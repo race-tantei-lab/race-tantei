@@ -1,0 +1,117 @@
+name: Apply isolated D1 schema hotfix
+
+on:
+  push:
+    branches: [hotfix-isolated-schema]
+    paths:
+      - '.github/workflows/apply-isolated-schema.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hotfix-isolated-schema
+      - name: Isolate completed app tables from pilot tables
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          db_path = Path('src/v1/db.ts')
+          text = db_path.read_text()
+
+          mapping = [
+              ('idx_race_sources_due', 'rt_idx_race_sources_due'),
+              ('idx_prediction_runners', 'rt_idx_prediction_runners'),
+              ('idx_predictions_race', 'rt_idx_predictions_race'),
+              ('idx_bets_settlement', 'rt_idx_bets_settlement'),
+              ('idx_runners_trainer', 'rt_idx_runners_trainer'),
+              ('idx_runners_jockey', 'rt_idx_runners_jockey'),
+              ('idx_runners_horse', 'rt_idx_runners_horse'),
+              ('idx_races_date', 'rt_idx_races_date'),
+              ('prediction_runners', 'rt_prediction_runners'),
+              ('system_state', 'rt_system_state'),
+              ('race_sources', 'rt_race_sources'),
+              ('model_events', 'rt_model_events'),
+              ('sync_runs', 'rt_sync_runs'),
+              ('predictions', 'rt_predictions'),
+              ('runners', 'rt_runners'),
+              ('results', 'rt_results'),
+              ('payouts', 'rt_payouts'),
+              ('races', 'rt_races'),
+              ('bets', 'rt_bets'),
+          ]
+
+          def patch_template(match):
+              value = match.group(0)
+              for old, new in mapping:
+                  value = re.sub(rf'\\b{re.escape(old)}\\b', new, value)
+              return value
+
+          patched = re.sub(r'`(?:\\.|[^`])*`', patch_template, text, flags=re.S)
+          if patched == text:
+              raise SystemExit('No SQL identifiers were patched')
+          db_path.write_text(patched)
+
+          entry_path = Path('src/entry.ts')
+          entry = entry_path.read_text()
+          entry = entry.replace('import { migrateLegacyData, prepareLegacySchema } from "./v1/migrate.js";\n', '')
+          old_prepare = '''function prepare(db: D1Database): Promise<void> {
+            startupReady ??= (async () => {
+              await prepareLegacySchema(db);
+              await ensureSchema(db);
+              await migrateLegacyData(db);
+            })().catch((error) => {
+              startupReady = null;
+              throw error;
+            });
+            return startupReady;
+          }
+          '''
+          new_prepare = '''function prepare(db: D1Database): Promise<void> {
+            startupReady ??= ensureSchema(db).catch((error) => {
+              startupReady = null;
+              throw error;
+            });
+            return startupReady;
+          }
+          '''
+          if old_prepare not in entry:
+              raise SystemExit('prepare function anchor not found')
+          entry = entry.replace(old_prepare, new_prepare, 1)
+
+          old_error = '''function failureResponse(request: Request, error: unknown): Response {
+            console.error("WORKER_STARTUP_FAILED", error);
+            const pathname = new URL(request.url).pathname;
+          '''
+          new_error = '''function failureResponse(request: Request, error: unknown): Response {
+            console.error("WORKER_STARTUP_FAILED", error);
+            const pathname = new URL(request.url).pathname;
+            const detail = error instanceof Error ? error.message : String(error);
+          '''
+          if old_error not in entry:
+              raise SystemExit('failureResponse anchor not found')
+          entry = entry.replace(old_error, new_error, 1)
+          entry = entry.replace(
+              'JSON.stringify({ ok: false, error: "WORKER_STARTUP_FAILED" })',
+              'JSON.stringify({ ok: false, error: "WORKER_STARTUP_FAILED", detail })'
+          )
+          entry = entry.replace(
+              '"レース探偵のデータベースを更新しています。数分後に再読み込みしてください。\\nエラーコード: WORKER_STARTUP_FAILED",',
+              '`レース探偵の起動処理に失敗しました。\\nエラーコード: WORKER_STARTUP_FAILED\\n詳細: ${detail}`,'
+          )
+          entry_path.write_text(entry)
+          PY
+          rm -f .github/workflows/apply-isolated-schema.yml
+      - name: Commit isolated schema hotfix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: isolate production tables from pilot D1 schema"
+          git push origin HEAD:hotfix-isolated-schema
