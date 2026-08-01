@@ -1,0 +1,84 @@
+name: Apply hierarchical race UI
+on:
+  push:
+    branches: [fix-hierarchical-race-ui]
+    paths: ['.github/workflows/apply-hierarchical-ui.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix-hierarchical-race-ui
+      - name: Patch UI
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('src/v1/ui.ts')
+          s=p.read_text()
+          css='''.date-block{margin:20px 0 30px}.date-head{position:sticky;top:0;z-index:3;background:rgba(9,16,24,.94);backdrop-filter:blur(10px);padding:11px 2px 9px;border-bottom:1px solid var(--line)}.date-title{font-size:23px;font-weight:900}.venue-block{margin:15px 0 22px}.venue-head{display:flex;justify-content:space-between;align-items:center;margin:0 3px 9px}.venue-name{font-size:19px;font-weight:900}.race-list{display:grid;gap:8px}.day-nav{display:flex;gap:7px;overflow:auto;padding:2px 0 8px}.day-nav a{white-space:nowrap;border:1px solid var(--line);background:#101925;padding:8px 11px;border-radius:10px;font-size:13px}.result-box{border-color:#76613a;background:#251e12}.detail-status{margin:10px 0}.race-date{font-weight:800;color:var(--accent)}@media(min-width:700px){.race-list{grid-template-columns:repeat(2,minmax(0,1fr))}}'''
+          s=s.replace('\n`;\n\nfunction layout', '\n'+css+'\n`;\n\nfunction layout',1)
+          home=r'''export function renderHome(metrics: DashboardMetrics, races: RaceListRow[]): string {
+            const dateLabel = (date: string): string => {
+              const parsed = new Date(`${date}T00:00:00+09:00`);
+              if (Number.isNaN(parsed.getTime())) return date;
+              const day = ["日", "月", "火", "水", "木", "金", "土"][parsed.getDay()] ?? "";
+              return `${parsed.getMonth() + 1}月${parsed.getDate()}日（${day}）`;
+            };
+            const grouped = new Map<string, Map<string, RaceListRow[]>>();
+            for (const race of [...races].sort((a,b) => a.raceDate.localeCompare(b.raceDate) || a.venue.localeCompare(b.venue, "ja") || a.raceNo-b.raceNo)) {
+              const venues = grouped.get(race.raceDate) ?? new Map<string, RaceListRow[]>();
+              const rows = venues.get(race.venue) ?? [];
+              rows.push(race); venues.set(race.venue, rows); grouped.set(race.raceDate, venues);
+            }
+            const dates=[...grouped.keys()];
+            const nav=dates.map(date=>`<a href="#date-${date}">${escapeHtml(dateLabel(date))}</a>`).join("");
+            const sections=dates.map(date=>{
+              const venues=grouped.get(date)!;
+              const venueHtml=[...venues.entries()].map(([venue,rows])=>{
+                const cards=rows.map(race=>{
+                  const finished=race.status==="finished";
+                  const state=finished ? "結果確定" : race.predictionStatus==="locked" ? "予想公開" : race.predictionStatus==="draft" ? "暫定予想" : "予想待ち";
+                  const cls=finished ? "finished" : race.predictionStatus==="locked" ? "locked" : "";
+                  const summary=finished ? "着順・払戻を確認" : race.topHorseNo ? `◎ ${race.topHorseNo} ${escapeHtml(race.topHorseName)}` : "予想データ準備中";
+                  return `<a class="card race" href="/races/${encodeURIComponent(race.raceId)}"><div><div class="race-date">${race.raceNo}R</div><div class="muted">${escapeHtml(race.startTimeJst ?? "時刻未定")}</div></div><div><b>${escapeHtml(race.raceName)}</b><div class="muted">${summary}</div></div><div class="right"><span class="pill ${cls}">${state}</span><div class="muted">買い目 ${race.betCount}</div></div></a>`;
+                }).join("");
+                return `<section class="venue-block"><div class="venue-head"><div class="venue-name">${escapeHtml(venue)}競馬場</div><div class="muted">${rows.length}レース</div></div><div class="race-list">${cards}</div></section>`;
+              }).join("");
+              return `<section class="date-block" id="date-${date}"><div class="date-head"><div class="date-title">${escapeHtml(dateLabel(date))}</div><div class="muted">${escapeHtml(date)} ／ ${[...venues.values()].reduce((n,v)=>n+v.length,0)}レース</div></div>${venueHtml}</section>`;
+            }).join("");
+            return layout("予想一覧", `<section class="hero"><div class="muted"><span class="status-dot"></span>全自動・公開予想記録</div><h1>日付と競馬場からレースを選ぶ。</h1><div class="muted">予想、買い目、結果、払戻を各レースの詳細画面で確認できます。</div></section><section class="grid"><div class="metric"><span class="muted">累計回収率</span><b class="${(metrics.roiPct ?? 0)>=100 ? "positive":""}">${pct(metrics.roiPct)}</b></div><div class="metric"><span class="muted">モデル収支</span><b class="${metrics.profitYen>=0?"positive":"negative"}">${metrics.profitYen>=0?"+":""}${formatYen(metrics.profitYen)}</b></div><div class="metric"><span class="muted">購入／払戻</span><b>${formatYen(metrics.totalStakeYen)}</b><small class="muted">払戻 ${formatYen(metrics.totalReturnYen)}</small></div><div class="metric"><span class="muted">固定予想</span><b>${metrics.predictionCount}R</b><small class="muted">的中率 ${pct(metrics.hitRatePct)}</small></div></section>${nav?`<h2 class="section">開催日</h2><div class="day-nav">${nav}</div>`:""}${sections||'<div class="card empty">レースデータを取得中です。</div>'}`);
+          }
+
+          '''
+          race=r'''export function renderRace(detail: RaceDetail): string {
+            const { race, runners, prediction, predictedRunners, bets } = detail;
+            const predMap=new Map(predictedRunners.map(r=>[r.horseNo,r]));
+            const finished=race.status==="finished";
+            const finishers=[...runners].filter(r=>r.finishPosition!==null).sort((a,b)=>(a.finishPosition??99)-(b.finishPosition??99));
+            const stake=bets.reduce((n,b)=>n+b.stakeYen,0), returns=bets.reduce((n,b)=>n+(b.returnYen??0),0), profit=returns-stake;
+            const marks=["◎","○","▲"];
+            const predictionBox=prediction ? `<div class="card detail-status"><b>${prediction.status==="locked"?"発走前固定予想":"暫定予想"}</b><div class="tabs">${predictedRunners.slice(0,3).map((p,i)=>`<span class="pill ${i===0?"locked":""}">${marks[i]} ${p.horseNo} ${escapeHtml(p.horseName)}</span>`).join("")}</div><div class="muted">生成 ${escapeHtml(prediction.generatedAt)}${prediction.lockedAt?` ／ 固定 ${escapeHtml(prediction.lockedAt)}`:""}</div></div>` : '<div class="card warning"><b>予想はまだ公開されていません</b><div class="muted">出走馬とオッズ取得後に自動生成します。</div></div>';
+            const resultBox=finished ? `<div class="card result-box"><b>レース結果</b><div class="tabs">${finishers.slice(0,3).map(r=>`<span class="pill finished">${r.finishPosition}着 ${r.horseNo} ${escapeHtml(r.horseName)}</span>`).join("")||'<span class="muted">着順取得中</span>'}</div>${bets.length?`<div>購入 ${formatYen(stake)} ／ 払戻 ${formatYen(returns)} ／ <strong class="${profit>=0?"positive":"negative"}">${profit>=0?"+":""}${formatYen(profit)}</strong></div>`:'<div class="muted">固定買い目なし</div>'}</div>` : '<div class="card"><b>結果待ち</b><div class="muted">終了後に着順、払戻、収支を自動反映します。</div></div>';
+            const rows=runners.map(r=>{const p=predMap.get(r.horseNo);return `<tr><td><span class="horse-no">${r.horseNo}</span>${escapeHtml(r.horseName)}<div class="muted">${escapeHtml(r.jockey??"")}</div></td><td>${p?`${p.predictedOrder}位<br>${(p.winProbability*100).toFixed(1)}%`:"—"}</td><td>${r.winOdds??"—"}</td><td>${p?.fairOdds.toFixed(2)??"—"}</td><td>${p?.expectedValuePct!=null?p.expectedValuePct.toFixed(1)+"%":"—"}</td><td>${r.finishPosition??"—"}</td></tr>`}).join("");
+            const betCards=bets.map(b=>`<div class="card buy"><b>${escapeHtml(b.betType)} ${escapeHtml(b.combination)}</b><div>購入想定 ${formatYen(b.stakeYen)} ／ 使用オッズ ${b.assumedOdds.toFixed(1)}</div><div class="muted">期待値 ${b.expectedValuePct.toFixed(1)}% ／ ${b.settlementStatus==="settled"?`払戻 ${formatYen(b.returnYen??0)}`:"発走前固定済み"}</div></div>`).join("");
+            const reasons=predictedRunners.slice(0,5).map(p=>`<div class="card"><b>${p.predictedOrder}位 ${p.horseNo} ${escapeHtml(p.horseName)}</b><div class="muted">${escapeHtml(p.explanation)}</div></div>`).join("");
+            return layout(`${race.raceDate} ${race.venue}${race.raceNo}R`, `<section class="hero"><div class="muted">${escapeHtml(race.raceDate)} ／ ${escapeHtml(race.venue)}競馬場</div><h1>${race.raceNo}R ${escapeHtml(race.raceName)}</h1><div><b>${escapeHtml(race.startTimeJst??"時刻未定")} 発走</b>　${escapeHtml(race.conditions??"")} ${escapeHtml(race.surface??"")}${race.distanceM??""}m</div><div class="tabs"><span class="pill ${finished?"finished":prediction?.status==="locked"?"locked":""}">${finished?"結果確定":prediction?.status==="locked"?"予想公開中":prediction?"暫定予想":"予想待ち"}</span></div></section>${predictionBox}${resultBox}<h2 class="section">買い目</h2>${betCards||'<div class="card empty">固定された買い目はありません。</div>'}<h2 class="section">出走馬・予想・結果</h2><div class="card" style="overflow:auto"><table><thead><tr><th>馬</th><th>予想</th><th>単勝</th><th>適正</th><th>期待値</th><th>着順</th></tr></thead><tbody>${rows||'<tr><td colspan="6">取得中</td></tr>'}</tbody></table></div><h2 class="section">予想根拠</h2>${reasons||'<div class="card empty">予想生成後に表示されます。</div>'}`);
+          }
+
+          '''
+          s=re.sub(r'export function renderHome\([\s\S]*?(?=export function renderRace)',home,s,count=1)
+          s=re.sub(r'export function renderRace\([\s\S]*?(?=export function renderPerformance)',race,s,count=1)
+          p.write_text(s)
+          PY
+          rm .github/workflows/apply-hierarchical-ui.yml
+      - name: Commit
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "feat: group races by date and venue and expose predictions and results"
+          git push origin HEAD:fix-hierarchical-race-ui
