@@ -28,6 +28,42 @@ function isAuthorized(request: Request, env: Env): boolean {
   return supplied === `Bearer ${env.PHASE0_ADMIN_TOKEN}`;
 }
 
+async function ensureSchema(db: D1Database): Promise<void> {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS probe_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_url TEXT NOT NULL,
+      fetched_at TEXT NOT NULL,
+      trigger_type TEXT NOT NULL CHECK (trigger_type IN ('manual', 'cron')),
+      ok INTEGER NOT NULL CHECK (ok IN (0, 1)),
+      http_status INTEGER NOT NULL,
+      content_type TEXT,
+      elapsed_ms INTEGER NOT NULL,
+      body_bytes INTEGER NOT NULL,
+      body_sha256 TEXT NOT NULL,
+      page_kind TEXT NOT NULL,
+      confidence REAL NOT NULL,
+      markers_found_json TEXT NOT NULL,
+      markers_missing_json TEXT NOT NULL,
+      title TEXT,
+      blocked_reason TEXT,
+      error_code TEXT,
+      error_message TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_probe_runs_fetched_at
+    ON probe_runs(fetched_at DESC)
+  `).run();
+
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_probe_runs_source_url
+    ON probe_runs(source_url, fetched_at DESC)
+  `).run();
+}
+
 async function saveProbe(db: D1Database, result: ProbeResult, triggerType: string): Promise<void> {
   await db.prepare(`
     INSERT INTO probe_runs (
@@ -60,6 +96,7 @@ async function saveProbe(db: D1Database, result: ProbeResult, triggerType: strin
 async function runConfiguredProbes(env: Env, triggerType: string): Promise<ProbeResult[]> {
   if (env.PROBE_ENABLED !== "true") return [];
 
+  await ensureSchema(env.DB);
   const urls = [env.JRA_ROBOTS_PROBE_URL, env.JRA_RESULT_PROBE_URL, env.JRA_ENTRY_PROBE_URL]
     .filter((url) => url.trim().length > 0);
   const results: ProbeResult[] = [];
