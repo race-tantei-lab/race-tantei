@@ -88,5 +88,6 @@ console.log(JSON.stringify({
   results: result.results.length,
   payouts: result.payouts.length,
   discoveredEntryLinks: discoveredLinks.length,
+  discoveredCnames: discoveredLinks.map((url) => decodeURIComponent(new URL(url).searchParams.get("CNAME") ?? "")),
   resultUrl: entry.race.resultUrl
 }, null, 2));
