@@ -1,10 +1,14 @@
 import { strict as assert } from "node:assert";
-import { extractEntryLinks, fetchJraPage, parseEntryPage, parseResultPage } from "../src/v1/jra.js";
+import { discoverRaceUrls, extractEntryLinks, fetchJraPage, parseEntryPage, parseResultPage } from "../src/v1/jra.js";
 
 function snippet(html: string, needle: string): string | null {
   const index = html.indexOf(needle);
   if (index < 0) return null;
   return html.slice(Math.max(0, index - 500), Math.min(html.length, index + 1800));
+}
+
+function cnameOf(url: string): string {
+  return decodeURIComponent(new URL(url).searchParams.get("CNAME") ?? "");
 }
 
 const entryUrl = "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030520260801%2F15";
@@ -81,13 +85,21 @@ assert.ok(result.results.length >= 5, `too few results parsed: ${result.results.
 assert.ok(result.results.some((runner) => runner.finishPosition === 1), "winner was not parsed");
 assert.ok(result.payouts.some((payout) => payout.betType === "単勝" && payout.payoutYen > 0), "win payout was not parsed");
 
+const allDiscovered = await discoverRaceUrls("https://www.jra.go.jp/", [entryUrl]);
+const currentDayLinks = allDiscovered.filter((url) => cnameOf(url).includes("20260801/"));
+const nextDayLinks = allDiscovered.filter((url) => cnameOf(url).includes("20260802/"));
+assert.ok(currentDayLinks.length >= 36, `current-day discovery incomplete: ${currentDayLinks.length}`);
+assert.ok(nextDayLinks.length >= 36, `next-day discovery incomplete: ${nextDayLinks.length}`);
+
 console.log(JSON.stringify({
   ok: true,
   raceId: entry.race.raceId,
   runners: entry.runners.length,
   results: result.results.length,
   payouts: result.payouts.length,
-  discoveredEntryLinks: discoveredLinks.length,
-  discoveredCnames: discoveredLinks.map((url) => decodeURIComponent(new URL(url).searchParams.get("CNAME") ?? "")),
+  directEntryLinks: discoveredLinks.length,
+  allDiscovered: allDiscovered.length,
+  currentDayLinks: currentDayLinks.length,
+  nextDayLinks: nextDayLinks.length,
   resultUrl: entry.race.resultUrl
 }, null, 2));
