@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist-test",
+    "rootDir": ".",
+    "moduleResolution": "Bundler"
+  },
+  "include": ["src/core/**/*.ts", "tests/**/*.ts", "worker-types.d.ts", "node-shims.d.ts"]
+}
