@@ -1,8 +1,8 @@
 {
-  "name": "race-tantei-phase0",
-  "version": "0.1.0",
+  "name": "race-tantei",
+  "version": "1.0.0",
   "private": true,
-  "description": "Phase 0 feasibility probe for a free, automated JRA prediction sharing site.",
+  "description": "Free automated JRA prediction sharing site on Cloudflare Workers and D1.",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -10,9 +10,7 @@
     "test": "npm run build:test && node dist-test/tests/run-tests.js",
     "check": "npm run typecheck && npm test",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "db:migrate:local": "wrangler d1 migrations apply race-tantei-phase0 --local",
-    "db:migrate:remote": "wrangler d1 migrations apply race-tantei-phase0 --remote"
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "typescript": "^5.8.3",
