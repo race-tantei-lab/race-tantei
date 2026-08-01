@@ -498,13 +498,11 @@ export async function discoverRaceUrls(homeUrl: string, seeds: string[], fetchIm
 }
 
 export function pageLooksLikeEntry(html: string): boolean {
-  const lines = htmlToLines(html);
-  const text = lines.join(" ");
-  return /出馬表/.test(text) && /馬名/.test(text) && /騎手名/.test(text) && /(?:コース|発走時刻)/.test(text);
+  const text = htmlToLines(html).join(" ");
+  return /出馬表/.test(text) && /20\d{2}年/.test(text) && /(?:札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉)/.test(text) && /<table\b/i.test(html);
 }
 
 export function pageLooksLikeResult(html: string): boolean {
-  const lines = htmlToLines(html);
-  const text = lines.join(" ");
-  return /レース結果/.test(text) && /着順/.test(text) && /払戻金/.test(text);
+  const text = htmlToLines(html).join(" ");
+  return /レース結果/.test(text) && /20\d{2}年/.test(text) && /<table\b/i.test(html);
 }
