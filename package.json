@@ -1,13 +1,15 @@
 {
   "name": "race-tantei",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Free automated JRA prediction sharing site on Cloudflare Workers and D1.",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build:test": "tsc -p tsconfig.test.json",
-    "test": "npm run build:test && node dist-test/tests/run-tests.js",
+    "test:unit": "node dist-test/tests/run-tests.js",
+    "test:live": "node dist-test/tests/live-jra.js",
+    "test": "npm run build:test && npm run test:unit && npm run test:live",
     "build": "wrangler deploy --dry-run --outdir dist-worker",
     "check": "npm run typecheck && npm test && npm run build",
     "dev": "wrangler dev",
