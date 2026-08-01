@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { fetchJraPage, parseEntryPage, parseResultPage } from "../src/v1/jra.js";
+import { extractEntryLinks, fetchJraPage, parseEntryPage, parseResultPage } from "../src/v1/jra.js";
 
 function snippet(html: string, needle: string): string | null {
   const index = html.indexOf(needle);
@@ -12,6 +12,7 @@ const entryPage = await fetchJraPage(entryUrl);
 assert.equal(entryPage.status, 200);
 assert.ok(entryPage.html.length > 10_000, "official current entry response was unexpectedly small");
 assert.ok(/出馬表/.test(entryPage.html), "official current entry page was not returned");
+const discoveredLinks = extractEntryLinks(entryPage.html, entryPage.url);
 
 let entry;
 try {
@@ -26,7 +27,8 @@ try {
       table: [...entryPage.html.matchAll(/<table\b/gi)].length,
       tr: [...entryPage.html.matchAll(/<tr\b/gi)].length,
       li: [...entryPage.html.matchAll(/<li\b/gi)].length,
-      div: [...entryPage.html.matchAll(/<div\b/gi)].length
+      div: [...entryPage.html.matchAll(/<div\b/gi)].length,
+      discoveredEntryLinks: discoveredLinks.length
     },
     snippets: {
       date: snippet(entryPage.html, "2026年8月1日"),
@@ -85,5 +87,6 @@ console.log(JSON.stringify({
   runners: entry.runners.length,
   results: result.results.length,
   payouts: result.payouts.length,
+  discoveredEntryLinks: discoveredLinks.length,
   resultUrl: entry.race.resultUrl
 }, null, 2));
