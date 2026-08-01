@@ -1,12 +1,15 @@
 import { strict as assert } from "node:assert";
 import {
   fetchJraPage,
-  pageLooksLikeEntry,
-  pageLooksLikeResult,
   parseEntryPage,
   parseResultPage
 } from "../src/v1/jra.js";
-import { htmlToLines } from "../src/v1/utils.js";
+
+function snippet(html: string, needle: string): string | null {
+  const index = html.indexOf(needle);
+  if (index < 0) return null;
+  return html.slice(Math.max(0, index - 500), Math.min(html.length, index + 1500));
+}
 
 const entryUrl = "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1001202601011220260725%2FE1";
 
@@ -14,20 +17,34 @@ const entryPage = await fetchJraPage(entryUrl);
 assert.equal(entryPage.status, 200);
 assert.ok(entryPage.html.length > 10_000, "official entry response was unexpectedly small");
 assert.ok(/<title[^>]*>[^<]*出馬表[^<]*<\/title>/i.test(entryPage.html), "official entry title was not found");
-const entryLines = htmlToLines(entryPage.html);
-if (!pageLooksLikeEntry(entryPage.html)) {
+
+let entry;
+try {
+  entry = parseEntryPage(entryPage.html, entryPage.url);
+} catch (error) {
   console.error(JSON.stringify({
-    stage: "entry-signature",
+    stage: "entry-parse",
+    error: error instanceof Error ? error.message : String(error),
     finalUrl: entryPage.url,
-    status: entryPage.status,
-    contentType: entryPage.contentType,
     htmlLength: entryPage.html.length,
-    title: entryPage.html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? null,
-    lines: entryLines.slice(0, 80)
+    counts: {
+      table: [...entryPage.html.matchAll(/<table\b/gi)].length,
+      tr: [...entryPage.html.matchAll(/<tr\b/gi)].length,
+      li: [...entryPage.html.matchAll(/<li\b/gi)].length,
+      div: [...entryPage.html.matchAll(/<div\b/gi)].length,
+      horseLinks: [...entryPage.html.matchAll(/CNAME=pw01dud/gi)].length
+    },
+    snippets: {
+      date: snippet(entryPage.html, "2026年7月25日"),
+      race: snippet(entryPage.html, "桑園特別"),
+      horseHeader: snippet(entryPage.html, "馬名"),
+      odds: snippet(entryPage.html, "単勝オッズ"),
+      horse: snippet(entryPage.html, "リメンバーヒム")
+    }
   }, null, 2));
+  throw error;
 }
-assert.equal(pageLooksLikeEntry(entryPage.html), true, "official JRA entry signature was not detected");
-const entry = parseEntryPage(entryPage.html, entryPage.url);
+
 assert.equal(entry.race.raceDate, "2026-07-25");
 assert.equal(entry.race.venue, "札幌");
 assert.equal(entry.race.raceNo, 12);
@@ -39,20 +56,31 @@ const resultPage = await fetchJraPage(entry.race.resultUrl);
 assert.equal(resultPage.status, 200);
 assert.ok(resultPage.html.length > 10_000, "official result response was unexpectedly small");
 assert.ok(/<title[^>]*>[^<]*レース結果[^<]*<\/title>/i.test(resultPage.html), "official result title was not found");
-const resultLines = htmlToLines(resultPage.html);
-if (!pageLooksLikeResult(resultPage.html)) {
+
+let result;
+try {
+  result = parseResultPage(resultPage.html, resultPage.url);
+} catch (error) {
   console.error(JSON.stringify({
-    stage: "result-signature",
+    stage: "result-parse",
+    error: error instanceof Error ? error.message : String(error),
     finalUrl: resultPage.url,
-    status: resultPage.status,
-    contentType: resultPage.contentType,
     htmlLength: resultPage.html.length,
-    title: resultPage.html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? null,
-    lines: resultLines.slice(0, 80)
+    counts: {
+      table: [...resultPage.html.matchAll(/<table\b/gi)].length,
+      tr: [...resultPage.html.matchAll(/<tr\b/gi)].length,
+      li: [...resultPage.html.matchAll(/<li\b/gi)].length,
+      div: [...resultPage.html.matchAll(/<div\b/gi)].length
+    },
+    snippets: {
+      result: snippet(resultPage.html, "着順"),
+      payout: snippet(resultPage.html, "払戻金"),
+      win: snippet(resultPage.html, "単勝")
+    }
   }, null, 2));
+  throw error;
 }
-assert.equal(pageLooksLikeResult(resultPage.html), true, "official JRA result signature was not detected");
-const result = parseResultPage(resultPage.html, resultPage.url);
+
 assert.equal(result.race.raceId, entry.race.raceId);
 assert.ok(result.results.length >= 8, `too few results parsed: ${result.results.length}`);
 assert.ok(result.results.some((runner) => runner.finishPosition === 1), "winner was not parsed");
