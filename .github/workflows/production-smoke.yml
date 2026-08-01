@@ -1,0 +1,41 @@
+name: Production smoke test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Cloudflare deployment and verify health
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          for attempt in $(seq 1 36); do
+            echo "Attempt ${attempt}/36"
+            health="$(curl --silent --show-error --fail --max-time 25 "${base}/health" || true)"
+            if printf '%s' "$health" | grep -q '"ok": true' && printf '%s' "$health" | grep -q 'v2.0.1-live'; then
+              echo "$health"
+              break
+            fi
+            if [ "$attempt" -eq 36 ]; then
+              echo "Production health endpoint did not reach v2.0.1-live"
+              echo "$health"
+              exit 1
+            fi
+            sleep 10
+          done
+      - name: Verify public pages
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          home="$(curl --silent --show-error --fail --max-time 25 "${base}/")"
+          status="$(curl --silent --show-error --fail --max-time 25 "${base}/api/status")"
+          printf '%s' "$home" | grep -q 'レース探偵'
+          printf '%s' "$status" | grep -q 'sourceCount'
+          echo "Production homepage and status API are reachable."
