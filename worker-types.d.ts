@@ -4,6 +4,11 @@ interface D1Result<T = Record<string, unknown>> {
   meta?: Record<string, unknown>;
 }
 
+interface D1ExecResult {
+  count: number;
+  duration: number;
+}
+
 interface D1PreparedStatement {
   bind(...values: unknown[]): D1PreparedStatement;
   run<T = Record<string, unknown>>(): Promise<D1Result<T>>;
@@ -13,6 +18,8 @@ interface D1PreparedStatement {
 
 interface D1Database {
   prepare(query: string): D1PreparedStatement;
+  batch<T = Record<string, unknown>>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
+  exec(query: string): Promise<D1ExecResult>;
 }
 
 interface ExecutionContext {
