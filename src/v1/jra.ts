@@ -499,10 +499,10 @@ export async function discoverRaceUrls(homeUrl: string, seeds: string[], fetchIm
 
 export function pageLooksLikeEntry(html: string): boolean {
   const text = htmlToLines(html).join(" ");
-  return /出馬表/.test(text) && /20\d{2}年/.test(text) && /(?:札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉)/.test(text) && /<table\b/i.test(html);
+  return /出馬表/.test(text) && /<table\b/i.test(html);
 }
 
 export function pageLooksLikeResult(html: string): boolean {
   const text = htmlToLines(html).join(" ");
-  return /レース結果/.test(text) && /20\d{2}年/.test(text) && /<table\b/i.test(html);
+  return /レース結果/.test(text) && /<table\b/i.test(html);
 }
