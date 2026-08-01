@@ -3,6 +3,8 @@ name: Production smoke test
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -17,9 +19,17 @@ jobs:
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
           for attempt in $(seq 1 36); do
-            echo "Attempt ${attempt}/36"
+            echo "Health attempt ${attempt}/36"
             health="$(curl --silent --show-error --fail --max-time 25 "${base}/health" || true)"
-            if printf '%s' "$health" | grep -q '"ok": true' && printf '%s' "$health" | grep -q 'v2.0.1-live'; then
+            if HEALTH="$health" python - <<'PY'
+          import json, os, sys
+          try:
+              data = json.loads(os.environ.get("HEALTH", ""))
+          except Exception:
+              sys.exit(1)
+          sys.exit(0 if data.get("ok") is True and data.get("modelVersion") == "v2.0.1-live" else 1)
+          PY
+            then
               echo "$health"
               break
             fi
@@ -30,12 +40,40 @@ jobs:
             fi
             sleep 10
           done
-      - name: Verify public pages
+
+      - name: Trigger and verify live data ingestion
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-          home="$(curl --silent --show-error --fail --max-time 25 "${base}/")"
-          status="$(curl --silent --show-error --fail --max-time 25 "${base}/api/status")"
-          printf '%s' "$home" | grep -q 'レース探偵'
-          printf '%s' "$status" | grep -q 'sourceCount'
-          echo "Production homepage and status API are reachable."
+          curl --silent --show-error --fail --max-time 25 "${base}/" >/tmp/home.html
+          grep -q 'レース探偵' /tmp/home.html
+
+          for attempt in $(seq 1 48); do
+            echo "Data attempt ${attempt}/48"
+            status="$(curl --silent --show-error --fail --max-time 25 "${base}/api/status" || true)"
+            races="$(curl --silent --show-error --fail --max-time 25 "${base}/api/races" || true)"
+            if STATUS="$status" RACES="$races" python - <<'PY'
+          import json, os, sys
+          try:
+              status = json.loads(os.environ.get("STATUS", ""))
+              races = json.loads(os.environ.get("RACES", ""))
+          except Exception:
+              sys.exit(1)
+          sources = sum(int(row.get("count", 0)) for row in status.get("sourceCounts", []))
+          last_race = status.get("lastRace")
+          valid_races = isinstance(races, list) and len(races) > 0
+          print(json.dumps({"sources": sources, "lastRace": last_race, "raceCount": len(races) if isinstance(races, list) else 0}, ensure_ascii=False))
+          sys.exit(0 if sources > 0 and last_race and valid_races else 1)
+          PY
+            then
+              echo "Production Worker has discovered and stored live races."
+              exit 0
+            fi
+            if [ "$attempt" -eq 48 ]; then
+              echo "Production ingestion did not create race sources and races in time."
+              echo "$status"
+              echo "$races"
+              exit 1
+            fi
+            sleep 10
+          done
