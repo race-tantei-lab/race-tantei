@@ -1,51 +1,74 @@
 import { strict as assert } from "node:assert";
-import { extractEntryLinks, parseEntryPage, parseResultPage, toResultUrl } from "../src/v1/jra.js";
+import {
+  extractEntryLinks,
+  extractResultUrl,
+  pageLooksLikeEntry,
+  pageLooksLikeResult,
+  parseEntryPage,
+  parseResultPage,
+  toResultUrl
+} from "../src/v1/jra.js";
 import { generatePrediction } from "../src/v1/model.js";
 import type { RaceRecord, RunnerHistoryStats, RunnerRecord } from "../src/v1/types.js";
 
-const entryUrl = "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030520260801%2F15";
-const resultUrl = toResultUrl(entryUrl);
-assert.ok(resultUrl.includes("accessS.html"));
-assert.ok(decodeURIComponent(resultUrl).includes("sw01sde"));
+const entryUrl = "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601030520260801%2F15";
+const officialResultUrl = "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0101202601030520260801%2F88";
+const fallbackResult = toResultUrl(entryUrl);
+assert.ok(fallbackResult.includes("accessS.html"));
+assert.ok(decodeURIComponent(fallbackResult).includes("pw01sde"));
 
-const navigation = `<a href="/JRADB/accessD.html?CNAME=sw01dde0101202601030120260801%2FAA">1R</a>
-<a href='https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030220260801%2FBB'>2R</a>`;
-assert.equal(extractEntryLinks(navigation, "https://sp.jra.jp/").length, 2);
+const navigation = `
+<a href="/JRADB/accessD.html?CNAME=pw01dde0101202601030120260801%2FAA">1R</a>
+<a data-url='https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030220260801%2FBB'>2R</a>
+<a href="/JRADB/accessS.html?CNAME=pw01sde0101202601030520260801%2F88">レース結果</a>`;
+assert.equal(extractEntryLinks(navigation, "https://www.jra.go.jp/").length, 2);
+assert.equal(extractResultUrl(navigation, entryUrl), officialResultUrl);
 
 const entryHtml = `<!doctype html><html><body>
 <h1>出馬表</h1>
-<h2>2026年8月1日(土曜) 1回札幌3日</h2>
-<h3>5R メイクデビュー札幌</h3>
-<p>2歳 新馬 (混合)[指定] 馬齢</p>
-<p>コース 1500m 芝・右 発走12:20</p>
-<table><tr><th>枠</th><th>馬番</th><th>馬名 / 単勝オッズ(人気)</th></tr>
-<tr><td>1</td><td>1</td><td>イントゥーザブルー 5.6 (4番人気) 牡2 / 栗 470kg(初出走) 丹内祐次 (55.0) 清水英克 (美浦)</td></tr>
-<tr><td>4</td><td>5</td><td>ティアラード 3.3 (2番人気) 牝2 / 黒鹿 460kg(初出走) 横山武史 (55.0) 小栗実 (栗東)</td></tr>
-<tr><td>5</td><td>7</td><td>ブルージェイ 2.5 (1番人気) 牡2 / 黒鹿 460kg(初出走) 鮫島克駿 (55.0) 加藤征弘 (美浦)</td></tr>
+<div>2026年8月1日（土曜） 1回札幌3日 発走時刻：12時20分</div>
+<div>5レース</div><h2>メイクデビュー札幌</h2>
+<p>2歳 新馬 （混合）［指定］ 馬齢 コース：1,500メートル（芝・右）</p>
+<a href="/JRADB/accessS.html?CNAME=pw01sde0101202601030520260801%2F88">レース結果</a>
+<table><tr><th>枠</th><th>馬番</th><th>馬名 / 単勝オッズ(人気) 馬体重 調教師名 血統</th><th>性齢/毛色 負担重量 騎手名</th></tr>
+<tr><td><img alt="枠1白"></td><td>1</td><td>イントゥーザブルー5.6(4番人気) 470kg(初出走) 清水 英克(美浦) 父：キタサンブラック</td><td>牡2/栗 55.0 kg 丹内 祐次</td></tr>
+<tr><td><img alt="枠4青"></td><td>5</td><td>ティアラード3.3(2番人気) 460kg(初出走) 小栗 実(栗東) 父：モーリス</td><td>牝2/黒鹿 55.0 kg 横山 武史</td></tr>
+<tr><td><img alt="枠5黄"></td><td>7</td><td>ブルージェイ2.5(1番人気) 460kg(初出走) 加藤 征弘(美浦) 父：ロードカナロア</td><td>牡2/黒鹿 55.0 kg 鮫島 克駿</td></tr>
 </table></body></html>`;
+assert.equal(pageLooksLikeEntry(entryHtml), true);
 const entry = parseEntryPage(entryHtml, entryUrl);
 assert.equal(entry.race.raceId, "2026-08-01-sapporo-05");
 assert.equal(entry.race.startTimeUtc, "2026-08-01T03:20:00.000Z");
+assert.equal(entry.race.resultUrl, officialResultUrl);
+assert.equal(entry.race.distanceM, 1500);
+assert.equal(entry.race.surface, "芝");
 assert.equal(entry.runners.length, 3);
 assert.equal(entry.runners[2]?.horseName, "ブルージェイ");
 assert.equal(entry.runners[2]?.winOdds, 2.5);
+assert.equal(entry.runners[2]?.jockey, "鮫島 克駿");
+assert.equal(entry.runners[2]?.trainer, "加藤 征弘");
 
 const resultHtml = `<!doctype html><html><body>
-<h1>レース結果</h1><h2>2026年8月1日(土曜) 1回札幌3日</h2><h3>5R メイクデビュー札幌</h3>
-<p>2歳 新馬 (混合)[指定] 馬齢</p><p>コース 1500m 芝・右 発走12:20</p><p>天候:曇 芝:稍重</p>
-<table><tr><th>着順</th><th>枠</th><th>馬番</th><th>馬名</th></tr>
-<tr><td>1</td><td>5</td><td>7</td><td>ブルージェイ 1番人気 牡2 / 460kg(初出走) 鮫島克駿 (55.0) 加藤征弘 (美浦) 1:30.4 / 35.4</td></tr>
-<tr><td>2</td><td>4</td><td>5</td><td>ティアラード 2番人気 牝2 / 460kg(初出走) 横山武史 (55.0) 小栗実 (栗東) 1:30.9 (２ 1/2) / 35.7</td></tr>
-<tr><td>3</td><td>3</td><td>3</td><td>ギャルズマインド 3番人気 牝2 / 436kg(初出走) 浜中俊 (55.0) 武幸四郎 (栗東) 1:31.0 (１) / 35.8</td></tr>
+<h1>レース結果</h1>
+<div>2026年8月1日（土曜） 1回札幌3日 発走時刻：12時20分</div>
+<div>天候曇 芝稍重 5レース</div><h2>メイクデビュー札幌</h2>
+<p>2歳 新馬 （混合）［指定］ 馬齢 コース：1,500メートル（芝・右）</p>
+<a href="/JRADB/accessD.html?CNAME=pw01dde0101202601030520260801%2F15">出馬表</a>
+<table><tr><th>着順</th><th>枠</th><th>馬番</th><th>馬名</th><th>性齢</th><th>負担重量</th><th>騎手名</th><th>タイム</th><th>着差</th><th>推定上り</th></tr>
+<tr><td>1</td><td><img alt="枠5黄"></td><td>7</td><td>ブルージェイ</td><td>牡2</td><td>55.0</td><td>鮫島 克駿</td><td>1:30.4</td><td></td><td>35.4</td></tr>
+<tr><td>2</td><td><img alt="枠4青"></td><td>5</td><td>ティアラード</td><td>牝2</td><td>55.0</td><td>横山 武史</td><td>1:30.9</td><td>２ 1/2</td><td>35.7</td></tr>
+<tr><td>3</td><td><img alt="枠3赤"></td><td>3</td><td>ギャルズマインド</td><td>牝2</td><td>55.0</td><td>浜中 俊</td><td>1:31.0</td><td>１</td><td>35.8</td></tr>
 </table>
 <h2>払戻金</h2><table>
 <tr><td>単勝</td><td>7</td><td>250円</td><td>1番人気</td></tr>
 <tr><td>馬連</td><td>5-7</td><td>430円</td><td>1番人気</td></tr>
 <tr><td>3連複</td><td>3-5-7</td><td>550円</td><td>1番人気</td></tr>
-</table><p>返還馬番 4番</p></body></html>`;
-const result = parseResultPage(resultHtml, resultUrl);
+</table><p>返還馬番：4</p></body></html>`;
+assert.equal(pageLooksLikeResult(resultHtml), true);
+const result = parseResultPage(resultHtml, officialResultUrl);
 assert.equal(result.results.length, 3);
 assert.equal(result.results[0]?.horseNo, 7);
+assert.equal(result.results[0]?.final3f, 35.4);
 assert.equal(result.payouts.find((p) => p.betType === "単勝")?.payoutYen, 250);
 assert.deepEqual(result.refundHorseNos, [4]);
 
@@ -63,9 +86,10 @@ const stats: RunnerHistoryStats[] = runners.map((runner) => ({
   courseStarts: 0,
   courseWins: 0
 }));
-const prediction = generatePrediction(race, runners, stats, "v1.0.0", 100, 2000);
+const prediction = generatePrediction(race, runners, stats, "v2.0.0-live", 100, 2000);
 assert.equal(prediction.runners.length, 3);
 assert.equal(prediction.runners[0]?.horseNo, 7);
 assert.ok(Math.abs(prediction.runners.reduce((sum, runner) => sum + runner.winProbability, 0) - 1) < 0.000001);
 assert.ok(prediction.bets.reduce((sum, bet) => sum + bet.stakeYen, 0) <= 2000);
-console.log("race-tantei v1 tests passed");
+assert.ok(prediction.bets.every((bet) => bet.stakeYen % 100 === 0));
+console.log("race-tantei v2 tests passed");
