@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "race-tantei-phase0",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": true,
+  "vars": {
+    "ENVIRONMENT": "phase0",
+    "PROBE_ENABLED": "false",
+    "JRA_ROBOTS_PROBE_URL": "https://www.jra.go.jp/robots.txt",
+    "JRA_RESULT_PROBE_URL": "https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0101202601030520260801%2FD1",
+    "JRA_ENTRY_PROBE_URL": "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030520260801%2F15"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "race-tantei-phase0",
+      "database_id": "REPLACE_WITH_RACE_TANTEI_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": {
+    "crons": ["17 0 * * 6", "17 0 * * 0"]
+  }
+}
