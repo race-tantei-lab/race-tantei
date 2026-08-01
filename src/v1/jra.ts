@@ -208,7 +208,9 @@ function parseHeader(html: string, pageUrl: string, isResult: boolean): RaceReco
   const raceMatches = [...text.matchAll(/(?:^|\s)(\d{1,2})(?:R|レース)(?:\s|$)/gm)]
     .map((match) => Number(match[1]))
     .filter((value) => value >= 1 && value <= 12);
-  const raceNo = raceMatches[0] ?? Number((new URL(pageUrl).searchParams.get("CNAME") ?? "").match(/(\d{2})20\d{6}(?:\/|%2F)/i)?.[1] ?? 0);
+  const decodedCname = decodeURIComponent(new URL(pageUrl).searchParams.get("CNAME") ?? "");
+  const cnameRaceNo = Number(decodedCname.match(/(\d{2})20\d{6}\//i)?.[1] ?? 0);
+  const raceNo = cnameRaceNo >= 1 && cnameRaceNo <= 12 ? cnameRaceNo : (raceMatches[0] ?? 0);
   if (!raceNo) throw new Error("RACE_NUMBER_NOT_FOUND");
   const raceName = parseRaceName(html, raceNo);
 
@@ -290,7 +292,7 @@ function parseEntryRows(html: string): RunnerRecord[] {
   for (const row of parsedRows(html)) {
     const joined = row.cells.join(" ").replace(/\s+/g, " ").trim();
     if (!/(?:番人気|初出走|kg|父[:：]|取消|除外|美浦|栗東)/.test(joined)) continue;
-    let detailIndex = row.cells.findIndex((cell) => /(?:番人気|初出走|\d{3}kg|父[:：]|取消|除外|\((?:美浦|栗東|本会外)\))/.test(cell));
+    const detailIndex = row.cells.findIndex((cell) => /(?:番人気|初出走|\d{3}kg|父[:：]|取消|除外|\((?:美浦|栗東|本会外)\))/.test(cell));
     if (detailIndex < 0) continue;
     const nums = numbersBefore(row.cells, detailIndex).filter((value) => value >= 1 && value <= 18);
     const horseNo = nums.at(-1) ?? null;
@@ -502,10 +504,10 @@ export async function discoverRaceUrls(homeUrl: string, seeds: string[], fetchIm
 
 export function pageLooksLikeEntry(html: string): boolean {
   const text = htmlToLines(html).join(" ");
-  return /出馬表/.test(text) && /<table\b/i.test(html);
+  return /出馬表/.test(text) && (/<table\b/i.test(html) || /<tr\b/i.test(html));
 }
 
 export function pageLooksLikeResult(html: string): boolean {
   const text = htmlToLines(html).join(" ");
-  return /レース結果/.test(text) && /<table\b/i.test(html);
+  return /レース結果/.test(text) && (/<table\b/i.test(html) || /<tr\b/i.test(html));
 }
