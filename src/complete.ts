@@ -101,6 +101,8 @@ function seeds(env: Env): string[] {
 }
 
 async function shouldDiscover(env: Env, now: Date): Promise<boolean> {
+  const discoveryVersion = await getState(env.DB, "last_discovery_model_version");
+  if (discoveryVersion !== env.MODEL_VERSION) return true;
   const last = await getState(env.DB, "last_discovery_at");
   if (!last) return true;
   const lastMs = new Date(last).getTime();
@@ -228,6 +230,7 @@ async function executeSync(env: Env, triggerType: "cron" | "manual" | "deploy"):
         await upsertRaceSources(env.DB, urls, toResultUrl);
         await setState(env.DB, "last_discovery_at", nowIso());
         await setState(env.DB, "last_discovery_count", String(urls.length));
+        await setState(env.DB, "last_discovery_model_version", env.MODEL_VERSION);
         await setState(env.DB, "last_discovery_error", "");
       } catch (error) {
         discoveryError = error instanceof Error ? error.message : String(error);
