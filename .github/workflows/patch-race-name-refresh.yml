@@ -1,0 +1,116 @@
+name: Patch live race names and refresh existing sources
+
+on:
+  push:
+    branches: [fix-race-name-refresh]
+    paths:
+      - '.github/workflows/patch-race-name-refresh.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix-race-name-refresh
+      - name: Patch parser and one-time refresh
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # Prefer JRA's dedicated race-name element.
+          jra = Path('src/v1/jra.ts')
+          s = jra.read_text()
+          old = '''function parseRaceName(html: string, raceNo: number): string {
+            for (const raw of headingTexts(html)) {'''
+          new = '''function parseRaceName(html: string, raceNo: number): string {
+            const explicitHtml = html.match(/<span\\b[^>]*class=["'][^"']*\\btitleRaceName\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/span>/i)?.[1];
+            if (explicitHtml) {
+              const explicitName = stripHtml(explicitHtml).replace(/\\s+/g, " ").trim();
+              if (explicitName) return explicitName;
+            }
+            for (const raw of headingTexts(html)) {'''
+          if old not in s:
+              raise SystemExit('parseRaceName anchor not found')
+          jra.write_text(s.replace(old, new, 1))
+
+          # Add a one-time reset for previously parsed source rows.
+          db = Path('src/v1/db.ts')
+          s = db.read_text()
+          anchor = '''export interface RaceSourceRow {
+          '''
+          addition = '''export async function resetRaceSourcesForDiscoveryRevision(db: D1Database): Promise<void> {
+            await db.prepare(`
+              UPDATE rt_race_sources
+              SET status = 'discovered', next_fetch_at = ?, failure_count = 0,
+                  last_error = NULL, updated_at = CURRENT_TIMESTAMP
+            `).bind(nowIso()).run();
+          }
+
+          export interface RaceSourceRow {
+          '''
+          if anchor not in s:
+              raise SystemExit('db reset anchor not found')
+          db.write_text(s.replace(anchor, addition, 1))
+
+          # Use a parser/discovery revision independent of model coefficients.
+          complete = Path('src/complete.ts')
+          s = complete.read_text()
+          s = s.replace('''  saveResultBundle,
+            setState,''', '''  saveResultBundle,
+            resetRaceSourcesForDiscoveryRevision,
+            setState,''', 1)
+          marker = '''let schemaReady: Promise<void> | null = null;
+          let inMemorySync: Promise<unknown> | null = null;
+          '''
+          replacement = '''let schemaReady: Promise<void> | null = null;
+          let inMemorySync: Promise<unknown> | null = null;
+          const DISCOVERY_REVISION = "2026-08-01-race-name-v1";
+          '''
+          if marker not in s:
+              raise SystemExit('revision constant anchor not found')
+          s = s.replace(marker, replacement, 1)
+          s = s.replace('''  const discoveryVersion = await getState(env.DB, "last_discovery_model_version");
+            if (discoveryVersion !== env.MODEL_VERSION) return true;''', '''  const discoveryVersion = await getState(env.DB, "last_discovery_revision");
+            if (discoveryVersion !== DISCOVERY_REVISION) return true;''', 1)
+          old_discovery = '''    if (await shouldDiscover(env, now)) {
+                try {
+                  const urls = await discoverRaceUrls(env.JRA_HOME_URL, seeds(env));'''
+          new_discovery = '''    if (await shouldDiscover(env, now)) {
+                try {
+                  const previousRevision = await getState(env.DB, "last_discovery_revision");
+                  if (previousRevision !== DISCOVERY_REVISION) {
+                    await resetRaceSourcesForDiscoveryRevision(env.DB);
+                  }
+                  const urls = await discoverRaceUrls(env.JRA_HOME_URL, seeds(env));'''
+          if old_discovery not in s:
+              raise SystemExit('discovery refresh anchor not found')
+          s = s.replace(old_discovery, new_discovery, 1)
+          s = s.replace('''        await setState(env.DB, "last_discovery_model_version", env.MODEL_VERSION);
+          ''', '''        await setState(env.DB, "last_discovery_revision", DISCOVERY_REVISION);
+          ''', 1)
+          complete.write_text(s)
+
+          # Lock the real live race name in the integration test.
+          test = Path('tests/live-jra.ts')
+          s = test.read_text()
+          anchor = '''assert.equal(entry.race.venue, "札幌");
+          assert.equal(entry.race.raceNo, 5);'''
+          replacement = '''assert.equal(entry.race.venue, "札幌");
+          assert.equal(entry.race.raceNo, 5);
+          assert.equal(entry.race.raceName, "メイクデビュー札幌");'''
+          if anchor not in s:
+              raise SystemExit('live test anchor not found')
+          test.write_text(s.replace(anchor, replacement, 1))
+          PY
+          rm -f .github/workflows/patch-race-name-refresh.yml
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: parse official JRA race names and refresh legacy rows"
+          git push origin HEAD:fix-race-name-refresh
