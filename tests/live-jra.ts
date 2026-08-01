@@ -4,9 +4,10 @@ import { discoverRaceUrls, extractEntryLinks, fetchJraPage, parseEntryPage, pars
 function snippet(html: string, needle: string): string | null {
   const index = html.indexOf(needle);
   if (index < 0) return null;
-  return html.slice(Math.max(0, index - 500), Math.min(html.length, index + 1800));
+  return html.slice(Math.max(0, index - 500), Math.min(html.length, index + 2200));
 }
 function cnameOf(url: string): string { return decodeURIComponent(new URL(url).searchParams.get("CNAME") ?? ""); }
+function plain(value: string): string { return value.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim(); }
 
 const entryUrl = "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030520260801%2F15";
 const entryPage = await fetchJraPage(entryUrl);
@@ -21,6 +22,18 @@ catch (error) {
   console.error(JSON.stringify({ stage: "current-entry-parse", error: error instanceof Error ? error.message : String(error), finalUrl: entryPage.url, htmlLength: entryPage.html.length, counts: { table: [...entryPage.html.matchAll(/<table\b/gi)].length, tr: [...entryPage.html.matchAll(/<tr\b/gi)].length, directLinks: directLinks.length }, snippets: { date: snippet(entryPage.html, "2026年8月1日"), raceHeader: snippet(entryPage.html, "5レース"), odds: snippet(entryPage.html, "番人気") } }, null, 2));
   throw error;
 }
+const headingDiagnostics = [...entryPage.html.matchAll(/<h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]>/gi)].map((match) => plain(match[0] ?? ""));
+console.log(JSON.stringify({
+  raceNameDiagnostic: entry.race.raceName,
+  titleDiagnostic: plain(entryPage.html.match(/<title[^>]*>[\s\S]*?<\/title>/i)?.[0] ?? ""),
+  headingDiagnostics,
+  snippets: {
+    raceNameClass: snippet(entryPage.html, "race_name"),
+    raceNameCamel: snippet(entryPage.html, "RaceName"),
+    searchWindow: snippet(entryPage.html, "検索ウィンドウ"),
+    raceFive: snippet(entryPage.html, "5レース")
+  }
+}, null, 2));
 assert.equal(entry.race.raceDate, "2026-08-01");
 assert.equal(entry.race.venue, "札幌");
 assert.equal(entry.race.raceNo, 5);
@@ -49,4 +62,4 @@ const nextDayLinks = allDiscovered.filter((url) => cnameOf(url).includes("202608
 assert.ok(currentDayLinks.length >= 36, `current-day discovery incomplete: ${currentDayLinks.length}`);
 assert.ok(nextDayLinks.length >= 36, `next-day discovery incomplete: ${nextDayLinks.length}`);
 
-console.log(JSON.stringify({ ok: true, raceId: entry.race.raceId, runners: entry.runners.length, results: result.results.length, payouts: result.payouts.length, directEntryLinks: directLinks.length, allDiscovered: allDiscovered.length, currentDayLinks: currentDayLinks.length, nextDayLinks: nextDayLinks.length, resultUrl: entry.race.resultUrl }, null, 2));
+console.log(JSON.stringify({ ok: true, raceId: entry.race.raceId, raceName: entry.race.raceName, runners: entry.runners.length, results: result.results.length, payouts: result.payouts.length, directEntryLinks: directLinks.length, allDiscovered: allDiscovered.length, currentDayLinks: currentDayLinks.length, nextDayLinks: nextDayLinks.length, resultUrl: entry.race.resultUrl }, null, 2));
