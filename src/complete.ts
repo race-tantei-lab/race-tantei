@@ -7,7 +7,6 @@ import {
   getDueRaceSources,
   getLatestRaces,
   getPerformanceRows,
-  getRace,
   getRaceDetail,
   getRunnerHistoryStats,
   getRunners,
@@ -42,6 +41,7 @@ import {
 import { isJstEntryWindow, isJstRaceWindow, nowIso, positiveInt, positiveNumber } from "./v1/utils.js";
 
 let schemaReady: Promise<void> | null = null;
+let inMemorySync: Promise<unknown> | null = null;
 
 function ready(db: D1Database): Promise<void> {
   schemaReady ??= ensureSchema(db).catch((error) => {
@@ -90,8 +90,8 @@ function nextEntryFetch(race: RaceRecord, now: Date): string {
   if (!race.startTimeUtc) return addMinutes(now, 60);
   const deltaMinutes = (new Date(race.startTimeUtc).getTime() - now.getTime()) / 60_000;
   if (deltaMinutes > 24 * 60) return addMinutes(now, 180);
-  if (deltaMinutes > 120) return addMinutes(now, 45);
-  if (deltaMinutes > 30) return addMinutes(now, 15);
+  if (deltaMinutes > 180) return addMinutes(now, 60);
+  if (deltaMinutes > 45) return addMinutes(now, 15);
   if (deltaMinutes > 0) return addMinutes(now, 5);
   return addMinutes(now, 8);
 }
@@ -101,26 +101,38 @@ function seeds(env: Env): string[] {
 }
 
 async function shouldDiscover(env: Env, now: Date): Promise<boolean> {
-  if (!isJstEntryWindow(now)) return false;
   const last = await getState(env.DB, "last_discovery_at");
   if (!last) return true;
-  const elapsedMinutes = (now.getTime() - new Date(last).getTime()) / 60_000;
-  return elapsedMinutes >= (isJstRaceWindow(now) ? 30 : 120);
+  const lastMs = new Date(last).getTime();
+  if (!Number.isFinite(lastMs)) return true;
+  const elapsedMinutes = (now.getTime() - lastMs) / 60_000;
+  if (!isJstEntryWindow(now)) return elapsedMinutes >= 24 * 60;
+  return elapsedMinutes >= (isJstRaceWindow(now) ? 20 : 90);
 }
 
 async function updatePrediction(env: Env, race: RaceRecord, now: Date): Promise<void> {
   if (!race.startTimeUtc || race.status === "finished") return;
   const minutesToStart = (new Date(race.startTimeUtc).getTime() - now.getTime()) / 60_000;
-  if (minutesToStart <= 0 || minutesToStart > 180) return;
+  if (minutesToStart <= 0 || minutesToStart > 240) return;
   const runners = await getRunners(env.DB, race.raceId);
   if (runners.filter((runner) => runner.runnerStatus === "active").length < 2) return;
+  if (runners.filter((runner) => runner.runnerStatus === "active" && runner.winOdds !== null).length < 2) return;
   const history = await getRunnerHistoryStats(env.DB, race, runners);
-  const minEv = positiveNumber(env.MIN_EXPECTED_VALUE, 108);
-  const budget = positiveInt(env.MAX_RACE_BUDGET_YEN, 2000);
-  const prediction = generatePrediction(race, runners, history, env.MODEL_VERSION, minEv, budget);
+  const prediction = generatePrediction(
+    race,
+    runners,
+    history,
+    env.MODEL_VERSION,
+    positiveNumber(env.MIN_EXPECTED_VALUE, 108),
+    positiveInt(env.MAX_RACE_BUDGET_YEN, 2000)
+  );
   const status = minutesToStart <= 15 ? "locked" : "draft";
   if (status === "draft") prediction.bets = [];
   await savePrediction(env.DB, race.raceId, prediction, status);
+}
+
+function hasResultUrl(url: string): boolean {
+  return /\/JRADB\/accessS\.html/i.test(url) && /(?:pw|sw)01sde/i.test(decodeURIComponent(url));
 }
 
 async function processSource(env: Env, source: Awaited<ReturnType<typeof getDueRaceSources>>[number], now: Date): Promise<boolean> {
@@ -132,7 +144,7 @@ async function processSource(env: Env, source: Awaited<ReturnType<typeof getDueR
     await updatePrediction(env, entry.race, now);
 
     const startMs = entry.race.startTimeUtc ? new Date(entry.race.startTimeUtc).getTime() : Number.POSITIVE_INFINITY;
-    const resultDue = now.getTime() >= startMs + 5 * 60_000;
+    const resultDue = now.getTime() >= startMs + 4 * 60_000;
     if (!resultDue) {
       await updateRaceSource(env.DB, source.entryUrl, {
         raceId: entry.race.raceId,
@@ -145,7 +157,8 @@ async function processSource(env: Env, source: Awaited<ReturnType<typeof getDueR
     }
 
     try {
-      const resultPage = await fetchJraPage(source.resultUrl || toResultUrl(source.entryUrl));
+      if (!hasResultUrl(entry.race.resultUrl)) throw new Error("RESULT_URL_NOT_READY");
+      const resultPage = await fetchJraPage(entry.race.resultUrl);
       if (!pageLooksLikeResult(resultPage.html)) throw new Error("RESULT_NOT_READY");
       const result = parseResultPage(resultPage.html, resultPage.url);
       if (result.race.raceId !== entry.race.raceId) throw new Error("RACE_ID_MISMATCH");
@@ -154,7 +167,7 @@ async function processSource(env: Env, source: Awaited<ReturnType<typeof getDueR
       await updateRaceSource(env.DB, source.entryUrl, {
         raceId: entry.race.raceId,
         status: "complete",
-        nextFetchAt: addMinutes(now, 24 * 60),
+        nextFetchAt: addMinutes(now, 7 * 24 * 60),
         entryFetched: true,
         resultFetched: true,
         error: null
@@ -165,15 +178,15 @@ async function processSource(env: Env, source: Awaited<ReturnType<typeof getDueR
       await updateRaceSource(env.DB, source.entryUrl, {
         raceId: entry.race.raceId,
         status: "awaiting_result",
-        nextFetchAt: addMinutes(now, 10),
+        nextFetchAt: addMinutes(now, message === "RESULT_URL_NOT_READY" ? 5 : 10),
         entryFetched: true,
         error: message
       });
-      return message === "RESULT_NOT_READY";
+      return message === "RESULT_NOT_READY" || message === "RESULT_URL_NOT_READY";
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const delay = Math.min(240, 20 * Math.pow(2, Math.min(3, source.failureCount)));
+    const delay = Math.min(240, 15 * Math.pow(2, Math.min(4, source.failureCount)));
     await updateRaceSource(env.DB, source.entryUrl, {
       raceId: source.raceId,
       status: "discovered",
@@ -184,27 +197,46 @@ async function processSource(env: Env, source: Awaited<ReturnType<typeof getDueR
   }
 }
 
-export async function runSync(env: Env, triggerType: "cron" | "manual" | "deploy"): Promise<unknown> {
+async function acquireSyncLock(env: Env, now: Date): Promise<boolean> {
+  const lock = await getState(env.DB, "sync_lock_until");
+  const lockMs = lock ? new Date(lock).getTime() : 0;
+  if (Number.isFinite(lockMs) && lockMs > now.getTime()) return false;
+  await setState(env.DB, "sync_lock_until", addMinutes(now, 4));
+  return true;
+}
+
+async function executeSync(env: Env, triggerType: "cron" | "manual" | "deploy"): Promise<unknown> {
   await ready(env.DB);
   const now = new Date();
+  if (!(await acquireSyncLock(env, now))) {
+    return { ok: true, skipped: "SYNC_ALREADY_RUNNING", now: nowIso() };
+  }
+
   const runId = await beginSyncRun(env.DB, triggerType);
   let discovered = 0;
   let processed = 0;
   let success = 0;
   let errors = 0;
+  let discoveryError: string | null = null;
   let fatal: string | undefined;
 
   try {
     if (await shouldDiscover(env, now)) {
-      const urls = await discoverRaceUrls(env.JRA_HOME_URL, seeds(env));
-      discovered = urls.length;
-      await upsertRaceSources(env.DB, urls, toResultUrl);
-      await setState(env.DB, "last_discovery_at", nowIso());
-      await setState(env.DB, "last_discovery_count", String(urls.length));
+      try {
+        const urls = await discoverRaceUrls(env.JRA_HOME_URL, seeds(env));
+        discovered = urls.length;
+        await upsertRaceSources(env.DB, urls, toResultUrl);
+        await setState(env.DB, "last_discovery_at", nowIso());
+        await setState(env.DB, "last_discovery_count", String(urls.length));
+        await setState(env.DB, "last_discovery_error", "");
+      } catch (error) {
+        discoveryError = error instanceof Error ? error.message : String(error);
+        errors += 1;
+        await setState(env.DB, "last_discovery_error", discoveryError);
+      }
     }
 
-    const batchSize = positiveInt(env.SYNC_BATCH_SIZE, 8);
-    const due = await getDueRaceSources(env.DB, batchSize);
+    const due = await getDueRaceSources(env.DB, positiveInt(env.SYNC_BATCH_SIZE, 12));
     processed = due.length;
     for (const source of due) {
       const ok = await processSource(env, source, now);
@@ -212,15 +244,25 @@ export async function runSync(env: Env, triggerType: "cron" | "manual" | "deploy
       else errors += 1;
     }
     await setState(env.DB, "last_successful_cycle_at", nowIso());
+    await setState(env.DB, "last_cycle_error", discoveryError ?? "");
   } catch (error) {
     fatal = error instanceof Error ? error.message : String(error);
     errors += 1;
     await setState(env.DB, "last_cycle_error", fatal);
   } finally {
-    await finishSyncRun(env.DB, runId, fatal ? { discovered, processed, success, errors, errorMessage: fatal } : { discovered, processed, success, errors });
+    await finishSyncRun(env.DB, runId, fatal ? { discovered, processed, success, errors, errorMessage: fatal } : { discovered, processed, success, errors, ...(discoveryError ? { errorMessage: discoveryError } : {}) });
+    await setState(env.DB, "sync_lock_until", new Date(0).toISOString());
   }
 
-  return { ok: !fatal, discovered, processed, success, errors, error: fatal ?? null, now: nowIso() };
+  return { ok: !fatal, discovered, processed, success, errors, discoveryError, error: fatal ?? null, now: nowIso() };
+}
+
+export function runSync(env: Env, triggerType: "cron" | "manual" | "deploy"): Promise<unknown> {
+  if (inMemorySync) return inMemorySync;
+  inMemorySync = executeSync(env, triggerType).finally(() => {
+    inMemorySync = null;
+  });
+  return inMemorySync;
 }
 
 async function handleApi(request: Request, env: Env, pathname: string): Promise<Response | null> {
@@ -251,7 +293,9 @@ export default {
 
     if (url.pathname === "/") {
       const [metrics, races] = await Promise.all([getDashboardMetrics(env.DB), getLatestRaces(env.DB)]);
-      return html(renderHome(metrics, races));
+      if (races.length === 0) ctx.waitUntil(runSync(env, "deploy"));
+      const refresh = races.length === 0 ? '<meta http-equiv="refresh" content="12">' : "";
+      return html(refresh + renderHome(metrics, races));
     }
     if (url.pathname.startsWith("/races/")) {
       const id = decodeURIComponent(url.pathname.slice("/races/".length));
@@ -270,8 +314,7 @@ export default {
   },
 
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    const now = new Date();
-    if (!isJstEntryWindow(now)) return;
+    if (!isJstEntryWindow(new Date())) return;
     ctx.waitUntil(runSync(env, "cron"));
   }
 } satisfies ExportedHandler<Env>;
