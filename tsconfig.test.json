@@ -6,5 +6,11 @@
     "rootDir": ".",
     "moduleResolution": "Bundler"
   },
-  "include": ["src/core/**/*.ts", "tests/**/*.ts", "worker-types.d.ts", "node-shims.d.ts"]
+  "include": [
+    "src/core/**/*.ts",
+    "src/phase1.ts",
+    "tests/**/*.ts",
+    "worker-types.d.ts",
+    "node-shims.d.ts"
+  ]
 }
