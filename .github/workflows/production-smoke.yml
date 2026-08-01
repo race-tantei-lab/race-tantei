@@ -41,7 +41,7 @@ jobs:
             sleep 10
           done
 
-      - name: Trigger and verify live data ingestion
+      - name: Verify complete weekend discovery in production
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
@@ -49,7 +49,7 @@ jobs:
           grep -q 'レース探偵' /tmp/home.html
 
           for attempt in $(seq 1 48); do
-            echo "Data attempt ${attempt}/48"
+            echo "Full-ingestion attempt ${attempt}/48"
             status="$(curl --silent --show-error --fail --max-time 25 "${base}/api/status" || true)"
             races="$(curl --silent --show-error --fail --max-time 25 "${base}/api/races" || true)"
             if STATUS="$status" RACES="$races" python - <<'PY'
@@ -61,16 +61,18 @@ jobs:
               sys.exit(1)
           sources = sum(int(row.get("count", 0)) for row in status.get("sourceCounts", []))
           last_race = status.get("lastRace")
-          valid_races = isinstance(races, list) and len(races) > 0
-          print(json.dumps({"sources": sources, "lastRace": last_race, "raceCount": len(races) if isinstance(races, list) else 0}, ensure_ascii=False))
-          sys.exit(0 if sources > 0 and last_race and valid_races else 1)
+          last_sync = status.get("lastSync") or {}
+          sync_finished = bool(last_sync.get("finished_at"))
+          race_count = len(races) if isinstance(races, list) else 0
+          print(json.dumps({"sources": sources, "lastRace": last_race, "raceCount": race_count, "lastSync": last_sync}, ensure_ascii=False))
+          sys.exit(0 if sources >= 72 and last_race and race_count > 0 and sync_finished else 1)
           PY
             then
-              echo "Production Worker has discovered and stored live races."
+              echo "Production Worker has discovered the complete 72-race weekend set."
               exit 0
             fi
             if [ "$attempt" -eq 48 ]; then
-              echo "Production ingestion did not create race sources and races in time."
+              echo "Production did not complete the 72-race weekend discovery in time."
               echo "$status"
               echo "$races"
               exit 1
