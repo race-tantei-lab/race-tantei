@@ -8,6 +8,8 @@
   "vars": {
     "ENVIRONMENT": "phase0",
     "PROBE_ENABLED": "true",
+    "PHASE0_MAX_CRON_SUCCESSES": "3",
+    "PHASE0_MAX_CRON_ATTEMPTS": "12",
     "JRA_ROBOTS_PROBE_URL": "https://www.jra.go.jp/robots.txt",
     "JRA_RESULT_PROBE_URL": "https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0101202601030520260801%2FD1",
     "JRA_ENTRY_PROBE_URL": "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030520260801%2F15"
@@ -21,6 +23,6 @@
     }
   ],
   "triggers": {
-    "crons": ["17 0 * * SAT", "17 0 * * SUN"]
+    "crons": ["17 * * * *"]
   }
 }
