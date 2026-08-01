@@ -11,6 +11,8 @@ import { htmlToLines } from "../src/v1/utils.js";
 const entryUrl = "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1001202601011220260725%2FE1";
 
 const entryPage = await fetchJraPage(entryUrl);
+assert.equal(entryPage.status, 200);
+assert.ok(entryPage.html.length > 10_000, "official entry response was unexpectedly small");
 const entryLines = htmlToLines(entryPage.html);
 if (!pageLooksLikeEntry(entryPage.html)) {
   console.error(JSON.stringify({
@@ -33,6 +35,8 @@ assert.ok(entry.runners.filter((runner) => runner.winOdds !== null).length >= 5,
 assert.ok(entry.race.resultUrl.includes("accessS.html"), "official result URL was not found on entry page");
 
 const resultPage = await fetchJraPage(entry.race.resultUrl);
+assert.equal(resultPage.status, 200);
+assert.ok(resultPage.html.length > 10_000, "official result response was unexpectedly small");
 const resultLines = htmlToLines(resultPage.html);
 if (!pageLooksLikeResult(resultPage.html)) {
   console.error(JSON.stringify({
