@@ -13,6 +13,7 @@ const entryUrl = "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde10012026
 const entryPage = await fetchJraPage(entryUrl);
 assert.equal(entryPage.status, 200);
 assert.ok(entryPage.html.length > 10_000, "official entry response was unexpectedly small");
+assert.match(entryPage.html, /<title[^>]*>[^<]*出馬表[^<]*<\/title>/i);
 const entryLines = htmlToLines(entryPage.html);
 if (!pageLooksLikeEntry(entryPage.html)) {
   console.error(JSON.stringify({
@@ -37,6 +38,7 @@ assert.ok(entry.race.resultUrl.includes("accessS.html"), "official result URL wa
 const resultPage = await fetchJraPage(entry.race.resultUrl);
 assert.equal(resultPage.status, 200);
 assert.ok(resultPage.html.length > 10_000, "official result response was unexpectedly small");
+assert.match(resultPage.html, /<title[^>]*>[^<]*レース結果[^<]*<\/title>/i);
 const resultLines = htmlToLines(resultPage.html);
 if (!pageLooksLikeResult(resultPage.html)) {
   console.error(JSON.stringify({
