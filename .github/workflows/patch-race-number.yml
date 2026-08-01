@@ -1,0 +1,48 @@
+name: Patch JRA race number parsing
+
+on:
+  push:
+    branches: [complete-live-v2]
+    paths:
+      - '.github/workflows/patch-race-number.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: complete-live-v2
+      - name: Prefer race number encoded by JRA in CNAME
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/v1/jra.ts')
+          s = p.read_text()
+          old = '''  const raceMatches = [...text.matchAll(/(?:^|\\s)(\\d{1,2})(?:R|レース)(?:\\s|$)/gm)]
+            .map((match) => Number(match[1]))
+            .filter((value) => value >= 1 && value <= 12);
+          const raceNo = raceMatches[0] ?? Number((new URL(pageUrl).searchParams.get("CNAME") ?? "").match(/(\\d{2})20\\d{6}(?:\\/|%2F)/i)?.[1] ?? 0);
+          if (!raceNo) throw new Error("RACE_NUMBER_NOT_FOUND");'''
+          new = '''  const raceMatches = [...text.matchAll(/(?:^|\\s)(\\d{1,2})(?:R|レース)(?:\\s|$)/gm)]
+            .map((match) => Number(match[1]))
+            .filter((value) => value >= 1 && value <= 12);
+          const decodedCname = decodeURIComponent(new URL(pageUrl).searchParams.get("CNAME") ?? "");
+          const cnameRaceNo = Number(decodedCname.match(/(\\d{2})20\\d{6}\\//i)?.[1] ?? 0);
+          const raceNo = cnameRaceNo >= 1 && cnameRaceNo <= 12 ? cnameRaceNo : (raceMatches[0] ?? 0);
+          if (!raceNo) throw new Error("RACE_NUMBER_NOT_FOUND");'''
+          if old not in s:
+              raise SystemExit('race number anchor not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          rm -f .github/workflows/patch-race-number.yml
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: prefer JRA CNAME race number over navigation labels"
+          git push origin HEAD:complete-live-v2
