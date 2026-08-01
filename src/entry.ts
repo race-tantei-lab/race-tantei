@@ -1,16 +1,11 @@
 import app from "./complete.js";
 import { ensureSchema } from "./v1/db.js";
-import { migrateLegacyData, prepareLegacySchema } from "./v1/migrate.js";
 import type { Env } from "./v1/types.js";
 
 let startupReady: Promise<void> | null = null;
 
 function prepare(db: D1Database): Promise<void> {
-  startupReady ??= (async () => {
-    await prepareLegacySchema(db);
-    await ensureSchema(db);
-    await migrateLegacyData(db);
-  })().catch((error) => {
+  startupReady ??= ensureSchema(db).catch((error) => {
     startupReady = null;
     throw error;
   });
@@ -20,8 +15,9 @@ function prepare(db: D1Database): Promise<void> {
 function failureResponse(request: Request, error: unknown): Response {
   console.error("WORKER_STARTUP_FAILED", error);
   const pathname = new URL(request.url).pathname;
+  const detail = error instanceof Error ? error.message : String(error);
   if (pathname === "/health" || pathname.startsWith("/api/")) {
-    return new Response(JSON.stringify({ ok: false, error: "WORKER_STARTUP_FAILED" }), {
+    return new Response(JSON.stringify({ ok: false, error: "WORKER_STARTUP_FAILED", detail }), {
       status: 500,
       headers: {
         "content-type": "application/json; charset=utf-8",
@@ -31,7 +27,7 @@ function failureResponse(request: Request, error: unknown): Response {
     });
   }
   return new Response(
-    "レース探偵のデータベースを更新しています。数分後に再読み込みしてください。\nエラーコード: WORKER_STARTUP_FAILED",
+    `レース探偵の起動処理に失敗しました。\nエラーコード: WORKER_STARTUP_FAILED\n詳細: ${detail}`,
     {
       status: 500,
       headers: {
