@@ -12,5 +12,5 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "worker-types.d.ts"]
+  "include": ["src/complete.ts", "src/v1/**/*.ts", "worker-types.d.ts"]
 }
