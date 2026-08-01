@@ -297,7 +297,8 @@ function parseEntryRows(html: string): RunnerRecord[] {
     if (!horseName) continue;
 
     const frameAlt = row.html.match(/alt=["'][^"']*枠(\d)[^"']*["']/i)?.[1];
-    const frameNo = frameAlt ? Number(frameAlt) : (nums.length >= 2 && nums[0] <= 8 ? nums[0] : null);
+    const firstFrame = nums[0] ?? null;
+    const frameNo = frameAlt ? Number(frameAlt) : (nums.length >= 2 && firstFrame !== null && firstFrame <= 8 ? firstFrame : null);
     const status: RunnerRecord["runnerStatus"] = /除外/.test(joined) ? "excluded" : /取消/.test(joined) ? "scratched" : "active";
     const odds = detail.match(/(\d+(?:\.\d+)?)\s*\((\d+)番人気\)/);
     const bodyWeight = detail.match(/(\d{3})\s*kg\s*\(([^)]*)\)/i);
