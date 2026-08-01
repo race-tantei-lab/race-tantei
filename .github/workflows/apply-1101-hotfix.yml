@@ -1,0 +1,95 @@
+name: Apply Worker 1101 hotfix
+
+on:
+  push:
+    branches: [hotfix-worker-1101]
+    paths:
+      - '.github/workflows/apply-1101-hotfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hotfix-worker-1101
+      - name: Patch Worker startup
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/complete.ts')
+          text = path.read_text()
+
+          old_import = 'import type { Env, RaceRecord } from "./v1/types.js";\n'
+          new_import = old_import + 'import { migrateLegacyData, prepareLegacySchema } from "./v1/migrate.js";\n'
+          if old_import not in text:
+              raise SystemExit('import anchor not found')
+          text = text.replace(old_import, new_import, 1)
+
+          old_ready = '''function ready(db: D1Database): Promise<void> {
+            schemaReady ??= ensureSchema(db).catch((error) => {
+              schemaReady = null;
+              throw error;
+            });
+            return schemaReady;
+          }
+          '''
+          new_ready = '''function ready(db: D1Database): Promise<void> {
+            schemaReady ??= (async () => {
+              await prepareLegacySchema(db);
+              await ensureSchema(db);
+              await migrateLegacyData(db);
+            })().catch((error) => {
+              schemaReady = null;
+              throw error;
+            });
+            return schemaReady;
+          }
+          '''
+          if old_ready not in text:
+              raise SystemExit('ready anchor not found')
+          text = text.replace(old_ready, new_ready, 1)
+
+          old_fetch = '''  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+            await ready(env.DB);
+            const url = new URL(request.url);
+          '''
+          new_fetch = '''  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+            const url = new URL(request.url);
+            try {
+              await ready(env.DB);
+            } catch (error) {
+              console.error("WORKER_STARTUP_FAILED", error);
+              if (url.pathname === "/health" || url.pathname.startsWith("/api/")) {
+                return json({ ok: false, error: "WORKER_STARTUP_FAILED" }, 500);
+              }
+              return new Response(
+                "レース探偵のデータベースを更新しています。数分後に再読み込みしてください。\\nエラーコード: WORKER_STARTUP_FAILED",
+                {
+                  status: 500,
+                  headers: {
+                    "content-type": "text/plain; charset=utf-8",
+                    "cache-control": "no-store",
+                    "x-robots-tag": "noindex, nofollow"
+                  }
+                }
+              );
+            }
+          '''
+          if old_fetch not in text:
+              raise SystemExit('fetch anchor not found')
+          text = text.replace(old_fetch, new_fetch, 1)
+          path.write_text(text)
+          PY
+          rm -f .github/workflows/apply-1101-hotfix.yml
+      - name: Commit hotfix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: migrate legacy D1 schema and guard startup"
+          git push origin HEAD:hotfix-worker-1101
