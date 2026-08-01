@@ -27,7 +27,6 @@ jobs:
 
           mapping = [
               ('idx_race_sources_due', 'rt_idx_race_sources_due'),
-              ('idx_prediction_runners', 'rt_idx_prediction_runners'),
               ('idx_predictions_race', 'rt_idx_predictions_race'),
               ('idx_bets_settlement', 'rt_idx_bets_settlement'),
               ('idx_runners_trainer', 'rt_idx_runners_trainer'),
@@ -50,10 +49,10 @@ jobs:
           def patch_template(match):
               value = match.group(0)
               for old, new in mapping:
-                  value = re.sub(rf'\\b{re.escape(old)}\\b', new, value)
+                  value = re.sub(rf'\b{re.escape(old)}\b', new, value)
               return value
 
-          patched = re.sub(r'`(?:\\.|[^`])*`', patch_template, text, flags=re.S)
+          patched = re.sub(r'`[^`]*`', patch_template, text, flags=re.S)
           if patched == text:
               raise SystemExit('No SQL identifiers were patched')
           db_path.write_text(patched)
