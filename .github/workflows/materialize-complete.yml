@@ -12,7 +12,6 @@ permissions:
 
 jobs:
   materialize:
-    if: ${{ hashFiles('complete-payload.00') != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,6 +19,7 @@ jobs:
           ref: complete-v1
       - name: Decode remaining source files
         run: |
+          test -f complete-payload.03
           cat complete-payload.* | base64 --decode > /tmp/remaining.zip
           unzip -o /tmp/remaining.zip
           rm -f complete-payload.*
