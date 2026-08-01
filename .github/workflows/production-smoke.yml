@@ -1,8 +1,6 @@
 name: Production smoke test
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -14,12 +12,11 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for Cloudflare deployment and verify health
+      - name: Wait for deployed Worker
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
           for attempt in $(seq 1 36); do
-            echo "Health attempt ${attempt}/36"
             health="$(curl --silent --show-error --fail --max-time 25 "${base}/health" || true)"
             if HEALTH="$health" python - <<'PY'
           import json, os, sys
@@ -31,25 +28,22 @@ jobs:
           PY
             then
               echo "$health"
-              break
-            fi
-            if [ "$attempt" -eq 36 ]; then
-              echo "Production health endpoint did not reach v2.0.1-live"
-              echo "$health"
-              exit 1
+              exit 0
             fi
             sleep 10
           done
+          echo "Worker health verification timed out."
+          exit 1
 
-      - name: Trigger and verify live data ingestion
+      - name: Verify full weekend discovery and corrected race names
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
           curl --silent --show-error --fail --max-time 25 "${base}/" >/tmp/home.html
           grep -q 'レース探偵' /tmp/home.html
 
-          for attempt in $(seq 1 48); do
-            echo "Data attempt ${attempt}/48"
+          for attempt in $(seq 1 120); do
+            echo "Final production attempt ${attempt}/120"
             status="$(curl --silent --show-error --fail --max-time 25 "${base}/api/status" || true)"
             races="$(curl --silent --show-error --fail --max-time 25 "${base}/api/races" || true)"
             if STATUS="$status" RACES="$races" python - <<'PY'
@@ -59,21 +53,32 @@ jobs:
               races = json.loads(os.environ.get("RACES", ""))
           except Exception:
               sys.exit(1)
+
           sources = sum(int(row.get("count", 0)) for row in status.get("sourceCounts", []))
-          last_race = status.get("lastRace")
-          valid_races = isinstance(races, list) and len(races) > 0
-          print(json.dumps({"sources": sources, "lastRace": last_race, "raceCount": len(races) if isinstance(races, list) else 0}, ensure_ascii=False))
-          sys.exit(0 if sources > 0 and last_race and valid_races else 1)
+          last_sync = status.get("lastSync") or {}
+          sync_finished = bool(last_sync.get("finished_at"))
+          target = next((race for race in races if race.get("raceId") == "2026-08-01-sapporo-05"), None) if isinstance(races, list) else None
+          correct_name = bool(target and target.get("raceName") == "メイクデビュー札幌")
+          race_count = len(races) if isinstance(races, list) else 0
+          snapshot = {
+              "sources": sources,
+              "raceCount": race_count,
+              "targetRace": target,
+              "lastSync": last_sync,
+              "syncFinished": sync_finished,
+              "correctRaceName": correct_name,
+          }
+          print(json.dumps(snapshot, ensure_ascii=False))
+          sys.exit(0 if sources >= 72 and race_count > 0 and sync_finished and correct_name else 1)
           PY
             then
-              echo "Production Worker has discovered and stored live races."
+              echo "Final production verification passed."
               exit 0
-            fi
-            if [ "$attempt" -eq 48 ]; then
-              echo "Production ingestion did not create race sources and races in time."
-              echo "$status"
-              echo "$races"
-              exit 1
             fi
             sleep 10
           done
+
+          echo "Final production verification timed out."
+          echo "$status"
+          echo "$races"
+          exit 1
