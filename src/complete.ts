@@ -15,6 +15,7 @@ import {
   saveEntryBundle,
   savePrediction,
   saveResultBundle,
+  resetRaceSourcesForDiscoveryRevision,
   setState,
   settleRace,
   updateRaceSource,
@@ -42,6 +43,7 @@ import { isJstEntryWindow, isJstRaceWindow, nowIso, positiveInt, positiveNumber 
 
 let schemaReady: Promise<void> | null = null;
 let inMemorySync: Promise<unknown> | null = null;
+const DISCOVERY_REVISION = "2026-08-01-race-name-v1";
 
 function ready(db: D1Database): Promise<void> {
   schemaReady ??= ensureSchema(db).catch((error) => {
@@ -101,8 +103,8 @@ function seeds(env: Env): string[] {
 }
 
 async function shouldDiscover(env: Env, now: Date): Promise<boolean> {
-  const discoveryVersion = await getState(env.DB, "last_discovery_model_version");
-  if (discoveryVersion !== env.MODEL_VERSION) return true;
+  const discoveryVersion = await getState(env.DB, "last_discovery_revision");
+  if (discoveryVersion !== DISCOVERY_REVISION) return true;
   const last = await getState(env.DB, "last_discovery_at");
   if (!last) return true;
   const lastMs = new Date(last).getTime();
@@ -225,12 +227,16 @@ async function executeSync(env: Env, triggerType: "cron" | "manual" | "deploy"):
   try {
     if (await shouldDiscover(env, now)) {
       try {
+        const previousRevision = await getState(env.DB, "last_discovery_revision");
+        if (previousRevision !== DISCOVERY_REVISION) {
+          await resetRaceSourcesForDiscoveryRevision(env.DB);
+        }
         const urls = await discoverRaceUrls(env.JRA_HOME_URL, seeds(env));
         discovered = urls.length;
         await upsertRaceSources(env.DB, urls, toResultUrl);
         await setState(env.DB, "last_discovery_at", nowIso());
         await setState(env.DB, "last_discovery_count", String(urls.length));
-        await setState(env.DB, "last_discovery_model_version", env.MODEL_VERSION);
+        await setState(env.DB, "last_discovery_revision", DISCOVERY_REVISION);
         await setState(env.DB, "last_discovery_error", "");
       } catch (error) {
         discoveryError = error instanceof Error ? error.message : String(error);

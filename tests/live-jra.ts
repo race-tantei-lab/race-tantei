@@ -24,6 +24,7 @@ catch (error) {
 assert.equal(entry.race.raceDate, "2026-08-01");
 assert.equal(entry.race.venue, "札幌");
 assert.equal(entry.race.raceNo, 5);
+assert.equal(entry.race.raceName, "メイクデビュー札幌");
 assert.ok(entry.runners.length >= 5, `too few runners parsed: ${entry.runners.length}`);
 assert.ok(entry.runners.filter((runner) => runner.winOdds !== null).length >= 3, "current win odds were not parsed");
 assert.ok(entry.race.resultUrl.includes("accessS.html"), "official current result URL was not found");

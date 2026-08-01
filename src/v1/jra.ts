@@ -134,6 +134,11 @@ function headingTexts(html: string): string[] {
 }
 
 function parseRaceName(html: string, raceNo: number): string {
+  const explicitHtml = html.match(/<span\b[^>]*class=["'][^"']*\btitleRaceName\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/i)?.[1];
+  if (explicitHtml) {
+    const explicitName = stripHtml(explicitHtml).replace(/\s+/g, " ").trim();
+    if (explicitName) return explicitName;
+  }
   for (const raw of headingTexts(html)) {
     const text = raw.replace(new RegExp(`^${raceNo}(?:R|レース)\\s*`), "").trim();
     if (!text || /^(?:出馬表|レース結果|払戻金|関連メニュー|コースレコード|勝馬の紹介)$/.test(text)) continue;
