@@ -206,6 +206,14 @@ export async function upsertRaceSources(db: D1Database, entryUrls: string[], res
   await db.batch(statements);
 }
 
+export async function resetRaceSourcesForDiscoveryRevision(db: D1Database): Promise<void> {
+  await db.prepare(`
+    UPDATE rt_race_sources
+    SET status = 'discovered', next_fetch_at = ?, failure_count = 0,
+        last_error = NULL, updated_at = CURRENT_TIMESTAMP
+  `).bind(nowIso()).run();
+}
+
 export interface RaceSourceRow {
   entryUrl: string;
   resultUrl: string;
