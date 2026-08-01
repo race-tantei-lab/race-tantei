@@ -6,6 +6,7 @@ const CSS = `
 :root{color-scheme:dark;--bg:#0b0f14;--panel:#121923;--panel2:#182231;--line:#293649;--text:#eef3f8;--muted:#9fb0c2;--accent:#4fd1a1;--danger:#ff7b72;--gold:#ffd166}
 *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#091018,#0b0f14 45%);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif;line-height:1.55}
 a{color:inherit;text-decoration:none}.wrap{max-width:980px;margin:auto;padding:16px}.top{display:flex;align-items:center;justify-content:space-between;padding:12px 0 18px}.brand{font-weight:900;font-size:22px;letter-spacing:.03em}.brand span{color:var(--accent)}nav{display:flex;gap:8px;overflow:auto;padding-bottom:4px}nav a{white-space:nowrap;padding:8px 11px;background:#111925;border:1px solid var(--line);border-radius:999px;font-size:13px}.hero{padding:20px;background:linear-gradient(135deg,#172638,#10241e);border:1px solid #2b5448;border-radius:20px;margin-bottom:14px}.hero h1{font-size:27px;margin:0 0 7px}.muted{color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.metric,.card{background:rgba(18,25,35,.94);border:1px solid var(--line);border-radius:16px;padding:15px}.metric b{display:block;font-size:22px;margin-top:4px}.section{margin:22px 0 10px;font-size:18px}.race{display:grid;grid-template-columns:72px 1fr auto;gap:12px;align-items:center;margin-bottom:9px}.race .no{font-weight:900;font-size:18px}.pill{display:inline-block;border-radius:999px;padding:3px 8px;font-size:12px;border:1px solid var(--line);color:var(--muted)}.pill.locked{color:#8df0cc;border-color:#347a65}.pill.finished{color:#ffd89a;border-color:#76613a}.right{text-align:right}.positive{color:var(--accent)}.negative{color:var(--danger)}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px 7px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}.horse-no{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:7px;background:#e8edf2;color:#101820;font-weight:900;margin-right:7px}.buy{border-color:#516d42;background:#162416}.warning{border-color:#6e5730;background:#251e12}.error{border-color:#74403d;background:#271817}.tabs{display:flex;gap:8px;margin:12px 0}.bar{height:7px;border-radius:9px;background:#263242;overflow:hidden;margin-top:5px}.bar i{display:block;height:100%;background:var(--accent)}.footer{font-size:12px;color:var(--muted);padding:32px 4px 50px}.empty{text-align:center;padding:34px 15px;color:var(--muted)}code{word-break:break-all;background:#0b111a;padding:2px 5px;border-radius:5px}.status-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--accent);margin-right:6px}@media(min-width:700px){.grid{grid-template-columns:repeat(4,1fr)}.wrap{padding:24px}.hero{padding:28px}.race{grid-template-columns:100px 1fr 180px}}
+.date-block{margin:20px 0 30px}.date-head{position:sticky;top:0;z-index:3;background:rgba(9,16,24,.94);backdrop-filter:blur(10px);padding:11px 2px 9px;border-bottom:1px solid var(--line)}.date-title{font-size:23px;font-weight:900}.venue-block{margin:15px 0 22px}.venue-head{display:flex;justify-content:space-between;align-items:center;margin:0 3px 9px}.venue-name{font-size:19px;font-weight:900}.race-list{display:grid;gap:8px}.day-nav{display:flex;gap:7px;overflow:auto;padding:2px 0 8px}.day-nav a{white-space:nowrap;border:1px solid var(--line);background:#101925;padding:8px 11px;border-radius:10px;font-size:13px}.result-box{border-color:#76613a;background:#251e12}.detail-status{margin:10px 0}.race-date{font-weight:800;color:var(--accent)}@media(min-width:700px){.race-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
 `;
 
 function layout(title: string, body: string): string {
@@ -17,40 +18,50 @@ function pct(value: number | null, digits = 1): string {
 }
 
 export function renderHome(metrics: DashboardMetrics, races: RaceListRow[]): string {
-  const raceCards = races.map((race) => `
-    <a class="card race" href="/races/${encodeURIComponent(race.raceId)}">
-      <div><div class="muted">${escapeHtml(race.venue)}</div><div class="no">${race.raceNo}R</div><div class="muted">${escapeHtml(race.startTimeJst ?? "")}</div></div>
-      <div><b>${escapeHtml(race.raceName)}</b><div class="muted">${race.topHorseNo ? `予想1位 ${race.topHorseNo} ${escapeHtml(race.topHorseName)}` : "予想計算待ち"}</div></div>
-      <div class="right"><span class="pill ${race.predictionStatus === "locked" ? "locked" : race.status === "finished" ? "finished" : ""}">${race.predictionStatus === "locked" ? "発走前固定済み" : race.status === "finished" ? "結果確定" : race.predictionStatus === "draft" ? "暫定" : "待機"}</span><div class="muted">買い目 ${race.betCount}</div></div>
-    </a>`).join("");
-  return layout("本日の予想", `
-    <section class="hero"><div class="muted"><span class="status-dot"></span>全自動・公開予想記録</div><h1>回収率100％超を、全履歴で検証する。</h1><div class="muted">出馬表取得、確率計算、発走前ロック、結果・払戻、回収率集計まで自動処理します。</div></section>
-    <section class="grid">
-      <div class="metric"><span class="muted">累計回収率</span><b class="${(metrics.roiPct ?? 0) >= 100 ? "positive" : ""}">${pct(metrics.roiPct)}</b></div>
-      <div class="metric"><span class="muted">モデル収支</span><b class="${metrics.profitYen >= 0 ? "positive" : "negative"}">${metrics.profitYen >= 0 ? "+" : ""}${formatYen(metrics.profitYen)}</b></div>
-      <div class="metric"><span class="muted">購入／払戻</span><b>${formatYen(metrics.totalStakeYen)}</b><small class="muted">払戻 ${formatYen(metrics.totalReturnYen)}</small></div>
-      <div class="metric"><span class="muted">固定予想</span><b>${metrics.predictionCount}R</b><small class="muted">的中率 ${pct(metrics.hitRatePct)}</small></div>
-    </section>
-    <h2 class="section">レース一覧</h2>
-    ${raceCards || '<div class="card empty">データ取得後にレースが表示されます。システムは定期実行中です。</div>'}
-  `);
+  const dateLabel = (date: string): string => {
+    const parsed = new Date(`${date}T00:00:00+09:00`);
+    if (Number.isNaN(parsed.getTime())) return date;
+    const day = ["日", "月", "火", "水", "木", "金", "土"][parsed.getDay()] ?? "";
+    return `${parsed.getMonth() + 1}月${parsed.getDate()}日（${day}）`;
+  };
+  const grouped = new Map<string, Map<string, RaceListRow[]>>();
+  for (const race of [...races].sort((a,b) => a.raceDate.localeCompare(b.raceDate) || a.venue.localeCompare(b.venue, "ja") || a.raceNo-b.raceNo)) {
+    const venues = grouped.get(race.raceDate) ?? new Map<string, RaceListRow[]>();
+    const rows = venues.get(race.venue) ?? [];
+    rows.push(race); venues.set(race.venue, rows); grouped.set(race.raceDate, venues);
+  }
+  const dates=[...grouped.keys()];
+  const nav=dates.map(date=>`<a href="#date-${date}">${escapeHtml(dateLabel(date))}</a>`).join("");
+  const sections=dates.map(date=>{
+    const venues=grouped.get(date)!;
+    const venueHtml=[...venues.entries()].map(([venue,rows])=>{
+      const cards=rows.map(race=>{
+        const finished=race.status==="finished";
+        const state=finished ? "結果確定" : race.predictionStatus==="locked" ? "予想公開" : race.predictionStatus==="draft" ? "暫定予想" : "予想待ち";
+        const cls=finished ? "finished" : race.predictionStatus==="locked" ? "locked" : "";
+        const summary=finished ? "着順・払戻を確認" : race.topHorseNo ? `◎ ${race.topHorseNo} ${escapeHtml(race.topHorseName)}` : "予想データ準備中";
+        return `<a class="card race" href="/races/${encodeURIComponent(race.raceId)}"><div><div class="race-date">${race.raceNo}R</div><div class="muted">${escapeHtml(race.startTimeJst ?? "時刻未定")}</div></div><div><b>${escapeHtml(race.raceName)}</b><div class="muted">${summary}</div></div><div class="right"><span class="pill ${cls}">${state}</span><div class="muted">買い目 ${race.betCount}</div></div></a>`;
+      }).join("");
+      return `<section class="venue-block"><div class="venue-head"><div class="venue-name">${escapeHtml(venue)}競馬場</div><div class="muted">${rows.length}レース</div></div><div class="race-list">${cards}</div></section>`;
+    }).join("");
+    return `<section class="date-block" id="date-${date}"><div class="date-head"><div class="date-title">${escapeHtml(dateLabel(date))}</div><div class="muted">${escapeHtml(date)} ／ ${[...venues.values()].reduce((n,v)=>n+v.length,0)}レース</div></div>${venueHtml}</section>`;
+  }).join("");
+  return layout("予想一覧", `<section class="hero"><div class="muted"><span class="status-dot"></span>全自動・公開予想記録</div><h1>日付と競馬場からレースを選ぶ。</h1><div class="muted">予想、買い目、結果、払戻を各レースの詳細画面で確認できます。</div></section><section class="grid"><div class="metric"><span class="muted">累計回収率</span><b class="${(metrics.roiPct ?? 0)>=100 ? "positive":""}">${pct(metrics.roiPct)}</b></div><div class="metric"><span class="muted">モデル収支</span><b class="${metrics.profitYen>=0?"positive":"negative"}">${metrics.profitYen>=0?"+":""}${formatYen(metrics.profitYen)}</b></div><div class="metric"><span class="muted">購入／払戻</span><b>${formatYen(metrics.totalStakeYen)}</b><small class="muted">払戻 ${formatYen(metrics.totalReturnYen)}</small></div><div class="metric"><span class="muted">固定予想</span><b>${metrics.predictionCount}R</b><small class="muted">的中率 ${pct(metrics.hitRatePct)}</small></div></section>${nav?`<h2 class="section">開催日</h2><div class="day-nav">${nav}</div>`:""}${sections||'<div class="card empty">レースデータを取得中です。</div>'}`);
 }
 
 export function renderRace(detail: RaceDetail): string {
   const { race, runners, prediction, predictedRunners, bets } = detail;
-  const predMap = new Map(predictedRunners.map((runner) => [runner.horseNo, runner]));
-  const runnerRows = runners.map((runner) => {
-    const pred = predMap.get(runner.horseNo);
-    return `<tr><td><span class="horse-no">${runner.horseNo}</span>${escapeHtml(runner.horseName)}${runner.runnerStatus !== "active" ? ` <span class="pill">${escapeHtml(runner.runnerStatus)}</span>` : ""}</td><td>${pred ? `${(pred.winProbability * 100).toFixed(1)}%<div class="bar"><i style="width:${Math.min(100, pred.winProbability * 250)}%"></i></div>` : "—"}</td><td>${runner.winOdds ?? "—"}</td><td>${pred?.fairOdds.toFixed(2) ?? "—"}</td><td>${pred?.expectedValuePct ? pred.expectedValuePct.toFixed(1) + "%" : "—"}</td><td>${runner.finishPosition ?? "—"}</td></tr>`;
-  }).join("");
-  const betCards = bets.map((bet) => `<div class="card buy"><b>${escapeHtml(bet.betType)} ${escapeHtml(bet.combination)}</b><div>モデル金額 ${formatYen(bet.stakeYen)} ／ 想定オッズ ${bet.assumedOdds.toFixed(1)}</div><div class="muted">推定期待値 ${bet.expectedValuePct.toFixed(1)}%　${bet.settlementStatus === "settled" ? `払戻 ${formatYen(bet.returnYen ?? 0)}` : "発走前公開"}</div></div>`).join("");
-  const explanations = predictedRunners.slice(0, 5).map((pred) => `<div class="card"><b>${pred.predictedOrder}位　${pred.horseNo} ${escapeHtml(pred.horseName)}</b><div class="muted">${escapeHtml(pred.explanation)}</div></div>`).join("");
-  return layout(`${race.venue}${race.raceNo}R`, `
-    <section class="hero"><div class="muted">${escapeHtml(race.raceDate)} ${escapeHtml(race.venue)} ${race.raceNo}R　${escapeHtml(race.startTimeJst ?? "")}</div><h1>${escapeHtml(race.raceName)}</h1><div>${escapeHtml(race.conditions ?? "")}　${escapeHtml(race.surface ?? "")}${race.distanceM ?? ""}m ${escapeHtml(race.direction ?? "")}</div><div class="tabs"><span class="pill ${prediction?.status === "locked" ? "locked" : ""}">${prediction?.status === "locked" ? "発走前固定済み" : prediction?.status === "draft" ? "暫定予想" : "予想待ち"}</span><span class="pill">モデル ${escapeHtml(prediction?.modelVersion ?? "—")}</span></div></section>
-    <h2 class="section">買い目</h2>${betCards || '<div class="card empty">期待値基準を満たす推奨馬券はありません。</div>'}
-    <h2 class="section">各馬の推定値</h2><div class="card" style="overflow:auto"><table><thead><tr><th>馬</th><th>勝率</th><th>オッズ</th><th>適正</th><th>期待値</th><th>着順</th></tr></thead><tbody>${runnerRows}</tbody></table></div>
-    <h2 class="section">予想根拠</h2>${explanations || '<div class="card empty">予想計算待ちです。</div>'}
-  `);
+  const predMap=new Map(predictedRunners.map(r=>[r.horseNo,r]));
+  const finished=race.status==="finished";
+  const finishers=[...runners].filter(r=>r.finishPosition!==null).sort((a,b)=>(a.finishPosition??99)-(b.finishPosition??99));
+  const stake=bets.reduce((n,b)=>n+b.stakeYen,0), returns=bets.reduce((n,b)=>n+(b.returnYen??0),0), profit=returns-stake;
+  const marks=["◎","○","▲"];
+  const predictionBox=prediction ? `<div class="card detail-status"><b>${prediction.status==="locked"?"発走前固定予想":"暫定予想"}</b><div class="tabs">${predictedRunners.slice(0,3).map((p,i)=>`<span class="pill ${i===0?"locked":""}">${marks[i]} ${p.horseNo} ${escapeHtml(p.horseName)}</span>`).join("")}</div><div class="muted">生成 ${escapeHtml(prediction.generatedAt)}${prediction.lockedAt?` ／ 固定 ${escapeHtml(prediction.lockedAt)}`:""}</div></div>` : '<div class="card warning"><b>予想はまだ公開されていません</b><div class="muted">出走馬とオッズ取得後に自動生成します。</div></div>';
+  const resultBox=finished ? `<div class="card result-box"><b>レース結果</b><div class="tabs">${finishers.slice(0,3).map(r=>`<span class="pill finished">${r.finishPosition}着 ${r.horseNo} ${escapeHtml(r.horseName)}</span>`).join("")||'<span class="muted">着順取得中</span>'}</div>${bets.length?`<div>購入 ${formatYen(stake)} ／ 払戻 ${formatYen(returns)} ／ <strong class="${profit>=0?"positive":"negative"}">${profit>=0?"+":""}${formatYen(profit)}</strong></div>`:'<div class="muted">固定買い目なし</div>'}</div>` : '<div class="card"><b>結果待ち</b><div class="muted">終了後に着順、払戻、収支を自動反映します。</div></div>';
+  const rows=runners.map(r=>{const p=predMap.get(r.horseNo);return `<tr><td><span class="horse-no">${r.horseNo}</span>${escapeHtml(r.horseName)}<div class="muted">${escapeHtml(r.jockey??"")}</div></td><td>${p?`${p.predictedOrder}位<br>${(p.winProbability*100).toFixed(1)}%`:"—"}</td><td>${r.winOdds??"—"}</td><td>${p?.fairOdds.toFixed(2)??"—"}</td><td>${p?.expectedValuePct!=null?p.expectedValuePct.toFixed(1)+"%":"—"}</td><td>${r.finishPosition??"—"}</td></tr>`}).join("");
+  const betCards=bets.map(b=>`<div class="card buy"><b>${escapeHtml(b.betType)} ${escapeHtml(b.combination)}</b><div>購入想定 ${formatYen(b.stakeYen)} ／ 使用オッズ ${b.assumedOdds.toFixed(1)}</div><div class="muted">期待値 ${b.expectedValuePct.toFixed(1)}% ／ ${b.settlementStatus==="settled"?`払戻 ${formatYen(b.returnYen??0)}`:"発走前固定済み"}</div></div>`).join("");
+  const reasons=predictedRunners.slice(0,5).map(p=>`<div class="card"><b>${p.predictedOrder}位 ${p.horseNo} ${escapeHtml(p.horseName)}</b><div class="muted">${escapeHtml(p.explanation)}</div></div>`).join("");
+  return layout(`${race.raceDate} ${race.venue}${race.raceNo}R`, `<section class="hero"><div class="muted">${escapeHtml(race.raceDate)} ／ ${escapeHtml(race.venue)}競馬場</div><h1>${race.raceNo}R ${escapeHtml(race.raceName)}</h1><div><b>${escapeHtml(race.startTimeJst??"時刻未定")} 発走</b>　${escapeHtml(race.conditions??"")} ${escapeHtml(race.surface??"")}${race.distanceM??""}m</div><div class="tabs"><span class="pill ${finished?"finished":prediction?.status==="locked"?"locked":""}">${finished?"結果確定":prediction?.status==="locked"?"予想公開中":prediction?"暫定予想":"予想待ち"}</span></div></section>${predictionBox}${resultBox}<h2 class="section">買い目</h2>${betCards||'<div class="card empty">固定された買い目はありません。</div>'}<h2 class="section">出走馬・予想・結果</h2><div class="card" style="overflow:auto"><table><thead><tr><th>馬</th><th>予想</th><th>単勝</th><th>適正</th><th>期待値</th><th>着順</th></tr></thead><tbody>${rows||'<tr><td colspan="6">取得中</td></tr>'}</tbody></table></div><h2 class="section">予想根拠</h2>${reasons||'<div class="card empty">予想生成後に表示されます。</div>'}`);
 }
 
 export function renderPerformance(metrics: DashboardMetrics, rows: Array<{ label: string; bets: number; stake: number; returns: number; roi: number | null }>): string {
