@@ -54,10 +54,13 @@ export async function fetchJraPage(rawUrl: string, fetchImpl: typeof fetch = fet
       redirect: "follow",
       signal: controller.signal,
       headers: {
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.5",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.7,en;q=0.5",
         "Cache-Control": "no-cache",
-        "User-Agent": "Mozilla/5.0 (compatible; RaceTantei/2.0; non-commercial; low-frequency)"
+        Pragma: "no-cache",
+        Referer: "https://www.jra.go.jp/",
+        "Upgrade-Insecure-Requests": "1",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
       }
     });
     const finalUrl = validateUrl(response.url || initial.toString());
