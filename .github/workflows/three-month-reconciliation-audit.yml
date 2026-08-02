@@ -1,0 +1,74 @@
+name: Three month reconciliation audit
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch read-only production audit
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          for attempt in $(seq 1 40); do
+            code="$(curl --silent --show-error --max-time 60 \
+              -H 'x-race-audit: stake-reconciliation-v1' \
+              -o audit.json -w '%{http_code}' \
+              "${base}/api/audit/three-months?full=1" || true)"
+            if [ "$code" = '200' ] && grep -q 'three-month-stake-reconciliation-v1' audit.json; then
+              break
+            fi
+            if [ "$attempt" -eq 40 ]; then
+              echo "audit endpoint unavailable: HTTP ${code}" >&2
+              cat audit.json || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Verify public safeguard and frozen writes
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          curl --silent --show-error --fail --max-time 60 "$base/" -o home.html
+          curl --silent --show-error --fail --max-time 60 "$base/performance" -o performance.html
+          test "$(curl --silent --show-error --max-time 30 -o freeze.json -w '%{http_code}' \
+            -X POST -H 'x-race-backfill: three-month-v1' \
+            "$base/api/history/three-months/step")" = '423'
+          grep -q '過去3ヶ月成績を監査中' home.html
+          grep -q '過去3ヶ月成績を監査中' performance.html
+          grep -q 'HISTORICAL_AUDIT_FROZEN' freeze.json
+
+      - name: Print reconciliation findings
+        run: |
+          python - <<'PY'
+          import json
+          data=json.load(open('audit.json',encoding='utf-8'))
+          summary={
+            'valid':data.get('valid'),
+            'scope':data.get('scope'),
+            'findings':data.get('findings'),
+            'courses':data.get('courses'),
+            'monthly':data.get('monthly'),
+            'firstStakeViolations':data.get('stakeViolations',[])[:10],
+            'firstDetailMismatches':data.get('individualDetailMismatches',[])[:5],
+            'firstArchiveMismatches':data.get('archiveMismatches',[])[:5],
+          }
+          print(json.dumps(summary,ensure_ascii=False,indent=2))
+          open('audit-summary.json','w',encoding='utf-8').write(json.dumps(summary,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Upload complete reconciliation
+        uses: actions/upload-artifact@v4
+        with:
+          name: three-month-reconciliation-audit
+          path: |
+            audit.json
+            audit-summary.json
+          retention-days: 30
