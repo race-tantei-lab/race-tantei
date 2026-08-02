@@ -4,6 +4,7 @@ import { renderCoursePerformance } from "./v1/course-ui.js";
 import { ensureSchema } from "./v1/db.js";
 import { getDisplayRaceDetail } from "./v1/display-detail.js";
 import { fetchJraPage } from "./v1/jra.js";
+import { refreshMissingLivePredictions } from "./v1/live-prediction-refresh.js";
 import { getPhaseCDashboard } from "./v1/phase-c-dashboard.js";
 import { renderPhaseCRaceDetail } from "./v1/race-detail-phase-c.js";
 import type { Env } from "./v1/types.js";
@@ -96,6 +97,8 @@ function runMaintenance(env: Env): Promise<void> {
   if (maintenanceRunning) return maintenanceRunning;
   maintenanceRunning = (async () => {
     await runSync(env, "deploy");
+    const refreshed = await refreshMissingLivePredictions(env, 30);
+    console.log("LIVE_PREDICTION_REFRESH", JSON.stringify(refreshed));
     await repairRaceNames(env.DB, 8);
     await runValidationBatch(env.DB, 6);
   })().finally(() => {
