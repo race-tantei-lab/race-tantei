@@ -1,8 +1,12 @@
 import app from "./complete.js";
+import { BACKTEST_DATE, renderBacktest, runBacktestBatch } from "./v1/backtest.js";
 import { ensureSchema } from "./v1/db.js";
+import { fetchJraPage } from "./v1/jra.js";
 import type { Env } from "./v1/types.js";
+import { stripHtml } from "./v1/utils.js";
 
 let startupReady: Promise<void> | null = null;
+let maintenanceRunning: Promise<void> | null = null;
 
 function prepare(db: D1Database): Promise<void> {
   startupReady ??= ensureSchema(db).catch((error) => {
@@ -39,10 +43,67 @@ function failureResponse(request: Request, error: unknown): Response {
   );
 }
 
+function extractOfficialRaceName(html: string): string | null {
+  const match = html.match(/<span\b[^>]*class=["'][^"']*\btitleRaceName\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
+  if (!match?.[1]) return null;
+  const name = stripHtml(match[1]).replace(/\s+/g, " ").trim();
+  if (!name || /^(?:検索ウィンドウ|メニュー|出馬表|レース結果|オッズ|払戻金)$/.test(name)) return null;
+  return name;
+}
+
+async function repairRaceNames(db: D1Database, limit = 8): Promise<number> {
+  const rows = await db.prepare(`
+    SELECT race_id AS raceId, entry_url AS entryUrl, race_name AS raceName
+    FROM rt_races
+    WHERE race_name IN ('検索ウィンドウ','メニュー','出馬表','レース結果','オッズ','払戻金')
+       OR race_name GLOB '[0-9]*レース'
+    ORDER BY race_date DESC, venue, race_no
+    LIMIT ?
+  `).bind(limit).all<{ raceId: string; entryUrl: string; raceName: string }>();
+  let repaired = 0;
+  for (const row of rows.results) {
+    try {
+      const page = await fetchJraPage(row.entryUrl);
+      const name = extractOfficialRaceName(page.html);
+      if (!name) continue;
+      await db.prepare(`UPDATE rt_races SET race_name=?, updated_at=CURRENT_TIMESTAMP WHERE race_id=?`)
+        .bind(name, row.raceId).run();
+      repaired += 1;
+    } catch (error) {
+      console.error("RACE_NAME_REPAIR_FAILED", row.raceId, error);
+    }
+  }
+  return repaired;
+}
+
+function runMaintenance(env: Env): Promise<void> {
+  if (maintenanceRunning) return maintenanceRunning;
+  maintenanceRunning = Promise.all([
+    repairRaceNames(env.DB, 8),
+    runBacktestBatch(env.DB, 4)
+  ]).then(() => undefined).finally(() => {
+    maintenanceRunning = null;
+  });
+  return maintenanceRunning;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
       await prepare(env.DB);
+      const pathname = new URL(request.url).pathname;
+      if (pathname === `/backtest/${BACKTEST_DATE}`) {
+        const progress = await runBacktestBatch(env.DB, 6);
+        if (progress.remaining > 0) ctx.waitUntil(runMaintenance(env));
+        return new Response(await renderBacktest(env.DB), {
+          headers: {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store",
+            "x-content-type-options": "nosniff"
+          }
+        });
+      }
+      if (pathname === "/" || pathname.startsWith("/races/")) ctx.waitUntil(runMaintenance(env));
       if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
       return await app.fetch(request, env, ctx);
     } catch (error) {
@@ -54,6 +115,7 @@ export default {
     try {
       await prepare(env.DB);
       if (app.scheduled) await app.scheduled(controller, env, ctx);
+      ctx.waitUntil(runMaintenance(env));
     } catch (error) {
       console.error("SCHEDULED_STARTUP_FAILED", error);
     }
