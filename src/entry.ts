@@ -158,12 +158,36 @@ function scheduleBackground(ctx: ExecutionContext, env: Env): void {
   ctx.waitUntil(runMaintenance(env));
 }
 
+async function displayedHistoricalSnapshot(db: D1Database): Promise<{
+  historical: Awaited<ReturnType<typeof getValidationSnapshot>>["combined"];
+  monthly: Awaited<ReturnType<typeof getThreeMonthValidationSnapshot>>["monthly"];
+  scope: { startDate: string; endDate: string; complete: boolean; totalRaces: number } | undefined;
+  threeMonth: Awaited<ReturnType<typeof getThreeMonthValidationSnapshot>>;
+}> {
+  const threeMonth = await getThreeMonthValidationSnapshot(db);
+  if (threeMonth.complete) {
+    return {
+      historical: threeMonth.combined,
+      monthly: threeMonth.monthly,
+      scope: {
+        startDate: threeMonth.startDate,
+        endDate: threeMonth.endDate,
+        complete: true,
+        totalRaces: threeMonth.totalRaces
+      },
+      threeMonth
+    };
+  }
+  const fallback = await getValidationSnapshot(db);
+  return { historical: fallback.combined, monthly: [], scope: undefined, threeMonth };
+}
+
 async function coursePerformanceSnapshot(env: Env): Promise<unknown> {
-  const [live, validation] = await Promise.all([
+  const [live, display] = await Promise.all([
     getCourseMetrics(env.DB, env.MODEL_VERSION),
-    getThreeMonthValidationSnapshot(env.DB)
+    displayedHistoricalSnapshot(env.DB)
   ]);
-  return { live, historical: validation.combined, threeMonth: validation };
+  return { live, historical: display.historical, threeMonth: display.threeMonth };
 }
 
 async function runThreeMonthPipelineStep(env: Env): Promise<unknown> {
@@ -275,13 +299,19 @@ export default {
         return page(body);
       }
       if (pathname === "/performance") {
-        const [cumulative, monthly, validation] = await Promise.all([
+        const [cumulative, monthly, display] = await Promise.all([
           getCourseMetrics(env.DB, env.MODEL_VERSION),
           getCourseMonthlyMetrics(env.DB, env.MODEL_VERSION),
-          getThreeMonthValidationSnapshot(env.DB)
+          displayedHistoricalSnapshot(env.DB)
         ]);
         scheduleBackground(ctx, env);
-        return page(renderCoursePerformance(cumulative, monthly, validation.combined));
+        return page(renderCoursePerformance(
+          cumulative,
+          monthly,
+          display.historical,
+          display.monthly,
+          display.scope
+        ));
       }
       if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
       return await app.fetch(request, env, ctx);
