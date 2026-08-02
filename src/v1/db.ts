@@ -437,16 +437,23 @@ export async function savePrediction(
   return { saved: true, predictionId: row.id };
 }
 
+function canonicalCombination(betType: string, combination: string): string {
+  const numbers = (combination.match(/\d{1,2}/g) ?? []).map(Number);
+  if (["ワイド", "馬連", "3連複"].includes(betType)) numbers.sort((a, b) => a - b);
+  return numbers.join("-");
+}
+
 export async function settleRace(db: D1Database, raceId: string): Promise<number> {
   const race = await db.prepare(`SELECT refund_horse_nos_json AS refunds FROM rt_races WHERE race_id=? AND status='finished'`)
     .bind(raceId).first<{ refunds: string }>();
   if (!race) return 0;
   const refunds = new Set<number>(JSON.parse(race.refunds || "[]") as number[]);
-  const winner = await db.prepare(`SELECT horse_no AS horseNo FROM rt_results WHERE race_id=? AND finish_position=1`)
-    .bind(raceId).first<{ horseNo: number }>();
   const payoutRows = await db.prepare(`SELECT bet_type AS betType, combination, payout_yen AS payoutYen FROM rt_payouts WHERE race_id=?`)
     .bind(raceId).all<{ betType: string; combination: string; payoutYen: number }>();
-  const payoutMap = new Map(payoutRows.results.map((row) => [`${row.betType}:${row.combination}`, row.payoutYen]));
+  const payoutMap = new Map(payoutRows.results.map((row) => [
+    `${row.betType}:${canonicalCombination(row.betType, row.combination)}`,
+    row.payoutYen
+  ]));
   const pending = await db.prepare(`
     SELECT b.id, b.bet_type AS betType, b.combination, b.stake_yen AS stakeYen
     FROM rt_bets b JOIN rt_predictions p ON p.id=b.prediction_id
@@ -454,11 +461,13 @@ export async function settleRace(db: D1Database, raceId: string): Promise<number
   `).bind(raceId).all<{ id: number; betType: string; combination: string; stakeYen: number }>();
 
   for (const bet of pending.results) {
-    const horseNo = Number(bet.combination);
+    const horses = (bet.combination.match(/\d{1,2}/g) ?? []).map(Number);
     let returnYen = 0;
-    if (refunds.has(horseNo)) returnYen = bet.stakeYen;
-    else if (bet.betType === "単勝" && winner?.horseNo === horseNo) {
-      const payout = payoutMap.get(`単勝:${bet.combination}`) ?? 0;
+    if (horses.some((horseNo) => refunds.has(horseNo))) {
+      returnYen = bet.stakeYen;
+    } else {
+      const key = `${bet.betType}:${canonicalCombination(bet.betType, bet.combination)}`;
+      const payout = payoutMap.get(key) ?? 0;
       returnYen = Math.round((bet.stakeYen / 100) * payout);
     }
     await db.prepare(`

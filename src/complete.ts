@@ -43,7 +43,7 @@ import { isJstEntryWindow, isJstRaceWindow, nowIso, positiveInt, positiveNumber 
 
 let schemaReady: Promise<void> | null = null;
 let inMemorySync: Promise<unknown> | null = null;
-const DISCOVERY_REVISION = "2026-08-01-race-name-v1";
+const DISCOVERY_REVISION = "2026-08-02-jst-bets-v3";
 
 function ready(db: D1Database): Promise<void> {
   schemaReady ??= ensureSchema(db).catch((error) => {
@@ -117,7 +117,7 @@ async function shouldDiscover(env: Env, now: Date): Promise<boolean> {
 async function updatePrediction(env: Env, race: RaceRecord, now: Date): Promise<void> {
   if (!race.startTimeUtc || race.status === "finished") return;
   const minutesToStart = (new Date(race.startTimeUtc).getTime() - now.getTime()) / 60_000;
-  if (minutesToStart <= 0 || minutesToStart > 240) return;
+  if (minutesToStart <= 0) return;
   const runners = await getRunners(env.DB, race.raceId);
   if (runners.filter((runner) => runner.runnerStatus === "active").length < 2) return;
   if (runners.filter((runner) => runner.runnerStatus === "active" && runner.winOdds !== null).length < 2) return;
@@ -131,7 +131,6 @@ async function updatePrediction(env: Env, race: RaceRecord, now: Date): Promise<
     positiveInt(env.MAX_RACE_BUDGET_YEN, 2000)
   );
   const status = minutesToStart <= 15 ? "locked" : "draft";
-  if (status === "draft") prediction.bets = [];
   await savePrediction(env.DB, race.raceId, prediction, status);
 }
 

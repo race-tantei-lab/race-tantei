@@ -19,10 +19,14 @@ function pct(value: number | null, digits = 1): string {
 
 export function renderHome(metrics: DashboardMetrics, races: RaceListRow[]): string {
   const dateLabel = (date: string): string => {
-    const parsed = new Date(`${date}T00:00:00+09:00`);
-    if (Number.isNaN(parsed.getTime())) return date;
-    const day = ["日", "月", "火", "水", "木", "金", "土"][parsed.getDay()] ?? "";
-    return `${parsed.getMonth() + 1}月${parsed.getDate()}日（${day}）`;
+    const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return date;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const dayOfMonth = Number(match[3]);
+    const weekday = new Date(Date.UTC(year, month - 1, dayOfMonth)).getUTCDay();
+    const day = ["日", "月", "火", "水", "木", "金", "土"][weekday] ?? "";
+    return `${month}月${dayOfMonth}日（${day}）`;
   };
   const grouped = new Map<string, Map<string, RaceListRow[]>>();
   for (const race of [...races].sort((a,b) => a.raceDate.localeCompare(b.raceDate) || a.venue.localeCompare(b.venue, "ja") || a.raceNo-b.raceNo)) {
