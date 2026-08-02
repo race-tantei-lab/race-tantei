@@ -1,7 +1,8 @@
 import app from "./complete.js";
 import { BACKTEST_DATE, renderBacktest, runBacktestBatch } from "./v1/backtest.js";
 import { getCourseMetrics } from "./v1/course-db.js";
-import { ensureSchema } from "./v1/db.js";
+import { renderCompactRace } from "./v1/course-detail.js";
+import { ensureSchema, getRaceDetail } from "./v1/db.js";
 import { getDashboardRaces, renderDashboard } from "./v1/home-dashboard.js";
 import { fetchJraPage } from "./v1/jra.js";
 import type { Env } from "./v1/types.js";
@@ -98,8 +99,9 @@ function runMaintenance(env: Env): Promise<void> {
   return maintenanceRunning;
 }
 
-function page(body: string): Response {
+function page(body: string, status = 200): Response {
   return new Response(body, {
+    status,
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
@@ -123,12 +125,18 @@ export default {
         return page(renderDashboard(races, metrics));
       }
 
+      if (pathname.startsWith("/races/")) {
+        const id = decodeURIComponent(pathname.slice("/races/".length));
+        const detail = await getRaceDetail(env.DB, id);
+        ctx.waitUntil(runMaintenance(env));
+        return detail ? page(renderCompactRace(detail)) : page("レースが見つかりません。", 404);
+      }
+
       if (pathname === `/backtest/${BACKTEST_DATE}`) {
         await runMaintenance(env);
         return page(await renderBacktest(env.DB));
       }
 
-      if (pathname.startsWith("/races/")) ctx.waitUntil(runMaintenance(env));
       if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
       return await app.fetch(request, env, ctx);
     } catch (error) {
