@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/apply-budget-courses.yml'
+      - '.github/budget-courses-trigger'
 
 permissions:
   contents: write
@@ -22,10 +23,7 @@ jobs:
 
           types = Path('src/v1/types.ts')
           text = types.read_text()
-          text = text.replace(
-            'export type BetType = "単勝" | "ワイド" | "馬連" | "馬単" | "3連複" | "3連単";\n\nexport interface BetRecommendation {\n  betType: BetType;',
-            'export type BetType = "単勝" | "ワイド" | "馬連" | "馬単" | "3連複" | "3連単";\nexport type BudgetCourse = "ライト" | "スタンダード" | "プレミアム";\n\nexport interface BetRecommendation {\n  course: BudgetCourse;\n  betType: BetType;'
-          )
+          text = text.replace('export type BetType = "単勝" | "ワイド" | "馬連" | "馬単" | "3連複" | "3連単";\n\nexport interface BetRecommendation {\n  betType: BetType;', 'export type BetType = "単勝" | "ワイド" | "馬連" | "馬単" | "3連複" | "3連単";\nexport type BudgetCourse = "ライト" | "スタンダード" | "プレミアム";\n\nexport interface BetRecommendation {\n  course: BudgetCourse;\n  betType: BetType;')
           types.write_text(text)
 
           model = Path('src/v1/model.ts')
@@ -46,64 +44,32 @@ jobs:
             const exacta=(x:RunnerPrediction,y:RunnerPrediction)=>clamp(x.winProbability*y.winProbability*1.15,0.002,0.4);
             const trio=(x:RunnerPrediction,y:RunnerPrediction,z:RunnerPrediction)=>clamp(6*x.winProbability*y.winProbability*z.winProbability*1.55,0.001,0.35);
             const trifecta=(x:RunnerPrediction,y:RunnerPrediction,z:RunnerPrediction)=>clamp(x.winProbability*y.winProbability*z.winProbability*1.1,0.0003,0.12);
-
-            add("ライト","単勝",[a],600,a.winProbability,1);
-            add("ライト","ワイド",[a,b],600,wide(a,b),1.8);
-            add("ライト","馬連",[a,b],400,quinella(a,b),3.2);
-            add("ライト","3連複",[a,b,c],400,trio(a,b,c),6.0);
-
-            add("スタンダード","単勝",[a],1000,a.winProbability,1);
-            add("スタンダード","ワイド",[a,b],900,wide(a,b),1.8);
-            add("スタンダード","ワイド",[a,c],600,wide(a,c),2.1);
-            add("スタンダード","馬連",[a,b],700,quinella(a,b),3.2);
-            add("スタンダード","馬単",[a,b],500,exacta(a,b),5.2);
-            add("スタンダード","3連複",[a,b,c],700,trio(a,b,c),6.0);
-            add("スタンダード","3連単",[a,b,c],300,trifecta(a,b,c),16);
-            add("スタンダード","3連単",[a,c,b],300,trifecta(a,c,b),17);
-
-            add("プレミアム","単勝",[a],1600,a.winProbability,1);
-            add("プレミアム","ワイド",[a,b],1200,wide(a,b),1.8);
-            add("プレミアム","ワイド",[a,c],800,wide(a,c),2.1);
-            add("プレミアム","馬連",[a,b],1000,quinella(a,b),3.2);
-            add("プレミアム","馬連",[a,c],600,quinella(a,c),3.7);
-            add("プレミアム","馬単",[a,b],800,exacta(a,b),5.2);
-            add("プレミアム","馬単",[a,c],400,exacta(a,c),6.0);
-            add("プレミアム","3連複",[a,b,c],1000,trio(a,b,c),6.0);
-            if(d) add("プレミアム","3連複",[a,b,d],600,trio(a,b,d),7.4);
-            const tri:[[RunnerPrediction,RunnerPrediction,RunnerPrediction,number]]|Array<[RunnerPrediction,RunnerPrediction,RunnerPrediction,number]> = [[a,b,c,500],[a,c,b,500],[a,b,d??c,300],[a,d??c,b,300],[b,a,c,200],[c,a,b,200]];
-            for(const [x,y,z,stake] of tri){if(new Set([x.horseNo,y.horseNo,z.horseNo]).size===3)add("プレミアム","3連単",[x,y,z],stake,trifecta(x,y,z),16);}
+            add("ライト","単勝",[a],600,a.winProbability,1); add("ライト","ワイド",[a,b],600,wide(a,b),1.8); add("ライト","馬連",[a,b],400,quinella(a,b),3.2); add("ライト","3連複",[a,b,c],400,trio(a,b,c),6.0);
+            add("スタンダード","単勝",[a],1000,a.winProbability,1); add("スタンダード","ワイド",[a,b],900,wide(a,b),1.8); add("スタンダード","ワイド",[a,c],600,wide(a,c),2.1); add("スタンダード","馬連",[a,b],700,quinella(a,b),3.2); add("スタンダード","馬単",[a,b],500,exacta(a,b),5.2); add("スタンダード","3連複",[a,b,c],700,trio(a,b,c),6.0); add("スタンダード","3連単",[a,b,c],300,trifecta(a,b,c),16); add("スタンダード","3連単",[a,c,b],300,trifecta(a,c,b),17);
+            add("プレミアム","単勝",[a],1600,a.winProbability,1); add("プレミアム","ワイド",[a,b],1200,wide(a,b),1.8); add("プレミアム","ワイド",[a,c],800,wide(a,c),2.1); add("プレミアム","馬連",[a,b],1000,quinella(a,b),3.2); add("プレミアム","馬連",[a,c],600,quinella(a,c),3.7); add("プレミアム","馬単",[a,b],800,exacta(a,b),5.2); add("プレミアム","馬単",[a,c],400,exacta(a,c),6.0); add("プレミアム","3連複",[a,b,c],1000,trio(a,b,c),6.0); if(d)add("プレミアム","3連複",[a,b,d],600,trio(a,b,d),7.4);
+            const tri:Array<[RunnerPrediction,RunnerPrediction,RunnerPrediction,number]>=[[a,b,c,500],[a,c,b,500],[a,b,d??c,300],[a,d??c,b,300],[b,a,c,200],[c,a,b,200]]; for(const [x,y,z,stake] of tri){if(new Set([x.horseNo,y.horseNo,z.horseNo]).size===3)add("プレミアム","3連単",[x,y,z],stake,trifecta(x,y,z),16);}
             return bets;
           }'''
           text = text[:start] + replacement + text[end:]
-          text = text.replace('bets: buildTicket(predictions, maxRaceBudgetYen)', 'bets: buildCourseTickets(predictions)')
-          text = text.replace('  maxRaceBudgetYen: number\n', '  _maxRaceBudgetYen: number\n')
+          text = text.replace('bets: buildTicket(predictions, maxRaceBudgetYen)', 'bets: buildCourseTickets(predictions)').replace('  maxRaceBudgetYen: number\n', '  _maxRaceBudgetYen: number\n')
           model.write_text(text)
 
-          db = Path('src/v1/db.ts')
-          text = db.read_text()
+          db = Path('src/v1/db.ts'); text = db.read_text()
           text = text.replace('row.id, raceId, bet.betType, bet.combination, bet.stakeYen, bet.assumedOdds,', 'row.id, raceId, `${bet.course}｜${bet.betType}`, bet.combination, bet.stakeYen, bet.assumedOdds,')
-          if 'function ticketType(' not in text:
-              text = text.replace('function canonicalCombination(betType: string, combination: string): string {', 'function ticketType(storedType: string): string { return storedType.includes("｜") ? (storedType.split("｜").pop() ?? storedType) : storedType; }\n\nfunction canonicalCombination(betType: string, combination: string): string {')
+          if 'function ticketType(' not in text: text = text.replace('function canonicalCombination(betType: string, combination: string): string {', 'function ticketType(storedType: string): string { return storedType.includes("｜") ? (storedType.split("｜").pop() ?? storedType) : storedType; }\n\nfunction canonicalCombination(betType: string, combination: string): string {')
           text = text.replace('const numbers = (combination.match(/\\d{1,2}/g) ?? []).map(Number);\n  if (["ワイド", "馬連", "3連複"].includes(betType))', 'betType = ticketType(betType);\n  const numbers = (combination.match(/\\d{1,2}/g) ?? []).map(Number);\n  if (["ワイド", "馬連", "3連複"].includes(betType))')
-          text = text.replace('`${row.betType}:${canonicalCombination(row.betType, row.combination)}`', '`${ticketType(row.betType)}:${canonicalCombination(row.betType, row.combination)}`')
-          text = text.replace('const key = `${bet.betType}:${canonicalCombination(bet.betType, bet.combination)}`;', 'const key = `${ticketType(bet.betType)}:${canonicalCombination(bet.betType, bet.combination)}`;')
+          text = text.replace('`${row.betType}:${canonicalCombination(row.betType, row.combination)}`', '`${ticketType(row.betType)}:${canonicalCombination(row.betType, row.combination)}`').replace('const key = `${bet.betType}:${canonicalCombination(bet.betType, bet.combination)}`;', 'const key = `${ticketType(bet.betType)}:${canonicalCombination(bet.betType, bet.combination)}`;')
           db.write_text(text)
 
-          ui = Path('src/v1/ui.ts')
-          text = ui.read_text()
+          ui = Path('src/v1/ui.ts'); text = ui.read_text()
           old = 'const betCards=bets.map(b=>`<div class="card buy"><b>${escapeHtml(b.betType)} ${escapeHtml(b.combination)}</b><div>購入想定 ${formatYen(b.stakeYen)} ／ 使用オッズ ${b.assumedOdds.toFixed(1)}</div><div class="muted">期待値 ${b.expectedValuePct.toFixed(1)}% ／ ${b.settlementStatus==="settled"?`払戻 ${formatYen(b.returnYen??0)}`:"発走前固定済み"}</div></div>`).join("");'
-          new = '''const courseNames=["ライト","スタンダード","プレミアム"];
-          const betCards=courseNames.map(course=>{const courseBets=bets.filter(b=>b.betType.startsWith(`${course}｜`));if(!courseBets.length)return "";const courseStake=courseBets.reduce((n,b)=>n+b.stakeYen,0),courseReturn=courseBets.reduce((n,b)=>n+(b.returnYen??0),0);return `<section><h3 class="section">${course}コース <span class="muted">${formatYen(courseStake)}</span></h3>${finished?`<div class="card">払戻 ${formatYen(courseReturn)} ／ 収支 <strong class="${courseReturn-courseStake>=0?"positive":"negative"}">${courseReturn-courseStake>=0?"+":""}${formatYen(courseReturn-courseStake)}</strong></div>`:""}${courseBets.map(b=>{const ticket=b.betType.split("｜").pop()??b.betType;return `<div class="card buy"><b>${escapeHtml(ticket)} ${escapeHtml(b.combination)}</b><div>${formatYen(b.stakeYen)} ／ 推定オッズ ${b.assumedOdds.toFixed(1)}</div><div class="muted">${b.settlementStatus==="settled"?`払戻 ${formatYen(b.returnYen??0)}`:"発走前固定済み"}</div></div>`}).join("")}</section>`}).join("");'''
-          if old not in text: raise SystemExit('ui betCards anchor missing')
+          new = '''const courseNames=["ライト","スタンダード","プレミアム"]; const betCards=courseNames.map(course=>{const courseBets=bets.filter(b=>b.betType.startsWith(`${course}｜`));if(!courseBets.length)return "";const courseStake=courseBets.reduce((n,b)=>n+b.stakeYen,0),courseReturn=courseBets.reduce((n,b)=>n+(b.returnYen??0),0);return `<section><h3 class="section">${course}コース <span class="muted">${formatYen(courseStake)}</span></h3>${finished?`<div class="card">払戻 ${formatYen(courseReturn)} ／ 収支 <strong class="${courseReturn-courseStake>=0?"positive":"negative"}">${courseReturn-courseStake>=0?"+":""}${formatYen(courseReturn-courseStake)}</strong></div>`:""}${courseBets.map(b=>{const ticket=b.betType.split("｜").pop()??b.betType;return `<div class="card buy"><b>${escapeHtml(ticket)} ${escapeHtml(b.combination)}</b><div>${formatYen(b.stakeYen)} ／ 推定オッズ ${b.assumedOdds.toFixed(1)}</div><div class="muted">${b.settlementStatus==="settled"?`払戻 ${formatYen(b.returnYen??0)}`:"発走前固定済み"}</div></div>`}).join("")}</section>`}).join("");'''
+          if old not in text: raise SystemExit('ui anchor missing')
           ui.write_text(text.replace(old,new,1))
 
-          backtest = Path('src/v1/backtest.ts')
-          text = backtest.read_text().replace('backtest-2026-08-01-multibet-v2','backtest-2026-08-01-budget-courses-v3').replace('各レース2,000円以内で、◎○▲から単勝・ワイド・馬連・馬単・3連複を一貫して組み立てます。','ライト2,000円・スタンダード5,000円・プレミアム10,000円の3コースを、単勝・ワイド・馬連・馬単・3連複・3連単で組み立てます。')
-          backtest.write_text(text)
-
-          wrangler = Path('wrangler.jsonc')
-          wrangler.write_text(re.sub(r'"MODEL_VERSION": "[^"]+"','"MODEL_VERSION": "v2.2.0-budget-courses"',wrangler.read_text(),count=1))
-          Path('.github/workflows/apply-budget-courses.yml').unlink(missing_ok=True)
+          backtest=Path('src/v1/backtest.ts'); text=backtest.read_text().replace('backtest-2026-08-01-multibet-v2','backtest-2026-08-01-budget-courses-v3').replace('各レース2,000円以内で、◎○▲から単勝・ワイド・馬連・馬単・3連複を一貫して組み立てます。','ライト2,000円・スタンダード5,000円・プレミアム10,000円の3コースを、単勝・ワイド・馬連・馬単・3連複・3連単で組み立てます。'); backtest.write_text(text)
+          wrangler=Path('wrangler.jsonc'); wrangler.write_text(re.sub(r'"MODEL_VERSION": "[^"]+"','"MODEL_VERSION": "v2.2.0-budget-courses"',wrangler.read_text(),count=1))
+          Path('.github/workflows/apply-budget-courses.yml').unlink(missing_ok=True); Path('.github/budget-courses-trigger').unlink(missing_ok=True)
           PY
       - name: Verify
         run: |
