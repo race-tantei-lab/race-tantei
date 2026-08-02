@@ -6,15 +6,11 @@ import {
   getArchiveMonthChecksum,
   parseArchiveResultCnames
 } from "../src/v1/three-month-archive.js";
+import { parseDesktopPayouts, parseDesktopResultRunners } from "../src/v1/three-month-desktop.js";
 import { fetchJraPage, parseResultPage } from "../src/v1/jra.js";
 import { archiveRaceDate, getThreeMonthHistoryProgressV2 } from "../src/v1/three-month-history-v2.js";
 
 void getThreeMonthHistoryProgressV2;
-
-function mobileResultUrl(cname: string): string {
-  const mobileCname = cname.replace(/^pw/i, "sw");
-  return `https://sp.jra.jp/JRADB/accessS.html?CNAME=${encodeURIComponent(mobileCname)}`;
-}
 
 const checksum = await getArchiveMonthChecksum("202605");
 assert.ok(/^[0-9A-F]{2}$/.test(checksum), `invalid archive checksum: ${checksum}`);
@@ -27,48 +23,27 @@ const meetingPage = await fetchJraArchivePage(meetings[0]!);
 const resultCnames = parseArchiveResultCnames(meetingPage.html);
 assert.ok(resultCnames.length >= 12, `too few result links in archive meeting: ${resultCnames.length}`);
 
-const probes = [];
-for (const resultCname of resultCnames.slice(0, 5)) {
-  const desktopUrl = archiveResultUrl(resultCname);
-  const desktopPage = await fetchJraPage(desktopUrl);
-  const desktopResult = parseResultPage(desktopPage.html, desktopPage.url);
-  let mobileResult: ReturnType<typeof parseResultPage> | null = null;
-  let mobileError: string | null = null;
-  try {
-    const mobilePage = await fetchJraPage(mobileResultUrl(resultCname));
-    mobileResult = parseResultPage(mobilePage.html, mobilePage.url);
-  } catch (error) {
-    mobileError = error instanceof Error ? error.message : String(error);
-  }
-  probes.push({
-    resultCname,
-    desktopUrl,
-    desktop: {
-      raceId: desktopResult.race.raceId,
-      date: desktopResult.race.raceDate,
-      venue: desktopResult.race.venue,
-      raceNo: desktopResult.race.raceNo,
-      results: desktopResult.results.length,
-      payouts: desktopResult.payouts.length
-    },
-    mobile: mobileResult ? {
-      raceId: mobileResult.race.raceId,
-      date: mobileResult.race.raceDate,
-      venue: mobileResult.race.venue,
-      raceNo: mobileResult.race.raceNo,
-      results: mobileResult.results.length,
-      payouts: mobileResult.payouts.length
-    } : null,
-    mobileError
-  });
-}
+const sampleUrl = archiveResultUrl(resultCnames[0]!);
+const sampleDate = archiveRaceDate(sampleUrl);
+assert.ok(sampleDate?.startsWith("2026-05-"), `unexpected archive result date: ${sampleDate}`);
 
-const usable = probes.find((probe) => (probe.mobile?.payouts ?? 0) > 0)
-  ?? probes.find((probe) => probe.desktop.payouts > 0);
-assert.ok(usable, `no archive result with payouts: ${JSON.stringify(probes)}`);
-const selectedDate = usable.mobile?.date ?? usable.desktop.date;
-assert.ok(selectedDate.startsWith("2026-05-"), `unexpected archive result date: ${selectedDate}`);
-assert.equal(archiveRaceDate(usable.desktopUrl), selectedDate);
+const resultPage = await fetchJraPage(sampleUrl);
+const result = parseResultPage(resultPage.html, resultPage.url);
+const runners = parseDesktopResultRunners(resultPage.html);
+const payouts = parseDesktopPayouts(resultPage.html);
+
+assert.equal(result.race.raceDate, sampleDate);
+assert.ok(result.results.some((row) => row.finishPosition === 1));
+assert.ok(runners.length >= 5, `too few desktop runners: ${runners.length}`);
+assert.ok(runners.every((row) => row.horseName.length > 0), "desktop horse names were not parsed");
+assert.ok(
+  runners.filter((row) => row.runnerStatus === "active").every((row) => row.winOdds !== null && row.winOdds > 1),
+  "desktop popularity proxy odds were not parsed"
+);
+assert.ok(payouts.length >= 6, `too few desktop payouts: ${payouts.length}`);
+assert.ok(payouts.some((row) => row.betType === "単勝" && row.payoutYen > 0));
+assert.ok(payouts.some((row) => row.betType === "馬連" && row.payoutYen > 0));
+assert.ok(payouts.some((row) => row.betType === "3連単" && row.payoutYen > 0));
 
 console.log(JSON.stringify({
   ok: true,
@@ -76,6 +51,12 @@ console.log(JSON.stringify({
   meetings: meetings.length,
   firstMeeting: meetings[0],
   resultLinks: resultCnames.length,
-  probes,
-  usable
+  sampleUrl,
+  raceId: result.race.raceId,
+  raceDate: result.race.raceDate,
+  venue: result.race.venue,
+  raceNo: result.race.raceNo,
+  runners: runners.length,
+  payouts: payouts.length,
+  payoutSample: payouts.slice(0, 8)
 }, null, 2));
