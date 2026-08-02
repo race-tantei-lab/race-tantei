@@ -81,8 +81,9 @@ jobs:
           base="https://race-tantei-phase0.race-tantei.workers.dev"
           for attempt in $(seq 1 30); do
             curl --silent --show-error --fail --max-time 45 -D /tmp/home.headers "${base}/" >/tmp/home.html
+            curl --silent --show-error --fail --max-time 45 "${base}/performance" >/tmp/performance.html
             performance="$(curl --silent --show-error --fail --max-time 45 "${base}/api/performance/courses")"
-            if HOME_FILE=/tmp/home.html PERFORMANCE="$performance" python - <<'PY'
+            if HOME_FILE=/tmp/home.html PERFORMANCE_FILE=/tmp/performance.html PERFORMANCE="$performance" python - <<'PY'
           from html.parser import HTMLParser
           import json, os, sys
 
@@ -112,9 +113,10 @@ jobs:
                           self.day, self.venue = previous
                           break
 
-          html = open(os.environ["HOME_FILE"], encoding="utf-8").read()
+          home_html = open(os.environ["HOME_FILE"], encoding="utf-8").read()
+          performance_html = open(os.environ["PERFORMANCE_FILE"], encoding="utf-8").read()
           parser = SelectionParser()
-          parser.feed(html)
+          parser.feed(home_html)
           performance = json.loads(os.environ.get("PERFORMANCE", "{}"))
           historical = performance.get("historical", []) if isinstance(performance, dict) else []
           target_stakes = {"ライト": 1600, "スタンダード": 4200, "プレミアム": 8800}
@@ -140,19 +142,29 @@ jobs:
               if date in expected_dates
           }
           venue_ok = len(counts) >= 6 and all(count >= 5 for count in counts.values())
-          page_ok = (
-              "総合成績" in html
-              and "過去レース＋本番を合算" in html
-              and "1R目安" not in html
-              and "上限 " not in html
-              and "本番公開成績" not in html
+          home_ok = (
+              "総合成績" in home_html
+              and "過去レース＋本番を合算" in home_html
+              and "1R目安" not in home_html
+              and "上限 " not in home_html
+              and "本番公開成績" not in home_html
           )
-          valid = historical_ok and budget_ok and venue_ok and page_ok
+          performance_ok = (
+              "コース別総合成績" in performance_html
+              and "過去レースと本番公開分を分けずに合算" in performance_html
+              and "1レースの購入額" not in performance_html
+              and "目安1,600円" not in performance_html
+              and "上限2,000円" not in performance_html
+              and "本番公開のみ" not in performance_html
+              and "遡及検証のみ" not in performance_html
+          )
+          valid = historical_ok and budget_ok and venue_ok and home_ok and performance_ok
           print(json.dumps({
               "historical": historical,
               "venueSelections": counts,
               "budgetOk": budget_ok,
-              "pageOk": page_ok,
+              "homeOk": home_ok,
+              "performanceOk": performance_ok,
               "valid": valid
           }, ensure_ascii=False))
           sys.exit(0 if valid else 1)
