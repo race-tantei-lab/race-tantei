@@ -55,12 +55,41 @@ jobs:
             sleep 10
           done
 
-      - name: Trigger and verify live data ingestion
+      - name: Verify production pages and live data
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-          curl --silent --show-error --fail --max-time 25 "${base}/" >/tmp/home.html
+          curl --silent --show-error --fail --max-time 25 -D /tmp/home.headers "${base}/" >/tmp/home.html
           grep -q 'レース探偵' /tmp/home.html
+
+          if [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            grep -qi '^x-race-ui-version: phase-c' /tmp/home.headers
+            curl --silent --show-error --fail --max-time 25 "${base}/validation" >/tmp/validation.html
+            grep -q 'フェーズC' /tmp/validation.html
+            validation="$(curl --silent --show-error --fail --max-time 25 "${base}/api/validation")"
+            VALIDATION="$validation" python - <<'PY'
+          import json, os, sys
+          try:
+              data = json.loads(os.environ.get("VALIDATION", ""))
+          except Exception:
+              sys.exit(1)
+          valid = (
+              data.get("phase") == "phase-c-validation-v1"
+              and isinstance(data.get("dates"), list)
+              and len(data.get("dates", [])) == 2
+              and int(data.get("totalRaces", 0)) > 0
+          )
+          print(json.dumps({
+              "phase": data.get("phase"),
+              "processed": data.get("processedRaces"),
+              "total": data.get("totalRaces"),
+              "remaining": data.get("remainingRaces")
+          }, ensure_ascii=False))
+          sys.exit(0 if valid else 1)
+          PY
+          fi
 
           for attempt in $(seq 1 48); do
             echo "Data attempt ${attempt}/48"
