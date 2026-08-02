@@ -1,8 +1,8 @@
 import app from "./complete.js";
 import { BACKTEST_DATE, renderBacktest, runBacktestBatch } from "./v1/backtest.js";
 import { getCourseMetrics } from "./v1/course-db.js";
-import { renderCourseHome } from "./v1/course-home.js";
-import { ensureSchema, getLatestRaces } from "./v1/db.js";
+import { ensureSchema } from "./v1/db.js";
+import { getDashboardRaces, renderDashboard } from "./v1/home-dashboard.js";
 import { fetchJraPage } from "./v1/jra.js";
 import type { Env } from "./v1/types.js";
 import { stripHtml } from "./v1/utils.js";
@@ -98,35 +98,36 @@ function runMaintenance(env: Env): Promise<void> {
   return maintenanceRunning;
 }
 
+function page(body: string): Response {
+  return new Response(body, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff"
+    }
+  });
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
       await prepare(env.DB);
       const pathname = new URL(request.url).pathname;
+
+      if (pathname === "/") {
+        const [races, metrics] = await Promise.all([
+          getDashboardRaces(env.DB, env.MODEL_VERSION),
+          getCourseMetrics(env.DB)
+        ]);
+        ctx.waitUntil(runMaintenance(env));
+        return page(renderDashboard(races, metrics));
+      }
+
       if (pathname === `/backtest/${BACKTEST_DATE}`) {
         await runMaintenance(env);
-        return new Response(await renderBacktest(env.DB), {
-          headers: {
-            "content-type": "text/html; charset=utf-8",
-            "cache-control": "no-store",
-            "x-content-type-options": "nosniff"
-          }
-        });
+        return page(await renderBacktest(env.DB));
       }
-      if (pathname === "/") {
-        ctx.waitUntil(runMaintenance(env));
-        const [metrics, races] = await Promise.all([
-          getCourseMetrics(env.DB),
-          getLatestRaces(env.DB)
-        ]);
-        return new Response(renderCourseHome(metrics, races), {
-          headers: {
-            "content-type": "text/html; charset=utf-8",
-            "cache-control": "no-store",
-            "x-content-type-options": "nosniff"
-          }
-        });
-      }
+
       if (pathname.startsWith("/races/")) ctx.waitUntil(runMaintenance(env));
       if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
       return await app.fetch(request, env, ctx);
