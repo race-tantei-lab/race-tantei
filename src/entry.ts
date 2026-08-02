@@ -53,18 +53,27 @@ function extractOfficialRaceName(html: string): string | null {
 
 async function repairRaceNames(db: D1Database, limit = 8): Promise<number> {
   const rows = await db.prepare(`
-    SELECT race_id AS raceId, entry_url AS entryUrl, race_name AS raceName
+    SELECT race_id AS raceId, entry_url AS entryUrl, result_url AS resultUrl, race_name AS raceName
     FROM rt_races
     WHERE race_name IN ('検索ウィンドウ','メニュー','出馬表','レース結果','オッズ','払戻金')
        OR race_name GLOB '[0-9]*レース'
     ORDER BY race_date DESC, venue, race_no
     LIMIT ?
-  `).bind(limit).all<{ raceId: string; entryUrl: string; raceName: string }>();
+  `).bind(limit).all<{ raceId: string; entryUrl: string; resultUrl: string; raceName: string }>();
   let repaired = 0;
   for (const row of rows.results) {
     try {
-      const page = await fetchJraPage(row.entryUrl);
-      const name = extractOfficialRaceName(page.html);
+      let name: string | null = null;
+      for (const url of [row.resultUrl, row.entryUrl]) {
+        if (!url) continue;
+        try {
+          const page = await fetchJraPage(url);
+          name = extractOfficialRaceName(page.html);
+          if (name) break;
+        } catch {
+          // Try the other official page.
+        }
+      }
       if (!name) continue;
       await db.prepare(`UPDATE rt_races SET race_name=?, updated_at=CURRENT_TIMESTAMP WHERE race_id=?`)
         .bind(name, row.raceId).run();
@@ -93,8 +102,7 @@ export default {
       await prepare(env.DB);
       const pathname = new URL(request.url).pathname;
       if (pathname === `/backtest/${BACKTEST_DATE}`) {
-        const progress = await runBacktestBatch(env.DB, 6);
-        if (progress.remaining > 0) ctx.waitUntil(runMaintenance(env));
+        await runMaintenance(env);
         return new Response(await renderBacktest(env.DB), {
           headers: {
             "content-type": "text/html; charset=utf-8",
