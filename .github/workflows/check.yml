@@ -7,63 +7,9 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  hotfix:
-    if: github.event_name == 'pull_request' && github.head_ref == 'fix-jst-dates-and-bets'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout PR branch
-        uses: actions/checkout@v4
-        with:
-          ref: fix-jst-dates-and-bets
-      - name: Apply JST date and bet publication fix
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          ui = Path('src/v1/ui.ts')
-          text = ui.read_text()
-          old = '''  const dateLabel = (date: string): string => {
-    const parsed = new Date(`${date}T00:00:00+09:00`);
-    if (Number.isNaN(parsed.getTime())) return date;
-    const day = ["日", "月", "火", "水", "木", "金", "土"][parsed.getDay()] ?? "";
-    return `${parsed.getMonth() + 1}月${parsed.getDate()}日（${day}）`;
-  };'''
-          new = '''  const dateLabel = (date: string): string => {
-    const match = date.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
-    if (!match) return date;
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const dayOfMonth = Number(match[3]);
-    const weekday = new Date(Date.UTC(year, month - 1, dayOfMonth)).getUTCDay();
-    const day = ["日", "月", "火", "水", "木", "金", "土"][weekday] ?? "";
-    return `${month}月${dayOfMonth}日（${day}）`;
-  };'''
-          if old in text:
-              ui.write_text(text.replace(old, new, 1))
-
-          complete = Path('src/complete.ts')
-          text = complete.read_text()
-          text = text.replace('const DISCOVERY_REVISION = "2026-08-01-race-name-v1";', 'const DISCOVERY_REVISION = "2026-08-02-jst-bets-v3";')
-          text = text.replace('if (minutesToStart <= 0 || minutesToStart > 240) return;', 'if (minutesToStart <= 0) return;', 1)
-          text = text.replace('''  const status = minutesToStart <= 15 ? "locked" : "draft";
-  if (status === "draft") prediction.bets = [];
-  await savePrediction(env.DB, race.raceId, prediction, status);''', '''  const status = minutesToStart <= 15 ? "locked" : "draft";
-  await savePrediction(env.DB, race.raceId, prediction, status);''', 1)
-          complete.write_text(text)
-          Path('.github/workflows/apply-jst-bets-fix.yml').unlink(missing_ok=True)
-          PY
-      - name: Commit PR fix
-        run: |
-          if git diff --quiet; then exit 0; fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "fix: correct JST dates and publish pre-race bets"
-          git push origin HEAD:fix-jst-dates-and-bets
-
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
