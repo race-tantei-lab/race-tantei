@@ -10,7 +10,12 @@ interface PredictionRow {
   id: number; status: string; modelVersion: string; generatedAt: string; lockedAt: string | null;
 }
 
-async function selectDisplayPrediction(db: D1Database, raceId: string, raceDate: string): Promise<PredictionRow | null> {
+async function selectDisplayPrediction(
+  db: D1Database,
+  raceId: string,
+  raceDate: string,
+  liveModel: string
+): Promise<PredictionRow | null> {
   if (raceDate === AUG1_DATE) {
     return await db.prepare(`
       SELECT id, status, model_version AS modelVersion, generated_at AS generatedAt, locked_at AS lockedAt
@@ -22,27 +27,35 @@ async function selectDisplayPrediction(db: D1Database, raceId: string, raceDate:
     return await db.prepare(`
       SELECT p.id, p.status, p.model_version AS modelVersion, p.generated_at AS generatedAt, p.locked_at AS lockedAt
       FROM rt_predictions p
-      WHERE p.race_id=? AND EXISTS (
-        SELECT 1 FROM rt_bets b WHERE b.prediction_id=p.id
-          AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
+      WHERE p.race_id=? AND (
+        p.model_version=? OR p.model_version=? OR EXISTS (
+          SELECT 1 FROM rt_bets b WHERE b.prediction_id=p.id
+            AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
+        )
       )
-      ORDER BY CASE WHEN p.model_version=? THEN 1 ELSE 0 END, p.id DESC
+      ORDER BY CASE WHEN p.model_version=? THEN 1 WHEN p.model_version=? THEN 2 ELSE 3 END, p.id DESC
       LIMIT 1
-    `).bind(raceId, AUG2_MODEL).first<PredictionRow>();
+    `).bind(raceId, liveModel, AUG2_MODEL, liveModel, AUG2_MODEL).first<PredictionRow>();
   }
 
   return await db.prepare(`
     SELECT p.id, p.status, p.model_version AS modelVersion, p.generated_at AS generatedAt, p.locked_at AS lockedAt
     FROM rt_predictions p
-    WHERE p.race_id=? AND EXISTS (
-      SELECT 1 FROM rt_bets b WHERE b.prediction_id=p.id
-        AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
+    WHERE p.race_id=? AND (
+      p.model_version=? OR EXISTS (
+        SELECT 1 FROM rt_bets b WHERE b.prediction_id=p.id
+          AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
+      )
     )
-    ORDER BY p.id DESC LIMIT 1
-  `).bind(raceId).first<PredictionRow>();
+    ORDER BY CASE WHEN p.model_version=? THEN 1 ELSE 2 END, p.id DESC LIMIT 1
+  `).bind(raceId, liveModel, liveModel).first<PredictionRow>();
 }
 
-export async function getDisplayRaceDetail(db: D1Database, raceId: string): Promise<RaceDetail | null> {
+export async function getDisplayRaceDetail(
+  db: D1Database,
+  raceId: string,
+  liveModel: string
+): Promise<RaceDetail | null> {
   const race = await getRace(db, raceId);
   if (!race) return null;
   const runners = await getRunners(db, raceId);
@@ -51,7 +64,7 @@ export async function getDisplayRaceDetail(db: D1Database, raceId: string): Prom
   const finishMap = new Map(resultRows.results.map((row) => [Number(row.horseNo), row.finishPosition]));
   const runnersWithResult = runners.map((runner) => ({ ...runner, finishPosition: finishMap.get(runner.horseNo) ?? null }));
 
-  const prediction = await selectDisplayPrediction(db, raceId, race.raceDate);
+  const prediction = await selectDisplayPrediction(db, raceId, race.raceDate, liveModel);
   if (!prediction) return { race, runners: runnersWithResult, prediction: null, predictedRunners: [], bets: [] };
 
   const predicted = await db.prepare(`

@@ -52,8 +52,8 @@ export async function runBacktestBatch(db: D1Database, limit = 4): Promise<{ pro
     if (!race) continue;
     const runners = await getRunners(db, raceId);
     if (runners.filter((runner) => runner.runnerStatus === "active" && runner.winOdds !== null).length < 3) continue;
-    const prediction = generatePrediction(race, runners, [], BACKTEST_MODEL, 0, 10000);
-    if (prediction.runners.length < 3 || prediction.bets.length === 0) continue;
+    const prediction = generatePrediction(race, runners, [], BACKTEST_MODEL, 108, 10000);
+    if (prediction.runners.length < 3) continue;
     await savePredictionWithCourses(db, raceId, prediction, "locked");
     await settleRaceWithCourses(db, raceId);
     processed += 1;
@@ -147,7 +147,7 @@ export async function renderBacktest(db: D1Database): Promise<string> {
       const results = row.predictionId ? await raceCourseResults(db, row.predictionId) : new Map();
       const courseLines = COURSES.map((course) => {
         const value = results.get(course);
-        if (!value) return `${course}：計算待ち`;
+        if (!value) return `${course}：見送り`;
         const profit = value.returns - value.stake;
         return `${course}：${formatYen(value.stake)} → ${formatYen(value.returns)}（${profit >= 0 ? "+" : ""}${formatYen(profit)}）`;
       }).join("<br>");
@@ -156,5 +156,5 @@ export async function renderBacktest(db: D1Database): Promise<string> {
     venues.push(`<section><h2>${escapeHtml(venue)}競馬場</h2>${raceHtml.join("")}</section>`);
   }
 
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="${completed < rows.length ? 10 : 300}"><title>8月1日 3コース検証｜レース探偵</title><style>:root{color-scheme:dark;--bg:#0b0f14;--panel:#121923;--line:#293649;--text:#eef3f8;--muted:#9fb0c2;--green:#4fd1a1;--red:#ff7b72}*{box-sizing:border-box}body{margin:0;background:#0b0f14;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif}.wrap{max-width:980px;margin:auto;padding:16px}a{color:inherit;text-decoration:none}.hero,.course,.race{background:var(--panel);border:1px solid var(--line);border-radius:16px}.hero{padding:20px}.note,small{color:var(--muted)}.course{padding:16px;margin:12px 0}.head{display:flex;justify-content:space-between;align-items:center}.head h2{margin:4px 0}.head strong{font-size:28px}.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.stats div{background:#0d141d;padding:10px;border-radius:10px}.stats b{display:block;margin-top:4px}.plus{color:var(--green)}.minus{color:var(--red)}.race{display:grid;grid-template-columns:1fr 1fr 1.5fr;gap:10px;padding:13px;margin:8px 0}.courses{font-size:13px;line-height:1.7}@media(max-width:700px){.race{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}}</style></head><body><main class="wrap"><p><a href="/">← 予想一覧へ</a></p><section class="hero"><h1>2026年8月1日 全36R・3コース遡及検証</h1><p class="note">結果は予想材料に使用せず、保存済み出走馬情報と最終取得単勝オッズで再計算しています。ライト2,000円、スタンダード5,000円、プレミアム10,000円を別々に公式払戻と照合します。</p><b>計算済み ${completed}/${rows.length}R</b></section>${summaryHtml}${venues.join("")}</main></body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="${completed < rows.length ? 10 : 300}"><title>8月1日 3コース検証｜レース探偵</title><style>:root{color-scheme:dark;--bg:#0b0f14;--panel:#121923;--line:#293649;--text:#eef3f8;--muted:#9fb0c2;--green:#4fd1a1;--red:#ff7b72}*{box-sizing:border-box}body{margin:0;background:#0b0f14;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif}.wrap{max-width:980px;margin:auto;padding:16px}a{color:inherit;text-decoration:none}.hero,.course,.race{background:var(--panel);border:1px solid var(--line);border-radius:16px}.hero{padding:20px}.note,small{color:var(--muted)}.course{padding:16px;margin:12px 0}.head{display:flex;justify-content:space-between;align-items:center}.head h2{margin:4px 0}.head strong{font-size:28px}.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.stats div{background:#0d141d;padding:10px;border-radius:10px}.stats b{display:block;margin-top:4px}.plus{color:var(--green)}.minus{color:var(--red)}.race{display:grid;grid-template-columns:1fr 1fr 1.5fr;gap:10px;padding:13px;margin:8px 0}.courses{font-size:13px;line-height:1.7}@media(max-width:700px){.race{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}}</style></head><body><main class="wrap"><p><a href="/">← 予想一覧へ</a></p><section class="hero"><h1>2026年8月1日 全36R・3コース遡及検証</h1><p class="note">結果は予想材料に使用せず、保存済み出走馬情報と最終取得単勝オッズで再計算しています。コース予算は上限であり、期待値基準を満たさない場合は購入しません。</p><b>計算済み ${completed}/${rows.length}R</b></section>${summaryHtml}${venues.join("")}</main></body></html>`;
 }

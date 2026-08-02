@@ -14,27 +14,41 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Wait for Cloudflare deployment and verify health
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
+          expected=""
+          if [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            expected="$(grep '"MODEL_VERSION"' wrangler.jsonc | sed -E 's/.*"MODEL_VERSION"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
+          fi
+
           for attempt in $(seq 1 36); do
-            echo "Health attempt ${attempt}/36"
+            echo "Health attempt ${attempt}/36 expected=${expected:-any}"
             health="$(curl --silent --show-error --fail --max-time 25 "${base}/health" || true)"
-            if HEALTH="$health" python - <<'PY'
+            if HEALTH="$health" EXPECTED="$expected" python - <<'PY'
           import json, os, sys
           try:
               data = json.loads(os.environ.get("HEALTH", ""))
           except Exception:
               sys.exit(1)
-          sys.exit(0 if data.get("ok") is True and data.get("modelVersion") == "v2.0.1-live" else 1)
+          expected = os.environ.get("EXPECTED", "")
+          valid = data.get("ok") is True and bool(data.get("modelVersion"))
+          if expected:
+              valid = valid and data.get("modelVersion") == expected
+          sys.exit(0 if valid else 1)
           PY
             then
               echo "$health"
               break
             fi
             if [ "$attempt" -eq 36 ]; then
-              echo "Production health endpoint did not reach v2.0.1-live"
+              echo "Production health endpoint did not reach the expected model."
               echo "$health"
               exit 1
             fi
