@@ -4,8 +4,8 @@ import { runAug2BackfillBatch } from "./v1/backfill-aug2.js";
 import { ensureSchema } from "./v1/db.js";
 import { getDisplayRaceDetail } from "./v1/display-detail.js";
 import { fetchJraPage } from "./v1/jra.js";
-import { renderRaceDetailV4 } from "./v1/race-detail-v4.js";
-import { getStableDashboard } from "./v1/stable-dashboard.js";
+import { getPhaseADashboard } from "./v1/phase-a-dashboard.js";
+import { renderPhaseARaceDetail } from "./v1/race-detail-phase-a.js";
 import type { Env } from "./v1/types.js";
 import { stripHtml } from "./v1/utils.js";
 
@@ -98,7 +98,7 @@ function page(body: string, status = 200): Response {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store, max-age=0",
       "x-content-type-options": "nosniff",
-      "x-race-detail-version": "v4"
+      "x-race-ui-version": "phase-a"
     }
   });
 }
@@ -109,15 +109,15 @@ export default {
       await prepare(env.DB);
       const pathname = new URL(request.url).pathname;
       if (pathname === "/") {
-        const dashboard = await getStableDashboard(env.DB, env.MODEL_VERSION);
+        const dashboard = await getPhaseADashboard(env.DB, env.MODEL_VERSION);
         ctx.waitUntil(runMaintenance(env));
-        return page(dashboard.html);
+        return page(dashboard);
       }
       if (pathname.startsWith("/races/")) {
         const id = decodeURIComponent(pathname.slice("/races/".length));
         const detail = await getDisplayRaceDetail(env.DB, id);
         ctx.waitUntil(runMaintenance(env));
-        return detail ? page(renderRaceDetailV4(detail)) : page("レースが見つかりません。", 404);
+        return detail ? page(renderPhaseARaceDetail(detail)) : page("レースが見つかりません。", 404);
       }
       if (pathname === `/backtest/${BACKTEST_DATE}`) {
         await runMaintenance(env);
