@@ -75,7 +75,7 @@ export async function refreshMissingLivePredictions(
       }
 
       const history = await getRunnerHistoryStats(env.DB, race, runners);
-      const prediction = generatePrediction(
+      const generated = generatePrediction(
         race,
         runners,
         history,
@@ -83,6 +83,7 @@ export async function refreshMissingLivePredictions(
         positiveNumber(env.MIN_EXPECTED_VALUE, 108),
         positiveInt(env.MAX_RACE_BUDGET_YEN, 10000)
       );
+      const prediction = { ...generated, bets: [] };
       const minutesToStart = (startMs - now) / 60_000;
       const status = minutesToStart <= 15 ? "locked" : "draft";
       const saved = await savePredictionWithCourses(env.DB, race.raceId, prediction, status);
@@ -91,7 +92,6 @@ export async function refreshMissingLivePredictions(
         continue;
       }
       result.generated += 1;
-      if (prediction.bets.length > 0) result.withBets += 1;
     } catch (error) {
       result.errors += 1;
       console.error("LIVE_PREDICTION_REFRESH_FAILED", row.raceId, error);
@@ -112,6 +112,7 @@ export async function refreshMissingLivePredictions(
     const quota = await ensureVenueDailyQuota(env.DB, env.MODEL_VERSION, raceDate, "live");
     result.quotaAddedRaces += quota.addedRaces;
     result.quotaAddedTickets += quota.addedTickets;
+    result.withBets += quota.venues.reduce((sum, venue) => sum + venue.selectedAfter, 0);
     result.venueQuotas.push({ raceDate, venues: quota.venues });
   }
 
