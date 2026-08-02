@@ -1,0 +1,41 @@
+name: Verify home performance layout
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check production home structure
+        run: |
+          set -euo pipefail
+          url='https://race-tantei-phase0.race-tantei.workers.dev/'
+          for attempt in $(seq 1 20); do
+            if curl --silent --show-error --fail --max-time 60 "$url" -o home.html; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              exit 1
+            fi
+            sleep 5
+          done
+          python - <<'PY'
+          from pathlib import Path
+          html=Path('home.html').read_text(encoding='utf-8')
+          required=['全期間の累計成績','成績の積み上がり','月別推移','直近の選出レース']
+          missing=[value for value in required if value not in html]
+          if missing:
+              raise SystemExit(f'missing home sections: {missing}')
+          day_panels=html.count('data-day-panel=')
+          year_blocks=html.count('class="year-block"')
+          if day_panels < 1 or day_panels > 2:
+              raise SystemExit(f'unexpected day panel count: {day_panels}')
+          if year_blocks < 1:
+              raise SystemExit('monthly year block was not rendered')
+          print({'ok':True,'dayPanels':day_panels,'yearBlocks':year_blocks,'length':len(html)})
+          PY
