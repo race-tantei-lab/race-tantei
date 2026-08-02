@@ -78,7 +78,7 @@ export function generatePrediction(
   stats: RunnerHistoryStats[],
   modelVersion: string,
   _minExpectedValuePct: number,
-  _maxRaceBudgetYen: number
+  maxRaceBudgetYen: number
 ): PredictionOutput {
   const active = runners.filter((runner) => runner.runnerStatus === "active");
   const market = marketProbabilities(runners);
@@ -110,5 +110,11 @@ export function generatePrediction(
   });
   predictions.sort((a, b) => b.winProbability - a.winProbability);
   predictions.forEach((prediction, index) => { prediction.predictedOrder = index + 1; });
-  return { modelVersion, runners: predictions, bets: buildBudgetCourseBets(predictions), generatedAt: nowIso() };
+  const allBets = buildBudgetCourseBets(predictions);
+  const bets = maxRaceBudgetYen <= 2000
+    ? allBets.filter((bet) => bet.course === "ライト")
+    : maxRaceBudgetYen <= 5000
+      ? allBets.filter((bet) => bet.course !== "プレミアム")
+      : allBets;
+  return { modelVersion, runners: predictions, bets, generatedAt: nowIso() };
 }
