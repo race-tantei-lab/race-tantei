@@ -105,7 +105,8 @@ export function generatePrediction(
       currentOdds,
       expectedValuePct,
       predictedOrder: 0,
-      explanation: `${race.surface ?? "条件"}${race.distanceM ?? ""}mを前提に、${reasons}`
+      explanation: `${race.surface ?? "条件"}${race.distanceM ?? ""}mを前提に、${reasons}`,
+      popularity: item.runner.popularity
     };
   });
   predictions.sort((a, b) => b.winProbability - a.winProbability);
