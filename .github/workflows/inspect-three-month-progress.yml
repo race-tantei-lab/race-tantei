@@ -1,4 +1,4 @@
-# progress probe 3
+# progress probe 4
 name: Inspect three month progress
 
 on:
@@ -35,17 +35,36 @@ jobs:
             'processedRaces':validation.get('processedRaces'),
             'totalRaces':validation.get('totalRaces'),
             'remainingRaces':validation.get('remainingRaces'),
-            'venueDays':validation.get('venueDays'),
-            'courses':[
-              {
-                'course':row.get('course'),
-                'selectedRaces':row.get('selectedRaces'),
-                'pendingTickets':row.get('pendingTickets'),
-                'roiPct':row.get('roiPct'),
-                'hitRatePct':row.get('hitRatePct')
-              }
-              for row in validation.get('combined',[])
-            ],
-            'monthly':validation.get('monthly',[])
+            'venueDays':validation.get('venueDays')
           },ensure_ascii=False,indent=2))
+          PY
+
+      - name: Inspect official historical navigation links
+        run: |
+          set -euo pipefail
+          url='https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0104202601010820260502%2F34'
+          curl --silent --show-error --fail --max-time 60 "$url" -o historical.raw
+          python - <<'PY'
+          import re, urllib.parse
+          raw=open('historical.raw','rb').read()
+          for enc in ('cp932','shift_jis','utf-8'):
+              try:
+                  html=raw.decode(enc)
+                  break
+              except UnicodeDecodeError:
+                  pass
+          else:
+              html=raw.decode('cp932',errors='replace')
+          found=[]
+          for value in re.findall(r'(?:CNAME=|CNAME%3D)(sw01sde[^"\'&<> ]+)', html, flags=re.I):
+              decoded=urllib.parse.unquote(value).replace('&amp;','&')
+              if decoded not in found:
+                  found.append(decoded)
+          for value in re.findall(r'sw01sde\d{20,}/\d{2}', urllib.parse.unquote(html), flags=re.I):
+              if value not in found:
+                  found.append(value)
+          print('RESULT_LINKS')
+          for value in found[:100]:
+              print(value)
+          print('COUNT',len(found))
           PY
