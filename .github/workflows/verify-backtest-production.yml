@@ -18,6 +18,7 @@ jobs:
           base="https://race-tantei-phase0.race-tantei.workers.dev"
           for attempt in $(seq 1 50); do
             echo "Backtest attempt ${attempt}/50"
+            curl --silent --show-error --fail --max-time 45 "${base}/" >/dev/null
             html="$(curl --silent --show-error --fail --max-time 45 "${base}/backtest/2026-08-01")"
             echo "$html" >/tmp/backtest.html
             python - <<'PY'
@@ -29,15 +30,12 @@ jobs:
           money=re.search(r'購入／払戻<b>[^0-9]*([0-9,]+)円\s*/\s*([0-9,]+)円</b>',html)
           roi=re.search(r'回収率<b>([0-9.]+)%</b>',html)
           bad=html.count('検索ウィンドウ')
-          print({'title':title.group(1) if title else None,'progress':progress.groups() if progress else None,'hits':hits.group(1) if hits else None,'money':money.groups() if money else None,'roi':roi.group(1) if roi else None,'badRaceNames':bad})
-          if not progress: raise SystemExit(1)
-          done,total=map(int,progress.groups())
-          if total >= 36 and done >= 36 and bad == 0:
-              raise SystemExit(0)
-          raise SystemExit(2)
+          snapshot={'title':title.group(1) if title else None,'progress':progress.groups() if progress else None,'hits':hits.group(1) if hits else None,'money':money.groups() if money else None,'roi':roi.group(1) if roi else None,'badRaceNames':bad}
+          print(snapshot)
+          done,total=map(int,progress.groups()) if progress else (0,0)
+          open('/tmp/passed','w').write('1' if total >= 36 and done >= 36 and bad == 0 else '0')
           PY
-            code=$?
-            if [ "$code" -eq 0 ]; then
+            if [ "$(cat /tmp/passed)" = "1" ]; then
               echo "Backtest production verification passed."
               exit 0
             fi
