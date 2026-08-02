@@ -66,7 +66,6 @@ function metricCard(metric: DisplayMetric, budget: number, href: string): string
 function replaceMetricArea(
   html: string,
   combined: DisplayMetric[],
-  live: DisplayMetric[],
   validationComplete: boolean
 ): string {
   const start = html.indexOf('<div class="section-label">');
@@ -74,23 +73,21 @@ function replaceMetricArea(
   const end = html.indexOf("</section>", metricsStart);
   if (start < 0 || metricsStart < 0 || end < 0) return html;
 
-  const combinedCards = COURSES.map(({ name, budget }) => metricCard(
+  const cards = COURSES.map(({ name, budget }) => metricCard(
     combined.find((row) => row.course === name) ?? { course: name, races: 0, hits: 0, stake: 0, returns: 0 },
     budget,
     "/performance"
   )).join("");
-  const liveCards = COURSES.map(({ name, budget }) => metricCard(
-    live.find((row) => row.course === name) ?? { course: name, races: 0, hits: 0, stake: 0, returns: 0 },
-    budget,
-    "/performance"
-  )).join("");
 
-  const replacement = `<div class="section-label"><h2>過去検証込み回収率</h2><span>8月1日・2日＋本番${validationComplete ? "" : "・集計中"}</span></div>
-    <section class="metrics">${combinedCards}</section>
-    <div class="notice">過去分は保存済みオッズによる遡及検証です。本番公開成績とは分けて下段に表示しています。</div>
-    <div class="section-label" style="margin-top:16px"><h2>本番公開成績</h2><span>発走前公開分のみ</span></div>
-    <section class="metrics">${liveCards}</section>`;
+  const replacement = `<div class="section-label"><h2>総合成績</h2><span>全予想を統合集計${validationComplete ? "" : "・集計中"}</span></div>
+    <section class="metrics">${cards}</section>`;
   return `${html.slice(0, start)}${replacement}${html.slice(end + "</section>".length)}`;
+}
+
+function removeSeparatedPerformanceUi(html: string): string {
+  return html
+    .replace(/<div class="notice">フェーズC検証[\s\S]*?<\/div>/, "")
+    .replace(/<a href="\/validation">検証<\/a>/g, "");
 }
 
 function markSelectedCards(html: string): string {
@@ -190,10 +187,11 @@ export async function getPhaseDDashboard(db: D1Database, liveModel: string): Pro
     historical.find((row) => row.course === name)!
   ));
 
-  html = replaceMetricArea(html, combined, live, validation.complete);
+  html = replaceMetricArea(html, combined, validation.complete);
+  html = removeSeparatedPerformanceUi(html);
   html = markSelectedCards(html)
     .replace(/買い目あり/g, "選出レース")
-    .replace("本番成績と遡及検証を分離し、期待値基準未達は見送ります。", "各会場から原則5Rを選出し、期待値厳選と会場上位補完を分けて集計します。")
-    .replace("<title>レース探偵｜フェーズC</title>", "<title>レース探偵｜会場別5R選出</title>");
+    .replace("本番成績と遡及検証を分離し、期待値基準未達は見送ります。", "各会場から原則5Rを選出し、全予想を一つの成績として集計します。")
+    .replace("<title>レース探偵｜フェーズC</title>", "<title>レース探偵｜総合成績</title>");
   return injectSelectionCountScript(html);
 }
