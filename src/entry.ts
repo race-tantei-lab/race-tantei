@@ -2,7 +2,8 @@ import app from "./complete.js";
 import { BACKTEST_DATE, renderBacktest, runBacktestBatch } from "./v1/backtest.js";
 import { renderCompactRace } from "./v1/course-detail.js";
 import { getResultDashboard, renderResultDashboard } from "./v1/dashboard-results.js";
-import { ensureSchema, getRaceDetail } from "./v1/db.js";
+import { ensureSchema } from "./v1/db.js";
+import { getDisplayRaceDetail } from "./v1/display-detail.js";
 import { fetchJraPage } from "./v1/jra.js";
 import type { Env } from "./v1/types.js";
 import { stripHtml } from "./v1/utils.js";
@@ -123,7 +124,7 @@ export default {
 
       if (pathname.startsWith("/races/")) {
         const id = decodeURIComponent(pathname.slice("/races/".length));
-        const detail = await getRaceDetail(env.DB, id);
+        const detail = await getDisplayRaceDetail(env.DB, id);
         ctx.waitUntil(runMaintenance(env));
         return detail ? page(renderCompactRace(detail)) : page("レースが見つかりません。", 404);
       }
