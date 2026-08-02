@@ -1,4 +1,5 @@
 import app, { runSync } from "./complete.js";
+import { getValidationAnalysisData } from "./v1/analysis-data.js";
 import { getCourseMetrics, getCourseMonthlyMetrics } from "./v1/course-db.js";
 import { renderCoursePerformance } from "./v1/course-ui.js";
 import { ensureSchema } from "./v1/db.js";
@@ -173,6 +174,9 @@ export default {
       await prepare(env.DB);
       const pathname = new URL(request.url).pathname;
 
+      if (pathname === "/api/validation/analysis-data") {
+        return json(await getValidationAnalysisData(env.DB));
+      }
       if (pathname === "/api/validation") {
         const snapshot = await getValidationSnapshot(env.DB);
         scheduleBackground(ctx, env);
