@@ -49,9 +49,10 @@ function popularityOdds(runners: Array<{ horseNo: number; popularity: number | n
 }
 
 export function parseDesktopResultRunners(html: string): RunnerRecord[] {
-  const parsed = tableRows(html).map((cells) => {
+  const parsed: RunnerRecord[] = [];
+  for (const cells of tableRows(html)) {
     const horseNo = /^\d{1,2}$/.test(cells[2] ?? "") ? Number(cells[2]) : null;
-    if (!horseNo || horseNo < 1 || horseNo > 18) return null;
+    if (!horseNo || horseNo < 1 || horseNo > 18) continue;
     const joined = cells.join(" ");
     const runnerStatus: RunnerRecord["runnerStatus"] = /除外/.test(joined)
       ? "excluded"
@@ -66,10 +67,12 @@ export function parseDesktopResultRunners(html: string): RunnerRecord[] {
     const popularity = popularityCell.match(/^\d+$/)?.[0]
       ?? popularityCell.match(/(\d+)番人気/)?.[1]
       ?? null;
-    return {
+    const horseName = (cells[3] ?? "").replace(/ブリンカー着用/g, "").trim();
+    if (!horseName) continue;
+    parsed.push({
       horseNo,
       frameNo: frameMatch?.[1] ? Number(frameMatch[1]) : null,
-      horseName: (cells[3] ?? "").replace(/ブリンカー着用/g, "").trim(),
+      horseName,
       sexAge,
       coatColor: null,
       horseWeight: body?.[1] ? Number(body[1]) : null,
@@ -81,8 +84,8 @@ export function parseDesktopResultRunners(html: string): RunnerRecord[] {
       popularity: popularity ? Number(popularity) : null,
       runnerStatus,
       winOdds: null
-    } satisfies RunnerRecord;
-  }).filter((runner): runner is RunnerRecord => runner !== null && runner.horseName.length > 0);
+    });
+  }
 
   const unique = new Map<number, RunnerRecord>();
   for (const runner of parsed) unique.set(runner.horseNo, runner);
