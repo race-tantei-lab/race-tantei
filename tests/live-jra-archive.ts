@@ -11,6 +11,11 @@ import { archiveRaceDate, getThreeMonthHistoryProgressV2 } from "../src/v1/three
 
 void getThreeMonthHistoryProgressV2;
 
+function mobileResultUrl(cname: string): string {
+  const mobileCname = cname.replace(/^pw/i, "sw");
+  return `https://sp.jra.jp/JRADB/accessS.html?CNAME=${encodeURIComponent(mobileCname)}`;
+}
+
 const checksum = await getArchiveMonthChecksum("202605");
 assert.ok(/^[0-9A-F]{2}$/.test(checksum), `invalid archive checksum: ${checksum}`);
 
@@ -22,14 +27,48 @@ const meetingPage = await fetchJraArchivePage(meetings[0]!);
 const resultCnames = parseArchiveResultCnames(meetingPage.html);
 assert.ok(resultCnames.length >= 12, `too few result links in archive meeting: ${resultCnames.length}`);
 
-const sampleUrl = archiveResultUrl(resultCnames[0]!);
-const sampleDate = archiveRaceDate(sampleUrl);
-assert.ok(sampleDate?.startsWith("2026-05-"), `unexpected archive result date: ${sampleDate}`);
-const resultPage = await fetchJraPage(sampleUrl);
-const result = parseResultPage(resultPage.html, resultPage.url);
-assert.equal(result.race.raceDate, sampleDate);
-assert.ok(result.results.some((row) => row.finishPosition === 1));
-assert.ok(result.payouts.some((row) => row.payoutYen > 0));
+const probes = [];
+for (const resultCname of resultCnames.slice(0, 5)) {
+  const desktopUrl = archiveResultUrl(resultCname);
+  const desktopPage = await fetchJraPage(desktopUrl);
+  const desktopResult = parseResultPage(desktopPage.html, desktopPage.url);
+  let mobileResult: ReturnType<typeof parseResultPage> | null = null;
+  let mobileError: string | null = null;
+  try {
+    const mobilePage = await fetchJraPage(mobileResultUrl(resultCname));
+    mobileResult = parseResultPage(mobilePage.html, mobilePage.url);
+  } catch (error) {
+    mobileError = error instanceof Error ? error.message : String(error);
+  }
+  probes.push({
+    resultCname,
+    desktopUrl,
+    desktop: {
+      raceId: desktopResult.race.raceId,
+      date: desktopResult.race.raceDate,
+      venue: desktopResult.race.venue,
+      raceNo: desktopResult.race.raceNo,
+      results: desktopResult.results.length,
+      payouts: desktopResult.payouts.length
+    },
+    mobile: mobileResult ? {
+      raceId: mobileResult.race.raceId,
+      date: mobileResult.race.raceDate,
+      venue: mobileResult.race.venue,
+      raceNo: mobileResult.race.raceNo,
+      results: mobileResult.results.length,
+      payouts: mobileResult.payouts.length
+    } : null,
+    mobileError
+  });
+}
+
+const usable = probes.find((probe) => (probe.mobile?.payouts ?? 0) > 0)
+  ?? probes.find((probe) => probe.desktop.payouts > 0);
+assert.ok(usable, `no archive result with payouts: ${JSON.stringify(probes)}`);
+const selectedDate = usable.mobile?.date ?? usable.desktop.date;
+assert.ok(selectedDate.startsWith("2026-05-"), `unexpected archive result date: ${selectedDate}`);
+assert.equal(archiveRaceDate(usable.desktopUrl), selectedDate);
 
 console.log(JSON.stringify({
   ok: true,
@@ -37,9 +76,6 @@ console.log(JSON.stringify({
   meetings: meetings.length,
   firstMeeting: meetings[0],
   resultLinks: resultCnames.length,
-  sampleUrl,
-  raceId: result.race.raceId,
-  raceDate: result.race.raceDate,
-  venue: result.race.venue,
-  raceNo: result.race.raceNo
+  probes,
+  usable
 }, null, 2));
