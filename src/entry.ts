@@ -95,14 +95,24 @@ async function repairRaceNames(db: D1Database, limit = 8): Promise<number> {
 }
 
 function logRefresh(result: Awaited<ReturnType<typeof refreshMissingLivePredictions>>): void {
-  if (result.candidates > 0 || result.quotaAddedRaces > 0 || result.errors > 0) {
+  if (
+    result.candidates > 0
+    || result.quotaAddedRaces > 0
+    || result.quotaAddedTickets > 0
+    || result.errors > 0
+  ) {
     console.log("LIVE_PREDICTION_REFRESH", JSON.stringify(result));
   }
 }
 
-async function applyValidationQuotas(db: D1Database): Promise<void> {
-  const results = await ensureValidationVenueQuotas(db, VALIDATION_CONFIGS);
-  if (results.some((row) => row.addedRaces > 0)) {
+async function applyOneValidationVenue(db: D1Database): Promise<void> {
+  const results = await ensureValidationVenueQuotas(db, VALIDATION_CONFIGS, 1);
+  if (results.some((row) =>
+    row.addedRaces > 0
+    || row.replacedRaces > 0
+    || row.removedRaces > 0
+    || row.normalizedVenues > 0
+  )) {
     console.log("VALIDATION_VENUE_QUOTAS", JSON.stringify(results));
   }
 }
@@ -110,15 +120,21 @@ async function applyValidationQuotas(db: D1Database): Promise<void> {
 function runMaintenance(env: Env): Promise<void> {
   if (maintenanceRunning) return maintenanceRunning;
   maintenanceRunning = (async () => {
+    await applyOneValidationVenue(env.DB);
     await runSync(env, "deploy");
     logRefresh(await refreshMissingLivePredictions(env, 60));
     await repairRaceNames(env.DB, 8);
     await runValidationBatch(env.DB, 12);
-    await applyValidationQuotas(env.DB);
-  })().finally(() => {
+  })().catch((error) => {
+    console.error("BACKGROUND_MAINTENANCE_FAILED", error);
+  }).finally(() => {
     maintenanceRunning = null;
   });
   return maintenanceRunning;
+}
+
+function scheduleMaintenance(ctx: ExecutionContext, env: Env): void {
+  ctx.waitUntil(runMaintenance(env));
 }
 
 function page(body: string, status = 200): Response {
@@ -147,49 +163,47 @@ export default {
       const pathname = new URL(request.url).pathname;
 
       if (pathname === "/api/validation") {
-        await applyValidationQuotas(env.DB);
-        ctx.waitUntil(runMaintenance(env));
-        return json(await getValidationSnapshot(env.DB));
+        const snapshot = await getValidationSnapshot(env.DB);
+        scheduleMaintenance(ctx, env);
+        return json(snapshot);
       }
       if (pathname === "/api/performance/courses") {
-        await applyValidationQuotas(env.DB);
         const [live, validation] = await Promise.all([
           getCourseMetrics(env.DB, env.MODEL_VERSION),
           getValidationSnapshot(env.DB)
         ]);
+        scheduleMaintenance(ctx, env);
         return json({ live, historical: validation.combined });
       }
       if (pathname === "/") {
-        logRefresh(await refreshMissingLivePredictions(env, 60));
-        await applyValidationQuotas(env.DB);
         const dashboard = await getPhaseDDashboard(env.DB, env.MODEL_VERSION);
-        ctx.waitUntil(runMaintenance(env));
+        scheduleMaintenance(ctx, env);
         return page(dashboard);
       }
       if (pathname.startsWith("/races/")) {
         const id = decodeURIComponent(pathname.slice("/races/".length));
         const detail = await getDisplayRaceDetail(env.DB, id, env.MODEL_VERSION);
-        ctx.waitUntil(runMaintenance(env));
+        scheduleMaintenance(ctx, env);
         return detail ? page(renderPhaseCRaceDetail(detail)) : page("レースが見つかりません。", 404);
       }
       if (pathname === "/validation") {
-        await applyValidationQuotas(env.DB);
-        ctx.waitUntil(runMaintenance(env));
-        return page(await renderValidation(env.DB));
+        const body = await renderValidation(env.DB);
+        scheduleMaintenance(ctx, env);
+        return page(body);
       }
       const validationDate = validationDateFromPath(pathname);
       if (validationDate) {
-        await applyValidationQuotas(env.DB);
-        ctx.waitUntil(runMaintenance(env));
-        return page(await renderValidation(env.DB, validationDate));
+        const body = await renderValidation(env.DB, validationDate);
+        scheduleMaintenance(ctx, env);
+        return page(body);
       }
       if (pathname === "/performance") {
-        await applyValidationQuotas(env.DB);
         const [cumulative, monthly, validation] = await Promise.all([
           getCourseMetrics(env.DB, env.MODEL_VERSION),
           getCourseMonthlyMetrics(env.DB, env.MODEL_VERSION),
           getValidationSnapshot(env.DB)
         ]);
+        scheduleMaintenance(ctx, env);
         return page(renderCoursePerformance(cumulative, monthly, validation.combined));
       }
       if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
@@ -202,7 +216,7 @@ export default {
     try {
       await prepare(env.DB);
       if (app.scheduled) await app.scheduled(controller, env, ctx);
-      ctx.waitUntil(runMaintenance(env));
+      scheduleMaintenance(ctx, env);
     } catch (error) {
       console.error("SCHEDULED_STARTUP_FAILED", error);
     }
