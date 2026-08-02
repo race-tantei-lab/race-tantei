@@ -1,0 +1,43 @@
+name: Diagnose race name markup
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect one bad production race
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          curl -sSf --max-time 45 "${base}/api/races" >/tmp/races.json
+          python - <<'PY' >/tmp/id
+          import json
+          rows=json.load(open('/tmp/races.json'))
+          row=next(r for r in rows if r.get('raceName')=='検索ウィンドウ')
+          print(row['raceId'])
+          PY
+          id="$(cat /tmp/id)"
+          echo "raceId=$id"
+          curl -sSf --max-time 45 "${base}/api/races/${id}" >/tmp/detail.json
+          python - <<'PY' >/tmp/result_url
+          import json
+          d=json.load(open('/tmp/detail.json'))
+          print(d['race']['resultUrl'])
+          PY
+          url="$(cat /tmp/result_url)"
+          echo "resultUrl=$url"
+          curl -sSfL --max-time 45 -A 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1' "$url" >/tmp/result.html
+          python - <<'PY'
+          import re
+          h=open('/tmp/result.html',encoding='utf-8',errors='replace').read()
+          for pattern in [r'.{0,180}titleRaceName.{0,300}',r'.{0,180}RaceName.{0,300}',r'<h[1-6][^>]*>[\s\S]{0,300}?</h[1-6]>',r'<title>[\s\S]*?</title>']:
+              print('\nPATTERN',pattern)
+              for m in list(re.finditer(pattern,h,re.I))[:20]:
+                  print(re.sub(r'\s+',' ',m.group(0))[:600])
+          PY
