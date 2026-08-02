@@ -1,0 +1,44 @@
+name: Inspect production ROI
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Advance normalization and capture performance
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          for attempt in $(seq 1 8); do
+            curl --silent --show-error --fail --max-time 60 "${base}/api/performance/courses" -o current-performance.json
+            echo "advanced ${attempt}/8"
+          done
+          python - <<'PY'
+          import json
+          data=json.load(open('current-performance.json', encoding='utf-8'))
+          historical=data.get('historical', [])
+          print(json.dumps({
+              row.get('course'): {
+                  'selectedRaces': row.get('selectedRaces'),
+                  'tickets': row.get('tickets'),
+                  'stakeYen': row.get('stakeYen'),
+                  'returnYen': row.get('returnYen'),
+                  'roiPct': row.get('roiPct'),
+                  'hitRatePct': row.get('hitRatePct'),
+                  'byTicketType': row.get('byTicketType')
+              }
+              for row in historical
+          }, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Upload production performance
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-production-roi
+          path: current-performance.json
