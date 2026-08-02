@@ -200,11 +200,9 @@ async function runThreeMonthPipelineStep(env: Env): Promise<unknown> {
   };
   let quotas: Awaited<ReturnType<typeof normalizeThreeMonthVenueQuotas>> = [];
 
-  if (historyProgress.phase !== "discovery") {
-    const validationBatchSize = historyProgress.phase === "import" ? 12 : 48;
-    const quotaBatchSize = historyProgress.phase === "import" ? 2 : 8;
-    validation = await runThreeMonthValidationBatch(env.DB, validationBatchSize);
-    quotas = await normalizeThreeMonthVenueQuotas(env.DB, quotaBatchSize);
+  if (historyProgress.phase === "complete") {
+    validation = await runThreeMonthValidationBatch(env.DB, 48);
+    quotas = await normalizeThreeMonthVenueQuotas(env.DB, 8);
   }
 
   const snapshot = await getThreeMonthValidationSnapshot(env.DB);
@@ -214,6 +212,7 @@ async function runThreeMonthPipelineStep(env: Env): Promise<unknown> {
     && snapshot.combined.every((row) => row.selectedRaces === requiredSelections);
   return {
     ok: true,
+    stage: historyProgress.complete ? "validation" : "history-import",
     history,
     validation,
     normalizedVenues: quotas.reduce((sum, row) => sum + row.normalizedVenues, 0),
