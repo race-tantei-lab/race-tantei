@@ -4,6 +4,7 @@ import {
   fetchJraArchivePage,
   getArchiveMeetingCnames,
   getArchiveMonthChecksum,
+  getArchiveResultUrls,
   parseArchiveResultCnames
 } from "../src/v1/three-month-archive.js";
 import {
@@ -62,12 +63,6 @@ if (payouts.length < 6) {
       exacta: around(plain, "馬単"),
       trifecta: around(plain, "3連単"),
       yen: around(plain, "円")
-    },
-    rawMarkers: {
-      payout: resultPage.html.indexOf("払戻"),
-      win: resultPage.html.indexOf("単勝"),
-      trifecta: resultPage.html.indexOf("3連単"),
-      yen: resultPage.html.indexOf("円")
     }
   }, null, 2));
 }
@@ -76,12 +71,21 @@ assert.ok(payouts.some((row) => row.betType === "単勝" && row.payoutYen > 0));
 assert.ok(payouts.some((row) => row.betType === "馬連" && row.payoutYen > 0));
 assert.ok(payouts.some((row) => row.betType === "3連単" && row.payoutYen > 0));
 
+const augustUrls = await getArchiveResultUrls("202608");
+const augustTargetUrls = augustUrls.filter((url) => {
+  const date = archiveRaceDate(url);
+  return date === "2026-08-01" || date === "2026-08-02";
+});
+assert.ok(augustTargetUrls.length >= 72, `too few August 1-2 result URLs: ${augustTargetUrls.length}`);
+
 console.log(JSON.stringify({
   ok: true,
   checksum,
   meetings: meetings.length,
   firstMeeting: meetings[0],
   resultLinks: resultCnames.length,
+  augustResultLinks: augustUrls.length,
+  augustTargetLinks: augustTargetUrls.length,
   sampleUrl,
   raceId: result.race.raceId,
   raceDate: result.race.raceDate,
