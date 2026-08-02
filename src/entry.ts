@@ -44,7 +44,7 @@ function failureResponse(request: Request, error: unknown): Response {
 }
 
 function extractOfficialRaceName(html: string): string | null {
-  const match = html.match(/<span\b[^>]*class=["'][^"']*\btitleRaceName\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
+  const match = html.match(/<span\b[^>]*class=["'][^"']*titleRaceName[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
   if (!match?.[1]) return null;
   const name = stripHtml(match[1]).replace(/\s+/g, " ").trim();
   if (!name || /^(?:検索ウィンドウ|メニュー|出馬表|レース結果|オッズ|払戻金)$/.test(name)) return null;
