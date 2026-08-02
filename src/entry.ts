@@ -1,10 +1,10 @@
-import app from "./complete.js";
+import app, { runSync } from "./complete.js";
 import { BACKTEST_DATE, renderBacktest, runBacktestBatch } from "./v1/backtest.js";
 import { renderCompactRace } from "./v1/course-detail.js";
-import { getResultDashboard, renderResultDashboard } from "./v1/dashboard-results.js";
 import { ensureSchema } from "./v1/db.js";
 import { getDisplayRaceDetail } from "./v1/display-detail.js";
 import { fetchJraPage } from "./v1/jra.js";
+import { getStableDashboard } from "./v1/stable-dashboard.js";
 import type { Env } from "./v1/types.js";
 import { stripHtml } from "./v1/utils.js";
 
@@ -92,7 +92,8 @@ function runMaintenance(env: Env): Promise<void> {
   if (maintenanceRunning) return maintenanceRunning;
   maintenanceRunning = Promise.all([
     repairRaceNames(env.DB, 8),
-    runBacktestBatch(env.DB, 4)
+    runBacktestBatch(env.DB, 12),
+    runSync(env, "deploy")
   ]).then(() => undefined).finally(() => {
     maintenanceRunning = null;
   });
@@ -117,9 +118,9 @@ export default {
       const pathname = new URL(request.url).pathname;
 
       if (pathname === "/") {
-        const dashboard = await getResultDashboard(env.DB, env.MODEL_VERSION);
+        const dashboard = await getStableDashboard(env.DB, env.MODEL_VERSION);
         ctx.waitUntil(runMaintenance(env));
-        return page(renderResultDashboard(dashboard.races, dashboard.metrics));
+        return page(dashboard.html);
       }
 
       if (pathname.startsWith("/races/")) {
