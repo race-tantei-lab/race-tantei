@@ -71,8 +71,16 @@ jobs:
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-          curl --silent --show-error --fail --max-time 25 "${base}/" >/tmp/home.html
-          grep -q 'レース探偵' /tmp/home.html
+          for attempt in $(seq 1 4); do
+            if curl --silent --show-error --fail --max-time 60 "${base}/" >/tmp/home.html \
+              && grep -q 'レース探偵' /tmp/home.html; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              exit 1
+            fi
+            sleep 5
+          done
 
       - name: Verify venue selections, budgets and unified ROI after deploy
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -82,16 +90,18 @@ jobs:
           for attempt in $(seq 1 48); do
             : >/tmp/home.html
             : >/tmp/home.headers
+            : >/tmp/performance.html
             home_code="$(curl --silent --show-error --max-time 25 -o /tmp/home.html -D /tmp/home.headers -w '%{http_code}' "${base}/" || true)"
+            performance_code="$(curl --silent --show-error --max-time 25 -o /tmp/performance.html -w '%{http_code}' "${base}/performance" || true)"
             performance="$(curl --silent --show-error --max-time 25 "${base}/api/performance/courses" || true)"
-            echo "Verification attempt ${attempt}/48 home=${home_code}"
+            echo "Verification attempt ${attempt}/48 home=${home_code} performance=${performance_code}"
 
-            if [ "$home_code" != "200" ] || [ -z "$performance" ]; then
+            if [ "$home_code" != "200" ] || [ "$performance_code" != "200" ] || [ -z "$performance" ]; then
               sleep 10
               continue
             fi
 
-            if HOME_FILE=/tmp/home.html PERFORMANCE="$performance" python - <<'PY'
+            if HOME_FILE=/tmp/home.html PERFORMANCE_FILE=/tmp/performance.html PERFORMANCE="$performance" python - <<'PY'
           from html.parser import HTMLParser
           import json, os, sys
 
@@ -121,9 +131,10 @@ jobs:
                           self.day, self.venue = previous
                           break
 
-          html = open(os.environ["HOME_FILE"], encoding="utf-8").read()
+          home_html = open(os.environ["HOME_FILE"], encoding="utf-8").read()
+          performance_html = open(os.environ["PERFORMANCE_FILE"], encoding="utf-8").read()
           parser = SelectionParser()
-          parser.feed(html)
+          parser.feed(home_html)
           try:
               performance = json.loads(os.environ.get("PERFORMANCE", "{}"))
           except Exception:
@@ -153,19 +164,30 @@ jobs:
               if date in expected_dates
           }
           venue_ok = len(counts) >= 6 and all(count == 5 for count in counts.values())
-          page_ok = (
-              "累計回収率" in html
-              and "過去レース＋本番を合算" in html
-              and "1R目安" in html
-              and "本番公開成績" not in html
+          home_ok = (
+              "総合成績" in home_html
+              and "過去レース＋本番を合算" in home_html
+              and "1R目安" not in home_html
+              and "上限 " not in home_html
+              and "本番公開成績" not in home_html
           )
-          valid = historical_ok and budget_ok and venue_ok and page_ok
+          performance_ok = (
+              "コース別総合成績" in performance_html
+              and "過去レースと本番公開分を分けずに合算" in performance_html
+              and "1レースの購入額" not in performance_html
+              and "目安1,600円" not in performance_html
+              and "上限2,000円" not in performance_html
+              and "本番公開のみ" not in performance_html
+              and "遡及検証のみ" not in performance_html
+          )
+          valid = historical_ok and budget_ok and venue_ok and home_ok and performance_ok
           print(json.dumps({
               "historical": historical,
               "averageStakePerRace": averages,
               "venueSelections": counts,
               "budgetOk": budget_ok,
-              "pageOk": page_ok,
+              "homeOk": home_ok,
+              "performanceOk": performance_ok,
               "valid": valid
           }, ensure_ascii=False))
           sys.exit(0 if valid else 1)
