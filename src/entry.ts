@@ -16,6 +16,7 @@ import {
 import { fetchJraPage } from "./v1/jra.js";
 import { refreshMissingLivePredictions } from "./v1/live-prediction-refresh.js";
 import { getPhaseDDashboard } from "./v1/phase-d-dashboard.js";
+import { historyDateFromPath, renderRaceArchiveDate } from "./v1/race-archive.js";
 import { renderPhaseCRaceDetail } from "./v1/race-detail-phase-c.js";
 import type { Env } from "./v1/types.js";
 import { stripHtml } from "./v1/utils.js";
@@ -165,14 +166,14 @@ async function displayedHistoricalSnapshot(db: D1Database): Promise<{
   threeMonth: Awaited<ReturnType<typeof getThreeMonthValidationSnapshot>>;
 }> {
   const threeMonth = await getThreeMonthValidationSnapshot(db);
-  if (threeMonth.complete) {
+  if (threeMonth.processedRaces > 0) {
     return {
       historical: threeMonth.combined,
       monthly: threeMonth.monthly,
       scope: {
         startDate: threeMonth.startDate,
         endDate: threeMonth.endDate,
-        complete: true,
+        complete: threeMonth.complete,
         totalRaces: threeMonth.totalRaces
       },
       threeMonth
@@ -297,6 +298,12 @@ export default {
         const dashboard = await getPhaseDDashboard(env.DB, env.MODEL_VERSION);
         scheduleBackground(ctx, env);
         return page(dashboard);
+      }
+      const historyDate = historyDateFromPath(pathname);
+      if (historyDate) {
+        const body = await renderRaceArchiveDate(env.DB, historyDate, env.MODEL_VERSION);
+        scheduleBackground(ctx, env);
+        return body ? page(body) : page("指定された開催日のレースが見つかりません。", 404);
       }
       if (pathname.startsWith("/races/")) {
         const id = decodeURIComponent(pathname.slice("/races/".length));
