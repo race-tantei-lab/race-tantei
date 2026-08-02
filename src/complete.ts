@@ -6,21 +6,24 @@ import {
   getDashboardMetrics,
   getDueRaceSources,
   getLatestRaces,
-  getPerformanceRows,
   getRaceDetail,
   getRunnerHistoryStats,
   getRunners,
   getState,
   getSystemSnapshot,
   saveEntryBundle,
-  savePrediction,
   saveResultBundle,
   resetRaceSourcesForDiscoveryRevision,
   setState,
-  settleRace,
   updateRaceSource,
   upsertRaceSources
 } from "./v1/db.js";
+import {
+  getCourseMetrics,
+  getCourseMonthlyMetrics,
+  savePredictionWithCourses,
+  settleRaceWithCourses
+} from "./v1/course-db.js";
 import {
   discoverRaceUrls,
   fetchJraPage,
@@ -31,11 +34,11 @@ import {
   toResultUrl
 } from "./v1/jra.js";
 import { generatePrediction } from "./v1/model.js";
+import { renderCoursePerformance } from "./v1/course-ui.js";
 import {
   renderHome,
   renderMethodology,
   renderNotFound,
-  renderPerformance,
   renderRace,
   renderSystem
 } from "./v1/ui.js";
@@ -43,7 +46,7 @@ import { isJstEntryWindow, isJstRaceWindow, nowIso, positiveInt, positiveNumber 
 
 let schemaReady: Promise<void> | null = null;
 let inMemorySync: Promise<unknown> | null = null;
-const DISCOVERY_REVISION = "2026-08-02-jst-bets-v3";
+const DISCOVERY_REVISION = "2026-08-02-budget-courses-v1";
 
 function ready(db: D1Database): Promise<void> {
   schemaReady ??= ensureSchema(db).catch((error) => {
@@ -128,10 +131,10 @@ async function updatePrediction(env: Env, race: RaceRecord, now: Date): Promise<
     history,
     env.MODEL_VERSION,
     positiveNumber(env.MIN_EXPECTED_VALUE, 108),
-    positiveInt(env.MAX_RACE_BUDGET_YEN, 2000)
+    positiveInt(env.MAX_RACE_BUDGET_YEN, 10000)
   );
   const status = minutesToStart <= 15 ? "locked" : "draft";
-  await savePrediction(env.DB, race.raceId, prediction, status);
+  await savePredictionWithCourses(env.DB, race.raceId, prediction, status);
 }
 
 function hasResultUrl(url: string): boolean {
@@ -166,7 +169,7 @@ async function processSource(env: Env, source: Awaited<ReturnType<typeof getDueR
       const result = parseResultPage(resultPage.html, resultPage.url);
       if (result.race.raceId !== entry.race.raceId) throw new Error("RACE_ID_MISMATCH");
       await saveResultBundle(env.DB, result);
-      await settleRace(env.DB, entry.race.raceId);
+      await settleRaceWithCourses(env.DB, entry.race.raceId);
       await updateRaceSource(env.DB, source.entryUrl, {
         raceId: entry.race.raceId,
         status: "complete",
@@ -280,6 +283,7 @@ async function handleApi(request: Request, env: Env, pathname: string): Promise<
   }
   if (pathname === "/api/status") return json(await getSystemSnapshot(env.DB));
   if (pathname === "/api/races") return json(await getLatestRaces(env.DB, 100));
+  if (pathname === "/api/performance/courses") return json(await getCourseMetrics(env.DB));
   if (pathname.startsWith("/api/races/")) {
     const id = decodeURIComponent(pathname.slice("/api/races/".length));
     const detail = await getRaceDetail(env.DB, id);
@@ -311,8 +315,8 @@ export default {
       return detail ? html(renderRace(detail)) : html(renderNotFound(), 404);
     }
     if (url.pathname === "/performance") {
-      const [metrics, rows] = await Promise.all([getDashboardMetrics(env.DB), getPerformanceRows(env.DB)]);
-      return html(renderPerformance(metrics, rows));
+      const [cumulative, monthly] = await Promise.all([getCourseMetrics(env.DB), getCourseMonthlyMetrics(env.DB)]);
+      return html(renderCoursePerformance(cumulative, monthly));
     }
     if (url.pathname === "/methodology") return html(renderMethodology());
     if (url.pathname === "/system") return html(renderSystem(await getSystemSnapshot(env.DB)));
