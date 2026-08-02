@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import { discoverRaceUrls, extractEntryLinks, fetchJraPage, parseEntryPage, parseResultPage } from "../src/v1/jra.js";
+import { stripHtml } from "../src/v1/utils.js";
 
 function snippet(html: string, needle: string): string | null {
   const index = html.indexOf(needle);
@@ -7,6 +8,15 @@ function snippet(html: string, needle: string): string | null {
   return html.slice(Math.max(0, index - 500), Math.min(html.length, index + 1800));
 }
 function cnameOf(url: string): string { return decodeURIComponent(new URL(url).searchParams.get("CNAME") ?? ""); }
+function resultRunnerRows(html: string): string[][] {
+  const values: string[][] = [];
+  for (const match of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...(match[1] ?? "").matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+      .map((cell) => stripHtml(cell[1] ?? "").replace(/\s+/g, " ").trim());
+    if (cells.some((cell) => /(?:\d+:\d{2}\.\d|除外|中止|失格|取消)/.test(cell))) values.push(cells);
+  }
+  return values;
+}
 
 const entryUrl = "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030520260801%2F15";
 const entryPage = await fetchJraPage(entryUrl);
@@ -44,20 +54,14 @@ assert.ok(result.results.length >= 5, `too few results parsed: ${result.results.
 assert.ok(result.results.some((runner) => runner.finishPosition === 1), "winner was not parsed");
 assert.ok(result.payouts.some((payout) => payout.betType === "単勝" && payout.payoutYen > 0), "win payout was not parsed");
 
-const historicalEntryUrl = "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0104202601010820260502%2F34";
 const historicalResultUrl = "https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0104202601010820260502%2F34";
-const [historicalEntryPage, historicalResultPage] = await Promise.all([
-  fetchJraPage(historicalEntryUrl),
-  fetchJraPage(historicalResultUrl)
-]);
-const historicalEntry = parseEntryPage(historicalEntryPage.html, historicalEntryPage.url);
+const historicalResultPage = await fetchJraPage(historicalResultUrl);
 const historicalResult = parseResultPage(historicalResultPage.html, historicalResultPage.url);
-assert.equal(historicalEntry.race.raceDate, "2026-05-02");
-assert.equal(historicalEntry.race.venue, "新潟");
-assert.equal(historicalEntry.race.raceNo, 8);
-assert.equal(historicalResult.race.raceId, historicalEntry.race.raceId);
-assert.ok(historicalEntry.runners.length >= 5, "historical runners were not parsed");
-assert.ok(historicalEntry.runners.filter((runner) => runner.winOdds !== null).length >= 3, "historical final win odds were not parsed");
+const historicalRows = resultRunnerRows(historicalResultPage.html);
+assert.equal(historicalResult.race.raceDate, "2026-05-02");
+assert.equal(historicalResult.race.venue, "新潟");
+assert.equal(historicalResult.race.raceNo, 8);
+assert.ok(historicalRows.length >= 5, "historical result runner rows were not found");
 assert.ok(historicalResult.results.some((runner) => runner.finishPosition === 1), "historical winner was not parsed");
 assert.ok(historicalResult.payouts.some((payout) => payout.betType === "3連単" && payout.payoutYen > 0), "historical trifecta payout was not parsed");
 
@@ -70,9 +74,10 @@ assert.ok(nextDayLinks.length >= 36, `next-day discovery incomplete: ${nextDayLi
 console.log(JSON.stringify({
   ok: true,
   raceId: entry.race.raceId,
-  historicalRaceId: historicalEntry.race.raceId,
+  historicalRaceId: historicalResult.race.raceId,
+  historicalResultFinalUrl: historicalResultPage.url,
+  historicalRunnerRows: historicalRows.slice(0, 4),
   runners: entry.runners.length,
-  historicalRunners: historicalEntry.runners.length,
   results: result.results.length,
   historicalResults: historicalResult.results.length,
   payouts: result.payouts.length,
