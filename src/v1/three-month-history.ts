@@ -6,9 +6,7 @@ import {
 } from "./db.js";
 import {
   fetchJraPage,
-  pageLooksLikeEntry,
   pageLooksLikeResult,
-  parseEntryPage,
   parseResultPage
 } from "./jra.js";
 import {
@@ -17,7 +15,8 @@ import {
   THREE_MONTH_SCOPE_VERSION,
   THREE_MONTH_START_DATE
 } from "./three-month-scope.js";
-import { stripHtml } from "./utils.js";
+import type { RaceBundle, RunnerRecord } from "./types.js";
+import { clamp, stripHtml } from "./utils.js";
 
 const VENUE_CODES: Record<string, string> = {
   札幌: "01",
@@ -40,6 +39,8 @@ const STATE_TASK_INDEX_KEY = `${STATE_PREFIX}:task_index`;
 const STATE_RACE_NO_KEY = `${STATE_PREFIX}:race_no`;
 const STATE_FAILURES_KEY = `${STATE_PREFIX}:failures`;
 const RACES_PER_BATCH = 4;
+const MARKET_TAKEOUT_FACTOR = 0.8;
+const POPULARITY_POWER = 1.07;
 
 export interface HistoricalMeetingTask {
   raceDate: string;
@@ -52,6 +53,21 @@ interface FailedRace extends HistoricalMeetingTask {
   raceNo: number;
   attempts: number;
   error: string;
+}
+
+interface ParsedHistoricalRunner {
+  horseNo: number;
+  frameNo: number | null;
+  horseName: string;
+  sexAge: string | null;
+  horseWeight: number | null;
+  weightChange: number | null;
+  jockey: string | null;
+  assignedWeight: number | null;
+  trainer: string | null;
+  stable: string | null;
+  popularity: number | null;
+  runnerStatus: RunnerRecord["runnerStatus"];
 }
 
 export interface ThreeMonthHistoryProgress {
@@ -113,25 +129,130 @@ export function parseHistoricalMeetings(html: string, raceDate: string): Histori
   return [...found.values()].sort((a, b) => a.venue.localeCompare(b.venue, "ja"));
 }
 
+function resultTableRows(html: string): string[][] {
+  const rows: string[][] = [];
+  for (const match of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...(match[1] ?? "").matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+      .map((cell) => stripHtml(cell[1] ?? "").replace(/\s+/g, " ").trim());
+    if (cells.some((cell) => /(?:\d+:\d{2}\.\d|除外|中止|失格|取消)/.test(cell))) rows.push(cells);
+  }
+  return rows;
+}
+
+function parseDetailedRunner(cells: string[]): ParsedHistoricalRunner | null {
+  const frameNo = /^\d{1,2}$/.test(cells[1] ?? "") ? Number(cells[1]) : null;
+  const horseNo = /^\d{1,2}$/.test(cells[2] ?? "") ? Number(cells[2]) : null;
+  if (!horseNo || horseNo < 1 || horseNo > 18) return null;
+  const detail = cells.slice(3).join(" ").replace(/\s+/g, " ").trim();
+  const status: RunnerRecord["runnerStatus"] = /除外/.test(detail)
+    ? "excluded"
+    : /取消/.test(detail)
+      ? "scratched"
+      : "active";
+  const popularityMatch = detail.match(/(\d+)番人気/);
+  const popularity = popularityMatch?.[1] ? Number(popularityMatch[1]) : null;
+  const horseName = (popularityMatch?.index !== undefined
+    ? detail.slice(0, popularityMatch.index)
+    : detail.split(/\s+(?:[牡牝騸セ]\d+|除外|取消)/)[0] ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!horseName) return null;
+
+  const sexAgeMatch = detail.match(/([牡牝騸セ])(\d+)/);
+  const bodyMatch = detail.match(/(\d{3})kg\(([+-]?\d+)\)/);
+  const peopleMatch = bodyMatch
+    ? detail.slice((bodyMatch.index ?? 0) + bodyMatch[0].length)
+      .match(/^\s*(.+?)\s+\((\d+(?:\.\d+)?)\)\s+(.+?)\s+\((美浦|栗東|本会外)\)/)
+    : null;
+
+  return {
+    horseNo,
+    frameNo,
+    horseName,
+    sexAge: sexAgeMatch ? `${sexAgeMatch[1]}${sexAgeMatch[2]}` : null,
+    horseWeight: bodyMatch?.[1] ? Number(bodyMatch[1]) : null,
+    weightChange: bodyMatch?.[2] ? Number(bodyMatch[2]) : null,
+    jockey: peopleMatch?.[1]?.trim() || null,
+    assignedWeight: peopleMatch?.[2] ? Number(peopleMatch[2]) : null,
+    trainer: peopleMatch?.[3]?.trim() || null,
+    stable: peopleMatch?.[4] ?? null,
+    popularity,
+    runnerStatus: status
+  };
+}
+
+function popularityProxyOdds(runners: ParsedHistoricalRunner[]): Map<number, number> {
+  const active = runners.filter((runner) => runner.runnerStatus === "active");
+  const fallbackStart = Math.max(
+    active.length,
+    ...active.map((runner) => runner.popularity ?? 0),
+    1
+  );
+  const ranks = new Map<number, number>();
+  let fallbackOffset = 0;
+  for (const runner of active) {
+    ranks.set(runner.horseNo, runner.popularity ?? fallbackStart + (++fallbackOffset));
+  }
+  const weights = new Map<number, number>();
+  for (const runner of active) {
+    const rank = ranks.get(runner.horseNo) ?? fallbackStart + 1;
+    weights.set(runner.horseNo, Math.pow(Math.max(1, rank), -POPULARITY_POWER));
+  }
+  const total = [...weights.values()].reduce((sum, value) => sum + value, 0);
+  const odds = new Map<number, number>();
+  for (const runner of active) {
+    const probability = total > 0
+      ? (weights.get(runner.horseNo) ?? 0) / total
+      : 1 / Math.max(1, active.length);
+    const decimalOdds = clamp(MARKET_TAKEOUT_FACTOR / Math.max(0.0001, probability), 1.1, 999.9);
+    odds.set(runner.horseNo, Math.floor(decimalOdds * 10) / 10);
+  }
+  return odds;
+}
+
+export function parseHistoricalResultRunners(html: string): RunnerRecord[] {
+  const parsed = resultTableRows(html)
+    .map(parseDetailedRunner)
+    .filter((runner): runner is ParsedHistoricalRunner => runner !== null);
+  const unique = new Map<number, ParsedHistoricalRunner>();
+  for (const runner of parsed) unique.set(runner.horseNo, runner);
+  const values = [...unique.values()].sort((a, b) => a.horseNo - b.horseNo);
+  const odds = popularityProxyOdds(values);
+  return values.map((runner) => ({
+    horseNo: runner.horseNo,
+    frameNo: runner.frameNo,
+    horseName: runner.horseName,
+    sexAge: runner.sexAge,
+    coatColor: null,
+    horseWeight: runner.horseWeight,
+    weightChange: runner.weightChange,
+    jockey: runner.jockey,
+    assignedWeight: runner.assignedWeight,
+    trainer: runner.trainer,
+    stable: runner.stable,
+    winOdds: runner.runnerStatus === "active" ? odds.get(runner.horseNo) ?? null : null,
+    popularity: runner.popularity,
+    runnerStatus: runner.runnerStatus
+  }));
+}
+
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
 }
 
-function jraDbUrl(task: HistoricalMeetingTask, raceNo: number, kind: "entry" | "result"): string {
+export function historicalResultUrl(task: HistoricalMeetingTask, raceNo: number): string {
   const venueCode = VENUE_CODES[task.venue];
   if (!venueCode) throw new Error(`UNKNOWN_VENUE:${task.venue}`);
   const ymd = task.raceDate.replace(/-/g, "");
   const year = task.raceDate.slice(0, 4);
-  const pageKind = kind === "entry" ? "dde" : "sde";
-  const cname = `sw01${pageKind}01${venueCode}${year}${pad2(task.meetingNo)}${pad2(task.meetingDay)}${pad2(raceNo)}${ymd}/00`;
-  const path = kind === "entry" ? "accessD.html" : "accessS.html";
-  return `https://sp.jra.jp/JRADB/${path}?CNAME=${encodeURIComponent(cname)}`;
+  const cname = `sw01sde01${venueCode}${year}${pad2(task.meetingNo)}${pad2(task.meetingDay)}${pad2(raceNo)}${ymd}/00`;
+  return `https://sp.jra.jp/JRADB/accessS.html?CNAME=${encodeURIComponent(cname)}`;
 }
 
 async function alreadyComplete(db: D1Database, task: HistoricalMeetingTask, raceNo: number): Promise<boolean> {
   const row = await db.prepare(`
     SELECT r.status,
-      (SELECT COUNT(*) FROM rt_runners rr WHERE rr.race_id=r.race_id AND rr.runner_status='active') AS runners,
+      (SELECT COUNT(*) FROM rt_runners rr WHERE rr.race_id=r.race_id AND rr.runner_status='active' AND rr.win_odds IS NOT NULL) AS runners,
       (SELECT COUNT(*) FROM rt_results rs WHERE rs.race_id=r.race_id) AS results,
       (SELECT COUNT(*) FROM rt_payouts p WHERE p.race_id=r.race_id) AS payouts
     FROM rt_races r
@@ -151,22 +272,24 @@ async function importHistoricalRace(
 ): Promise<{ imported: boolean; skipped: boolean }> {
   if (await alreadyComplete(db, task, raceNo)) return { imported: false, skipped: true };
 
-  const entryUrl = jraDbUrl(task, raceNo, "entry");
-  const resultUrl = jraDbUrl(task, raceNo, "result");
-  const [entryPage, resultPage] = await Promise.all([
-    fetchJraPage(entryUrl),
-    fetchJraPage(resultUrl)
-  ]);
-  if (!pageLooksLikeEntry(entryPage.html)) throw new Error("HISTORY_ENTRY_SIGNATURE_MISSING");
+  const resultUrl = historicalResultUrl(task, raceNo);
+  const resultPage = await fetchJraPage(resultUrl);
   if (!pageLooksLikeResult(resultPage.html)) throw new Error("HISTORY_RESULT_SIGNATURE_MISSING");
-
-  const entry = parseEntryPage(entryPage.html, entryPage.url);
   const result = parseResultPage(resultPage.html, resultPage.url);
-  if (entry.race.raceDate !== task.raceDate || entry.race.venue !== task.venue || entry.race.raceNo !== raceNo) {
-    throw new Error(`ENTRY_RACE_MISMATCH:${entry.race.raceDate}:${entry.race.venue}:${entry.race.raceNo}`);
+  if (result.race.raceDate !== task.raceDate || result.race.venue !== task.venue || result.race.raceNo !== raceNo) {
+    throw new Error(`RESULT_RACE_MISMATCH:${result.race.raceDate}:${result.race.venue}:${result.race.raceNo}`);
   }
-  if (result.race.raceId !== entry.race.raceId) throw new Error("HISTORY_RACE_ID_MISMATCH");
-
+  const runners = parseHistoricalResultRunners(resultPage.html);
+  if (runners.filter((runner) => runner.runnerStatus === "active" && runner.winOdds !== null).length < 2) {
+    throw new Error(`HISTORY_RUNNERS_NOT_FOUND:${runners.length}`);
+  }
+  const entry: RaceBundle = {
+    race: { ...result.race, status: "scheduled" },
+    runners,
+    results: [],
+    payouts: [],
+    refundHorseNos: []
+  };
   await saveEntryBundle(db, entry);
   await saveResultBundle(db, result);
   return { imported: true, skipped: false };
@@ -232,6 +355,7 @@ async function discoverNextDate(db: D1Database): Promise<{ raceDate: string; mee
   if (!raceDate) return { raceDate: THREE_MONTH_END_DATE, meetings: [] };
   const page = await fetchJraPage(calendarUrl(raceDate));
   const meetings = parseHistoricalMeetings(page.html, raceDate);
+  if (meetings.length === 0) throw new Error(`HISTORY_MEETINGS_NOT_FOUND:${raceDate}`);
   const tasks = parseJsonArray<HistoricalMeetingTask>(await getState(db, STATE_TASKS_KEY));
   const byKey = new Map(tasks.map((task) => [`${task.raceDate}:${task.venue}`, task]));
   for (const meeting of meetings) byKey.set(`${meeting.raceDate}:${meeting.venue}`, meeting);
@@ -302,24 +426,22 @@ async function importNextRaceBatch(db: D1Database): Promise<{
 async function retryOneFailure(db: D1Database): Promise<{
   retried: boolean;
   recovered: boolean;
-  abandoned: boolean;
   failure: FailedRace | null;
 }> {
   const failures = parseJsonArray<FailedRace>(await getState(db, STATE_FAILURES_KEY));
   const failure = failures.shift() ?? null;
-  if (!failure) return { retried: false, recovered: false, abandoned: false, failure: null };
+  if (!failure) return { retried: false, recovered: false, failure: null };
   try {
     await importHistoricalRace(db, failure, failure.raceNo);
     await setState(db, STATE_FAILURES_KEY, JSON.stringify(failures));
-    return { retried: true, recovered: true, abandoned: false, failure };
+    return { retried: true, recovered: true, failure };
   } catch (error) {
     const attempts = failure.attempts + 1;
     const message = error instanceof Error ? error.message : String(error);
-    const abandoned = attempts >= 3;
-    if (!abandoned) failures.push({ ...failure, attempts, error: message });
+    failures.push({ ...failure, attempts, error: message });
     await setState(db, STATE_FAILURES_KEY, JSON.stringify(failures));
     console.error("THREE_MONTH_HISTORY_RETRY_FAILED", failure, message);
-    return { retried: true, recovered: false, abandoned, failure: { ...failure, attempts, error: message } };
+    return { retried: true, recovered: false, failure: { ...failure, attempts, error: message } };
   }
 }
 
