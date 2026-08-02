@@ -149,6 +149,14 @@ function scheduleBackground(ctx: ExecutionContext, env: Env): void {
   ctx.waitUntil(runMaintenance(env));
 }
 
+async function coursePerformanceSnapshot(env: Env): Promise<unknown> {
+  const [live, validation] = await Promise.all([
+    getCourseMetrics(env.DB, env.MODEL_VERSION),
+    getValidationSnapshot(env.DB)
+  ]);
+  return { live, historical: validation.combined };
+}
+
 function page(body: string, status = 200): Response {
   return new Response(body, {
     status,
@@ -182,13 +190,13 @@ export default {
         scheduleBackground(ctx, env);
         return json(snapshot);
       }
+      if (pathname === "/api/performance/courses/read-only") {
+        return json(await coursePerformanceSnapshot(env));
+      }
       if (pathname === "/api/performance/courses") {
-        const [live, validation] = await Promise.all([
-          getCourseMetrics(env.DB, env.MODEL_VERSION),
-          getValidationSnapshot(env.DB)
-        ]);
+        const snapshot = await coursePerformanceSnapshot(env);
         scheduleBackground(ctx, env);
-        return json({ live, historical: validation.combined });
+        return json(snapshot);
       }
       if (pathname === "/") {
         const dashboard = await getPhaseDDashboard(env.DB, env.MODEL_VERSION);
