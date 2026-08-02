@@ -58,13 +58,13 @@ for (const course of ["ライト", "スタンダード", "プレミアム"] as B
 }
 
 const baseScore = coverageRaceScore(predictions);
-const lessPopularTop = predictions.map((prediction, index) => ({
+const lessPopularTop: RunnerPrediction[] = predictions.map((prediction, index) => ({
   ...prediction,
-  popularity: index === 0 ? 6 : prediction.popularity
+  popularity: index === 0 ? 6 : prediction.popularity ?? null
 }));
 const changedScore = coverageRaceScore(lessPopularTop);
 assert.ok(Number.isFinite(baseScore));
 assert.ok(Number.isFinite(changedScore));
-assert.notEqual(baseScore, changedScore, "人気順位を含む固定レース選択スコアが反映されていません");
+assert.ok(baseScore !== changedScore, "人気順位を含む固定レース選択スコアが反映されていません");
 
 console.log("race-tantei ROI policy v1 tests passed");
