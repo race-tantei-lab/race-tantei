@@ -77,7 +77,7 @@ export function generatePrediction(
   runners: RunnerRecord[],
   stats: RunnerHistoryStats[],
   modelVersion: string,
-  _minExpectedValuePct: number,
+  minExpectedValuePct: number,
   maxRaceBudgetYen: number
 ): PredictionOutput {
   const active = runners.filter((runner) => runner.runnerStatus === "active");
@@ -110,7 +110,8 @@ export function generatePrediction(
   });
   predictions.sort((a, b) => b.winProbability - a.winProbability);
   predictions.forEach((prediction, index) => { prediction.predictedOrder = index + 1; });
-  const allBets = buildBudgetCourseBets(predictions);
+
+  const allBets = buildBudgetCourseBets(predictions, minExpectedValuePct);
   const bets = maxRaceBudgetYen <= 2000
     ? allBets.filter((bet) => bet.course === "ライト")
     : maxRaceBudgetYen <= 5000
