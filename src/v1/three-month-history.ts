@@ -41,6 +41,7 @@ const STATE_FAILURES_KEY = `${STATE_PREFIX}:failures`;
 const RACES_PER_BATCH = 4;
 const MARKET_TAKEOUT_FACTOR = 0.8;
 const POPULARITY_POWER = 1.07;
+const HISTORICAL_TRANSITION_SUFFIX = "34";
 
 export interface HistoricalMeetingTask {
   raceDate: string;
@@ -245,7 +246,7 @@ export function historicalResultUrl(task: HistoricalMeetingTask, raceNo: number)
   if (!venueCode) throw new Error(`UNKNOWN_VENUE:${task.venue}`);
   const ymd = task.raceDate.replace(/-/g, "");
   const year = task.raceDate.slice(0, 4);
-  const cname = `sw01sde01${venueCode}${year}${pad2(task.meetingNo)}${pad2(task.meetingDay)}${pad2(raceNo)}${ymd}/00`;
+  const cname = `sw01sde01${venueCode}${year}${pad2(task.meetingNo)}${pad2(task.meetingDay)}${pad2(raceNo)}${ymd}/${HISTORICAL_TRANSITION_SUFFIX}`;
   return `https://sp.jra.jp/JRADB/accessS.html?CNAME=${encodeURIComponent(cname)}`;
 }
 
