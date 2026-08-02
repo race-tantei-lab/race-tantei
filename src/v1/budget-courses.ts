@@ -288,9 +288,7 @@ function stakeFor(candidateBet: Candidate, course: BudgetCourse, policy: CourseP
     budget * policy.maximumTicketShare,
     budget * fullKelly * policy.kellyScale * config.riskWeight
   );
-  let stake = floor100(rawStake);
-  if (stake < 100 && candidateBet.expectedValuePct >= policy.minimumExpectedValuePct + 15) stake = 100;
-  return stake;
+  return Math.max(100, floor100(rawStake));
 }
 
 function selectCourse(
