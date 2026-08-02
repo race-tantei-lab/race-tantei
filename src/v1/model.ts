@@ -6,7 +6,7 @@ import type {
   RunnerPrediction,
   RunnerRecord
 } from "./types.js";
-import { clamp, nowIso, round100 } from "./utils.js";
+import { clamp, nowIso } from "./utils.js";
 
 function safeRate(wins: number, starts: number, priorWins: number, priorStarts: number): number {
   return (wins + priorWins) / (starts + priorStarts);
@@ -28,9 +28,7 @@ function marketProbabilities(runners: RunnerRecord[]): Map<number, number> {
   }));
   const total = inverse.reduce((sum, item) => sum + item.value, 0);
   const result = new Map<number, number>();
-  for (const item of inverse) {
-    result.set(item.horseNo, total > 0 ? item.value / total : 1 / Math.max(1, active.length));
-  }
+  for (const item of inverse) result.set(item.horseNo, total > 0 ? item.value / total : 1 / Math.max(1, active.length));
   return result;
 }
 
@@ -47,7 +45,6 @@ function historyAdjustment(stats: RunnerHistoryStats | undefined): { score: numb
     0.35 * Math.log(jockeyWin / (1 / 14)) +
     0.25 * Math.log(trainerWin / (1 / 14)) +
     0.25 * Math.log(courseWin / (1 / 16));
-
   const reasons: string[] = [];
   if (stats.horseStarts >= 2) reasons.push(`馬の蓄積成績${stats.horseStarts}走`);
   if (stats.jockeyStarts >= 10) reasons.push(`騎手成績${stats.jockeyStarts}走`);
@@ -75,12 +72,81 @@ function physicalAdjustment(runner: RunnerRecord): { score: number; reasons: str
   return { score, reasons };
 }
 
+function estimatedOdds(type: BetRecommendation["betType"], picks: RunnerPrediction[]): number {
+  const odds = picks.map((pick) => Math.max(1.1, pick.currentOdds ?? pick.fairOdds));
+  if (type === "単勝") return odds[0] ?? 1;
+  if (type === "ワイド") return Math.max(1.5, Math.sqrt((odds[0] ?? 1) * (odds[1] ?? 1)) * 0.42);
+  if (type === "馬連") return Math.max(2, Math.sqrt((odds[0] ?? 1) * (odds[1] ?? 1)) * 1.15);
+  if (type === "馬単") return Math.max(3, (odds[0] ?? 1) * Math.sqrt(odds[1] ?? 1) * 0.95);
+  if (type === "3連複") return Math.max(5, Math.cbrt((odds[0] ?? 1) * (odds[1] ?? 1) * (odds[2] ?? 1)) * 2.8);
+  return Math.max(8, (odds[0] ?? 1) * Math.sqrt((odds[1] ?? 1) * (odds[2] ?? 1)) * 1.5);
+}
+
+function makeBet(
+  betType: BetRecommendation["betType"],
+  picks: RunnerPrediction[],
+  stakeYen: number,
+  probability: number
+): BetRecommendation {
+  const ordered = betType === "馬単" || betType === "3連単";
+  const horseNos = picks.map((pick) => pick.horseNo);
+  const combination = (ordered ? horseNos : [...horseNos].sort((a, b) => a - b)).join("-");
+  const assumedOdds = estimatedOdds(betType, picks);
+  return {
+    betType,
+    combination,
+    stakeYen,
+    assumedOdds,
+    hitProbability: clamp(probability, 0.001, 0.95),
+    expectedValuePct: clamp(probability * assumedOdds * 100, 1, 999)
+  };
+}
+
+function buildTicket(predictions: RunnerPrediction[], maxBudget: number): BetRecommendation[] {
+  const [top, second, third] = predictions;
+  if (!top) return [];
+  const budget = Math.max(0, Math.floor(maxBudget / 100) * 100);
+  if (budget < 100) return [];
+  if (!second || !third || budget < 600) {
+    return [makeBet("単勝", [top], budget, top.winProbability)];
+  }
+
+  const confidenceGap = top.winProbability - second.winProbability;
+  const strong = top.winProbability >= 0.34 || confidenceGap >= 0.12;
+  const units = strong
+    ? [6, 5, 3, 3, 2, 1]
+    : [2, 5, 4, 4, 2, 3];
+  const totalUnits = units.reduce((sum, value) => sum + value, 0);
+  const unitYen = Math.max(100, Math.floor(budget / totalUnits / 100) * 100);
+  const stakes = units.map((unit) => unit * unitYen);
+  const used = stakes.reduce((sum, value) => sum + value, 0);
+  stakes[0] = (stakes[0] ?? 0) + Math.max(0, budget - used);
+
+  const p1 = top.winProbability;
+  const p2 = second.winProbability;
+  const p3 = third.winProbability;
+  const place12 = clamp(top.placeProbability * second.placeProbability * 0.72, 0.01, 0.8);
+  const place13 = clamp(top.placeProbability * third.placeProbability * 0.65, 0.01, 0.75);
+  const quinella12 = clamp(2 * p1 * p2 * 1.45, 0.005, 0.6);
+  const exacta12 = clamp(p1 * p2 * 1.2, 0.003, 0.45);
+  const trio123 = clamp(6 * p1 * p2 * p3 * 1.8, 0.002, 0.45);
+
+  return [
+    makeBet("単勝", [top], stakes[0] ?? 0, p1),
+    makeBet("ワイド", [top, second], stakes[1] ?? 0, place12),
+    makeBet("ワイド", [top, third], stakes[2] ?? 0, place13),
+    makeBet("馬連", [top, second], stakes[3] ?? 0, quinella12),
+    makeBet("馬単", [top, second], stakes[4] ?? 0, exacta12),
+    makeBet("3連複", [top, second, third], stakes[5] ?? 0, trio123)
+  ].filter((bet) => bet.stakeYen >= 100);
+}
+
 export function generatePrediction(
   race: RaceRecord,
   runners: RunnerRecord[],
   stats: RunnerHistoryStats[],
   modelVersion: string,
-  minExpectedValuePct: number,
+  _minExpectedValuePct: number,
   maxRaceBudgetYen: number
 ): PredictionOutput {
   const active = runners.filter((runner) => runner.runnerStatus === "active");
@@ -90,14 +156,9 @@ export function generatePrediction(
     const base = Math.log(Math.max(0.01, market.get(runner.horseNo) ?? 1 / Math.max(1, active.length)));
     const history = historyAdjustment(statsMap.get(runner.horseNo));
     const physical = physicalAdjustment(runner);
-    return {
-      runner,
-      score: 0.84 * base + history.score + physical.score,
-      reasons: [...history.reasons, ...physical.reasons]
-    };
+    return { runner, score: 0.84 * base + history.score + physical.score, reasons: [...history.reasons, ...physical.reasons] };
   });
   const probabilities = softmax(rawScores.map((item) => item.score));
-
   const predictions: RunnerPrediction[] = rawScores.map((item, index) => {
     const winProbability = probabilities[index] ?? 0;
     const currentOdds = item.runner.winOdds;
@@ -116,50 +177,7 @@ export function generatePrediction(
       explanation: `${race.surface ?? "条件"}${race.distanceM ?? ""}mを前提に、${reasons}`
     };
   });
-
   predictions.sort((a, b) => b.winProbability - a.winProbability);
-  predictions.forEach((prediction, index) => {
-    prediction.predictedOrder = index + 1;
-  });
-
-  const candidates = predictions
-    .filter((prediction) =>
-      prediction.currentOdds !== null &&
-      prediction.currentOdds >= 1.5 &&
-      prediction.currentOdds <= 50 &&
-      prediction.winProbability >= 0.06 &&
-      (prediction.expectedValuePct ?? 0) >= minExpectedValuePct
-    )
-    .map((prediction) => {
-      const odds = prediction.currentOdds as number;
-      const edge = prediction.winProbability * odds - 1;
-      const fullKelly = Math.max(0, edge / Math.max(0.01, odds - 1));
-      return { prediction, kelly: Math.min(0.08, fullKelly * 0.1) };
-    })
-    .sort((a, b) => (b.prediction.expectedValuePct ?? 0) - (a.prediction.expectedValuePct ?? 0));
-
-  const bets: BetRecommendation[] = [];
-  let remaining = Math.max(0, maxRaceBudgetYen);
-  const weightTotal = candidates.reduce((sum, item) => sum + Math.max(0.005, item.kelly), 0);
-  for (const item of candidates) {
-    if (remaining < 100) break;
-    const share = weightTotal > 0 ? Math.max(0.005, item.kelly) / weightTotal : 1 / candidates.length;
-    const stake = Math.min(remaining, Math.max(100, round100(maxRaceBudgetYen * share)));
-    bets.push({
-      betType: "単勝",
-      combination: String(item.prediction.horseNo),
-      stakeYen: stake,
-      assumedOdds: item.prediction.currentOdds as number,
-      hitProbability: item.prediction.winProbability,
-      expectedValuePct: item.prediction.expectedValuePct as number
-    });
-    remaining -= stake;
-  }
-
-  return {
-    modelVersion,
-    runners: predictions,
-    bets,
-    generatedAt: nowIso()
-  };
+  predictions.forEach((prediction, index) => { prediction.predictedOrder = index + 1; });
+  return { modelVersion, runners: predictions, bets: buildTicket(predictions, maxRaceBudgetYen), generatedAt: nowIso() };
 }
