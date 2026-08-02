@@ -1,0 +1,39 @@
+name: Patch dashboard status labels
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/patch-dashboard-status.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch labels
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/v1/home-dashboard.ts')
+          s=p.read_text()
+          old='''  if (totalStake === 0) return { label: "見送り", cls: "skip", detail: "固定買い目なし" };'''
+          new='''  if (totalStake === 0) return { label: "検証対象外", cls: "wait", detail: "現行モデルの固定買い目なし" };'''
+          if old not in s: raise SystemExit('finished status anchor missing')
+          s=s.replace(old,new,1)
+          old='''  if (race.predictionStatus) return { label: "見送り", cls: "skip", detail: "購入条件を満たす券なし" };'''
+          new='''  if (race.predictionStatus === "locked") return { label: "見送り", cls: "skip", detail: "固定時点で購入対象なし" };
+  if (race.predictionStatus) return { label: "買い目調整中", cls: "wait", detail: "発走15分前まで更新" };'''
+          if old not in s: raise SystemExit('draft status anchor missing')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+          rm -f .github/workflows/patch-dashboard-status.yml
+      - name: Verify and commit
+        run: |
+          npm install
+          npm run check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'fix: distinguish adjusting, skipped, and untested races'
+          git push origin HEAD:main
