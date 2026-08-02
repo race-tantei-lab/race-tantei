@@ -42,10 +42,10 @@ jobs:
           valid = data.get("ok") is True and bool(data.get("modelVersion"))
           if expected:
               valid = valid and data.get("modelVersion") == expected
+          print(json.dumps({"modelVersion": data.get("modelVersion"), "expected": expected or "any"}))
           sys.exit(0 if valid else 1)
           PY
             then
-              echo "$health"
               break
             fi
             if [ "$attempt" -eq 36 ]; then
@@ -56,129 +56,90 @@ jobs:
             sleep 10
           done
 
-      - name: Verify production pages and live data
+      - name: Verify venue selections and historical ROI
         env:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-          curl --silent --show-error --fail --max-time 25 -D /tmp/home.headers "${base}/" >/tmp/home.html
-          grep -q 'レース探偵' /tmp/home.html
 
-          if [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            grep -qi '^x-race-ui-version: phase-c' /tmp/home.headers
-            curl --silent --show-error --fail --max-time 25 "${base}/validation" >/tmp/validation.html
-            grep -q 'フェーズC' /tmp/validation.html
-            validation="$(curl --silent --show-error --fail --max-time 25 "${base}/api/validation")"
-            VALIDATION="$validation" python - <<'PY'
-          import json, os, sys
-          try:
-              data = json.loads(os.environ.get("VALIDATION", ""))
-          except Exception:
-              sys.exit(1)
-          valid = (
-              data.get("phase") == "phase-c-validation-v1"
-              and isinstance(data.get("dates"), list)
-              and len(data.get("dates", [])) == 2
-              and int(data.get("totalRaces", 0)) > 0
-          )
+          for attempt in $(seq 1 24); do
+            curl --silent --show-error --fail --max-time 45 -D /tmp/home.headers "${base}/" >/tmp/home.html
+            performance="$(curl --silent --show-error --fail --max-time 45 "${base}/api/performance/courses")"
+            if HOME_FILE=/tmp/home.html PERFORMANCE="$performance" EVENT_NAME="$EVENT_NAME" python - <<'PY'
+          from html.parser import HTMLParser
+          import json, os, re, sys
+
+          class SelectionParser(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.day = None
+                  self.venue = None
+                  self.stack = []
+                  self.counts = {}
+              def handle_starttag(self, tag, attrs):
+                  values = dict(attrs)
+                  previous = (self.day, self.venue)
+                  self.stack.append((tag, previous))
+                  if tag == "section" and values.get("data-day-panel"):
+                      self.day = values["data-day-panel"]
+                  if tag == "section" and values.get("data-venue-panel"):
+                      self.venue = values["data-venue-panel"]
+                  if tag == "a" and values.get("data-race-selected") == "true" and self.day and self.venue:
+                      key = (self.day, self.venue)
+                      self.counts[key] = self.counts.get(key, 0) + 1
+              def handle_endtag(self, tag):
+                  for index in range(len(self.stack) - 1, -1, -1):
+                      open_tag, previous = self.stack[index]
+                      if open_tag == tag:
+                          self.stack = self.stack[:index]
+                          self.day, self.venue = previous
+                          break
+
+          html = open(os.environ["HOME_FILE"], encoding="utf-8").read()
+          parser = SelectionParser()
+          parser.feed(html)
+          performance = json.loads(os.environ.get("PERFORMANCE", "{}"))
+          historical = performance.get("historical", [])
+          historical_ok = len(historical) == 3 and all(float(row.get("stakeYen", 0)) > 0 for row in historical)
+          expected_dates = {"2026-08-01", "2026-08-02"}
+          historical_counts = {
+              f"{date}:{venue}": count
+              for (date, venue), count in parser.counts.items()
+              if date in expected_dates
+          }
+          venue_ok = bool(historical_counts) and all(count >= 5 for count in historical_counts.values())
+          page_ok = "過去検証込み回収率" in html and "会場別5R選出" in html
+          if os.environ.get("EVENT_NAME") == "pull_request":
+              valid = "レース探偵" in html
+          else:
+              valid = historical_ok and venue_ok and page_ok
           print(json.dumps({
-              "phase": data.get("phase"),
-              "processed": data.get("processedRaces"),
-              "total": data.get("totalRaces"),
-              "remaining": data.get("remainingRaces")
+              "historicalCourses": historical,
+              "historicalVenueSelections": historical_counts,
+              "pageOk": page_ok,
+              "valid": valid
           }, ensure_ascii=False))
           sys.exit(0 if valid else 1)
           PY
-          fi
-
-          for attempt in $(seq 1 48); do
-            echo "Data attempt ${attempt}/48"
-            status="$(curl --silent --show-error --fail --max-time 25 "${base}/api/status" || true)"
-            races="$(curl --silent --show-error --fail --max-time 25 "${base}/api/races" || true)"
-            if STATUS="$status" RACES="$races" python - <<'PY'
-          import json, os, sys
-          try:
-              status = json.loads(os.environ.get("STATUS", ""))
-              races = json.loads(os.environ.get("RACES", ""))
-          except Exception:
-              sys.exit(1)
-          sources = sum(int(row.get("count", 0)) for row in status.get("sourceCounts", []))
-          last_race = status.get("lastRace")
-          valid_races = isinstance(races, list) and len(races) > 0
-          print(json.dumps({"sources": sources, "lastRace": last_race, "raceCount": len(races) if isinstance(races, list) else 0}, ensure_ascii=False))
-          sys.exit(0 if sources > 0 and last_race and valid_races else 1)
-          PY
             then
-              echo "Production Worker has discovered and stored live races."
               break
             fi
-            if [ "$attempt" -eq 48 ]; then
-              echo "Production ingestion did not create race sources and races in time."
-              echo "$status"
-              echo "$races"
+            if [ "$attempt" -eq 24 ]; then
+              echo "Venue quota or historical ROI did not become ready."
+              cat /tmp/home.html | head -c 4000
+              echo
+              echo "$performance"
               exit 1
             fi
             sleep 10
           done
 
-          curl --silent --show-error --fail --max-time 25 "${base}/" >/tmp/home-after-sync.html
-          HOME_HTML="$(cat /tmp/home-after-sync.html)" python - <<'PY'
-          import json, os, re
-          html = os.environ.get("HOME_HTML", "")
-          matches = re.findall(
-              r'data-day-panel="([^"]+)"[\s\S]*?<div class="day-summary">[\s\S]*?<p>買い目あり\s+(\d+)R',
-              html
-          )
-          print(json.dumps({
-              "liveBuyCounts": [
-                  {"date": date, "buyRaces": int(count)} for date, count in matches
-              ],
-              "visibleBuyCards": len(re.findall(r'data-race-category="buy"', html))
-          }, ensure_ascii=False))
-          PY
+          if [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            grep -qi '^x-race-ui-version: phase-d' /tmp/home.headers
+          fi
 
-          races="$(curl --silent --show-error --fail --max-time 25 "${base}/api/races")"
-          RACES="$races" BASE="$base" python - <<'PY'
-          import json, os, urllib.parse, urllib.request
-          rows = json.loads(os.environ.get("RACES", "[]"))
-          base = os.environ["BASE"]
-          diagnostics = []
-          for row in rows:
-              if row.get("raceDate") != "2026-08-02" or row.get("status") == "finished":
-                  continue
-              race_id = str(row.get("raceId", ""))
-              if not race_id:
-                  continue
-              try:
-                  url = base + "/api/races/" + urllib.parse.quote(race_id, safe="")
-                  with urllib.request.urlopen(url, timeout=25) as response:
-                      detail = json.load(response)
-                  prediction = detail.get("prediction") or {}
-                  predicted = detail.get("predictedRunners") or []
-                  bets = detail.get("bets") or []
-                  max_ev = max(
-                      [float(item.get("expectedValuePct") or 0) for item in predicted],
-                      default=0
-                  )
-                  diagnostics.append({
-                      "raceId": race_id,
-                      "raceNo": row.get("raceNo"),
-                      "status": row.get("status"),
-                      "predictionStatus": row.get("predictionStatus"),
-                      "modelVersion": prediction.get("modelVersion"),
-                      "runnerCount": len(predicted),
-                      "maxRunnerWinEvPct": round(max_ev, 1),
-                      "betCount": len(bets)
-                  })
-              except Exception as error:
-                  diagnostics.append({"raceId": race_id, "error": str(error)})
-              if len(diagnostics) >= 12:
-                  break
-          print(json.dumps({"activeRaceDiagnostics": diagnostics}, ensure_ascii=False))
-          PY
-
-      - name: Publish Phase C production verification
+      - name: Publish Phase D production verification
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -187,6 +148,6 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
-            -f context='production/phase-c' \
-            -f description='Phase C production routes verified' \
+            -f context='production/phase-d' \
+            -f description='Venue five selections and historical ROI verified' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
