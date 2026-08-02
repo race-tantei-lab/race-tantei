@@ -157,8 +157,14 @@ export async function getArchiveResultUrls(
 ): Promise<string[]> {
   const meetings = await getArchiveMeetingCnames(yearMonth, fetchImpl);
   const resultGroups = await mapWithConcurrency(meetings, 6, async (meeting) => {
-    const page = await fetchJraArchivePage(meeting, fetchImpl);
-    return parseArchiveResultCnames(page.html);
+    try {
+      const page = await fetchJraArchivePage(meeting, fetchImpl);
+      return parseArchiveResultCnames(page.html);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn("ARCHIVE_MEETING_SKIPPED", yearMonth, meeting, message);
+      return [];
+    }
   });
   const cnames = unique(resultGroups.flat());
   if (cnames.length === 0) throw new Error(`ARCHIVE_RESULTS_NOT_FOUND:${yearMonth}`);
