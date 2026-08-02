@@ -1,90 +1,15 @@
+# trigger PR hotfix runner
 name: Apply JST and bets fix
 
 on:
   push:
     branches: [fix-jst-dates-and-bets]
-    paths:
-      - '.github/workflows/apply-jst-bets-fix.yml'
 
 permissions:
   contents: write
 
 jobs:
-  patch:
+  noop:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: fix-jst-dates-and-bets
-      - name: Patch JST date labels and publish draft bets
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          ui = Path('src/v1/ui.ts')
-          text = ui.read_text()
-          old = '''  const dateLabel = (date: string): string => {
-    const parsed = new Date(`${date}T00:00:00+09:00`);
-    if (Number.isNaN(parsed.getTime())) return date;
-    const day = ["日", "月", "火", "水", "木", "金", "土"][parsed.getDay()] ?? "";
-    return `${parsed.getMonth() + 1}月${parsed.getDate()}日（${day}）`;
-  };'''
-          new = '''  const dateLabel = (date: string): string => {
-    const match = date.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
-    if (!match) return date;
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const dayOfMonth = Number(match[3]);
-    const weekday = new Date(Date.UTC(year, month - 1, dayOfMonth)).getUTCDay();
-    const day = ["日", "月", "火", "水", "木", "金", "土"][weekday] ?? "";
-    return `${month}月${dayOfMonth}日（${day}）`;
-  };'''
-          if old not in text:
-              raise SystemExit('dateLabel anchor not found')
-          ui.write_text(text.replace(old, new, 1))
-
-          complete = Path('src/complete.ts')
-          text = complete.read_text()
-          text = text.replace('const DISCOVERY_REVISION = "2026-08-01-race-name-v2";', 'const DISCOVERY_REVISION = "2026-08-02-jst-bets-v3";')
-          old = '''  if (minutesToStart <= 0 || minutesToStart > 240) return;'''
-          new = '''  if (minutesToStart <= 0) return;'''
-          if old not in text:
-              raise SystemExit('prediction time anchor not found')
-          text = text.replace(old, new, 1)
-          old = '''  const status = minutesToStart <= 15 ? "locked" : "draft";
-  if (status === "draft") prediction.bets = [];
-  await savePrediction(env.DB, race.raceId, prediction, status);'''
-          new = '''  const status = minutesToStart <= 15 ? "locked" : "draft";
-  await savePrediction(env.DB, race.raceId, prediction, status);'''
-          if old not in text:
-              raise SystemExit('draft bet clearing anchor not found')
-          complete.write_text(text.replace(old, new, 1))
-
-          tests = Path('tests/run-tests.ts')
-          test_text = tests.read_text()
-          marker = 'console.log("race-tantei v2 tests passed");'
-          insert = '''
-// A draft prediction must retain its recommendations for public display.
-const draftPrediction = generatePrediction(
-  sampleRace,
-  sampleRunners,
-  [],
-  "test",
-  0,
-  2000
-);
-assert.ok(draftPrediction.bets.length > 0, "draft recommendations should not be empty when odds are available");
-assert.ok(draftPrediction.bets.reduce((sum, bet) => sum + bet.stakeYen, 0) <= 2000);
-
-'''
-          if marker in test_text and 'draft recommendations should not be empty' not in test_text:
-              tests.write_text(test_text.replace(marker, insert + marker, 1))
-          PY
-          rm -f .github/workflows/apply-jst-bets-fix.yml
-      - name: Commit fix
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "fix: use JST dates and retain draft bet recommendations"
-          git push origin HEAD:fix-jst-dates-and-bets
+      - run: echo "PR hotfix runner handles this branch"
