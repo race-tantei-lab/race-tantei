@@ -1,6 +1,7 @@
 import { savePredictionWithCourses, settleRaceWithCourses } from "./course-db.js";
 import { getRace, getRunnerHistoryStats, getRunners } from "./db.js";
 import { generatePrediction } from "./model.js";
+import { getThreeMonthHistoryProgress } from "./three-month-history.js";
 import {
   THREE_MONTH_END_DATE,
   THREE_MONTH_SCOPE_VERSION,
@@ -19,7 +20,6 @@ import {
 import { ensureValidationVenueQuotas, type VenueQuotaResult } from "./venue-quota.js";
 
 const MODEL_SUFFIX = "-roi-policy-v1-3m";
-const CONFIG_BY_DATE = new Map(THREE_MONTH_VALIDATION_CONFIGS.map((config) => [config.raceDate, config]));
 
 interface PredictionRow {
   raceId: string;
@@ -134,7 +134,7 @@ function numericTicket(row: TicketRow): TicketRow {
 export async function getThreeMonthValidationSnapshot(
   db: D1Database
 ): Promise<ThreeMonthValidationSnapshot> {
-  const [totalRows, predictionRows, ticketRows, venueRow] = await Promise.all([
+  const [totalRows, predictionRows, ticketRows, venueRow, historyProgress] = await Promise.all([
     db.prepare(`
       SELECT race_date AS raceDate, COUNT(*) AS count
       FROM rt_races
@@ -170,7 +170,8 @@ export async function getThreeMonthValidationSnapshot(
         WHERE race_date BETWEEN ? AND ? AND status='finished'
         GROUP BY race_date, venue
       )
-    `).bind(THREE_MONTH_START_DATE, THREE_MONTH_END_DATE).first<{ count: number }>()
+    `).bind(THREE_MONTH_START_DATE, THREE_MONTH_END_DATE).first<{ count: number }>(),
+    getThreeMonthHistoryProgress(db)
   ]);
 
   const totalByDate = new Map(totalRows.results.map((row) => [row.raceDate, Number(row.count)]));
@@ -220,6 +221,7 @@ export async function getThreeMonthValidationSnapshot(
     const monthTickets = allTickets.filter((row) => row.raceDate.startsWith(month));
     return { month, courses: summarizeValidationTickets(monthRaceIds, monthTickets) };
   });
+  const validationComplete = totalRaces > 0 && processedRaces >= totalRaces;
 
   return {
     phase: "three-month-validation-v1",
@@ -227,7 +229,7 @@ export async function getThreeMonthValidationSnapshot(
     startDate: THREE_MONTH_START_DATE,
     endDate: THREE_MONTH_END_DATE,
     generatedAt: nowIso(),
-    complete: totalRaces > 0 && processedRaces >= totalRaces,
+    complete: historyProgress.complete && validationComplete,
     totalRaces,
     processedRaces,
     remainingRaces: Math.max(0, totalRaces - processedRaces),
