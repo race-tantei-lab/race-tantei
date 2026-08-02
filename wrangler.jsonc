@@ -7,11 +7,11 @@
   "workers_dev": true,
   "vars": {
     "ENVIRONMENT": "production",
-    "MODEL_VERSION": "v2.1.0-multibet",
+    "MODEL_VERSION": "v2.2.0-budget-courses",
     "JRA_HOME_URL": "https://sp.jra.jp/",
     "JRA_SEED_ENTRY_URLS": "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030520260801%2F15",
     "MIN_EXPECTED_VALUE": "108",
-    "MAX_RACE_BUDGET_YEN": "2000",
+    "MAX_RACE_BUDGET_YEN": "10000",
     "SYNC_BATCH_SIZE": "12"
   },
   "d1_databases": [
