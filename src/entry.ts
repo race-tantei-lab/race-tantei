@@ -4,6 +4,15 @@ import { getCourseMetrics, getCourseMonthlyMetrics } from "./v1/course-db.js";
 import { renderCoursePerformance } from "./v1/course-ui.js";
 import { ensureSchema } from "./v1/db.js";
 import { getDisplayRaceDetail } from "./v1/display-detail.js";
+import {
+  getThreeMonthHistoryProgress,
+  runThreeMonthHistoryStep
+} from "./v1/three-month-history.js";
+import {
+  getThreeMonthValidationSnapshot,
+  normalizeThreeMonthVenueQuotas,
+  runThreeMonthValidationBatch
+} from "./v1/three-month-validation.js";
 import { fetchJraPage } from "./v1/jra.js";
 import { refreshMissingLivePredictions } from "./v1/live-prediction-refresh.js";
 import { getPhaseDDashboard } from "./v1/phase-d-dashboard.js";
@@ -152,9 +161,37 @@ function scheduleBackground(ctx: ExecutionContext, env: Env): void {
 async function coursePerformanceSnapshot(env: Env): Promise<unknown> {
   const [live, validation] = await Promise.all([
     getCourseMetrics(env.DB, env.MODEL_VERSION),
-    getValidationSnapshot(env.DB)
+    getThreeMonthValidationSnapshot(env.DB)
   ]);
-  return { live, historical: validation.combined };
+  return { live, historical: validation.combined, threeMonth: validation };
+}
+
+async function runThreeMonthPipelineStep(env: Env): Promise<unknown> {
+  const history = await runThreeMonthHistoryStep(env.DB);
+  const validation = await runThreeMonthValidationBatch(env.DB, 36);
+  const quotas = await normalizeThreeMonthVenueQuotas(env.DB, 3);
+  const [historyProgress, snapshot] = await Promise.all([
+    getThreeMonthHistoryProgress(env.DB),
+    getThreeMonthValidationSnapshot(env.DB)
+  ]);
+  const pendingTickets = snapshot.combined.reduce((sum, row) => sum + row.pendingTickets, 0);
+  return {
+    ok: true,
+    history,
+    validation,
+    normalizedVenues: quotas.reduce((sum, row) => sum + row.normalizedVenues, 0),
+    progress: historyProgress,
+    snapshot: {
+      complete: snapshot.complete,
+      totalRaces: snapshot.totalRaces,
+      processedRaces: snapshot.processedRaces,
+      remainingRaces: snapshot.remainingRaces,
+      venueDays: snapshot.venueDays,
+      pendingTickets,
+      courses: snapshot.combined
+    },
+    complete: historyProgress.complete && snapshot.complete && pendingTickets === 0
+  };
 }
 
 function page(body: string, status = 200): Response {
@@ -180,7 +217,8 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
       await prepare(env.DB);
-      const pathname = new URL(request.url).pathname;
+      const url = new URL(request.url);
+      const pathname = url.pathname;
 
       if (pathname === "/api/validation/analysis-data") {
         return json(await getValidationAnalysisData(env.DB));
@@ -189,6 +227,22 @@ export default {
         const snapshot = await getValidationSnapshot(env.DB);
         scheduleBackground(ctx, env);
         return json(snapshot);
+      }
+      if (pathname === "/api/history/three-months/status") {
+        const [progress, validation] = await Promise.all([
+          getThreeMonthHistoryProgress(env.DB),
+          getThreeMonthValidationSnapshot(env.DB)
+        ]);
+        return json({ progress, validation });
+      }
+      if (pathname === "/api/history/three-months/step" && request.method === "POST") {
+        if (request.headers.get("x-race-backfill") !== "three-month-v1") {
+          return json({ ok: false, error: "BACKFILL_HEADER_REQUIRED" }, 403);
+        }
+        return json(await runThreeMonthPipelineStep(env));
+      }
+      if (pathname === "/api/performance/three-months/read-only") {
+        return json(await getThreeMonthValidationSnapshot(env.DB));
       }
       if (pathname === "/api/performance/courses/read-only") {
         return json(await coursePerformanceSnapshot(env));
@@ -224,7 +278,7 @@ export default {
         const [cumulative, monthly, validation] = await Promise.all([
           getCourseMetrics(env.DB, env.MODEL_VERSION),
           getCourseMonthlyMetrics(env.DB, env.MODEL_VERSION),
-          getValidationSnapshot(env.DB)
+          getThreeMonthValidationSnapshot(env.DB)
         ]);
         scheduleBackground(ctx, env);
         return page(renderCoursePerformance(cumulative, monthly, validation.combined));
