@@ -117,7 +117,11 @@ jobs:
           parser.feed(html)
           performance = json.loads(os.environ.get("PERFORMANCE", "{}"))
           historical = performance.get("historical", []) if isinstance(performance, dict) else []
-          historical_ok = len(historical) == 3 and all(float(row.get("stakeYen", 0)) > 0 for row in historical)
+          historical_ok = (
+              len(historical) == 3
+              and all(float(row.get("stakeYen", 0)) > 0 for row in historical)
+              and all(int(row.get("pendingTickets", 0)) == 0 for row in historical)
+          )
           expected_dates = {"2026-08-01", "2026-08-02"}
           counts = {
               f"{date}:{venue}": count
