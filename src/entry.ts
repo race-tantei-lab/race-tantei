@@ -2,8 +2,9 @@ import app from "./complete.js";
 import { BACKTEST_DATE, renderBacktest, runBacktestBatch } from "./v1/backtest.js";
 import { getCourseMetrics } from "./v1/course-db.js";
 import { renderCompactRace } from "./v1/course-detail.js";
+import { renderClearDashboard } from "./v1/dashboard-view.js";
 import { ensureSchema, getRaceDetail } from "./v1/db.js";
-import { getDashboardRaces, renderDashboard } from "./v1/home-dashboard.js";
+import { getDashboardRaces } from "./v1/home-dashboard.js";
 import { fetchJraPage } from "./v1/jra.js";
 import type { Env } from "./v1/types.js";
 import { stripHtml } from "./v1/utils.js";
@@ -122,7 +123,7 @@ export default {
           getCourseMetrics(env.DB)
         ]);
         ctx.waitUntil(runMaintenance(env));
-        return page(renderDashboard(races, metrics));
+        return page(renderClearDashboard(races, metrics));
       }
 
       if (pathname.startsWith("/races/")) {
