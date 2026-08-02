@@ -8,8 +8,16 @@ import {
   parseResultPage,
   toResultUrl
 } from "../src/v1/jra.js";
+import { buildBudgetCourseBets, COURSE_BUDGETS } from "../src/v1/budget-courses.js";
 import { generatePrediction } from "../src/v1/model.js";
-import type { RaceRecord, RunnerHistoryStats, RunnerRecord } from "../src/v1/types.js";
+import type {
+  BetType,
+  BudgetCourse,
+  RaceRecord,
+  RunnerHistoryStats,
+  RunnerPrediction,
+  RunnerRecord
+} from "../src/v1/types.js";
 
 const entryUrl = "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601030520260801%2F15";
 const officialResultUrl = "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0101202601030520260801%2F88";
@@ -86,10 +94,66 @@ const stats: RunnerHistoryStats[] = runners.map((runner) => ({
   courseStarts: 0,
   courseWins: 0
 }));
-const prediction = generatePrediction(race, runners, stats, "v2.0.0-live", 100, 2000);
+const prediction = generatePrediction(race, runners, stats, "v3.0.0-value-engine", 108, 2000);
 assert.equal(prediction.runners.length, 3);
 assert.equal(prediction.runners[0]?.horseNo, 7);
 assert.ok(Math.abs(prediction.runners.reduce((sum, runner) => sum + runner.winProbability, 0) - 1) < 0.000001);
 assert.ok(prediction.bets.reduce((sum, bet) => sum + bet.stakeYen, 0) <= 2000);
+assert.ok(prediction.bets.every((bet) => bet.course === "ライト"));
 assert.ok(prediction.bets.every((bet) => bet.stakeYen % 100 === 0));
-console.log("race-tantei v2 tests passed");
+
+function runnerPrediction(
+  horseNo: number,
+  probability: number,
+  odds: number,
+  predictedOrder: number
+): RunnerPrediction {
+  return {
+    horseNo,
+    horseName: `テスト${horseNo}`,
+    winProbability: probability,
+    placeProbability: Math.min(0.96, 1 - Math.pow(1 - probability, 3)),
+    fairOdds: 1 / probability,
+    currentOdds: odds,
+    expectedValuePct: probability * odds * 100,
+    predictedOrder,
+    explanation: "テスト"
+  };
+}
+
+const marketAligned: RunnerPrediction[] = [
+  runnerPrediction(1, 0.5, 2, 1),
+  runnerPrediction(2, 0.25, 4, 2),
+  runnerPrediction(3, 0.125, 8, 3),
+  runnerPrediction(4, 0.0625, 16, 4),
+  runnerPrediction(5, 0.0625, 16, 5)
+];
+assert.deepEqual(buildBudgetCourseBets(marketAligned, 108), []);
+
+const strongEdge: RunnerPrediction[] = [
+  runnerPrediction(1, 0.58, 5, 1),
+  runnerPrediction(2, 0.16, 2.2, 2),
+  runnerPrediction(3, 0.11, 4, 3),
+  runnerPrediction(4, 0.08, 8, 4),
+  runnerPrediction(5, 0.07, 14, 5)
+];
+const valueBets = buildBudgetCourseBets(strongEdge, 108);
+assert.ok(valueBets.length > 0);
+assert.ok(valueBets.every((bet) => bet.expectedValuePct >= 108));
+assert.ok(valueBets.every((bet) => bet.stakeYen >= 100 && bet.stakeYen % 100 === 0));
+
+const allowed: Record<BudgetCourse, Set<BetType>> = {
+  ライト: new Set<BetType>(["単勝", "ワイド", "馬連"]),
+  スタンダード: new Set<BetType>(["単勝", "ワイド", "馬連", "馬単", "3連複"]),
+  プレミアム: new Set<BetType>(["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"])
+};
+for (const course of Object.keys(COURSE_BUDGETS) as BudgetCourse[]) {
+  const courseBets = valueBets.filter((bet) => bet.course === course);
+  const stake = courseBets.reduce((sum, bet) => sum + bet.stakeYen, 0);
+  assert.ok(stake <= COURSE_BUDGETS[course]);
+  assert.ok(stake < COURSE_BUDGETS[course]);
+  assert.ok(courseBets.every((bet) => allowed[course].has(bet.betType)));
+}
+assert.deepEqual(buildBudgetCourseBets(strongEdge, 10000), []);
+
+console.log("race-tantei Phase B value-engine tests passed");
