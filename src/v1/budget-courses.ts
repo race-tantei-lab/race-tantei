@@ -57,6 +57,27 @@ const MINIMUM_HIT: Record<BetType, number> = {
   "3連単": 0.004
 };
 
+const COVERAGE_MINIMUM_HIT: Record<BetType, number> = {
+  単勝: 0.035,
+  ワイド: 0.08,
+  馬連: 0.025,
+  馬単: 0.012,
+  "3連複": 0.012,
+  "3連単": 0.0015
+};
+
+const COVERAGE_ALLOWED: Record<BudgetCourse, ReadonlySet<BetType>> = {
+  ライト: new Set<BetType>(["単勝", "ワイド", "馬連"]),
+  スタンダード: new Set<BetType>(["単勝", "ワイド", "馬連", "馬単", "3連複"]),
+  プレミアム: new Set<BetType>(TICKET_ORDER)
+};
+
+const COVERAGE_MAX_TICKETS: Record<BudgetCourse, number> = {
+  ライト: 2,
+  スタンダード: 3,
+  プレミアム: 4
+};
+
 function floor100(value: number): number {
   return Math.max(0, Math.floor(value / 100) * 100);
 }
@@ -246,7 +267,7 @@ function buildCandidates(predictions: RunnerPrediction[]): Candidate[] {
 function policyFor(course: BudgetCourse, baseMinimum: number): CoursePolicy {
   if (course === "ライト") {
     return {
-      allowed: new Set<BetType>(["単勝", "ワイド", "馬連"]),
+      allowed: COVERAGE_ALLOWED.ライト,
       minimumExpectedValuePct: Math.max(108, baseMinimum),
       minimumHitProbability: { 単勝: 0.09, ワイド: 0.2, 馬連: 0.08 },
       maximumTickets: 4,
@@ -256,7 +277,7 @@ function policyFor(course: BudgetCourse, baseMinimum: number): CoursePolicy {
   }
   if (course === "スタンダード") {
     return {
-      allowed: new Set<BetType>(["単勝", "ワイド", "馬連", "馬単", "3連複"]),
+      allowed: COVERAGE_ALLOWED.スタンダード,
       minimumExpectedValuePct: Math.max(110, baseMinimum + 2),
       minimumHitProbability: { 単勝: 0.07, ワイド: 0.16, 馬連: 0.065, 馬単: 0.03, "3連複": 0.03 },
       maximumTickets: 7,
@@ -265,7 +286,7 @@ function policyFor(course: BudgetCourse, baseMinimum: number): CoursePolicy {
     };
   }
   return {
-    allowed: new Set<BetType>(TICKET_ORDER),
+    allowed: COVERAGE_ALLOWED.プレミアム,
     minimumExpectedValuePct: Math.max(115, baseMinimum + 7),
     minimumHitProbability: MINIMUM_HIT,
     maximumTickets: 10,
@@ -276,6 +297,11 @@ function policyFor(course: BudgetCourse, baseMinimum: number): CoursePolicy {
 
 function candidateScore(value: Candidate, threshold: number): number {
   return (value.expectedValuePct - threshold) * Math.sqrt(value.hitProbability) * value.reliability;
+}
+
+function coverageCandidateScore(value: Candidate): number {
+  const valueFactor = Math.max(0.5, value.expectedValuePct / 100);
+  return valueFactor * Math.sqrt(value.hitProbability) * value.reliability;
 }
 
 function stakeFor(candidateBet: Candidate, course: BudgetCourse, policy: CoursePolicy): number {
@@ -289,6 +315,18 @@ function stakeFor(candidateBet: Candidate, course: BudgetCourse, policy: CourseP
     budget * fullKelly * policy.kellyScale * config.riskWeight
   );
   return Math.max(100, floor100(rawStake));
+}
+
+function toRecommendation(course: BudgetCourse, item: Candidate, stakeYen: number): BetRecommendation {
+  return {
+    course,
+    betType: item.betType,
+    combination: item.combination.join("-"),
+    stakeYen,
+    assumedOdds: item.assumedOdds,
+    hitProbability: item.hitProbability,
+    expectedValuePct: item.expectedValuePct
+  };
 }
 
 function selectCourse(
@@ -311,18 +349,50 @@ function selectCourse(
     let stakeYen = stakeFor(item, course, policy);
     if (spent + stakeYen > budget) stakeYen = floor100(budget - spent);
     if (stakeYen < 100) continue;
-    selected.push({
-      course,
-      betType: item.betType,
-      combination: item.combination.join("-"),
-      stakeYen,
-      assumedOdds: item.assumedOdds,
-      hitProbability: item.hitProbability,
-      expectedValuePct: item.expectedValuePct
-    });
+    selected.push(toRecommendation(course, item, stakeYen));
     spent += stakeYen;
   }
   return selected;
+}
+
+function selectCoverageCourse(course: BudgetCourse, candidates: Candidate[]): BetRecommendation[] {
+  const allowed = COVERAGE_ALLOWED[course];
+  const allAllowed = candidates.filter((item) => allowed.has(item.betType));
+  const reliable = allAllowed.filter((item) => item.hitProbability >= COVERAGE_MINIMUM_HIT[item.betType]);
+  const pool = (reliable.length > 0 ? reliable : allAllowed)
+    .sort((a, b) => coverageCandidateScore(b) - coverageCandidateScore(a));
+  const selected: BetRecommendation[] = [];
+  const usedTypes = new Set<BetType>();
+
+  for (const item of pool) {
+    if (selected.length >= COVERAGE_MAX_TICKETS[course]) break;
+    if (usedTypes.has(item.betType) && selected.length < Math.min(2, COVERAGE_MAX_TICKETS[course])) continue;
+    selected.push(toRecommendation(course, item, 100));
+    usedTypes.add(item.betType);
+  }
+
+  if (selected.length === 0 && allAllowed[0]) selected.push(toRecommendation(course, allAllowed[0], 100));
+  return selected;
+}
+
+export function coverageRaceScore(predictions: RunnerPrediction[]): number {
+  const candidates = buildCandidates(predictions);
+  if (candidates.length === 0) return Number.NEGATIVE_INFINITY;
+  const best = candidates
+    .filter((item) => item.hitProbability >= COVERAGE_MINIMUM_HIT[item.betType])
+    .sort((a, b) => coverageCandidateScore(b) - coverageCandidateScore(a))[0]
+    ?? candidates.sort((a, b) => coverageCandidateScore(b) - coverageCandidateScore(a))[0];
+  const ranked = [...predictions].sort((a, b) => a.predictedOrder - b.predictedOrder);
+  const first = ranked[0]?.winProbability ?? 0;
+  const second = ranked[1]?.winProbability ?? 0;
+  return coverageCandidateScore(best) * 100 + first * 20 + Math.max(0, first - second) * 40;
+}
+
+export function buildVenueCoverageBets(predictions: RunnerPrediction[]): BetRecommendation[] {
+  const candidates = buildCandidates(predictions);
+  if (candidates.length === 0) return [];
+  return (["ライト", "スタンダード", "プレミアム"] as BudgetCourse[])
+    .flatMap((course) => selectCoverageCourse(course, candidates));
 }
 
 export function buildBudgetCourseBets(

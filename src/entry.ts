@@ -5,10 +5,11 @@ import { ensureSchema } from "./v1/db.js";
 import { getDisplayRaceDetail } from "./v1/display-detail.js";
 import { fetchJraPage } from "./v1/jra.js";
 import { refreshMissingLivePredictions } from "./v1/live-prediction-refresh.js";
-import { getPhaseCDashboard } from "./v1/phase-c-dashboard.js";
+import { getPhaseDDashboard } from "./v1/phase-d-dashboard.js";
 import { renderPhaseCRaceDetail } from "./v1/race-detail-phase-c.js";
 import type { Env } from "./v1/types.js";
 import { stripHtml } from "./v1/utils.js";
+import { ensureValidationVenueQuotas } from "./v1/venue-quota.js";
 import {
   getValidationSnapshot,
   renderValidation,
@@ -94,8 +95,15 @@ async function repairRaceNames(db: D1Database, limit = 8): Promise<number> {
 }
 
 function logRefresh(result: Awaited<ReturnType<typeof refreshMissingLivePredictions>>): void {
-  if (result.candidates > 0 || result.errors > 0) {
+  if (result.candidates > 0 || result.quotaAddedRaces > 0 || result.errors > 0) {
     console.log("LIVE_PREDICTION_REFRESH", JSON.stringify(result));
+  }
+}
+
+async function applyValidationQuotas(db: D1Database): Promise<void> {
+  const results = await ensureValidationVenueQuotas(db, VALIDATION_CONFIGS);
+  if (results.some((row) => row.addedRaces > 0)) {
+    console.log("VALIDATION_VENUE_QUOTAS", JSON.stringify(results));
   }
 }
 
@@ -103,9 +111,10 @@ function runMaintenance(env: Env): Promise<void> {
   if (maintenanceRunning) return maintenanceRunning;
   maintenanceRunning = (async () => {
     await runSync(env, "deploy");
-    logRefresh(await refreshMissingLivePredictions(env, 30));
+    logRefresh(await refreshMissingLivePredictions(env, 60));
     await repairRaceNames(env.DB, 8);
-    await runValidationBatch(env.DB, 6);
+    await runValidationBatch(env.DB, 12);
+    await applyValidationQuotas(env.DB);
   })().finally(() => {
     maintenanceRunning = null;
   });
@@ -119,7 +128,7 @@ function page(body: string, status = 200): Response {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store, max-age=0",
       "x-content-type-options": "nosniff",
-      "x-race-ui-version": "phase-c"
+      "x-race-ui-version": "phase-d"
     }
   });
 }
@@ -138,15 +147,22 @@ export default {
       const pathname = new URL(request.url).pathname;
 
       if (pathname === "/api/validation") {
+        await applyValidationQuotas(env.DB);
         ctx.waitUntil(runMaintenance(env));
         return json(await getValidationSnapshot(env.DB));
       }
       if (pathname === "/api/performance/courses") {
-        return json(await getCourseMetrics(env.DB, env.MODEL_VERSION));
+        await applyValidationQuotas(env.DB);
+        const [live, validation] = await Promise.all([
+          getCourseMetrics(env.DB, env.MODEL_VERSION),
+          getValidationSnapshot(env.DB)
+        ]);
+        return json({ live, historical: validation.combined });
       }
       if (pathname === "/") {
-        logRefresh(await refreshMissingLivePredictions(env, 30));
-        const dashboard = await getPhaseCDashboard(env.DB, env.MODEL_VERSION);
+        logRefresh(await refreshMissingLivePredictions(env, 60));
+        await applyValidationQuotas(env.DB);
+        const dashboard = await getPhaseDDashboard(env.DB, env.MODEL_VERSION);
         ctx.waitUntil(runMaintenance(env));
         return page(dashboard);
       }
@@ -157,20 +173,24 @@ export default {
         return detail ? page(renderPhaseCRaceDetail(detail)) : page("レースが見つかりません。", 404);
       }
       if (pathname === "/validation") {
+        await applyValidationQuotas(env.DB);
         ctx.waitUntil(runMaintenance(env));
         return page(await renderValidation(env.DB));
       }
       const validationDate = validationDateFromPath(pathname);
       if (validationDate) {
+        await applyValidationQuotas(env.DB);
         ctx.waitUntil(runMaintenance(env));
         return page(await renderValidation(env.DB, validationDate));
       }
       if (pathname === "/performance") {
-        const [cumulative, monthly] = await Promise.all([
+        await applyValidationQuotas(env.DB);
+        const [cumulative, monthly, validation] = await Promise.all([
           getCourseMetrics(env.DB, env.MODEL_VERSION),
-          getCourseMonthlyMetrics(env.DB, env.MODEL_VERSION)
+          getCourseMonthlyMetrics(env.DB, env.MODEL_VERSION),
+          getValidationSnapshot(env.DB)
         ]);
-        return page(renderCoursePerformance(cumulative, monthly));
+        return page(renderCoursePerformance(cumulative, monthly, validation.combined));
       }
       if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
       return await app.fetch(request, env, ctx);
