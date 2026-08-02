@@ -13,11 +13,13 @@ import {
   normalizeThreeMonthVenueQuotas,
   runThreeMonthValidationBatch
 } from "./v1/three-month-validation.js";
-import { getThreeMonthStakeAudit } from "./v1/three-month-audit.js";
+import { getThreeMonthStakeAuditV2 } from "./v1/three-month-audit-v2.js";
+import { runThreeMonthFixedStakeRepair } from "./v1/three-month-repair.js";
+import { isThreeMonthDate } from "./v1/three-month-scope.js";
 import { fetchJraPage } from "./v1/jra.js";
 import { refreshMissingLivePredictions } from "./v1/live-prediction-refresh.js";
-import { getPhaseDDashboard } from "./v1/phase-d-dashboard.js";
-import { historyDateFromPath, renderRaceArchiveDate } from "./v1/race-archive.js";
+import { getAuditedPhaseDDashboard } from "./v1/phase-d-dashboard-audited.js";
+import { historyDateFromPath, renderAuditedRaceArchiveDate } from "./v1/race-archive-audited.js";
 import { renderPhaseCRaceDetail } from "./v1/race-detail-phase-c.js";
 import type { Env } from "./v1/types.js";
 import { stripHtml } from "./v1/utils.js";
@@ -186,11 +188,17 @@ async function displayedHistoricalSnapshot(db: D1Database): Promise<{
 }
 
 async function coursePerformanceSnapshot(env: Env): Promise<unknown> {
-  const [live, display] = await Promise.all([
-    getCourseMetrics(env.DB, env.MODEL_VERSION),
-    displayedHistoricalSnapshot(env.DB)
-  ]);
-  return { live, historical: display.historical, threeMonth: display.threeMonth, auditFrozen: HISTORICAL_AUDIT_FROZEN };
+  const live = await getCourseMetrics(env.DB, env.MODEL_VERSION);
+  if (HISTORICAL_AUDIT_FROZEN) {
+    return {
+      live,
+      historical: [],
+      threeMonth: { auditFrozen: true, message: "Historical performance is hidden until fixed-stake reconciliation passes." },
+      auditFrozen: true
+    };
+  }
+  const display = await displayedHistoricalSnapshot(env.DB);
+  return { live, historical: display.historical, threeMonth: display.threeMonth, auditFrozen: false };
 }
 
 async function runThreeMonthPipelineStep(env: Env): Promise<unknown> {
@@ -260,7 +268,7 @@ function validationDateFromPath(pathname: string): string | null {
 function auditHoldSection(): string {
   return `<section style="margin:20px 0;padding:18px;border:1px solid #c76767;border-radius:16px;background:#2a1619;color:#fff">
     <h2 style="margin:0 0 8px;font-size:20px">過去3ヶ月成績を監査中</h2>
-    <p style="margin:0;color:#e8bdc0;line-height:1.7">購入額の不整合と、個別レースページ・累計集計の参照モデル不一致が疑われるため、回収率・収支・月別成績を一時的に非表示にしています。全レースへのリンクは下に残しています。</p>
+    <p style="margin:0;color:#e8bdc0;line-height:1.7">固定購入額違反と参照予想の不一致が確認されたため、回収率・収支・月別成績・個別買い目を一時的に非表示にしています。全開催日と全レースの一覧は確認できます。</p>
   </section>`;
 }
 
@@ -270,11 +278,11 @@ function maskDisputedHomeMetrics(html: string): string {
     auditHoldSection()
   );
   next = next.replace(/<section class="home-history" id="monthly-history">[\s\S]*?<\/section>/, "");
-  return next.replace("</head>", `<style>.audit-hold-link{color:#78dfb3}</style></head>`);
+  return next;
 }
 
-function auditPerformancePage(): string {
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>レース探偵｜成績監査中</title><style>body{margin:0;background:#07111b;color:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:760px;margin:auto;padding:28px 18px}.box{margin-top:40px;padding:22px;border:1px solid #c76767;border-radius:18px;background:#2a1619}.box h1{margin:0 0 12px}.box p{color:#e8bdc0;line-height:1.8}.box a{display:inline-block;margin-top:10px;color:#78dfb3;text-decoration:none}</style></head><body><main class="wrap"><div class="box"><h1>過去3ヶ月成績を監査中</h1><p>固定購入額、個別レースの買い目、累計集計に使われた買い目を全件突合しています。検証が完了するまで回収率と収支は表示しません。</p><a href="/">ホームへ戻る</a></div></main></body></html>`;
+function auditNoticePage(title: string, detail: string): string {
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>レース探偵｜成績監査中</title><style>body{margin:0;background:#07111b;color:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:760px;margin:auto;padding:28px 18px}.box{margin-top:40px;padding:22px;border:1px solid #c76767;border-radius:18px;background:#2a1619}.box h1{margin:0 0 12px}.box p{color:#e8bdc0;line-height:1.8}.box a{display:inline-block;margin-top:10px;color:#78dfb3;text-decoration:none}</style></head><body><main class="wrap"><div class="box"><h1>${title}</h1><p>${detail}</p><a href="/">ホームへ戻る</a></div></main></body></html>`;
 }
 
 export default {
@@ -291,7 +299,14 @@ export default {
         if (request.headers.get("x-race-audit") !== "stake-reconciliation-v1") {
           return json({ ok: false, error: "AUDIT_HEADER_REQUIRED" }, 403);
         }
-        return json(await getThreeMonthStakeAudit(env.DB, env.MODEL_VERSION, url.searchParams.get("full") === "1"));
+        return json(await getThreeMonthStakeAuditV2(env.DB, env.MODEL_VERSION, url.searchParams.get("full") === "1"));
+      }
+      if (pathname === "/api/audit/three-months/repair" && request.method === "POST") {
+        if (request.headers.get("x-race-audit-repair") !== "fixed-stake-v1") {
+          return json({ ok: false, error: "AUDIT_REPAIR_HEADER_REQUIRED" }, 403);
+        }
+        const maximumVenues = Number(url.searchParams.get("venues") ?? 4);
+        return json(await runThreeMonthFixedStakeRepair(env.DB, env.MODEL_VERSION, maximumVenues));
       }
       if (pathname === "/api/validation") {
         const snapshot = await getValidationSnapshot(env.DB);
@@ -299,15 +314,12 @@ export default {
         return json(snapshot);
       }
       if (pathname === "/api/history/three-months/status") {
-        const [progress, validation] = await Promise.all([
-          getThreeMonthHistoryProgress(env.DB),
-          getThreeMonthValidationSnapshot(env.DB)
-        ]);
-        return json({ progress, validation, auditFrozen: HISTORICAL_AUDIT_FROZEN });
+        const progress = await getThreeMonthHistoryProgress(env.DB);
+        return json({ progress, auditFrozen: HISTORICAL_AUDIT_FROZEN });
       }
       if (pathname === "/api/history/three-months/step" && request.method === "POST") {
         if (HISTORICAL_AUDIT_FROZEN) {
-          return json({ ok: false, error: "HISTORICAL_AUDIT_FROZEN", message: "Three-month writes are disabled until stake reconciliation is complete." }, 423);
+          return json({ ok: false, error: "HISTORICAL_AUDIT_FROZEN", message: "Three-month writes are disabled except for the controlled fixed-stake repair." }, 423);
         }
         if (request.headers.get("x-race-backfill") !== "three-month-v1") {
           return json({ ok: false, error: "BACKFILL_HEADER_REQUIRED" }, 403);
@@ -315,7 +327,8 @@ export default {
         return json(await runThreeMonthPipelineStep(env));
       }
       if (pathname === "/api/performance/three-months/read-only") {
-        return json({ ...(await getThreeMonthValidationSnapshot(env.DB)), auditFrozen: HISTORICAL_AUDIT_FROZEN });
+        if (HISTORICAL_AUDIT_FROZEN) return json({ auditFrozen: true, message: "Historical figures are hidden during reconciliation." });
+        return json(await getThreeMonthValidationSnapshot(env.DB));
       }
       if (pathname === "/api/performance/courses/read-only") {
         return json(await coursePerformanceSnapshot(env));
@@ -326,13 +339,13 @@ export default {
         return json(snapshot);
       }
       if (pathname === "/") {
-        const dashboard = await getPhaseDDashboard(env.DB, env.MODEL_VERSION);
+        const dashboard = await getAuditedPhaseDDashboard(env.DB, env.MODEL_VERSION, HISTORICAL_AUDIT_FROZEN);
         scheduleBackground(ctx, env);
         return page(HISTORICAL_AUDIT_FROZEN ? maskDisputedHomeMetrics(dashboard) : dashboard);
       }
       const historyDate = historyDateFromPath(pathname);
       if (historyDate) {
-        const body = await renderRaceArchiveDate(env.DB, historyDate, env.MODEL_VERSION);
+        const body = await renderAuditedRaceArchiveDate(env.DB, historyDate, env.MODEL_VERSION, HISTORICAL_AUDIT_FROZEN);
         scheduleBackground(ctx, env);
         return body ? page(body) : page("指定された開催日のレースが見つかりません。", 404);
       }
@@ -340,7 +353,11 @@ export default {
         const id = decodeURIComponent(pathname.slice("/races/".length));
         const detail = await getDisplayRaceDetail(env.DB, id, env.MODEL_VERSION);
         scheduleBackground(ctx, env);
-        return detail ? page(renderPhaseCRaceDetail(detail)) : page("レースが見つかりません。", 404);
+        if (!detail) return page("レースが見つかりません。", 404);
+        if (HISTORICAL_AUDIT_FROZEN && isThreeMonthDate(detail.race.raceDate)) {
+          return page(auditNoticePage("個別買い目を監査中", "このレースの表示買い目と累計集計の参照元を統一し、固定購入額で再精算しています。監査完了まで買い目と払戻額は表示しません。"));
+        }
+        return page(renderPhaseCRaceDetail(detail));
       }
       if (pathname === "/validation") {
         const body = await renderValidation(env.DB);
@@ -354,7 +371,9 @@ export default {
         return page(body);
       }
       if (pathname === "/performance") {
-        if (HISTORICAL_AUDIT_FROZEN) return page(auditPerformancePage());
+        if (HISTORICAL_AUDIT_FROZEN) {
+          return page(auditNoticePage("過去3ヶ月成績を監査中", "固定購入額、個別レースの買い目、累計集計に使われた買い目を全件突合しています。検証が完了するまで回収率と収支は表示しません。"));
+        }
         const [cumulative, monthly, display] = await Promise.all([
           getCourseMetrics(env.DB, env.MODEL_VERSION),
           getCourseMonthlyMetrics(env.DB, env.MODEL_VERSION),
