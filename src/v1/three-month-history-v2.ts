@@ -19,7 +19,7 @@ const URL_INDEX_KEY = `${STATE_PREFIX}:url_index`;
 const FAILURES_KEY = `${STATE_PREFIX}:failures`;
 const MONTHS = ["202605", "202606", "202607", "202608"] as const;
 const TARGET_DATES = new Set<string>(THREE_MONTH_RACE_DATES);
-const BATCH_SIZE = 4;
+const BATCH_SIZE = 12;
 
 interface FailedUrl {
   url: string;
