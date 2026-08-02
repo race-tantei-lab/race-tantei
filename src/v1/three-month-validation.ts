@@ -8,31 +8,49 @@ import {
   THREE_MONTH_START_DATE,
   THREE_MONTH_VALIDATION_CONFIGS
 } from "./three-month-scope.js";
-import type { PredictionOutput } from "./types.js";
+import type { BetType, BudgetCourse, PredictionOutput } from "./types.js";
 import { nowIso } from "./utils.js";
-import {
-  summarizeValidationTickets,
-  type CourseValidationSummary,
-  type ValidationDateSnapshot,
-  type ValidationSnapshot,
-  type ValidationTicketInput
+import type {
+  CourseValidationSummary,
+  TicketTypeValidationSummary,
+  ValidationDateSnapshot,
+  ValidationSnapshot
 } from "./validation.js";
 import { ensureValidationVenueQuotas, type VenueQuotaResult } from "./venue-quota.js";
 
 const MODEL_SUFFIX = "-roi-policy-v1-3m";
+const COURSES: BudgetCourse[] = ["ライト", "スタンダード", "プレミアム"];
+const TICKET_ORDER: BetType[] = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"];
 
-interface PredictionRow {
-  raceId: string;
+interface DateAggregateRow {
   raceDate: string;
+  totalRaces: number;
+  processedRaces: number;
+  wageredRaces: number;
 }
 
-interface TotalRow {
+interface CourseAggregateRow {
   raceDate: string;
-  count: number;
+  course: string;
+  selectedRaces: number;
+  hitRaces: number;
+  tickets: number;
+  pendingTickets: number;
+  stakeYen: number;
+  returnYen: number;
+  expectedReturnYen: number;
 }
 
-interface TicketRow extends ValidationTicketInput {
+interface TicketAggregateRow {
   raceDate: string;
+  course: string;
+  betType: string;
+  tickets: number;
+  pendingTickets: number;
+  stakeYen: number;
+  returnYen: number;
+  expectedReturnYen: number;
+  hits: number;
 }
 
 export interface ThreeMonthValidationSnapshot extends ValidationSnapshot {
@@ -122,47 +140,225 @@ export async function runThreeMonthValidationBatch(
   return { processed, errors, remaining: await remainingCount(db) };
 }
 
-function numericTicket(row: TicketRow): TicketRow {
+function numeric(value: unknown): number {
+  return Number(value ?? 0);
+}
+
+function validCourse(value: string): BudgetCourse | null {
+  return COURSES.includes(value as BudgetCourse) ? value as BudgetCourse : null;
+}
+
+function validTicket(value: string): BetType | null {
+  return TICKET_ORDER.includes(value as BetType) ? value as BetType : null;
+}
+
+function emptyTicketSummary(betType: BetType): TicketTypeValidationSummary {
+  return {
+    betType,
+    tickets: 0,
+    stakeYen: 0,
+    returnYen: 0,
+    profitYen: 0,
+    expectedReturnYen: 0,
+    roiPct: null,
+    expectedRoiPct: null,
+    hits: 0,
+    pendingTickets: 0
+  };
+}
+
+function finishTicketSummary(row: TicketTypeValidationSummary): TicketTypeValidationSummary {
   return {
     ...row,
-    stakeYen: Number(row.stakeYen),
-    returnYen: row.returnYen === null ? null : Number(row.returnYen),
-    expectedValuePct: Number(row.expectedValuePct)
+    profitYen: row.returnYen - row.stakeYen,
+    roiPct: row.stakeYen > 0 ? row.returnYen / row.stakeYen * 100 : null,
+    expectedRoiPct: row.stakeYen > 0 ? row.expectedReturnYen / row.stakeYen * 100 : null
   };
+}
+
+function courseSummaryForDate(
+  processedRaces: number,
+  course: BudgetCourse,
+  aggregate: CourseAggregateRow | undefined,
+  ticketRows: TicketAggregateRow[]
+): CourseValidationSummary {
+  const selectedRaces = numeric(aggregate?.selectedRaces);
+  const hitRaces = numeric(aggregate?.hitRaces);
+  const tickets = numeric(aggregate?.tickets);
+  const pendingTickets = numeric(aggregate?.pendingTickets);
+  const stakeYen = numeric(aggregate?.stakeYen);
+  const returnYen = numeric(aggregate?.returnYen);
+  const expectedReturnYen = numeric(aggregate?.expectedReturnYen);
+  const byTicketType = TICKET_ORDER.map((betType) => {
+    const raw = ticketRows.find((row) => row.betType === betType);
+    if (!raw) return emptyTicketSummary(betType);
+    return finishTicketSummary({
+      betType,
+      tickets: numeric(raw.tickets),
+      pendingTickets: numeric(raw.pendingTickets),
+      stakeYen: numeric(raw.stakeYen),
+      returnYen: numeric(raw.returnYen),
+      profitYen: 0,
+      expectedReturnYen: numeric(raw.expectedReturnYen),
+      roiPct: null,
+      expectedRoiPct: null,
+      hits: numeric(raw.hits)
+    });
+  }).filter((row) => row.tickets > 0);
+
+  return {
+    course,
+    processedRaces,
+    selectedRaces,
+    skippedRaces: Math.max(0, processedRaces - selectedRaces),
+    hitRaces,
+    tickets,
+    pendingTickets,
+    stakeYen,
+    returnYen,
+    profitYen: returnYen - stakeYen,
+    expectedReturnYen,
+    roiPct: stakeYen > 0 ? returnYen / stakeYen * 100 : null,
+    expectedRoiPct: stakeYen > 0 ? expectedReturnYen / stakeYen * 100 : null,
+    hitRatePct: selectedRaces > 0 ? hitRaces / selectedRaces * 100 : null,
+    byTicketType
+  };
+}
+
+function mergeCourseSummaries(
+  summaries: CourseValidationSummary[],
+  processedRaces: number
+): CourseValidationSummary[] {
+  return COURSES.map((course) => {
+    const rows = summaries.filter((row) => row.course === course);
+    const selectedRaces = rows.reduce((sum, row) => sum + row.selectedRaces, 0);
+    const hitRaces = rows.reduce((sum, row) => sum + row.hitRaces, 0);
+    const tickets = rows.reduce((sum, row) => sum + row.tickets, 0);
+    const pendingTickets = rows.reduce((sum, row) => sum + row.pendingTickets, 0);
+    const stakeYen = rows.reduce((sum, row) => sum + row.stakeYen, 0);
+    const returnYen = rows.reduce((sum, row) => sum + row.returnYen, 0);
+    const expectedReturnYen = rows.reduce((sum, row) => sum + row.expectedReturnYen, 0);
+    const byTicketType = TICKET_ORDER.map((betType) => {
+      const ticketRows = rows.flatMap((row) => row.byTicketType).filter((row) => row.betType === betType);
+      return finishTicketSummary({
+        betType,
+        tickets: ticketRows.reduce((sum, row) => sum + row.tickets, 0),
+        pendingTickets: ticketRows.reduce((sum, row) => sum + row.pendingTickets, 0),
+        stakeYen: ticketRows.reduce((sum, row) => sum + row.stakeYen, 0),
+        returnYen: ticketRows.reduce((sum, row) => sum + row.returnYen, 0),
+        profitYen: 0,
+        expectedReturnYen: ticketRows.reduce((sum, row) => sum + row.expectedReturnYen, 0),
+        roiPct: null,
+        expectedRoiPct: null,
+        hits: ticketRows.reduce((sum, row) => sum + row.hits, 0)
+      });
+    }).filter((row) => row.tickets > 0);
+
+    return {
+      course,
+      processedRaces,
+      selectedRaces,
+      skippedRaces: Math.max(0, processedRaces - selectedRaces),
+      hitRaces,
+      tickets,
+      pendingTickets,
+      stakeYen,
+      returnYen,
+      profitYen: returnYen - stakeYen,
+      expectedReturnYen,
+      roiPct: stakeYen > 0 ? returnYen / stakeYen * 100 : null,
+      expectedRoiPct: stakeYen > 0 ? expectedReturnYen / stakeYen * 100 : null,
+      hitRatePct: selectedRaces > 0 ? hitRaces / selectedRaces * 100 : null,
+      byTicketType
+    };
+  });
 }
 
 export async function getThreeMonthValidationSnapshot(
   db: D1Database
 ): Promise<ThreeMonthValidationSnapshot> {
-  const [totalRows, predictionRows, ticketRows, venueRow, historyProgress] = await Promise.all([
+  const [dateRows, courseRows, ticketRows, venueRow, historyProgress] = await Promise.all([
     db.prepare(`
-      SELECT race_date AS raceDate, COUNT(*) AS count
-      FROM rt_races
-      WHERE race_date BETWEEN ? AND ? AND status='finished'
-      GROUP BY race_date
-      ORDER BY race_date
-    `).bind(THREE_MONTH_START_DATE, THREE_MONTH_END_DATE).all<TotalRow>(),
+      WITH prediction_state AS (
+        SELECT p.id AS predictionId, p.race_id AS raceId, r.race_date AS raceDate
+        FROM rt_predictions p
+        JOIN rt_races r ON r.race_id=p.race_id
+        WHERE r.race_date BETWEEN ? AND ?
+          AND p.model_version=('validation-' || r.race_date || ?)
+          AND p.status='locked'
+      ), selected_state AS (
+        SELECT DISTINCT ps.raceId, ps.raceDate
+        FROM prediction_state ps
+        JOIN rt_bets b ON b.prediction_id=ps.predictionId
+        WHERE b.bet_type LIKE 'ライト｜%'
+           OR b.bet_type LIKE 'スタンダード｜%'
+           OR b.bet_type LIKE 'プレミアム｜%'
+      )
+      SELECT r.race_date AS raceDate,
+        COUNT(DISTINCT r.race_id) AS totalRaces,
+        COUNT(DISTINCT ps.raceId) AS processedRaces,
+        COUNT(DISTINCT ss.raceId) AS wageredRaces
+      FROM rt_races r
+      LEFT JOIN prediction_state ps ON ps.raceId=r.race_id
+      LEFT JOIN selected_state ss ON ss.raceId=r.race_id
+      WHERE r.race_date BETWEEN ? AND ? AND r.status='finished'
+      GROUP BY r.race_date
+      ORDER BY r.race_date
+    `).bind(
+      THREE_MONTH_START_DATE,
+      THREE_MONTH_END_DATE,
+      MODEL_SUFFIX,
+      THREE_MONTH_START_DATE,
+      THREE_MONTH_END_DATE
+    ).all<DateAggregateRow>(),
     db.prepare(`
-      SELECT r.race_date AS raceDate, p.race_id AS raceId
-      FROM rt_predictions p
-      JOIN rt_races r ON r.race_id=p.race_id
-      WHERE r.race_date BETWEEN ? AND ?
-        AND p.model_version=('validation-' || r.race_date || ?)
-        AND p.status='locked'
-      ORDER BY r.race_date, r.venue, r.race_no
-    `).bind(THREE_MONTH_START_DATE, THREE_MONTH_END_DATE, MODEL_SUFFIX).all<PredictionRow>(),
-    db.prepare(`
-      SELECT r.race_date AS raceDate, b.race_id AS raceId, b.bet_type AS betType,
-        b.stake_yen AS stakeYen, b.return_yen AS returnYen,
-        b.expected_value_pct AS expectedValuePct, b.settlement_status AS settlementStatus
+      SELECT r.race_date AS raceDate,
+        CASE
+          WHEN b.bet_type LIKE 'ライト｜%' THEN 'ライト'
+          WHEN b.bet_type LIKE 'スタンダード｜%' THEN 'スタンダード'
+          WHEN b.bet_type LIKE 'プレミアム｜%' THEN 'プレミアム'
+        END AS course,
+        COUNT(DISTINCT b.race_id) AS selectedRaces,
+        COUNT(DISTINCT CASE WHEN b.return_yen>0 THEN b.race_id END) AS hitRaces,
+        COUNT(*) AS tickets,
+        SUM(CASE WHEN b.settlement_status<>'settled' THEN 1 ELSE 0 END) AS pendingTickets,
+        COALESCE(SUM(b.stake_yen),0) AS stakeYen,
+        COALESCE(SUM(b.return_yen),0) AS returnYen,
+        COALESCE(SUM(b.stake_yen * b.expected_value_pct / 100.0),0) AS expectedReturnYen
       FROM rt_bets b
       JOIN rt_predictions p ON p.id=b.prediction_id
       JOIN rt_races r ON r.race_id=b.race_id
       WHERE r.race_date BETWEEN ? AND ?
         AND p.model_version=('validation-' || r.race_date || ?)
+        AND p.status='locked'
         AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
-      ORDER BY r.race_date, b.race_id, b.id
-    `).bind(THREE_MONTH_START_DATE, THREE_MONTH_END_DATE, MODEL_SUFFIX).all<TicketRow>(),
+      GROUP BY r.race_date, course
+      ORDER BY r.race_date, course
+    `).bind(THREE_MONTH_START_DATE, THREE_MONTH_END_DATE, MODEL_SUFFIX).all<CourseAggregateRow>(),
+    db.prepare(`
+      SELECT r.race_date AS raceDate,
+        CASE
+          WHEN b.bet_type LIKE 'ライト｜%' THEN 'ライト'
+          WHEN b.bet_type LIKE 'スタンダード｜%' THEN 'スタンダード'
+          WHEN b.bet_type LIKE 'プレミアム｜%' THEN 'プレミアム'
+        END AS course,
+        substr(b.bet_type, instr(b.bet_type, '｜') + 1) AS betType,
+        COUNT(*) AS tickets,
+        SUM(CASE WHEN b.settlement_status<>'settled' THEN 1 ELSE 0 END) AS pendingTickets,
+        COALESCE(SUM(b.stake_yen),0) AS stakeYen,
+        COALESCE(SUM(b.return_yen),0) AS returnYen,
+        COALESCE(SUM(b.stake_yen * b.expected_value_pct / 100.0),0) AS expectedReturnYen,
+        SUM(CASE WHEN b.return_yen>0 THEN 1 ELSE 0 END) AS hits
+      FROM rt_bets b
+      JOIN rt_predictions p ON p.id=b.prediction_id
+      JOIN rt_races r ON r.race_id=b.race_id
+      WHERE r.race_date BETWEEN ? AND ?
+        AND p.model_version=('validation-' || r.race_date || ?)
+        AND p.status='locked'
+        AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
+      GROUP BY r.race_date, course, betType
+      ORDER BY r.race_date, course, betType
+    `).bind(THREE_MONTH_START_DATE, THREE_MONTH_END_DATE, MODEL_SUFFIX).all<TicketAggregateRow>(),
     db.prepare(`
       SELECT COUNT(*) AS count FROM (
         SELECT race_date, venue
@@ -174,27 +370,21 @@ export async function getThreeMonthValidationSnapshot(
     getThreeMonthHistoryProgress(db)
   ]);
 
-  const totalByDate = new Map(totalRows.results.map((row) => [row.raceDate, Number(row.count)]));
-  const processedByDate = new Map<string, string[]>();
-  for (const row of predictionRows.results) {
-    const values = processedByDate.get(row.raceDate) ?? [];
-    values.push(row.raceId);
-    processedByDate.set(row.raceDate, values);
-  }
-  const ticketsByDate = new Map<string, TicketRow[]>();
-  for (const raw of ticketRows.results) {
-    const row = numericTicket(raw);
-    const values = ticketsByDate.get(row.raceDate) ?? [];
-    values.push(row);
-    ticketsByDate.set(row.raceDate, values);
-  }
+  const dateAggregate = new Map(dateRows.results.map((row) => [row.raceDate, row]));
+  const normalizedCourseRows = courseRows.results.filter((row) => validCourse(row.course));
+  const normalizedTicketRows = ticketRows.results.filter((row) => validCourse(row.course) && validTicket(row.betType));
 
   const dates: ValidationDateSnapshot[] = THREE_MONTH_VALIDATION_CONFIGS.map((config) => {
-    const totalRaces = totalByDate.get(config.raceDate) ?? 0;
-    const processedRaceIds = processedByDate.get(config.raceDate) ?? [];
-    const tickets = ticketsByDate.get(config.raceDate) ?? [];
-    const processedRaces = new Set(processedRaceIds).size;
-    const wageredRaces = new Set(tickets.map((ticket) => ticket.raceId)).size;
+    const state = dateAggregate.get(config.raceDate);
+    const totalRaces = numeric(state?.totalRaces);
+    const processedRaces = numeric(state?.processedRaces);
+    const wageredRaces = numeric(state?.wageredRaces);
+    const courses = COURSES.map((course) => courseSummaryForDate(
+      processedRaces,
+      course,
+      normalizedCourseRows.find((row) => row.raceDate === config.raceDate && row.course === course),
+      normalizedTicketRows.filter((row) => row.raceDate === config.raceDate && row.course === course)
+    ));
     return {
       raceDate: config.raceDate,
       label: config.label,
@@ -204,27 +394,32 @@ export async function getThreeMonthValidationSnapshot(
       remainingRaces: Math.max(0, totalRaces - processedRaces),
       noBetRaces: Math.max(0, processedRaces - wageredRaces),
       complete: totalRaces > 0 && processedRaces >= totalRaces,
-      courses: summarizeValidationTickets(processedRaceIds, tickets)
+      courses
     };
   }).filter((row) => row.totalRaces > 0);
 
-  const allProcessedRaceIds = predictionRows.results.map((row) => row.raceId);
-  const allTickets = ticketRows.results.map(numericTicket);
   const totalRaces = dates.reduce((sum, row) => sum + row.totalRaces, 0);
-  const processedRaces = new Set(allProcessedRaceIds).size;
-  const wageredRaces = new Set(allTickets.map((row) => row.raceId)).size;
+  const processedRaces = dates.reduce((sum, row) => sum + row.processedRaces, 0);
+  const noBetRaces = dates.reduce((sum, row) => sum + row.noBetRaces, 0);
+  const combined = mergeCourseSummaries(
+    dates.flatMap((row) => row.courses),
+    processedRaces
+  );
   const months = [...new Set(dates.map((row) => row.raceDate.slice(0, 7)))];
   const monthly = months.map((month) => {
-    const monthRaceIds = predictionRows.results
-      .filter((row) => row.raceDate.startsWith(month))
-      .map((row) => row.raceId);
-    const monthTickets = allTickets.filter((row) => row.raceDate.startsWith(month));
-    return { month, courses: summarizeValidationTickets(monthRaceIds, monthTickets) };
+    const monthDates = dates.filter((row) => row.raceDate.startsWith(month));
+    return {
+      month,
+      courses: mergeCourseSummaries(
+        monthDates.flatMap((row) => row.courses),
+        monthDates.reduce((sum, row) => sum + row.processedRaces, 0)
+      )
+    };
   });
   const validationComplete = totalRaces > 0 && processedRaces >= totalRaces;
 
   return {
-    phase: "three-month-validation-v1",
+    phase: "three-month-validation-v2-sql-aggregate",
     scopeVersion: THREE_MONTH_SCOPE_VERSION,
     startDate: THREE_MONTH_START_DATE,
     endDate: THREE_MONTH_END_DATE,
@@ -233,10 +428,10 @@ export async function getThreeMonthValidationSnapshot(
     totalRaces,
     processedRaces,
     remainingRaces: Math.max(0, totalRaces - processedRaces),
-    noBetRaces: Math.max(0, processedRaces - wageredRaces),
+    noBetRaces,
     venueDays: Number(venueRow?.count ?? 0),
     dates,
-    combined: summarizeValidationTickets(allProcessedRaceIds, allTickets),
+    combined,
     monthly
   };
 }
