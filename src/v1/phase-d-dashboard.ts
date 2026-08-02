@@ -1,9 +1,13 @@
-import { getCourseMetrics, type CourseMetric } from "./course-db.js";
+import { getCourseMetrics, getCourseMonthlyMetrics, type CourseMetric } from "./course-db.js";
 import { getPhaseCDashboard } from "./phase-c-dashboard.js";
 import { getThreeMonthValidationSnapshot } from "./three-month-validation.js";
 import type { BudgetCourse } from "./types.js";
 import { escapeHtml, formatYen } from "./utils.js";
-import type { CourseValidationSummary } from "./validation.js";
+import {
+  getValidationSnapshot,
+  type CourseValidationSummary,
+  type ValidationDateSnapshot
+} from "./validation.js";
 
 const COURSES: Array<{ name: BudgetCourse }> = [
   { name: "ライト" },
@@ -12,6 +16,7 @@ const COURSES: Array<{ name: BudgetCourse }> = [
 ];
 
 const MAX_SELECTED_RACES_PER_VENUE = 5;
+const HOME_RECENT_DAYS = 2;
 
 interface DisplayMetric {
   course: BudgetCourse;
@@ -19,6 +24,10 @@ interface DisplayMetric {
   hits: number;
   stake: number;
   returns: number;
+}
+
+interface MonthlyDisplayMetric extends DisplayMetric {
+  month: string;
 }
 
 interface RaceCardMatch {
@@ -30,6 +39,10 @@ interface RaceCardMatch {
 
 function signedYen(value: number): string {
   return `${value >= 0 ? "+" : ""}${formatYen(value)}`;
+}
+
+function pct(value: number | null): string {
+  return value === null ? "—" : `${value.toFixed(1)}%`;
 }
 
 function fromLive(row: CourseMetric): DisplayMetric {
@@ -62,11 +75,31 @@ function combine(live: DisplayMetric, historical: DisplayMetric): DisplayMetric 
   };
 }
 
+function emptyHistorical(course: BudgetCourse): CourseValidationSummary {
+  return {
+    course,
+    processedRaces: 0,
+    selectedRaces: 0,
+    skippedRaces: 0,
+    hitRaces: 0,
+    tickets: 0,
+    pendingTickets: 0,
+    stakeYen: 0,
+    returnYen: 0,
+    profitYen: 0,
+    expectedReturnYen: 0,
+    roiPct: null,
+    expectedRoiPct: null,
+    hitRatePct: null,
+    byTicketType: []
+  };
+}
+
 function metricCard(metric: DisplayMetric): string {
   const roi = metric.stake > 0 ? metric.returns / metric.stake * 100 : null;
   const profit = metric.returns - metric.stake;
   const averageStake = metric.races > 0 ? Math.round(metric.stake / metric.races) : null;
-  return `<a class="metric" href="/performance">
+  return `<a class="metric" href="#monthly-history">
     <div class="metric-head"><b>${escapeHtml(metric.course)}</b><span>${averageStake === null ? "平均購入 —" : `平均購入 ${formatYen(averageStake)}/R`}</span></div>
     <strong>${roi === null ? "—" : `${roi.toFixed(1)}%`}</strong>
     <small>${metric.hits}/${metric.races}R的中　${formatYen(metric.stake)} → ${formatYen(metric.returns)}</small>
@@ -88,9 +121,138 @@ function replaceMetricArea(
     combined.find((row) => row.course === name) ?? { course: name, races: 0, hits: 0, stake: 0, returns: 0 }
   )).join("");
 
-  const replacement = `<div class="section-label"><h2>累計回収率</h2><span>過去3ヶ月＋本番を合算${historicalComplete ? "" : "・過去分集計中"}</span></div>
+  const replacement = `<div class="section-label"><h2>全期間の累計成績</h2><span>確定済み期間＋本番${historicalComplete ? "" : "・追加期間集計中"}</span></div>
     <section class="metrics">${cards}</section>`;
   return `${html.slice(0, start)}${replacement}${html.slice(end + "</section>".length)}`;
+}
+
+function addMonthlyMetric(
+  map: Map<string, MonthlyDisplayMetric>,
+  metric: MonthlyDisplayMetric
+): void {
+  const key = `${metric.month}:${metric.course}`;
+  const current = map.get(key);
+  if (!current) {
+    map.set(key, { ...metric });
+    return;
+  }
+  const merged = combine(current, metric);
+  map.set(key, { month: metric.month, ...merged });
+}
+
+function monthlyFromHistorical(
+  blocks: Awaited<ReturnType<typeof getThreeMonthValidationSnapshot>>["monthly"]
+): MonthlyDisplayMetric[] {
+  const map = new Map<string, MonthlyDisplayMetric>();
+  for (const block of blocks) {
+    for (const course of block.courses) {
+      addMonthlyMetric(map, { month: block.month, ...fromValidation(course) });
+    }
+  }
+  return [...map.values()];
+}
+
+function monthlyFromValidationDates(dates: ValidationDateSnapshot[]): MonthlyDisplayMetric[] {
+  const map = new Map<string, MonthlyDisplayMetric>();
+  for (const date of dates) {
+    const month = date.raceDate.slice(0, 7);
+    for (const course of date.courses) {
+      addMonthlyMetric(map, { month, ...fromValidation(course) });
+    }
+  }
+  return [...map.values()];
+}
+
+function mergeMonthly(
+  liveRows: Array<CourseMetric & { month: string }>,
+  historicalRows: MonthlyDisplayMetric[]
+): MonthlyDisplayMetric[] {
+  const map = new Map<string, MonthlyDisplayMetric>();
+  for (const row of liveRows) addMonthlyMetric(map, { month: row.month, ...fromLive(row) });
+  for (const row of historicalRows) addMonthlyMetric(map, row);
+  const courseOrder = new Map(COURSES.map((row, index) => [row.name, index]));
+  return [...map.values()].sort((a, b) =>
+    b.month.localeCompare(a.month)
+    || (courseOrder.get(a.course) ?? 99) - (courseOrder.get(b.course) ?? 99)
+  );
+}
+
+function monthLabel(month: string): string {
+  const match = month.match(/^(\d{4})-(\d{2})$/);
+  return match ? `${Number(match[1])}年${Number(match[2])}月` : month;
+}
+
+function monthCell(metric: MonthlyDisplayMetric | undefined): string {
+  if (!metric || metric.stake <= 0) return `<td class="month-empty">—</td>`;
+  const roi = metric.returns / metric.stake * 100;
+  const profit = metric.returns - metric.stake;
+  return `<td class="month-cell"><strong class="${roi >= 100 ? "plus" : "minus"}">${pct(roi)}</strong><span>${signedYen(profit)}・${metric.races}R</span></td>`;
+}
+
+function monthlyMatrix(rows: MonthlyDisplayMetric[]): string {
+  const months = [...new Set(rows.map((row) => row.month))];
+  if (months.length === 0) return `<div class="history-empty">精算済みの月別成績はまだありません。</div>`;
+  const years = [...new Set(months.map((month) => month.slice(0, 4)))];
+  const latestYear = years[0];
+  return years.map((year) => {
+    const yearMonths = months.filter((month) => month.startsWith(year));
+    const body = yearMonths.map((month) => {
+      const monthRows = rows.filter((row) => row.month === month);
+      return `<tr><th>${escapeHtml(monthLabel(month))}</th>${COURSES.map(({ name }) => monthCell(monthRows.find((row) => row.course === name))).join("")}</tr>`;
+    }).join("");
+    return `<details class="year-block" ${year === latestYear ? "open" : ""}>
+      <summary><b>${escapeHtml(year)}年</b><span>${yearMonths.length}ヶ月</span></summary>
+      <div class="month-table-wrap"><table class="month-table"><thead><tr><th>期間</th>${COURSES.map(({ name }) => `<th>${escapeHtml(name)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>
+    </details>`;
+  }).join("");
+}
+
+function historyOverview(
+  monthly: MonthlyDisplayMetric[],
+  combined: DisplayMetric[],
+  snapshot: Awaited<ReturnType<typeof getThreeMonthValidationSnapshot>>
+): string {
+  const months = [...new Set(monthly.map((row) => row.month))].sort();
+  const period = months.length > 0
+    ? `${monthLabel(months[0]!)}〜${monthLabel(months.at(-1)!)}`
+    : "集計準備中";
+  const selectedPerCourse = Math.max(0, ...combined.map((row) => row.races));
+  const progress = snapshot.complete
+    ? `<div class="history-progress done"><b>追加期間の集計完了</b><span>${escapeHtml(snapshot.startDate)}〜${escapeHtml(snapshot.endDate)}・${snapshot.venueDays}会場日・${snapshot.totalRaces}R</span></div>`
+    : `<div class="history-progress working"><b>追加期間を集計中</b><span>${snapshot.processedRaces}/${snapshot.totalRaces || 960}R。累計と月別は確定済み期間だけを表示しています。</span></div>`;
+
+  return `<section class="home-history" id="monthly-history">
+    <div class="section-label history-label"><h2>成績の積み上がり</h2><span>日別を並べず月単位で整理</span></div>
+    <div class="history-kpis">
+      <div class="history-kpi"><small>表示期間</small><b>${escapeHtml(period)}</b></div>
+      <div class="history-kpi"><small>表示月数</small><b>${months.length}ヶ月</b></div>
+      <div class="history-kpi"><small>検証対象</small><b>${snapshot.totalRaces || 0}R</b></div>
+      <div class="history-kpi"><small>累計選出</small><b>${selectedPerCourse}R／コース</b></div>
+    </div>
+    ${progress}
+    <div class="monthly-heading"><div><h3>月別推移</h3><p>各セルは「回収率・収支・選出レース数」。過去年は年ごとに開閉できます。</p></div><a href="/performance">詳細表示</a></div>
+    <div class="year-list">${monthlyMatrix(monthly)}</div>
+  </section>`;
+}
+
+function removeLegacyValidationNotice(html: string): string {
+  return html.replace(/<div class="notice">フェーズC検証[\s\S]*?<\/div>/, "");
+}
+
+function injectHistoryOverview(html: string, overview: string): string {
+  const start = html.indexOf('<section class="metrics">');
+  const end = html.indexOf("</section>", start);
+  if (start < 0 || end < 0) return html;
+  const at = end + "</section>".length;
+  return `${html.slice(0, at)}${overview}${html.slice(at)}`;
+}
+
+function injectHomeStyles(html: string): string {
+  const styles = `<style>
+  .home-history{margin:22px 0 4px}.history-label{margin-top:0}.history-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.history-kpi{min-width:0;border:1px solid var(--line);border-radius:14px;background:#0d1722;padding:12px}.history-kpi small{display:block;color:var(--muted);font-size:11px}.history-kpi b{display:block;margin-top:5px;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.history-progress{display:flex;justify-content:space-between;gap:12px;margin:10px 0 15px;padding:11px 13px;border-radius:13px;font-size:12px}.history-progress span{color:var(--muted);text-align:right}.history-progress.done{border:1px solid #285f50;background:#10231f}.history-progress.done b{color:var(--green)}.history-progress.working{border:1px solid #65552f;background:#241f13}.history-progress.working b{color:#f2d28a}.monthly-heading{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:18px 0 8px}.monthly-heading h3{margin:0;font-size:17px}.monthly-heading p{margin:4px 0 0;color:var(--muted);font-size:11px}.monthly-heading a{white-space:nowrap;border:1px solid var(--line);border-radius:999px;padding:7px 10px;color:var(--muted);font-size:11px}.year-list{display:grid;gap:9px}.year-block{border:1px solid var(--line);border-radius:15px;background:var(--panel);overflow:hidden}.year-block summary{display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:12px 14px}.year-block summary span{color:var(--muted);font-size:12px}.month-table-wrap{overflow:auto;border-top:1px solid var(--line)}.month-table{width:100%;min-width:700px;border-collapse:collapse}.month-table th,.month-table td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left}.month-table thead th{color:var(--muted);font-size:11px}.month-table tbody th{font-size:12px;white-space:nowrap}.month-cell strong{display:block;font-size:15px}.month-cell span{display:block;margin-top:3px;color:var(--muted);font-size:10px;white-space:nowrap}.month-empty{color:var(--muted)}.history-empty{padding:20px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);text-align:center}.recent-label{margin-top:25px}
+  @media(max-width:720px){.history-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.history-progress{display:block}.history-progress span{display:block;margin-top:4px;text-align:left}.monthly-heading{align-items:flex-start}.monthly-heading p{max-width:250px}}
+  </style>`;
+  return html.replace("</head>", `${styles}</head>`);
 }
 
 function categoryTokens(category: string): string[] {
@@ -180,6 +342,33 @@ export function markSelectedCards(html: string): string {
   );
 }
 
+export function keepRecentRaceDays(html: string, maximumDays = HOME_RECENT_DAYS): string {
+  const navStart = html.indexOf('<nav class="day-tabs"');
+  const navEnd = navStart < 0 ? -1 : html.indexOf("</nav>", navStart);
+  const panelStart = navEnd < 0 ? -1 : html.indexOf('<section class="day-panel"', navEnd);
+  const footerStart = panelStart < 0 ? -1 : html.indexOf('<footer class="footer"', panelStart);
+  if (navStart < 0 || navEnd < 0 || panelStart < 0 || footerStart < 0) return html;
+
+  const panelRegion = html.slice(panelStart, footerStart);
+  const starts = [...panelRegion.matchAll(/<section class="day-panel"[^>]*data-day-panel="([^"]+)"[^>]*>/g)];
+  if (starts.length <= maximumDays) {
+    return `${html.slice(0, navStart)}<div class="section-label recent-label"><h2>直近の選出レース</h2><span>開催日詳細は直近${maximumDays}日だけ表示</span></div>${html.slice(navStart)}`;
+  }
+
+  const blocks = starts.map((match, index) => ({
+    date: match[1] ?? "",
+    html: panelRegion.slice(match.index ?? 0, starts[index + 1]?.index ?? panelRegion.length)
+  }));
+  const kept = blocks.slice(0, Math.max(1, maximumDays));
+  const dates = new Set(kept.map((row) => row.date));
+  const nav = html.slice(navStart, navEnd + "</nav>".length).replace(
+    /<button type="button" data-day-tab="([^"]+)">[\s\S]*?<\/button>/g,
+    (button, date: string) => dates.has(date) ? button : ""
+  );
+  const heading = `<div class="section-label recent-label"><h2>直近の選出レース</h2><span>日別カードは直近${kept.length}日・過去は月別へ集約</span></div>`;
+  return `${html.slice(0, navStart)}${heading}${nav}${kept.map((row) => row.html).join("")}${html.slice(footerStart)}`;
+}
+
 function injectSelectionCountScript(html: string): string {
   const script = `<script>(()=>{
     const update=()=>{
@@ -217,10 +406,20 @@ function injectSelectionCountScript(html: string): string {
 
 export async function getPhaseDDashboard(db: D1Database, liveModel: string): Promise<string> {
   let html = await getPhaseCDashboard(db, liveModel);
-  const [liveRows, historicalSnapshot] = await Promise.all([
+  const [liveRows, liveMonthlyRows, threeMonthSnapshot, fallbackSnapshot] = await Promise.all([
     getCourseMetrics(db, liveModel),
-    getThreeMonthValidationSnapshot(db)
+    getCourseMonthlyMetrics(db, liveModel),
+    getThreeMonthValidationSnapshot(db),
+    getValidationSnapshot(db)
   ]);
+
+  const historicalRows = threeMonthSnapshot.complete
+    ? threeMonthSnapshot.combined
+    : fallbackSnapshot.combined;
+  const historicalMonthly = threeMonthSnapshot.complete
+    ? monthlyFromHistorical(threeMonthSnapshot.monthly)
+    : monthlyFromValidationDates(fallbackSnapshot.dates);
+
   const live = COURSES.map(({ name }) => fromLive(
     liveRows.find((row) => row.course === name) ?? {
       course: name,
@@ -234,37 +433,28 @@ export async function getPhaseDDashboard(db: D1Database, liveModel: string): Pro
     }
   ));
   const historical = COURSES.map(({ name }) => fromValidation(
-    historicalSnapshot.combined.find((row) => row.course === name) ?? {
-      course: name,
-      processedRaces: 0,
-      selectedRaces: 0,
-      skippedRaces: 0,
-      hitRaces: 0,
-      tickets: 0,
-      pendingTickets: 0,
-      stakeYen: 0,
-      returnYen: 0,
-      profitYen: 0,
-      expectedReturnYen: 0,
-      roiPct: null,
-      expectedRoiPct: null,
-      hitRatePct: null,
-      byTicketType: []
-    }
+    historicalRows.find((row) => row.course === name) ?? emptyHistorical(name)
   ));
   const combined = COURSES.map(({ name }) => combine(
     live.find((row) => row.course === name)!,
     historical.find((row) => row.course === name)!
   ));
+  const monthly = mergeMonthly(liveMonthlyRows, historicalMonthly);
 
-  html = replaceMetricArea(html, combined, historicalSnapshot.complete);
+  html = replaceMetricArea(html, combined, threeMonthSnapshot.complete);
+  html = removeLegacyValidationNotice(html);
+  html = injectHistoryOverview(html, historyOverview(monthly, combined, threeMonthSnapshot));
   html = markSelectedCards(html)
     .replace(/買い目あり/g, "選出レース")
-    .replace("本番成績と遡及検証を分離し、期待値基準未達は見送ります。", "各会場から原則5Rを選出し、過去3ヶ月と本番を同じ総合成績に合算します。")
-    .replace("各会場から原則5Rを選出し、期待値厳選と会場上位補完を分けて集計します。", "各会場から原則5Rを選出し、過去3ヶ月と本番を同じ総合成績に合算します。")
-    .replace("各会場から原則5Rを選出し、過去レースと本番を同じ総合成績に合算します。", "各会場から原則5Rを選出し、過去3ヶ月と本番を同じ総合成績に合算します。")
-    .replace("<title>レース探偵｜フェーズC</title>", "<title>レース探偵｜会場別5R・累計回収率</title>")
-    .replace("<title>レース探偵｜会場別5R選出</title>", "<title>レース探偵｜会場別5R・累計回収率</title>")
-    .replace("<title>レース探偵｜会場別5R・総合成績</title>", "<title>レース探偵｜会場別5R・累計回収率</title>");
+    .replace("本番成績と遡及検証を分離し、期待値基準未達は見送ります。", "確定済みの過去検証と本番を同じ総合成績へ積み上げます。")
+    .replace("各会場から原則5Rを選出し、期待値厳選と会場上位補完を分けて集計します。", "各会場から原則5Rを選出し、確定済みの全期間を月別に積み上げます。")
+    .replace("各会場から原則5Rを選出し、過去レースと本番を同じ総合成績に合算します。", "各会場から原則5Rを選出し、確定済みの全期間を月別に積み上げます。")
+    .replace("各会場から原則5Rを選出し、過去3ヶ月と本番を同じ総合成績に合算します。", "各会場から原則5Rを選出し、確定済みの全期間を月別に積み上げます。")
+    .replace("<title>レース探偵｜フェーズC</title>", "<title>レース探偵｜全期間成績と直近予想</title>")
+    .replace("<title>レース探偵｜会場別5R選出</title>", "<title>レース探偵｜全期間成績と直近予想</title>")
+    .replace("<title>レース探偵｜会場別5R・総合成績</title>", "<title>レース探偵｜全期間成績と直近予想</title>")
+    .replace("<title>レース探偵｜会場別5R・累計回収率</title>", "<title>レース探偵｜全期間成績と直近予想</title>");
+  html = keepRecentRaceDays(html);
+  html = injectHomeStyles(html);
   return injectSelectionCountScript(html);
 }
