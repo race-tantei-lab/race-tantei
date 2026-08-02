@@ -1,4 +1,4 @@
-# progress probe 5
+# progress probe 6
 name: Inspect three month progress
 
 on:
@@ -13,34 +13,43 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect official calendar result links
+      - name: Inspect official result page scripts
         run: |
           set -euo pipefail
-          for date in 0502 0509 0606 0704 0801; do
-            month="${date:0:2}"
-            url="https://www.jra.go.jp/keiba/calendar2026/2026/$((10#$month))/${date}.html"
-            curl --silent --show-error --fail --max-time 60 "$url" -o "calendar-${date}.raw"
-          done
+          url='https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0104202601010820260502%2F34'
+          curl --silent --show-error --fail --max-time 60 "$url" -o historical.raw
           python - <<'PY'
           import re, urllib.parse
-          for date in ('0502','0509','0606','0704','0801'):
-              raw=open(f'calendar-{date}.raw','rb').read()
-              for enc in ('utf-8','cp932','shift_jis'):
-                  try:
-                      html=raw.decode(enc)
-                      break
-                  except UnicodeDecodeError:
-                      pass
-              decoded=urllib.parse.unquote(html).replace('&amp;','&')
-              links=[]
-              for pattern in (r'[sp]w01sde[0-9A-Za-z/]+', r'CNAME=([^"\'&<> ]+)'):
-                  for value in re.findall(pattern, decoded, flags=re.I):
-                      if 'sde' in value.lower() and value not in links:
-                          links.append(value)
-              print('DATE',date,'COUNT',len(links))
-              for value in links[:30]:
-                  print(value)
+          raw=open('historical.raw','rb').read()
+          for enc in ('cp932','shift_jis','utf-8'):
+              try:
+                  html=raw.decode(enc)
+                  break
+              except UnicodeDecodeError:
+                  pass
+          open('historical.html','w',encoding='utf-8').write(html)
+          print('SCRIPT_SRCS')
+          for src in re.findall(r'<script[^>]+src=["\']([^"\']+)',html,flags=re.I):
+              print(urllib.parse.urljoin('https://sp.jra.jp/JRADB/accessS.html',src))
+          print('INLINE_CNAME_LINES')
+          for line in html.splitlines():
+              if any(token in line.lower() for token in ('cname','sde10','checksum','encrypt','hash')):
+                  print(line[:1000])
           PY
+          mkdir -p scripts
+          python - <<'PY' > script-urls.txt
+          import re, urllib.parse
+          html=open('historical.html',encoding='utf-8').read()
+          for src in re.findall(r'<script[^>]+src=["\']([^"\']+)',html,flags=re.I):
+              print(urllib.parse.urljoin('https://sp.jra.jp/JRADB/accessS.html',src))
+          PY
+          i=0
+          while IFS= read -r src; do
+            i=$((i+1))
+            curl --silent --show-error --max-time 60 "$src" -o "scripts/$i.js" || true
+          done < script-urls.txt
+          echo 'SCRIPT_MATCHES'
+          grep -RniE 'CNAME|sde10|checksum|encrypt|hash|charCodeAt|toString\(16\)' scripts historical.html | head -300 || true
 
       - name: Read current progress
         run: |
