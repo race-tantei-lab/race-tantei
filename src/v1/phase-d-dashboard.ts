@@ -64,8 +64,9 @@ function combine(live: DisplayMetric, historical: DisplayMetric): DisplayMetric 
 function metricCard(metric: DisplayMetric): string {
   const roi = metric.stake > 0 ? metric.returns / metric.stake * 100 : null;
   const profit = metric.returns - metric.stake;
+  const averageStake = metric.races > 0 ? Math.round(metric.stake / metric.races) : null;
   return `<a class="metric" href="/performance">
-    <div class="metric-head"><b>${escapeHtml(metric.course)}</b></div>
+    <div class="metric-head"><b>${escapeHtml(metric.course)}</b><span>${averageStake === null ? "平均購入 —" : `平均購入 ${formatYen(averageStake)}/R`}</span></div>
     <strong>${roi === null ? "—" : `${roi.toFixed(1)}%`}</strong>
     <small>${metric.hits}/${metric.races}R的中　${formatYen(metric.stake)} → ${formatYen(metric.returns)}</small>
     <em class="${profit >= 0 ? "plus" : "minus"}">${signedYen(profit)}</em>
@@ -86,7 +87,7 @@ function replaceMetricArea(
     combined.find((row) => row.course === name) ?? { course: name, races: 0, hits: 0, stake: 0, returns: 0 }
   )).join("");
 
-  const replacement = `<div class="section-label"><h2>総合成績</h2><span>過去レース＋本番を合算${historicalComplete ? "" : "・過去分集計中"}</span></div>
+  const replacement = `<div class="section-label"><h2>累計回収率</h2><span>過去レース＋本番を合算${historicalComplete ? "" : "・過去分集計中"}</span></div>
     <section class="metrics">${cards}</section>`;
   return `${html.slice(0, start)}${replacement}${html.slice(end + "</section>".length)}`;
 }
@@ -260,7 +261,8 @@ export async function getPhaseDDashboard(db: D1Database, liveModel: string): Pro
     .replace(/買い目あり/g, "選出レース")
     .replace("本番成績と遡及検証を分離し、期待値基準未達は見送ります。", "各会場から原則5Rを選出し、過去レースと本番を同じ総合成績に合算します。")
     .replace("各会場から原則5Rを選出し、期待値厳選と会場上位補完を分けて集計します。", "各会場から原則5Rを選出し、過去レースと本番を同じ総合成績に合算します。")
-    .replace("<title>レース探偵｜フェーズC</title>", "<title>レース探偵｜会場別5R・総合成績</title>")
-    .replace("<title>レース探偵｜会場別5R選出</title>", "<title>レース探偵｜会場別5R・総合成績</title>");
+    .replace("<title>レース探偵｜フェーズC</title>", "<title>レース探偵｜会場別5R・累計回収率</title>")
+    .replace("<title>レース探偵｜会場別5R選出</title>", "<title>レース探偵｜会場別5R・累計回収率</title>")
+    .replace("<title>レース探偵｜会場別5R・総合成績</title>", "<title>レース探偵｜会場別5R・累計回収率</title>");
   return injectSelectionCountScript(html);
 }
