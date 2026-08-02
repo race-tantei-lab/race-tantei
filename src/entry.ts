@@ -19,6 +19,7 @@ import {
 
 let startupReady: Promise<void> | null = null;
 let maintenanceRunning: Promise<void> | null = null;
+let quotaNormalizationRunning: Promise<void> | null = null;
 
 function prepare(db: D1Database): Promise<void> {
   startupReady ??= ensureSchema(db).catch((error) => {
@@ -117,10 +118,19 @@ async function applyOneValidationVenue(db: D1Database): Promise<void> {
   }
 }
 
+function runQuotaNormalization(db: D1Database): Promise<void> {
+  if (quotaNormalizationRunning) return quotaNormalizationRunning;
+  quotaNormalizationRunning = applyOneValidationVenue(db).catch((error) => {
+    console.error("QUOTA_NORMALIZATION_FAILED", error);
+  }).finally(() => {
+    quotaNormalizationRunning = null;
+  });
+  return quotaNormalizationRunning;
+}
+
 function runMaintenance(env: Env): Promise<void> {
   if (maintenanceRunning) return maintenanceRunning;
   maintenanceRunning = (async () => {
-    await applyOneValidationVenue(env.DB);
     await runSync(env, "deploy");
     logRefresh(await refreshMissingLivePredictions(env, 60));
     await repairRaceNames(env.DB, 8);
@@ -133,7 +143,8 @@ function runMaintenance(env: Env): Promise<void> {
   return maintenanceRunning;
 }
 
-function scheduleMaintenance(ctx: ExecutionContext, env: Env): void {
+function scheduleBackground(ctx: ExecutionContext, env: Env): void {
+  ctx.waitUntil(runQuotaNormalization(env.DB));
   ctx.waitUntil(runMaintenance(env));
 }
 
@@ -164,7 +175,7 @@ export default {
 
       if (pathname === "/api/validation") {
         const snapshot = await getValidationSnapshot(env.DB);
-        scheduleMaintenance(ctx, env);
+        scheduleBackground(ctx, env);
         return json(snapshot);
       }
       if (pathname === "/api/performance/courses") {
@@ -172,29 +183,29 @@ export default {
           getCourseMetrics(env.DB, env.MODEL_VERSION),
           getValidationSnapshot(env.DB)
         ]);
-        scheduleMaintenance(ctx, env);
+        scheduleBackground(ctx, env);
         return json({ live, historical: validation.combined });
       }
       if (pathname === "/") {
         const dashboard = await getPhaseDDashboard(env.DB, env.MODEL_VERSION);
-        scheduleMaintenance(ctx, env);
+        scheduleBackground(ctx, env);
         return page(dashboard);
       }
       if (pathname.startsWith("/races/")) {
         const id = decodeURIComponent(pathname.slice("/races/".length));
         const detail = await getDisplayRaceDetail(env.DB, id, env.MODEL_VERSION);
-        scheduleMaintenance(ctx, env);
+        scheduleBackground(ctx, env);
         return detail ? page(renderPhaseCRaceDetail(detail)) : page("レースが見つかりません。", 404);
       }
       if (pathname === "/validation") {
         const body = await renderValidation(env.DB);
-        scheduleMaintenance(ctx, env);
+        scheduleBackground(ctx, env);
         return page(body);
       }
       const validationDate = validationDateFromPath(pathname);
       if (validationDate) {
         const body = await renderValidation(env.DB, validationDate);
-        scheduleMaintenance(ctx, env);
+        scheduleBackground(ctx, env);
         return page(body);
       }
       if (pathname === "/performance") {
@@ -203,7 +214,7 @@ export default {
           getCourseMonthlyMetrics(env.DB, env.MODEL_VERSION),
           getValidationSnapshot(env.DB)
         ]);
-        scheduleMaintenance(ctx, env);
+        scheduleBackground(ctx, env);
         return page(renderCoursePerformance(cumulative, monthly, validation.combined));
       }
       if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
@@ -216,7 +227,7 @@ export default {
     try {
       await prepare(env.DB);
       if (app.scheduled) await app.scheduled(controller, env, ctx);
-      scheduleMaintenance(ctx, env);
+      scheduleBackground(ctx, env);
     } catch (error) {
       console.error("SCHEDULED_STARTUP_FAILED", error);
     }
