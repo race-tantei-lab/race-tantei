@@ -1,0 +1,97 @@
+name: Apply race-name and backtest patch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-race-name-backtest.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch production source
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          jra = Path('src/v1/jra.ts')
+          text = jra.read_text()
+          old = '''    if (!text || /^(?:出馬表|レース結果|払戻金|関連メニュー|コースレコード|勝馬の紹介)$/.test(text)) continue;'''
+          new = '''    if (!text || /^(?:出馬表|レース結果|払戻金|関連メニュー|コースレコード|勝馬の紹介|検索ウィンドウ|メニュー|レースメニュー|オッズ|特別登録馬)$/.test(text)) continue;'''
+          if old not in text:
+              raise SystemExit('race-name blacklist anchor not found')
+          text = text.replace(old, new, 1)
+          old = '''  const match = normalizeText(html).match(new RegExp(`${raceNo}(?:R|レース)\\s*([^\\n]+)`));
+  return match?.[1]?.trim() || `${raceNo}レース`;'''
+          new = '''  const match = normalizeText(html).match(new RegExp(`${raceNo}(?:R|レース)\\s*([^\\n]+)`));
+  const fallback = match?.[1]?.trim() ?? "";
+  if (fallback && !/^(?:検索ウィンドウ|メニュー|出馬表|レース結果|オッズ|払戻金)$/.test(fallback)) return fallback;
+  return `${raceNo}レース`;'''
+          if old not in text:
+              raise SystemExit('race-name fallback anchor not found')
+          jra.write_text(text.replace(old, new, 1))
+
+          complete = Path('src/complete.ts')
+          text = complete.read_text()
+          import_anchor = 'import { generatePrediction } from "./v1/model.js";\n'
+          import_line = 'import { BACKTEST_DATE, renderBacktest, runBacktestBatch } from "./v1/backtest.js";\n'
+          if import_line not in text:
+              if import_anchor not in text:
+                  raise SystemExit('backtest import anchor not found')
+              text = text.replace(import_anchor, import_anchor + import_line, 1)
+          import re
+          text = re.sub(r'const DISCOVERY_REVISION = "[^"]+";', 'const DISCOVERY_REVISION = "2026-08-02-race-name-backtest-v1";', text, count=1)
+
+          route_anchor = '''    if (url.pathname === "/performance") {
+      const [metrics, rows] = await Promise.all([getDashboardMetrics(env.DB), getPerformanceRows(env.DB)]);
+      return html(renderPerformance(metrics, rows));
+    }'''
+          route_new = '''    if (url.pathname === `/backtest/${BACKTEST_DATE}`) {
+      const progress = await runBacktestBatch(env.DB, 4);
+      if (progress.remaining > 0) ctx.waitUntil(runBacktestBatch(env.DB, 4));
+      return html(await renderBacktest(env.DB));
+    }
+    if (url.pathname === "/performance") {
+      const [metrics, rows] = await Promise.all([getDashboardMetrics(env.DB), getPerformanceRows(env.DB)]);
+      return html(renderPerformance(metrics, rows));
+    }'''
+          if route_anchor not in text:
+              raise SystemExit('backtest route anchor not found')
+          text = text.replace(route_anchor, route_new, 1)
+
+          cron_anchor = '''    if (!isJstEntryWindow(new Date())) return;
+    ctx.waitUntil(runSync(env, "cron"));'''
+          cron_new = '''    if (!isJstEntryWindow(new Date())) return;
+    ctx.waitUntil(Promise.all([runSync(env, "cron"), runBacktestBatch(env.DB, 4)]));'''
+          if cron_anchor not in text:
+              raise SystemExit('backtest cron anchor not found')
+          complete.write_text(text.replace(cron_anchor, cron_new, 1))
+
+          ui = Path('src/v1/ui.ts')
+          text = ui.read_text()
+          nav_anchor = '<a href="/performance">成績</a>'
+          nav_new = '<a href="/performance">成績</a><a href="/backtest/2026-08-01">8/1検証</a>'
+          if nav_new not in text:
+              if nav_anchor not in text:
+                  raise SystemExit('ui nav anchor not found')
+              text = text.replace(nav_anchor, nav_new)
+          ui.write_text(text)
+
+          Path('.github/workflows/apply-race-name-backtest.yml').unlink(missing_ok=True)
+          PY
+      - name: Verify
+        run: |
+          npm install
+          npm run check
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: correct race names and add August 1 backtest"
+          git push origin HEAD:main
