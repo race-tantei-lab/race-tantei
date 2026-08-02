@@ -12,6 +12,12 @@ export const COURSE_BUDGETS = {
   プレミアム: 10000
 } as const;
 
+export const COURSE_TARGET_STAKES = {
+  ライト: 1600,
+  スタンダード: 4200,
+  プレミアム: 8800
+} as const;
+
 type WeightMap = Map<number, number>;
 
 interface Candidate {
@@ -30,6 +36,14 @@ interface CoursePolicy {
   maximumTickets: number;
   kellyScale: number;
   maximumTicketShare: number;
+}
+
+interface CoveragePolicy {
+  allowed: ReadonlySet<BetType>;
+  maximumTickets: number;
+  maximumTicketShare: number;
+  targetStakeYen: number;
+  typeCaps: Partial<Record<BetType, number>>;
 }
 
 const TICKET_ORDER: BetType[] = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"];
@@ -72,10 +86,28 @@ const COVERAGE_ALLOWED: Record<BudgetCourse, ReadonlySet<BetType>> = {
   プレミアム: new Set<BetType>(TICKET_ORDER)
 };
 
-const COVERAGE_MAX_TICKETS: Record<BudgetCourse, number> = {
-  ライト: 2,
-  スタンダード: 3,
-  プレミアム: 4
+const COVERAGE_POLICIES: Record<BudgetCourse, CoveragePolicy> = {
+  ライト: {
+    allowed: COVERAGE_ALLOWED.ライト,
+    maximumTickets: 5,
+    maximumTicketShare: 0.45,
+    targetStakeYen: COURSE_TARGET_STAKES.ライト,
+    typeCaps: { 単勝: 1, ワイド: 3, 馬連: 2 }
+  },
+  スタンダード: {
+    allowed: COVERAGE_ALLOWED.スタンダード,
+    maximumTickets: 9,
+    maximumTicketShare: 0.30,
+    targetStakeYen: COURSE_TARGET_STAKES.スタンダード,
+    typeCaps: { 単勝: 1, ワイド: 3, 馬連: 2, 馬単: 2, "3連複": 3 }
+  },
+  プレミアム: {
+    allowed: COVERAGE_ALLOWED.プレミアム,
+    maximumTickets: 16,
+    maximumTicketShare: 0.20,
+    targetStakeYen: COURSE_TARGET_STAKES.プレミアム,
+    typeCaps: { 単勝: 1, ワイド: 3, 馬連: 2, 馬単: 3, "3連複": 4, "3連単": 7 }
+  }
 };
 
 function floor100(value: number): number {
@@ -230,8 +262,7 @@ function buildCandidates(predictions: RunnerPrediction[]): Candidate[] {
     candidates.push(built);
   };
 
-  const singlePool = ranked.slice(0, 6);
-  for (const runner of singlePool) add("単勝", [runner.horseNo]);
+  for (const runner of ranked.slice(0, 6)) add("単勝", [runner.horseNo]);
 
   const pairPool = ranked.slice(0, 5);
   for (let first = 0; first < pairPool.length; first += 1) {
@@ -300,7 +331,7 @@ function candidateScore(value: Candidate, threshold: number): number {
 }
 
 function coverageCandidateScore(value: Candidate): number {
-  const valueFactor = Math.max(0.5, value.expectedValuePct / 100);
+  const valueFactor = clamp(value.expectedValuePct / 100, 0.55, 2.5);
   return valueFactor * Math.sqrt(value.hitProbability) * value.reliability;
 }
 
@@ -355,24 +386,67 @@ function selectCourse(
   return selected;
 }
 
-function selectCoverageCourse(course: BudgetCourse, candidates: Candidate[]): BetRecommendation[] {
-  const allowed = COVERAGE_ALLOWED[course];
-  const allAllowed = candidates.filter((item) => allowed.has(item.betType));
-  const reliable = allAllowed.filter((item) => item.hitProbability >= COVERAGE_MINIMUM_HIT[item.betType]);
-  const pool = (reliable.length > 0 ? reliable : allAllowed)
+function selectCoverageCandidates(course: BudgetCourse, candidates: Candidate[]): Candidate[] {
+  const policy = COVERAGE_POLICIES[course];
+  const allowed = candidates.filter((item) => policy.allowed.has(item.betType));
+  const reliable = allowed.filter((item) => item.hitProbability >= COVERAGE_MINIMUM_HIT[item.betType]);
+  const pool = (reliable.length >= policy.maximumTickets ? reliable : allowed)
     .sort((a, b) => coverageCandidateScore(b) - coverageCandidateScore(a));
-  const selected: BetRecommendation[] = [];
-  const usedTypes = new Set<BetType>();
+  const typeCounts = new Map<BetType, number>();
+  const selected: Candidate[] = [];
 
   for (const item of pool) {
-    if (selected.length >= COVERAGE_MAX_TICKETS[course]) break;
-    if (usedTypes.has(item.betType) && selected.length < Math.min(2, COVERAGE_MAX_TICKETS[course])) continue;
-    selected.push(toRecommendation(course, item, 100));
-    usedTypes.add(item.betType);
+    if (selected.length >= policy.maximumTickets) break;
+    const used = typeCounts.get(item.betType) ?? 0;
+    const cap = policy.typeCaps[item.betType] ?? policy.maximumTickets;
+    if (used >= cap) continue;
+    selected.push(item);
+    typeCounts.set(item.betType, used + 1);
   }
 
-  if (selected.length === 0 && allAllowed[0]) selected.push(toRecommendation(course, allAllowed[0], 100));
+  if (selected.length === 0 && allowed[0]) selected.push(allowed[0]);
   return selected;
+}
+
+function allocateCoverageStakes(
+  course: BudgetCourse,
+  selected: Candidate[]
+): BetRecommendation[] {
+  if (selected.length === 0) return [];
+  const policy = COVERAGE_POLICIES[course];
+  const budget = COURSE_BUDGETS[course];
+  const target = Math.min(budget, Math.max(selected.length * 100, floor100(policy.targetStakeYen)));
+  const maximumPerTicket = Math.max(100, floor100(budget * policy.maximumTicketShare));
+  const stakes = selected.map(() => 100);
+  let remaining = target - selected.length * 100;
+  const weights = selected.map((item) => Math.max(0.01, coverageCandidateScore(item)));
+  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
+
+  for (let index = 0; index < selected.length && remaining >= 100; index += 1) {
+    const proportional = floor100(remaining * (weights[index] ?? 0) / Math.max(0.01, totalWeight));
+    const room = Math.max(0, maximumPerTicket - (stakes[index] ?? 0));
+    const addition = Math.min(room, proportional);
+    stakes[index] = (stakes[index] ?? 0) + addition;
+    remaining -= addition;
+  }
+
+  const order = selected
+    .map((item, index) => ({ index, score: coverageCandidateScore(item) }))
+    .sort((a, b) => b.score - a.score);
+  while (remaining >= 100) {
+    let allocated = false;
+    for (const item of order) {
+      const current = stakes[item.index] ?? 0;
+      if (current + 100 > maximumPerTicket) continue;
+      stakes[item.index] = current + 100;
+      remaining -= 100;
+      allocated = true;
+      if (remaining < 100) break;
+    }
+    if (!allocated) break;
+  }
+
+  return selected.map((item, index) => toRecommendation(course, item, stakes[index] ?? 100));
 }
 
 export function coverageRaceScore(predictions: RunnerPrediction[]): number {
@@ -392,7 +466,7 @@ export function buildVenueCoverageBets(predictions: RunnerPrediction[]): BetReco
   const candidates = buildCandidates(predictions);
   if (candidates.length === 0) return [];
   return (["ライト", "スタンダード", "プレミアム"] as BudgetCourse[])
-    .flatMap((course) => selectCoverageCourse(course, candidates));
+    .flatMap((course) => allocateCoverageStakes(course, selectCoverageCandidates(course, candidates)));
 }
 
 export function buildBudgetCourseBets(

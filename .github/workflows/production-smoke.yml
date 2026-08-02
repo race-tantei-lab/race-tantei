@@ -28,7 +28,7 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='production/phase-d' \
-            -f description='Verifying venue five selections and historical ROI' \
+            -f description='Verifying unified ROI and scaled course budgets' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Wait for Cloudflare deployment and verify health
@@ -74,12 +74,12 @@ jobs:
           curl --silent --show-error --fail --max-time 25 "${base}/" >/tmp/home.html
           grep -q 'レース探偵' /tmp/home.html
 
-      - name: Verify venue selections and historical ROI after deploy
+      - name: Verify venue selections, budgets and unified ROI after deploy
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-          for attempt in $(seq 1 24); do
+          for attempt in $(seq 1 30); do
             curl --silent --show-error --fail --max-time 45 -D /tmp/home.headers "${base}/" >/tmp/home.html
             performance="$(curl --silent --show-error --fail --max-time 45 "${base}/api/performance/courses")"
             if HOME_FILE=/tmp/home.html PERFORMANCE="$performance" python - <<'PY'
@@ -117,11 +117,22 @@ jobs:
           parser.feed(html)
           performance = json.loads(os.environ.get("PERFORMANCE", "{}"))
           historical = performance.get("historical", []) if isinstance(performance, dict) else []
-          historical_ok = (
-              len(historical) == 3
-              and all(float(row.get("stakeYen", 0)) > 0 for row in historical)
-              and all(int(row.get("pendingTickets", 0)) == 0 for row in historical)
-          )
+          target_stakes = {"ライト": 1600, "スタンダード": 4200, "プレミアム": 8800}
+          historical_ok = len(historical) == 3
+          budget_ok = historical_ok
+          for row in historical:
+              course = row.get("course")
+              races = int(row.get("selectedRaces", 0))
+              stake = float(row.get("stakeYen", 0))
+              pending = int(row.get("pendingTickets", 0))
+              target = target_stakes.get(course)
+              if not target or races <= 0 or pending != 0:
+                  budget_ok = False
+                  continue
+              average = stake / races
+              if abs(average - target) > 0.01:
+                  budget_ok = False
+
           expected_dates = {"2026-08-01", "2026-08-02"}
           counts = {
               f"{date}:{venue}": count
@@ -129,16 +140,27 @@ jobs:
               if date in expected_dates
           }
           venue_ok = len(counts) >= 6 and all(count >= 5 for count in counts.values())
-          page_ok = "過去検証込み回収率" in html and "会場別5R選出" in html
-          valid = historical_ok and venue_ok and page_ok
-          print(json.dumps({"historical": historical, "venueSelections": counts, "pageOk": page_ok, "valid": valid}, ensure_ascii=False))
+          page_ok = (
+              "累計回収率" in html
+              and "過去レース＋本番を合算" in html
+              and "1R目安" in html
+              and "本番公開成績" not in html
+          )
+          valid = historical_ok and budget_ok and venue_ok and page_ok
+          print(json.dumps({
+              "historical": historical,
+              "venueSelections": counts,
+              "budgetOk": budget_ok,
+              "pageOk": page_ok,
+              "valid": valid
+          }, ensure_ascii=False))
           sys.exit(0 if valid else 1)
           PY
             then
               grep -qi '^x-race-ui-version: phase-d' /tmp/home.headers
               break
             fi
-            if [ "$attempt" -eq 24 ]; then
+            if [ "$attempt" -eq 30 ]; then
               echo "$performance"
               exit 1
             fi
@@ -155,7 +177,7 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/phase-d' \
-            -f description='Venue five selections and historical ROI verified' \
+            -f description='Unified ROI and scaled budgets verified' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Publish Phase D failure
@@ -168,5 +190,5 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/phase-d' \
-            -f description='Phase D production verification failed' \
+            -f description='Unified ROI production verification failed' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

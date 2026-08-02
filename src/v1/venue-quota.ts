@@ -15,6 +15,8 @@ interface QuotaRaceRow {
   predictionId: number;
   predictionStatus: string;
   betCount: number;
+  settledCount: number;
+  stakeYen: number;
 }
 
 interface RankedQuotaCandidate extends QuotaRaceRow {
@@ -29,6 +31,8 @@ export interface VenueQuotaVenueResult {
   targetRaces: number;
   selectedBefore: number;
   addedRaces: number;
+  replacedRaces: number;
+  removedRaces: number;
   selectedAfter: number;
 }
 
@@ -38,6 +42,8 @@ export interface VenueQuotaResult {
   mode: VenueQuotaMode;
   addedRaces: number;
   addedTickets: number;
+  replacedRaces: number;
+  removedRaces: number;
   venues: VenueQuotaVenueResult[];
 }
 
@@ -53,7 +59,7 @@ async function loadQuotaRaces(
 ): Promise<QuotaRaceRow[]> {
   const statusCondition = mode === "validation"
     ? "r.status='finished' AND p.status='locked'"
-    : "r.status='scheduled' AND r.start_time_utc IS NOT NULL AND datetime(r.start_time_utc)>datetime('now')";
+    : "r.status IN ('scheduled','finished')";
   const rows = await db.prepare(`
     SELECT r.race_id AS raceId, r.race_date AS raceDate, r.venue,
       r.race_no AS raceNo, r.status AS raceStatus,
@@ -62,7 +68,17 @@ async function loadQuotaRaces(
         SELECT COUNT(*) FROM rt_bets b
         WHERE b.prediction_id=p.id
           AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
-      ),0) AS betCount
+      ),0) AS betCount,
+      COALESCE((
+        SELECT COUNT(*) FROM rt_bets b
+        WHERE b.prediction_id=p.id AND b.settlement_status='settled'
+          AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
+      ),0) AS settledCount,
+      COALESCE((
+        SELECT SUM(b.stake_yen) FROM rt_bets b
+        WHERE b.prediction_id=p.id
+          AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
+      ),0) AS stakeYen
     FROM rt_races r
     JOIN rt_predictions p ON p.race_id=r.race_id AND p.model_version=?
     WHERE r.race_date=? AND ${statusCondition}
@@ -72,7 +88,9 @@ async function loadQuotaRaces(
     ...row,
     raceNo: toNumber(row.raceNo),
     predictionId: toNumber(row.predictionId),
-    betCount: toNumber(row.betCount)
+    betCount: toNumber(row.betCount),
+    settledCount: toNumber(row.settledCount),
+    stakeYen: toNumber(row.stakeYen)
   }));
 }
 
@@ -103,54 +121,61 @@ function encodedBetType(bet: BetRecommendation): string {
   return `${bet.course}｜${bet.betType}`;
 }
 
-async function claimAndInsertBets(
+async function deleteCourseBets(db: D1Database, predictionId: number): Promise<number> {
+  const result = await db.prepare(`
+    DELETE FROM rt_bets
+    WHERE prediction_id=?
+      AND (bet_type LIKE 'ライト｜%' OR bet_type LIKE 'スタンダード｜%' OR bet_type LIKE 'プレミアム｜%')
+  `).bind(predictionId).run();
+  return Number(result.meta?.changes ?? 0);
+}
+
+async function replaceCourseBets(
   db: D1Database,
   row: RankedQuotaCandidate
 ): Promise<number> {
-  const [first, ...rest] = row.bets;
-  if (!first) return 0;
-  const claim = await db.prepare(`
-    INSERT INTO rt_bets (
+  await deleteCourseBets(db, row.predictionId);
+  if (row.bets.length === 0) return 0;
+  await db.batch(row.bets.map((bet) => db.prepare(`
+    INSERT OR REPLACE INTO rt_bets (
       prediction_id, race_id, bet_type, combination, stake_yen, assumed_odds,
-      hit_probability, expected_value_pct, settlement_status
-    )
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'pending'
-    WHERE NOT EXISTS (
-      SELECT 1 FROM rt_bets existing
-      WHERE existing.prediction_id=?
-        AND (existing.bet_type LIKE 'ライト｜%' OR existing.bet_type LIKE 'スタンダード｜%' OR existing.bet_type LIKE 'プレミアム｜%')
-    )
+      hit_probability, expected_value_pct, settlement_status, return_yen, settled_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, NULL)
   `).bind(
     row.predictionId,
     row.raceId,
-    encodedBetType(first),
-    first.combination,
-    first.stakeYen,
-    first.assumedOdds,
-    first.hitProbability,
-    first.expectedValuePct,
-    row.predictionId
-  ).run();
-  if (Number(claim.meta?.changes ?? 0) === 0) return 0;
-
-  if (rest.length > 0) {
-    await db.batch(rest.map((bet) => db.prepare(`
-      INSERT INTO rt_bets (
-        prediction_id, race_id, bet_type, combination, stake_yen, assumed_odds,
-        hit_probability, expected_value_pct, settlement_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-    `).bind(
-      row.predictionId,
-      row.raceId,
-      encodedBetType(bet),
-      bet.combination,
-      bet.stakeYen,
-      bet.assumedOdds,
-      bet.hitProbability,
-      bet.expectedValuePct
-    )));
-  }
+    encodedBetType(bet),
+    bet.combination,
+    bet.stakeYen,
+    bet.assumedOdds,
+    bet.hitProbability,
+    bet.expectedValuePct
+  )));
   return row.bets.length;
+}
+
+function desiredStake(row: RankedQuotaCandidate): number {
+  return row.bets.reduce((sum, bet) => sum + bet.stakeYen, 0);
+}
+
+function needsReplacement(row: RankedQuotaCandidate, mode: VenueQuotaMode): boolean {
+  const desired = desiredStake(row);
+  if (row.betCount !== row.bets.length || row.stakeYen !== desired) return true;
+  if (mode === "validation" && row.settledCount !== row.bets.length) return true;
+  if (mode === "live" && row.predictionStatus !== "locked" && row.raceStatus !== "finished") return true;
+  return false;
+}
+
+async function rankRows(db: D1Database, rows: QuotaRaceRow[]): Promise<RankedQuotaCandidate[]> {
+  const candidates: RankedQuotaCandidate[] = [];
+  for (const row of rows) {
+    const predictions = await loadPredictions(db, row.predictionId);
+    const bets = buildVenueCoverageBets(predictions);
+    const score = coverageRaceScore(predictions);
+    if (bets.length === 0 || !Number.isFinite(score)) continue;
+    candidates.push({ ...row, score, predictions, bets });
+  }
+  return candidates.sort((a, b) => b.score - a.score || a.raceNo - b.raceNo);
 }
 
 export async function ensureVenueDailyQuota(
@@ -165,32 +190,54 @@ export async function ensureVenueDailyQuota(
   const venueResults: VenueQuotaVenueResult[] = [];
   let addedRaces = 0;
   let addedTickets = 0;
+  let replacedRaces = 0;
+  let removedRaces = 0;
 
   for (const venue of venues) {
     const venueRows = rows.filter((row) => row.venue === venue);
     const selectedBefore = venueRows.filter((row) => row.betCount > 0).length;
     const targetRaces = Math.min(minimumPerVenue, venueRows.length);
-    const needed = Math.max(0, targetRaces - selectedBefore);
-    const candidates: RankedQuotaCandidate[] = [];
+    const ranked = await rankRows(db, venueRows);
 
-    if (needed > 0) {
-      for (const row of venueRows.filter((item) => item.betCount === 0)) {
-        const predictions = await loadPredictions(db, row.predictionId);
-        const bets = buildVenueCoverageBets(predictions);
-        const score = coverageRaceScore(predictions);
-        if (bets.length === 0 || !Number.isFinite(score)) continue;
-        candidates.push({ ...row, score, predictions, bets });
-      }
-      candidates.sort((a, b) => b.score - a.score || a.raceNo - b.raceNo);
-    }
+    const fixedLive = mode === "live"
+      ? ranked.filter((row) => row.betCount > 0 && (row.predictionStatus === "locked" || row.raceStatus === "finished"))
+      : [];
+    const fixedIds = new Set(fixedLive.map((row) => row.raceId));
+    const remainingSlots = Math.max(0, targetRaces - fixedLive.length);
+    const chosen = [
+      ...fixedLive,
+      ...ranked.filter((row) => !fixedIds.has(row.raceId)).slice(0, remainingSlots)
+    ];
+    const selectedIds = new Set(chosen.map((row) => row.raceId));
 
     let venueAdded = 0;
-    for (const candidate of candidates.slice(0, needed)) {
-      const inserted = await claimAndInsertBets(db, candidate);
+    let venueReplaced = 0;
+    let venueRemoved = 0;
+
+    for (const row of venueRows) {
+      if (selectedIds.has(row.raceId)) continue;
+      const protectedLive = mode === "live" && (row.predictionStatus === "locked" || row.raceStatus === "finished");
+      if (protectedLive || row.betCount === 0) continue;
+      const deleted = await deleteCourseBets(db, row.predictionId);
+      if (deleted > 0) {
+        venueRemoved += 1;
+        removedRaces += 1;
+      }
+    }
+
+    for (const candidate of chosen) {
+      const wasSelected = candidate.betCount > 0;
+      if (!needsReplacement(candidate, mode)) continue;
+      const inserted = await replaceCourseBets(db, candidate);
       if (inserted === 0) continue;
-      venueAdded += 1;
-      addedRaces += 1;
       addedTickets += inserted;
+      if (wasSelected) {
+        venueReplaced += 1;
+        replacedRaces += 1;
+      } else {
+        venueAdded += 1;
+        addedRaces += 1;
+      }
       if (mode === "validation" || candidate.raceStatus === "finished") {
         await settleRaceWithCourses(db, candidate.raceId);
       }
@@ -202,7 +249,9 @@ export async function ensureVenueDailyQuota(
       targetRaces,
       selectedBefore,
       addedRaces: venueAdded,
-      selectedAfter: Math.min(targetRaces, selectedBefore + venueAdded)
+      replacedRaces: venueReplaced,
+      removedRaces: venueRemoved,
+      selectedAfter: selectedIds.size
     });
   }
 
@@ -212,6 +261,8 @@ export async function ensureVenueDailyQuota(
     mode,
     addedRaces,
     addedTickets,
+    replacedRaces,
+    removedRaces,
     venues: venueResults
   };
 }
