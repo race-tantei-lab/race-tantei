@@ -21,7 +21,7 @@ interface PredictionRow extends RaceRow {
   modelVersion: string;
 }
 
-interface BetAggregateRow {
+interface AggregateRow {
   predictionId: number;
   course: BudgetCourse;
   tickets: number;
@@ -31,7 +31,10 @@ interface BetAggregateRow {
   ticketFingerprint: string | null;
 }
 
-interface CourseValues {
+interface AuditRow extends RaceRow {
+  predictionId: number;
+  modelVersion: string;
+  course: BudgetCourse;
   tickets: number;
   pendingTickets: number;
   stakeYen: number;
@@ -39,11 +42,27 @@ interface CourseValues {
   ticketFingerprint: string;
 }
 
-interface AuditRow extends RaceRow, CourseValues {
+interface CourseSummary {
   course: BudgetCourse;
   targetStakeYen: number;
-  predictionId: number;
-  modelVersion: string;
+  selectedRaces: number;
+  fixedStakeRaces: number;
+  underStakeRaces: number;
+  overStakeRaces: number;
+  averageStakeYen: number | null;
+  medianStakeYen: number | null;
+  minimumStakeYen: number | null;
+  maximumStakeYen: number | null;
+  hitRaces: number;
+  missRaces: number;
+  averageHitStakeYen: number | null;
+  averageMissStakeYen: number | null;
+  hitToMissAverageStakeRatio: number | null;
+  stakeYen: number;
+  returnYen: number;
+  profitYen: number;
+  roiPct: number | null;
+  pendingTickets: number;
 }
 
 function n(value: unknown): number {
@@ -67,34 +86,15 @@ function modelForDate(raceDate: string): string {
   return `validation-${raceDate}-roi-policy-v1-3m`;
 }
 
-function emptyValues(): CourseValues {
-  return { tickets: 0, pendingTickets: 0, stakeYen: 0, returnYen: 0, ticketFingerprint: "" };
-}
-
-function valuesFor(
-  map: Map<string, BetAggregateRow>,
-  predictionId: number | null,
-  course: BudgetCourse
-): CourseValues {
-  if (!predictionId) return emptyValues();
-  const row = map.get(`${predictionId}:${course}`);
-  return row ? {
-    tickets: row.tickets,
-    pendingTickets: row.pendingTickets,
-    stakeYen: row.stakeYen,
-    returnYen: row.returnYen,
-    ticketFingerprint: row.ticketFingerprint ?? ""
-  } : emptyValues();
-}
-
-function summarizeCourse(rows: AuditRow[], course: BudgetCourse): Record<string, unknown> {
+function summarizeCourse(rows: AuditRow[], course: BudgetCourse): CourseSummary {
   const values = rows.filter((row) => row.course === course);
   const hits = values.filter((row) => row.returnYen > 0);
   const misses = values.filter((row) => row.returnYen <= 0);
-  const stakeYen = values.reduce((sum, row) => sum + row.stakeYen, 0);
-  const returnYen = values.reduce((sum, row) => sum + row.returnYen, 0);
+  const stakes = values.map((row) => row.stakeYen);
   const hitAverage = average(hits.map((row) => row.stakeYen));
   const missAverage = average(misses.map((row) => row.stakeYen));
+  const stakeYen = values.reduce((sum, row) => sum + row.stakeYen, 0);
+  const returnYen = values.reduce((sum, row) => sum + row.returnYen, 0);
   return {
     course,
     targetStakeYen: TARGET_STAKES[course],
@@ -102,10 +102,10 @@ function summarizeCourse(rows: AuditRow[], course: BudgetCourse): Record<string,
     fixedStakeRaces: values.filter((row) => row.stakeYen === TARGET_STAKES[course]).length,
     underStakeRaces: values.filter((row) => row.stakeYen < TARGET_STAKES[course]).length,
     overStakeRaces: values.filter((row) => row.stakeYen > TARGET_STAKES[course]).length,
-    averageStakeYen: average(values.map((row) => row.stakeYen)),
-    medianStakeYen: median(values.map((row) => row.stakeYen)),
-    minimumStakeYen: values.length ? Math.min(...values.map((row) => row.stakeYen)) : null,
-    maximumStakeYen: values.length ? Math.max(...values.map((row) => row.stakeYen)) : null,
+    averageStakeYen: average(stakes),
+    medianStakeYen: median(stakes),
+    minimumStakeYen: stakes.length ? Math.min(...stakes) : null,
+    maximumStakeYen: stakes.length ? Math.max(...stakes) : null,
     hitRaces: hits.length,
     missRaces: misses.length,
     averageHitStakeYen: hitAverage,
@@ -124,7 +124,6 @@ function periodSummary(rows: AuditRow[], startDate: string, endDate: string): Re
   return {
     startDate,
     endDate,
-    selectedRaceCourses: periodRows.length,
     courses: COURSES.map((course) => summarizeCourse(periodRows, course))
   };
 }
@@ -134,7 +133,7 @@ export async function getThreeMonthStakeAuditV2(
   liveModel: string,
   includeAllRows = false
 ): Promise<Record<string, any>> {
-  const [raceResult, predictionResult, betResult, venueResult] = await Promise.all([
+  const [raceResult, predictionResult, aggregateResult, venueResult] = await Promise.all([
     db.prepare(`
       SELECT race_id AS raceId, race_date AS raceDate, venue, race_no AS raceNo
       FROM rt_races
@@ -161,7 +160,8 @@ export async function getThreeMonthStakeAuditV2(
             WHEN b.bet_type LIKE 'スタンダード｜%' THEN 'スタンダード'
             WHEN b.bet_type LIKE 'プレミアム｜%' THEN 'プレミアム'
           END AS course,
-          b.stake_yen AS stakeYen, COALESCE(b.return_yen,0) AS returnYen,
+          b.stake_yen AS stakeYen,
+          COALESCE(b.return_yen,0) AS returnYen,
           b.settlement_status AS settlementStatus,
           b.bet_type || ':' || b.combination || ':' || b.stake_yen || ':' || COALESCE(b.return_yen,'') || ':' || b.settlement_status AS ticketKey
         FROM rt_bets b
@@ -172,7 +172,7 @@ export async function getThreeMonthStakeAuditV2(
         ORDER BY p.id, course, b.bet_type, b.combination, b.stake_yen, b.id
       )
       GROUP BY predictionId, course
-    `).bind(THREE_MONTH_START_DATE, THREE_MONTH_END_DATE).all<BetAggregateRow>(),
+    `).bind(THREE_MONTH_START_DATE, THREE_MONTH_END_DATE).all<AggregateRow>(),
     db.prepare(`
       SELECT COUNT(*) AS count FROM (
         SELECT race_date, venue FROM rt_races
@@ -188,8 +188,8 @@ export async function getThreeMonthStakeAuditV2(
     predictionId: n(row.predictionId),
     raceNo: n(row.raceNo)
   }));
-  const aggregates = new Map<string, BetAggregateRow>();
-  for (const raw of betResult.results) {
+  const aggregateMap = new Map<string, AggregateRow>();
+  for (const raw of aggregateResult.results) {
     if (!COURSES.includes(raw.course)) continue;
     const row = {
       ...raw,
@@ -199,26 +199,25 @@ export async function getThreeMonthStakeAuditV2(
       stakeYen: n(raw.stakeYen),
       returnYen: n(raw.returnYen)
     };
-    aggregates.set(`${row.predictionId}:${row.course}`, row);
+    aggregateMap.set(`${row.predictionId}:${row.course}`, row);
   }
 
   const predictionsByRace = new Map<string, PredictionRow[]>();
   for (const prediction of predictions) {
-    const rows = predictionsByRace.get(prediction.raceId) ?? [];
-    rows.push(prediction);
-    predictionsByRace.set(prediction.raceId, rows);
+    const list = predictionsByRace.get(prediction.raceId) ?? [];
+    list.push(prediction);
+    predictionsByRace.set(prediction.raceId, list);
   }
 
-  const auditRows: AuditRow[] = [];
+  const rows: AuditRow[] = [];
   const missingModelRaces: RaceRow[] = [];
   const displayMismatches: Record<string, unknown>[] = [];
   for (const race of races) {
-    const exactModel = modelForDate(race.raceDate);
-    const racePredictions = predictionsByRace.get(race.raceId) ?? [];
-    const cumulative = racePredictions
-      .filter((row) => row.modelVersion === exactModel)
+    const available = predictionsByRace.get(race.raceId) ?? [];
+    const cumulative = available
+      .filter((row) => row.modelVersion === modelForDate(race.raceDate))
       .sort((a, b) => b.predictionId - a.predictionId)[0] ?? null;
-    const displayed = cumulative ?? racePredictions
+    const displayed = cumulative ?? available
       .filter((row) => row.modelVersion === liveModel)
       .sort((a, b) => b.predictionId - a.predictionId)[0] ?? null;
     if (!cumulative) missingModelRaces.push(race);
@@ -233,30 +232,33 @@ export async function getThreeMonthStakeAuditV2(
     }
     if (!cumulative) continue;
     for (const course of COURSES) {
-      const values = valuesFor(aggregates, cumulative.predictionId, course);
-      if (values.tickets === 0) continue;
-      auditRows.push({
+      const aggregate = aggregateMap.get(`${cumulative.predictionId}:${course}`);
+      if (!aggregate || n(aggregate.tickets) === 0) continue;
+      rows.push({
         ...race,
-        ...values,
-        course,
-        targetStakeYen: TARGET_STAKES[course],
         predictionId: cumulative.predictionId,
-        modelVersion: cumulative.modelVersion
+        modelVersion: cumulative.modelVersion,
+        course,
+        tickets: n(aggregate.tickets),
+        pendingTickets: n(aggregate.pendingTickets),
+        stakeYen: n(aggregate.stakeYen),
+        returnYen: n(aggregate.returnYen),
+        ticketFingerprint: aggregate.ticketFingerprint ?? ""
       });
     }
   }
 
-  const stakeViolations = auditRows.filter((row) => row.stakeYen !== row.targetStakeYen);
-  const pendingRows = auditRows.filter((row) => row.pendingTickets > 0);
-  const raceCourseCounts = new Map<string, number>();
-  for (const row of auditRows) raceCourseCounts.set(row.raceId, (raceCourseCounts.get(row.raceId) ?? 0) + 1);
+  const stakeViolations = rows.filter((row) => row.stakeYen !== TARGET_STAKES[row.course]);
+  const pendingRows = rows.filter((row) => row.pendingTickets > 0);
+  const courseCountByRace = new Map<string, number>();
+  for (const row of rows) courseCountByRace.set(row.raceId, (courseCountByRace.get(row.raceId) ?? 0) + 1);
   const courseSelectionMismatchRaces = races.filter((race) => {
-    const count = raceCourseCounts.get(race.raceId) ?? 0;
+    const count = courseCountByRace.get(race.raceId) ?? 0;
     return count !== 0 && count !== COURSES.length;
   });
 
   const quotaGroups = new Map<string, Map<BudgetCourse, number>>();
-  for (const row of auditRows) {
+  for (const row of rows) {
     const key = `${row.raceDate}:${row.venue}`;
     const group = quotaGroups.get(key) ?? new Map<BudgetCourse, number>();
     group.set(row.course, (group.get(row.course) ?? 0) + 1);
@@ -273,13 +275,13 @@ export async function getThreeMonthStakeAuditV2(
   const requiredSelections = venueDays * 5;
   const courses = COURSES.map((course) => ({
     requiredSelections,
-    ...summarizeCourse(auditRows, course)
+    ...summarizeCourse(rows, course)
   }));
   const months = [...new Set(races.map((row) => row.raceDate.slice(0, 7)))].sort();
   const monthly = months.map((month) => ({
     month,
     courses: COURSES.map((course) => summarizeCourse(
-      auditRows.filter((row) => row.raceDate.startsWith(month)),
+      rows.filter((row) => row.raceDate.startsWith(month)),
       course
     ))
   }));
@@ -314,12 +316,12 @@ export async function getThreeMonthStakeAuditV2(
     },
     courses,
     monthly,
-    evaluationPeriod: periodSummary(auditRows, THREE_MONTH_START_DATE, "2026-07-26"),
-    tuningPeriod: periodSummary(auditRows, "2026-08-01", THREE_MONTH_END_DATE),
+    evaluationPeriod: periodSummary(rows, THREE_MONTH_START_DATE, "2026-07-26"),
+    tuningPeriod: periodSummary(rows, "2026-08-01", THREE_MONTH_END_DATE),
     stakeViolations: includeAllRows ? stakeViolations : stakeViolations.slice(0, 50),
     displayMismatches: includeAllRows ? displayMismatches : displayMismatches.slice(0, 30),
     quotaViolations: includeAllRows ? quotaViolations : quotaViolations.slice(0, 30),
     courseSelectionMismatchRaces: includeAllRows ? courseSelectionMismatchRaces : courseSelectionMismatchRaces.slice(0, 30),
-    allSelectedRaceCourses: includeAllRows ? auditRows : undefined
+    allSelectedRaceCourses: includeAllRows ? rows : undefined
   };
 }
