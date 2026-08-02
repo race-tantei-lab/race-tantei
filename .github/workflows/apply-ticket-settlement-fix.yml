@@ -1,0 +1,94 @@
+name: Apply coherent ticket settlement fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-ticket-settlement-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch settlement, backtest, and model revision
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          db = Path('src/v1/db.ts')
+          text = db.read_text()
+          start = text.index('export async function settleRace(')
+          end = text.index('\nexport async function getDashboardMetrics', start)
+          replacement = r'''function canonicalCombination(betType: string, combination: string): string {
+            const numbers = (combination.match(/\d{1,2}/g) ?? []).map(Number);
+            if (["ワイド", "馬連", "3連複"].includes(betType)) numbers.sort((a, b) => a - b);
+            return numbers.join("-");
+          }
+
+          export async function settleRace(db: D1Database, raceId: string): Promise<number> {
+            const race = await db.prepare(`SELECT refund_horse_nos_json AS refunds FROM rt_races WHERE race_id=? AND status='finished'`)
+              .bind(raceId).first<{ refunds: string }>();
+            if (!race) return 0;
+            const refunds = new Set<number>(JSON.parse(race.refunds || "[]") as number[]);
+            const payoutRows = await db.prepare(`SELECT bet_type AS betType, combination, payout_yen AS payoutYen FROM rt_payouts WHERE race_id=?`)
+              .bind(raceId).all<{ betType: string; combination: string; payoutYen: number }>();
+            const payoutMap = new Map(payoutRows.results.map((row) => [
+              `${row.betType}:${canonicalCombination(row.betType, row.combination)}`,
+              row.payoutYen
+            ]));
+            const pending = await db.prepare(`
+              SELECT b.id, b.bet_type AS betType, b.combination, b.stake_yen AS stakeYen
+              FROM rt_bets b JOIN rt_predictions p ON p.id=b.prediction_id
+              WHERE b.race_id=? AND b.settlement_status='pending' AND p.status='locked'
+            `).bind(raceId).all<{ id: number; betType: string; combination: string; stakeYen: number }>();
+
+            for (const bet of pending.results) {
+              const horses = (bet.combination.match(/\d{1,2}/g) ?? []).map(Number);
+              let returnYen = 0;
+              if (horses.some((horseNo) => refunds.has(horseNo))) {
+                returnYen = bet.stakeYen;
+              } else {
+                const key = `${bet.betType}:${canonicalCombination(bet.betType, bet.combination)}`;
+                const payout = payoutMap.get(key) ?? 0;
+                returnYen = Math.round((bet.stakeYen / 100) * payout);
+              }
+              await db.prepare(`
+                UPDATE rt_bets SET settlement_status='settled', return_yen=?, settled_at=? WHERE id=?
+              `).bind(returnYen, nowIso(), bet.id).run();
+            }
+            return pending.results.length;
+          }
+          '''
+          db.write_text(text[:start] + replacement + text[end:])
+
+          backtest = Path('src/v1/backtest.ts')
+          text = backtest.read_text()
+          text = text.replace('export const BACKTEST_MODEL = "backtest-2026-08-01-final-odds-v1";', 'export const BACKTEST_MODEL = "backtest-2026-08-01-multibet-v2";')
+          text = re.sub(r'\nfunction mandatorySingleBet\([\s\S]*?\n}\n\nasync function pendingRaceIds', '\nasync function pendingRaceIds', text, count=1)
+          text = text.replace('    prediction.bets = mandatorySingleBet(prediction, runners, 2000);\n', '')
+          text = text.replace('各レース一律2,000円の単勝1点で比較します。', '各レース2,000円以内で、◎○▲から単勝・ワイド・馬連・馬単・3連複を一貫して組み立てます。')
+          backtest.write_text(text)
+
+          wrangler = Path('wrangler.jsonc')
+          text = wrangler.read_text().replace('"MODEL_VERSION": "v2.0.1-live"', '"MODEL_VERSION": "v2.1.0-multibet"')
+          wrangler.write_text(text)
+
+          Path('.github/workflows/apply-ticket-settlement-fix.yml').unlink(missing_ok=True)
+          PY
+      - name: Verify
+        run: |
+          npm install
+          npm run check
+          npx wrangler deploy --dry-run
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: align marks, multi-bet tickets, and official payouts"
+          git push origin HEAD:main
