@@ -15,11 +15,6 @@ async function pendingRaceIds(db: D1Database, liveModel: string, limit: number):
         WHERE p.race_id=r.race_id
           AND p.status='locked'
           AND p.model_version IN (?, ?)
-          AND EXISTS (
-            SELECT 1 FROM rt_bets b
-            WHERE b.prediction_id=p.id
-              AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
-          )
       )
     ORDER BY r.venue, r.race_no
     LIMIT ?
@@ -43,8 +38,8 @@ export async function runAug2BackfillBatch(
     if (usable.length < 3) continue;
 
     // Retrospective simulation: use only the stored entry/odds fields. Results are not passed to the model.
-    const prediction = generatePrediction(race, runners, [], AUG2_BACKFILL_MODEL, 0, 10000);
-    if (prediction.runners.length < 3 || prediction.bets.length === 0) continue;
+    const prediction = generatePrediction(race, runners, [], AUG2_BACKFILL_MODEL, 108, 10000);
+    if (prediction.runners.length < 3) continue;
 
     await savePredictionWithCourses(db, raceId, prediction, "locked");
     await settleRaceWithCourses(db, raceId);
