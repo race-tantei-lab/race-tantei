@@ -28,9 +28,7 @@ jobs:
           if [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             expected="$(grep '"MODEL_VERSION"' wrangler.jsonc | sed -E 's/.*"MODEL_VERSION"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
           fi
-
           for attempt in $(seq 1 36); do
-            echo "Health attempt ${attempt}/36 expected=${expected:-any}"
             health="$(curl --silent --show-error --fail --max-time 25 "${base}/health" || true)"
             if HEALTH="$health" EXPECTED="$expected" python - <<'PY'
           import json, os, sys
@@ -49,26 +47,31 @@ jobs:
               break
             fi
             if [ "$attempt" -eq 36 ]; then
-              echo "Production health endpoint did not reach the expected model."
               echo "$health"
               exit 1
             fi
             sleep 10
           done
 
-      - name: Verify venue selections and historical ROI
-        env:
-          EVENT_NAME: ${{ github.event_name }}
+      - name: Verify current production is alive on PR
+        if: github.event_name == 'pull_request'
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
+          curl --silent --show-error --fail --max-time 25 "${base}/" >/tmp/home.html
+          grep -q 'レース探偵' /tmp/home.html
 
+      - name: Verify venue selections and historical ROI after deploy
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
           for attempt in $(seq 1 24); do
             curl --silent --show-error --fail --max-time 45 -D /tmp/home.headers "${base}/" >/tmp/home.html
             performance="$(curl --silent --show-error --fail --max-time 45 "${base}/api/performance/courses")"
-            if HOME_FILE=/tmp/home.html PERFORMANCE="$performance" EVENT_NAME="$EVENT_NAME" python - <<'PY'
+            if HOME_FILE=/tmp/home.html PERFORMANCE="$performance" python - <<'PY'
           from html.parser import HTMLParser
-          import json, os, re, sys
+          import json, os, sys
 
           class SelectionParser(HTMLParser):
               def __init__(self):
@@ -100,44 +103,30 @@ jobs:
           parser = SelectionParser()
           parser.feed(html)
           performance = json.loads(os.environ.get("PERFORMANCE", "{}"))
-          historical = performance.get("historical", [])
+          historical = performance.get("historical", []) if isinstance(performance, dict) else []
           historical_ok = len(historical) == 3 and all(float(row.get("stakeYen", 0)) > 0 for row in historical)
           expected_dates = {"2026-08-01", "2026-08-02"}
-          historical_counts = {
+          counts = {
               f"{date}:{venue}": count
               for (date, venue), count in parser.counts.items()
               if date in expected_dates
           }
-          venue_ok = bool(historical_counts) and all(count >= 5 for count in historical_counts.values())
+          venue_ok = bool(counts) and all(count >= 5 for count in counts.values())
           page_ok = "過去検証込み回収率" in html and "会場別5R選出" in html
-          if os.environ.get("EVENT_NAME") == "pull_request":
-              valid = "レース探偵" in html
-          else:
-              valid = historical_ok and venue_ok and page_ok
-          print(json.dumps({
-              "historicalCourses": historical,
-              "historicalVenueSelections": historical_counts,
-              "pageOk": page_ok,
-              "valid": valid
-          }, ensure_ascii=False))
+          valid = historical_ok and venue_ok and page_ok
+          print(json.dumps({"historical": historical, "venueSelections": counts, "pageOk": page_ok, "valid": valid}, ensure_ascii=False))
           sys.exit(0 if valid else 1)
           PY
             then
+              grep -qi '^x-race-ui-version: phase-d' /tmp/home.headers
               break
             fi
             if [ "$attempt" -eq 24 ]; then
-              echo "Venue quota or historical ROI did not become ready."
-              cat /tmp/home.html | head -c 4000
-              echo
               echo "$performance"
               exit 1
             fi
             sleep 10
           done
-
-          if [ "$EVENT_NAME" = "push" ] || [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            grep -qi '^x-race-ui-version: phase-d' /tmp/home.headers
-          fi
 
       - name: Publish Phase D production verification
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
