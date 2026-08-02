@@ -1,4 +1,4 @@
-# progress probe 6
+# v2 progress probe
 name: Inspect three month progress
 
 on:
@@ -13,46 +13,9 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect official result page scripts
+      - name: Read V2 progress without mutation
         run: |
           set -euo pipefail
-          url='https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0104202601010820260502%2F34'
-          curl --silent --show-error --fail --max-time 60 "$url" -o historical.raw
-          python - <<'PY'
-          import re, urllib.parse
-          raw=open('historical.raw','rb').read()
-          for enc in ('cp932','shift_jis','utf-8'):
-              try:
-                  html=raw.decode(enc)
-                  break
-              except UnicodeDecodeError:
-                  pass
-          open('historical.html','w',encoding='utf-8').write(html)
-          print('SCRIPT_SRCS')
-          for src in re.findall(r'<script[^>]+src=["\']([^"\']+)',html,flags=re.I):
-              print(urllib.parse.urljoin('https://sp.jra.jp/JRADB/accessS.html',src))
-          print('INLINE_CNAME_LINES')
-          for line in html.splitlines():
-              if any(token in line.lower() for token in ('cname','sde10','checksum','encrypt','hash')):
-                  print(line[:1000])
-          PY
-          mkdir -p scripts
-          python - <<'PY' > script-urls.txt
-          import re, urllib.parse
-          html=open('historical.html',encoding='utf-8').read()
-          for src in re.findall(r'<script[^>]+src=["\']([^"\']+)',html,flags=re.I):
-              print(urllib.parse.urljoin('https://sp.jra.jp/JRADB/accessS.html',src))
-          PY
-          i=0
-          while IFS= read -r src; do
-            i=$((i+1))
-            curl --silent --show-error --max-time 60 "$src" -o "scripts/$i.js" || true
-          done < script-urls.txt
-          echo 'SCRIPT_MATCHES'
-          grep -RniE 'CNAME|sde10|checksum|encrypt|hash|charCodeAt|toString\(16\)' scripts historical.html | head -300 || true
-
-      - name: Read current progress
-        run: |
           curl --silent --show-error --fail --max-time 60 \
             "https://race-tantei-phase0.race-tantei.workers.dev/api/history/three-months/status" \
             -o progress.json
@@ -63,11 +26,24 @@ jobs:
           v=data.get('validation',{})
           print(json.dumps({
             'phase':p.get('phase'),
-            'discovery':f"{p.get('discoveryDates')}/{p.get('totalDiscoveryDates')}",
-            'meetings':f"{p.get('completedMeetingTasks')}/{p.get('meetingTasks')}",
+            'months':f"{p.get('discoveryDates')}/{p.get('totalDiscoveryDates')}",
+            'results':f"{p.get('completedMeetingTasks')}/{p.get('meetingTasks')}",
             'failedRaces':p.get('failedRaces'),
             'storedRaces':p.get('storedRaces'),
+            'validationComplete':v.get('complete'),
             'processedRaces':v.get('processedRaces'),
-            'venueDays':v.get('venueDays')
+            'totalRaces':v.get('totalRaces'),
+            'remainingRaces':v.get('remainingRaces'),
+            'venueDays':v.get('venueDays'),
+            'courses':[
+              {
+                'course':row.get('course'),
+                'selectedRaces':row.get('selectedRaces'),
+                'pendingTickets':row.get('pendingTickets'),
+                'roiPct':row.get('roiPct'),
+                'hitRatePct':row.get('hitRatePct')
+              }
+              for row in v.get('combined',[])
+            ]
           },ensure_ascii=False,indent=2))
           PY
