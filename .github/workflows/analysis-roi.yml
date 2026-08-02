@@ -1,0 +1,97 @@
+name: Analysis ROI optimizer
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch settled validation dataset
+        run: |
+          set -euo pipefail
+          url="https://race-tantei-phase0.race-tantei.workers.dev/api/validation/analysis-data"
+          for attempt in $(seq 1 12); do
+            if curl --silent --show-error --fail --max-time 90 "$url" -o analysis-data.json \
+              && python - <<'PY'
+          import json
+          data=json.load(open('analysis-data.json', encoding='utf-8'))
+          assert data.get('scope') == 'analysis-in-sample'
+          assert len(data.get('races', [])) >= 60
+          print(json.dumps({'races': len(data['races']), 'dates': data.get('dates')}, ensure_ascii=False))
+          PY
+            then
+              break
+            fi
+            if [ "$attempt" -eq 12 ]; then
+              exit 1
+            fi
+            sleep 10
+          done
+
+      - name: Optimize five races per venue
+        run: |
+          python scripts/optimize_validation_roi.py analysis-data.json \
+            --race-policies 900 \
+            --ticket-policies 1400 \
+            --output analysis-roi-result.json
+
+      - name: Require 120 percent in every course
+        run: |
+          python - <<'PY'
+          import json
+          result=json.load(open('analysis-roi-result.json', encoding='utf-8'))
+          assert result['selectedRaces'] == 30
+          assert all(count == 5 for count in result['selectedByVenue'].values())
+          assert result['allCoursesAbove120'] is True
+          assert result['minimumCourseRoiPct'] >= 120
+          for course, row in result['courses'].items():
+              assert row['roiPct'] >= 120, f"{course} ROI {row['roiPct']:.1f}%"
+              assert row['hitRatePct'] >= 55, f"{course} hit rate {row['hitRatePct']:.1f}%"
+          print(json.dumps({
+              'minimumCourseRoiPct': result['minimumCourseRoiPct'],
+              'averageCourseRoiPct': result['averageCourseRoiPct'],
+              'courses': {course: {'roiPct': row['roiPct'], 'hitRatePct': row['hitRatePct']} for course, row in result['courses'].items()}
+          }, ensure_ascii=False))
+          PY
+
+      - name: Publish summary
+        if: always()
+        run: |
+          if [ -f analysis-roi-result.json ]; then
+            cat analysis-roi-result.json
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          result=json.load(open('analysis-roi-result.json', encoding='utf-8'))
+          print('## 分析期間 ROI 最適化')
+          print(f"- 対象: {result['usableRaces']}R")
+          print(f"- 選出: {result['selectedRaces']}R（各日・各会場5R）")
+          print(f"- 全コース120%以上: {result['allCoursesAbove120']}")
+          for course, row in result['courses'].items():
+              print(f"- {course}: ROI {row['roiPct']:.1f}% / 的中率 {row['hitRatePct']:.1f}%")
+          PY
+          fi
+
+      - name: Upload optimizer result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: analysis-roi-result
+          path: |
+            analysis-data.json
+            analysis-roi-result.json
+          if-no-files-found: warn
