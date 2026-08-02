@@ -10,12 +10,21 @@ const COURSES: Array<{ name: BudgetCourse }> = [
   { name: "プレミアム" }
 ];
 
+const MAX_SELECTED_RACES_PER_VENUE = 5;
+
 interface DisplayMetric {
   course: BudgetCourse;
   races: number;
   hits: number;
   stake: number;
   returns: number;
+}
+
+interface RaceCardMatch {
+  card: string;
+  index: number;
+  category: string;
+  historical: boolean;
 }
 
 function signedYen(value: number): string {
@@ -82,20 +91,87 @@ function replaceMetricArea(
   return `${html.slice(0, start)}${replacement}${html.slice(end + "</section>".length)}`;
 }
 
-function markSelectedCards(html: string): string {
-  let next = html.replace(
-    /<a class="race-card" data-race-category="buy"/g,
-    '<a class="race-card" data-race-selected="true" data-race-category="buy"'
+function categoryTokens(category: string): string[] {
+  return category.split(/\s+/).filter(Boolean);
+}
+
+function isHistoricalCard(card: string): boolean {
+  return card.includes('class="retro"') || card.includes("遡及検証");
+}
+
+function hasSettledCourseResult(card: string): boolean {
+  return card.includes('class="course-result')
+    && !card.includes("status skip")
+    && !card.includes("検証計算中")
+    && !card.includes("結果反映中");
+}
+
+function markCardSelected(card: string): string {
+  let next = card.replace(/\sdata-race-selected="true"/g, "");
+  const category = next.match(/data-race-category="([^"]+)"/)?.[1] ?? "other";
+  const tokens = categoryTokens(category);
+  if (!tokens.includes("buy")) tokens.unshift("buy");
+  next = next.replace(/data-race-category="[^"]+"/, `data-race-category="${tokens.join(" ")}"`);
+  return next.replace(
+    '<a class="race-card"',
+    '<a class="race-card" data-race-selected="true"'
   );
-  next = next.replace(/<a class="race-card" data-race-category="finished"[\s\S]*?<\/a>/g, (card) => {
-    const historical = card.includes("フェーズC遡及検証");
-    const selected = historical && !card.includes("status skip") && !card.includes("検証計算中");
-    if (!selected) return card;
-    return card.replace(
-      '<a class="race-card" data-race-category="finished"',
-      '<a class="race-card" data-race-selected="true" data-race-category="buy finished"'
-    );
+}
+
+function cleanUnselectedCard(card: string, historical: boolean): string {
+  let next = card.replace(/\sdata-race-selected="true"/g, "");
+  if (!historical) return next;
+  const category = next.match(/data-race-category="([^"]+)"/)?.[1];
+  if (!category) return next;
+  const tokens = categoryTokens(category).filter((token) => token !== "buy");
+  return next.replace(
+    /data-race-category="[^"]+"/,
+    `data-race-category="${tokens.length > 0 ? tokens.join(" ") : "finished"}"`
+  );
+}
+
+function selectVenueCards(panel: string): string {
+  const cardPattern = /<a class="race-card"[^>]*data-race-category="([^"]+)"[^>]*>[\s\S]*?<\/a>/g;
+  const cards: RaceCardMatch[] = [...panel.matchAll(cardPattern)].map((match) => ({
+    card: match[0],
+    index: match.index ?? 0,
+    category: match[1] ?? "other",
+    historical: isHistoricalCard(match[0])
+  }));
+  if (cards.length === 0) return panel;
+
+  const selected = new Set<number>();
+  const liveCandidates = cards.filter((item) => {
+    if (item.historical) return false;
+    const tokens = categoryTokens(item.category);
+    return tokens.includes("buy") || (tokens.includes("finished") && hasSettledCourseResult(item.card));
   });
+  const historicalCandidates = cards.filter((item) => item.historical && hasSettledCourseResult(item.card));
+
+  for (const candidate of liveCandidates) {
+    if (selected.size >= MAX_SELECTED_RACES_PER_VENUE) break;
+    selected.add(candidate.index);
+  }
+  for (const candidate of historicalCandidates) {
+    if (selected.size >= MAX_SELECTED_RACES_PER_VENUE) break;
+    selected.add(candidate.index);
+  }
+
+  let result = "";
+  let cursor = 0;
+  for (const item of cards) {
+    result += panel.slice(cursor, item.index);
+    result += selected.has(item.index)
+      ? markCardSelected(item.card)
+      : cleanUnselectedCard(item.card, item.historical);
+    cursor = item.index + item.card.length;
+  }
+  return result + panel.slice(cursor);
+}
+
+export function markSelectedCards(html: string): string {
+  const venuePattern = /<section class="venue-panel"[^>]*data-venue-panel="[^"]+"[^>]*>[\s\S]*?<\/section>/g;
+  const next = html.replace(venuePattern, (panel) => selectVenueCards(panel));
   return next.replace(
     "card.dataset.raceCategory!==filter",
     "!card.dataset.raceCategory.split(' ').includes(filter)"
