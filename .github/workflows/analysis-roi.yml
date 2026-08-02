@@ -50,6 +50,25 @@ jobs:
             --ticket-policies 1400 \
             --output analysis-roi-result.json
 
+      - name: Require 120 percent in every course
+        run: |
+          python - <<'PY'
+          import json
+          result=json.load(open('analysis-roi-result.json', encoding='utf-8'))
+          assert result['selectedRaces'] == 30
+          assert all(count == 5 for count in result['selectedByVenue'].values())
+          assert result['allCoursesAbove120'] is True
+          assert result['minimumCourseRoiPct'] >= 120
+          for course, row in result['courses'].items():
+              assert row['roiPct'] >= 120, f"{course} ROI {row['roiPct']:.1f}%"
+              assert row['hitRatePct'] >= 55, f"{course} hit rate {row['hitRatePct']:.1f}%"
+          print(json.dumps({
+              'minimumCourseRoiPct': result['minimumCourseRoiPct'],
+              'averageCourseRoiPct': result['averageCourseRoiPct'],
+              'courses': {course: {'roiPct': row['roiPct'], 'hitRatePct': row['hitRatePct']} for course, row in result['courses'].items()}
+          }, ensure_ascii=False))
+          PY
+
       - name: Publish summary
         if: always()
         run: |
