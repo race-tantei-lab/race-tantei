@@ -1,6 +1,5 @@
 import { generatePrediction } from "./model.js";
 import { getRace, getRunners, savePrediction, settleRace } from "./db.js";
-import type { BetRecommendation, PredictionOutput, RaceRecord, RunnerRecord } from "./types.js";
 import { escapeHtml, formatYen } from "./utils.js";
 
 export const BACKTEST_DATE = "2026-08-01";
@@ -50,8 +49,8 @@ export async function runBacktestBatch(db: D1Database, limit = 4): Promise<{ pro
     const activeWithOdds = runners.filter((runner) => runner.runnerStatus === "active" && runner.winOdds !== null);
     if (activeWithOdds.length < 2) continue;
 
-    // Deliberately excludes historical-result features. This retrospective test uses only the
-    // stored runners and final captured win odds, so race results are not prediction inputs.
+    // Results are deliberately excluded. This retrospective test uses stored runners and final
+    // captured win odds only, then evaluates the coherent multi-bet ticket against official payouts.
     const prediction = generatePrediction(race, runners, [], BACKTEST_MODEL, 0, 2000);
     if (prediction.runners.length === 0 || prediction.bets.length === 0) continue;
     await savePrediction(db, raceId, prediction, "locked");
@@ -108,7 +107,7 @@ export async function renderBacktest(db: D1Database): Promise<string> {
       const predicted = row.topHorseNo ? `${row.topHorseNo} ${escapeHtml(row.topHorseName ?? "")}` : "未計算";
       const winner = row.winnerHorseNo ? `${row.winnerHorseNo} ${escapeHtml(row.winnerHorseName ?? "")}` : "結果未取得";
       const hit = row.returnYen > 0;
-      return `<a class="race" href="/races/${encodeURIComponent(row.raceId)}"><div><b>${row.raceNo}R ${escapeHtml(row.raceName)}</b><small>${escapeHtml(row.startTimeJst ?? "")}</small></div><div>予想 ◎ ${predicted}<br>1着 ${winner}</div><div class="${hit ? "hit" : "miss"}">${row.betCount ? `${hit ? "的中" : "不的中"}<br>${formatYen(row.returnYen)}` : "計算待ち"}</div></a>`;
+      return `<a class="race" href="/races/${encodeURIComponent(row.raceId)}"><div><b>${row.raceNo}R ${escapeHtml(row.raceName)}</b><small>${escapeHtml(row.startTimeJst ?? "")}</small></div><div>予想 ◎ ${predicted}<br>1着 ${winner}<br>買い目 ${row.betCount}点</div><div class="${hit ? "hit" : "miss"}">${row.betCount ? `${hit ? "的中" : "不的中"}<br>${formatYen(row.returnYen)}` : "計算待ち"}</div></a>`;
     }).join("")}</section>`).join("");
 
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="${completed.length < rows.length ? 12 : 300}"><title>8月1日 遡及検証｜レース探偵</title><style>
