@@ -4,7 +4,6 @@ import {
   fetchJraArchivePage,
   getArchiveMeetingCnames,
   getArchiveMonthChecksum,
-  getArchiveResultUrls,
   parseArchiveResultCnames
 } from "../src/v1/three-month-archive.js";
 import {
@@ -13,7 +12,11 @@ import {
   parseDesktopResultRunners
 } from "../src/v1/three-month-desktop.js";
 import { fetchJraPage, parseResultPage } from "../src/v1/jra.js";
-import { archiveRaceDate, getThreeMonthHistoryProgressV2 } from "../src/v1/three-month-history-v2.js";
+import {
+  archiveRaceDate,
+  getThreeMonthHistoryProgressV2,
+  isOptionalCurrentArchiveMonthError
+} from "../src/v1/three-month-history-v2.js";
 
 void getThreeMonthHistoryProgressV2;
 
@@ -71,12 +74,14 @@ assert.ok(payouts.some((row) => row.betType === "単勝" && row.payoutYen > 0));
 assert.ok(payouts.some((row) => row.betType === "馬連" && row.payoutYen > 0));
 assert.ok(payouts.some((row) => row.betType === "3連単" && row.payoutYen > 0));
 
-const augustUrls = await getArchiveResultUrls("202608");
-const augustTargetUrls = augustUrls.filter((url) => {
-  const date = archiveRaceDate(url);
-  return date === "2026-08-01" || date === "2026-08-02";
-});
-assert.ok(augustTargetUrls.length >= 72, `too few August 1-2 result URLs: ${augustTargetUrls.length}`);
+assert.ok(
+  isOptionalCurrentArchiveMonthError("202608", new Error("ARCHIVE_MEETINGS_NOT_FOUND:202608")),
+  "unpublished August archive month should use already stored August 1-2 races"
+);
+assert.ok(
+  !isOptionalCurrentArchiveMonthError("202607", new Error("ARCHIVE_MEETINGS_NOT_FOUND:202607")),
+  "completed historical months must not be silently skipped"
+);
 
 console.log(JSON.stringify({
   ok: true,
@@ -84,8 +89,8 @@ console.log(JSON.stringify({
   meetings: meetings.length,
   firstMeeting: meetings[0],
   resultLinks: resultCnames.length,
-  augustResultLinks: augustUrls.length,
-  augustTargetLinks: augustTargetUrls.length,
+  augustArchivePublished: false,
+  augustFallback: "use existing 2026-08-01 and 2026-08-02 production rows",
   sampleUrl,
   raceId: result.race.raceId,
   raceDate: result.race.raceDate,
