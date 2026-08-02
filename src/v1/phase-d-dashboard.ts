@@ -1,8 +1,9 @@
 import { getCourseMetrics, type CourseMetric } from "./course-db.js";
 import { getPhaseCDashboard } from "./phase-c-dashboard.js";
+import { getThreeMonthValidationSnapshot } from "./three-month-validation.js";
 import type { BudgetCourse } from "./types.js";
 import { escapeHtml, formatYen } from "./utils.js";
-import { getValidationSnapshot, type CourseValidationSummary } from "./validation.js";
+import type { CourseValidationSummary } from "./validation.js";
 
 const COURSES: Array<{ name: BudgetCourse }> = [
   { name: "ライト" },
@@ -87,7 +88,7 @@ function replaceMetricArea(
     combined.find((row) => row.course === name) ?? { course: name, races: 0, hits: 0, stake: 0, returns: 0 }
   )).join("");
 
-  const replacement = `<div class="section-label"><h2>累計回収率</h2><span>過去レース＋本番を合算${historicalComplete ? "" : "・過去分集計中"}</span></div>
+  const replacement = `<div class="section-label"><h2>累計回収率</h2><span>過去3ヶ月＋本番を合算${historicalComplete ? "" : "・過去分集計中"}</span></div>
     <section class="metrics">${cards}</section>`;
   return `${html.slice(0, start)}${replacement}${html.slice(end + "</section>".length)}`;
 }
@@ -218,7 +219,7 @@ export async function getPhaseDDashboard(db: D1Database, liveModel: string): Pro
   let html = await getPhaseCDashboard(db, liveModel);
   const [liveRows, historicalSnapshot] = await Promise.all([
     getCourseMetrics(db, liveModel),
-    getValidationSnapshot(db)
+    getThreeMonthValidationSnapshot(db)
   ]);
   const live = COURSES.map(({ name }) => fromLive(
     liveRows.find((row) => row.course === name) ?? {
@@ -259,8 +260,9 @@ export async function getPhaseDDashboard(db: D1Database, liveModel: string): Pro
   html = replaceMetricArea(html, combined, historicalSnapshot.complete);
   html = markSelectedCards(html)
     .replace(/買い目あり/g, "選出レース")
-    .replace("本番成績と遡及検証を分離し、期待値基準未達は見送ります。", "各会場から原則5Rを選出し、過去レースと本番を同じ総合成績に合算します。")
-    .replace("各会場から原則5Rを選出し、期待値厳選と会場上位補完を分けて集計します。", "各会場から原則5Rを選出し、過去レースと本番を同じ総合成績に合算します。")
+    .replace("本番成績と遡及検証を分離し、期待値基準未達は見送ります。", "各会場から原則5Rを選出し、過去3ヶ月と本番を同じ総合成績に合算します。")
+    .replace("各会場から原則5Rを選出し、期待値厳選と会場上位補完を分けて集計します。", "各会場から原則5Rを選出し、過去3ヶ月と本番を同じ総合成績に合算します。")
+    .replace("各会場から原則5Rを選出し、過去レースと本番を同じ総合成績に合算します。", "各会場から原則5Rを選出し、過去3ヶ月と本番を同じ総合成績に合算します。")
     .replace("<title>レース探偵｜フェーズC</title>", "<title>レース探偵｜会場別5R・累計回収率</title>")
     .replace("<title>レース探偵｜会場別5R選出</title>", "<title>レース探偵｜会場別5R・累計回収率</title>")
     .replace("<title>レース探偵｜会場別5R・総合成績</title>", "<title>レース探偵｜会場別5R・累計回収率</title>");

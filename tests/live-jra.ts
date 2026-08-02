@@ -1,5 +1,10 @@
 import { strict as assert } from "node:assert";
 import { discoverRaceUrls, extractEntryLinks, fetchJraPage, parseEntryPage, parseResultPage } from "../src/v1/jra.js";
+import {
+  historicalResultUrl,
+  parseHistoricalMeetings,
+  parseHistoricalResultRunners
+} from "../src/v1/three-month-history.js";
 
 function snippet(html: string, needle: string): string | null {
   const index = html.indexOf(needle);
@@ -44,10 +49,49 @@ assert.ok(result.results.length >= 5, `too few results parsed: ${result.results.
 assert.ok(result.results.some((runner) => runner.finishPosition === 1), "winner was not parsed");
 assert.ok(result.payouts.some((payout) => payout.betType === "単勝" && payout.payoutYen > 0), "win payout was not parsed");
 
+const historicalTask = { raceDate: "2026-05-02", venue: "新潟", meetingNo: 1, meetingDay: 1 };
+const generatedHistoricalUrl = historicalResultUrl(historicalTask, 8);
+const historicalResultPage = await fetchJraPage(generatedHistoricalUrl);
+const historicalResult = parseResultPage(historicalResultPage.html, historicalResultPage.url);
+const historicalRunners = parseHistoricalResultRunners(historicalResultPage.html);
+assert.equal(historicalResult.race.raceDate, "2026-05-02");
+assert.equal(historicalResult.race.venue, "新潟");
+assert.equal(historicalResult.race.raceNo, 8);
+assert.ok(historicalRunners.length >= 10, "historical result runners were not reconstructed");
+assert.ok(historicalRunners.every((runner) => runner.horseName.length > 0), "historical horse names were not reconstructed");
+assert.ok(historicalRunners.filter((runner) => runner.runnerStatus === "active").every((runner) => runner.winOdds !== null && runner.winOdds > 1), "popularity proxy odds were not reconstructed");
+assert.ok(historicalRunners.filter((runner) => runner.popularity !== null).length >= 10, "historical popularity was not reconstructed");
+assert.ok(historicalRunners.some((runner) => runner.jockey && runner.trainer && runner.assignedWeight), "historical people and weight fields were not reconstructed");
+assert.ok(historicalResult.results.some((runner) => runner.finishPosition === 1), "historical winner was not parsed");
+assert.ok(historicalResult.payouts.some((payout) => payout.betType === "3連単" && payout.payoutYen > 0), "historical trifecta payout was not parsed");
+
+const calendarPage = await fetchJraPage("https://www.jra.go.jp/keiba/calendar2026/2026/5/0502.html");
+const calendarMeetings = parseHistoricalMeetings(calendarPage.html, "2026-05-02");
+assert.ok(calendarMeetings.some((row) => row.venue === "新潟" && row.meetingNo === 1 && row.meetingDay === 1), "historical calendar did not expose Niigata meeting");
+assert.ok(calendarMeetings.length >= 3, "historical calendar meetings were incomplete");
+
 const allDiscovered = await discoverRaceUrls("https://sp.jra.jp/", [entryUrl]);
 const currentDayLinks = allDiscovered.filter((url) => cnameOf(url).includes("20260801/"));
 const nextDayLinks = allDiscovered.filter((url) => cnameOf(url).includes("20260802/"));
 assert.ok(currentDayLinks.length >= 36, `current-day discovery incomplete: ${currentDayLinks.length}`);
 assert.ok(nextDayLinks.length >= 36, `next-day discovery incomplete: ${nextDayLinks.length}`);
 
-console.log(JSON.stringify({ ok: true, raceId: entry.race.raceId, runners: entry.runners.length, results: result.results.length, payouts: result.payouts.length, directEntryLinks: directLinks.length, allDiscovered: allDiscovered.length, currentDayLinks: currentDayLinks.length, nextDayLinks: nextDayLinks.length, resultUrl: entry.race.resultUrl }, null, 2));
+console.log(JSON.stringify({
+  ok: true,
+  raceId: entry.race.raceId,
+  historicalRaceId: historicalResult.race.raceId,
+  generatedHistoricalUrl,
+  historicalResultFinalUrl: historicalResultPage.url,
+  historicalRunners: historicalRunners.slice(0, 4),
+  calendarMeetings,
+  runners: entry.runners.length,
+  results: result.results.length,
+  historicalResults: historicalResult.results.length,
+  payouts: result.payouts.length,
+  historicalPayouts: historicalResult.payouts.length,
+  directEntryLinks: directLinks.length,
+  allDiscovered: allDiscovered.length,
+  currentDayLinks: currentDayLinks.length,
+  nextDayLinks: nextDayLinks.length,
+  resultUrl: entry.race.resultUrl
+}, null, 2));
