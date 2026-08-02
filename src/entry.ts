@@ -1,13 +1,19 @@
 import app, { runSync } from "./complete.js";
-import { BACKTEST_DATE, renderBacktest, runBacktestBatch } from "./v1/backtest.js";
-import { runAug2BackfillBatch } from "./v1/backfill-aug2.js";
+import { getCourseMetrics, getCourseMonthlyMetrics } from "./v1/course-db.js";
+import { renderCoursePerformance } from "./v1/course-ui.js";
 import { ensureSchema } from "./v1/db.js";
 import { getDisplayRaceDetail } from "./v1/display-detail.js";
 import { fetchJraPage } from "./v1/jra.js";
-import { getPhaseBDashboard } from "./v1/phase-b-dashboard.js";
-import { renderPhaseARaceDetail } from "./v1/race-detail-phase-a.js";
+import { getPhaseCDashboard } from "./v1/phase-c-dashboard.js";
+import { renderPhaseCRaceDetail } from "./v1/race-detail-phase-c.js";
 import type { Env } from "./v1/types.js";
 import { stripHtml } from "./v1/utils.js";
+import {
+  getValidationSnapshot,
+  renderValidation,
+  runValidationBatch,
+  VALIDATION_CONFIGS
+} from "./v1/validation.js";
 
 let startupReady: Promise<void> | null = null;
 let maintenanceRunning: Promise<void> | null = null;
@@ -20,15 +26,24 @@ function prepare(db: D1Database): Promise<void> {
   return startupReady;
 }
 
+function json(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store, max-age=0",
+      "x-content-type-options": "nosniff",
+      "x-robots-tag": "noindex, nofollow"
+    }
+  });
+}
+
 function failureResponse(request: Request, error: unknown): Response {
   console.error("WORKER_STARTUP_FAILED", error);
   const pathname = new URL(request.url).pathname;
   const detail = error instanceof Error ? error.message : String(error);
   if (pathname === "/health" || pathname.startsWith("/api/")) {
-    return new Response(JSON.stringify({ ok: false, error: "WORKER_STARTUP_FAILED", detail }), {
-      status: 500,
-      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "x-robots-tag": "noindex, nofollow" }
-    });
+    return json({ ok: false, error: "WORKER_STARTUP_FAILED", detail }, 500);
   }
   return new Response(`レース探偵の起動処理に失敗しました。\nエラーコード: WORKER_STARTUP_FAILED\n詳細: ${detail}`, {
     status: 500,
@@ -67,7 +82,8 @@ async function repairRaceNames(db: D1Database, limit = 8): Promise<number> {
         }
       }
       if (!name) continue;
-      await db.prepare(`UPDATE rt_races SET race_name=?, updated_at=CURRENT_TIMESTAMP WHERE race_id=?`).bind(name, row.raceId).run();
+      await db.prepare(`UPDATE rt_races SET race_name=?, updated_at=CURRENT_TIMESTAMP WHERE race_id=?`)
+        .bind(name, row.raceId).run();
       repaired += 1;
     } catch (error) {
       console.error("RACE_NAME_REPAIR_FAILED", row.raceId, error);
@@ -80,11 +96,8 @@ function runMaintenance(env: Env): Promise<void> {
   if (maintenanceRunning) return maintenanceRunning;
   maintenanceRunning = (async () => {
     await runSync(env, "deploy");
-    await Promise.all([
-      repairRaceNames(env.DB, 8),
-      runBacktestBatch(env.DB, 12),
-      runAug2BackfillBatch(env.DB, env.MODEL_VERSION, 12)
-    ]);
+    await repairRaceNames(env.DB, 8);
+    await runValidationBatch(env.DB, 6);
   })().finally(() => {
     maintenanceRunning = null;
   });
@@ -98,9 +111,16 @@ function page(body: string, status = 200): Response {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store, max-age=0",
       "x-content-type-options": "nosniff",
-      "x-race-ui-version": "phase-b"
+      "x-race-ui-version": "phase-c"
     }
   });
+}
+
+function validationDateFromPath(pathname: string): string | null {
+  const prefix = pathname.startsWith("/validation/") ? "/validation/" : pathname.startsWith("/backtest/") ? "/backtest/" : null;
+  if (!prefix) return null;
+  const value = decodeURIComponent(pathname.slice(prefix.length));
+  return VALIDATION_CONFIGS.some((config) => config.raceDate === value) ? value : null;
 }
 
 export default {
@@ -108,8 +128,16 @@ export default {
     try {
       await prepare(env.DB);
       const pathname = new URL(request.url).pathname;
+
+      if (pathname === "/api/validation") {
+        ctx.waitUntil(runMaintenance(env));
+        return json(await getValidationSnapshot(env.DB));
+      }
+      if (pathname === "/api/performance/courses") {
+        return json(await getCourseMetrics(env.DB, env.MODEL_VERSION));
+      }
       if (pathname === "/") {
-        const dashboard = await getPhaseBDashboard(env.DB, env.MODEL_VERSION);
+        const dashboard = await getPhaseCDashboard(env.DB, env.MODEL_VERSION);
         ctx.waitUntil(runMaintenance(env));
         return page(dashboard);
       }
@@ -117,11 +145,23 @@ export default {
         const id = decodeURIComponent(pathname.slice("/races/".length));
         const detail = await getDisplayRaceDetail(env.DB, id, env.MODEL_VERSION);
         ctx.waitUntil(runMaintenance(env));
-        return detail ? page(renderPhaseARaceDetail(detail)) : page("レースが見つかりません。", 404);
+        return detail ? page(renderPhaseCRaceDetail(detail)) : page("レースが見つかりません。", 404);
       }
-      if (pathname === `/backtest/${BACKTEST_DATE}`) {
-        await runMaintenance(env);
-        return page(await renderBacktest(env.DB));
+      if (pathname === "/validation") {
+        ctx.waitUntil(runMaintenance(env));
+        return page(await renderValidation(env.DB));
+      }
+      const validationDate = validationDateFromPath(pathname);
+      if (validationDate) {
+        ctx.waitUntil(runMaintenance(env));
+        return page(await renderValidation(env.DB, validationDate));
+      }
+      if (pathname === "/performance") {
+        const [cumulative, monthly] = await Promise.all([
+          getCourseMetrics(env.DB, env.MODEL_VERSION),
+          getCourseMonthlyMetrics(env.DB, env.MODEL_VERSION)
+        ]);
+        return page(renderCoursePerformance(cumulative, monthly));
       }
       if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
       return await app.fetch(request, env, ctx);
