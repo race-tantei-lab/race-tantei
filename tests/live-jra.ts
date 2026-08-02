@@ -1,6 +1,10 @@
 import { strict as assert } from "node:assert";
 import { discoverRaceUrls, extractEntryLinks, fetchJraPage, parseEntryPage, parseResultPage } from "../src/v1/jra.js";
-import { stripHtml } from "../src/v1/utils.js";
+import {
+  historicalResultUrl,
+  parseHistoricalMeetings,
+  parseHistoricalResultRunners
+} from "../src/v1/three-month-history.js";
 
 function snippet(html: string, needle: string): string | null {
   const index = html.indexOf(needle);
@@ -8,15 +12,6 @@ function snippet(html: string, needle: string): string | null {
   return html.slice(Math.max(0, index - 500), Math.min(html.length, index + 1800));
 }
 function cnameOf(url: string): string { return decodeURIComponent(new URL(url).searchParams.get("CNAME") ?? ""); }
-function resultRunnerRows(html: string): string[][] {
-  const values: string[][] = [];
-  for (const match of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
-    const cells = [...(match[1] ?? "").matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)]
-      .map((cell) => stripHtml(cell[1] ?? "").replace(/\s+/g, " ").trim());
-    if (cells.some((cell) => /(?:\d+:\d{2}\.\d|除外|中止|失格|取消)/.test(cell))) values.push(cells);
-  }
-  return values;
-}
 
 const entryUrl = "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030520260801%2F15";
 const entryPage = await fetchJraPage(entryUrl);
@@ -54,16 +49,26 @@ assert.ok(result.results.length >= 5, `too few results parsed: ${result.results.
 assert.ok(result.results.some((runner) => runner.finishPosition === 1), "winner was not parsed");
 assert.ok(result.payouts.some((payout) => payout.betType === "単勝" && payout.payoutYen > 0), "win payout was not parsed");
 
-const historicalResultUrl = "https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0104202601010820260502%2F34";
-const historicalResultPage = await fetchJraPage(historicalResultUrl);
+const historicalTask = { raceDate: "2026-05-02", venue: "新潟", meetingNo: 1, meetingDay: 1 };
+const generatedHistoricalUrl = historicalResultUrl(historicalTask, 8);
+const historicalResultPage = await fetchJraPage(generatedHistoricalUrl);
 const historicalResult = parseResultPage(historicalResultPage.html, historicalResultPage.url);
-const historicalRows = resultRunnerRows(historicalResultPage.html);
+const historicalRunners = parseHistoricalResultRunners(historicalResultPage.html);
 assert.equal(historicalResult.race.raceDate, "2026-05-02");
 assert.equal(historicalResult.race.venue, "新潟");
 assert.equal(historicalResult.race.raceNo, 8);
-assert.ok(historicalRows.length >= 5, "historical result runner rows were not found");
+assert.ok(historicalRunners.length >= 10, "historical result runners were not reconstructed");
+assert.ok(historicalRunners.every((runner) => runner.horseName.length > 0), "historical horse names were not reconstructed");
+assert.ok(historicalRunners.filter((runner) => runner.runnerStatus === "active").every((runner) => runner.winOdds !== null && runner.winOdds > 1), "popularity proxy odds were not reconstructed");
+assert.ok(historicalRunners.filter((runner) => runner.popularity !== null).length >= 10, "historical popularity was not reconstructed");
+assert.ok(historicalRunners.some((runner) => runner.jockey && runner.trainer && runner.assignedWeight), "historical people and weight fields were not reconstructed");
 assert.ok(historicalResult.results.some((runner) => runner.finishPosition === 1), "historical winner was not parsed");
 assert.ok(historicalResult.payouts.some((payout) => payout.betType === "3連単" && payout.payoutYen > 0), "historical trifecta payout was not parsed");
+
+const calendarPage = await fetchJraPage("https://www.jra.go.jp/keiba/calendar2026/2026/5/0502.html");
+const calendarMeetings = parseHistoricalMeetings(calendarPage.html, "2026-05-02");
+assert.ok(calendarMeetings.some((row) => row.venue === "新潟" && row.meetingNo === 1 && row.meetingDay === 1), "historical calendar did not expose Niigata meeting");
+assert.ok(calendarMeetings.length >= 3, "historical calendar meetings were incomplete");
 
 const allDiscovered = await discoverRaceUrls("https://sp.jra.jp/", [entryUrl]);
 const currentDayLinks = allDiscovered.filter((url) => cnameOf(url).includes("20260801/"));
@@ -75,8 +80,10 @@ console.log(JSON.stringify({
   ok: true,
   raceId: entry.race.raceId,
   historicalRaceId: historicalResult.race.raceId,
+  generatedHistoricalUrl,
   historicalResultFinalUrl: historicalResultPage.url,
-  historicalRunnerRows: historicalRows.slice(0, 4),
+  historicalRunners: historicalRunners.slice(0, 4),
+  calendarMeetings,
   runners: entry.runners.length,
   results: result.results.length,
   historicalResults: historicalResult.results.length,
