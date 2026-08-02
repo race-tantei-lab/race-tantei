@@ -1,7 +1,7 @@
 import { savePredictionWithCourses, settleRaceWithCourses } from "./course-db.js";
 import { getRace, getRunnerHistoryStats, getRunners } from "./db.js";
 import { generatePrediction } from "./model.js";
-import { getThreeMonthHistoryProgress } from "./three-month-history.js";
+import { getThreeMonthHistoryProgressV2 as getThreeMonthHistoryProgress } from "./three-month-history-v2.js";
 import {
   THREE_MONTH_END_DATE,
   THREE_MONTH_SCOPE_VERSION,
