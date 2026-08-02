@@ -1,7 +1,7 @@
 import { getState, saveEntryBundle, saveResultBundle, setState } from "./db.js";
 import { fetchJraPage, pageLooksLikeResult, parseResultPage } from "./jra.js";
 import { getArchiveResultUrls } from "./three-month-archive.js";
-import { parseHistoricalResultRunners } from "./three-month-history.js";
+import { parseDesktopPayouts, parseDesktopResultRunners } from "./three-month-desktop.js";
 import {
   THREE_MONTH_END_DATE,
   THREE_MONTH_RACE_DATES,
@@ -161,13 +161,21 @@ async function alreadyComplete(db: D1Database, raceId: string): Promise<boolean>
 async function importUrl(db: D1Database, url: string): Promise<{ imported: boolean; skipped: boolean }> {
   const page = await fetchJraPage(url);
   if (!pageLooksLikeResult(page.html)) throw new Error("HISTORY_RESULT_SIGNATURE_MISSING");
-  const result = parseResultPage(page.html, page.url);
-  if (!TARGET_DATES.has(result.race.raceDate)) throw new Error(`OUT_OF_SCOPE_RESULT:${result.race.raceDate}`);
-  if (await alreadyComplete(db, result.race.raceId)) return { imported: false, skipped: true };
-  const runners = parseHistoricalResultRunners(page.html);
+
+  const parsed = parseResultPage(page.html, page.url);
+  if (!TARGET_DATES.has(parsed.race.raceDate)) throw new Error(`OUT_OF_SCOPE_RESULT:${parsed.race.raceDate}`);
+  if (await alreadyComplete(db, parsed.race.raceId)) return { imported: false, skipped: true };
+
+  const runners = parseDesktopResultRunners(page.html);
+  const payouts = parsed.payouts.length > 0 ? parsed.payouts : parseDesktopPayouts(page.html);
   if (runners.filter((row) => row.runnerStatus === "active" && row.winOdds !== null).length < 2) {
     throw new Error(`HISTORY_RUNNERS_NOT_FOUND:${runners.length}`);
   }
+  if (parsed.race.status !== "cancelled" && payouts.length === 0) {
+    throw new Error("HISTORY_PAYOUTS_NOT_FOUND");
+  }
+
+  const result: RaceBundle = { ...parsed, payouts };
   const entry: RaceBundle = {
     race: { ...result.race, status: "scheduled" },
     runners,
