@@ -7,7 +7,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build:test": "tsc -p tsconfig.test.json",
-    "test:unit": "node dist-test/tests/run-tests.js",
+    "test:unit": "node dist-test/tests/run-tests.js && node dist-test/tests/validation-tests.js",
     "test:live": "node dist-test/tests/live-jra.js",
     "test": "npm run build:test && npm run test:unit && npm run test:live",
     "build": "wrangler deploy --dry-run --outdir dist-worker",

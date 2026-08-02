@@ -92,25 +92,31 @@ export interface CourseMetric {
   hitRatePct: number | null;
 }
 
-export async function getCourseMetrics(db: D1Database): Promise<CourseMetric[]> {
+export async function getCourseMetrics(
+  db: D1Database,
+  modelVersion?: string
+): Promise<CourseMetric[]> {
+  const filter = modelVersion ?? "";
   const rows = await db.prepare(`
     SELECT
       CASE
-        WHEN bet_type LIKE 'ライト｜%' THEN 'ライト'
-        WHEN bet_type LIKE 'スタンダード｜%' THEN 'スタンダード'
-        WHEN bet_type LIKE 'プレミアム｜%' THEN 'プレミアム'
+        WHEN b.bet_type LIKE 'ライト｜%' THEN 'ライト'
+        WHEN b.bet_type LIKE 'スタンダード｜%' THEN 'スタンダード'
+        WHEN b.bet_type LIKE 'プレミアム｜%' THEN 'プレミアム'
         ELSE NULL
       END AS course,
-      COUNT(DISTINCT race_id) AS settledRaces,
+      COUNT(DISTINCT b.race_id) AS settledRaces,
       COUNT(*) AS betCount,
-      COALESCE(SUM(stake_yen),0) AS stakeYen,
-      COALESCE(SUM(return_yen),0) AS returnYen,
-      COALESCE(SUM(CASE WHEN return_yen > 0 THEN 1 ELSE 0 END),0) AS hits
-    FROM rt_bets
-    WHERE settlement_status='settled'
-      AND (bet_type LIKE 'ライト｜%' OR bet_type LIKE 'スタンダード｜%' OR bet_type LIKE 'プレミアム｜%')
+      COALESCE(SUM(b.stake_yen),0) AS stakeYen,
+      COALESCE(SUM(b.return_yen),0) AS returnYen,
+      COALESCE(SUM(CASE WHEN b.return_yen > 0 THEN 1 ELSE 0 END),0) AS hits
+    FROM rt_bets b
+    JOIN rt_predictions p ON p.id=b.prediction_id
+    WHERE b.settlement_status='settled'
+      AND (?='' OR p.model_version=?)
+      AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
     GROUP BY course
-  `).all<{
+  `).bind(filter, filter).all<{
     course: BudgetCourse;
     settledRaces: number;
     betCount: number;
@@ -133,13 +139,17 @@ export async function getCourseMetrics(db: D1Database): Promise<CourseMetric[]> 
       stakeYen,
       returnYen,
       profitYen: returnYen - stakeYen,
-      roiPct: stakeYen > 0 ? (returnYen / stakeYen) * 100 : null,
-      hitRatePct: betCount > 0 ? (hits / betCount) * 100 : null
+      roiPct: stakeYen > 0 ? returnYen / stakeYen * 100 : null,
+      hitRatePct: betCount > 0 ? hits / betCount * 100 : null
     };
   });
 }
 
-export async function getCourseMonthlyMetrics(db: D1Database): Promise<Array<CourseMetric & { month: string }>> {
+export async function getCourseMonthlyMetrics(
+  db: D1Database,
+  modelVersion?: string
+): Promise<Array<CourseMetric & { month: string }>> {
+  const filter = modelVersion ?? "";
   const rows = await db.prepare(`
     SELECT substr(r.race_date,1,7) AS month,
       CASE
@@ -152,14 +162,22 @@ export async function getCourseMonthlyMetrics(db: D1Database): Promise<Array<Cou
       COALESCE(SUM(b.stake_yen),0) AS stakeYen,
       COALESCE(SUM(b.return_yen),0) AS returnYen,
       COALESCE(SUM(CASE WHEN b.return_yen > 0 THEN 1 ELSE 0 END),0) AS hits
-    FROM rt_bets b JOIN rt_races r ON r.race_id=b.race_id
+    FROM rt_bets b
+    JOIN rt_races r ON r.race_id=b.race_id
+    JOIN rt_predictions p ON p.id=b.prediction_id
     WHERE b.settlement_status='settled'
+      AND (?='' OR p.model_version=?)
       AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
     GROUP BY month, course
     ORDER BY month DESC, course
-  `).all<{
-    month: string; course: BudgetCourse; settledRaces: number; betCount: number;
-    stakeYen: number; returnYen: number; hits: number;
+  `).bind(filter, filter).all<{
+    month: string;
+    course: BudgetCourse;
+    settledRaces: number;
+    betCount: number;
+    stakeYen: number;
+    returnYen: number;
+    hits: number;
   }>();
 
   return rows.results.map((row) => ({
