@@ -1,0 +1,78 @@
+name: Live selection diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect active production predictions
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          races="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/races")"
+
+          RACES="$races" python - <<'PY' >/tmp/active-race-ids.txt
+          import json, os
+          rows = json.loads(os.environ.get("RACES", "[]"))
+          active = [row for row in rows if row.get("raceDate") == "2026-08-02" and row.get("status") != "finished"]
+          print(json.dumps({
+              "activeRaceRows": [
+                  {
+                      "raceId": row.get("raceId"),
+                      "raceNo": row.get("raceNo"),
+                      "status": row.get("status"),
+                      "predictionStatus": row.get("predictionStatus"),
+                      "betCount": int(row.get("betCount") or 0)
+                  }
+                  for row in active
+              ]
+          }, ensure_ascii=False))
+          for row in active[:12]:
+              if row.get("raceId"):
+                  print(row["raceId"])
+          PY
+
+          head -n 1 /tmp/active-race-ids.txt
+          tail -n +2 /tmp/active-race-ids.txt | while IFS= read -r race_id; do
+            detail="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/races/${race_id}" || true)"
+            RACE_ID="$race_id" DETAIL="$detail" python - <<'PY'
+          import json, os
+          race_id = os.environ.get("RACE_ID", "")
+          try:
+              detail = json.loads(os.environ.get("DETAIL", ""))
+          except Exception:
+              print(json.dumps({"raceId": race_id, "detailError": "invalid response"}, ensure_ascii=False))
+              raise SystemExit
+          prediction = detail.get("prediction") or {}
+          predicted = detail.get("predictedRunners") or []
+          bets = detail.get("bets") or []
+          ranked = sorted(
+              [
+                  {
+                      "horseNo": item.get("horseNo"),
+                      "odds": item.get("currentOdds"),
+                      "winProbability": round(float(item.get("winProbability") or 0) * 100, 1),
+                      "winEvPct": round(float(item.get("expectedValuePct") or 0), 1)
+                  }
+                  for item in predicted
+              ],
+              key=lambda item: item["winEvPct"],
+              reverse=True
+          )
+          print(json.dumps({
+              "raceId": race_id,
+              "modelVersion": prediction.get("modelVersion"),
+              "predictionStatus": prediction.get("status"),
+              "runnerCount": len(predicted),
+              "betCount": len(bets),
+              "topWinEv": ranked[:3]
+          }, ensure_ascii=False))
+          PY
+          done
