@@ -131,7 +131,7 @@ async function claimAndInsertBets(
     first.expectedValuePct,
     row.predictionId
   ).run();
-  if (Number(claim.meta.changes ?? 0) === 0) return 0;
+  if (Number(claim.meta?.changes ?? 0) === 0) return 0;
 
   if (rest.length > 0) {
     await db.batch(rest.map((bet) => db.prepare(`
@@ -218,7 +218,7 @@ export async function ensureVenueDailyQuota(
 
 export async function ensureValidationVenueQuotas(
   db: D1Database,
-  configs: readonly Array<{ raceDate: string; modelVersion: string }>
+  configs: ReadonlyArray<{ raceDate: string; modelVersion: string }>
 ): Promise<VenueQuotaResult[]> {
   const results: VenueQuotaResult[] = [];
   for (const config of configs) {
