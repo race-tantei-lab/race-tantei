@@ -4,6 +4,7 @@ import { renderCoursePerformance } from "./v1/course-ui.js";
 import { ensureSchema } from "./v1/db.js";
 import { getDisplayRaceDetail } from "./v1/display-detail.js";
 import { fetchJraPage } from "./v1/jra.js";
+import { refreshMissingLivePredictions } from "./v1/live-prediction-refresh.js";
 import { getPhaseCDashboard } from "./v1/phase-c-dashboard.js";
 import { renderPhaseCRaceDetail } from "./v1/race-detail-phase-c.js";
 import type { Env } from "./v1/types.js";
@@ -92,10 +93,17 @@ async function repairRaceNames(db: D1Database, limit = 8): Promise<number> {
   return repaired;
 }
 
+function logRefresh(result: Awaited<ReturnType<typeof refreshMissingLivePredictions>>): void {
+  if (result.candidates > 0 || result.errors > 0) {
+    console.log("LIVE_PREDICTION_REFRESH", JSON.stringify(result));
+  }
+}
+
 function runMaintenance(env: Env): Promise<void> {
   if (maintenanceRunning) return maintenanceRunning;
   maintenanceRunning = (async () => {
     await runSync(env, "deploy");
+    logRefresh(await refreshMissingLivePredictions(env, 30));
     await repairRaceNames(env.DB, 8);
     await runValidationBatch(env.DB, 6);
   })().finally(() => {
@@ -137,6 +145,7 @@ export default {
         return json(await getCourseMetrics(env.DB, env.MODEL_VERSION));
       }
       if (pathname === "/") {
+        logRefresh(await refreshMissingLivePredictions(env, 30));
         const dashboard = await getPhaseCDashboard(env.DB, env.MODEL_VERSION);
         ctx.waitUntil(runMaintenance(env));
         return page(dashboard);
