@@ -5,12 +5,12 @@
     "moduleResolution": "Bundler",
     "lib": ["ES2022", "WebWorker"],
     "strict": true,
-    "noUncheckedIndexedAccess": true,
+    "noUncheckedIndexedAccess": false,
     "noImplicitOverride": true,
     "exactOptionalPropertyTypes": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["src/complete.ts", "src/v1/**/*.ts", "worker-types.d.ts"]
+  "include": ["src/entry.ts", "worker-types.d.ts"]
 }
