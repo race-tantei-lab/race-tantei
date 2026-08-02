@@ -1,0 +1,76 @@
+name: Finish three month normalization
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Complete venue quotas and settlement
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          for attempt in $(seq 1 90); do
+            body=$(curl --silent --show-error --max-time 90 -X POST \
+              -H 'x-race-backfill: three-month-v1' \
+              "$base/api/history/three-months/step" || true)
+            if [ -z "$body" ]; then
+              echo "attempt $attempt: empty response"
+              sleep 2
+              continue
+            fi
+            printf '%s' "$body" > step.json
+            complete=$(python - <<'PY'
+          import json
+          try:
+              data=json.load(open('step.json',encoding='utf-8'))
+          except Exception:
+              print('false')
+              raise SystemExit
+          s=data.get('snapshot',{})
+          courses=s.get('courses',[])
+          print('true' if data.get('complete') is True else 'false')
+          print({
+            'attemptComplete':data.get('complete'),
+            'processed':f"{s.get('processedRaces')}/{s.get('totalRaces')}",
+            'venueDays':s.get('venueDays'),
+            'requiredSelections':s.get('requiredSelections'),
+            'pendingTickets':s.get('pendingTickets'),
+            'courses':[(r.get('course'),r.get('selectedRaces'),r.get('pendingTickets'),r.get('roiPct')) for r in courses]
+          },file=__import__('sys').stderr)
+          PY
+            )
+            if [ "$complete" = "true" ]; then
+              break
+            fi
+            if [ "$attempt" -eq 90 ]; then
+              exit 1
+            fi
+            sleep 2
+          done
+          curl --silent --show-error --fail --max-time 30 \
+            "$base/api/performance/three-months/read-only" -o final.json
+          python - <<'PY'
+          import json
+          data=json.load(open('final.json',encoding='utf-8'))
+          venue_days=int(data.get('venueDays',0))
+          expected=venue_days*5
+          courses=data.get('combined',[])
+          valid=data.get('complete') is True and int(data.get('processedRaces',0))==int(data.get('totalRaces',-1))
+          summary={}
+          for row in courses:
+              summary[row.get('course')]={
+                'selectedRaces':int(row.get('selectedRaces',0)),
+                'pendingTickets':int(row.get('pendingTickets',0)),
+                'roiPct':row.get('roiPct'),
+                'hitRatePct':row.get('hitRatePct')
+              }
+              valid=valid and int(row.get('selectedRaces',0))==expected and int(row.get('pendingTickets',0))==0
+          print(json.dumps({'valid':valid,'totalRaces':data.get('totalRaces'),'venueDays':venue_days,'expectedPerCourse':expected,'courses':summary},ensure_ascii=False,indent=2))
+          if not valid:
+              raise SystemExit(1)
+          PY
