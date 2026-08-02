@@ -4,6 +4,8 @@ import {
   coverageRaceScore
 } from "./budget-courses.js";
 import { settleRaceWithCourses } from "./course-db.js";
+import { getState, setState } from "./db.js";
+import { ROI_POLICY_VERSION } from "./roi-policy.js";
 import type { BetRecommendation, RunnerPrediction } from "./types.js";
 
 export const MINIMUM_SELECTED_RACES_PER_VENUE = 5;
@@ -103,14 +105,16 @@ async function loadQuotaRaces(
 
 async function loadPredictions(db: D1Database, predictionId: number): Promise<RunnerPrediction[]> {
   const rows = await db.prepare(`
-    SELECT horse_no AS horseNo, horse_name AS horseName,
-      win_probability AS winProbability, place_probability AS placeProbability,
-      fair_odds AS fairOdds, current_odds AS currentOdds,
-      expected_value_pct AS expectedValuePct, predicted_order AS predictedOrder,
-      explanation
-    FROM rt_prediction_runners
-    WHERE prediction_id=?
-    ORDER BY predicted_order
+    SELECT pr.horse_no AS horseNo, pr.horse_name AS horseName,
+      pr.win_probability AS winProbability, pr.place_probability AS placeProbability,
+      pr.fair_odds AS fairOdds, pr.current_odds AS currentOdds,
+      pr.expected_value_pct AS expectedValuePct, pr.predicted_order AS predictedOrder,
+      pr.explanation, rr.popularity
+    FROM rt_prediction_runners pr
+    JOIN rt_predictions p ON p.id=pr.prediction_id
+    LEFT JOIN rt_runners rr ON rr.race_id=p.race_id AND rr.horse_no=pr.horse_no
+    WHERE pr.prediction_id=?
+    ORDER BY pr.predicted_order
   `).bind(predictionId).all<RunnerPrediction>();
   return rows.results.map((row) => ({
     ...row,
@@ -120,7 +124,8 @@ async function loadPredictions(db: D1Database, predictionId: number): Promise<Ru
     fairOdds: toNumber(row.fairOdds),
     currentOdds: row.currentOdds === null ? null : toNumber(row.currentOdds),
     expectedValuePct: row.expectedValuePct === null ? null : toNumber(row.expectedValuePct),
-    predictedOrder: toNumber(row.predictedOrder)
+    predictedOrder: toNumber(row.predictedOrder),
+    popularity: row.popularity === null || row.popularity === undefined ? null : toNumber(row.popularity)
   }));
 }
 
@@ -187,6 +192,20 @@ function venueIsNormalized(
   );
 }
 
+function quotaStateKey(
+  mode: VenueQuotaMode,
+  modelVersion: string,
+  raceDate: string,
+  venue: string
+): string {
+  return `venue_quota:${mode}:${modelVersion}:${raceDate}:${venue}`;
+}
+
+function quotaFingerprint(rows: QuotaRaceRow[], targetRaces: number): string {
+  const predictionIds = rows.map((row) => row.predictionId).sort((a, b) => a - b);
+  return `${ROI_POLICY_VERSION}:${targetRaces}:${predictionIds.join(",")}`;
+}
+
 async function rankRows(db: D1Database, rows: QuotaRaceRow[]): Promise<RankedQuotaCandidate[]> {
   const candidates: RankedQuotaCandidate[] = [];
   for (const row of rows) {
@@ -220,7 +239,11 @@ export async function ensureVenueDailyQuota(
     const venueRows = rows.filter((row) => row.venue === venue);
     const selectedBefore = venueRows.filter((row) => row.betCount > 0).length;
     const targetRaces = Math.min(minimumPerVenue, venueRows.length);
-    const alreadyNormalized = venueIsNormalized(venueRows, targetRaces, mode);
+    const stateKey = quotaStateKey(mode, modelVersion, raceDate, venue);
+    const fingerprint = quotaFingerprint(venueRows, targetRaces);
+    const storedFingerprint = await getState(db, stateKey);
+    const policyChanged = storedFingerprint !== fingerprint;
+    const alreadyNormalized = !policyChanged && venueIsNormalized(venueRows, targetRaces, mode);
 
     if (alreadyNormalized || normalizedVenues >= maximumVenuesToNormalize) {
       venueResults.push({
@@ -277,7 +300,7 @@ export async function ensureVenueDailyQuota(
 
     for (const candidate of chosen) {
       const wasSelected = candidate.betCount > 0;
-      if (!needsReplacement(candidate, mode)) continue;
+      if (!policyChanged && !needsReplacement(candidate, mode)) continue;
       const inserted = await replaceCourseBets(db, candidate);
       if (inserted === 0) continue;
       addedTickets += inserted;
@@ -293,6 +316,7 @@ export async function ensureVenueDailyQuota(
       }
     }
 
+    await setState(db, stateKey, fingerprint);
     venueResults.push({
       venue,
       availableRaces: venueRows.length,
