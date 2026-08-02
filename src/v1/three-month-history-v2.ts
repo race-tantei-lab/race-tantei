@@ -70,6 +70,13 @@ export function archiveRaceDate(url: string): string | null {
   return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
 }
 
+export function isOptionalCurrentArchiveMonthError(yearMonth: string, error: unknown): boolean {
+  if (yearMonth !== "202608") return false;
+  const message = error instanceof Error ? error.message : String(error);
+  return message === "ARCHIVE_MEETINGS_NOT_FOUND:202608"
+    || message === "ARCHIVE_RESULTS_NOT_FOUND:202608";
+}
+
 function sortedUniqueUrls(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))].sort((a, b) => {
     const dateOrder = (archiveRaceDate(a) ?? "").localeCompare(archiveRaceDate(b) ?? "");
@@ -126,11 +133,21 @@ export async function getThreeMonthHistoryProgressV2(db: D1Database): Promise<Th
   };
 }
 
+async function resultUrlsForMonth(yearMonth: string): Promise<string[]> {
+  try {
+    return await getArchiveResultUrls(yearMonth);
+  } catch (error) {
+    if (!isOptionalCurrentArchiveMonthError(yearMonth, error)) throw error;
+    console.warn("CURRENT_ARCHIVE_MONTH_NOT_PUBLISHED", yearMonth);
+    return [];
+  }
+}
+
 async function discoverMonth(db: D1Database): Promise<unknown> {
   const monthIndex = integerState(await getState(db, MONTH_INDEX_KEY));
   const yearMonth = MONTHS[monthIndex];
   if (!yearMonth) return { yearMonth: null, discovered: 0, retained: 0 };
-  const discovered = await getArchiveResultUrls(yearMonth);
+  const discovered = await resultUrlsForMonth(yearMonth);
   const retained = discovered.filter((url) => {
     const date = archiveRaceDate(url);
     return date !== null && TARGET_DATES.has(date);
@@ -141,7 +158,13 @@ async function discoverMonth(db: D1Database): Promise<unknown> {
     setState(db, URLS_KEY, JSON.stringify(merged)),
     setState(db, MONTH_INDEX_KEY, String(monthIndex + 1))
   ]);
-  return { yearMonth, discovered: discovered.length, retained: retained.length, total: merged.length };
+  return {
+    yearMonth,
+    discovered: discovered.length,
+    retained: retained.length,
+    total: merged.length,
+    usedExistingStoredRaces: yearMonth === "202608" && discovered.length === 0
+  };
 }
 
 async function alreadyComplete(db: D1Database, raceId: string): Promise<boolean> {
