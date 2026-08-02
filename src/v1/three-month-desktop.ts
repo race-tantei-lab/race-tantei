@@ -101,16 +101,8 @@ export function parseDesktopResultRunners(html: string): RunnerRecord[] {
   }));
 }
 
-function payoutSegment(html: string): string {
-  const start = html.search(/払戻金/);
-  if (start < 0) return "";
-  const tail = html.slice(start);
-  const end = tail.search(/勝馬の紹介|レースや騎手等につく記号|ページトップへ戻る/);
-  return end > 0 ? tail.slice(0, end) : tail;
-}
-
-function normalizePayoutText(html: string): string {
-  return decodeEntities(payoutSegment(html))
+function normalizedPageText(html: string): string {
+  return decodeEntities(html)
     .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
     .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
@@ -119,6 +111,22 @@ function normalizePayoutText(html: string): string {
     .replace(/\s*-\s*/g, "-")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizePayoutText(html: string): string {
+  const text = normalizedPageText(html);
+  let start = text.lastIndexOf("払戻金 単勝");
+  if (start < 0) {
+    const trifecta = text.lastIndexOf("3連単");
+    start = trifecta >= 0 ? text.lastIndexOf("払戻金", trifecta) : -1;
+  }
+  if (start < 0) return "";
+  const endCandidates = [
+    text.indexOf("勝馬の紹介", start),
+    text.indexOf("レースや騎手等につく記号", start),
+    text.indexOf("開催選択へ戻る", start)
+  ].filter((index) => index > start).sort((a, b) => a - b);
+  return text.slice(start, endCandidates[0] ?? text.length);
 }
 
 const PAYOUT_TYPES = ["単勝", "複勝", "枠連", "ワイド", "馬連", "馬単", "3連複", "3連単"] as const;
@@ -146,7 +154,7 @@ export function parseDesktopPayouts(html: string): PayoutRecord[] {
   for (const type of PAYOUT_TYPES) {
     const section = sectionForType(text, type);
     if (!section) continue;
-    const pattern = new RegExp(`(${combinationPattern(type)})\\s+([\\d,]+)円\\s+(\\d+)番人気`, "g");
+    const pattern = new RegExp(`(${combinationPattern(type)})\\s+([\\d,]+)\\s*円\\s+(\\d+)\\s*番人気`, "g");
     for (const match of section.matchAll(pattern)) {
       const payoutYen = Number((match[2] ?? "").replace(/,/g, ""));
       if (!Number.isFinite(payoutYen) || payoutYen <= 0 || !match[1]) continue;
