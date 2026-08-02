@@ -1,5 +1,6 @@
 import type { RaceDetail } from "./db.js";
 import { getRace, getRunners } from "./db.js";
+import { isThreeMonthDate } from "./three-month-scope.js";
 import { validationModelForDate } from "./validation.js";
 
 interface PredictionRow {
@@ -10,12 +11,31 @@ interface PredictionRow {
   lockedAt: string | null;
 }
 
+function threeMonthModelForDate(raceDate: string): string | null {
+  return isThreeMonthDate(raceDate)
+    ? `validation-${raceDate}-roi-policy-v1-3m`
+    : null;
+}
+
 async function selectDisplayPrediction(
   db: D1Database,
   raceId: string,
   raceDate: string,
   liveModel: string
 ): Promise<PredictionRow | null> {
+  const threeMonthModel = threeMonthModelForDate(raceDate);
+  if (threeMonthModel) {
+    return await db.prepare(`
+      SELECT id, status, model_version AS modelVersion, generated_at AS generatedAt, locked_at AS lockedAt
+      FROM rt_predictions
+      WHERE race_id=? AND model_version IN (?, ?)
+      ORDER BY CASE WHEN model_version=? THEN 1 ELSE 2 END,
+        CASE WHEN status='locked' THEN 1 ELSE 2 END,
+        id DESC
+      LIMIT 1
+    `).bind(raceId, threeMonthModel, liveModel, threeMonthModel).first<PredictionRow>();
+  }
+
   const validationModel = validationModelForDate(raceDate);
   if (validationModel) {
     return await db.prepare(`
