@@ -4,6 +4,13 @@ import type {
   BudgetCourse,
   RunnerPrediction
 } from "./types.js";
+import {
+  allocateRoiPolicyStakes,
+  ROI_POLICY_TARGET_STAKES,
+  roiPolicyRaceScore,
+  selectRoiPolicyCandidates,
+  type RoiPolicyCandidate
+} from "./roi-policy.js";
 import { clamp } from "./utils.js";
 
 export const COURSE_BUDGETS = {
@@ -12,20 +19,12 @@ export const COURSE_BUDGETS = {
   プレミアム: 10000
 } as const;
 
-export const COURSE_TARGET_STAKES = {
-  ライト: 1600,
-  スタンダード: 4200,
-  プレミアム: 8800
-} as const;
+export const COURSE_TARGET_STAKES = ROI_POLICY_TARGET_STAKES;
 
 type WeightMap = Map<number, number>;
 
-interface Candidate {
-  betType: BetType;
+interface Candidate extends RoiPolicyCandidate {
   combination: number[];
-  assumedOdds: number;
-  hitProbability: number;
-  expectedValuePct: number;
   reliability: number;
 }
 
@@ -36,14 +35,6 @@ interface CoursePolicy {
   maximumTickets: number;
   kellyScale: number;
   maximumTicketShare: number;
-}
-
-interface CoveragePolicy {
-  allowed: ReadonlySet<BetType>;
-  maximumTickets: number;
-  maximumTicketShare: number;
-  targetStakeYen: number;
-  typeCaps: Partial<Record<BetType, number>>;
 }
 
 const TICKET_ORDER: BetType[] = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"];
@@ -71,43 +62,10 @@ const MINIMUM_HIT: Record<BetType, number> = {
   "3連単": 0.004
 };
 
-const COVERAGE_MINIMUM_HIT: Record<BetType, number> = {
-  単勝: 0.035,
-  ワイド: 0.08,
-  馬連: 0.025,
-  馬単: 0.012,
-  "3連複": 0.012,
-  "3連単": 0.0015
-};
-
-const COVERAGE_ALLOWED: Record<BudgetCourse, ReadonlySet<BetType>> = {
+const COURSE_ALLOWED: Record<BudgetCourse, ReadonlySet<BetType>> = {
   ライト: new Set<BetType>(["単勝", "ワイド", "馬連"]),
   スタンダード: new Set<BetType>(["単勝", "ワイド", "馬連", "馬単", "3連複"]),
   プレミアム: new Set<BetType>(TICKET_ORDER)
-};
-
-const COVERAGE_POLICIES: Record<BudgetCourse, CoveragePolicy> = {
-  ライト: {
-    allowed: COVERAGE_ALLOWED.ライト,
-    maximumTickets: 5,
-    maximumTicketShare: 0.45,
-    targetStakeYen: COURSE_TARGET_STAKES.ライト,
-    typeCaps: { 単勝: 1, ワイド: 3, 馬連: 2 }
-  },
-  スタンダード: {
-    allowed: COVERAGE_ALLOWED.スタンダード,
-    maximumTickets: 9,
-    maximumTicketShare: 0.30,
-    targetStakeYen: COURSE_TARGET_STAKES.スタンダード,
-    typeCaps: { 単勝: 1, ワイド: 3, 馬連: 2, 馬単: 2, "3連複": 3 }
-  },
-  プレミアム: {
-    allowed: COVERAGE_ALLOWED.プレミアム,
-    maximumTickets: 16,
-    maximumTicketShare: 0.20,
-    targetStakeYen: COURSE_TARGET_STAKES.プレミアム,
-    typeCaps: { 単勝: 1, ワイド: 3, 馬連: 2, 馬単: 3, "3連複": 4, "3連単": 7 }
-  }
 };
 
 function floor100(value: number): number {
@@ -214,7 +172,8 @@ function candidate(
   combination: number[],
   predictionsByHorse: Map<number, RunnerPrediction>,
   modelWeights: WeightMap,
-  marketWeights: WeightMap
+  marketWeights: WeightMap,
+  firstHorseNo: number
 ): Candidate | null {
   if (new Set(combination).size !== combination.length) return null;
   const modelProbability = eventProbability(betType, combination, modelWeights);
@@ -230,15 +189,21 @@ function candidate(
   } else {
     assumedOdds = config.payoutRatio / marketProbability;
   }
-  assumedOdds = Math.floor(clamp(assumedOdds, 1.1, config.maximumOdds) * 10) / 10;
+  assumedOdds = Math.floor(clamp(assumedOdds, 1.1, 2500) * 10) / 10;
   const expectedValuePct = clamp(modelProbability * assumedOdds * 100 * config.reliability, 1, 9999);
+  const rankSum = combination.reduce(
+    (sum, horseNo) => sum + (predictionsByHorse.get(horseNo)?.predictedOrder ?? 99),
+    0
+  );
   return {
     betType,
     combination,
     assumedOdds,
     hitProbability: modelProbability,
     expectedValuePct,
-    reliability: config.reliability
+    reliability: config.reliability,
+    rankSum,
+    includesFirst: combination.includes(firstHorseNo)
   };
 }
 
@@ -253,22 +218,30 @@ function buildCandidates(predictions: RunnerPrediction[]): Candidate[] {
   const predictionsByHorse = new Map(ranked.map((prediction) => [prediction.horseNo, prediction]));
   const candidates: Candidate[] = [];
   const seen = new Set<string>();
+  const firstHorseNo = ranked[0]!.horseNo;
   const add = (betType: BetType, combination: number[]) => {
     const key = combinationKey(betType, combination);
     if (seen.has(key)) return;
-    const built = candidate(betType, combination, predictionsByHorse, modelWeights, marketWeights);
+    const built = candidate(
+      betType,
+      combination,
+      predictionsByHorse,
+      modelWeights,
+      marketWeights,
+      firstHorseNo
+    );
     if (!built) return;
     seen.add(key);
     candidates.push(built);
   };
 
-  for (const runner of ranked.slice(0, 6)) add("単勝", [runner.horseNo]);
+  const pool = ranked.slice(0, 6);
+  for (const runner of pool) add("単勝", [runner.horseNo]);
 
-  const pairPool = ranked.slice(0, 5);
-  for (let first = 0; first < pairPool.length; first += 1) {
-    for (let second = first + 1; second < pairPool.length; second += 1) {
-      const a = pairPool[first];
-      const b = pairPool[second];
+  for (let first = 0; first < pool.length; first += 1) {
+    for (let second = first + 1; second < pool.length; second += 1) {
+      const a = pool[first];
+      const b = pool[second];
       if (!a || !b) continue;
       add("ワイド", [a.horseNo, b.horseNo]);
       add("馬連", [a.horseNo, b.horseNo]);
@@ -277,13 +250,12 @@ function buildCandidates(predictions: RunnerPrediction[]): Candidate[] {
     }
   }
 
-  const triplePool = ranked.slice(0, 5);
-  for (let first = 0; first < triplePool.length; first += 1) {
-    for (let second = first + 1; second < triplePool.length; second += 1) {
-      for (let third = second + 1; third < triplePool.length; third += 1) {
-        const a = triplePool[first];
-        const b = triplePool[second];
-        const c = triplePool[third];
+  for (let first = 0; first < pool.length; first += 1) {
+    for (let second = first + 1; second < pool.length; second += 1) {
+      for (let third = second + 1; third < pool.length; third += 1) {
+        const a = pool[first];
+        const b = pool[second];
+        const c = pool[third];
         if (!a || !b || !c) continue;
         const horses = [a.horseNo, b.horseNo, c.horseNo];
         add("3連複", horses);
@@ -298,7 +270,7 @@ function buildCandidates(predictions: RunnerPrediction[]): Candidate[] {
 function policyFor(course: BudgetCourse, baseMinimum: number): CoursePolicy {
   if (course === "ライト") {
     return {
-      allowed: COVERAGE_ALLOWED.ライト,
+      allowed: COURSE_ALLOWED.ライト,
       minimumExpectedValuePct: Math.max(108, baseMinimum),
       minimumHitProbability: { 単勝: 0.09, ワイド: 0.2, 馬連: 0.08 },
       maximumTickets: 4,
@@ -308,7 +280,7 @@ function policyFor(course: BudgetCourse, baseMinimum: number): CoursePolicy {
   }
   if (course === "スタンダード") {
     return {
-      allowed: COVERAGE_ALLOWED.スタンダード,
+      allowed: COURSE_ALLOWED.スタンダード,
       minimumExpectedValuePct: Math.max(110, baseMinimum + 2),
       minimumHitProbability: { 単勝: 0.07, ワイド: 0.16, 馬連: 0.065, 馬単: 0.03, "3連複": 0.03 },
       maximumTickets: 7,
@@ -317,7 +289,7 @@ function policyFor(course: BudgetCourse, baseMinimum: number): CoursePolicy {
     };
   }
   return {
-    allowed: COVERAGE_ALLOWED.プレミアム,
+    allowed: COURSE_ALLOWED.プレミアム,
     minimumExpectedValuePct: Math.max(115, baseMinimum + 7),
     minimumHitProbability: MINIMUM_HIT,
     maximumTickets: 10,
@@ -328,11 +300,6 @@ function policyFor(course: BudgetCourse, baseMinimum: number): CoursePolicy {
 
 function candidateScore(value: Candidate, threshold: number): number {
   return (value.expectedValuePct - threshold) * Math.sqrt(value.hitProbability) * value.reliability;
-}
-
-function coverageCandidateScore(value: Candidate): number {
-  const valueFactor = clamp(value.expectedValuePct / 100, 0.55, 2.5);
-  return valueFactor * Math.sqrt(value.hitProbability) * value.reliability;
 }
 
 function stakeFor(candidateBet: Candidate, course: BudgetCourse, policy: CoursePolicy): number {
@@ -386,87 +353,23 @@ function selectCourse(
   return selected;
 }
 
-function selectCoverageCandidates(course: BudgetCourse, candidates: Candidate[]): Candidate[] {
-  const policy = COVERAGE_POLICIES[course];
-  const allowed = candidates.filter((item) => policy.allowed.has(item.betType));
-  const reliable = allowed.filter((item) => item.hitProbability >= COVERAGE_MINIMUM_HIT[item.betType]);
-  const pool = (reliable.length >= policy.maximumTickets ? reliable : allowed)
-    .sort((a, b) => coverageCandidateScore(b) - coverageCandidateScore(a));
-  const typeCounts = new Map<BetType, number>();
-  const selected: Candidate[] = [];
-
-  for (const item of pool) {
-    if (selected.length >= policy.maximumTickets) break;
-    const used = typeCounts.get(item.betType) ?? 0;
-    const cap = policy.typeCaps[item.betType] ?? policy.maximumTickets;
-    if (used >= cap) continue;
-    selected.push(item);
-    typeCounts.set(item.betType, used + 1);
-  }
-
-  if (selected.length === 0 && allowed[0]) selected.push(allowed[0]);
-  return selected;
-}
-
-function allocateCoverageStakes(
-  course: BudgetCourse,
-  selected: Candidate[]
-): BetRecommendation[] {
-  if (selected.length === 0) return [];
-  const policy = COVERAGE_POLICIES[course];
-  const budget = COURSE_BUDGETS[course];
-  const target = Math.min(budget, Math.max(selected.length * 100, floor100(policy.targetStakeYen)));
-  const maximumPerTicket = Math.max(100, floor100(budget * policy.maximumTicketShare));
-  const stakes = selected.map(() => 100);
-  let remaining = target - selected.length * 100;
-  const weights = selected.map((item) => Math.max(0.01, coverageCandidateScore(item)));
-  const totalWeight = weights.reduce((sum, value) => sum + value, 0);
-
-  for (let index = 0; index < selected.length && remaining >= 100; index += 1) {
-    const proportional = floor100(remaining * (weights[index] ?? 0) / Math.max(0.01, totalWeight));
-    const room = Math.max(0, maximumPerTicket - (stakes[index] ?? 0));
-    const addition = Math.min(room, proportional);
-    stakes[index] = (stakes[index] ?? 0) + addition;
-    remaining -= addition;
-  }
-
-  const order = selected
-    .map((item, index) => ({ index, score: coverageCandidateScore(item) }))
-    .sort((a, b) => b.score - a.score);
-  while (remaining >= 100) {
-    let allocated = false;
-    for (const item of order) {
-      const current = stakes[item.index] ?? 0;
-      if (current + 100 > maximumPerTicket) continue;
-      stakes[item.index] = current + 100;
-      remaining -= 100;
-      allocated = true;
-      if (remaining < 100) break;
-    }
-    if (!allocated) break;
-  }
-
+function buildRoiPolicyCourseBets(course: BudgetCourse, candidates: Candidate[]): BetRecommendation[] {
+  const selected = selectRoiPolicyCandidates(course, candidates);
+  const stakes = allocateRoiPolicyStakes(course, selected);
   return selected.map((item, index) => toRecommendation(course, item, stakes[index] ?? 100));
 }
 
 export function coverageRaceScore(predictions: RunnerPrediction[]): number {
   const candidates = buildCandidates(predictions);
   if (candidates.length === 0) return Number.NEGATIVE_INFINITY;
-  const best = candidates
-    .filter((item) => item.hitProbability >= COVERAGE_MINIMUM_HIT[item.betType])
-    .sort((a, b) => coverageCandidateScore(b) - coverageCandidateScore(a))[0]
-    ?? candidates.sort((a, b) => coverageCandidateScore(b) - coverageCandidateScore(a))[0];
-  const ranked = [...predictions].sort((a, b) => a.predictedOrder - b.predictedOrder);
-  const first = ranked[0]?.winProbability ?? 0;
-  const second = ranked[1]?.winProbability ?? 0;
-  return coverageCandidateScore(best) * 100 + first * 20 + Math.max(0, first - second) * 40;
+  return roiPolicyRaceScore(predictions, candidates);
 }
 
 export function buildVenueCoverageBets(predictions: RunnerPrediction[]): BetRecommendation[] {
   const candidates = buildCandidates(predictions);
   if (candidates.length === 0) return [];
   return (["ライト", "スタンダード", "プレミアム"] as BudgetCourse[])
-    .flatMap((course) => allocateCoverageStakes(course, selectCoverageCandidates(course, candidates)));
+    .flatMap((course) => buildRoiPolicyCourseBets(course, candidates));
 }
 
 export function buildBudgetCourseBets(

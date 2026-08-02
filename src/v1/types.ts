@@ -95,6 +95,7 @@ export interface RunnerPrediction {
   expectedValuePct: number | null;
   predictedOrder: number;
   explanation: string;
+  popularity?: number | null;
 }
 
 export type BetType = "単勝" | "ワイド" | "馬連" | "馬単" | "3連複" | "3連単";
