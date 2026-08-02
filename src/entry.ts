@@ -192,13 +192,26 @@ async function coursePerformanceSnapshot(env: Env): Promise<unknown> {
 
 async function runThreeMonthPipelineStep(env: Env): Promise<unknown> {
   const history = await runThreeMonthHistoryStep(env.DB);
-  const validation = await runThreeMonthValidationBatch(env.DB, 36);
-  const quotas = await normalizeThreeMonthVenueQuotas(env.DB, 3);
-  const [historyProgress, snapshot] = await Promise.all([
-    getThreeMonthHistoryProgress(env.DB),
-    getThreeMonthValidationSnapshot(env.DB)
-  ]);
+  const historyProgress = await getThreeMonthHistoryProgress(env.DB);
+  let validation: Awaited<ReturnType<typeof runThreeMonthValidationBatch>> = {
+    processed: 0,
+    errors: 0,
+    remaining: 0
+  };
+  let quotas: Awaited<ReturnType<typeof normalizeThreeMonthVenueQuotas>> = [];
+
+  if (historyProgress.phase !== "discovery") {
+    const validationBatchSize = historyProgress.phase === "import" ? 12 : 48;
+    const quotaBatchSize = historyProgress.phase === "import" ? 2 : 8;
+    validation = await runThreeMonthValidationBatch(env.DB, validationBatchSize);
+    quotas = await normalizeThreeMonthVenueQuotas(env.DB, quotaBatchSize);
+  }
+
+  const snapshot = await getThreeMonthValidationSnapshot(env.DB);
   const pendingTickets = snapshot.combined.reduce((sum, row) => sum + row.pendingTickets, 0);
+  const requiredSelections = snapshot.venueDays * 5;
+  const quotasComplete = snapshot.combined.length === 3
+    && snapshot.combined.every((row) => row.selectedRaces === requiredSelections);
   return {
     ok: true,
     history,
@@ -211,10 +224,15 @@ async function runThreeMonthPipelineStep(env: Env): Promise<unknown> {
       processedRaces: snapshot.processedRaces,
       remainingRaces: snapshot.remainingRaces,
       venueDays: snapshot.venueDays,
+      requiredSelections,
+      quotasComplete,
       pendingTickets,
       courses: snapshot.combined
     },
-    complete: historyProgress.complete && snapshot.complete && pendingTickets === 0
+    complete: historyProgress.complete
+      && snapshot.complete
+      && pendingTickets === 0
+      && quotasComplete
   };
 }
 
