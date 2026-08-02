@@ -1,0 +1,80 @@
+name: ROI policy production verification
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for ROI policy deployment
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          expected="$(grep '"MODEL_VERSION"' wrangler.jsonc | sed -E 's/.*"MODEL_VERSION"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
+          for attempt in $(seq 1 48); do
+            health="$(curl --silent --show-error --max-time 25 "${base}/health" || true)"
+            if HEALTH="$health" EXPECTED="$expected" python - <<'PY'
+          import json, os, sys
+          try:
+              data=json.loads(os.environ.get('HEALTH',''))
+          except Exception:
+              sys.exit(1)
+          sys.exit(0 if data.get('ok') is True and data.get('modelVersion') == os.environ['EXPECTED'] else 1)
+          PY
+            then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+
+      - name: Reprocess and verify historical ROI
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          for attempt in $(seq 1 72); do
+            performance="$(curl --silent --show-error --max-time 40 "${base}/api/performance/courses" || true)"
+            page="$(curl --silent --show-error --max-time 40 "${base}/performance" || true)"
+            if PERFORMANCE="$performance" PAGE="$page" python - <<'PY'
+          import json, os, sys
+          try:
+              payload=json.loads(os.environ.get('PERFORMANCE',''))
+          except Exception:
+              sys.exit(1)
+          historical=payload.get('historical', []) if isinstance(payload, dict) else []
+          targets={'ライト':1600,'スタンダード':4200,'プレミアム':8800}
+          valid=len(historical)==3
+          summary={}
+          for row in historical:
+              course=row.get('course')
+              races=int(row.get('selectedRaces',0))
+              stake=float(row.get('stakeYen',0))
+              roi=float(row.get('roiPct') or 0)
+              hit=float(row.get('hitRatePct') or 0)
+              pending=int(row.get('pendingTickets',0))
+              average=stake/races if races else 0
+              summary[course]={'races':races,'roiPct':roi,'hitRatePct':hit,'averageStake':average,'pending':pending}
+              valid = valid and course in targets and races == 30 and pending == 0
+              valid = valid and abs(average-targets[course]) < 0.01 and roi >= 120 and hit >= 55
+          page=os.environ.get('PAGE','')
+          valid = valid and '分析固定ルール roi-policy-v1' in page and '全コース120%超' in page
+          print(json.dumps({'attemptValid':valid,'historical':summary},ensure_ascii=False))
+          sys.exit(0 if valid else 1)
+          PY
+            then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "$performance"
+          exit 1
