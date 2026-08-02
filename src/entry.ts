@@ -13,6 +13,7 @@ import {
   normalizeThreeMonthVenueQuotas,
   runThreeMonthValidationBatch
 } from "./v1/three-month-validation.js";
+import { getThreeMonthStakeAudit } from "./v1/three-month-audit.js";
 import { fetchJraPage } from "./v1/jra.js";
 import { refreshMissingLivePredictions } from "./v1/live-prediction-refresh.js";
 import { getPhaseDDashboard } from "./v1/phase-d-dashboard.js";
@@ -28,6 +29,7 @@ import {
   VALIDATION_CONFIGS
 } from "./v1/validation.js";
 
+const HISTORICAL_AUDIT_FROZEN = true;
 let startupReady: Promise<void> | null = null;
 let maintenanceRunning: Promise<void> | null = null;
 let quotaNormalizationRunning: Promise<void> | null = null;
@@ -188,7 +190,7 @@ async function coursePerformanceSnapshot(env: Env): Promise<unknown> {
     getCourseMetrics(env.DB, env.MODEL_VERSION),
     displayedHistoricalSnapshot(env.DB)
   ]);
-  return { live, historical: display.historical, threeMonth: display.threeMonth };
+  return { live, historical: display.historical, threeMonth: display.threeMonth, auditFrozen: HISTORICAL_AUDIT_FROZEN };
 }
 
 async function runThreeMonthPipelineStep(env: Env): Promise<unknown> {
@@ -255,6 +257,26 @@ function validationDateFromPath(pathname: string): string | null {
   return VALIDATION_CONFIGS.some((config) => config.raceDate === value) ? value : null;
 }
 
+function auditHoldSection(): string {
+  return `<section style="margin:20px 0;padding:18px;border:1px solid #c76767;border-radius:16px;background:#2a1619;color:#fff">
+    <h2 style="margin:0 0 8px;font-size:20px">過去3ヶ月成績を監査中</h2>
+    <p style="margin:0;color:#e8bdc0;line-height:1.7">購入額の不整合と、個別レースページ・累計集計の参照モデル不一致が疑われるため、回収率・収支・月別成績を一時的に非表示にしています。全レースへのリンクは下に残しています。</p>
+  </section>`;
+}
+
+function maskDisputedHomeMetrics(html: string): string {
+  let next = html.replace(
+    /<div class="section-label"><h2>全期間の累計成績[\s\S]*?<\/section>/,
+    auditHoldSection()
+  );
+  next = next.replace(/<section class="home-history" id="monthly-history">[\s\S]*?<\/section>/, "");
+  return next.replace("</head>", `<style>.audit-hold-link{color:#78dfb3}</style></head>`);
+}
+
+function auditPerformancePage(): string {
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>レース探偵｜成績監査中</title><style>body{margin:0;background:#07111b;color:#f5f7fa;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:760px;margin:auto;padding:28px 18px}.box{margin-top:40px;padding:22px;border:1px solid #c76767;border-radius:18px;background:#2a1619}.box h1{margin:0 0 12px}.box p{color:#e8bdc0;line-height:1.8}.box a{display:inline-block;margin-top:10px;color:#78dfb3;text-decoration:none}</style></head><body><main class="wrap"><div class="box"><h1>過去3ヶ月成績を監査中</h1><p>固定購入額、個別レースの買い目、累計集計に使われた買い目を全件突合しています。検証が完了するまで回収率と収支は表示しません。</p><a href="/">ホームへ戻る</a></div></main></body></html>`;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
@@ -264,6 +286,12 @@ export default {
 
       if (pathname === "/api/validation/analysis-data") {
         return json(await getValidationAnalysisData(env.DB));
+      }
+      if (pathname === "/api/audit/three-months") {
+        if (request.headers.get("x-race-audit") !== "stake-reconciliation-v1") {
+          return json({ ok: false, error: "AUDIT_HEADER_REQUIRED" }, 403);
+        }
+        return json(await getThreeMonthStakeAudit(env.DB, env.MODEL_VERSION, url.searchParams.get("full") === "1"));
       }
       if (pathname === "/api/validation") {
         const snapshot = await getValidationSnapshot(env.DB);
@@ -275,16 +303,19 @@ export default {
           getThreeMonthHistoryProgress(env.DB),
           getThreeMonthValidationSnapshot(env.DB)
         ]);
-        return json({ progress, validation });
+        return json({ progress, validation, auditFrozen: HISTORICAL_AUDIT_FROZEN });
       }
       if (pathname === "/api/history/three-months/step" && request.method === "POST") {
+        if (HISTORICAL_AUDIT_FROZEN) {
+          return json({ ok: false, error: "HISTORICAL_AUDIT_FROZEN", message: "Three-month writes are disabled until stake reconciliation is complete." }, 423);
+        }
         if (request.headers.get("x-race-backfill") !== "three-month-v1") {
           return json({ ok: false, error: "BACKFILL_HEADER_REQUIRED" }, 403);
         }
         return json(await runThreeMonthPipelineStep(env));
       }
       if (pathname === "/api/performance/three-months/read-only") {
-        return json(await getThreeMonthValidationSnapshot(env.DB));
+        return json({ ...(await getThreeMonthValidationSnapshot(env.DB)), auditFrozen: HISTORICAL_AUDIT_FROZEN });
       }
       if (pathname === "/api/performance/courses/read-only") {
         return json(await coursePerformanceSnapshot(env));
@@ -297,7 +328,7 @@ export default {
       if (pathname === "/") {
         const dashboard = await getPhaseDDashboard(env.DB, env.MODEL_VERSION);
         scheduleBackground(ctx, env);
-        return page(dashboard);
+        return page(HISTORICAL_AUDIT_FROZEN ? maskDisputedHomeMetrics(dashboard) : dashboard);
       }
       const historyDate = historyDateFromPath(pathname);
       if (historyDate) {
@@ -323,6 +354,7 @@ export default {
         return page(body);
       }
       if (pathname === "/performance") {
+        if (HISTORICAL_AUDIT_FROZEN) return page(auditPerformancePage());
         const [cumulative, monthly, display] = await Promise.all([
           getCourseMetrics(env.DB, env.MODEL_VERSION),
           getCourseMonthlyMetrics(env.DB, env.MODEL_VERSION),
