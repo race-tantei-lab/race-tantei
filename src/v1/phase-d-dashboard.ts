@@ -4,10 +4,10 @@ import type { BudgetCourse } from "./types.js";
 import { escapeHtml, formatYen } from "./utils.js";
 import { getValidationSnapshot, type CourseValidationSummary } from "./validation.js";
 
-const COURSES: Array<{ name: BudgetCourse; budget: number; target: number }> = [
-  { name: "ライト", budget: 2000, target: 1600 },
-  { name: "スタンダード", budget: 5000, target: 4200 },
-  { name: "プレミアム", budget: 10000, target: 8800 }
+const COURSES: Array<{ name: BudgetCourse }> = [
+  { name: "ライト" },
+  { name: "スタンダード" },
+  { name: "プレミアム" }
 ];
 
 interface DisplayMetric {
@@ -52,15 +52,14 @@ function combine(live: DisplayMetric, historical: DisplayMetric): DisplayMetric 
   };
 }
 
-function metricCard(metric: DisplayMetric, budget: number, target: number): string {
+function metricCard(metric: DisplayMetric): string {
   const roi = metric.stake > 0 ? metric.returns / metric.stake * 100 : null;
   const profit = metric.returns - metric.stake;
   return `<a class="metric" href="/performance">
-    <div class="metric-head"><b>${escapeHtml(metric.course)}</b><span>上限 ${formatYen(budget)}</span></div>
+    <div class="metric-head"><b>${escapeHtml(metric.course)}</b></div>
     <strong>${roi === null ? "—" : `${roi.toFixed(1)}%`}</strong>
     <small>${metric.hits}/${metric.races}R的中　${formatYen(metric.stake)} → ${formatYen(metric.returns)}</small>
     <em class="${profit >= 0 ? "plus" : "minus"}">${signedYen(profit)}</em>
-    <small style="display:block;margin-top:5px">1R目安 ${formatYen(target)}</small>
   </a>`;
 }
 
@@ -74,15 +73,12 @@ function replaceMetricArea(
   const end = html.indexOf("</section>", metricsStart);
   if (start < 0 || metricsStart < 0 || end < 0) return html;
 
-  const cards = COURSES.map(({ name, budget, target }) => metricCard(
-    combined.find((row) => row.course === name) ?? { course: name, races: 0, hits: 0, stake: 0, returns: 0 },
-    budget,
-    target
+  const cards = COURSES.map(({ name }) => metricCard(
+    combined.find((row) => row.course === name) ?? { course: name, races: 0, hits: 0, stake: 0, returns: 0 }
   )).join("");
 
-  const replacement = `<div class="section-label"><h2>累計回収率</h2><span>過去レース＋本番を合算${historicalComplete ? "" : "・過去分集計中"}</span></div>
-    <section class="metrics">${cards}</section>
-    <div class="notice">過去分と本番分を分けず、選出した全レースを同じ成績として集計しています。各レースの購入額はライト約1,600円、スタンダード約4,200円、プレミアム約8,800円を目安に配分します。</div>`;
+  const replacement = `<div class="section-label"><h2>総合成績</h2><span>過去レース＋本番を合算${historicalComplete ? "" : "・過去分集計中"}</span></div>
+    <section class="metrics">${cards}</section>`;
   return `${html.slice(0, start)}${replacement}${html.slice(end + "</section>".length)}`;
 }
 
@@ -186,9 +182,9 @@ export async function getPhaseDDashboard(db: D1Database, liveModel: string): Pro
   html = replaceMetricArea(html, combined, historicalSnapshot.complete);
   html = markSelectedCards(html)
     .replace(/買い目あり/g, "選出レース")
-    .replace("本番成績と遡及検証を分離し、期待値基準未達は見送ります。", "各会場から原則5Rを選出し、過去レースと本番を同じ累計成績に合算します。")
-    .replace("各会場から原則5Rを選出し、期待値厳選と会場上位補完を分けて集計します。", "各会場から原則5Rを選出し、過去レースと本番を同じ累計成績に合算します。")
-    .replace("<title>レース探偵｜フェーズC</title>", "<title>レース探偵｜会場別5R選出</title>")
-    .replace("<title>レース探偵｜会場別5R選出</title>", "<title>レース探偵｜会場別5R・累計成績</title>");
+    .replace("本番成績と遡及検証を分離し、期待値基準未達は見送ります。", "各会場から原則5Rを選出し、過去レースと本番を同じ総合成績に合算します。")
+    .replace("各会場から原則5Rを選出し、期待値厳選と会場上位補完を分けて集計します。", "各会場から原則5Rを選出し、過去レースと本番を同じ総合成績に合算します。")
+    .replace("<title>レース探偵｜フェーズC</title>", "<title>レース探偵｜会場別5R・総合成績</title>")
+    .replace("<title>レース探偵｜会場別5R選出</title>", "<title>レース探偵｜会場別5R・総合成績</title>");
   return injectSelectionCountScript(html);
 }
