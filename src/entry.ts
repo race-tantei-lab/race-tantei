@@ -1,5 +1,6 @@
 import app, { runSync } from "./complete.js";
 import { BACKTEST_DATE, renderBacktest, runBacktestBatch } from "./v1/backtest.js";
+import { runAug2BackfillBatch } from "./v1/backfill-aug2.js";
 import { renderCompactRace } from "./v1/course-detail.js";
 import { ensureSchema } from "./v1/db.js";
 import { getDisplayRaceDetail } from "./v1/display-detail.js";
@@ -26,129 +27,94 @@ function failureResponse(request: Request, error: unknown): Response {
   if (pathname === "/health" || pathname.startsWith("/api/")) {
     return new Response(JSON.stringify({ ok: false, error: "WORKER_STARTUP_FAILED", detail }), {
       status: 500,
-      headers: {
-        "content-type": "application/json; charset=utf-8",
-        "cache-control": "no-store",
-        "x-robots-tag": "noindex, nofollow"
-      }
+      headers: { "content-type":"application/json; charset=utf-8", "cache-control":"no-store", "x-robots-tag":"noindex, nofollow" }
     });
   }
-  return new Response(
-    `レース探偵の起動処理に失敗しました。\nエラーコード: WORKER_STARTUP_FAILED\n詳細: ${detail}`,
-    {
-      status: 500,
-      headers: {
-        "content-type": "text/plain; charset=utf-8",
-        "cache-control": "no-store",
-        "x-robots-tag": "noindex, nofollow"
-      }
-    }
-  );
+  return new Response(`レース探偵の起動処理に失敗しました。\nエラーコード: WORKER_STARTUP_FAILED\n詳細: ${detail}`, {
+    status:500,
+    headers:{ "content-type":"text/plain; charset=utf-8", "cache-control":"no-store", "x-robots-tag":"noindex, nofollow" }
+  });
 }
 
-function extractOfficialRaceName(html: string): string | null {
-  const match = html.match(/<span\b[^>]*class=["'][^"']*titleRaceName[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
-  if (!match?.[1]) return null;
-  const name = stripHtml(match[1]).replace(/\s+/g, " ").trim();
-  if (!name || /^(?:検索ウィンドウ|メニュー|出馬表|レース結果|オッズ|払戻金)$/.test(name)) return null;
+function extractOfficialRaceName(html:string):string|null {
+  const match=html.match(/<span\b[^>]*class=["'][^"']*titleRaceName[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
+  if(!match?.[1])return null;
+  const name=stripHtml(match[1]).replace(/\s+/g," ").trim();
+  if(!name||/^(?:検索ウィンドウ|メニュー|出馬表|レース結果|オッズ|払戻金)$/.test(name))return null;
   return name;
 }
 
-async function repairRaceNames(db: D1Database, limit = 8): Promise<number> {
-  const rows = await db.prepare(`
-    SELECT race_id AS raceId, entry_url AS entryUrl, result_url AS resultUrl, race_name AS raceName
+async function repairRaceNames(db:D1Database,limit=8):Promise<number>{
+  const rows=await db.prepare(`
+    SELECT race_id AS raceId, entry_url AS entryUrl, result_url AS resultUrl
     FROM rt_races
     WHERE race_name IN ('検索ウィンドウ','メニュー','出馬表','レース結果','オッズ','払戻金')
        OR race_name GLOB '[0-9]*レース'
-    ORDER BY race_date DESC, venue, race_no
-    LIMIT ?
-  `).bind(limit).all<{ raceId: string; entryUrl: string; resultUrl: string; raceName: string }>();
-  let repaired = 0;
-  for (const row of rows.results) {
-    try {
-      let name: string | null = null;
-      for (const url of [row.resultUrl, row.entryUrl]) {
-        if (!url) continue;
-        try {
-          const page = await fetchJraPage(url);
-          name = extractOfficialRaceName(page.html);
-          if (name) break;
-        } catch {
-          // Try the other official page.
-        }
+    ORDER BY race_date DESC,venue,race_no LIMIT ?
+  `).bind(limit).all<{raceId:string;entryUrl:string;resultUrl:string}>();
+  let repaired=0;
+  for(const row of rows.results){
+    try{
+      let name:string|null=null;
+      for(const url of [row.resultUrl,row.entryUrl]){
+        if(!url)continue;
+        try{const page=await fetchJraPage(url);name=extractOfficialRaceName(page.html);if(name)break;}catch{/* try next */}
       }
-      if (!name) continue;
-      await db.prepare(`UPDATE rt_races SET race_name=?, updated_at=CURRENT_TIMESTAMP WHERE race_id=?`)
-        .bind(name, row.raceId).run();
-      repaired += 1;
-    } catch (error) {
-      console.error("RACE_NAME_REPAIR_FAILED", row.raceId, error);
-    }
+      if(!name)continue;
+      await db.prepare(`UPDATE rt_races SET race_name=?,updated_at=CURRENT_TIMESTAMP WHERE race_id=?`).bind(name,row.raceId).run();
+      repaired+=1;
+    }catch(error){console.error("RACE_NAME_REPAIR_FAILED",row.raceId,error);}
   }
   return repaired;
 }
 
-function runMaintenance(env: Env): Promise<void> {
-  if (maintenanceRunning) return maintenanceRunning;
-  maintenanceRunning = Promise.all([
-    repairRaceNames(env.DB, 8),
-    runBacktestBatch(env.DB, 12),
-    runSync(env, "deploy")
-  ]).then(() => undefined).finally(() => {
-    maintenanceRunning = null;
-  });
+function runMaintenance(env:Env):Promise<void>{
+  if(maintenanceRunning)return maintenanceRunning;
+  maintenanceRunning=(async()=>{
+    // Results must be fetched first; only then can already-finished races be retrospectively predicted and settled.
+    await runSync(env,"deploy");
+    await Promise.all([
+      repairRaceNames(env.DB,8),
+      runBacktestBatch(env.DB,12),
+      runAug2BackfillBatch(env.DB,env.MODEL_VERSION,12)
+    ]);
+  })().finally(()=>{maintenanceRunning=null;});
   return maintenanceRunning;
 }
 
-function page(body: string, status = 200): Response {
-  return new Response(body, {
-    status,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store",
-      "x-content-type-options": "nosniff"
-    }
-  });
+function page(body:string,status=200):Response{
+  return new Response(body,{status,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}});
 }
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    try {
+  async fetch(request:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
+    try{
       await prepare(env.DB);
-      const pathname = new URL(request.url).pathname;
-
-      if (pathname === "/") {
-        const dashboard = await getStableDashboard(env.DB, env.MODEL_VERSION);
+      const pathname=new URL(request.url).pathname;
+      if(pathname==="/"){
+        const dashboard=await getStableDashboard(env.DB,env.MODEL_VERSION);
         ctx.waitUntil(runMaintenance(env));
         return page(dashboard.html);
       }
-
-      if (pathname.startsWith("/races/")) {
-        const id = decodeURIComponent(pathname.slice("/races/".length));
-        const detail = await getDisplayRaceDetail(env.DB, id);
+      if(pathname.startsWith("/races/")){
+        const id=decodeURIComponent(pathname.slice("/races/".length));
+        const detail=await getDisplayRaceDetail(env.DB,id);
         ctx.waitUntil(runMaintenance(env));
-        return detail ? page(renderCompactRace(detail)) : page("レースが見つかりません。", 404);
+        return detail?page(renderCompactRace(detail)):page("レースが見つかりません。",404);
       }
-
-      if (pathname === `/backtest/${BACKTEST_DATE}`) {
+      if(pathname===`/backtest/${BACKTEST_DATE}`){
         await runMaintenance(env);
         return page(await renderBacktest(env.DB));
       }
-
-      if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
-      return await app.fetch(request, env, ctx);
-    } catch (error) {
-      return failureResponse(request, error);
-    }
+      if(!app.fetch)return new Response("NOT_FOUND",{status:404});
+      return await app.fetch(request,env,ctx);
+    }catch(error){return failureResponse(request,error);}
   },
-
-  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    try {
+  async scheduled(controller:ScheduledController,env:Env,ctx:ExecutionContext):Promise<void>{
+    try{
       await prepare(env.DB);
-      if (app.scheduled) await app.scheduled(controller, env, ctx);
+      if(app.scheduled)await app.scheduled(controller,env,ctx);
       ctx.waitUntil(runMaintenance(env));
-    } catch (error) {
-      console.error("SCHEDULED_STARTUP_FAILED", error);
-    }
+    }catch(error){console.error("SCHEDULED_STARTUP_FAILED",error);}
   }
 } satisfies ExportedHandler<Env>;
