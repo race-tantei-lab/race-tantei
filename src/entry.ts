@@ -5,9 +5,9 @@ import { renderCoursePerformance } from "./v1/course-ui.js";
 import { ensureSchema } from "./v1/db.js";
 import { getDisplayRaceDetail } from "./v1/display-detail.js";
 import {
-  getThreeMonthHistoryProgress,
-  runThreeMonthHistoryStep
-} from "./v1/three-month-history.js";
+  getThreeMonthHistoryProgressV2 as getThreeMonthHistoryProgress,
+  runThreeMonthHistoryStepV2 as runThreeMonthHistoryStep
+} from "./v1/three-month-history-v2.js";
 import {
   getThreeMonthValidationSnapshot,
   normalizeThreeMonthVenueQuotas,
