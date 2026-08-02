@@ -97,8 +97,10 @@ export interface RunnerPrediction {
   explanation: string;
 }
 
+export type BetType = "単勝" | "ワイド" | "馬連" | "馬単" | "3連複" | "3連単";
+
 export interface BetRecommendation {
-  betType: "単勝";
+  betType: BetType;
   combination: string;
   stakeYen: number;
   assumedOdds: number;
