@@ -111,7 +111,7 @@ jobs:
           PY
             then
               echo "Production Worker has discovered and stored live races."
-              exit 0
+              break
             fi
             if [ "$attempt" -eq 48 ]; then
               echo "Production ingestion did not create race sources and races in time."
@@ -121,6 +121,22 @@ jobs:
             fi
             sleep 10
           done
+
+          curl --silent --show-error --fail --max-time 25 "${base}/" >/tmp/home-after-sync.html
+          HOME_HTML="$(cat /tmp/home-after-sync.html)" python - <<'PY'
+          import json, os, re
+          html = os.environ.get("HOME_HTML", "")
+          matches = re.findall(
+              r'data-day-panel="([^"]+)"[\s\S]*?<div class="day-summary">[\s\S]*?<p>買い目あり\s+(\d+)R',
+              html
+          )
+          print(json.dumps({
+              "liveBuyCounts": [
+                  {"date": date, "buyRaces": int(count)} for date, count in matches
+              ],
+              "visibleBuyCards": len(re.findall(r'data-race-category="buy"', html))
+          }, ensure_ascii=False))
+          PY
 
       - name: Publish Phase C production verification
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
