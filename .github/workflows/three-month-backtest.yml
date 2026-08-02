@@ -1,0 +1,166 @@
+name: Three month historical backtest
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/entry.ts"
+      - "src/v1/three-month-*.ts"
+      - ".github/workflows/three-month-backtest.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Publish pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='production/three-month-backtest' \
+            -f description='Importing and validating 2026-05-02 through 2026-08-02' \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Wait for backtest endpoint
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          for attempt in $(seq 1 60); do
+            body="$(curl --silent --show-error --max-time 30 "${base}/api/history/three-months/status" || true)"
+            if BODY="$body" python - <<'PY'
+          import json, os, sys
+          try:
+              data=json.loads(os.environ.get('BODY',''))
+          except Exception:
+              sys.exit(1)
+          progress=data.get('progress',{})
+          sys.exit(0 if progress.get('scopeVersion') == 'three-month-2026-05-02-to-2026-08-02-v1' else 1)
+          PY
+            then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+
+      - name: Import, predict, select and settle
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          for attempt in $(seq 1 450); do
+            body="$(curl --silent --show-error --max-time 90 \
+              -X POST -H 'x-race-backfill: three-month-v1' \
+              "${base}/api/history/three-months/step" || true)"
+            if [ -z "$body" ]; then
+              echo "attempt ${attempt}: empty response"
+              sleep 3
+              continue
+            fi
+            complete="$(BODY="$body" python - <<'PY'
+          import json, os
+          try:
+              data=json.loads(os.environ['BODY'])
+          except Exception:
+              print('false')
+              raise SystemExit
+          p=data.get('progress',{})
+          s=data.get('snapshot',{})
+          print('true' if data.get('complete') is True else 'false')
+          print(
+              f"phase={p.get('phase')} discovery={p.get('discoveryDates')}/{p.get('totalDiscoveryDates')} "
+              f"meetings={p.get('completedMeetingTasks')}/{p.get('meetingTasks')} "
+              f"races={s.get('processedRaces')}/{s.get('totalRaces')} pending={s.get('pendingTickets')}",
+              file=__import__('sys').stderr
+          )
+          PY
+            )"
+            echo "attempt ${attempt}: complete=${complete}"
+            if [ "$complete" = "true" ]; then
+              printf '%s' "$body" > three-month-final.json
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Verify fixed policy over three months
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          curl --silent --show-error --fail --max-time 60 \
+            "${base}/api/performance/three-months/read-only" \
+            -o three-month-performance.json
+          python - <<'PY'
+          import json
+          data=json.load(open('three-month-performance.json',encoding='utf-8'))
+          courses=data.get('combined',[])
+          venue_days=int(data.get('venueDays',0))
+          valid=data.get('complete') is True and int(data.get('remainingRaces',-1)) == 0
+          valid=valid and int(data.get('totalRaces',0)) >= 900 and venue_days >= 75
+          targets={'ライト':1600,'スタンダード':4200,'プレミアム':8800}
+          summary={}
+          for row in courses:
+              course=row.get('course')
+              races=int(row.get('selectedRaces',0))
+              stake=float(row.get('stakeYen',0))
+              pending=int(row.get('pendingTickets',0))
+              average=stake/races if races else 0
+              roi=float(row.get('roiPct') or 0)
+              hit=float(row.get('hitRatePct') or 0)
+              summary[course]={'races':races,'roiPct':roi,'hitRatePct':hit,'averageStake':average,'pending':pending}
+              valid=valid and course in targets and races == venue_days * 5
+              valid=valid and pending == 0 and abs(average-targets[course]) < 0.01
+          print(json.dumps({
+              'valid':valid,
+              'scope':f"{data.get('startDate')}..{data.get('endDate')}",
+              'totalRaces':data.get('totalRaces'),
+              'venueDays':venue_days,
+              'courses':summary
+          },ensure_ascii=False,indent=2))
+          if not valid:
+              raise SystemExit(1)
+          description='3M ROI L{:.1f}% S{:.1f}% P{:.1f}%'.format(
+              summary['ライト']['roiPct'],
+              summary['スタンダード']['roiPct'],
+              summary['プレミアム']['roiPct']
+          )
+          open('three-month-description.txt','w',encoding='utf-8').write(description)
+          PY
+
+      - name: Publish success status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          description="$(cat three-month-description.txt)"
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='production/three-month-backtest' \
+            -f description="$description" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Publish failure status
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='production/three-month-backtest' \
+            -f description='Three month import or validation failed' \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
