@@ -3,6 +3,7 @@ import { getRace, getRunnerHistoryStats, getRunners } from "./db.js";
 import { generatePrediction } from "./model.js";
 import type { Env } from "./types.js";
 import { positiveInt, positiveNumber } from "./utils.js";
+import { ensureVenueDailyQuota, type VenueQuotaVenueResult } from "./venue-quota.js";
 
 export interface LivePredictionRefreshResult {
   candidates: number;
@@ -10,11 +11,14 @@ export interface LivePredictionRefreshResult {
   withBets: number;
   skipped: number;
   errors: number;
+  quotaAddedRaces: number;
+  quotaAddedTickets: number;
+  venueQuotas: Array<{ raceDate: string; venues: VenueQuotaVenueResult[] }>;
 }
 
 export async function refreshMissingLivePredictions(
   env: Env,
-  limit = 30
+  limit = 60
 ): Promise<LivePredictionRefreshResult> {
   const rows = await env.DB.prepare(`
     SELECT r.race_id AS raceId
@@ -41,7 +45,10 @@ export async function refreshMissingLivePredictions(
     generated: 0,
     withBets: 0,
     skipped: 0,
-    errors: 0
+    errors: 0,
+    quotaAddedRaces: 0,
+    quotaAddedTickets: 0,
+    venueQuotas: []
   };
   const now = Date.now();
 
@@ -89,6 +96,23 @@ export async function refreshMissingLivePredictions(
       result.errors += 1;
       console.error("LIVE_PREDICTION_REFRESH_FAILED", row.raceId, error);
     }
+  }
+
+  const dates = await env.DB.prepare(`
+    SELECT DISTINCT r.race_date AS raceDate
+    FROM rt_races r
+    JOIN rt_predictions p ON p.race_id=r.race_id AND p.model_version=?
+    WHERE r.status='scheduled'
+      AND r.start_time_utc IS NOT NULL
+      AND datetime(r.start_time_utc)>datetime('now')
+    ORDER BY r.race_date
+  `).bind(env.MODEL_VERSION).all<{ raceDate: string }>();
+
+  for (const { raceDate } of dates.results) {
+    const quota = await ensureVenueDailyQuota(env.DB, env.MODEL_VERSION, raceDate, "live");
+    result.quotaAddedRaces += quota.addedRaces;
+    result.quotaAddedTickets += quota.addedTickets;
+    result.venueQuotas.push({ raceDate, venues: quota.venues });
   }
 
   return result;
