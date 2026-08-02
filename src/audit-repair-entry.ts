@@ -65,7 +65,10 @@ function runRepair(env: Env): Promise<void> {
 
 function addMethodologyNotice(html: string): string {
   const notice = `<section style="margin:0 0 16px;padding:14px;border:1px solid #315f55;border-radius:14px;background:#10231f;color:#d9f3ec;line-height:1.7"><b>監査済み成績</b><br>主要回収率は2026年5月2日〜7月26日の固定購入額検証です。モデル調整に使った8月1日・2日は累計から除外しています。個別レースと累計は同じ予想ID・同じ買い目を参照します。</section>`;
-  return html.replace(/<main\b[^>]*>/, (match) => `${match}${notice}`);
+  const corrected = html
+    .replace("過去3ヶ月と本番公開分の合算", "主要検証期間と本番公開分の合算")
+    .replace("過去3ヶ月分はJRA結果ページに残る最終人気から市場確率を固定式で復元しています。", "過去検証分はJRA結果ページに残る最終人気から市場確率を固定式で復元しています。");
+  return corrected.replace(/<main\b[^>]*>/, (match) => `${match}${notice}`);
 }
 
 function addTuningNotice(html: string): string {
