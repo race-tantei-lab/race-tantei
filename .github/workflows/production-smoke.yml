@@ -141,9 +141,10 @@ jobs:
           }
           venue_ok = len(counts) >= 6 and all(count >= 5 for count in counts.values())
           page_ok = (
-              "累計回収率" in html
+              "総合成績" in html
               and "過去レース＋本番を合算" in html
-              and "1R目安" in html
+              and "1R目安" not in html
+              and "上限 " not in html
               and "本番公開成績" not in html
           )
           valid = historical_ok and budget_ok and venue_ok and page_ok
