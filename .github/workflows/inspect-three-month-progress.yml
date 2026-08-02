@@ -1,0 +1,48 @@
+name: Inspect three month progress
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read progress without mutation
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          curl --silent --show-error --fail --max-time 60 \
+            "${base}/api/history/three-months/status" -o progress.json
+          python - <<'PY'
+          import json
+          data=json.load(open('progress.json',encoding='utf-8'))
+          progress=data.get('progress',{})
+          validation=data.get('validation',{})
+          print(json.dumps({
+            'phase':progress.get('phase'),
+            'discovery':f"{progress.get('discoveryDates')}/{progress.get('totalDiscoveryDates')}",
+            'meetings':f"{progress.get('completedMeetingTasks')}/{progress.get('meetingTasks')}",
+            'nextRaceNo':progress.get('nextRaceNo'),
+            'failedRaces':progress.get('failedRaces'),
+            'storedRaces':progress.get('storedRaces'),
+            'validationComplete':validation.get('complete'),
+            'processedRaces':validation.get('processedRaces'),
+            'totalRaces':validation.get('totalRaces'),
+            'remainingRaces':validation.get('remainingRaces'),
+            'venueDays':validation.get('venueDays'),
+            'courses':[
+              {
+                'course':row.get('course'),
+                'selectedRaces':row.get('selectedRaces'),
+                'pendingTickets':row.get('pendingTickets'),
+                'roiPct':row.get('roiPct')
+              }
+              for row in validation.get('combined',[])
+            ]
+          },ensure_ascii=False,indent=2))
+          PY
