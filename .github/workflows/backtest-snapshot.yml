@@ -1,0 +1,31 @@
+name: Backtest snapshot
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read current production backtest
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail --max-time 60 "https://race-tantei-phase0.race-tantei.workers.dev/backtest/2026-08-01" >/tmp/backtest.html
+          python - <<'PY'
+          import re
+          html=open('/tmp/backtest.html',encoding='utf-8').read()
+          def one(p):
+              m=re.search(p,html)
+              return m.groups() if m and len(m.groups())>1 else (m.group(1) if m else None)
+          print({
+            'progress':one(r'計算済み<b>(\d+)/(\d+)R</b>'),
+            'hits':one(r'的中<b>(\d+)R</b>'),
+            'money':one(r'購入／払戻<b>[^0-9]*([0-9,]+)円\s*/\s*([0-9,]+)円</b>'),
+            'roi':one(r'回収率<b>([0-9.]+)%</b>'),
+            'badRaceNames':html.count('検索ウィンドウ')
+          })
+          PY
