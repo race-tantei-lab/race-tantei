@@ -12,7 +12,7 @@ import { archiveRaceDate, getThreeMonthHistoryProgressV2 } from "../src/v1/three
 void getThreeMonthHistoryProgressV2;
 
 const checksum = await getArchiveMonthChecksum("202605");
-assert.match(checksum, /^[0-9A-F]{2}$/);
+assert.ok(/^[0-9A-F]{2}$/.test(checksum), `invalid archive checksum: ${checksum}`);
 
 const meetings = await getArchiveMeetingCnames("202605");
 assert.ok(meetings.length >= 20, `too few May archive meetings: ${meetings.length}`);
