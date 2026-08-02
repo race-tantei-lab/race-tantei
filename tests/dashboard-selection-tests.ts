@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import { markSelectedCards } from "../src/v1/phase-d-dashboard.js";
+import { keepRecentRaceDays, markSelectedCards } from "../src/v1/phase-d-dashboard.js";
 
 function liveOpenCard(raceNo: number): string {
   return `<a class="race-card" data-race-category="buy" href="/races/live-${raceNo}">
@@ -69,5 +69,27 @@ const twoVenues = markSelectedCards([
   venuePanel("札幌", [historicalCard(1), historicalCard(2), historicalCard(3), historicalCard(4), historicalCard(5), historicalCard(6)])
 ].join(""));
 assert.equal((twoVenues.match(/data-race-selected="true"/g) ?? []).length, 10, "会場ごとに独立して5Rを選ぶ");
+
+function dayPanel(date: string): string {
+  return `<section class="day-panel" data-day-panel="${date}" hidden><div>${date}</div></section>`;
+}
+
+const compactHome = keepRecentRaceDays(`
+  <nav class="day-tabs">
+    <button type="button" data-day-tab="2026-08-02">8月2日</button>
+    <button type="button" data-day-tab="2026-08-01">8月1日</button>
+    <button type="button" data-day-tab="2026-07-26">7月26日</button>
+  </nav>
+  ${dayPanel("2026-08-02")}
+  ${dayPanel("2026-08-01")}
+  ${dayPanel("2026-07-26")}
+  <footer class="footer">footer</footer>
+`);
+assert.ok(compactHome.includes("直近の選出レース"));
+assert.ok(compactHome.includes('data-day-tab="2026-08-02"'));
+assert.ok(compactHome.includes('data-day-tab="2026-08-01"'));
+assert.ok(!compactHome.includes('data-day-tab="2026-07-26"'));
+assert.ok(!compactHome.includes('data-day-panel="2026-07-26"'));
+assert.equal((compactHome.match(/data-day-panel=/g) ?? []).length, 2, "ホームの日別詳細は直近2日だけに絞る");
 
 console.log("race-tantei dashboard selection tests passed");
