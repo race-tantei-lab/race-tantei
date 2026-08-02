@@ -1,0 +1,56 @@
+name: Verify optimized full history home
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check production totals and archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          for attempt in $(seq 1 30); do
+            if curl --silent --show-error --fail --max-time 60 "$base/" -o home.html; then
+              if grep -q '全レース' home.html && grep -q '集計済み分を随時反映' home.html; then
+                break
+              fi
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo 'new production home was not available' >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          html=Path('home.html').read_text(encoding='utf-8')
+          race_counts=[int(v) for v in re.findall(r'/([0-9]+)R的中',html)]
+          if len(race_counts)<3:
+              raise SystemExit(f'could not read three cumulative race counts: {race_counts}')
+          if min(race_counts[:3])<=36:
+              raise SystemExit(f'cumulative totals still use 36R fallback: {race_counts[:3]}')
+          links=re.findall(r'href="(/history/\d{4}-\d{2}-\d{2})"',html)
+          unique=list(dict.fromkeys(links))
+          if len(unique)<28:
+              raise SystemExit(f'too few archive date links: {len(unique)}')
+          Path('sample_path.txt').write_text(unique[-1],encoding='utf-8')
+          print({'cumulativeRaceCounts':race_counts[:3],'archiveDates':len(unique),'sample':unique[-1],'homeBytes':len(html.encode())})
+          PY
+          sample_path=$(cat sample_path.txt)
+          curl --silent --show-error --fail --max-time 60 "$base$sample_path" -o date.html
+          python - <<'PY'
+          from pathlib import Path
+          html=Path('date.html').read_text(encoding='utf-8')
+          cards=html.count('class="archive-race"')
+          if cards<24:
+              raise SystemExit(f'archive date did not render all races: {cards}')
+          for value in ['全レース','data-filter="selected"','data-filter="hit"','archive-venue-nav']:
+              if value not in html:
+                  raise SystemExit(f'missing archive page control: {value}')
+          print({'archiveRaceCards':cards,'archiveBytes':len(html.encode()),'ok':True})
+          PY
