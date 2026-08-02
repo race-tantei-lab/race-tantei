@@ -183,11 +183,12 @@ export default {
         return json(snapshot);
       }
       if (pathname === "/api/performance/courses") {
+        await runQuotaNormalization(env.DB);
         const [live, validation] = await Promise.all([
           getCourseMetrics(env.DB, env.MODEL_VERSION),
           getValidationSnapshot(env.DB)
         ]);
-        scheduleBackground(ctx, env);
+        ctx.waitUntil(runMaintenance(env));
         return json({ live, historical: validation.combined });
       }
       if (pathname === "/") {
