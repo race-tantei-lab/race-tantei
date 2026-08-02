@@ -1,0 +1,49 @@
+name: Apply course grouping and backtest
+on:
+  push:
+    branches: [fix-course-grouping-and-backtest]
+    paths: ['docs/course-grouping-trigger.txt']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix-course-grouping-and-backtest
+      - name: Patch UI and backtest
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          ui=Path('src/v1/ui.ts'); s=ui.read_text()
+          s=s.replace('.result-box{border-color:#76613a;background:#251e12}', '.result-box{border-color:#76613a;background:#251e12}.course-block{margin:14px 0 22px;border:1px solid var(--line);border-radius:18px;overflow:hidden}.course-head{display:flex;justify-content:space-between;align-items:center;padding:15px;background:#111a25}.course-head b{font-size:19px}.course-summary{padding:11px 15px;background:#0d141d;border-top:1px solid var(--line)}.course-bets{padding:10px;display:grid;gap:9px}.course-light{border-color:#3b6f62}.course-standard{border-color:#665d38}.course-premium{border-color:#744c67}.course-empty{padding:18px;color:var(--muted)}')
+          s=s.replace('  const stake=bets.reduce((n,b)=>n+b.stakeYen,0), returns=bets.reduce((n,b)=>n+(b.returnYen??0),0), profit=returns-stake;\n','')
+          old='''  const resultBox=finished ? `<div class="card result-box"><b>レース結果</b><div class="tabs">${finishers.slice(0,3).map(r=>`<span class="pill finished">${r.finishPosition}着 ${r.horseNo} ${escapeHtml(r.horseName)}</span>`).join("")||'<span class="muted">着順取得中</span>'}</div>${bets.length?`<div>購入 ${formatYen(stake)} ／ 払戻 ${formatYen(returns)} ／ <strong class="${profit>=0?"positive":"negative"}">${profit>=0?"+":""}${formatYen(profit)}</strong></div>`:'<div class="muted">固定買い目なし</div>'}</div>` : '<div class="card"><b>結果待ち</b><div class="muted">終了後に着順、払戻、収支を自動反映します。</div></div>';'''
+          new='''  const resultBox=finished ? `<div class="card result-box"><b>レース結果</b><div class="tabs">${finishers.slice(0,3).map(r=>`<span class="pill finished">${r.finishPosition}着 ${r.horseNo} ${escapeHtml(r.horseName)}</span>`).join("")||'<span class="muted">着順取得中</span>'}</div><div class="muted">払戻と収支は下の各コース内に分けて表示します。</div></div>` : '<div class="card"><b>結果待ち</b><div class="muted">終了後に着順、払戻、収支をコース別に自動反映します。</div></div>';'''
+          if old not in s: raise SystemExit('result anchor missing')
+          s=s.replace(old,new)
+          old='''  const betCards=bets.map(b=>`<div class="card buy"><b>${escapeHtml(b.betType)} ${escapeHtml(b.combination)}</b><div>購入想定 ${formatYen(b.stakeYen)} ／ 使用オッズ ${b.assumedOdds.toFixed(1)}</div><div class="muted">期待値 ${b.expectedValuePct.toFixed(1)}% ／ ${b.settlementStatus==="settled"?`払戻 ${formatYen(b.returnYen??0)}`:"発走前固定済み"}</div></div>`).join("");'''
+          new='''  const courseDefs=[{name:"ライト",budget:"2,000円",cls:"course-light"},{name:"スタンダード",budget:"5,000円",cls:"course-standard"},{name:"プレミアム",budget:"10,000円",cls:"course-premium"}];
+  const betCards=courseDefs.map(course=>{const list=bets.filter(b=>b.betType.startsWith(`${course.name}｜`));if(!list.length)return `<section class="course-block ${course.cls}"><div class="course-head"><b>${course.name}コース</b><span>${course.budget}</span></div><div class="course-empty">このコースの買い目はまだ生成されていません。</div></section>`;const stake=list.reduce((n,b)=>n+b.stakeYen,0);const returns=list.reduce((n,b)=>n+(b.returnYen??0),0);const profit=returns-stake;const cards=list.map(b=>{const ticket=b.betType.split("｜").pop()??b.betType;return `<div class="card buy"><b>${escapeHtml(ticket)} ${escapeHtml(b.combination)}</b><div>購入 ${formatYen(b.stakeYen)} ／ 使用オッズ ${b.assumedOdds.toFixed(1)}</div><div class="muted">期待値 ${b.expectedValuePct.toFixed(1)}% ／ ${b.settlementStatus==="settled"?`払戻 ${formatYen(b.returnYen??0)}`:"発走前固定済み"}</div></div>`}).join("");return `<section class="course-block ${course.cls}"><div class="course-head"><b>${course.name}コース</b><span>${course.budget}</span></div>${finished?`<div class="course-summary">購入 ${formatYen(stake)} ／ 払戻 ${formatYen(returns)} ／ <strong class="${profit>=0?"positive":"negative"}">${profit>=0?"+":""}${formatYen(profit)}</strong></div>`:`<div class="course-summary">合計購入 ${formatYen(stake)}</div>`}<div class="course-bets">${cards}</div></section>`}).join("");'''
+          if old not in s: raise SystemExit('bets anchor missing')
+          s=s.replace(old,new)
+          s=s.replace('<h2 class="section">買い目</h2>${betCards||\'<div class="card empty">固定された買い目はありません。</div>\'}','<h2 class="section">予算コース別の買い目</h2>${betCards}')
+          ui.write_text(s)
+
+          bt=Path('src/v1/backtest.ts'); s=bt.read_text()
+          s=s.replace('backtest-2026-08-01-multibet-v2','backtest-2026-08-01-budget-courses-v3')
+          s=s.replace('generatePrediction(race, runners, [], BACKTEST_MODEL, 0, 2000)','generatePrediction(race, runners, [], BACKTEST_MODEL, 0, 10000)')
+          s=s.replace('各レース2,000円以内で、◎○▲から単勝・ワイド・馬連・馬単・3連複を一貫して組み立てます。','ライト2,000円・スタンダード5,000円・プレミアム10,000円を、同じ◎○▲△から単勝・ワイド・馬連・馬単・3連複・3連単で組み立てます。')
+          bt.write_text(s)
+          PY
+      - name: Verify and commit
+        run: |
+          rm -f docs/course-grouping-trigger.txt .github/workflows/apply-course-grouping.yml
+          npm install
+          npm run check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m 'fix: group tickets by course and rerun August 1 backtest'
+          git push origin HEAD:fix-course-grouping-and-backtest
