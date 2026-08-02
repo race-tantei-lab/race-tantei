@@ -1,0 +1,123 @@
+{
+  "status": "INVALIDATED",
+  "recordedAt": "2026-08-02T22:27:00+09:00",
+  "scope": {
+    "startDate": "2026-05-02",
+    "endDate": "2026-08-02",
+    "totalRaces": 960,
+    "venueDays": 80,
+    "requiredSelectionsPerCourse": 400
+  },
+  "reason": "The public three-month performance mixed legacy variable-stake tickets with partially normalized fixed-stake tickets, and individual race pages did not consistently reference the prediction used by cumulative aggregation. The figures are not valid performance evidence.",
+  "findings": {
+    "stakeViolationRaceCourses": 1047,
+    "pendingRaceCourses": 15,
+    "individualDetailMismatchRaces": 548,
+    "archiveMismatchRaces": 6
+  },
+  "courses": [
+    {
+      "course": "ライト",
+      "targetStakeYen": 1600,
+      "selectedRaces": 409,
+      "fixedStakeRaces": 123,
+      "underStakeRaces": 286,
+      "averageStakeYen": 612.7139364303178,
+      "medianStakeYen": 300,
+      "minimumStakeYen": 100,
+      "maximumStakeYen": 1600,
+      "hitRaces": 130,
+      "missRaces": 279,
+      "averageHitStakeYen": 1072.3076923076924,
+      "averageMissStakeYen": 398.5663082437276,
+      "hitToMissAverageStakeRatio": 2.690415246271112,
+      "stakeYen": 250600,
+      "returnYen": 258390,
+      "reportedRoiPct": 103.10853950518756
+    },
+    {
+      "course": "スタンダード",
+      "targetStakeYen": 4200,
+      "selectedRaces": 507,
+      "fixedStakeRaces": 123,
+      "underStakeRaces": 384,
+      "averageStakeYen": 1255.2268244575937,
+      "medianStakeYen": 400,
+      "minimumStakeYen": 100,
+      "maximumStakeYen": 4200,
+      "hitRaces": 135,
+      "missRaces": 372,
+      "averageHitStakeYen": 2659.259259259259,
+      "averageMissStakeYen": 745.6989247311828,
+      "hitToMissAverageStakeRatio": 3.566131581361316,
+      "stakeYen": 636400,
+      "returnYen": 665100,
+      "reportedRoiPct": 104.50974230043998
+    },
+    {
+      "course": "プレミアム",
+      "targetStakeYen": 8800,
+      "selectedRaces": 500,
+      "fixedStakeRaces": 123,
+      "underStakeRaces": 377,
+      "averageStakeYen": 2567,
+      "medianStakeYen": 800,
+      "minimumStakeYen": 100,
+      "maximumStakeYen": 8800,
+      "hitRaces": 130,
+      "missRaces": 370,
+      "averageHitStakeYen": 5650,
+      "averageMissStakeYen": 1483.7837837837837,
+      "hitToMissAverageStakeRatio": 3.807832422586521,
+      "stakeYen": 1283500,
+      "returnYen": 1327710,
+      "reportedRoiPct": 103.4444877296455
+    }
+  ],
+  "monthly": [
+    {
+      "month": "2026-05",
+      "courses": [
+        {"course":"ライト","selectedRaces":129,"averageStakeYen":1176.7441860465117,"fixedStakeRaces":91,"roiPct":90.44103188605698},
+        {"course":"スタンダード","selectedRaces":150,"averageStakeYen":2647.3333333333335,"fixedStakeRaces":91,"roiPct":85.99093348403124},
+        {"course":"プレミアム","selectedRaces":150,"averageStakeYen":5528.666666666667,"fixedStakeRaces":91,"roiPct":81.8288547495026}
+      ]
+    },
+    {
+      "month": "2026-06",
+      "courses": [
+        {"course":"ライト","selectedRaces":110,"averageStakeYen":184.54545454545453,"fixedStakeRaces":1,"roiPct":72.85714285714285},
+        {"course":"スタンダード","selectedRaces":153,"averageStakeYen":307.84313725490193,"fixedStakeRaces":1,"roiPct":92.87234042553192},
+        {"course":"プレミアム","selectedRaces":157,"averageStakeYen":526.1146496815287,"fixedStakeRaces":1,"roiPct":103.43712212817499}
+      ]
+    },
+    {
+      "month": "2026-07",
+      "courses": [
+        {"course":"ライト","selectedRaces":140,"averageStakeYen":217.85714285714286,"fixedStakeRaces":1,"roiPct":79.8360655737705},
+        {"course":"スタンダード","selectedRaces":174,"averageStakeYen":380.45977011494256,"fixedStakeRaces":1,"roiPct":69.26021180030257},
+        {"course":"プレミアム","selectedRaces":163,"averageStakeYen":660.1226993865031,"fixedStakeRaces":1,"roiPct":56.2267657992565}
+      ]
+    },
+    {
+      "month": "2026-08",
+      "note": "This was the model tuning period and must not be included as out-of-sample evidence.",
+      "courses": [
+        {"course":"ライト","selectedRaces":30,"averageStakeYen":1600,"fixedStakeRaces":30,"roiPct":170.75},
+        {"course":"スタンダード","selectedRaces":30,"averageStakeYen":4200,"fixedStakeRaces":30,"roiPct":185.75396825396825},
+        {"course":"プレミアム","selectedRaces":30,"averageStakeYen":8800,"fixedStakeRaces":30,"roiPct":190.57575757575756}
+      ]
+    }
+  ],
+  "methodologicalCorrection": {
+    "evaluationPeriod": "2026-05-02 through 2026-07-26",
+    "tuningPeriod": "2026-08-01 through 2026-08-02",
+    "headlinePerformanceRule": "The tuning period is excluded from the primary evaluation headline."
+  },
+  "source": {
+    "workflowRunId": 30750375953,
+    "workflowJobId": 91503247140,
+    "artifactId": 8834245348,
+    "artifactName": "three-month-reconciliation-audit"
+  }
+}
