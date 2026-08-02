@@ -1,10 +1,8 @@
 import app from "./complete.js";
 import { BACKTEST_DATE, renderBacktest, runBacktestBatch } from "./v1/backtest.js";
-import { getCourseMetrics } from "./v1/course-db.js";
 import { renderCompactRace } from "./v1/course-detail.js";
+import { getResultDashboard, renderResultDashboard } from "./v1/dashboard-results.js";
 import { ensureSchema, getRaceDetail } from "./v1/db.js";
-import { renderDashboardV2 } from "./v1/home-dashboard-v2.js";
-import { getDashboardRaces } from "./v1/home-dashboard.js";
 import { fetchJraPage } from "./v1/jra.js";
 import type { Env } from "./v1/types.js";
 import { stripHtml } from "./v1/utils.js";
@@ -118,12 +116,9 @@ export default {
       const pathname = new URL(request.url).pathname;
 
       if (pathname === "/") {
-        const [races, metrics] = await Promise.all([
-          getDashboardRaces(env.DB, env.MODEL_VERSION),
-          getCourseMetrics(env.DB)
-        ]);
+        const dashboard = await getResultDashboard(env.DB, env.MODEL_VERSION);
         ctx.waitUntil(runMaintenance(env));
-        return page(renderDashboardV2(races, metrics));
+        return page(renderResultDashboard(dashboard.races, dashboard.metrics));
       }
 
       if (pathname.startsWith("/races/")) {
