@@ -1,0 +1,132 @@
+name: Unified production diagnostics
+
+on:
+  push:
+    branches: [diagnose-unified-production]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe production and publish concise diagnostics
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+
+          # Each request advances at most one historical venue normalization.
+          for attempt in $(seq 1 12); do
+            curl --silent --show-error --max-time 25 "${base}/" >/tmp/home.html || true
+            curl --silent --show-error --max-time 25 "${base}/api/performance/courses" >/tmp/performance.json || true
+            sleep 4
+          done
+
+          curl --silent --show-error --fail --max-time 25 "${base}/" >/tmp/home.html
+          curl --silent --show-error --fail --max-time 25 "${base}/api/performance/courses" >/tmp/performance.json
+
+          python - <<'PY' >/tmp/diagnostics.env
+          from html.parser import HTMLParser
+          import json
+
+          class SelectionParser(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.day = None
+                  self.venue = None
+                  self.stack = []
+                  self.counts = {}
+              def handle_starttag(self, tag, attrs):
+                  values = dict(attrs)
+                  previous = (self.day, self.venue)
+                  self.stack.append((tag, previous))
+                  if tag == "section" and values.get("data-day-panel"):
+                      self.day = values["data-day-panel"]
+                  if tag == "section" and values.get("data-venue-panel"):
+                      self.venue = values["data-venue-panel"]
+                  if tag == "a" and values.get("data-race-selected") == "true" and self.day and self.venue:
+                      key = (self.day, self.venue)
+                      self.counts[key] = self.counts.get(key, 0) + 1
+              def handle_endtag(self, tag):
+                  for index in range(len(self.stack) - 1, -1, -1):
+                      open_tag, previous = self.stack[index]
+                      if open_tag == tag:
+                          self.stack = self.stack[:index]
+                          self.day, self.venue = previous
+                          break
+
+          html = open('/tmp/home.html', encoding='utf-8').read()
+          performance = json.load(open('/tmp/performance.json', encoding='utf-8'))
+          parser = SelectionParser()
+          parser.feed(html)
+
+          historical = performance.get('historical', []) if isinstance(performance, dict) else []
+          course_parts = []
+          course_ok = True
+          targets = {'ライト': 1600, 'スタンダード': 4200, 'プレミアム': 8800}
+          short = {'ライト': 'L', 'スタンダード': 'S', 'プレミアム': 'P'}
+          for course in ['ライト', 'スタンダード', 'プレミアム']:
+              row = next((item for item in historical if item.get('course') == course), {})
+              races = int(row.get('selectedRaces', 0) or 0)
+              stake = float(row.get('stakeYen', 0) or 0)
+              pending = int(row.get('pendingTickets', 0) or 0)
+              average = round(stake / races) if races else 0
+              course_parts.append(f"{short[course]}={average}/{races}R/p{pending}")
+              course_ok = course_ok and races > 0 and average == targets[course] and pending == 0
+
+          def venue_description(date):
+              rows = sorted((venue, count) for (day, venue), count in parser.counts.items() if day == date)
+              if not rows:
+                  return 'none'
+              return ' '.join(f"{venue}={count}" for venue, count in rows)
+
+          descriptions = {
+              'COURSES': ' '.join(course_parts),
+              'VENUE_0801': venue_description('2026-08-01'),
+              'VENUE_0802': venue_description('2026-08-02'),
+              'PAGE': f"roi={int('累計回収率' in html)} merged={int('過去レース＋本番を合算' in html)} old={int('本番公開成績' in html)} guide={int('1R目安' in html)}",
+          }
+          venue_ok = all(
+              len([(venue, count) for (day, venue), count in parser.counts.items() if day == date]) >= 3
+              and all(count == 5 for (day, venue), count in parser.counts.items() if day == date)
+              for date in ['2026-08-01', '2026-08-02']
+          )
+          page_ok = '累計回収率' in html and '過去レース＋本番を合算' in html and '本番公開成績' not in html and '1R目安' not in html
+          states = {
+              'COURSES_STATE': 'success' if course_ok else 'failure',
+              'VENUES_STATE': 'success' if venue_ok else 'failure',
+              'PAGE_STATE': 'success' if page_ok else 'failure',
+          }
+          for key, value in {**descriptions, **states}.items():
+              print(f"{key}={value}")
+          PY
+
+          source /tmp/diagnostics.env
+
+          publish_status() {
+            local state="$1"
+            local context="$2"
+            local description="$3"
+            gh api --method POST \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state="$state" \
+              -f context="$context" \
+              -f description="${description:0:140}" \
+              -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+          }
+
+          publish_status "$COURSES_STATE" "diagnostic/course-budgets" "$COURSES"
+          publish_status "$VENUES_STATE" "diagnostic/venues-0801" "$VENUE_0801"
+          publish_status "$VENUES_STATE" "diagnostic/venues-0802" "$VENUE_0802"
+          publish_status "$PAGE_STATE" "diagnostic/unified-page" "$PAGE"
+
+          echo "Courses: $COURSES"
+          echo "2026-08-01: $VENUE_0801"
+          echo "2026-08-02: $VENUE_0802"
+          echo "Page: $PAGE"
