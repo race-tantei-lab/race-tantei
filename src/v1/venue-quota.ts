@@ -1,8 +1,13 @@
-import { buildVenueCoverageBets, coverageRaceScore } from "./budget-courses.js";
+import {
+  buildVenueCoverageBets,
+  COURSE_TARGET_STAKES,
+  coverageRaceScore
+} from "./budget-courses.js";
 import { settleRaceWithCourses } from "./course-db.js";
 import type { BetRecommendation, RunnerPrediction } from "./types.js";
 
 export const MINIMUM_SELECTED_RACES_PER_VENUE = 5;
+const TOTAL_TARGET_STAKE = Object.values(COURSE_TARGET_STAKES).reduce((sum, value) => sum + value, 0);
 
 export type VenueQuotaMode = "live" | "validation";
 
@@ -34,6 +39,7 @@ export interface VenueQuotaVenueResult {
   replacedRaces: number;
   removedRaces: number;
   selectedAfter: number;
+  alreadyNormalized: boolean;
 }
 
 export interface VenueQuotaResult {
@@ -44,6 +50,7 @@ export interface VenueQuotaResult {
   addedTickets: number;
   replacedRaces: number;
   removedRaces: number;
+  normalizedVenues: number;
   venues: VenueQuotaVenueResult[];
 }
 
@@ -166,6 +173,20 @@ function needsReplacement(row: RankedQuotaCandidate, mode: VenueQuotaMode): bool
   return false;
 }
 
+function venueIsNormalized(
+  rows: QuotaRaceRow[],
+  targetRaces: number,
+  mode: VenueQuotaMode
+): boolean {
+  const selected = rows.filter((row) => row.betCount > 0);
+  if (selected.length !== targetRaces) return false;
+  return selected.every((row) =>
+    row.stakeYen === TOTAL_TARGET_STAKE
+    && row.betCount >= 3
+    && (mode !== "validation" || row.settledCount === row.betCount)
+  );
+}
+
 async function rankRows(db: D1Database, rows: QuotaRaceRow[]): Promise<RankedQuotaCandidate[]> {
   const candidates: RankedQuotaCandidate[] = [];
   for (const row of rows) {
@@ -183,7 +204,8 @@ export async function ensureVenueDailyQuota(
   modelVersion: string,
   raceDate: string,
   mode: VenueQuotaMode,
-  minimumPerVenue = MINIMUM_SELECTED_RACES_PER_VENUE
+  minimumPerVenue = MINIMUM_SELECTED_RACES_PER_VENUE,
+  maximumVenuesToNormalize = Number.POSITIVE_INFINITY
 ): Promise<VenueQuotaResult> {
   const rows = await loadQuotaRaces(db, modelVersion, raceDate, mode);
   const venues = [...new Set(rows.map((row) => row.venue))];
@@ -192,15 +214,39 @@ export async function ensureVenueDailyQuota(
   let addedTickets = 0;
   let replacedRaces = 0;
   let removedRaces = 0;
+  let normalizedVenues = 0;
 
   for (const venue of venues) {
     const venueRows = rows.filter((row) => row.venue === venue);
     const selectedBefore = venueRows.filter((row) => row.betCount > 0).length;
     const targetRaces = Math.min(minimumPerVenue, venueRows.length);
-    const ranked = await rankRows(db, venueRows);
+    const alreadyNormalized = venueIsNormalized(venueRows, targetRaces, mode);
 
+    if (alreadyNormalized || normalizedVenues >= maximumVenuesToNormalize) {
+      venueResults.push({
+        venue,
+        availableRaces: venueRows.length,
+        targetRaces,
+        selectedBefore,
+        addedRaces: 0,
+        replacedRaces: 0,
+        removedRaces: 0,
+        selectedAfter: selectedBefore,
+        alreadyNormalized
+      });
+      continue;
+    }
+
+    normalizedVenues += 1;
+    const ranked = await rankRows(db, venueRows);
     const fixedLive = mode === "live"
-      ? ranked.filter((row) => row.betCount > 0 && (row.predictionStatus === "locked" || row.raceStatus === "finished"))
+      ? ranked.filter((row) =>
+        row.betCount > 0
+        && (
+          row.raceStatus === "finished"
+          || (row.predictionStatus === "locked" && row.stakeYen === TOTAL_TARGET_STAKE)
+        )
+      )
       : [];
     const fixedIds = new Set(fixedLive.map((row) => row.raceId));
     const remainingSlots = Math.max(0, targetRaces - fixedLive.length);
@@ -216,7 +262,11 @@ export async function ensureVenueDailyQuota(
 
     for (const row of venueRows) {
       if (selectedIds.has(row.raceId)) continue;
-      const protectedLive = mode === "live" && (row.predictionStatus === "locked" || row.raceStatus === "finished");
+      const protectedLive = mode === "live"
+        && (
+          row.raceStatus === "finished"
+          || (row.predictionStatus === "locked" && row.stakeYen === TOTAL_TARGET_STAKE)
+        );
       if (protectedLive || row.betCount === 0) continue;
       const deleted = await deleteCourseBets(db, row.predictionId);
       if (deleted > 0) {
@@ -251,7 +301,8 @@ export async function ensureVenueDailyQuota(
       addedRaces: venueAdded,
       replacedRaces: venueReplaced,
       removedRaces: venueRemoved,
-      selectedAfter: selectedIds.size
+      selectedAfter: selectedIds.size,
+      alreadyNormalized: false
     });
   }
 
@@ -263,17 +314,29 @@ export async function ensureVenueDailyQuota(
     addedTickets,
     replacedRaces,
     removedRaces,
+    normalizedVenues,
     venues: venueResults
   };
 }
 
 export async function ensureValidationVenueQuotas(
   db: D1Database,
-  configs: ReadonlyArray<{ raceDate: string; modelVersion: string }>
+  configs: ReadonlyArray<{ raceDate: string; modelVersion: string }>,
+  maximumVenuesToNormalize = Number.POSITIVE_INFINITY
 ): Promise<VenueQuotaResult[]> {
   const results: VenueQuotaResult[] = [];
+  let remaining = maximumVenuesToNormalize;
   for (const config of configs) {
-    results.push(await ensureVenueDailyQuota(db, config.modelVersion, config.raceDate, "validation"));
+    const result = await ensureVenueDailyQuota(
+      db,
+      config.modelVersion,
+      config.raceDate,
+      "validation",
+      MINIMUM_SELECTED_RACES_PER_VENUE,
+      remaining
+    );
+    results.push(result);
+    if (Number.isFinite(remaining)) remaining = Math.max(0, remaining - result.normalizedVenues);
   }
   return results;
 }
