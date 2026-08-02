@@ -28,7 +28,7 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='production/phase-d' \
-            -f description='Verifying venue five selections and historical ROI' \
+            -f description='Verifying unified performance and budget stakes' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Wait for Cloudflare deployment and verify health
@@ -74,15 +74,16 @@ jobs:
           curl --silent --show-error --fail --max-time 25 "${base}/" >/tmp/home.html
           grep -q 'レース探偵' /tmp/home.html
 
-      - name: Verify venue selections and historical ROI after deploy
+      - name: Verify unified performance and venue selections after deploy
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
           for attempt in $(seq 1 24); do
             curl --silent --show-error --fail --max-time 45 -D /tmp/home.headers "${base}/" >/tmp/home.html
+            curl --silent --show-error --fail --max-time 45 "${base}/performance" >/tmp/performance.html
             performance="$(curl --silent --show-error --fail --max-time 45 "${base}/api/performance/courses")"
-            if HOME_FILE=/tmp/home.html PERFORMANCE="$performance" python - <<'PY'
+            if HOME_FILE=/tmp/home.html PERFORMANCE_FILE=/tmp/performance.html PERFORMANCE="$performance" python - <<'PY'
           from html.parser import HTMLParser
           import json, os, sys
 
@@ -113,6 +114,7 @@ jobs:
                           break
 
           html = open(os.environ["HOME_FILE"], encoding="utf-8").read()
+          performance_html = open(os.environ["PERFORMANCE_FILE"], encoding="utf-8").read()
           parser = SelectionParser()
           parser.feed(html)
           performance = json.loads(os.environ.get("PERFORMANCE", "{}"))
@@ -129,9 +131,24 @@ jobs:
               if date in expected_dates
           }
           venue_ok = len(counts) >= 6 and all(count >= 5 for count in counts.values())
-          page_ok = "過去検証込み回収率" in html and "会場別5R選出" in html
-          valid = historical_ok and venue_ok and page_ok
-          print(json.dumps({"historical": historical, "venueSelections": counts, "pageOk": page_ok, "valid": valid}, ensure_ascii=False))
+          home_ok = (
+              "総合成績" in html
+              and "本番公開成績" not in html
+              and "過去検証込み回収率" not in html
+          )
+          performance_page_ok = (
+              "総合成績" in performance_html
+              and "本番公開のみ" not in performance_html
+              and "遡及検証のみ" not in performance_html
+          )
+          valid = historical_ok and venue_ok and home_ok and performance_page_ok
+          print(json.dumps({
+              "historical": historical,
+              "venueSelections": counts,
+              "homeOk": home_ok,
+              "performancePageOk": performance_page_ok,
+              "valid": valid
+          }, ensure_ascii=False))
           sys.exit(0 if valid else 1)
           PY
             then
@@ -155,7 +172,7 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/phase-d' \
-            -f description='Venue five selections and historical ROI verified' \
+            -f description='Unified performance and budget stakes verified' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Publish Phase D failure
