@@ -98,8 +98,10 @@ export interface RunnerPrediction {
 }
 
 export type BetType = "単勝" | "ワイド" | "馬連" | "馬単" | "3連複" | "3連単";
+export type BudgetCourse = "ライト" | "スタンダード" | "プレミアム";
 
 export interface BetRecommendation {
+  course: BudgetCourse;
   betType: BetType;
   combination: string;
   stakeYen: number;
