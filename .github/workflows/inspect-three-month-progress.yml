@@ -1,4 +1,4 @@
-# progress probe 4
+# progress probe 5
 name: Inspect three month progress
 
 on:
@@ -13,58 +13,52 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Read progress without mutation
+      - name: Inspect official calendar result links
         run: |
           set -euo pipefail
-          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          for date in 0502 0509 0606 0704 0801; do
+            month="${date:0:2}"
+            url="https://www.jra.go.jp/keiba/calendar2026/2026/$((10#$month))/${date}.html"
+            curl --silent --show-error --fail --max-time 60 "$url" -o "calendar-${date}.raw"
+          done
+          python - <<'PY'
+          import re, urllib.parse
+          for date in ('0502','0509','0606','0704','0801'):
+              raw=open(f'calendar-{date}.raw','rb').read()
+              for enc in ('utf-8','cp932','shift_jis'):
+                  try:
+                      html=raw.decode(enc)
+                      break
+                  except UnicodeDecodeError:
+                      pass
+              decoded=urllib.parse.unquote(html).replace('&amp;','&')
+              links=[]
+              for pattern in (r'[sp]w01sde[0-9A-Za-z/]+', r'CNAME=([^"\'&<> ]+)'):
+                  for value in re.findall(pattern, decoded, flags=re.I):
+                      if 'sde' in value.lower() and value not in links:
+                          links.append(value)
+              print('DATE',date,'COUNT',len(links))
+              for value in links[:30]:
+                  print(value)
+          PY
+
+      - name: Read current progress
+        run: |
           curl --silent --show-error --fail --max-time 60 \
-            "${base}/api/history/three-months/status" -o progress.json
+            "https://race-tantei-phase0.race-tantei.workers.dev/api/history/three-months/status" \
+            -o progress.json
           python - <<'PY'
           import json
           data=json.load(open('progress.json',encoding='utf-8'))
-          progress=data.get('progress',{})
-          validation=data.get('validation',{})
+          p=data.get('progress',{})
+          v=data.get('validation',{})
           print(json.dumps({
-            'phase':progress.get('phase'),
-            'discovery':f"{progress.get('discoveryDates')}/{progress.get('totalDiscoveryDates')}",
-            'meetings':f"{progress.get('completedMeetingTasks')}/{progress.get('meetingTasks')}",
-            'nextRaceNo':progress.get('nextRaceNo'),
-            'failedRaces':progress.get('failedRaces'),
-            'storedRaces':progress.get('storedRaces'),
-            'validationComplete':validation.get('complete'),
-            'processedRaces':validation.get('processedRaces'),
-            'totalRaces':validation.get('totalRaces'),
-            'remainingRaces':validation.get('remainingRaces'),
-            'venueDays':validation.get('venueDays')
+            'phase':p.get('phase'),
+            'discovery':f"{p.get('discoveryDates')}/{p.get('totalDiscoveryDates')}",
+            'meetings':f"{p.get('completedMeetingTasks')}/{p.get('meetingTasks')}",
+            'failedRaces':p.get('failedRaces'),
+            'storedRaces':p.get('storedRaces'),
+            'processedRaces':v.get('processedRaces'),
+            'venueDays':v.get('venueDays')
           },ensure_ascii=False,indent=2))
-          PY
-
-      - name: Inspect official historical navigation links
-        run: |
-          set -euo pipefail
-          url='https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0104202601010820260502%2F34'
-          curl --silent --show-error --fail --max-time 60 "$url" -o historical.raw
-          python - <<'PY'
-          import re, urllib.parse
-          raw=open('historical.raw','rb').read()
-          for enc in ('cp932','shift_jis','utf-8'):
-              try:
-                  html=raw.decode(enc)
-                  break
-              except UnicodeDecodeError:
-                  pass
-          else:
-              html=raw.decode('cp932',errors='replace')
-          found=[]
-          for value in re.findall(r'(?:CNAME=|CNAME%3D)(sw01sde[^"\'&<> ]+)', html, flags=re.I):
-              decoded=urllib.parse.unquote(value).replace('&amp;','&')
-              if decoded not in found:
-                  found.append(decoded)
-          for value in re.findall(r'sw01sde\d{20,}/\d{2}', urllib.parse.unquote(html), flags=re.I):
-              if value not in found:
-                  found.append(value)
-          print('RESULT_LINKS')
-          for value in found[:100]:
-              print(value)
-          print('COUNT',len(found))
           PY
