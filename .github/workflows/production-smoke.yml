@@ -18,6 +18,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Publish Phase D pending verification
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='production/phase-d' \
+            -f description='Verifying venue five selections and historical ROI' \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
       - name: Wait for Cloudflare deployment and verify health
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -111,7 +124,7 @@ jobs:
               for (date, venue), count in parser.counts.items()
               if date in expected_dates
           }
-          venue_ok = bool(counts) and all(count >= 5 for count in counts.values())
+          venue_ok = len(counts) >= 6 and all(count >= 5 for count in counts.values())
           page_ok = "過去検証込み回収率" in html and "会場別5R選出" in html
           valid = historical_ok and venue_ok and page_ok
           print(json.dumps({"historical": historical, "venueSelections": counts, "pageOk": page_ok, "valid": valid}, ensure_ascii=False))
@@ -139,4 +152,17 @@ jobs:
             -f state=success \
             -f context='production/phase-d' \
             -f description='Venue five selections and historical ROI verified' \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Publish Phase D failure
+        if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='production/phase-d' \
+            -f description='Phase D production verification failed' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
