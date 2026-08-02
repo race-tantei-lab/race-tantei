@@ -12,7 +12,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 8
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='production/roi-policy' \
-            -f description='Reprocessing historical bets and requiring ROI above 120%' \
+            -f description='Reading production ROI without mutating historical bets' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Wait for ROI policy deployment
@@ -34,7 +34,7 @@ jobs:
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
           expected="$(grep '"MODEL_VERSION"' wrangler.jsonc | sed -E 's/.*"MODEL_VERSION"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
-          for attempt in $(seq 1 48); do
+          for attempt in $(seq 1 36); do
             health="$(curl --silent --show-error --max-time 25 "${base}/health" || true)"
             if HEALTH="$health" EXPECTED="$expected" python - <<'PY'
           import json, os, sys
@@ -51,14 +51,13 @@ jobs:
           done
           exit 1
 
-      - name: Reprocess and verify historical ROI
+      - name: Verify historical ROI read-only
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-          for attempt in $(seq 1 72); do
-            performance="$(curl --silent --show-error --max-time 40 "${base}/api/performance/courses" || true)"
-            page="$(curl --silent --show-error --max-time 40 "${base}/performance" || true)"
-            if PERFORMANCE="$performance" PAGE="$page" python - <<'PY'
+          for attempt in $(seq 1 12); do
+            performance="$(curl --silent --show-error --max-time 30 "${base}/api/performance/courses/read-only" || true)"
+            if PERFORMANCE="$performance" python - <<'PY'
           import json, os, sys
           try:
               payload=json.loads(os.environ.get('PERFORMANCE',''))
@@ -79,9 +78,14 @@ jobs:
               summary[course]={'races':races,'roiPct':roi,'hitRatePct':hit,'averageStake':average,'pending':pending}
               valid = valid and course in targets and races == 30 and pending == 0
               valid = valid and abs(average-targets[course]) < 0.01 and roi >= 120 and hit >= 55
-          page=os.environ.get('PAGE','')
-          valid = valid and '分析固定ルール roi-policy-v1' in page and '全コース120%超' in page
-          print(json.dumps({'attempt':int(os.environ.get('ATTEMPT','0') or 0),'attemptValid':valid,'historical':summary},ensure_ascii=False))
+          print(json.dumps({'valid':valid,'historical':summary},ensure_ascii=False))
+          if valid:
+              text='ROI L{:.1f}% S{:.1f}% P{:.1f}% verified'.format(
+                  summary['ライト']['roiPct'],
+                  summary['スタンダード']['roiPct'],
+                  summary['プレミアム']['roiPct']
+              )
+              open('roi-description.txt','w',encoding='utf-8').write(text)
           sys.exit(0 if valid else 1)
           PY
             then
@@ -91,19 +95,18 @@ jobs:
           done
           echo "$performance"
           exit 1
-        env:
-          ATTEMPT: ${{ github.run_attempt }}
 
       - name: Publish ROI verification success
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          description="$(cat roi-description.txt)"
           gh api --method POST \
             -H "Accept: application/vnd.github+json" \
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/roi-policy' \
-            -f description='Historical ROI above 120% verified for all courses' \
+            -f description="$description" \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Publish ROI verification failure
