@@ -1,3 +1,4 @@
+# progress probe 2
 name: Inspect three month progress
 
 on:
@@ -40,9 +41,11 @@ jobs:
                 'course':row.get('course'),
                 'selectedRaces':row.get('selectedRaces'),
                 'pendingTickets':row.get('pendingTickets'),
-                'roiPct':row.get('roiPct')
+                'roiPct':row.get('roiPct'),
+                'hitRatePct':row.get('hitRatePct')
               }
               for row in validation.get('combined',[])
-            ]
+            ],
+            'monthly':validation.get('monthly',[])
           },ensure_ascii=False,indent=2))
           PY
