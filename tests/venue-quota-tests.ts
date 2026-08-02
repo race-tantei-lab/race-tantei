@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import {
   buildBudgetCourseBets,
   buildVenueCoverageBets,
+  COURSE_BUDGETS,
   coverageRaceScore
 } from "../src/v1/budget-courses.js";
 import type { BudgetCourse, RunnerPrediction } from "../src/v1/types.js";
@@ -40,7 +41,13 @@ assert.ok(Number.isFinite(coverageRaceScore(marketAligned)));
 assert.ok(coverage.every((bet) => bet.stakeYen >= 100 && bet.stakeYen % 100 === 0));
 
 for (const course of ["ライト", "スタンダード", "プレミアム"] as BudgetCourse[]) {
-  assert.ok(coverage.some((bet) => bet.course === course), `${course}に補完買い目がありません`);
+  const courseBets = coverage.filter((bet) => bet.course === course);
+  assert.ok(courseBets.length > 0, `${course}に補完買い目がありません`);
+  assert.equal(
+    courseBets.reduce((sum, bet) => sum + bet.stakeYen, 0),
+    COURSE_BUDGETS[course],
+    `${course}の補完買い目がコース予算に沿っていません`
+  );
 }
 
 console.log("race-tantei venue quota tests passed");
