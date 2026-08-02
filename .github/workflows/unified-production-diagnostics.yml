@@ -20,14 +20,14 @@ jobs:
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
 
-          for attempt in $(seq 1 12); do
-            curl -sS --max-time 25 "${base}/" >/tmp/home.html || true
-            curl -sS --max-time 25 "${base}/api/performance/courses" >/tmp/performance.json || true
-            sleep 4
+          for attempt in $(seq 1 8); do
+            curl -sS --max-time 8 "${base}/" >/tmp/home.html || true
+            curl -sS --max-time 8 "${base}/api/performance/courses" >/tmp/performance.json || true
+            sleep 3
           done
 
-          curl -fsS --max-time 25 "${base}/" >/tmp/home.html
-          curl -fsS --max-time 25 "${base}/api/performance/courses" >/tmp/performance.json
+          curl -fsS --max-time 15 "${base}/" >/tmp/home.html
+          curl -fsS --max-time 15 "${base}/api/performance/courses" >/tmp/performance.json
 
           python - <<'PY' >/tmp/diag.json
           from html.parser import HTMLParser
@@ -65,17 +65,16 @@ jobs:
                   'target':target
               }
           venues={f'{day}:{venue}':count for (day,venue),count in sorted(parser.counts.items()) if day in {'2026-08-01','2026-08-02'}}
-          result={
+          print(json.dumps({
               'courses':courses,
               'venues':venues,
               'page':{
-                  'roi': '累計回収率' in html,
-                  'merged': '過去レース＋本番を合算' in html,
-                  'old': '本番公開成績' in html,
-                  'guide': '1R目安' in html
+                  'roi':'累計回収率' in html,
+                  'merged':'過去レース＋本番を合算' in html,
+                  'old':'本番公開成績' in html,
+                  'guide':'1R目安' in html
               }
-          }
-          print(json.dumps(result,ensure_ascii=False))
+          },ensure_ascii=False))
           PY
 
           cat /tmp/diag.json
