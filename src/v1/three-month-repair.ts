@@ -19,10 +19,11 @@ export async function runThreeMonthFixedStakeRepair(
   liveModel: string,
   maximumVenues = 4
 ): Promise<ThreeMonthFixedStakeRepairResult> {
+  const venuesPerPass = Math.max(4, Math.min(12, maximumVenues));
   const results = await ensureValidationVenueQuotas(
     db,
     THREE_MONTH_VALIDATION_CONFIGS,
-    Math.max(1, Math.min(12, maximumVenues))
+    venuesPerPass
   );
   const audit = await getThreeMonthStakeAuditV2(db, liveModel, false);
   const state = await saveHistoricalAuditState(db, liveModel, audit);
