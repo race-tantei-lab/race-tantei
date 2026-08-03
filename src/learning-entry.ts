@@ -1,5 +1,5 @@
 import app from "./audit-repair-entry.js";
-import { ensureSchema } from "./v1/db.js";
+import { ensureSchema, getState, setState } from "./v1/db.js";
 import { renderWorkerCalibrationPanel } from "./v1/learned-calibration-ui.js";
 import { getWalkForwardAnalysisData } from "./v1/walk-forward-analysis-data.js";
 import {
@@ -12,6 +12,8 @@ import {
 } from "./v1/worker-calibration-v2.js";
 import type { Env } from "./v1/types.js";
 
+const CRON_HEARTBEAT_KEY = "walk_forward_cron:last_success";
+const CRON_ERROR_KEY = "walk_forward_cron:last_error";
 let learningRunning: Promise<void> | null = null;
 
 function json(data: unknown, status = 200): Response {
@@ -26,12 +28,21 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+function formatHeartbeat(value: string | null): string {
+  if (!value) return "定期処理の成功記録なし";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `最終定期処理：${date.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`;
+}
+
 async function withLearningPanel(response: Response, env: Env): Promise<Response> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/html")) return response;
-  const [state, training] = await Promise.all([
+  const [state, training, heartbeat, cronError] = await Promise.all([
     getWorkerCalibrationState(env.DB),
-    getWalkForwardTrainingProgress(env.DB)
+    getWalkForwardTrainingProgress(env.DB),
+    getState(env.DB, CRON_HEARTBEAT_KEY),
+    getState(env.DB, CRON_ERROR_KEY)
   ]);
   let html = await response.text();
   if (state.active) {
@@ -39,10 +50,11 @@ async function withLearningPanel(response: Response, env: Env): Promise<Response
       .replace("全期間の累計", "旧モデル参考")
       .replace("主要検証期間と本番公開分の合算", "旧モデルv1の参考成績");
   }
+  const heartbeatHtml = `<p style="margin:10px 0 0;font-size:12px;opacity:.8">${formatHeartbeat(heartbeat)}${cronError ? `／直近エラー：${cronError}` : ""}</p>`;
   const panel = renderWorkerCalibrationPanel({
     ...state,
     trainingProgress: training
-  } as typeof state);
+  } as typeof state).replace("</section>", `${heartbeatHtml}</section>`);
   html = html.replace(/<main\b[^>]*>/, (match) => `${match}${panel}`);
   const headers = new Headers(response.headers);
   headers.set("cache-control", "no-store, max-age=0");
@@ -50,11 +62,11 @@ async function withLearningPanel(response: Response, env: Env): Promise<Response
   return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
-async function advanceLearning(db: D1Database): Promise<void> {
-  for (let step = 0; step < 4; step += 1) {
+async function advanceLearning(db: D1Database, steps: number, predictionBatchSize: number): Promise<void> {
+  for (let step = 0; step < steps; step += 1) {
     const progress = await getWalkForwardTrainingProgress(db);
     if (!progress.complete) {
-      await runWalkForwardTrainingStep(db, 16);
+      await runWalkForwardTrainingStep(db, predictionBatchSize);
       continue;
     }
     await runWorkerCalibrationStep(db);
@@ -66,7 +78,7 @@ function startLearning(env: Env): Promise<void> {
   if (learningRunning) return learningRunning;
   learningRunning = (async () => {
     await ensureSchema(env.DB);
-    await advanceLearning(env.DB);
+    await advanceLearning(env.DB, 4, 16);
   })().catch((error) => {
     console.error("WALK_FORWARD_SELF_START_FAILED", error);
   }).finally(() => {
@@ -80,7 +92,7 @@ export default {
     const pathname = new URL(request.url).pathname;
     const isLearningPage = pathname === "/" || pathname === "/performance";
 
-    // Cronが動かない環境でも、通常表示を待たせずにバックグラウンドで進める。
+    // 閲覧時は応答を待たせず複数ステップ進める。
     if (isLearningPage) ctx.waitUntil(startLearning(env));
 
     if (!pathname.startsWith("/api/training/walk-forward")) {
@@ -94,7 +106,11 @@ export default {
       ctx.waitUntil(startLearning(env));
       return json({
         training: await getWalkForwardTrainingProgress(env.DB),
-        calibration: await getWorkerCalibrationState(env.DB)
+        calibration: await getWorkerCalibrationState(env.DB),
+        cron: {
+          lastSuccess: await getState(env.DB, CRON_HEARTBEAT_KEY),
+          lastError: await getState(env.DB, CRON_ERROR_KEY)
+        }
       });
     }
     if (pathname === "/api/training/walk-forward/calibration-status" && request.method === "GET") {
@@ -121,11 +137,22 @@ export default {
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     await ensureSchema(env.DB);
-    const progress = await getWalkForwardTrainingProgress(env.DB);
-    ctx.waitUntil(startLearning(env));
+    try {
+      // Cronは小さい1ステップを直接待ち、DB保存まで完了してから終了する。
+      // waitUntilへ投げた重い処理が途中終了する問題を避ける。
+      await advanceLearning(env.DB, 1, 4);
+      await Promise.all([
+        setState(env.DB, CRON_HEARTBEAT_KEY, new Date().toISOString()),
+        setState(env.DB, CRON_ERROR_KEY, "")
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await setState(env.DB, CRON_ERROR_KEY, message.slice(0, 300));
+      console.error("WALK_FORWARD_CRON_STEP_FAILED", error);
+      return;
+    }
 
-    // 過去データ取得・基礎予想生成中は通常メンテナンスと競合させない。
-    // 学習データ完成後のみ、従来の定期処理も再開する。
+    const progress = await getWalkForwardTrainingProgress(env.DB);
     if (progress.complete && app.scheduled) {
       await app.scheduled(controller, env, ctx);
     }
