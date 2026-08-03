@@ -1,0 +1,129 @@
+name: Walk-forward 12 month learning
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "20 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  learn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read learning progress
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          curl --silent --show-error --fail --max-time 90 \
+            "${base}/api/training/walk-forward/status" -o walk-forward-status.json
+          python - <<'PY'
+          import json
+          status=json.load(open('walk-forward-status.json', encoding='utf-8'))
+          print(json.dumps(status, ensure_ascii=False, indent=2))
+          ready=status.get('complete') is True
+          with open('ready.txt','w',encoding='utf-8') as f:
+              f.write('true' if ready else 'false')
+          PY
+
+      - name: Publish import progress
+        if: ${{ hashFiles('ready.txt') != '' }}
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          status=json.load(open('walk-forward-status.json', encoding='utf-8'))
+          print('## 12か月ウォークフォワード学習')
+          print(f"- フェーズ: {status.get('phase')}")
+          print(f"- 基礎予想: {status.get('generatedRaces',0)} / {status.get('targetRaces',0)}R")
+          history=status.get('history',{})
+          print(f"- 履歴URL: {history.get('importedUrls',0)} / {history.get('resultUrls',0)}")
+          print(f"- 恒久取得失敗: {history.get('permanentFailures',0)}")
+          PY
+
+      - name: Stop until dataset is complete
+        if: ${{ hashFiles('ready.txt') != '' }}
+        run: |
+          if [ "$(cat ready.txt)" != "true" ]; then
+            echo "Dataset is still being imported. No policy optimization was run."
+            exit 0
+          fi
+
+      - name: Fetch completed split dataset
+        if: ${{ hashFiles('ready.txt') != '' && success() }}
+        run: |
+          if [ "$(cat ready.txt)" != "true" ]; then exit 0; fi
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          curl --silent --show-error --fail --max-time 180 \
+            "${base}/api/training/walk-forward/data" -o walk-forward-data.json
+          python - <<'PY'
+          import json
+          data=json.load(open('walk-forward-data.json', encoding='utf-8'))
+          assert data.get('complete') is True
+          counts=data.get('splitCounts',{})
+          assert counts.get('train',0) >= 1800, counts
+          assert counts.get('validation',0) >= 300, counts
+          assert counts.get('holdout',0) >= 150, counts
+          print(json.dumps(counts, ensure_ascii=False))
+          PY
+
+      - name: Train on 12 months and evaluate holdout once
+        if: ${{ hashFiles('walk-forward-data.json') != '' }}
+        run: |
+          python scripts/optimize_walk_forward_roi.py walk-forward-data.json \
+            --candidates 4 \
+            --race-policies 90 \
+            --ticket-policies 140 \
+            --output walk-forward-roi-result.json
+
+      - name: Require holdout promotion gate
+        if: ${{ hashFiles('walk-forward-roi-result.json') != '' }}
+        run: |
+          python - <<'PY'
+          import json
+          result=json.load(open('walk-forward-roi-result.json', encoding='utf-8'))
+          holdout=result['holdout']
+          print(json.dumps({
+              'promotionReady': result['promotionReady'],
+              'validation': result['validation']['courses'],
+              'holdout': holdout['courses']
+          }, ensure_ascii=False, indent=2))
+          assert result['promotionReady'] is True, 'Holdout gate failed; production policy must remain unchanged'
+          PY
+
+      - name: Publish learning result
+        if: always()
+        run: |
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, os
+          if not os.path.exists('walk-forward-roi-result.json'):
+              print('- データ準備中のため、モデル選定は未実施です。')
+              raise SystemExit(0)
+          result=json.load(open('walk-forward-roi-result.json', encoding='utf-8'))
+          print(f"- 本番昇格可否: **{result['promotionReady']}**")
+          print(f"- 校正: modelWeight={result['calibration']['modelWeight']:.2f}, temperature={result['calibration']['temperature']:.2f}")
+          for split in ('validation','holdout'):
+              print(f"### {split}")
+              for course,row in result[split]['courses'].items():
+                  print(f"- {course}: ROI {row['roiPct']:.1f}% / 的中率 {row['hitRatePct']:.1f}% / 最大1日寄与 {row['maximumPositiveDayShare']:.1%}")
+          PY
+
+      - name: Upload learning artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: walk-forward-learning
+          path: |
+            walk-forward-status.json
+            walk-forward-data.json
+            walk-forward-roi-result.json
+          if-no-files-found: warn
