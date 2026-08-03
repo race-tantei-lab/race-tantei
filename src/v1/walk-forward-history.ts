@@ -4,10 +4,10 @@ import { getArchiveResultUrls } from "./three-month-archive.js";
 import { parseDesktopPayouts, parseDesktopResultRunners } from "./three-month-desktop.js";
 import {
   WALK_FORWARD_ARCHIVE_MONTHS,
+  WALK_FORWARD_CONTEXT_START_DATE,
   WALK_FORWARD_HOLDOUT_END_DATE,
   WALK_FORWARD_SCOPE_VERSION,
-  WALK_FORWARD_TRAIN_START_DATE,
-  isWalkForwardDate
+  isWalkForwardArchiveDate
 } from "./walk-forward-scope.js";
 import type { RaceBundle } from "./types.js";
 
@@ -94,7 +94,7 @@ async function storedRaceCount(db: D1Database): Promise<number> {
   const row = await db.prepare(`
     SELECT COUNT(*) AS count FROM rt_races
     WHERE race_date BETWEEN ? AND ? AND status='finished'
-  `).bind(WALK_FORWARD_TRAIN_START_DATE, WALK_FORWARD_HOLDOUT_END_DATE)
+  `).bind(WALK_FORWARD_CONTEXT_START_DATE, WALK_FORWARD_HOLDOUT_END_DATE)
     .first<{ count: number }>();
   return Number(row?.count ?? 0);
 }
@@ -138,7 +138,7 @@ async function discoverMonth(db: D1Database): Promise<unknown> {
   const discovered = await getArchiveResultUrls(yearMonth);
   const retained = discovered.filter((url) => {
     const date = archiveRaceDate(url);
-    return date !== null && isWalkForwardDate(date);
+    return date !== null && isWalkForwardArchiveDate(date);
   });
   const current = jsonArray<string>(await getState(db, URLS_KEY));
   const merged = sortedUniqueUrls([...current, ...retained]);
@@ -167,7 +167,7 @@ async function importUrl(db: D1Database, url: string): Promise<{ imported: boole
   const page = await fetchJraPage(url);
   if (!pageLooksLikeResult(page.html)) throw new Error("WALK_FORWARD_RESULT_SIGNATURE_MISSING");
   const parsed = parseResultPage(page.html, page.url);
-  if (!isWalkForwardDate(parsed.race.raceDate)) {
+  if (!isWalkForwardArchiveDate(parsed.race.raceDate)) {
     throw new Error(`WALK_FORWARD_OUT_OF_SCOPE:${parsed.race.raceDate}`);
   }
   if (await alreadyComplete(db, parsed.race.raceId)) return { imported: false, skipped: true };
