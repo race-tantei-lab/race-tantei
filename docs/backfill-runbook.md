@@ -1,0 +1,1 @@
+Run `.github/workflows/backfill-history.yml` once for the initial 27-month history load. The job compiles the existing parsers, downloads pages concurrently, emits transactional SQL chunks, loads them into the remote D1 database, and updates the walk-forward history cursor and retry list.
