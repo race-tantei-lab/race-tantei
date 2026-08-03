@@ -1,5 +1,9 @@
 import { strict as assert } from "node:assert";
 import {
+  buildLearnedVenueBets,
+  learnedPredictionRaceScore
+} from "../src/v1/learned-betting-policy.js";
+import {
   buildCalibratedPrediction,
   calibratedProbabilities,
   updateCalibrationLoss,
@@ -77,5 +81,15 @@ const predictions = buildCalibratedPrediction(runners, {
 assert.deepEqual(predictions.map((row) => row.horseNo), [1, 2, 3]);
 assert.equal(predictions[0]?.predictedOrder, 1);
 assert.ok(predictions.every((row) => row.explanation.includes("12か月")));
+
+const bets = buildLearnedVenueBets(predictions);
+const stakeByCourse = new Map<string, number>();
+for (const bet of bets) {
+  stakeByCourse.set(bet.course, (stakeByCourse.get(bet.course) ?? 0) + bet.stakeYen);
+}
+assert.equal(stakeByCourse.get("ライト"), 1600);
+assert.equal(stakeByCourse.get("スタンダード"), 4200);
+assert.equal(stakeByCourse.get("プレミアム"), 8800);
+assert.ok(Number.isFinite(learnedPredictionRaceScore(predictions)));
 
 console.log("race-tantei learned calibration tests passed");
