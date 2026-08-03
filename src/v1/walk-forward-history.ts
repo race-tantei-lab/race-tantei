@@ -21,8 +21,8 @@ const URL_INDEX_KEY = `${STATE_PREFIX}:url_index`;
 const FAILURES_KEY = `${STATE_PREFIX}:failures`;
 const PERMANENT_FAILURES_KEY = `${STATE_PREFIX}:permanent_failures`;
 const LAST_BATCH_METRICS_KEY = `${STATE_PREFIX}:last_batch_metrics`;
-const BATCH_SIZE = 4;
-const FETCH_CONCURRENCY = 4;
+const BATCH_SIZE = 45;
+const FETCH_CONCURRENCY = 6;
 const MAX_FAILURE_ATTEMPTS = 3;
 
 interface FailedUrl { url: string; attempts: number; error: string }
@@ -147,6 +147,20 @@ function replaceFailure(failures: FailedUrl[], failure: FailedUrl): FailedUrl[] 
   return [...failures.filter((row) => row.url !== failure.url), failure];
 }
 
+async function prepareWithConcurrency(urls: string[]): Promise<PromiseSettledResult<PreparedImport>[]> {
+  const outcomes: PromiseSettledResult<PreparedImport>[] = new Array(urls.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < urls.length) {
+      const position = next++;
+      try { outcomes[position] = { status: "fulfilled", value: await prepareImport(urls[position]!) }; }
+      catch (reason) { outcomes[position] = { status: "rejected", reason }; }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(FETCH_CONCURRENCY, urls.length) }, () => worker()));
+  return outcomes;
+}
+
 async function importBatch(db: D1Database): Promise<HistoryBatchMetrics> {
   const totalStartedAt = performance.now();
   const [urlsValue, indexValue, failuresValue] = await Promise.all([getState(db, URLS_KEY), getState(db, URL_INDEX_KEY), getState(db, FAILURES_KEY)]);
@@ -165,7 +179,7 @@ async function importBatch(db: D1Database): Promise<HistoryBatchMetrics> {
   }
 
   const fetchStartedAt = performance.now();
-  const outcomes = await Promise.allSettled(batch.map((url) => prepareImport(url)));
+  const outcomes = await prepareWithConcurrency(batch);
   metrics.fetchParseMs = elapsedMs(fetchStartedAt);
   const prepared: PreparedImport[] = [];
   outcomes.forEach((outcome, position) => {
