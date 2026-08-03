@@ -13,7 +13,11 @@ import {
 import {
   WALK_FORWARD_BASE_MODEL_VERSION,
   WALK_FORWARD_HOLDOUT_END_DATE,
+  WALK_FORWARD_HOLDOUT_START_DATE,
+  WALK_FORWARD_TRAIN_END_DATE,
   WALK_FORWARD_TRAIN_START_DATE,
+  WALK_FORWARD_VALIDATION_END_DATE,
+  WALK_FORWARD_VALIDATION_START_DATE,
   walkForwardSplitForDate
 } from "./walk-forward-scope.js";
 import type { PredictionOutput } from "./types.js";
@@ -38,6 +42,23 @@ function emptyPrediction(): PredictionOutput {
   };
 }
 
+const SPLIT_SQL = `(
+  r.race_date BETWEEN ? AND ?
+  OR r.race_date BETWEEN ? AND ?
+  OR r.race_date BETWEEN ? AND ?
+)`;
+
+function splitBindings(): string[] {
+  return [
+    WALK_FORWARD_TRAIN_START_DATE,
+    WALK_FORWARD_TRAIN_END_DATE,
+    WALK_FORWARD_VALIDATION_START_DATE,
+    WALK_FORWARD_VALIDATION_END_DATE,
+    WALK_FORWARD_HOLDOUT_START_DATE,
+    WALK_FORWARD_HOLDOUT_END_DATE
+  ];
+}
+
 async function pendingRaces(
   db: D1Database,
   limit: number
@@ -45,7 +66,7 @@ async function pendingRaces(
   const rows = await db.prepare(`
     SELECT r.race_id AS raceId, r.race_date AS raceDate
     FROM rt_races r
-    WHERE r.race_date BETWEEN ? AND ?
+    WHERE ${SPLIT_SQL}
       AND r.status='finished'
       AND NOT EXISTS (
         SELECT 1 FROM rt_predictions p
@@ -56,12 +77,11 @@ async function pendingRaces(
     ORDER BY r.race_date, r.venue, r.race_no
     LIMIT ?
   `).bind(
-    WALK_FORWARD_TRAIN_START_DATE,
-    WALK_FORWARD_HOLDOUT_END_DATE,
+    ...splitBindings(),
     WALK_FORWARD_BASE_MODEL_VERSION,
     limit
   ).all<{ raceId: string; raceDate: string }>();
-  return rows.results.filter((row) => walkForwardSplitForDate(row.raceDate) !== null);
+  return rows.results;
 }
 
 async function generateBatch(
@@ -114,14 +134,16 @@ export async function getWalkForwardTrainingProgress(db: D1Database): Promise<Wa
     LEFT JOIN rt_predictions p
       ON p.race_id=r.race_id AND p.model_version=?
     WHERE r.status='finished'
-      AND r.race_date BETWEEN ? AND ?
+      AND ${SPLIT_SQL}
   `).bind(
-    "2025-05-01", "2026-04-30",
-    "2026-05-02", "2026-06-28",
-    "2026-07-04", "2026-07-26",
-    WALK_FORWARD_BASE_MODEL_VERSION,
     WALK_FORWARD_TRAIN_START_DATE,
-    WALK_FORWARD_HOLDOUT_END_DATE
+    WALK_FORWARD_TRAIN_END_DATE,
+    WALK_FORWARD_VALIDATION_START_DATE,
+    WALK_FORWARD_VALIDATION_END_DATE,
+    WALK_FORWARD_HOLDOUT_START_DATE,
+    WALK_FORWARD_HOLDOUT_END_DATE,
+    WALK_FORWARD_BASE_MODEL_VERSION,
+    ...splitBindings()
   ).first<{
     targetRaces: number;
     generatedRaces: number;
