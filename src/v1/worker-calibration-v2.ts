@@ -24,7 +24,7 @@ import {
   WORKER_LEARNED_MODEL_VERSION,
   type WorkerCalibrationState
 } from "./learned-calibration-state.js";
-import { ensureVenueDailyQuota } from "./venue-quota.js";
+import { ensureLearnedVenueQuota } from "./learned-venue-quota.js";
 import { walkForwardSplitForDate } from "./walk-forward-scope.js";
 import { getWalkForwardTrainingProgress } from "./walk-forward-training.js";
 import type { PredictionOutput } from "./types.js";
@@ -175,7 +175,7 @@ async function runQuotaStep(db: D1Database, state: WorkerCalibrationState): Prom
     await finalizeMetrics(db, state);
     return;
   }
-  await ensureVenueDailyQuota(db, WORKER_LEARNED_MODEL_VERSION, raceDate, "validation", 5, 8);
+  await ensureLearnedVenueQuota(db, raceDate);
   state.quotaDateIndex += 1;
 }
 
