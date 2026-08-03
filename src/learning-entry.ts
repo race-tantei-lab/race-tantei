@@ -12,8 +12,6 @@ const CRON_ERROR_KEY = "walk_forward_cron:last_error";
 const CRON_DURATION_KEY = "walk_forward_cron:last_duration_ms";
 const CRON_STAGE_KEY = "walk_forward_cron:last_stage";
 const CRON_DELTA_KEY = "walk_forward_cron:last_delta";
-const CRON_MAX_STEPS = 1;
-const CRON_TIME_BUDGET_MS = 45_000;
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data, null, 2), {
@@ -32,6 +30,18 @@ function formatTime(label: string, value: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return `${label}${value}`;
   return `${label}${date.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`;
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function stringValue(value: unknown, fallback: string): string {
+  return typeof value === "string" && value ? value : fallback;
 }
 
 async function withLearningPanel(response: Response, env: Env): Promise<Response> {
@@ -63,32 +73,51 @@ async function withLearningPanel(response: Response, env: Env): Promise<Response
   return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
-async function advanceCronWork(db: D1Database, startedAt: number): Promise<{ stage: string; delta: string }> {
-  const initialTraining = await getWalkForwardTrainingProgress(db);
-  const initialCalibration = await getWorkerCalibrationState(db);
-  let latestTraining = initialTraining;
-  let latestCalibration = initialCalibration;
-  let steps = 0;
-  while (steps < CRON_MAX_STEPS && Date.now() - startedAt < CRON_TIME_BUDGET_MS) {
-    if (!latestTraining.complete) {
-      await runWalkForwardTrainingStep(db, 4);
-      latestTraining = await getWalkForwardTrainingProgress(db);
-    } else {
-      await runWorkerCalibrationStep(db);
-      latestCalibration = await getWorkerCalibrationState(db);
-      if (latestCalibration.phase === "complete" || latestCalibration.phase === "failed") break;
-    }
-    steps += 1;
-  }
-  if (!latestTraining.complete) {
+interface CronWorkResult {
+  stage: string;
+  delta: string;
+  trainingComplete: boolean;
+}
+
+async function advanceCronWork(db: D1Database): Promise<CronWorkResult> {
+  // runWalkForwardTrainingStep already performs the one status read it needs and returns
+  // the resulting progress. Do not surround it with duplicate progress queries: on the
+  // Workers Free plan those reads count toward the same 50-query invocation budget.
+  const trainingResult = objectValue(await runWalkForwardTrainingStep(db, 4));
+  const trainingStage = stringValue(trainingResult.stage, "learning");
+  const progress = objectValue(trainingResult.progress);
+  const trainingComplete = progress.complete === true;
+
+  if (!trainingComplete) {
+    const action = objectValue(trainingResult.action);
+    const history = objectValue(action.history);
+    const historyAction = objectValue(history.action);
+    const imported = numberValue(historyAction.imported);
+    const skipped = numberValue(historyAction.skipped);
+    const errors = numberValue(historyAction.errors);
+    const processed = numberValue(objectValue(action.features).processed);
     return {
-      stage: latestTraining.phase,
-      delta: `公式結果 +${Math.max(0, latestTraining.history.importedUrls - initialTraining.history.importedUrls)}件 / 基礎予想 +${Math.max(0, latestTraining.generatedRaces - initialTraining.generatedRaces)}R / ${steps}処理`
+      stage: trainingStage,
+      delta: `公式結果 +${imported}件（既存${skipped}・失敗${errors}）/ 基礎予想 +${processed}R / 1処理`,
+      trainingComplete: false
     };
   }
+
+  const calibrationBefore = await getWorkerCalibrationState(db);
+  if (calibrationBefore.phase === "complete" || calibrationBefore.phase === "failed") {
+    return {
+      stage: calibrationBefore.phase,
+      delta: `学習 ${calibrationBefore.scoredRaces}R / 再予想 ${calibrationBefore.appliedRaces}R`,
+      trainingComplete: true
+    };
+  }
+
+  const calibrationResult = objectValue(await runWorkerCalibrationStep(db));
+  const calibrationProgress = objectValue(calibrationResult.progress);
   return {
-    stage: latestCalibration.phase,
-    delta: `学習 +${Math.max(0, latestCalibration.scoredRaces - initialCalibration.scoredRaces)}R / 再予想 +${Math.max(0, latestCalibration.appliedRaces - initialCalibration.appliedRaces)}R / ${steps}処理`
+    stage: stringValue(calibrationProgress.phase, "calibration"),
+    delta: `勝率学習・再予想を1処理実行`,
+    trainingComplete: true
   };
 }
 
@@ -144,7 +173,7 @@ export default {
     let stage = "learning";
     try {
       await setState(env.DB, CRON_ATTEMPT_KEY, new Date(startedAt).toISOString());
-      const result = await advanceCronWork(env.DB, startedAt);
+      const result = await advanceCronWork(env.DB);
       stage = result.stage;
       await Promise.all([
         setState(env.DB, CRON_HEARTBEAT_KEY, new Date().toISOString()),
@@ -153,8 +182,7 @@ export default {
         setState(env.DB, CRON_DELTA_KEY, result.delta),
         setState(env.DB, CRON_ERROR_KEY, "")
       ]);
-      const progress = await getWalkForwardTrainingProgress(env.DB);
-      if (progress.complete && app.scheduled) await app.scheduled(controller, env, ctx);
+      if (result.trainingComplete && app.scheduled) await app.scheduled(controller, env, ctx);
     } catch (error) {
       await safelyRecordFailure(env.DB, startedAt, stage, error);
       console.error("WALK_FORWARD_CRON_STEP_FAILED", error);
