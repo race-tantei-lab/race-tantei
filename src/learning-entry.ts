@@ -1,4 +1,5 @@
 import app from "./audit-repair-entry.js";
+import { finishCronRun, tryStartCronRun } from "./cron-run-lock.js";
 import { ensureSchema, getState, setState } from "./v1/db.js";
 import { renderWorkerCalibrationPanel } from "./v1/learned-calibration-ui.js";
 import { getWalkForwardAnalysisData } from "./v1/walk-forward-analysis-data.js";
@@ -97,6 +98,18 @@ function startLearning(env: Env): Promise<void> {
   return learningRunning;
 }
 
+async function safelyRecordCronFailure(db: D1Database, startedAt: number, error: unknown): Promise<void> {
+  const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  try {
+    await Promise.all([
+      setState(db, CRON_DURATION_KEY, String(Date.now() - startedAt)),
+      setState(db, CRON_ERROR_KEY, message.slice(0, 500))
+    ]);
+  } catch (recordError) {
+    console.error("WALK_FORWARD_CRON_ERROR_RECORD_FAILED", recordError);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const pathname = new URL(request.url).pathname;
@@ -148,28 +161,27 @@ export default {
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const startedAt = Date.now();
-    await ensureSchema(env.DB);
-    await setState(env.DB, CRON_ATTEMPT_KEY, new Date(startedAt).toISOString());
+    if (!tryStartCronRun()) return;
+
     try {
+      await ensureSchema(env.DB);
+      await setState(env.DB, CRON_ATTEMPT_KEY, new Date(startedAt).toISOString());
       await advanceLearning(env.DB, 1, 1);
       await Promise.all([
         setState(env.DB, CRON_HEARTBEAT_KEY, new Date().toISOString()),
         setState(env.DB, CRON_DURATION_KEY, String(Date.now() - startedAt)),
         setState(env.DB, CRON_ERROR_KEY, "")
       ]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      await Promise.all([
-        setState(env.DB, CRON_DURATION_KEY, String(Date.now() - startedAt)),
-        setState(env.DB, CRON_ERROR_KEY, message.slice(0, 300))
-      ]);
-      console.error("WALK_FORWARD_CRON_STEP_FAILED", error);
-      return;
-    }
 
-    const progress = await getWalkForwardTrainingProgress(env.DB);
-    if (progress.complete && app.scheduled) {
-      await app.scheduled(controller, env, ctx);
+      const progress = await getWalkForwardTrainingProgress(env.DB);
+      if (progress.complete && app.scheduled) {
+        await app.scheduled(controller, env, ctx);
+      }
+    } catch (error) {
+      await safelyRecordCronFailure(env.DB, startedAt, error);
+      console.error("WALK_FORWARD_CRON_STEP_FAILED", error);
+    } finally {
+      finishCronRun();
     }
   }
 } satisfies ExportedHandler<Env>;
