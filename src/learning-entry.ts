@@ -12,6 +12,8 @@ import {
 } from "./v1/worker-calibration-v2.js";
 import type { Env } from "./v1/types.js";
 
+let learningRunning: Promise<void> | null = null;
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data, null, 2), {
     status,
@@ -27,14 +29,20 @@ function json(data: unknown, status = 200): Response {
 async function withLearningPanel(response: Response, env: Env): Promise<Response> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/html")) return response;
-  const state = await getWorkerCalibrationState(env.DB);
+  const [state, training] = await Promise.all([
+    getWorkerCalibrationState(env.DB),
+    getWalkForwardTrainingProgress(env.DB)
+  ]);
   let html = await response.text();
   if (state.active) {
     html = html
       .replace("全期間の累計", "旧モデル参考")
       .replace("主要検証期間と本番公開分の合算", "旧モデルv1の参考成績");
   }
-  const panel = renderWorkerCalibrationPanel(state);
+  const panel = renderWorkerCalibrationPanel({
+    ...state,
+    trainingProgress: training
+  } as typeof state);
   html = html.replace(/<main\b[^>]*>/, (match) => `${match}${panel}`);
   const headers = new Headers(response.headers);
   headers.set("cache-control", "no-store, max-age=0");
@@ -54,25 +62,43 @@ async function advanceLearning(db: D1Database): Promise<void> {
   }
 }
 
+function startLearning(env: Env): Promise<void> {
+  if (learningRunning) return learningRunning;
+  learningRunning = (async () => {
+    await ensureSchema(env.DB);
+    await advanceLearning(env.DB);
+  })().catch((error) => {
+    console.error("WALK_FORWARD_SELF_START_FAILED", error);
+  }).finally(() => {
+    learningRunning = null;
+  });
+  return learningRunning;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const pathname = new URL(request.url).pathname;
+    const isLearningPage = pathname === "/" || pathname === "/performance";
+
+    // Cronが動かない環境でも、通常表示を待たせずにバックグラウンドで進める。
+    if (isLearningPage) ctx.waitUntil(startLearning(env));
+
     if (!pathname.startsWith("/api/training/walk-forward")) {
       if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
       const response = await app.fetch(request, env, ctx);
-      return pathname === "/" || pathname === "/performance"
-        ? await withLearningPanel(response, env)
-        : response;
+      return isLearningPage ? await withLearningPanel(response, env) : response;
     }
 
     await ensureSchema(env.DB);
     if (pathname === "/api/training/walk-forward/status" && request.method === "GET") {
+      ctx.waitUntil(startLearning(env));
       return json({
         training: await getWalkForwardTrainingProgress(env.DB),
         calibration: await getWorkerCalibrationState(env.DB)
       });
     }
     if (pathname === "/api/training/walk-forward/calibration-status" && request.method === "GET") {
+      ctx.waitUntil(startLearning(env));
       return json(await getWorkerCalibrationState(env.DB));
     }
     if (pathname === "/api/training/walk-forward/data" && request.method === "GET") {
@@ -96,9 +122,7 @@ export default {
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     await ensureSchema(env.DB);
     const progress = await getWalkForwardTrainingProgress(env.DB);
-    ctx.waitUntil(advanceLearning(env.DB).catch((error) => {
-      console.error("WALK_FORWARD_PIPELINE_STEP_FAILED", error);
-    }));
+    ctx.waitUntil(startLearning(env));
 
     // 過去データ取得・基礎予想生成中は通常メンテナンスと競合させない。
     // 学習データ完成後のみ、従来の定期処理も再開する。
