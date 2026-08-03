@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "scripts/backfill-history.mjs"
+      - "scripts/backfill-history-v2.mjs"
       - ".github/workflows/backfill-history.yml"
   workflow_dispatch:
     inputs:
@@ -45,8 +45,8 @@ jobs:
       - name: Compile parsers
         run: npm run build:test
 
-      - name: Download and parse all history pages
-        run: node scripts/backfill-history.mjs
+      - name: Download and parse all history pages in parallel
+        run: node scripts/backfill-history-v2.mjs
 
       - name: Bulk load generated SQL into D1
         shell: bash
