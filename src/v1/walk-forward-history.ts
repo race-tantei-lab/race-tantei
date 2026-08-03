@@ -21,7 +21,7 @@ const URL_INDEX_KEY = `${STATE_PREFIX}:url_index`;
 const FAILURES_KEY = `${STATE_PREFIX}:failures`;
 const PERMANENT_FAILURES_KEY = `${STATE_PREFIX}:permanent_failures`;
 const LAST_BATCH_METRICS_KEY = `${STATE_PREFIX}:last_batch_metrics`;
-const MAX_URLS_PER_CRON = 45;
+const MAX_URLS_PER_CRON = 15;
 const CHECKPOINT_SIZE = 5;
 const FETCH_CONCURRENCY = 3;
 const JRA_FETCH_TIMEOUT_MS = 8_000;
@@ -379,7 +379,6 @@ async function importBatch(db: D1Database): Promise<HistoryBatchMetrics> {
   if (index >= urls.length) metrics.stopReason = "complete";
   else if (metrics.urls >= MAX_URLS_PER_CRON) metrics.stopReason = "batch-limit";
   else if (metrics.urls === 0 && metrics.stopReason !== "soft-budget") metrics.stopReason = "empty";
-  await setState(db, LAST_BATCH_METRICS_KEY, JSON.stringify(metrics));
   return metrics;
 }
 
