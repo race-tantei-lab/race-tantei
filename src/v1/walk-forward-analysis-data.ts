@@ -4,6 +4,7 @@ import {
   WALK_FORWARD_HOLDOUT_END_DATE,
   WALK_FORWARD_SCOPE_VERSION,
   WALK_FORWARD_TRAIN_START_DATE,
+  WALK_FORWARD_VALIDATION_START_DATE,
   walkForwardSplitForDate
 } from "./walk-forward-scope.js";
 
@@ -45,6 +46,14 @@ interface PayoutRow {
   payoutYen: number;
 }
 
+interface BaselineBetRow {
+  raceId: string;
+  betType: string;
+  combination: string;
+  stakeYen: number;
+  returnYen: number;
+}
+
 function numberValue(value: unknown): number {
   return Number(value ?? 0);
 }
@@ -60,7 +69,7 @@ export async function getWalkForwardAnalysisData(db: D1Database): Promise<unknow
     };
   }
 
-  const [raceRows, runnerRows, resultRows, payoutRows] = await Promise.all([
+  const [raceRows, runnerRows, resultRows, payoutRows, baselineRows] = await Promise.all([
     db.prepare(`
       SELECT r.race_id AS raceId, r.race_date AS raceDate, r.venue, r.race_no AS raceNo,
         r.race_name AS raceName, r.surface, r.distance_m AS distanceM,
@@ -107,7 +116,20 @@ export async function getWalkForwardAnalysisData(db: D1Database): Promise<unknow
       JOIN rt_races r ON r.race_id=p.race_id
       WHERE r.race_date BETWEEN ? AND ?
       ORDER BY p.race_id, p.bet_type, p.combination
-    `).bind(WALK_FORWARD_TRAIN_START_DATE, WALK_FORWARD_HOLDOUT_END_DATE).all<PayoutRow>()
+    `).bind(WALK_FORWARD_TRAIN_START_DATE, WALK_FORWARD_HOLDOUT_END_DATE).all<PayoutRow>(),
+    db.prepare(`
+      SELECT b.race_id AS raceId, b.bet_type AS betType, b.combination,
+        b.stake_yen AS stakeYen, COALESCE(b.return_yen,0) AS returnYen
+      FROM rt_bets b
+      JOIN rt_predictions p ON p.id=b.prediction_id
+      JOIN rt_races r ON r.race_id=b.race_id
+      WHERE p.model_version=('validation-' || r.race_date || '-roi-policy-v1-3m')
+        AND p.status='locked'
+        AND b.settlement_status='settled'
+        AND r.race_date BETWEEN ? AND ?
+        AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
+      ORDER BY b.race_id, b.id
+    `).bind(WALK_FORWARD_VALIDATION_START_DATE, WALK_FORWARD_HOLDOUT_END_DATE).all<BaselineBetRow>()
   ]);
 
   const runnersByPrediction = new Map<number, PredictionRunnerRow[]>();
@@ -147,6 +169,17 @@ export async function getWalkForwardAnalysisData(db: D1Database): Promise<unknow
     payoutsByRace.set(row.raceId, values);
   }
 
+  const baselineByRace = new Map<string, BaselineBetRow[]>();
+  for (const row of baselineRows.results) {
+    const values = baselineByRace.get(row.raceId) ?? [];
+    values.push({
+      ...row,
+      stakeYen: numberValue(row.stakeYen),
+      returnYen: numberValue(row.returnYen)
+    });
+    baselineByRace.set(row.raceId, values);
+  }
+
   const races = raceRows.results.flatMap((row) => {
     const split = walkForwardSplitForDate(row.raceDate);
     if (!split) return [];
@@ -160,7 +193,8 @@ export async function getWalkForwardAnalysisData(db: D1Database): Promise<unknow
       predictionId,
       runners: runnersByPrediction.get(predictionId) ?? [],
       results: resultsByRace.get(row.raceId) ?? [],
-      payouts: payoutsByRace.get(row.raceId) ?? []
+      payouts: payoutsByRace.get(row.raceId) ?? [],
+      baselineBets: baselineByRace.get(row.raceId) ?? []
     }];
   });
 
@@ -173,6 +207,7 @@ export async function getWalkForwardAnalysisData(db: D1Database): Promise<unknow
     complete: true,
     preRaceFeaturesOnly: true,
     baseModelVersion: WALK_FORWARD_BASE_MODEL_VERSION,
+    baselinePolicyVersion: "roi-policy-v1",
     splitCounts,
     progress,
     races
