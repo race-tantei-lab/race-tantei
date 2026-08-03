@@ -1,5 +1,4 @@
 import app from "./audit-repair-entry.js";
-import { finishCronRun, tryStartCronRun } from "./cron-run-lock.js";
 import { ensureSchema, getState, setState } from "./v1/db.js";
 import { renderWorkerCalibrationPanel } from "./v1/learned-calibration-ui.js";
 import { getWalkForwardAnalysisData } from "./v1/walk-forward-analysis-data.js";
@@ -17,7 +16,8 @@ const CRON_ATTEMPT_KEY = "walk_forward_cron:last_attempt";
 const CRON_HEARTBEAT_KEY = "walk_forward_cron:last_success";
 const CRON_ERROR_KEY = "walk_forward_cron:last_error";
 const CRON_DURATION_KEY = "walk_forward_cron:last_duration_ms";
-let learningRunning: Promise<void> | null = null;
+const CRON_STAGE_KEY = "walk_forward_cron:last_stage";
+const CRON_DELTA_KEY = "walk_forward_cron:last_delta";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data, null, 2), {
@@ -41,13 +41,15 @@ function formatTime(label: string, value: string | null): string {
 async function withLearningPanel(response: Response, env: Env): Promise<Response> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/html")) return response;
-  const [state, training, attempt, heartbeat, cronError, duration] = await Promise.all([
+  const [state, training, attempt, heartbeat, cronError, duration, stage, delta] = await Promise.all([
     getWorkerCalibrationState(env.DB),
     getWalkForwardTrainingProgress(env.DB),
     getState(env.DB, CRON_ATTEMPT_KEY),
     getState(env.DB, CRON_HEARTBEAT_KEY),
     getState(env.DB, CRON_ERROR_KEY),
-    getState(env.DB, CRON_DURATION_KEY)
+    getState(env.DB, CRON_DURATION_KEY),
+    getState(env.DB, CRON_STAGE_KEY),
+    getState(env.DB, CRON_DELTA_KEY)
   ]);
   let html = await response.text();
   if (state.active) {
@@ -58,8 +60,11 @@ async function withLearningPanel(response: Response, env: Env): Promise<Response
   const cronDetails = [
     formatTime("最終Cron発火：", attempt),
     formatTime("最終成功：", heartbeat),
+    stage ? `最終工程：${stage}` : "",
+    delta ? `直近進捗：${delta}` : "",
     duration ? `処理時間：${duration}ms` : "",
-    cronError ? `直近エラー：${cronError}` : ""
+    cronError ? `直近エラー：${cronError}` : "",
+    "更新処理：Cron専用（ページ閲覧では進みません）"
   ].filter(Boolean).join("<br>");
   const heartbeatHtml = `<p style="margin:10px 0 0;font-size:12px;opacity:.8;line-height:1.6">${cronDetails}</p>`;
   const panel = renderWorkerCalibrationPanel({
@@ -73,36 +78,32 @@ async function withLearningPanel(response: Response, env: Env): Promise<Response
   return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
-async function advanceLearning(db: D1Database, steps: number, predictionBatchSize: number): Promise<void> {
-  for (let step = 0; step < steps; step += 1) {
-    const progress = await getWalkForwardTrainingProgress(db);
-    if (!progress.complete) {
-      await runWalkForwardTrainingStep(db, predictionBatchSize);
-      continue;
-    }
-    await runWorkerCalibrationStep(db);
-    return;
+async function advanceOneCronStep(db: D1Database): Promise<{ stage: string; delta: string }> {
+  const before = await getWalkForwardTrainingProgress(db);
+  if (!before.complete) {
+    await runWalkForwardTrainingStep(db, 4);
+    const after = await getWalkForwardTrainingProgress(db);
+    return {
+      stage: after.phase,
+      delta: `公式結果 +${Math.max(0, after.history.importedUrls - before.history.importedUrls)}件 / 基礎予想 +${Math.max(0, after.generatedRaces - before.generatedRaces)}R`
+    };
   }
+
+  const beforeCalibration = await getWorkerCalibrationState(db);
+  await runWorkerCalibrationStep(db);
+  const afterCalibration = await getWorkerCalibrationState(db);
+  return {
+    stage: afterCalibration.phase,
+    delta: `学習 +${Math.max(0, afterCalibration.trainedRaces - beforeCalibration.trainedRaces)}R / 再予想 +${Math.max(0, afterCalibration.appliedRaces - beforeCalibration.appliedRaces)}R`
+  };
 }
 
-function startLearning(env: Env): Promise<void> {
-  if (learningRunning) return learningRunning;
-  learningRunning = (async () => {
-    await ensureSchema(env.DB);
-    await advanceLearning(env.DB, 4, 16);
-  })().catch((error) => {
-    console.error("WALK_FORWARD_SELF_START_FAILED", error);
-  }).finally(() => {
-    learningRunning = null;
-  });
-  return learningRunning;
-}
-
-async function safelyRecordCronFailure(db: D1Database, startedAt: number, error: unknown): Promise<void> {
+async function safelyRecordFailure(db: D1Database, startedAt: number, stage: string, error: unknown): Promise<void> {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   try {
     await Promise.all([
       setState(db, CRON_DURATION_KEY, String(Date.now() - startedAt)),
+      setState(db, CRON_STAGE_KEY, stage),
       setState(db, CRON_ERROR_KEY, message.slice(0, 500))
     ]);
   } catch (recordError) {
@@ -115,8 +116,6 @@ export default {
     const pathname = new URL(request.url).pathname;
     const isLearningPage = pathname === "/" || pathname === "/performance";
 
-    if (isLearningPage) ctx.waitUntil(startLearning(env));
-
     if (!pathname.startsWith("/api/training/walk-forward")) {
       if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
       const response = await app.fetch(request, env, ctx);
@@ -125,7 +124,6 @@ export default {
 
     await ensureSchema(env.DB);
     if (pathname === "/api/training/walk-forward/status" && request.method === "GET") {
-      ctx.waitUntil(startLearning(env));
       return json({
         training: await getWalkForwardTrainingProgress(env.DB),
         calibration: await getWorkerCalibrationState(env.DB),
@@ -133,12 +131,13 @@ export default {
           lastAttempt: await getState(env.DB, CRON_ATTEMPT_KEY),
           lastSuccess: await getState(env.DB, CRON_HEARTBEAT_KEY),
           lastDurationMs: await getState(env.DB, CRON_DURATION_KEY),
+          lastStage: await getState(env.DB, CRON_STAGE_KEY),
+          lastDelta: await getState(env.DB, CRON_DELTA_KEY),
           lastError: await getState(env.DB, CRON_ERROR_KEY)
         }
       });
     }
     if (pathname === "/api/training/walk-forward/calibration-status" && request.method === "GET") {
-      ctx.waitUntil(startLearning(env));
       return json(await getWorkerCalibrationState(env.DB));
     }
     if (pathname === "/api/training/walk-forward/data" && request.method === "GET") {
@@ -148,7 +147,7 @@ export default {
       if (request.headers.get("x-race-training") !== "walk-forward-12m-v1") {
         return json({ ok: false, error: "TRAINING_HEADER_REQUIRED" }, 403);
       }
-      return json(await runWalkForwardTrainingStep(env.DB, 16));
+      return json(await runWalkForwardTrainingStep(env.DB, 4));
     }
     if (pathname === "/api/training/walk-forward/calibration-step" && request.method === "POST") {
       if (request.headers.get("x-race-training") !== "walk-forward-12m-v1") {
@@ -161,15 +160,18 @@ export default {
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const startedAt = Date.now();
-    if (!tryStartCronRun()) return;
-
+    let stage = "schema";
     try {
       await ensureSchema(env.DB);
       await setState(env.DB, CRON_ATTEMPT_KEY, new Date(startedAt).toISOString());
-      await advanceLearning(env.DB, 1, 1);
+      stage = "learning";
+      const result = await advanceOneCronStep(env.DB);
+      stage = result.stage;
       await Promise.all([
         setState(env.DB, CRON_HEARTBEAT_KEY, new Date().toISOString()),
         setState(env.DB, CRON_DURATION_KEY, String(Date.now() - startedAt)),
+        setState(env.DB, CRON_STAGE_KEY, result.stage),
+        setState(env.DB, CRON_DELTA_KEY, result.delta),
         setState(env.DB, CRON_ERROR_KEY, "")
       ]);
 
@@ -178,10 +180,8 @@ export default {
         await app.scheduled(controller, env, ctx);
       }
     } catch (error) {
-      await safelyRecordCronFailure(env.DB, startedAt, error);
+      await safelyRecordFailure(env.DB, startedAt, stage, error);
       console.error("WALK_FORWARD_CRON_STEP_FAILED", error);
-    } finally {
-      finishCronRun();
     }
   }
 } satisfies ExportedHandler<Env>;
