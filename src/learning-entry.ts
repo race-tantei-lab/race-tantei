@@ -1,5 +1,6 @@
 import app from "./audit-repair-entry.js";
-import { ensureSchema, getState, setState } from "./v1/db.js";
+import { ensureSchema, getState } from "./v1/db.js";
+import { setHistoryStatesBatch } from "./v1/history-batch-db.js";
 import { renderWorkerCalibrationPanel } from "./v1/learned-calibration-ui.js";
 import { getWalkForwardAnalysisData } from "./v1/walk-forward-analysis-data.js";
 import { getWalkForwardTrainingProgress, runWalkForwardTrainingStep } from "./v1/walk-forward-training.js";
@@ -80,9 +81,6 @@ interface CronWorkResult {
 }
 
 async function advanceCronWork(db: D1Database): Promise<CronWorkResult> {
-  // runWalkForwardTrainingStep already performs the one status read it needs and returns
-  // the resulting progress. Do not surround it with duplicate progress queries: on the
-  // Workers Free plan those reads count toward the same 50-query invocation budget.
   const trainingResult = objectValue(await runWalkForwardTrainingStep(db, 4));
   const trainingStage = stringValue(trainingResult.stage, "learning");
   const progress = objectValue(trainingResult.progress);
@@ -116,7 +114,7 @@ async function advanceCronWork(db: D1Database): Promise<CronWorkResult> {
   const calibrationProgress = objectValue(calibrationResult.progress);
   return {
     stage: stringValue(calibrationProgress.phase, "calibration"),
-    delta: `勝率学習・再予想を1処理実行`,
+    delta: "勝率学習・再予想を1処理実行",
     trainingComplete: true
   };
 }
@@ -124,10 +122,11 @@ async function advanceCronWork(db: D1Database): Promise<CronWorkResult> {
 async function safelyRecordFailure(db: D1Database, startedAt: number, stage: string, error: unknown): Promise<void> {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   try {
-    await Promise.all([
-      setState(db, CRON_DURATION_KEY, String(Date.now() - startedAt)),
-      setState(db, CRON_STAGE_KEY, stage),
-      setState(db, CRON_ERROR_KEY, message.slice(0, 500))
+    await setHistoryStatesBatch(db, [
+      { key: CRON_DURATION_KEY, value: String(Date.now() - startedAt) },
+      { key: CRON_STAGE_KEY, value: stage },
+      { key: CRON_DELTA_KEY, value: "処理失敗（次回Cronで自動再試行）" },
+      { key: CRON_ERROR_KEY, value: message.slice(0, 500) }
     ]);
   } catch (recordError) {
     console.error("WALK_FORWARD_CRON_ERROR_RECORD_FAILED", recordError);
@@ -172,15 +171,18 @@ export default {
     const startedAt = Date.now();
     let stage = "learning";
     try {
-      await setState(env.DB, CRON_ATTEMPT_KEY, new Date(startedAt).toISOString());
+      await setHistoryStatesBatch(env.DB, [
+        { key: CRON_ATTEMPT_KEY, value: new Date(startedAt).toISOString() },
+        { key: CRON_ERROR_KEY, value: "" }
+      ]);
       const result = await advanceCronWork(env.DB);
       stage = result.stage;
-      await Promise.all([
-        setState(env.DB, CRON_HEARTBEAT_KEY, new Date().toISOString()),
-        setState(env.DB, CRON_DURATION_KEY, String(Date.now() - startedAt)),
-        setState(env.DB, CRON_STAGE_KEY, result.stage),
-        setState(env.DB, CRON_DELTA_KEY, result.delta),
-        setState(env.DB, CRON_ERROR_KEY, "")
+      await setHistoryStatesBatch(env.DB, [
+        { key: CRON_HEARTBEAT_KEY, value: new Date().toISOString() },
+        { key: CRON_DURATION_KEY, value: String(Date.now() - startedAt) },
+        { key: CRON_STAGE_KEY, value: result.stage },
+        { key: CRON_DELTA_KEY, value: result.delta },
+        { key: CRON_ERROR_KEY, value: "" }
       ]);
       if (result.trainingComplete && app.scheduled) await app.scheduled(controller, env, ctx);
     } catch (error) {
