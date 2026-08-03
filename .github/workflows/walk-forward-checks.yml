@@ -8,6 +8,8 @@ on:
       - "src/v1/walk-forward-*.ts"
       - "src/v1/worker-calibration*.ts"
       - "src/v1/learned-calibration-*.ts"
+      - "src/v1/learned-betting-policy.ts"
+      - "src/v1/learned-venue-quota.ts"
       - "src/v1/display-detail.ts"
       - "scripts/optimize_walk_forward_roi.py"
       - "scripts/check_walk_forward_promotion.py"
