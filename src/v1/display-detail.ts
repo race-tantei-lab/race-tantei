@@ -3,7 +3,7 @@ import { getRace, getRunners } from "./db.js";
 import { isThreeMonthDate } from "./three-month-scope.js";
 import { validationModelForDate } from "./validation.js";
 import { walkForwardSplitForDate } from "./walk-forward-scope.js";
-import { getActiveLearnedModelVersion } from "./worker-calibration.js";
+import { getActiveLearnedModelVersion } from "./worker-calibration-v2.js";
 
 interface PredictionRow {
   id: number;
