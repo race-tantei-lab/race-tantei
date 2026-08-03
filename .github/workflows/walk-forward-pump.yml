@@ -1,0 +1,78 @@
+name: Walk-forward training pump
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/walk-forward-pump.yml
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: walk-forward-training-pump
+  cancel-in-progress: false
+
+jobs:
+  pump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Advance training or calibration
+        shell: bash
+        env:
+          STATUS_URL: https://race-tantei-phase0.race-tantei.workers.dev/api/training/walk-forward/status
+          TRAINING_URL: https://race-tantei-phase0.race-tantei.workers.dev/api/training/walk-forward/step
+          CALIBRATION_URL: https://race-tantei-phase0.race-tantei.workers.dev/api/training/walk-forward/calibration-step
+          TRAINING_HEADER: walk-forward-12m-v1
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 8); do
+            status_file="$(mktemp)"
+            curl --fail --silent --show-error --max-time 30 \
+              "$STATUS_URL" > "$status_file"
+
+            training_complete="$(jq -r '.training.complete // false' "$status_file")"
+            calibration_phase="$(jq -r '.calibration.phase // "waiting-data"' "$status_file")"
+
+            echo "attempt=$attempt training_complete=$training_complete calibration_phase=$calibration_phase"
+
+            if [[ "$training_complete" == "true" && "$calibration_phase" == "complete" ]]; then
+              echo "Walk-forward pipeline completed. Disabling scheduled pump."
+              curl --fail --silent --show-error \
+                -X PUT \
+                -H "Authorization: Bearer $GITHUB_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/walk-forward-pump.yml/disable"
+              exit 0
+            fi
+
+            if [[ "$training_complete" == "true" ]]; then
+              target="$CALIBRATION_URL"
+            else
+              target="$TRAINING_URL"
+            fi
+
+            response_file="$(mktemp)"
+            http_code="$(curl --silent --show-error --max-time 45 \
+              -o "$response_file" -w '%{http_code}' \
+              -X POST \
+              -H "x-race-training: $TRAINING_HEADER" \
+              "$target" || true)"
+
+            cat "$response_file"
+            echo
+            if [[ "$http_code" != "200" ]]; then
+              echo "Training pump failed with HTTP $http_code" >&2
+              exit 1
+            fi
+
+            sleep 2
+          done
