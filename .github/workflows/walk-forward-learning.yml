@@ -70,6 +70,9 @@ jobs:
           data=json.load(open('walk-forward-data.json', encoding='utf-8'))
           assert data.get('complete') is True
           counts=data.get('splitCounts',{})
+          progress=data.get('progress',{})
+          history=progress.get('history',{})
+          assert history.get('permanentFailures',0) == 0, history
           assert counts.get('train',0) >= 1800, counts
           assert counts.get('validation',0) >= 300, counts
           assert counts.get('holdout',0) >= 150, counts
@@ -85,19 +88,27 @@ jobs:
             --ticket-policies 140 \
             --output walk-forward-roi-result.json
 
+      - name: Compare with audited v1 baseline
+        if: ${{ hashFiles('walk-forward-roi-result.json') != '' }}
+        run: |
+          python scripts/check_walk_forward_promotion.py \
+            walk-forward-data.json \
+            walk-forward-roi-result.json
+
       - name: Require holdout promotion gate
         if: ${{ hashFiles('walk-forward-roi-result.json') != '' }}
         run: |
           python - <<'PY'
           import json
           result=json.load(open('walk-forward-roi-result.json', encoding='utf-8'))
-          holdout=result['holdout']
           print(json.dumps({
               'promotionReady': result['promotionReady'],
+              'promotionChecks': result['promotionChecks'],
               'validation': result['validation']['courses'],
-              'holdout': holdout['courses']
+              'holdout': result['holdout']['courses'],
+              'baselineHoldout': result['baseline']['holdout']['courses']
           }, ensure_ascii=False, indent=2))
-          assert result['promotionReady'] is True, 'Holdout gate failed; production policy must remain unchanged'
+          assert result['promotionReady'] is True, 'New policy did not beat audited v1 on untouched holdout; production remains unchanged'
           PY
 
       - name: Publish learning result
@@ -115,6 +126,10 @@ jobs:
               print(f"### {split}")
               for course,row in result[split]['courses'].items():
                   print(f"- {course}: ROI {row['roiPct']:.1f}% / 的中率 {row['hitRatePct']:.1f}% / 最大1日寄与 {row['maximumPositiveDayShare']:.1%}")
+          if 'baseline' in result:
+              print('### 現行v1とのホールドアウト比較')
+              for course,check in result['promotionChecks'].items():
+                  print(f"- {course}: v1 {check['baselineRoiPct']:.1f}% → 新 {check['learnedRoiPct']:.1f}%（必要 {check['requiredRoiPct']:.1f}%）")
           PY
 
       - name: Upload learning artifacts
