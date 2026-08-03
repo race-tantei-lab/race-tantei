@@ -186,7 +186,7 @@ export async function runWalkForwardTrainingStep(
 
   if (before.phase === "history" || before.phase === "streaming") {
     const historyAction = await runWalkForwardHistoryStep(db);
-    const featureAction = await generateBatch(db, batchSize);
+    const featureAction = await generateBatch(db, Math.min(4, batchSize));
     return {
       stage: "streaming",
       action: { history: historyAction, features: featureAction },
