@@ -1,5 +1,6 @@
 import app from "./audit-repair-entry.js";
 import { ensureSchema } from "./v1/db.js";
+import { renderWorkerCalibrationPanel } from "./v1/learned-calibration-ui.js";
 import { getWalkForwardAnalysisData } from "./v1/walk-forward-analysis-data.js";
 import {
   getWalkForwardTrainingProgress,
@@ -7,9 +8,8 @@ import {
 } from "./v1/walk-forward-training.js";
 import {
   getWorkerCalibrationState,
-  renderWorkerCalibrationPanel,
   runWorkerCalibrationStep
-} from "./v1/worker-calibration.js";
+} from "./v1/worker-calibration-v2.js";
 import type { Env } from "./v1/types.js";
 
 function json(data: unknown, status = 200): Response {
