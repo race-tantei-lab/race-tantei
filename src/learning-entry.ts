@@ -12,8 +12,10 @@ import {
 } from "./v1/worker-calibration-v2.js";
 import type { Env } from "./v1/types.js";
 
+const CRON_ATTEMPT_KEY = "walk_forward_cron:last_attempt";
 const CRON_HEARTBEAT_KEY = "walk_forward_cron:last_success";
 const CRON_ERROR_KEY = "walk_forward_cron:last_error";
+const CRON_DURATION_KEY = "walk_forward_cron:last_duration_ms";
 let learningRunning: Promise<void> | null = null;
 
 function json(data: unknown, status = 200): Response {
@@ -28,21 +30,23 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
-function formatHeartbeat(value: string | null): string {
-  if (!value) return "定期処理の成功記録なし";
+function formatTime(label: string, value: string | null): string {
+  if (!value) return `${label}なし`;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return `最終定期処理：${date.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`;
+  if (Number.isNaN(date.getTime())) return `${label}${value}`;
+  return `${label}${date.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}`;
 }
 
 async function withLearningPanel(response: Response, env: Env): Promise<Response> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/html")) return response;
-  const [state, training, heartbeat, cronError] = await Promise.all([
+  const [state, training, attempt, heartbeat, cronError, duration] = await Promise.all([
     getWorkerCalibrationState(env.DB),
     getWalkForwardTrainingProgress(env.DB),
+    getState(env.DB, CRON_ATTEMPT_KEY),
     getState(env.DB, CRON_HEARTBEAT_KEY),
-    getState(env.DB, CRON_ERROR_KEY)
+    getState(env.DB, CRON_ERROR_KEY),
+    getState(env.DB, CRON_DURATION_KEY)
   ]);
   let html = await response.text();
   if (state.active) {
@@ -50,7 +54,13 @@ async function withLearningPanel(response: Response, env: Env): Promise<Response
       .replace("全期間の累計", "旧モデル参考")
       .replace("主要検証期間と本番公開分の合算", "旧モデルv1の参考成績");
   }
-  const heartbeatHtml = `<p style="margin:10px 0 0;font-size:12px;opacity:.8">${formatHeartbeat(heartbeat)}${cronError ? `／直近エラー：${cronError}` : ""}</p>`;
+  const cronDetails = [
+    formatTime("最終Cron発火：", attempt),
+    formatTime("最終成功：", heartbeat),
+    duration ? `処理時間：${duration}ms` : "",
+    cronError ? `直近エラー：${cronError}` : ""
+  ].filter(Boolean).join("<br>");
+  const heartbeatHtml = `<p style="margin:10px 0 0;font-size:12px;opacity:.8;line-height:1.6">${cronDetails}</p>`;
   const panel = renderWorkerCalibrationPanel({
     ...state,
     trainingProgress: training
@@ -92,7 +102,6 @@ export default {
     const pathname = new URL(request.url).pathname;
     const isLearningPage = pathname === "/" || pathname === "/performance";
 
-    // 閲覧時は応答を待たせず複数ステップ進める。
     if (isLearningPage) ctx.waitUntil(startLearning(env));
 
     if (!pathname.startsWith("/api/training/walk-forward")) {
@@ -108,7 +117,9 @@ export default {
         training: await getWalkForwardTrainingProgress(env.DB),
         calibration: await getWorkerCalibrationState(env.DB),
         cron: {
+          lastAttempt: await getState(env.DB, CRON_ATTEMPT_KEY),
           lastSuccess: await getState(env.DB, CRON_HEARTBEAT_KEY),
+          lastDurationMs: await getState(env.DB, CRON_DURATION_KEY),
           lastError: await getState(env.DB, CRON_ERROR_KEY)
         }
       });
@@ -136,18 +147,22 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    const startedAt = Date.now();
     await ensureSchema(env.DB);
+    await setState(env.DB, CRON_ATTEMPT_KEY, new Date(startedAt).toISOString());
     try {
-      // Cronは小さい1ステップを直接待ち、DB保存まで完了してから終了する。
-      // waitUntilへ投げた重い処理が途中終了する問題を避ける。
-      await advanceLearning(env.DB, 1, 4);
+      await advanceLearning(env.DB, 1, 1);
       await Promise.all([
         setState(env.DB, CRON_HEARTBEAT_KEY, new Date().toISOString()),
+        setState(env.DB, CRON_DURATION_KEY, String(Date.now() - startedAt)),
         setState(env.DB, CRON_ERROR_KEY, "")
       ]);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await setState(env.DB, CRON_ERROR_KEY, message.slice(0, 300));
+      await Promise.all([
+        setState(env.DB, CRON_DURATION_KEY, String(Date.now() - startedAt)),
+        setState(env.DB, CRON_ERROR_KEY, message.slice(0, 300))
+      ]);
       console.error("WALK_FORWARD_CRON_STEP_FAILED", error);
       return;
     }
