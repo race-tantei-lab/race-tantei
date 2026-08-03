@@ -94,7 +94,7 @@ async function advanceOneCronStep(db: D1Database): Promise<{ stage: string; delt
   const afterCalibration = await getWorkerCalibrationState(db);
   return {
     stage: afterCalibration.phase,
-    delta: `学習 +${Math.max(0, afterCalibration.trainedRaces - beforeCalibration.trainedRaces)}R / 再予想 +${Math.max(0, afterCalibration.appliedRaces - beforeCalibration.appliedRaces)}R`
+    delta: `学習 +${Math.max(0, afterCalibration.scoredRaces - beforeCalibration.scoredRaces)}R / 再予想 +${Math.max(0, afterCalibration.appliedRaces - beforeCalibration.appliedRaces)}R`
   };
 }
 
