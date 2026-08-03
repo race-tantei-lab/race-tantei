@@ -1,0 +1,70 @@
+name: One-off history backfill
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/backfill-history.mjs"
+      - ".github/workflows/backfill-history.yml"
+  workflow_dispatch:
+    inputs:
+      concurrency:
+        description: "Concurrent JRA page downloads"
+        required: false
+        default: "24"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: race-tantei-history-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      BACKFILL_CONCURRENCY: ${{ inputs.concurrency || '24' }}
+      BACKFILL_RACES_PER_FILE: "40"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile parsers
+        run: npm run build:test
+
+      - name: Download and parse all history pages
+        run: node scripts/backfill-history.mjs
+
+      - name: Bulk load generated SQL into D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in tmp/history-backfill/backfill-*.sql; do
+            echo "Loading $file"
+            npx wrangler d1 execute race-tantei-phase0 --remote --file "$file" --config wrangler.jsonc
+          done
+          npx wrangler d1 execute race-tantei-phase0 --remote --file tmp/history-backfill/zzzz-state.sql --config wrangler.jsonc
+
+      - name: Upload backfill report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: history-backfill-report
+          path: |
+            tmp/history-backfill/summary.json
+            tmp/history-backfill/failures.json
+          if-no-files-found: ignore
+          retention-days: 14
