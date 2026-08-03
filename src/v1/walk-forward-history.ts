@@ -21,7 +21,7 @@ const URL_INDEX_KEY = `${STATE_PREFIX}:url_index`;
 const FAILURES_KEY = `${STATE_PREFIX}:failures`;
 const PERMANENT_FAILURES_KEY = `${STATE_PREFIX}:permanent_failures`;
 const LAST_BATCH_METRICS_KEY = `${STATE_PREFIX}:last_batch_metrics`;
-const MAX_URLS_PER_CRON = 15;
+const MAX_URLS_PER_CRON = 5;
 const CHECKPOINT_SIZE = 5;
 const FETCH_CONCURRENCY = 3;
 const JRA_FETCH_TIMEOUT_MS = 8_000;
@@ -293,6 +293,30 @@ async function prepareWithConcurrency(urls: string[]): Promise<PromiseSettledRes
   return outcomes;
 }
 
+async function persistPreparedIndividually(
+  db: D1Database,
+  pending: PreparedImport[],
+  failures: FailedUrl[],
+  metrics: HistoryBatchMetrics
+): Promise<FailedUrl[]> {
+  let nextFailures = failures;
+  for (const row of pending) {
+    try {
+      const persisted = await saveHistoryBundlePairsBatch(db, [{ entry: row.entry, result: row.result }]);
+      metrics.imported += persisted.races;
+      metrics.dbStatements += persisted.statements;
+    } catch (error) {
+      metrics.errors += 1;
+      nextFailures = replaceFailure(nextFailures, {
+        url: row.url,
+        attempts: 1,
+        error: `DB_SAVE_FAILED:${errorMessage(error)}`
+      });
+    }
+  }
+  return nextFailures;
+}
+
 async function importBatch(db: D1Database): Promise<HistoryBatchMetrics> {
   const totalStartedAt = performance.now();
   const [urlsValue, indexValue, failuresValue] = await Promise.all([
@@ -352,12 +376,16 @@ async function importBatch(db: D1Database): Promise<HistoryBatchMetrics> {
       const pending = prepared.filter((row) => !completeRaceIds.has(row.raceId));
       if (pending.length > 0) {
         const persistStartedAt = performance.now();
-        const persisted = await saveHistoryBundlePairsBatch(
-          db,
-          pending.map((row) => ({ entry: row.entry, result: row.result }))
-        );
-        metrics.imported += persisted.races;
-        metrics.dbStatements += persisted.statements;
+        try {
+          const persisted = await saveHistoryBundlePairsBatch(
+            db,
+            pending.map((row) => ({ entry: row.entry, result: row.result }))
+          );
+          metrics.imported += persisted.races;
+          metrics.dbStatements += persisted.statements;
+        } catch {
+          failures = await persistPreparedIndividually(db, pending, failures, metrics);
+        }
         metrics.dbPersistMs += elapsedMs(persistStartedAt);
       }
     }
