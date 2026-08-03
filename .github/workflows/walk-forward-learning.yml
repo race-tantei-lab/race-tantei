@@ -79,7 +79,7 @@ jobs:
           print(json.dumps(counts, ensure_ascii=False))
           PY
 
-      - name: Train on 12 months and evaluate holdout once
+      - name: Train on 12 months and evaluate historical test once
         if: ${{ hashFiles('walk-forward-data.json') != '' }}
         run: |
           python scripts/optimize_walk_forward_roi.py walk-forward-data.json \
@@ -95,20 +95,24 @@ jobs:
             walk-forward-data.json \
             walk-forward-roi-result.json
 
-      - name: Require holdout promotion gate
+      - name: Require historical gate before shadow mode
         if: ${{ hashFiles('walk-forward-roi-result.json') != '' }}
         run: |
           python - <<'PY'
           import json
           result=json.load(open('walk-forward-roi-result.json', encoding='utf-8'))
           print(json.dumps({
+              'historicalGatePassed': result['historicalGatePassed'],
               'promotionReady': result['promotionReady'],
+              'nextRequiredStage': result['nextRequiredStage'],
               'promotionChecks': result['promotionChecks'],
               'validation': result['validation']['courses'],
               'holdout': result['holdout']['courses'],
               'baselineHoldout': result['baseline']['holdout']['courses']
           }, ensure_ascii=False, indent=2))
-          assert result['promotionReady'] is True, 'New policy did not beat audited v1 on untouched holdout; production remains unchanged'
+          assert result['historicalGatePassed'] is True, 'Candidate did not beat audited v1 on the historical test; reject it'
+          assert result['promotionReady'] is False, 'Historical data alone must never promote production'
+          assert result['nextRequiredStage'] == 'future-shadow'
           PY
 
       - name: Publish learning result
@@ -120,14 +124,16 @@ jobs:
               print('- データ準備中のため、モデル選定は未実施です。')
               raise SystemExit(0)
           result=json.load(open('walk-forward-roi-result.json', encoding='utf-8'))
-          print(f"- 本番昇格可否: **{result['promotionReady']}**")
+          print(f"- 履歴テスト合格: **{result.get('historicalGatePassed', False)}**")
+          print(f"- 本番昇格: **{result.get('promotionReady', False)}**（未来影運用前のため必ずFalse）")
+          print(f"- 次段階: {result.get('nextRequiredStage')}")
           print(f"- 校正: modelWeight={result['calibration']['modelWeight']:.2f}, temperature={result['calibration']['temperature']:.2f}")
           for split in ('validation','holdout'):
               print(f"### {split}")
               for course,row in result[split]['courses'].items():
                   print(f"- {course}: ROI {row['roiPct']:.1f}% / 的中率 {row['hitRatePct']:.1f}% / 最大1日寄与 {row['maximumPositiveDayShare']:.1%}")
           if 'baseline' in result:
-              print('### 現行v1とのホールドアウト比較')
+              print('### 現行v1との履歴テスト比較')
               for course,check in result['promotionChecks'].items():
                   print(f"- {course}: v1 {check['baselineRoiPct']:.1f}% → 新 {check['learnedRoiPct']:.1f}%（必要 {check['requiredRoiPct']:.1f}%）")
           PY
