@@ -2,6 +2,8 @@ import type { RaceDetail } from "./db.js";
 import { getRace, getRunners } from "./db.js";
 import { isThreeMonthDate } from "./three-month-scope.js";
 import { validationModelForDate } from "./validation.js";
+import { walkForwardSplitForDate } from "./walk-forward-scope.js";
+import { getActiveLearnedModelVersion } from "./worker-calibration.js";
 
 interface PredictionRow {
   id: number;
@@ -23,7 +25,33 @@ async function selectDisplayPrediction(
   raceDate: string,
   liveModel: string
 ): Promise<PredictionRow | null> {
+  const learnedModel = walkForwardSplitForDate(raceDate)
+    ? await getActiveLearnedModelVersion(db)
+    : null;
   const threeMonthModel = threeMonthModelForDate(raceDate);
+
+  if (learnedModel) {
+    return await db.prepare(`
+      SELECT id, status, model_version AS modelVersion, generated_at AS generatedAt, locked_at AS lockedAt
+      FROM rt_predictions
+      WHERE race_id=? AND model_version IN (?, ?, ?)
+      ORDER BY CASE
+        WHEN model_version=? THEN 1
+        WHEN model_version=? THEN 2
+        ELSE 3 END,
+        CASE WHEN status='locked' THEN 1 ELSE 2 END,
+        id DESC
+      LIMIT 1
+    `).bind(
+      raceId,
+      learnedModel,
+      threeMonthModel ?? liveModel,
+      liveModel,
+      learnedModel,
+      threeMonthModel ?? liveModel
+    ).first<PredictionRow>();
+  }
+
   if (threeMonthModel) {
     return await db.prepare(`
       SELECT id, status, model_version AS modelVersion, generated_at AS generatedAt, locked_at AS lockedAt
