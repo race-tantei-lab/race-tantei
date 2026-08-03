@@ -6,10 +6,11 @@ import {
 import { settleRaceWithCourses } from "./course-db.js";
 import { getState, setState } from "./db.js";
 import { ROI_POLICY_VERSION } from "./roi-policy.js";
-import type { BetRecommendation, RunnerPrediction } from "./types.js";
+import type { BetRecommendation, BudgetCourse, RunnerPrediction } from "./types.js";
 
 export const MINIMUM_SELECTED_RACES_PER_VENUE = 5;
 const TOTAL_TARGET_STAKE = Object.values(COURSE_TARGET_STAKES).reduce((sum, value) => sum + value, 0);
+const COURSES: BudgetCourse[] = ["ライト", "スタンダード", "プレミアム"];
 
 export type VenueQuotaMode = "live" | "validation";
 
@@ -24,12 +25,27 @@ interface QuotaRaceRow {
   betCount: number;
   settledCount: number;
   stakeYen: number;
+  lightCount: number;
+  lightSettledCount: number;
+  lightStakeYen: number;
+  standardCount: number;
+  standardSettledCount: number;
+  standardStakeYen: number;
+  premiumCount: number;
+  premiumSettledCount: number;
+  premiumStakeYen: number;
 }
 
 interface RankedQuotaCandidate extends QuotaRaceRow {
   score: number;
   predictions: RunnerPrediction[];
   bets: BetRecommendation[];
+}
+
+interface CourseBetState {
+  count: number;
+  settledCount: number;
+  stakeYen: number;
 }
 
 export interface VenueQuotaVenueResult {
@@ -87,7 +103,16 @@ async function loadQuotaRaces(
         SELECT SUM(b.stake_yen) FROM rt_bets b
         WHERE b.prediction_id=p.id
           AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
-      ),0) AS stakeYen
+      ),0) AS stakeYen,
+      COALESCE((SELECT COUNT(*) FROM rt_bets b WHERE b.prediction_id=p.id AND b.bet_type LIKE 'ライト｜%'),0) AS lightCount,
+      COALESCE((SELECT COUNT(*) FROM rt_bets b WHERE b.prediction_id=p.id AND b.bet_type LIKE 'ライト｜%' AND b.settlement_status='settled'),0) AS lightSettledCount,
+      COALESCE((SELECT SUM(b.stake_yen) FROM rt_bets b WHERE b.prediction_id=p.id AND b.bet_type LIKE 'ライト｜%'),0) AS lightStakeYen,
+      COALESCE((SELECT COUNT(*) FROM rt_bets b WHERE b.prediction_id=p.id AND b.bet_type LIKE 'スタンダード｜%'),0) AS standardCount,
+      COALESCE((SELECT COUNT(*) FROM rt_bets b WHERE b.prediction_id=p.id AND b.bet_type LIKE 'スタンダード｜%' AND b.settlement_status='settled'),0) AS standardSettledCount,
+      COALESCE((SELECT SUM(b.stake_yen) FROM rt_bets b WHERE b.prediction_id=p.id AND b.bet_type LIKE 'スタンダード｜%'),0) AS standardStakeYen,
+      COALESCE((SELECT COUNT(*) FROM rt_bets b WHERE b.prediction_id=p.id AND b.bet_type LIKE 'プレミアム｜%'),0) AS premiumCount,
+      COALESCE((SELECT COUNT(*) FROM rt_bets b WHERE b.prediction_id=p.id AND b.bet_type LIKE 'プレミアム｜%' AND b.settlement_status='settled'),0) AS premiumSettledCount,
+      COALESCE((SELECT SUM(b.stake_yen) FROM rt_bets b WHERE b.prediction_id=p.id AND b.bet_type LIKE 'プレミアム｜%'),0) AS premiumStakeYen
     FROM rt_races r
     JOIN rt_predictions p ON p.race_id=r.race_id AND p.model_version=?
     WHERE r.race_date=? AND ${statusCondition}
@@ -99,7 +124,16 @@ async function loadQuotaRaces(
     predictionId: toNumber(row.predictionId),
     betCount: toNumber(row.betCount),
     settledCount: toNumber(row.settledCount),
-    stakeYen: toNumber(row.stakeYen)
+    stakeYen: toNumber(row.stakeYen),
+    lightCount: toNumber(row.lightCount),
+    lightSettledCount: toNumber(row.lightSettledCount),
+    lightStakeYen: toNumber(row.lightStakeYen),
+    standardCount: toNumber(row.standardCount),
+    standardSettledCount: toNumber(row.standardSettledCount),
+    standardStakeYen: toNumber(row.standardStakeYen),
+    premiumCount: toNumber(row.premiumCount),
+    premiumSettledCount: toNumber(row.premiumSettledCount),
+    premiumStakeYen: toNumber(row.premiumStakeYen)
   }));
 }
 
@@ -166,13 +200,42 @@ async function replaceCourseBets(
   return row.bets.length;
 }
 
-function desiredStake(row: RankedQuotaCandidate): number {
-  return row.bets.reduce((sum, bet) => sum + bet.stakeYen, 0);
+function storedCourseState(row: QuotaRaceRow, course: BudgetCourse): CourseBetState {
+  if (course === "ライト") {
+    return { count: row.lightCount, settledCount: row.lightSettledCount, stakeYen: row.lightStakeYen };
+  }
+  if (course === "スタンダード") {
+    return { count: row.standardCount, settledCount: row.standardSettledCount, stakeYen: row.standardStakeYen };
+  }
+  return { count: row.premiumCount, settledCount: row.premiumSettledCount, stakeYen: row.premiumStakeYen };
+}
+
+function desiredCourseState(bets: BetRecommendation[], course: BudgetCourse): CourseBetState {
+  const rows = bets.filter((bet) => bet.course === course);
+  return {
+    count: rows.length,
+    settledCount: 0,
+    stakeYen: rows.reduce((sum, bet) => sum + bet.stakeYen, 0)
+  };
+}
+
+function courseBetsAreNormalized(row: QuotaRaceRow, mode: VenueQuotaMode): boolean {
+  return COURSES.every((course) => {
+    const state = storedCourseState(row, course);
+    return state.count > 0
+      && state.stakeYen === COURSE_TARGET_STAKES[course]
+      && (mode !== "validation" || state.settledCount === state.count);
+  });
 }
 
 function needsReplacement(row: RankedQuotaCandidate, mode: VenueQuotaMode): boolean {
-  const desired = desiredStake(row);
-  if (row.betCount !== row.bets.length || row.stakeYen !== desired) return true;
+  for (const course of COURSES) {
+    const stored = storedCourseState(row, course);
+    const desired = desiredCourseState(row.bets, course);
+    if (stored.count !== desired.count || stored.stakeYen !== desired.stakeYen) return true;
+    if (mode === "validation" && stored.settledCount !== stored.count) return true;
+  }
+  if (row.betCount !== row.bets.length || row.stakeYen !== TOTAL_TARGET_STAKE) return true;
   if (mode === "validation" && row.settledCount !== row.bets.length) return true;
   if (mode === "live" && row.predictionStatus !== "locked" && row.raceStatus !== "finished") return true;
   return false;
@@ -187,7 +250,7 @@ function venueIsNormalized(
   if (selected.length !== targetRaces) return false;
   return selected.every((row) =>
     row.stakeYen === TOTAL_TARGET_STAKE
-    && row.betCount >= 3
+    && courseBetsAreNormalized(row, mode)
     && (mode !== "validation" || row.settledCount === row.betCount)
   );
 }
@@ -267,7 +330,7 @@ export async function ensureVenueDailyQuota(
         row.betCount > 0
         && (
           row.raceStatus === "finished"
-          || (row.predictionStatus === "locked" && row.stakeYen === TOTAL_TARGET_STAKE)
+          || (row.predictionStatus === "locked" && courseBetsAreNormalized(row, mode))
         )
       )
       : [];
@@ -288,7 +351,7 @@ export async function ensureVenueDailyQuota(
       const protectedLive = mode === "live"
         && (
           row.raceStatus === "finished"
-          || (row.predictionStatus === "locked" && row.stakeYen === TOTAL_TARGET_STAKE)
+          || (row.predictionStatus === "locked" && courseBetsAreNormalized(row, mode))
         );
       if (protectedLive || row.betCount === 0) continue;
       const deleted = await deleteCourseBets(db, row.predictionId);
