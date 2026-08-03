@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the immutable production-promotion gate to a walk-forward result."""
+"""Apply the immutable historical gate before a candidate enters future shadow mode."""
 
 from __future__ import annotations
 
@@ -13,6 +13,8 @@ MINIMUM_IMPROVEMENT_PCT = 5.0
 MINIMUM_ABSOLUTE_ROI_PCT = 100.0
 MINIMUM_HIT_RATE_PCT = 20.0
 MAXIMUM_POSITIVE_DAY_SHARE = 0.40
+FUTURE_SHADOW_START_DATE = "2026-08-08"
+MINIMUM_FUTURE_SHADOW_VENUE_DAYS = 20
 
 
 def selected_race_metrics(data: dict[str, Any], split: str, course: str) -> dict[str, Any]:
@@ -111,7 +113,7 @@ def apply_gate(data: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
             "hitRatePassed": hit_rate >= MINIMUM_HIT_RATE_PCT,
             "concentrationPassed": concentration <= MAXIMUM_POSITIVE_DAY_SHARE,
         }
-    promotion_ready = (
+    historical_gate_passed = (
         validation_baseline["valid"]
         and holdout_baseline["valid"]
         and holdout.get("fivePerVenue") is True
@@ -126,8 +128,10 @@ def apply_gate(data: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
         "holdout": holdout_baseline,
     }
     output["promotionChecks"] = checks
-    output["promotionReady"] = promotion_ready
-    output["promotionRule"] = {
+    output["historicalGatePassed"] = historical_gate_passed
+    output["promotionReady"] = False
+    output["nextRequiredStage"] = "future-shadow" if historical_gate_passed else "reject-historical-candidate"
+    output["historicalGateRule"] = {
         "mustBeatAuditedV1ByPctPoints": MINIMUM_IMPROVEMENT_PCT,
         "allHoldoutCoursesRoiAtLeastPct": MINIMUM_ABSOLUTE_ROI_PCT,
         "maximumPositiveDayShareAtMost": MAXIMUM_POSITIVE_DAY_SHARE,
@@ -135,6 +139,12 @@ def apply_gate(data: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
         "fiveRacesPerVenue": True,
         "sameSelectedRacesAcrossCourses": True,
         "fixedStakeViolations": 0,
+    }
+    output["futurePromotionRule"] = {
+        "shadowStartDate": FUTURE_SHADOW_START_DATE,
+        "minimumVenueDays": MINIMUM_FUTURE_SHADOW_VENUE_DAYS,
+        "policyMustBeFrozenBeforeShadow": True,
+        "productionPromotionRequiresSeparateApproval": True,
     }
     return output
 
@@ -152,7 +162,9 @@ def main() -> None:
     output = Path(args.output or args.result)
     output.write_text(json.dumps(gated, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({
+        "historicalGatePassed": gated["historicalGatePassed"],
         "promotionReady": gated["promotionReady"],
+        "nextRequiredStage": gated["nextRequiredStage"],
         "promotionChecks": gated["promotionChecks"],
         "baselineValid": gated["baseline"]["holdout"]["valid"],
     }, ensure_ascii=False, indent=2))
