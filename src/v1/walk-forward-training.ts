@@ -24,7 +24,7 @@ import type { PredictionOutput } from "./types.js";
 import { nowIso } from "./utils.js";
 
 export interface WalkForwardTrainingProgress {
-  phase: "history" | "features" | "complete";
+  phase: "history" | "streaming" | "features" | "complete";
   history: WalkForwardHistoryProgress;
   targetRaces: number;
   generatedRaces: number;
@@ -155,8 +155,15 @@ export async function getWalkForwardTrainingProgress(db: D1Database): Promise<Wa
   const generatedRaces = Number(rows?.generatedRaces ?? 0);
   const remainingRaces = Math.max(0, targetRaces - generatedRaces);
   const complete = history.complete && targetRaces > 0 && remainingRaces === 0;
+  const phase = complete
+    ? "complete"
+    : history.complete
+      ? "features"
+      : targetRaces > 0
+        ? "streaming"
+        : "history";
   return {
-    phase: !history.complete ? "history" : complete ? "complete" : "features",
+    phase,
     history,
     targetRaces,
     generatedRaces,
@@ -175,19 +182,25 @@ export async function runWalkForwardTrainingStep(
   predictionBatchSize = 8
 ): Promise<unknown> {
   const before = await getWalkForwardTrainingProgress(db);
-  if (before.phase === "history") {
+  const batchSize = Math.max(1, Math.min(16, predictionBatchSize));
+
+  if (before.phase === "history" || before.phase === "streaming") {
+    const historyAction = await runWalkForwardHistoryStep(db);
+    const featureAction = await generateBatch(db, batchSize);
     return {
-      stage: "history",
-      action: await runWalkForwardHistoryStep(db),
+      stage: "streaming",
+      action: { history: historyAction, features: featureAction },
       progress: await getWalkForwardTrainingProgress(db)
     };
   }
+
   if (before.phase === "features") {
     return {
       stage: "features",
-      action: await generateBatch(db, Math.max(1, Math.min(16, predictionBatchSize))),
+      action: await generateBatch(db, batchSize),
       progress: await getWalkForwardTrainingProgress(db)
     };
   }
+
   return { stage: "complete", action: { type: "complete" }, progress: before };
 }
