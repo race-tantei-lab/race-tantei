@@ -2,12 +2,17 @@ import {
   CALIBRATION_COURSES,
   type WorkerCalibrationState
 } from "./learned-calibration-state.js";
+import type { WalkForwardTrainingProgress } from "./walk-forward-training.js";
+
+export type CalibrationPanelState = WorkerCalibrationState & {
+  trainingProgress?: WalkForwardTrainingProgress;
+};
 
 function formatSignedYen(value: number): string {
   return `${value >= 0 ? "+" : ""}${Math.round(value).toLocaleString("ja-JP")}円`;
 }
 
-export function renderWorkerCalibrationPanel(state: WorkerCalibrationState): string {
+export function renderWorkerCalibrationPanel(state: CalibrationPanelState): string {
   const phaseLabels: Record<WorkerCalibrationState["phase"], string> = {
     "waiting-data": "公式過去データを取得中",
     score: "勝率予測を学習中",
@@ -17,6 +22,14 @@ export function renderWorkerCalibrationPanel(state: WorkerCalibrationState): str
     complete: state.active ? "新モデル反映済み" : "検証完了・現行モデルを維持",
     failed: "学習処理でエラー"
   };
+  const history = state.trainingProgress?.history;
+  const progressText = state.phase === "waiting-data" && state.trainingProgress
+    ? history?.phase === "discovery"
+      ? `月別探索 ${history.discoveredMonths}/${history.totalMonths}・保存済み${history.storedRaces}R`
+      : history?.phase === "import" || history?.phase === "retry"
+        ? `公式結果 ${history.importedUrls}/${history.resultUrls}件・保存済み${history.storedRaces}R`
+        : `基礎予想 ${state.trainingProgress.generatedRaces}/${state.trainingProgress.targetRaces}R`
+    : `学習${state.scoredRaces}R・再予想${state.appliedRaces}R`;
   const metricCards = state.metrics.map((row) => `
     <div style="padding:12px;border:1px solid #315f55;border-radius:12px;background:#10231f">
       <b>${row.course}</b>
@@ -39,7 +52,7 @@ export function renderWorkerCalibrationPanel(state: WorkerCalibrationState): str
   return `<section id="learned-model-status" style="margin:0 0 16px;padding:15px;border:1px solid ${state.phase === "failed" ? "#8d3d3d" : "#315f55"};border-radius:16px;background:#0d1d1a;color:#e7f6f1;line-height:1.55">
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
       <div><b style="font-size:16px">12か月学習モデル</b><div style="font-size:13px;opacity:.85">${phaseLabels[state.phase]}</div></div>
-      <span style="font-size:12px">学習${state.scoredRaces}R・再予想${state.appliedRaces}R</span>
+      <span style="font-size:12px;text-align:right">${progressText}</span>
     </div>
     ${accuracy}
     ${metricCards ? `<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px">${metricCards}</div>` : ""}
