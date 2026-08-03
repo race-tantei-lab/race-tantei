@@ -5,6 +5,11 @@ import {
   getWalkForwardTrainingProgress,
   runWalkForwardTrainingStep
 } from "./v1/walk-forward-training.js";
+import {
+  getWorkerCalibrationState,
+  renderWorkerCalibrationPanel,
+  runWorkerCalibrationStep
+} from "./v1/worker-calibration.js";
 import type { Env } from "./v1/types.js";
 
 function json(data: unknown, status = 200): Response {
@@ -19,17 +24,53 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+async function withLearningPanel(response: Response, env: Env): Promise<Response> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("text/html")) return response;
+  const state = await getWorkerCalibrationState(env.DB);
+  let html = await response.text();
+  if (state.active) {
+    html = html
+      .replace("全期間の累計", "旧モデル参考")
+      .replace("主要検証期間と本番公開分の合算", "旧モデルv1の参考成績");
+  }
+  const panel = renderWorkerCalibrationPanel(state);
+  html = html.replace(/<main\b[^>]*>/, (match) => `${match}${panel}`);
+  const headers = new Headers(response.headers);
+  headers.set("cache-control", "no-store, max-age=0");
+  headers.set("content-length", String(new TextEncoder().encode(html).length));
+  return new Response(html, { status: response.status, statusText: response.statusText, headers });
+}
+
+async function advanceLearning(db: D1Database): Promise<void> {
+  const progress = await getWalkForwardTrainingProgress(db);
+  if (!progress.complete) {
+    await runWalkForwardTrainingStep(db, 12);
+    return;
+  }
+  await runWorkerCalibrationStep(db);
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const pathname = new URL(request.url).pathname;
     if (!pathname.startsWith("/api/training/walk-forward")) {
       if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
-      return app.fetch(request, env, ctx);
+      const response = await app.fetch(request, env, ctx);
+      return pathname === "/" || pathname === "/performance"
+        ? await withLearningPanel(response, env)
+        : response;
     }
 
     await ensureSchema(env.DB);
     if (pathname === "/api/training/walk-forward/status" && request.method === "GET") {
-      return json(await getWalkForwardTrainingProgress(env.DB));
+      return json({
+        training: await getWalkForwardTrainingProgress(env.DB),
+        calibration: await getWorkerCalibrationState(env.DB)
+      });
+    }
+    if (pathname === "/api/training/walk-forward/calibration-status" && request.method === "GET") {
+      return json(await getWorkerCalibrationState(env.DB));
     }
     if (pathname === "/api/training/walk-forward/data" && request.method === "GET") {
       return json(await getWalkForwardAnalysisData(env.DB));
@@ -40,13 +81,19 @@ export default {
       }
       return json(await runWalkForwardTrainingStep(env.DB, 16));
     }
+    if (pathname === "/api/training/walk-forward/calibration-step" && request.method === "POST") {
+      if (request.headers.get("x-race-training") !== "walk-forward-12m-v1") {
+        return json({ ok: false, error: "TRAINING_HEADER_REQUIRED" }, 403);
+      }
+      return json(await runWorkerCalibrationStep(env.DB));
+    }
     return json({ ok: false, error: "NOT_FOUND" }, 404);
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     await ensureSchema(env.DB);
-    ctx.waitUntil(runWalkForwardTrainingStep(env.DB, 12).catch((error) => {
-      console.error("WALK_FORWARD_TRAINING_STEP_FAILED", error);
+    ctx.waitUntil(advanceLearning(env.DB).catch((error) => {
+      console.error("WALK_FORWARD_PIPELINE_STEP_FAILED", error);
     }));
     if (app.scheduled) await app.scheduled(controller, env, ctx);
   }
