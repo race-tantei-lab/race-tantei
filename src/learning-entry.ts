@@ -1,6 +1,5 @@
 import app from "./audit-repair-entry.js";
 import { ensureSchema } from "./v1/db.js";
-import { getHistoricalAuditState } from "./v1/historical-audit-state.js";
 import { getWalkForwardAnalysisData } from "./v1/walk-forward-analysis-data.js";
 import {
   getWalkForwardTrainingProgress,
@@ -39,19 +38,16 @@ export default {
       if (request.headers.get("x-race-training") !== "walk-forward-12m-v1") {
         return json({ ok: false, error: "TRAINING_HEADER_REQUIRED" }, 403);
       }
-      return json(await runWalkForwardTrainingStep(env.DB, 12));
+      return json(await runWalkForwardTrainingStep(env.DB, 16));
     }
     return json({ ok: false, error: "NOT_FOUND" }, 404);
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     await ensureSchema(env.DB);
-    const audit = await getHistoricalAuditState(env.DB, env.MODEL_VERSION);
-    if (audit.valid) {
-      ctx.waitUntil(runWalkForwardTrainingStep(env.DB, 8).catch((error) => {
-        console.error("WALK_FORWARD_TRAINING_STEP_FAILED", error);
-      }));
-    }
+    ctx.waitUntil(runWalkForwardTrainingStep(env.DB, 12).catch((error) => {
+      console.error("WALK_FORWARD_TRAINING_STEP_FAILED", error);
+    }));
     if (app.scheduled) await app.scheduled(controller, env, ctx);
   }
 } satisfies ExportedHandler<Env>;
