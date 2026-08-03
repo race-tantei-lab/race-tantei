@@ -1,0 +1,1 @@
+Official result imports now use 36 URLs per batch while streaming feature generation is capped at 4 races per import step. Full feature generation returns to 16 races per step once history import is complete.

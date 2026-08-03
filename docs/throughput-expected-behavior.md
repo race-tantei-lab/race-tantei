@@ -1,0 +1,1 @@
+A successful import invocation should advance official-result progress by up to 36 URLs. Feature progress advances more slowly during import so the external fetch and D1 write path gets most of the execution budget.
