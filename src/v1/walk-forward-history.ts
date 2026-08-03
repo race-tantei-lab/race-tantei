@@ -19,13 +19,21 @@ const URLS_KEY = `${STATE_PREFIX}:urls`;
 const URL_INDEX_KEY = `${STATE_PREFIX}:url_index`;
 const FAILURES_KEY = `${STATE_PREFIX}:failures`;
 const PERMANENT_FAILURES_KEY = `${STATE_PREFIX}:permanent_failures`;
-const BATCH_SIZE = 3;
+const BATCH_SIZE = 12;
+const FETCH_CONCURRENCY = 3;
 const MAX_FAILURE_ATTEMPTS = 3;
 
 interface FailedUrl {
   url: string;
   attempts: number;
   error: string;
+}
+
+interface PreparedImport {
+  url: string;
+  raceId: string;
+  entry: RaceBundle;
+  result: RaceBundle;
 }
 
 export interface WalkForwardHistoryProgress {
@@ -163,14 +171,13 @@ async function alreadyComplete(db: D1Database, raceId: string): Promise<boolean>
     && Number(row.payouts ?? 0) >= 1;
 }
 
-async function importUrl(db: D1Database, url: string): Promise<{ imported: boolean; skipped: boolean }> {
+async function prepareImport(url: string): Promise<PreparedImport> {
   const page = await fetchJraPage(url);
   if (!pageLooksLikeResult(page.html)) throw new Error("WALK_FORWARD_RESULT_SIGNATURE_MISSING");
   const parsed = parseResultPage(page.html, page.url);
   if (!isWalkForwardArchiveDate(parsed.race.raceDate)) {
     throw new Error(`WALK_FORWARD_OUT_OF_SCOPE:${parsed.race.raceDate}`);
   }
-  if (await alreadyComplete(db, parsed.race.raceId)) return { imported: false, skipped: true };
 
   const runners = parseDesktopResultRunners(page.html);
   const payouts = parsed.payouts.length > 0 ? parsed.payouts : parseDesktopPayouts(page.html);
@@ -189,47 +196,75 @@ async function importUrl(db: D1Database, url: string): Promise<{ imported: boole
     payouts: [],
     refundHorseNos: []
   };
-  await saveEntryBundle(db, entry);
-  await saveResultBundle(db, result);
+  return { url, raceId: parsed.race.raceId, entry, result };
+}
+
+async function persistPreparedImport(
+  db: D1Database,
+  prepared: PreparedImport
+): Promise<{ imported: boolean; skipped: boolean }> {
+  if (await alreadyComplete(db, prepared.raceId)) return { imported: false, skipped: true };
+  await saveEntryBundle(db, prepared.entry);
+  await saveResultBundle(db, prepared.result);
   return { imported: true, skipped: false };
+}
+
+async function importUrl(db: D1Database, url: string): Promise<{ imported: boolean; skipped: boolean }> {
+  return persistPreparedImport(db, await prepareImport(url));
 }
 
 function replaceFailure(failures: FailedUrl[], failure: FailedUrl): FailedUrl[] {
   return [...failures.filter((row) => row.url !== failure.url), failure];
 }
 
+async function saveCursorAndFailures(
+  db: D1Database,
+  index: number,
+  failures: FailedUrl[]
+): Promise<void> {
+  await Promise.all([
+    setState(db, URL_INDEX_KEY, String(index)),
+    setState(db, FAILURES_KEY, JSON.stringify(failures))
+  ]);
+}
+
 async function importBatch(db: D1Database): Promise<unknown> {
   const urls = jsonArray<string>(await getState(db, URLS_KEY));
   let index = integerState(await getState(db, URL_INDEX_KEY));
   const batch = urls.slice(index, index + BATCH_SIZE);
-  if (!batch.length) return { urls: [], imported: 0, skipped: 0, errors: 0 };
+  if (!batch.length) return { urls: 0, imported: 0, skipped: 0, errors: 0 };
 
   let imported = 0;
   let skipped = 0;
   let errors = 0;
   let failures = jsonArray<FailedUrl>(await getState(db, FAILURES_KEY));
 
-  for (const url of batch) {
-    try {
-      const result = await importUrl(db, url);
-      imported += result.imported ? 1 : 0;
-      skipped += result.skipped ? 1 : 0;
-    } catch (error) {
-      errors += 1;
-      failures = replaceFailure(failures, {
-        url,
-        attempts: 0,
-        error: error instanceof Error ? error.message : String(error)
-      });
+  for (let offset = 0; offset < batch.length; offset += FETCH_CONCURRENCY) {
+    const group = batch.slice(offset, offset + FETCH_CONCURRENCY);
+    const prepared = await Promise.allSettled(group.map((url) => prepareImport(url)));
+
+    for (let position = 0; position < prepared.length; position += 1) {
+      const outcome = prepared[position]!;
+      const url = group[position]!;
+      try {
+        if (outcome.status === "rejected") throw outcome.reason;
+        const result = await persistPreparedImport(db, outcome.value);
+        imported += result.imported ? 1 : 0;
+        skipped += result.skipped ? 1 : 0;
+      } catch (error) {
+        errors += 1;
+        failures = replaceFailure(failures, {
+          url,
+          attempts: 0,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+      index += 1;
+      await saveCursorAndFailures(db, index, failures);
     }
-    index += 1;
-    await Promise.all([
-      setState(db, URL_INDEX_KEY, String(index)),
-      setState(db, FAILURES_KEY, JSON.stringify(failures))
-    ]);
   }
 
-  return { urls: batch.length, imported, skipped, errors };
+  return { urls: batch.length, imported, skipped, errors, concurrency: FETCH_CONCURRENCY };
 }
 
 async function retryFailure(db: D1Database): Promise<unknown> {
