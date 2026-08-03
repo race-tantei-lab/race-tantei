@@ -19,7 +19,7 @@ const URLS_KEY = `${STATE_PREFIX}:urls`;
 const URL_INDEX_KEY = `${STATE_PREFIX}:url_index`;
 const FAILURES_KEY = `${STATE_PREFIX}:failures`;
 const PERMANENT_FAILURES_KEY = `${STATE_PREFIX}:permanent_failures`;
-const BATCH_SIZE = 12;
+const BATCH_SIZE = 3;
 const MAX_FAILURE_ATTEMPTS = 3;
 
 interface FailedUrl {
@@ -203,30 +203,32 @@ async function importBatch(db: D1Database): Promise<unknown> {
   let index = integerState(await getState(db, URL_INDEX_KEY));
   const batch = urls.slice(index, index + BATCH_SIZE);
   if (!batch.length) return { urls: [], imported: 0, skipped: 0, errors: 0 };
+
   let imported = 0;
   let skipped = 0;
   let errors = 0;
   let failures = jsonArray<FailedUrl>(await getState(db, FAILURES_KEY));
-  const results = await Promise.allSettled(batch.map((url) => importUrl(db, url)));
-  results.forEach((result, position) => {
-    const url = batch[position]!;
-    if (result.status === "fulfilled") {
-      imported += result.value.imported ? 1 : 0;
-      skipped += result.value.skipped ? 1 : 0;
-    } else {
+
+  for (const url of batch) {
+    try {
+      const result = await importUrl(db, url);
+      imported += result.imported ? 1 : 0;
+      skipped += result.skipped ? 1 : 0;
+    } catch (error) {
       errors += 1;
       failures = replaceFailure(failures, {
         url,
         attempts: 0,
-        error: result.reason instanceof Error ? result.reason.message : String(result.reason)
+        error: error instanceof Error ? error.message : String(error)
       });
     }
-  });
-  index += batch.length;
-  await Promise.all([
-    setState(db, URL_INDEX_KEY, String(index)),
-    setState(db, FAILURES_KEY, JSON.stringify(failures))
-  ]);
+    index += 1;
+    await Promise.all([
+      setState(db, URL_INDEX_KEY, String(index)),
+      setState(db, FAILURES_KEY, JSON.stringify(failures))
+    ]);
+  }
+
   return { urls: batch.length, imported, skipped, errors };
 }
 
