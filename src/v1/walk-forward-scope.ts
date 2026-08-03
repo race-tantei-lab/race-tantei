@@ -1,5 +1,6 @@
-export const WALK_FORWARD_SCOPE_VERSION = "walk-forward-12m-v1";
+export const WALK_FORWARD_SCOPE_VERSION = "walk-forward-12m-v2";
 
+export const WALK_FORWARD_CONTEXT_START_DATE = "2024-05-01";
 export const WALK_FORWARD_TRAIN_START_DATE = "2025-05-01";
 export const WALK_FORWARD_TRAIN_END_DATE = "2026-04-30";
 export const WALK_FORWARD_VALIDATION_START_DATE = "2026-05-02";
@@ -26,6 +27,10 @@ export function isWalkForwardDate(raceDate: string): boolean {
   return walkForwardSplitForDate(raceDate) !== null;
 }
 
+export function isWalkForwardArchiveDate(raceDate: string): boolean {
+  return inRange(raceDate, WALK_FORWARD_CONTEXT_START_DATE, WALK_FORWARD_HOLDOUT_END_DATE);
+}
+
 function monthRange(startYearMonth: string, endYearMonth: string): string[] {
   const values: string[] = [];
   let year = Number(startYearMonth.slice(0, 4));
@@ -43,10 +48,11 @@ function monthRange(startYearMonth: string, endYearMonth: string): string[] {
   return values;
 }
 
-export const WALK_FORWARD_ARCHIVE_MONTHS = monthRange("202505", "202607");
+export const WALK_FORWARD_ARCHIVE_MONTHS = monthRange("202405", "202607");
 
 export function assertWalkForwardScope(): void {
   const ordered = [
+    WALK_FORWARD_CONTEXT_START_DATE,
     WALK_FORWARD_TRAIN_START_DATE,
     WALK_FORWARD_TRAIN_END_DATE,
     WALK_FORWARD_VALIDATION_START_DATE,
