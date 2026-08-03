@@ -2,7 +2,7 @@ import base from "./entry.js";
 import { renderCoursePerformance } from "./v1/course-ui.js";
 import { ensureSchema } from "./v1/db.js";
 import { getDisplayRaceDetail } from "./v1/display-detail.js";
-import { getHistoricalAuditState, type HistoricalAuditState } from "./v1/historical-audit-state.js";
+import { getHistoricalAuditState } from "./v1/historical-audit-state.js";
 import { getAuditedPhaseDDashboard } from "./v1/phase-d-dashboard-audited.js";
 import { historyDateFromPath, renderAuditedRaceArchiveDate } from "./v1/race-archive-audited.js";
 import { renderPhaseCRaceDetail } from "./v1/race-detail-phase-c.js";
@@ -14,7 +14,6 @@ import {
 import { runThreeMonthFixedStakeRepair } from "./v1/three-month-repair.js";
 import { isThreeMonthTuningDate } from "./v1/three-month-scope.js";
 import type { Env } from "./v1/types.js";
-import { escapeHtml } from "./v1/utils.js";
 
 let repairRunning: Promise<void> | null = null;
 
@@ -37,28 +36,9 @@ function page(body: string, status = 200): Response {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store, max-age=0",
       "x-content-type-options": "nosniff",
-      "x-race-ui-version": "phase-d-audited-light"
+      "x-race-ui-version": "phase-d-audited"
     }
   });
-}
-
-function finding(state: HistoricalAuditState, key: string): number {
-  return Number(state.findings[key] ?? 0);
-}
-
-function maintenancePage(state: HistoricalAuditState): string {
-  const items: Array<[string, number]> = [
-    ["固定購入額違反", finding(state, "stakeViolationRaceCourses")],
-    ["未精算", finding(state, "pendingRaceCourses")],
-    ["会場5R違反", finding(state, "venueQuotaViolations")],
-    ["個別表示不一致", finding(state, "individualDetailMismatchRaces")],
-    ["コース選出不一致", finding(state, "courseSelectionMismatchRaces")],
-    ["予想未生成", finding(state, "missingModelRaces")]
-  ];
-  const checkedAt = state.checkedAt ? new Date(state.checkedAt).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }) : "—";
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#07111b"><meta http-equiv="refresh" content="30"><title>監査修復中｜レース探偵</title><style>
-  :root{color-scheme:dark;--bg:#07111b;--panel:#101a27;--line:#2b3a4e;--text:#edf3f8;--muted:#9eafc2;--green:#57d6aa;--gold:#e6c875}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif}.wrap{max-width:720px;margin:auto;padding:28px 20px 48px}.top{display:flex;align-items:center;justify-content:space-between;margin:24px 0 56px}.brand{font-size:28px;font-weight:900;color:var(--green)}.badge{border:1px solid var(--line);border-radius:999px;padding:8px 12px;color:var(--muted);font-size:13px}.card{border:1px solid #765f2b;background:#241f13;border-radius:22px;padding:24px}.card h1{font-size:27px;margin:0 0 12px}.card p{margin:0;color:#dacda8;line-height:1.8}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px}.item{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px}.item small{display:block;color:var(--muted);margin-bottom:4px}.item b{font-size:21px}.note{margin-top:20px;padding:14px;border-radius:14px;background:#0d1723;color:var(--muted);line-height:1.7}.time{margin-top:14px;color:var(--muted);font-size:12px}@media(max-width:480px){.wrap{padding:22px 16px}.top{margin-bottom:38px}.grid{grid-template-columns:1fr 1fr}.card{padding:20px}.card h1{font-size:24px}}
-  </style></head><body><main class="wrap"><div class="top"><div class="brand">レース探偵</div><div class="badge">軽量表示</div></div><section class="card"><h1>過去成績を修復中</h1><p>誤った回収率や買い目は表示していません。修復処理は画面表示とは切り離し、1分ごとの定期処理で進めています。この画面は30秒ごとに自動更新されます。</p><div class="grid">${items.map(([label, value]) => `<div class="item"><small>${escapeHtml(label)}</small><b>${value}</b></div>`).join("")}</div><div class="note">全項目が0になり、固定購入額・会場5R・個別ページ・累計の一致を確認できた時点で、正しい成績画面へ自動的に戻ります。</div><div class="time">最終監査：${escapeHtml(checkedAt)}</div></section></main></body></html>`;
 }
 
 function runRepair(env: Env): Promise<void> {
@@ -184,11 +164,8 @@ export default {
       if (pathname === "/api/audit/three-months/public-status") {
         return json({ auditFrozen: true, state });
       }
-      if (pathname === "/health" || pathname === "/api/health") {
-        if (!base.fetch) return json({ ok: true, auditFrozen: true });
-        return base.fetch(request, env, ctx);
-      }
-      return page(maintenancePage(state));
+      if (!base.fetch) return new Response("NOT_FOUND", { status: 404 });
+      return base.fetch(request, env, ctx);
     }
 
     const handled = await handledAfterAudit(request, env);
