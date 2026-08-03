@@ -6,9 +6,15 @@ on:
     paths:
       - "src/learning-entry.ts"
       - "src/v1/walk-forward-*.ts"
+      - "src/v1/worker-calibration*.ts"
+      - "src/v1/learned-calibration-*.ts"
+      - "src/v1/learned-betting-policy.ts"
+      - "src/v1/learned-venue-quota.ts"
+      - "src/v1/display-detail.ts"
       - "scripts/optimize_walk_forward_roi.py"
       - "scripts/check_walk_forward_promotion.py"
       - "tests/walk-forward-tests.ts"
+      - "tests/learned-calibration-tests.ts"
       - ".github/workflows/walk-forward-*.yml"
       - "package.json"
       - "tsconfig.json"
@@ -47,6 +53,9 @@ jobs:
 
       - name: Run walk-forward scope test
         run: node dist-test/tests/walk-forward-tests.js
+
+      - name: Run learned calibration test
+        run: node dist-test/tests/learned-calibration-tests.js
 
       - name: Compile Python learning scripts
         run: |
