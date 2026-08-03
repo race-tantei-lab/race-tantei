@@ -1,0 +1,59 @@
+name: Walk-forward learning checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/learning-entry.ts"
+      - "src/v1/walk-forward-*.ts"
+      - "scripts/optimize_walk_forward_roi.py"
+      - "scripts/check_walk_forward_promotion.py"
+      - "tests/walk-forward-tests.ts"
+      - ".github/workflows/walk-forward-*.yml"
+      - "package.json"
+      - "tsconfig.json"
+      - "wrangler.jsonc"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck worker entry
+        run: npm run typecheck
+
+      - name: Compile tests
+        run: npm run build:test
+
+      - name: Run walk-forward scope test
+        run: node dist-test/tests/walk-forward-tests.js
+
+      - name: Compile Python learning scripts
+        run: |
+          python -m py_compile \
+            scripts/optimize_validation_roi.py \
+            scripts/optimize_walk_forward_roi.py \
+            scripts/check_walk_forward_promotion.py
+
+      - name: Dry-run Worker build
+        run: npm run build
