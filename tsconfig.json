@@ -12,5 +12,10 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["src/entry.ts", "src/audit-repair-entry.ts", "worker-types.d.ts"]
+  "include": [
+    "src/entry.ts",
+    "src/audit-repair-entry.ts",
+    "src/learning-entry.ts",
+    "worker-types.d.ts"
+  ]
 }
