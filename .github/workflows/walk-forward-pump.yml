@@ -22,6 +22,8 @@ jobs:
   pump:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      PUMP_REVISION: "2026-08-03-1958-jst"
     steps:
       - name: Advance training or calibration
         shell: bash
@@ -32,6 +34,7 @@ jobs:
           TRAINING_HEADER: walk-forward-12m-v1
         run: |
           set -euo pipefail
+          echo "pump_revision=$PUMP_REVISION"
 
           for attempt in $(seq 1 8); do
             status_file="$(mktemp)"
