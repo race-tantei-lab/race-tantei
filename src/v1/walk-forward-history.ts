@@ -1,4 +1,9 @@
-import { getState, saveEntryBundle, saveResultBundle, setState } from "./db.js";
+import { getState, setState } from "./db.js";
+import {
+  getCompleteHistoryRaceIds,
+  saveHistoryBundlePairsBatch,
+  setHistoryStatesBatch
+} from "./history-batch-db.js";
 import { fetchJraPage, pageLooksLikeResult, parseResultPage } from "./jra.js";
 import { getArchiveResultUrls } from "./three-month-archive.js";
 import { parseDesktopPayouts, parseDesktopResultRunners } from "./three-month-desktop.js";
@@ -19,8 +24,9 @@ const URLS_KEY = `${STATE_PREFIX}:urls`;
 const URL_INDEX_KEY = `${STATE_PREFIX}:url_index`;
 const FAILURES_KEY = `${STATE_PREFIX}:failures`;
 const PERMANENT_FAILURES_KEY = `${STATE_PREFIX}:permanent_failures`;
-const BATCH_SIZE = 12;
-const FETCH_CONCURRENCY = 3;
+const LAST_BATCH_METRICS_KEY = `${STATE_PREFIX}:last_batch_metrics`;
+const BATCH_SIZE = 24;
+const FETCH_CONCURRENCY = 4;
 const MAX_FAILURE_ATTEMPTS = 3;
 
 interface FailedUrl {
@@ -36,6 +42,21 @@ interface PreparedImport {
   result: RaceBundle;
 }
 
+interface HistoryBatchMetrics {
+  urls: number;
+  prepared: number;
+  imported: number;
+  skipped: number;
+  errors: number;
+  dbStatements: number;
+  fetchParseMs: number;
+  completeCheckMs: number;
+  dbPersistMs: number;
+  statePersistMs: number;
+  totalMs: number;
+  concurrency: number;
+}
+
 export interface WalkForwardHistoryProgress {
   scopeVersion: string;
   phase: "discovery" | "import" | "retry" | "complete";
@@ -46,6 +67,7 @@ export interface WalkForwardHistoryProgress {
   failedUrls: number;
   permanentFailures: number;
   storedRaces: number;
+  lastBatchMetrics: HistoryBatchMetrics | null;
   complete: boolean;
 }
 
@@ -62,6 +84,24 @@ function jsonArray<T>(value: string | null): T[] {
   } catch {
     return [];
   }
+}
+
+function jsonObject<T>(value: string | null): T | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as T : null;
+  } catch {
+    return null;
+  }
+}
+
+function elapsedMs(startedAt: number): number {
+  return Math.max(0, Math.round(performance.now() - startedAt));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function cname(url: string): string {
@@ -88,13 +128,14 @@ function sortedUniqueUrls(values: string[]): string[] {
 
 async function initialize(db: D1Database): Promise<void> {
   if (await getState(db, VERSION_KEY) === HISTORY_VERSION) return;
-  await Promise.all([
-    setState(db, VERSION_KEY, HISTORY_VERSION),
-    setState(db, MONTH_INDEX_KEY, "0"),
-    setState(db, URLS_KEY, "[]"),
-    setState(db, URL_INDEX_KEY, "0"),
-    setState(db, FAILURES_KEY, "[]"),
-    setState(db, PERMANENT_FAILURES_KEY, "[]")
+  await setHistoryStatesBatch(db, [
+    { key: VERSION_KEY, value: HISTORY_VERSION },
+    { key: MONTH_INDEX_KEY, value: "0" },
+    { key: URLS_KEY, value: "[]" },
+    { key: URL_INDEX_KEY, value: "0" },
+    { key: FAILURES_KEY, value: "[]" },
+    { key: PERMANENT_FAILURES_KEY, value: "[]" },
+    { key: LAST_BATCH_METRICS_KEY, value: "null" }
   ]);
 }
 
@@ -109,12 +150,13 @@ async function storedRaceCount(db: D1Database): Promise<number> {
 
 export async function getWalkForwardHistoryProgress(db: D1Database): Promise<WalkForwardHistoryProgress> {
   await initialize(db);
-  const [monthValue, urlsValue, indexValue, failuresValue, permanentValue, storedRaces] = await Promise.all([
+  const [monthValue, urlsValue, indexValue, failuresValue, permanentValue, metricsValue, storedRaces] = await Promise.all([
     getState(db, MONTH_INDEX_KEY),
     getState(db, URLS_KEY),
     getState(db, URL_INDEX_KEY),
     getState(db, FAILURES_KEY),
     getState(db, PERMANENT_FAILURES_KEY),
+    getState(db, LAST_BATCH_METRICS_KEY),
     storedRaceCount(db)
   ]);
   const monthIndex = integerState(monthValue);
@@ -135,6 +177,7 @@ export async function getWalkForwardHistoryProgress(db: D1Database): Promise<Wal
     failedUrls: failures.length,
     permanentFailures: permanent.length,
     storedRaces,
+    lastBatchMetrics: jsonObject<HistoryBatchMetrics>(metricsValue),
     complete
   };
 }
@@ -150,25 +193,11 @@ async function discoverMonth(db: D1Database): Promise<unknown> {
   });
   const current = jsonArray<string>(await getState(db, URLS_KEY));
   const merged = sortedUniqueUrls([...current, ...retained]);
-  await Promise.all([
-    setState(db, URLS_KEY, JSON.stringify(merged)),
-    setState(db, MONTH_INDEX_KEY, String(monthIndex + 1))
+  await setHistoryStatesBatch(db, [
+    { key: URLS_KEY, value: JSON.stringify(merged) },
+    { key: MONTH_INDEX_KEY, value: String(monthIndex + 1) }
   ]);
   return { yearMonth, discovered: discovered.length, retained: retained.length, total: merged.length };
-}
-
-async function alreadyComplete(db: D1Database, raceId: string): Promise<boolean> {
-  const row = await db.prepare(`
-    SELECT r.status,
-      (SELECT COUNT(*) FROM rt_runners x WHERE x.race_id=r.race_id AND x.runner_status='active' AND x.win_odds IS NOT NULL) AS runners,
-      (SELECT COUNT(*) FROM rt_results x WHERE x.race_id=r.race_id) AS results,
-      (SELECT COUNT(*) FROM rt_payouts x WHERE x.race_id=r.race_id) AS payouts
-    FROM rt_races r WHERE r.race_id=?
-  `).bind(raceId).first<{ status: string; runners: number; results: number; payouts: number }>();
-  return row?.status === "finished"
-    && Number(row.runners ?? 0) >= 2
-    && Number(row.results ?? 0) >= 2
-    && Number(row.payouts ?? 0) >= 1;
 }
 
 async function prepareImport(url: string): Promise<PreparedImport> {
@@ -199,72 +228,100 @@ async function prepareImport(url: string): Promise<PreparedImport> {
   return { url, raceId: parsed.race.raceId, entry, result };
 }
 
-async function persistPreparedImport(
-  db: D1Database,
-  prepared: PreparedImport
-): Promise<{ imported: boolean; skipped: boolean }> {
-  if (await alreadyComplete(db, prepared.raceId)) return { imported: false, skipped: true };
-  await saveEntryBundle(db, prepared.entry);
-  await saveResultBundle(db, prepared.result);
-  return { imported: true, skipped: false };
-}
-
-async function importUrl(db: D1Database, url: string): Promise<{ imported: boolean; skipped: boolean }> {
-  return persistPreparedImport(db, await prepareImport(url));
-}
-
 function replaceFailure(failures: FailedUrl[], failure: FailedUrl): FailedUrl[] {
   return [...failures.filter((row) => row.url !== failure.url), failure];
 }
 
-async function saveCursorAndFailures(
-  db: D1Database,
-  index: number,
-  failures: FailedUrl[]
-): Promise<void> {
-  await Promise.all([
-    setState(db, URL_INDEX_KEY, String(index)),
-    setState(db, FAILURES_KEY, JSON.stringify(failures))
+async function importBatch(db: D1Database): Promise<HistoryBatchMetrics> {
+  const totalStartedAt = performance.now();
+  const [urlsValue, indexValue, failuresValue] = await Promise.all([
+    getState(db, URLS_KEY),
+    getState(db, URL_INDEX_KEY),
+    getState(db, FAILURES_KEY)
   ]);
-}
-
-async function importBatch(db: D1Database): Promise<unknown> {
-  const urls = jsonArray<string>(await getState(db, URLS_KEY));
-  let index = integerState(await getState(db, URL_INDEX_KEY));
+  const urls = jsonArray<string>(urlsValue);
+  let index = integerState(indexValue);
   const batch = urls.slice(index, index + BATCH_SIZE);
-  if (!batch.length) return { urls: 0, imported: 0, skipped: 0, errors: 0 };
+  let failures = jsonArray<FailedUrl>(failuresValue);
 
-  let imported = 0;
-  let skipped = 0;
-  let errors = 0;
-  let failures = jsonArray<FailedUrl>(await getState(db, FAILURES_KEY));
+  const metrics: HistoryBatchMetrics = {
+    urls: batch.length,
+    prepared: 0,
+    imported: 0,
+    skipped: 0,
+    errors: 0,
+    dbStatements: 0,
+    fetchParseMs: 0,
+    completeCheckMs: 0,
+    dbPersistMs: 0,
+    statePersistMs: 0,
+    totalMs: 0,
+    concurrency: FETCH_CONCURRENCY
+  };
+
+  if (batch.length === 0) {
+    metrics.totalMs = elapsedMs(totalStartedAt);
+    await setState(db, LAST_BATCH_METRICS_KEY, JSON.stringify(metrics));
+    return metrics;
+  }
 
   for (let offset = 0; offset < batch.length; offset += FETCH_CONCURRENCY) {
     const group = batch.slice(offset, offset + FETCH_CONCURRENCY);
-    const prepared = await Promise.allSettled(group.map((url) => prepareImport(url)));
+    const fetchStartedAt = performance.now();
+    const outcomes = await Promise.allSettled(group.map((url) => prepareImport(url)));
+    metrics.fetchParseMs += elapsedMs(fetchStartedAt);
 
-    for (let position = 0; position < prepared.length; position += 1) {
-      const outcome = prepared[position]!;
+    const prepared: PreparedImport[] = [];
+    for (let position = 0; position < outcomes.length; position += 1) {
+      const outcome = outcomes[position]!;
       const url = group[position]!;
-      try {
-        if (outcome.status === "rejected") throw outcome.reason;
-        const result = await persistPreparedImport(db, outcome.value);
-        imported += result.imported ? 1 : 0;
-        skipped += result.skipped ? 1 : 0;
-      } catch (error) {
-        errors += 1;
-        failures = replaceFailure(failures, {
-          url,
-          attempts: 0,
-          error: error instanceof Error ? error.message : String(error)
-        });
+      if (outcome.status === "fulfilled") {
+        prepared.push(outcome.value);
+        metrics.prepared += 1;
+      } else {
+        metrics.errors += 1;
+        failures = replaceFailure(failures, { url, attempts: 0, error: errorMessage(outcome.reason) });
       }
-      index += 1;
-      await saveCursorAndFailures(db, index, failures);
     }
+
+    if (prepared.length > 0) {
+      const checkStartedAt = performance.now();
+      const completeRaceIds = await getCompleteHistoryRaceIds(db, prepared.map((row) => row.raceId));
+      metrics.completeCheckMs += elapsedMs(checkStartedAt);
+      metrics.skipped += completeRaceIds.size;
+      const pending = prepared.filter((row) => !completeRaceIds.has(row.raceId));
+
+      if (pending.length > 0) {
+        const persistStartedAt = performance.now();
+        try {
+          const persisted = await saveHistoryBundlePairsBatch(
+            db,
+            pending.map((row) => ({ entry: row.entry, result: row.result }))
+          );
+          metrics.imported += persisted.races;
+          metrics.dbStatements += persisted.statements;
+        } catch (error) {
+          metrics.errors += pending.length;
+          for (const row of pending) {
+            failures = replaceFailure(failures, { url: row.url, attempts: 0, error: errorMessage(error) });
+          }
+        }
+        metrics.dbPersistMs += elapsedMs(persistStartedAt);
+      }
+    }
+
+    index += group.length;
+    const stateStartedAt = performance.now();
+    await setHistoryStatesBatch(db, [
+      { key: URL_INDEX_KEY, value: String(index) },
+      { key: FAILURES_KEY, value: JSON.stringify(failures) }
+    ]);
+    metrics.statePersistMs += elapsedMs(stateStartedAt);
   }
 
-  return { urls: batch.length, imported, skipped, errors, concurrency: FETCH_CONCURRENCY };
+  metrics.totalMs = elapsedMs(totalStartedAt);
+  await setState(db, LAST_BATCH_METRICS_KEY, JSON.stringify(metrics));
+  return metrics;
 }
 
 async function retryFailure(db: D1Database): Promise<unknown> {
@@ -272,21 +329,25 @@ async function retryFailure(db: D1Database): Promise<unknown> {
   const failure = failures.shift();
   if (!failure) return { retried: false };
   try {
-    await importUrl(db, failure.url);
+    const prepared = await prepareImport(failure.url);
+    const complete = await getCompleteHistoryRaceIds(db, [prepared.raceId]);
+    if (!complete.has(prepared.raceId)) {
+      await saveHistoryBundlePairsBatch(db, [{ entry: prepared.entry, result: prepared.result }]);
+    }
     await setState(db, FAILURES_KEY, JSON.stringify(failures));
     return { retried: true, recovered: true, url: failure.url };
   } catch (error) {
     const next: FailedUrl = {
       ...failure,
       attempts: failure.attempts + 1,
-      error: error instanceof Error ? error.message : String(error)
+      error: errorMessage(error)
     };
     if (next.attempts >= MAX_FAILURE_ATTEMPTS) {
       const permanent = jsonArray<FailedUrl>(await getState(db, PERMANENT_FAILURES_KEY));
       permanent.push(next);
-      await Promise.all([
-        setState(db, FAILURES_KEY, JSON.stringify(failures)),
-        setState(db, PERMANENT_FAILURES_KEY, JSON.stringify(permanent))
+      await setHistoryStatesBatch(db, [
+        { key: FAILURES_KEY, value: JSON.stringify(failures) },
+        { key: PERMANENT_FAILURES_KEY, value: JSON.stringify(permanent) }
       ]);
       return { retried: true, recovered: false, permanent: true, failure: next };
     }
