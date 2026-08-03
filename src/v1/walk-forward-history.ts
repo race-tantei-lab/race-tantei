@@ -19,7 +19,7 @@ const URLS_KEY = `${STATE_PREFIX}:urls`;
 const URL_INDEX_KEY = `${STATE_PREFIX}:url_index`;
 const FAILURES_KEY = `${STATE_PREFIX}:failures`;
 const PERMANENT_FAILURES_KEY = `${STATE_PREFIX}:permanent_failures`;
-const BATCH_SIZE = 36;
+const BATCH_SIZE = 12;
 const MAX_FAILURE_ATTEMPTS = 3;
 
 interface FailedUrl {
