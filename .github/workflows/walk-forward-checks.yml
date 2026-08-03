@@ -12,6 +12,7 @@ on:
       - "scripts/optimize_walk_forward_roi.py"
       - "scripts/check_walk_forward_promotion.py"
       - "tests/walk-forward-tests.ts"
+      - "tests/learned-calibration-tests.ts"
       - ".github/workflows/walk-forward-*.yml"
       - "package.json"
       - "tsconfig.json"
@@ -50,6 +51,9 @@ jobs:
 
       - name: Run walk-forward scope test
         run: node dist-test/tests/walk-forward-tests.js
+
+      - name: Run learned calibration test
+        run: node dist-test/tests/learned-calibration-tests.js
 
       - name: Compile Python learning scripts
         run: |
