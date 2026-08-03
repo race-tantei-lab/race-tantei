@@ -43,12 +43,15 @@ async function withLearningPanel(response: Response, env: Env): Promise<Response
 }
 
 async function advanceLearning(db: D1Database): Promise<void> {
-  const progress = await getWalkForwardTrainingProgress(db);
-  if (!progress.complete) {
-    await runWalkForwardTrainingStep(db, 12);
+  for (let step = 0; step < 4; step += 1) {
+    const progress = await getWalkForwardTrainingProgress(db);
+    if (!progress.complete) {
+      await runWalkForwardTrainingStep(db, 16);
+      continue;
+    }
+    await runWorkerCalibrationStep(db);
     return;
   }
-  await runWorkerCalibrationStep(db);
 }
 
 export default {
@@ -92,9 +95,15 @@ export default {
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     await ensureSchema(env.DB);
+    const progress = await getWalkForwardTrainingProgress(env.DB);
     ctx.waitUntil(advanceLearning(env.DB).catch((error) => {
       console.error("WALK_FORWARD_PIPELINE_STEP_FAILED", error);
     }));
-    if (app.scheduled) await app.scheduled(controller, env, ctx);
+
+    // 過去データ取得・基礎予想生成中は通常メンテナンスと競合させない。
+    // 学習データ完成後のみ、従来の定期処理も再開する。
+    if (progress.complete && app.scheduled) {
+      await app.scheduled(controller, env, ctx);
+    }
   }
 } satisfies ExportedHandler<Env>;
