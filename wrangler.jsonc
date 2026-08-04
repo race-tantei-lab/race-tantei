@@ -7,7 +7,7 @@
   "workers_dev": true,
   "vars": {
     "ENVIRONMENT": "production",
-    "DEPLOY_REVISION": "worker-native-calibration-v2-cron-diagnosis-2026-08-03-1951-jst",
+    "DEPLOY_REVISION": "github-actions-learning-runner-v1",
     "MODEL_VERSION": "v3.3.0-roi-policy-v1",
     "JRA_HOME_URL": "https://sp.jra.jp/",
     "JRA_SEED_ENTRY_URLS": "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030520260801%2F15",
@@ -21,8 +21,5 @@
       "database_name": "race-tantei-phase0",
       "database_id": "949b5e8b-d1a4-4c4e-80d1-d031afdc03de"
     }
-  ],
-  "triggers": {
-    "crons": ["* * * * *"]
-  }
+  ]
 }
