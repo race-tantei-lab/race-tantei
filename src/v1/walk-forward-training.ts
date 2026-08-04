@@ -188,7 +188,7 @@ export async function runWalkForwardTrainingStep(
     return {
       stage: "history",
       action: await runWalkForwardHistoryStep(db),
-      progress: await getWalkForwardTrainingProgress(db)
+      progress: before
     };
   }
 
@@ -196,7 +196,7 @@ export async function runWalkForwardTrainingStep(
     return {
       stage: "features",
       action: await generateBatch(db, batchSize),
-      progress: await getWalkForwardTrainingProgress(db)
+      progress: before
     };
   }
 
