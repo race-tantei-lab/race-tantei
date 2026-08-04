@@ -427,15 +427,31 @@ async function retryFailure(db: D1Database): Promise<unknown> {
   }
 }
 
+async function getHistoryPhase(db: D1Database): Promise<WalkForwardHistoryProgress["phase"]> {
+  const [monthValue, urlsValue, indexValue, failuresValue] = await Promise.all([
+    getState(db, MONTH_INDEX_KEY),
+    getState(db, URLS_KEY),
+    getState(db, URL_INDEX_KEY),
+    getState(db, FAILURES_KEY)
+  ]);
+  const monthIndex = integerState(monthValue);
+  const urls = jsonArray<string>(urlsValue);
+  const urlIndex = integerState(indexValue);
+  const failures = jsonArray<FailedUrl>(failuresValue);
+  if (monthIndex < WALK_FORWARD_ARCHIVE_MONTHS.length) return "discovery";
+  if (urlIndex < urls.length) return "import";
+  return failures.length > 0 ? "retry" : "complete";
+}
+
 export async function runWalkForwardHistoryStep(db: D1Database): Promise<unknown> {
   await initialize(db);
-  const before = await getWalkForwardHistoryProgress(db);
-  const action = before.phase === "discovery"
+  const phase = await getHistoryPhase(db);
+  const action = phase === "discovery"
     ? { type: "official-search", ...(await discoverMonth(db) as object) }
-    : before.phase === "import"
+    : phase === "import"
       ? { type: "official-import", ...(await importBatch(db) as object) }
-      : before.phase === "retry"
+      : phase === "retry"
         ? { type: "official-retry", ...(await retryFailure(db) as object) }
         : { type: "complete" };
-  return { action, progress: await getWalkForwardHistoryProgress(db) };
+  return { action, phase };
 }
