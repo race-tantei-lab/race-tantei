@@ -293,30 +293,6 @@ async function prepareWithConcurrency(urls: string[]): Promise<PromiseSettledRes
   return outcomes;
 }
 
-async function persistPreparedIndividually(
-  db: D1Database,
-  pending: PreparedImport[],
-  failures: FailedUrl[],
-  metrics: HistoryBatchMetrics
-): Promise<FailedUrl[]> {
-  let nextFailures = failures;
-  for (const row of pending) {
-    try {
-      const persisted = await saveHistoryBundlePairsBatch(db, [{ entry: row.entry, result: row.result }]);
-      metrics.imported += persisted.races;
-      metrics.dbStatements += persisted.statements;
-    } catch (error) {
-      metrics.errors += 1;
-      nextFailures = replaceFailure(nextFailures, {
-        url: row.url,
-        attempts: 1,
-        error: `DB_SAVE_FAILED:${errorMessage(error)}`
-      });
-    }
-  }
-  return nextFailures;
-}
-
 async function importBatch(db: D1Database): Promise<HistoryBatchMetrics> {
   const totalStartedAt = performance.now();
   const [urlsValue, indexValue, failuresValue] = await Promise.all([
@@ -383,8 +359,16 @@ async function importBatch(db: D1Database): Promise<HistoryBatchMetrics> {
           );
           metrics.imported += persisted.races;
           metrics.dbStatements += persisted.statements;
-        } catch {
-          failures = await persistPreparedIndividually(db, pending, failures, metrics);
+        } catch (error) {
+          const message = `DB_BATCH_SAVE_FAILED:${errorMessage(error)}`;
+          for (const row of pending) {
+            metrics.errors += 1;
+            failures = replaceFailure(failures, {
+              url: row.url,
+              attempts: 0,
+              error: message
+            });
+          }
         }
         metrics.dbPersistMs += elapsedMs(persistStartedAt);
       }
