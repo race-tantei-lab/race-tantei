@@ -14,8 +14,8 @@
     "check": "npm run typecheck && npm test && npm run build",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "learning:local": "node scripts/run-walk-forward-local.mjs",
-    "learning:local:once": "node scripts/run-walk-forward-local.mjs --once"
+    "learning:local": "npm run build:test && node scripts/run-walk-forward-local.mjs",
+    "learning:local:once": "npm run build:test && node scripts/run-walk-forward-local.mjs --once"
   },
   "devDependencies": {
     "typescript": "^5.8.3",
