@@ -1,5 +1,6 @@
 name: Nonlinear v4 hit buffer
 
+# Explicit trigger after workflow registration.
 on:
   workflow_dispatch:
   push:
