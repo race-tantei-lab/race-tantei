@@ -1,0 +1,122 @@
+{
+  "generatedAt": "2026-08-05T16:25:36Z",
+  "method": "Validation-only 10% allocation refinement for the fixed nonlinear v4 mixed portfolio.",
+  "targetRoiPct": 200.0,
+  "minimumRacesPerVenueDay": 5,
+  "fixedModel": {
+    "max_leaf_nodes": 15,
+    "learning_rate": 0.035,
+    "max_iter": 180,
+    "l2_regularization": 2.0,
+    "longshotPower": 0.0,
+    "blend": 1.0
+  },
+  "fixedRaceConfiguration": {
+    "mode": "disagreement",
+    "count": 5
+  },
+  "ticketOrder": [
+    "ワイド1-2",
+    "ワイド1-3",
+    "馬連1-2",
+    "3連複1-2-3"
+  ],
+  "validation": {
+    "ライト": {
+      "weights": {
+        "wide_1_2": 1,
+        "wide_1_3": 0,
+        "quinella_1_2": 0,
+        "trio_1_2_3": 9
+      },
+      "races": 250.0,
+      "roi": 723.888,
+      "hit": 39.6,
+      "minMonth": 269.2727,
+      "monthlyRois": {
+        "2026-05": 1081.0857,
+        "2026-06": 269.2727
+      },
+      "profit": 3119440.0,
+      "objective": 427.9151
+    },
+    "スタンダード": {
+      "weights": {
+        "wide_1_2": 1,
+        "wide_1_3": 0,
+        "quinella_1_2": 0,
+        "trio_1_2_3": 9
+      },
+      "races": 250.0,
+      "roi": 723.888,
+      "hit": 39.6,
+      "minMonth": 269.2727,
+      "monthlyRois": {
+        "2026-05": 1081.0857,
+        "2026-06": 269.2727
+      },
+      "profit": 7798600.0,
+      "objective": 427.9151
+    },
+    "プレミアム": {
+      "weights": {
+        "wide_1_2": 1,
+        "wide_1_3": 0,
+        "quinella_1_2": 0,
+        "trio_1_2_3": 9
+      },
+      "races": 250.0,
+      "roi": 723.888,
+      "hit": 39.6,
+      "minMonth": 269.2727,
+      "monthlyRois": {
+        "2026-05": 1081.0857,
+        "2026-06": 269.2727
+      },
+      "profit": 15597200.0,
+      "objective": 427.9151
+    }
+  },
+  "holdout": {
+    "ライト": {
+      "races": 120.0,
+      "roi": 249.25,
+      "hit": 35.8333,
+      "minMonth": 249.25,
+      "monthlyRois": {
+        "2026-07": 249.25
+      },
+      "profit": 358200.0,
+      "objective": 206.5667,
+      "pass200": true,
+      "hitRequirementMet": false
+    },
+    "スタンダード": {
+      "races": 120.0,
+      "roi": 249.25,
+      "hit": 35.8333,
+      "minMonth": 249.25,
+      "monthlyRois": {
+        "2026-07": 249.25
+      },
+      "profit": 895500.0,
+      "objective": 206.5667,
+      "pass200": true,
+      "hitRequirementMet": false
+    },
+    "プレミアム": {
+      "races": 120.0,
+      "roi": 249.25,
+      "hit": 35.8333,
+      "minMonth": 249.25,
+      "monthlyRois": {
+        "2026-07": 249.25
+      },
+      "profit": 1791000.0,
+      "objective": 206.5667,
+      "pass200": true,
+      "hitRequirementMet": false
+    }
+  },
+  "promotionEligible": false
+}
