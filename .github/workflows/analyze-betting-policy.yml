@@ -56,10 +56,13 @@ jobs:
 
       - name: Analyze validation and untouched holdout
         if: steps.existing.outputs.skip != 'true'
-        run: npm run learning:analyze
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run learning:analyze 2>&1 | tee policy-analysis.log
 
       - name: Publish result in workflow summary
-        if: steps.existing.outputs.skip != 'true'
+        if: steps.existing.outputs.skip != 'true' && hashFiles('policy-analysis.json') != ''
         shell: bash
         run: |
           echo "## 5R-plus betting policy analysis" >> "$GITHUB_STEP_SUMMARY"
@@ -67,23 +70,27 @@ jobs:
           cat policy-analysis.json >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload full result
-        if: steps.existing.outputs.skip != 'true'
+      - name: Upload analysis result and diagnostics
+        if: always() && steps.existing.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: policy-analysis
-          path: policy-analysis.json
+          path: |
+            policy-analysis.json
+            policy-analysis.log
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Save result to GitHub
-        if: steps.existing.outputs.skip != 'true'
+        if: success() && steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           mkdir -p analysis-results
           cp policy-analysis.json analysis-results/policy-analysis.json
+          cp policy-analysis.log analysis-results/policy-analysis.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add analysis-results/policy-analysis.json
+          git add -f analysis-results/policy-analysis.json analysis-results/policy-analysis.log
           if git diff --cached --quiet; then
             echo "No result change to commit."
           else
