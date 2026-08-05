@@ -1,0 +1,96 @@
+{
+  "generatedAt": "2026-08-05T12:21:31.129Z",
+  "targetRoiPct": 200,
+  "minimumRacesPerVenueDay": 5,
+  "method": "Expanded candidate universe. Race and ticket policies selected on validation only; holdout evaluated after selection.",
+  "candidatePoolHorses": 7,
+  "raceConfigurationFinalists": [
+    {
+      "mode": "value",
+      "count": 10,
+      "score": 78.72571428571428
+    },
+    {
+      "mode": "model",
+      "count": 10,
+      "score": 77.90342857142856
+    }
+  ],
+  "selectedRaceConfiguration": {
+    "mode": "value",
+    "count": 10
+  },
+  "validation": {
+    "ライト": {
+      "policy": {
+        "profile": "noTrifecta",
+        "scoreMode": "edge",
+        "minEv": 100,
+        "minHit": 0.06,
+        "maxOdds": 20,
+        "maxRank": 5,
+        "includesFirst": "any",
+        "maxTickets": 1,
+        "stakeMode": "equal"
+      },
+      "roi": 94,
+      "hit": 30,
+      "minMonth": 93,
+      "profit": -48320
+    },
+    "スタンダード": {
+      "policy": {
+        "profile": "noTrifecta",
+        "scoreMode": "edge",
+        "minEv": 100,
+        "minHit": 0.06,
+        "maxOdds": 20,
+        "maxRank": 5,
+        "includesFirst": "any",
+        "maxTickets": 1,
+        "stakeMode": "equal"
+      },
+      "roi": 94,
+      "hit": 30,
+      "minMonth": 93,
+      "profit": -126840
+    },
+    "プレミアム": {
+      "policy": {
+        "profile": "noTrifecta",
+        "scoreMode": "edge",
+        "minEv": 100,
+        "minHit": 0.06,
+        "maxOdds": 20,
+        "maxRank": 5,
+        "includesFirst": "any",
+        "maxTickets": 1,
+        "stakeMode": "equal"
+      },
+      "roi": 94,
+      "hit": 30,
+      "minMonth": 93,
+      "profit": -265760
+    }
+  },
+  "holdout": {
+    "ライト": {
+      "roi": 62.5,
+      "hit": 23.3,
+      "profit": -143840,
+      "pass200": false
+    },
+    "スタンダード": {
+      "roi": 62.5,
+      "hit": 23.3,
+      "profit": -377580,
+      "pass200": false
+    },
+    "プレミアム": {
+      "roi": 62.5,
+      "hit": 23.3,
+      "profit": -791120,
+      "pass200": false
+    }
+  }
+}
