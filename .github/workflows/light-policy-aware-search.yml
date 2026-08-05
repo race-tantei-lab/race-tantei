@@ -45,6 +45,20 @@ jobs:
       - name: Build analysis modules
         run: npm run build:test
 
+      - name: Fix rejection report writer
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/run-light-policy-aware-search.mjs")
+          source = path.read_text()
+          old = '    await writeFile("light-policy-aware-search.json", JSON.stringify(rejectedReport, null, 2) + "\\\\n");'
+          new = '    await (await import("node:fs/promises")).writeFile("light-policy-aware-search.json", JSON.stringify(rejectedReport, null, 2) + "\\\\n");'
+          if old not in source:
+              raise SystemExit("rejection writer pattern not found")
+          path.write_text(source.replace(old, new))
+          PY
+
       - name: Search policy-aware light strategy
         shell: bash
         run: |
