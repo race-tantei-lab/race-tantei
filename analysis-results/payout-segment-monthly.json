@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-08-05T13:45:41.468Z",
+  "targetRoiPct": 200,
+  "requiredValidationMonthRoiPct": 100,
+  "minimumRacesPerVenueDay": 5,
+  "method": "Use exact payout_yen/zero returns and reject every policy with any validation month below 100%.",
+  "training": {
+    "races": 3422,
+    "tickets": 1142798,
+    "months": [
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04"
+    ],
+    "stableSegments": 10841
+  },
+  "selectedRaceConfiguration": null,
+  "validation": {},
+  "holdout": {},
+  "validationMonthlyGatePassed": false,
+  "promotionEligible": false,
+  "rejectionReason": "NO_POLICY_PROFITABLE_IN_EVERY_VALIDATION_MONTH"
+}
