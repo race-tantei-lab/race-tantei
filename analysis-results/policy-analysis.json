@@ -1,0 +1,130 @@
+{
+  "targetRoiPct": 200,
+  "minimumRacesPerVenueDay": 5,
+  "selectedRacesPerVenueDay": 5,
+  "eligibleRaceCounts": [
+    5
+  ],
+  "skippedRaceCounts": [
+    {
+      "count": 6,
+      "failedCourses": [
+        "ライト",
+        "スタンダード",
+        "プレミアム"
+      ]
+    },
+    {
+      "count": 7,
+      "failedCourses": [
+        "ライト",
+        "スタンダード",
+        "プレミアム"
+      ]
+    },
+    {
+      "count": 8,
+      "failedCourses": [
+        "ライト",
+        "スタンダード",
+        "プレミアム"
+      ]
+    },
+    {
+      "count": 9,
+      "failedCourses": [
+        "ライト",
+        "スタンダード",
+        "プレミアム"
+      ]
+    },
+    {
+      "count": 10,
+      "failedCourses": [
+        "ライト",
+        "スタンダード",
+        "プレミアム"
+      ]
+    },
+    {
+      "count": 12,
+      "failedCourses": [
+        "ライト",
+        "スタンダード",
+        "プレミアム"
+      ]
+    }
+  ],
+  "baseline": {
+    "ライト": {
+      "roi": 81.4,
+      "hit": 36.8
+    },
+    "スタンダード": {
+      "roi": 83.6,
+      "hit": 36.8
+    },
+    "プレミアム": {
+      "roi": 85.6,
+      "hit": 36.8
+    }
+  },
+  "validation": {
+    "ライト": {
+      "policy": {
+        "profile": "all",
+        "minEv": 0,
+        "minHit": 0,
+        "maxOdds": 12,
+        "maxTickets": 1
+      },
+      "roi": 82.2,
+      "hit": 36.8,
+      "minMonth": 76.5
+    },
+    "スタンダード": {
+      "policy": {
+        "profile": "all",
+        "minEv": 0,
+        "minHit": 0,
+        "maxOdds": 12,
+        "maxTickets": 1
+      },
+      "roi": 83.6,
+      "hit": 36.8,
+      "minMonth": 80.5
+    },
+    "プレミアム": {
+      "policy": {
+        "profile": "all",
+        "minEv": 0,
+        "minHit": 0,
+        "maxOdds": 80,
+        "maxTickets": 2
+      },
+      "roi": 85.6,
+      "hit": 36.8,
+      "minMonth": 84.9
+    }
+  },
+  "holdout": {
+    "ライト": {
+      "roi": 79.9,
+      "hit": 36.7,
+      "profit": -38560,
+      "pass200": false
+    },
+    "スタンダード": {
+      "roi": 72.3,
+      "hit": 35,
+      "profit": -139440,
+      "pass200": false
+    },
+    "プレミアム": {
+      "roi": 73.6,
+      "hit": 35.8,
+      "profit": -278960,
+      "pass200": false
+    }
+  }
+}

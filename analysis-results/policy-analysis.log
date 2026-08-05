@@ -1,0 +1,38 @@
+
+> race-tantei@2.5.0 learning:analyze
+> npm run build:test && node scripts/analyze-betting-policy.mjs
+
+
+> race-tantei@2.5.0 build:test
+> tsc -p tsconfig.test.json
+
+Analyzing 5 races per venue/day...
+Analyzing 6 races per venue/day...
+Skipping 6R: baseline hit rate could not be preserved for ライト, スタンダード, プレミアム
+Analyzing 7 races per venue/day...
+Skipping 7R: baseline hit rate could not be preserved for ライト, スタンダード, プレミアム
+Analyzing 8 races per venue/day...
+Skipping 8R: baseline hit rate could not be preserved for ライト, スタンダード, プレミアム
+Analyzing 9 races per venue/day...
+Skipping 9R: baseline hit rate could not be preserved for ライト, スタンダード, プレミアム
+Analyzing 10 races per venue/day...
+Skipping 10R: baseline hit rate could not be preserved for ライト, スタンダード, プレミアム
+Analyzing 12 races per venue/day...
+Skipping 12R: baseline hit rate could not be preserved for ライト, スタンダード, プレミアム
+
+=== Baseline validation ===
+ライト: ROI 81.4% / hit 36.8%
+スタンダード: ROI 83.6% / hit 36.8%
+プレミアム: ROI 85.6% / hit 36.8%
+
+=== Validation winner: 5R per venue/day (minimum 5 preserved) ===
+ライト: ROI 82.2% / hit 36.8% / {"profile":"all","minEv":0,"minHit":0,"maxOdds":12,"maxTickets":1}
+スタンダード: ROI 83.6% / hit 36.8% / {"profile":"all","minEv":0,"minHit":0,"maxOdds":12,"maxTickets":1}
+プレミアム: ROI 85.6% / hit 36.8% / {"profile":"all","minEv":0,"minHit":0,"maxOdds":80,"maxTickets":2}
+
+=== Untouched holdout ===
+ライト: ROI 79.9% / hit 36.7% / 200% FAIL
+スタンダード: ROI 72.3% / hit 35% / 200% FAIL
+プレミアム: ROI 73.6% / hit 35.8% / 200% FAIL
+
+Full result: policy-analysis.json
