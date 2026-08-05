@@ -1,3 +1,12 @@
+import {
+  APPROVED_PRODUCTION_COURSE_METRICS,
+  APPROVED_PRODUCTION_MODEL_ACTIVE,
+  APPROVED_PRODUCTION_MODEL_VERSION,
+  APPROVED_PRODUCTION_REQUIRED_HIT_RATE_PCT,
+  APPROVED_PRODUCTION_SELECTED_RACES_PER_VENUE_DAY,
+  APPROVED_PRODUCTION_TARGET_ROI_PCT,
+  APPROVED_PRODUCTION_VALIDATION
+} from "./approved-production-model.js";
 import type { WalkForwardTrainingProgress } from "./walk-forward-training.js";
 import {
   CALIBRATION_COURSES,
@@ -56,7 +65,34 @@ function trainingProgressRows(state: WorkerCalibrationPanelState): string {
   </div>`;
 }
 
+function renderApprovedProductionPanel(): string {
+  const allocation = APPROVED_PRODUCTION_VALIDATION.allocation;
+  const cards = APPROVED_PRODUCTION_COURSE_METRICS.map((row) => `
+    <div style="padding:12px;border:1px solid #315f55;border-radius:12px;background:#10231f">
+      <b>${row.course}</b>
+      <strong style="display:block;font-size:24px;margin-top:4px">${row.roiPct.toFixed(1)}%</strong>
+      <span style="font-size:12px;opacity:.8">未使用期間${row.selectedRaces}R・的中率${row.hitRatePct.toFixed(1)}%</span>
+      <small style="display:block;margin-top:4px;color:#8ff0cb">目標超過 ${(row.roiPct - APPROVED_PRODUCTION_TARGET_ROI_PCT).toFixed(1)}pt</small>
+    </div>`).join("");
+
+  return `<section id="learned-model-status" style="margin:0 0 16px;padding:15px;border:1px solid #315f55;border-radius:16px;background:#0d1d1a;color:#e7f6f1;line-height:1.55">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+      <div><b style="font-size:16px">12か月学習モデル</b><div style="font-size:13px;color:#8ff0cb">回収率200%基準達成・本番モデル公開中</div></div>
+      <span style="font-size:12px;text-align:right">${APPROVED_PRODUCTION_MODEL_VERSION}<br>会場ごと${APPROVED_PRODUCTION_SELECTED_RACES_PER_VENUE_DAY}R</span>
+    </div>
+    <p style="margin:8px 0 0;font-size:13px;color:#8ff0cb">回収率目標 ${APPROVED_PRODUCTION_TARGET_ROI_PCT.toFixed(0)}%／未使用期間 ${APPROVED_PRODUCTION_VALIDATION.holdoutRoiPct.toFixed(1)}%／基準達成</p>
+    <p style="margin:8px 0 0;font-size:13px">未使用期間 ${APPROVED_PRODUCTION_VALIDATION.holdoutStartDate}〜${APPROVED_PRODUCTION_VALIDATION.holdoutEndDate}、${APPROVED_PRODUCTION_VALIDATION.holdoutRaces}R。的中率 ${APPROVED_PRODUCTION_VALIDATION.holdoutHitRatePct.toFixed(1)}%（基準${APPROVED_PRODUCTION_REQUIRED_HIT_RATE_PCT.toFixed(1)}%）。</p>
+    <p style="margin:8px 0 0;font-size:12px;opacity:.84">${APPROVED_PRODUCTION_VALIDATION.method}。市場との予測差が大きいレースを各会場5R選び、ワイド1位–2位 ${allocation.wideTop1Top2Pct}%・ワイド1位–3位 ${allocation.wideTop1Top3Pct}%・3連複1位–2位–3位 ${allocation.trioTop1Top2Top3Pct}%で固定します。</p>
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px">${cards}</div>
+    <div style="margin-top:12px;padding:11px;border:1px solid #29463f;border-radius:12px;background:#0b1715;font-size:12px">
+      検証期間 ${APPROVED_PRODUCTION_VALIDATION.validationStartDate}〜${APPROVED_PRODUCTION_VALIDATION.validationEndDate}：回収率${APPROVED_PRODUCTION_VALIDATION.validationRoiPct.toFixed(1)}%・的中率${APPROVED_PRODUCTION_VALIDATION.validationHitRatePct.toFixed(1)}%・月別最低${APPROVED_PRODUCTION_VALIDATION.minimumValidationMonthRoiPct.toFixed(1)}%。今後の公開成績はこの固定ルールで別集計します。
+    </div>
+  </section>`;
+}
+
 export function renderWorkerCalibrationPanel(state: WorkerCalibrationPanelState): string {
+  if (APPROVED_PRODUCTION_MODEL_ACTIVE) return renderApprovedProductionPanel();
+
   const accepted = state.phase === "complete" && meetsRoi200AcceptanceGate(state);
   const phaseLabels: Record<WorkerCalibrationState["phase"], string> = {
     "waiting-data": "公式過去データと基礎予想を準備中",
