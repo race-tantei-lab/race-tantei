@@ -1,5 +1,10 @@
-Traceback (most recent call last):
-  File "/home/runner/work/race-tantei/race-tantei/scripts/train-market-residual-ranking-v3.py", line 292, in <module>
-    source = source.replaceAll('runner-ranking-v2.json', 'market-residual-ranking-v3.json')
-             ^^^^^^^^^^^^^^^^^
-AttributeError: 'str' object has no attribute 'replaceAll'. Did you mean: 'replace'?
+/home/runner/work/race-tantei/race-tantei/scripts/.generated-market-residual-ranking-v3.mjs:713
+  function buildBettingRecords(  function buildBettingRecords(races) {
+                                 ^^^^^^^^
+
+SyntaxError: Unexpected token 'function'
+    at checkSyntax (node:internal/main/check_syntax:74:5)
+
+Node.js v22.23.1
+
+
