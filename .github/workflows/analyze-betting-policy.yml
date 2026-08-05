@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/analyze-betting-policy.yml"
       - "scripts/analyze-betting-policy.mjs"
+      - "scripts/analyze-betting-factors.mjs"
       - "src/v1/**"
       - "package.json"
   schedule:
@@ -54,12 +55,23 @@ jobs:
         if: steps.existing.outputs.skip != 'true'
         run: npm ci
 
+      - name: Build analysis modules
+        if: steps.existing.outputs.skip != 'true'
+        run: npm run build:test
+
       - name: Analyze validation and untouched holdout
         if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           set -o pipefail
-          npm run learning:analyze 2>&1 | tee policy-analysis.log
+          node scripts/analyze-betting-policy.mjs 2>&1 | tee policy-analysis.log
+
+      - name: Decompose betting factors
+        if: steps.existing.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/analyze-betting-factors.mjs 2>&1 | tee betting-factor-analysis.log
 
       - name: Publish result in workflow summary
         if: steps.existing.outputs.skip != 'true' && hashFiles('policy-analysis.json') != ''
@@ -68,6 +80,10 @@ jobs:
           echo "## 5R-plus betting policy analysis" >> "$GITHUB_STEP_SUMMARY"
           echo '```json' >> "$GITHUB_STEP_SUMMARY"
           cat policy-analysis.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "## Betting factor decomposition" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat betting-factor-analysis.json >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload analysis result and diagnostics
@@ -78,6 +94,8 @@ jobs:
           path: |
             policy-analysis.json
             policy-analysis.log
+            betting-factor-analysis.json
+            betting-factor-analysis.log
           if-no-files-found: warn
           retention-days: 30
 
@@ -88,12 +106,18 @@ jobs:
           mkdir -p analysis-results
           cp policy-analysis.json analysis-results/policy-analysis.json
           cp policy-analysis.log analysis-results/policy-analysis.log
+          cp betting-factor-analysis.json analysis-results/betting-factor-analysis.json
+          cp betting-factor-analysis.log analysis-results/betting-factor-analysis.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f analysis-results/policy-analysis.json analysis-results/policy-analysis.log
+          git add -f \
+            analysis-results/policy-analysis.json \
+            analysis-results/policy-analysis.log \
+            analysis-results/betting-factor-analysis.json \
+            analysis-results/betting-factor-analysis.log
           if git diff --cached --quiet; then
             echo "No result change to commit."
           else
-            git commit -m "Save 5R-plus policy analysis result"
+            git commit -m "Save betting policy and factor analysis results"
             git push
           fi
