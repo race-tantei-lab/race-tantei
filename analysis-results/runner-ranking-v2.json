@@ -1,0 +1,122 @@
+{
+  "generatedAt": "2026-08-05T12:46:49.364Z",
+  "targetRoiPct": 200,
+  "minimumRacesPerVenueDay": 5,
+  "featureCount": 32,
+  "samples": {
+    "train": 3425,
+    "validation": 600,
+    "holdout": 288
+  },
+  "selectedTrainingConfig": {
+    "learningRate": 0.08,
+    "l2": 0.001,
+    "epochs": 50
+  },
+  "ranking": {
+    "marketValidation": {
+      "races": 600,
+      "logLoss": 2.0939,
+      "top1Pct": 30.6667,
+      "top3Pct": 60.3333
+    },
+    "modelValidation": {
+      "races": 600,
+      "logLoss": 2.1638,
+      "top1Pct": 31.1667,
+      "top3Pct": 62.1667
+    },
+    "marketHoldout": {
+      "races": 288,
+      "logLoss": 1.98,
+      "top1Pct": 34.375,
+      "top3Pct": 66.3194
+    },
+    "modelHoldout": {
+      "races": 288,
+      "logLoss": 2.0412,
+      "top1Pct": 34.375,
+      "top3Pct": 66.3194
+    }
+  },
+  "selectedRaceConfiguration": {
+    "mode": "edge",
+    "count": 6
+  },
+  "validation": {
+    "ライト": {
+      "policy": {
+        "profile": "stable",
+        "stakeMode": "equal",
+        "minEv": 0,
+        "minHit": 0.25,
+        "maxOdds": 40,
+        "maxRank": 2,
+        "includesFirst": "yes",
+        "ticketCount": 4,
+        "hedge": "wide"
+      },
+      "roi": 77.1875,
+      "hit": 51.3333,
+      "minMonth": 70.0047,
+      "hitRequirementMet": true
+    },
+    "スタンダード": {
+      "policy": {
+        "profile": "stable",
+        "stakeMode": "equal",
+        "minEv": 0,
+        "minHit": 0.25,
+        "maxOdds": 40,
+        "maxRank": 2,
+        "includesFirst": "yes",
+        "ticketCount": 4,
+        "hedge": "wide"
+      },
+      "roi": 77.1952,
+      "hit": 51.3333,
+      "minMonth": 70.1696,
+      "hitRequirementMet": true
+    },
+    "プレミアム": {
+      "policy": {
+        "profile": "noTrifecta",
+        "stakeMode": "equal",
+        "minEv": 0,
+        "minHit": 0.25,
+        "maxOdds": 40,
+        "maxRank": 2,
+        "includesFirst": "yes",
+        "ticketCount": 4,
+        "hedge": "wide"
+      },
+      "roi": 77.1417,
+      "hit": 51,
+      "minMonth": 70.5742,
+      "hitRequirementMet": true
+    }
+  },
+  "holdout": {
+    "ライト": {
+      "roi": 74.9609,
+      "hit": 51.3889,
+      "profit": -57690,
+      "pass200": false,
+      "hitRequirementMet": true
+    },
+    "スタンダード": {
+      "roi": 75.0992,
+      "hit": 51.3889,
+      "profit": -150600,
+      "pass200": false,
+      "hitRequirementMet": true
+    },
+    "プレミアム": {
+      "roi": 75.1018,
+      "hit": 51.3889,
+      "profit": -315510,
+      "pass200": false,
+      "hitRequirementMet": true
+    }
+  }
+}
