@@ -9,6 +9,7 @@ on:
     paths:
       - ".github/workflows/light-barbell-search.yml"
       - "scripts/run-light-barbell-search.mjs"
+      - "scripts/run-light-barbell-search-repaired.mjs"
       - "scripts/run-light-policy-aware-search.mjs"
       - "scripts/train-payout-segment-ensemble.mjs"
       - "src/v1/**"
@@ -50,7 +51,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          node scripts/run-light-barbell-search.mjs 2>&1 | tee light-barbell-search.log
+          node scripts/run-light-barbell-search-repaired.mjs 2>&1 | tee light-barbell-search.log
 
       - name: Publish result
         if: always()
