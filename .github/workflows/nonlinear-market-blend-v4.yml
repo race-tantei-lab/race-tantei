@@ -1,5 +1,6 @@
 name: Nonlinear market blend v4
 
+# Explicit trigger after workflow registration.
 on:
   workflow_dispatch:
   push:
