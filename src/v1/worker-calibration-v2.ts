@@ -20,6 +20,7 @@ import {
   CALIBRATION_CANDIDATES,
   emptyLossAccumulator,
   loadWorkerCalibrationState,
+  meetsRoi200AcceptanceGate,
   saveWorkerCalibrationState,
   WORKER_LEARNED_MODEL_VERSION,
   type WorkerCalibrationState
@@ -161,11 +162,7 @@ async function finalizeMetrics(db: D1Database, state: WorkerCalibrationState): P
       && row.fixedStakeViolations === 0
       && Math.abs(row.averageStakeYen - COURSE_TARGET_STAKES[row.course]) < 0.01
     );
-  state.active = state.integrityValid
-    && state.selected !== null
-    && state.selected.validationImprovementPct > 0
-    && state.holdout !== null
-    && state.holdout.logLoss <= state.holdout.baselineLogLoss;
+  state.active = meetsRoi200AcceptanceGate(state);
   state.phase = "complete";
 }
 
@@ -185,7 +182,9 @@ export async function getWorkerCalibrationState(db: D1Database): Promise<WorkerC
 
 export async function getActiveLearnedModelVersion(db: D1Database): Promise<string | null> {
   const state = await loadWorkerCalibrationState(db);
-  return state.phase === "complete" && state.active ? WORKER_LEARNED_MODEL_VERSION : null;
+  return state.phase === "complete" && meetsRoi200AcceptanceGate(state)
+    ? WORKER_LEARNED_MODEL_VERSION
+    : null;
 }
 
 export async function runWorkerCalibrationStep(db: D1Database): Promise<WorkerCalibrationState> {
