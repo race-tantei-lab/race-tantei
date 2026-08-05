@@ -2,8 +2,6 @@ name: Walk-forward free runner
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "17 18 * * *"
 
 concurrency:
   group: walk-forward-free-runner
