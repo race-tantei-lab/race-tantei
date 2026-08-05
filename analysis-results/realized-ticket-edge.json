@@ -1,0 +1,125 @@
+{
+  "generatedAt": "2026-08-05T12:32:03.583Z",
+  "targetRoiPct": 200,
+  "minimumRacesPerVenueDay": 5,
+  "method": "Train smoothed realized-return ticket signals on 2025-05 through 2026-04. Select race and ticket policy on validation only. Evaluate July holdout once after selection.",
+  "training": {
+    "races": 3422,
+    "tickets": 393530,
+    "globalTicketRoi": 67.8,
+    "globalTicketHitPct": 3.5
+  },
+  "selectedRaceConfiguration": {
+    "mode": "combined",
+    "count": 6
+  },
+  "raceConfigurationFinalists": [
+    {
+      "mode": "combined",
+      "count": 6,
+      "roi": 78.6,
+      "hit": 53.7,
+      "minMonth": 71.5
+    },
+    {
+      "mode": "edge",
+      "count": 8,
+      "roi": 79.7,
+      "hit": 53.8,
+      "minMonth": 68.2
+    },
+    {
+      "mode": "confidence",
+      "count": 6,
+      "roi": 76.9,
+      "hit": 53,
+      "minMonth": 71.9
+    },
+    {
+      "mode": "confidence",
+      "count": 9,
+      "roi": 77.5,
+      "hit": 51.8,
+      "minMonth": 70.5
+    }
+  ],
+  "validation": {
+    "ライト": {
+      "policy": {
+        "profile": "singleWide",
+        "stakeMode": "hit",
+        "minLearnedRoi": 0,
+        "minLearnedHit": 0.25,
+        "maxOdds": 5,
+        "maxRank": 2,
+        "includesFirst": "any",
+        "ticketCount": 6,
+        "hedge": "none"
+      },
+      "roi": 73.7,
+      "hit": 74,
+      "minMonth": 72.1,
+      "profit": -126440,
+      "hitRequirementMet": true
+    },
+    "スタンダード": {
+      "policy": {
+        "profile": "singleWide",
+        "stakeMode": "equal",
+        "minLearnedRoi": 0,
+        "minLearnedHit": 0.25,
+        "maxOdds": 5,
+        "maxRank": 2,
+        "includesFirst": "any",
+        "ticketCount": 4,
+        "hedge": "hit"
+      },
+      "roi": 76.5,
+      "hit": 67,
+      "minMonth": 74,
+      "profit": -296450,
+      "hitRequirementMet": true
+    },
+    "プレミアム": {
+      "policy": {
+        "profile": "stable",
+        "stakeMode": "score",
+        "minLearnedRoi": 0,
+        "minLearnedHit": 0.25,
+        "maxOdds": 5,
+        "maxRank": 2,
+        "includesFirst": "any",
+        "ticketCount": 4,
+        "hedge": "none"
+      },
+      "roi": 76.3,
+      "hit": 67,
+      "minMonth": 74,
+      "profit": -626270,
+      "hitRequirementMet": true
+    }
+  },
+  "holdout": {
+    "ライト": {
+      "roi": 76.3,
+      "hit": 71.5,
+      "profit": -54690,
+      "pass200": false,
+      "hitRequirementMet": true
+    },
+    "スタンダード": {
+      "roi": 77.2,
+      "hit": 62.5,
+      "profit": -137850,
+      "pass200": false,
+      "hitRequirementMet": true
+    },
+    "プレミアム": {
+      "roi": 76.9,
+      "hit": 62.5,
+      "profit": -292780,
+      "pass200": false,
+      "hitRequirementMet": true
+    }
+  }
+}

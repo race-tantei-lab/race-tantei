@@ -1,0 +1,22 @@
+Searching realized-edge policy for combined/6R...
+ライト: validation ROI 73.7% / hit 74% / minMonth 72.1%
+スタンダード: validation ROI 76.5% / hit 67% / minMonth 74%
+プレミアム: validation ROI 76.3% / hit 67% / minMonth 74%
+Searching realized-edge policy for edge/8R...
+ライト: validation ROI 75.1% / hit 73.8% / minMonth 69.9%
+スタンダード: validation ROI 76.5% / hit 66% / minMonth 71.9%
+プレミアム: validation ROI 76.3% / hit 66% / minMonth 71.9%
+Searching realized-edge policy for confidence/6R...
+ライト: validation ROI 74.1% / hit 72.3% / minMonth 69.6%
+スタンダード: validation ROI 75.7% / hit 65.7% / minMonth 72.4%
+プレミアム: validation ROI 75.8% / hit 65.7% / minMonth 72.9%
+Searching realized-edge policy for confidence/9R...
+ライト: validation ROI 73.8% / hit 71.1% / minMonth 69.1%
+スタンダード: validation ROI 75% / hit 63.3% / minMonth 71.1%
+プレミアム: validation ROI 74.8% / hit 63.3% / minMonth 71%
+Winner: combined/6R
+Training: 3422 races / 393530 candidate tickets
+ライト: validation 73.7% / holdout 76.3% / holdout hit 71.5% / 200% FAIL
+スタンダード: validation 76.5% / holdout 77.2% / holdout hit 62.5% / 200% FAIL
+プレミアム: validation 76.3% / holdout 76.9% / holdout hit 62.5% / 200% FAIL
+Realized-edge result: realized-ticket-edge.json
