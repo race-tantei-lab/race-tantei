@@ -1,11 +1,3 @@
-
-> race-tantei@2.5.0 learning:analyze
-> npm run build:test && node scripts/analyze-betting-policy.mjs
-
-
-> race-tantei@2.5.0 build:test
-> tsc -p tsconfig.test.json
-
 Analyzing 5 races per venue/day...
 Analyzing 6 races per venue/day...
 Skipping 6R: baseline hit rate could not be preserved for ライト, スタンダード, プレミアム
