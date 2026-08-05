@@ -11,6 +11,7 @@ on:
       - "scripts/analyze-betting-factors.mjs"
       - "scripts/search-betting-policy-v2.mjs"
       - "scripts/train-realized-ticket-edge.mjs"
+      - "scripts/train-runner-ranking-v2.mjs"
       - "src/v1/**"
       - "package.json"
   schedule:
@@ -72,11 +73,17 @@ jobs:
           set -o pipefail
           node scripts/train-realized-ticket-edge.mjs 2>&1 | tee realized-ticket-edge.log
 
+      - name: Train chronological runner ranking model
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/train-runner-ranking-v2.mjs 2>&1 | tee runner-ranking-v2.log
+
       - name: Publish latest result in workflow summary
         if: always()
         shell: bash
         run: |
-          for file in policy-analysis.json betting-factor-analysis.json expanded-policy-search.json realized-ticket-edge.json; do
+          for file in policy-analysis.json betting-factor-analysis.json expanded-policy-search.json realized-ticket-edge.json runner-ranking-v2.json; do
             if [[ -f "$file" ]]; then
               echo "## $file" >> "$GITHUB_STEP_SUMMARY"
               echo '```json' >> "$GITHUB_STEP_SUMMARY"
@@ -99,6 +106,8 @@ jobs:
             expanded-policy-search.log
             realized-ticket-edge.json
             realized-ticket-edge.log
+            runner-ranking-v2.json
+            runner-ranking-v2.log
           if-no-files-found: warn
           retention-days: 30
 
@@ -111,7 +120,8 @@ jobs:
             policy-analysis.json policy-analysis.log \
             betting-factor-analysis.json betting-factor-analysis.log \
             expanded-policy-search.json expanded-policy-search.log \
-            realized-ticket-edge.json realized-ticket-edge.log; do
+            realized-ticket-edge.json realized-ticket-edge.log \
+            runner-ranking-v2.json runner-ranking-v2.log; do
             if [[ -f "$file" ]]; then
               cp "$file" "analysis-results/$file"
               git add -f "analysis-results/$file"
@@ -122,6 +132,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No result change to commit."
           else
-            git commit -m "Save realized-return ticket edge analysis"
+            git commit -m "Save runner ranking and betting analysis"
             git push
           fi
