@@ -10,6 +10,7 @@ on:
       - "scripts/analyze-betting-policy.mjs"
       - "scripts/analyze-betting-factors.mjs"
       - "scripts/search-betting-policy-v2.mjs"
+      - "scripts/train-realized-ticket-edge.mjs"
       - "src/v1/**"
       - "package.json"
   schedule:
@@ -35,67 +36,57 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check whether a scheduled result already exists
-        id: existing
-        shell: bash
-        run: |
-          if [[ -f analysis-results/expanded-policy-search.json && "${{ github.event_name }}" == "schedule" ]]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Setup Node
-        if: steps.existing.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
       - name: Install dependencies
-        if: steps.existing.outputs.skip != 'true'
         run: npm ci
 
       - name: Build analysis modules
-        if: steps.existing.outputs.skip != 'true'
         run: npm run build:test
 
-      - name: Analyze validation and untouched holdout
-        if: steps.existing.outputs.skip != 'true'
+      - name: Analyze current policy
         shell: bash
         run: |
           set -o pipefail
           node scripts/analyze-betting-policy.mjs 2>&1 | tee policy-analysis.log
 
       - name: Decompose betting factors
-        if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           set -o pipefail
           node scripts/analyze-betting-factors.mjs 2>&1 | tee betting-factor-analysis.log
 
       - name: Search expanded candidate universe
-        if: steps.existing.outputs.skip != 'true'
         shell: bash
         run: |
           set -o pipefail
           node scripts/search-betting-policy-v2.mjs 2>&1 | tee expanded-policy-search.log
 
-      - name: Publish result in workflow summary
-        if: steps.existing.outputs.skip != 'true' && hashFiles('policy-analysis.json') != ''
+      - name: Train realized-return ticket edge model
         shell: bash
         run: |
-          echo "## Current policy analysis" >> "$GITHUB_STEP_SUMMARY"
-          echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          cat policy-analysis.json >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "## Expanded candidate policy search" >> "$GITHUB_STEP_SUMMARY"
-          echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          cat expanded-policy-search.json >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          set -o pipefail
+          node scripts/train-realized-ticket-edge.mjs 2>&1 | tee realized-ticket-edge.log
+
+      - name: Publish latest result in workflow summary
+        if: always()
+        shell: bash
+        run: |
+          for file in policy-analysis.json betting-factor-analysis.json expanded-policy-search.json realized-ticket-edge.json; do
+            if [[ -f "$file" ]]; then
+              echo "## $file" >> "$GITHUB_STEP_SUMMARY"
+              echo '```json' >> "$GITHUB_STEP_SUMMARY"
+              cat "$file" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
       - name: Upload analysis result and diagnostics
-        if: always() && steps.existing.outputs.skip != 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: policy-analysis
@@ -106,32 +97,31 @@ jobs:
             betting-factor-analysis.log
             expanded-policy-search.json
             expanded-policy-search.log
+            realized-ticket-edge.json
+            realized-ticket-edge.log
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Save result to GitHub
-        if: success() && steps.existing.outputs.skip != 'true'
+      - name: Save available results to GitHub
+        if: always()
         shell: bash
         run: |
           mkdir -p analysis-results
-          cp policy-analysis.json analysis-results/policy-analysis.json
-          cp policy-analysis.log analysis-results/policy-analysis.log
-          cp betting-factor-analysis.json analysis-results/betting-factor-analysis.json
-          cp betting-factor-analysis.log analysis-results/betting-factor-analysis.log
-          cp expanded-policy-search.json analysis-results/expanded-policy-search.json
-          cp expanded-policy-search.log analysis-results/expanded-policy-search.log
+          for file in \
+            policy-analysis.json policy-analysis.log \
+            betting-factor-analysis.json betting-factor-analysis.log \
+            expanded-policy-search.json expanded-policy-search.log \
+            realized-ticket-edge.json realized-ticket-edge.log; do
+            if [[ -f "$file" ]]; then
+              cp "$file" "analysis-results/$file"
+              git add -f "analysis-results/$file"
+            fi
+          done
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f \
-            analysis-results/policy-analysis.json \
-            analysis-results/policy-analysis.log \
-            analysis-results/betting-factor-analysis.json \
-            analysis-results/betting-factor-analysis.log \
-            analysis-results/expanded-policy-search.json \
-            analysis-results/expanded-policy-search.log
           if git diff --cached --quiet; then
             echo "No result change to commit."
           else
-            git commit -m "Save expanded betting policy search result"
+            git commit -m "Save realized-return ticket edge analysis"
             git push
           fi
