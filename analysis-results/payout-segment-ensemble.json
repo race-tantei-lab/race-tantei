@@ -1,0 +1,558 @@
+{
+  "generatedAt": "2026-08-05T13:24:56.559Z",
+  "targetRoiPct": 200,
+  "minimumRacesPerVenueDay": 5,
+  "method": "Mine payout segments on four chronological training folds using exact payout_yen/zero returns. Select race count and ticket policy on validation only; evaluate holdout once.",
+  "training": {
+    "races": 3422,
+    "tickets": 1142798,
+    "months": [
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04"
+    ],
+    "stableSegments": 10841,
+    "topSegments": [
+      {
+        "family": "venueCell",
+        "key": "3連単|7-2-3|東京|unknown|d1",
+        "count": 518,
+        "roi": 975.6,
+        "hitPct": 0.8,
+        "foldRois": [
+          0,
+          2909.4,
+          0,
+          2195
+        ],
+        "robustRoi": 419.5,
+        "confidence": 1
+      },
+      {
+        "family": "popularity",
+        "key": "3連単|9-4-2|false",
+        "count": 533,
+        "roi": 922,
+        "hitPct": 0.6,
+        "foldRois": [
+          0,
+          1684.3,
+          0,
+          2096.2
+        ],
+        "robustRoi": 375.8,
+        "confidence": 1
+      },
+      {
+        "family": "cell",
+        "key": "3連単|7-1-3|h1|f3|early",
+        "count": 640,
+        "roi": 412.9,
+        "hitPct": 0.9,
+        "foldRois": [
+          551.1,
+          325.4,
+          262.4,
+          465.6
+        ],
+        "robustRoi": 339.9,
+        "confidence": 1
+      },
+      {
+        "family": "cell",
+        "key": "3連単|1-2-7|h3|f2|middle",
+        "count": 216,
+        "roi": 423.5,
+        "hitPct": 3.2,
+        "foldRois": [
+          90,
+          385.9,
+          638.6,
+          624.1
+        ],
+        "robustRoi": 329.8,
+        "confidence": 0.993
+      },
+      {
+        "family": "cell",
+        "key": "3連単|7-2-3|h1|f3|middle",
+        "count": 539,
+        "roi": 774.6,
+        "hitPct": 0.6,
+        "foldRois": [
+          0,
+          2183.8,
+          225.3,
+          953
+        ],
+        "robustRoi": 315.6,
+        "confidence": 1
+      },
+      {
+        "family": "venueCell",
+        "key": "馬単|6-7|福島|unknown|d1",
+        "count": 239,
+        "roi": 472.7,
+        "hitPct": 2.1,
+        "foldRois": [
+          0,
+          722.1,
+          846.9
+        ],
+        "robustRoi": 398.9,
+        "confidence": 0.75
+      },
+      {
+        "family": "venueCell",
+        "key": "3連単|3-2-6|中京|unknown|d1",
+        "count": 285,
+        "roi": 727.4,
+        "hitPct": 1.1,
+        "foldRois": [
+          0,
+          247.4,
+          1768.2,
+          708.9
+        ],
+        "robustRoi": 293.8,
+        "confidence": 1
+      },
+      {
+        "family": "venueCell",
+        "key": "3連単|2-5-6|小倉|unknown|d1",
+        "count": 237,
+        "roi": 561,
+        "hitPct": 0.8,
+        "foldRois": [
+          572,
+          0,
+          740
+        ],
+        "robustRoi": 378.9,
+        "confidence": 0.75
+      },
+      {
+        "family": "venueCell",
+        "key": "3連単|7-3-5|京都|unknown|d1",
+        "count": 546,
+        "roi": 681.1,
+        "hitPct": 0.5,
+        "foldRois": [
+          1284.6,
+          2009.3,
+          35.8,
+          0
+        ],
+        "robustRoi": 278.4,
+        "confidence": 1
+      },
+      {
+        "family": "venueCell",
+        "key": "馬連|6-7|福島|unknown|d1",
+        "count": 239,
+        "roi": 403.7,
+        "hitPct": 2.9,
+        "foldRois": [
+          327.7,
+          440.6,
+          467.1
+        ],
+        "robustRoi": 367.4,
+        "confidence": 0.75
+      },
+      {
+        "family": "venueCell",
+        "key": "3連単|6-2-7|東京|unknown|d1",
+        "count": 518,
+        "roi": 563.1,
+        "hitPct": 0.4,
+        "foldRois": [
+          1010.9,
+          1048.4,
+          0,
+          0
+        ],
+        "robustRoi": 264.5,
+        "confidence": 1
+      },
+      {
+        "family": "cell",
+        "key": "3連複|1-2-7|h5|f2|middle",
+        "count": 185,
+        "roi": 312.2,
+        "hitPct": 7.6,
+        "foldRois": [
+          227.3,
+          307.7,
+          383.1,
+          358.4
+        ],
+        "robustRoi": 268.7,
+        "confidence": 0.965
+      },
+      {
+        "family": "cell",
+        "key": "3連単|3-1-7|h2|f3|middle",
+        "count": 167,
+        "roi": 439,
+        "hitPct": 1.8,
+        "foldRois": [
+          0,
+          601.4,
+          666.3,
+          286.8
+        ],
+        "robustRoi": 274,
+        "confidence": 0.946
+      },
+      {
+        "family": "cell",
+        "key": "3連単|6-7-3|h1|f3|late",
+        "count": 572,
+        "roi": 649.7,
+        "hitPct": 0.3,
+        "foldRois": [
+          0,
+          1632.6,
+          0,
+          1080.5
+        ],
+        "robustRoi": 256.9,
+        "confidence": 1
+      },
+      {
+        "family": "cell",
+        "key": "馬連|5-7|h1|f2|middle",
+        "count": 33,
+        "roi": 891.8,
+        "hitPct": 6.1,
+        "foldRois": [
+          0,
+          1863.8,
+          1320
+        ],
+        "robustRoi": 529.9,
+        "confidence": 0.488
+      },
+      {
+        "family": "cell",
+        "key": "3連単|6-1-2|h2|f2|early",
+        "count": 252,
+        "roi": 336,
+        "hitPct": 1.2,
+        "foldRois": [
+          0,
+          548.6,
+          304.8,
+          431.4
+        ],
+        "robustRoi": 243.3,
+        "confidence": 1
+      },
+      {
+        "family": "cell",
+        "key": "3連単|2-1-5|h2|f3|early",
+        "count": 390,
+        "roi": 301.2,
+        "hitPct": 2.8,
+        "foldRois": [
+          62.3,
+          595.7,
+          322,
+          373.7
+        ],
+        "robustRoi": 240.3,
+        "confidence": 1
+      },
+      {
+        "family": "cell",
+        "key": "3連単|6-5-7|h1|f3|late",
+        "count": 572,
+        "roi": 310,
+        "hitPct": 0.7,
+        "foldRois": [
+          302,
+          567.3,
+          332.2,
+          56.3
+        ],
+        "robustRoi": 236.6,
+        "confidence": 1
+      },
+      {
+        "family": "cell",
+        "key": "馬単|5-3|h2|f3|middle",
+        "count": 332,
+        "roi": 267.4,
+        "hitPct": 2.4,
+        "foldRois": [
+          370.1,
+          314.8,
+          46.9,
+          353.5
+        ],
+        "robustRoi": 235.3,
+        "confidence": 1
+      },
+      {
+        "family": "cell",
+        "key": "3連単|5-6-1|h1|f2|late",
+        "count": 313,
+        "roi": 601.1,
+        "hitPct": 0.6,
+        "foldRois": [
+          1391.4,
+          0,
+          0,
+          989.9
+        ],
+        "robustRoi": 230.7,
+        "confidence": 1
+      },
+      {
+        "family": "cell",
+        "key": "3連単|4-2-1|h2|f3|late",
+        "count": 308,
+        "roi": 329.2,
+        "hitPct": 1.6,
+        "foldRois": [
+          190.6,
+          612.2,
+          542.2,
+          0
+        ],
+        "robustRoi": 213.7,
+        "confidence": 1
+      },
+      {
+        "family": "cell",
+        "key": "3連単|1-6-2|h2|f3|early",
+        "count": 514,
+        "roi": 289.6,
+        "hitPct": 1.4,
+        "foldRois": [
+          141.1,
+          535.2,
+          521.9,
+          102.1
+        ],
+        "robustRoi": 204.1,
+        "confidence": 1
+      },
+      {
+        "family": "cell",
+        "key": "3連単|3-5-1|h2|f3|early",
+        "count": 151,
+        "roi": 305.8,
+        "hitPct": 2,
+        "foldRois": [
+          612.2,
+          345.8,
+          0,
+          372.5
+        ],
+        "robustRoi": 221.2,
+        "confidence": 0.928
+      },
+      {
+        "family": "cell",
+        "key": "3連単|6-2-5|h1|f3|middle",
+        "count": 539,
+        "roi": 424,
+        "hitPct": 0.4,
+        "foldRois": [
+          873.9,
+          0,
+          0,
+          877.2
+        ],
+        "robustRoi": 203.7,
+        "confidence": 1
+      },
+      {
+        "family": "cell",
+        "key": "3連単|4-7-1|h1|f3|middle",
+        "count": 539,
+        "roi": 449.7,
+        "hitPct": 0.4,
+        "foldRois": [
+          1075,
+          912.5,
+          0,
+          0
+        ],
+        "robustRoi": 203.3,
+        "confidence": 1
+      },
+      {
+        "family": "venueCell",
+        "key": "3連単|7-4-5|中山|unknown|d1",
+        "count": 501,
+        "roi": 327.9,
+        "hitPct": 0.4,
+        "foldRois": [
+          0,
+          424.5,
+          411.2
+        ],
+        "robustRoi": 265.6,
+        "confidence": 0.75
+      },
+      {
+        "family": "cell",
+        "key": "3連単|5-1-2|h2|f3|middle",
+        "count": 454,
+        "roi": 241.4,
+        "hitPct": 0.9,
+        "foldRois": [
+          337.6,
+          181.5,
+          322.2,
+          104.6
+        ],
+        "robustRoi": 191.9,
+        "confidence": 1
+      },
+      {
+        "family": "popularity",
+        "key": "3連単|8-2-3|false",
+        "count": 1060,
+        "roi": 354.7,
+        "hitPct": 0.4,
+        "foldRois": [
+          771.9,
+          149.1,
+          0,
+          441.9
+        ],
+        "robustRoi": 190.4,
+        "confidence": 1
+      },
+      {
+        "family": "venueCell",
+        "key": "3連単|2-4-1|福島|unknown|d1",
+        "count": 240,
+        "roi": 310.8,
+        "hitPct": 2.1,
+        "foldRois": [
+          457.6,
+          425.8,
+          0
+        ],
+        "robustRoi": 252.3,
+        "confidence": 0.75
+      },
+      {
+        "family": "cell",
+        "key": "3連単|5-3-4|h1|f3|middle",
+        "count": 538,
+        "roi": 780.8,
+        "hitPct": 0.6,
+        "foldRois": [
+          0,
+          639.6,
+          92.6,
+          2469.9
+        ],
+        "robustRoi": 180.2,
+        "confidence": 1
+      }
+    ]
+  },
+  "selectedRaceConfiguration": {
+    "mode": "hit",
+    "count": 5
+  },
+  "validation": {
+    "ライト": {
+      "policy": {
+        "profile": "all",
+        "stakeMode": "equal",
+        "minStableRoi": 90,
+        "minStableHit": 0.005,
+        "minConfidence": 0,
+        "maxRank": 4,
+        "includesFirst": "any",
+        "ticketCount": 6,
+        "hedge": "none"
+      },
+      "roi": 178.5,
+      "hit": 73.2,
+      "minMonth": 69.4,
+      "volatility": 97.4,
+      "profit": 314050,
+      "hitRequirementMet": true
+    },
+    "スタンダード": {
+      "policy": {
+        "profile": "all",
+        "stakeMode": "equal",
+        "minStableRoi": 90,
+        "minStableHit": 0.005,
+        "minConfidence": 0,
+        "maxRank": 4,
+        "includesFirst": "any",
+        "ticketCount": 6,
+        "hedge": "none"
+      },
+      "roi": 178.3,
+      "hit": 73.2,
+      "minMonth": 71.5,
+      "volatility": 95.3,
+      "profit": 821800,
+      "hitRequirementMet": true
+    },
+    "プレミアム": {
+      "policy": {
+        "profile": "all",
+        "stakeMode": "equal",
+        "minStableRoi": 90,
+        "minStableHit": 0.005,
+        "minConfidence": 0,
+        "maxRank": 4,
+        "includesFirst": "any",
+        "ticketCount": 6,
+        "hedge": "none"
+      },
+      "roi": 178.3,
+      "hit": 73.2,
+      "minMonth": 71.1,
+      "volatility": 95.7,
+      "profit": 1722850,
+      "hitRequirementMet": true
+    }
+  },
+  "holdout": {
+    "ライト": {
+      "roi": 75.2,
+      "hit": 70.8,
+      "profit": -47570,
+      "pass200": false,
+      "hitRequirementMet": true
+    },
+    "スタンダード": {
+      "roi": 75.1,
+      "hit": 70.8,
+      "profit": -125580,
+      "pass200": false,
+      "hitRequirementMet": true
+    },
+    "プレミアム": {
+      "roi": 75.1,
+      "hit": 70.8,
+      "profit": -262850,
+      "pass200": false,
+      "hitRequirementMet": true
+    }
+  },
+  "promotionEligible": false
+}
