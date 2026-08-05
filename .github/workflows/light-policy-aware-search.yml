@@ -1,5 +1,6 @@
 name: Policy-aware light betting search
 
+# Explicit trigger after initial workflow registration.
 on:
   workflow_dispatch:
   push:
