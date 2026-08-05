@@ -1,10 +1,23 @@
-/home/runner/work/race-tantei/race-tantei/scripts/.generated-market-residual-ranking-v3.mjs:713
-  function buildBettingRecords(  function buildBettingRecords(races) {
-                                 ^^^^^^^^
-
-SyntaxError: Unexpected token 'function'
-    at checkSyntax (node:internal/main/check_syntax:74:5)
-
-Node.js v22.23.1
-
-
+Searching market-residual policy for confidence/11R...
+ライト: validation ROI 111.2898% / hit 54.3636% / minMonth 76.6376%
+スタンダード: validation ROI 111.3814% / hit 54.3636% / minMonth 77.3639%
+プレミアム: validation ROI 111.4221% / hit 54.3636% / minMonth 77.096%
+Searching market-residual policy for confidence/10R...
+ライト: validation ROI 115.4937% / hit 55.8% / minMonth 74.6272%
+スタンダード: validation ROI 115.7557% / hit 55.8% / minMonth 75.5876%
+プレミアム: validation ROI 115.8795% / hit 55.8% / minMonth 75.4115%
+Searching market-residual policy for combined/11R...
+ライト: validation ROI 77.4989% / hit 70.5455% / minMonth 73.6467%
+スタンダード: validation ROI 73.8835% / hit 71.4545% / minMonth 70.7005%
+プレミアム: validation ROI 74.0093% / hit 71.4545% / minMonth 70.7203%
+Searching market-residual policy for edge/8R...
+ライト: validation ROI 122.4906% / hit 57.25% / minMonth 68.2506%
+スタンダード: validation ROI 121.9071% / hit 57.25% / minMonth 67.1652%
+プレミアム: validation ROI 122.0378% / hit 57.25% / minMonth 67.1723%
+Ranking validation: market logloss 2.0939 / model 2.0702, top1 market 30.6667% / model 31.6667%
+Ranking holdout: market logloss 1.98 / model 1.9565, top1 market 34.375% / model 34.375%
+Winner: edge/8R
+ライト: validation 122.4906% / holdout 66.4583% / hit 60.9375% / 200% FAIL
+スタンダード: validation 121.9071% / holdout 65.8395% / hit 60.9375% / 200% FAIL
+プレミアム: validation 122.0378% / holdout 65.8132% / hit 60.9375% / 200% FAIL
+Market residual ranking result: market-residual-ranking-v3.json
