@@ -42,10 +42,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
 
-      - name: Save verified deployment report
+      - name: Save production deployment report
+        if: always()
         shell: bash
         run: |
           mkdir -p analysis-results
+          if [[ ! -f production-deployment.log ]]; then
+            echo "Deployment did not reach the Wrangler step." > production-deployment.log
+          fi
           cp production-deployment.log analysis-results/production-deployment.log
           git add -f analysis-results/production-deployment.log
           git config user.name "github-actions[bot]"
