@@ -9,6 +9,7 @@ on:
       - ".github/workflows/analyze-betting-policy.yml"
       - "scripts/analyze-betting-policy.mjs"
       - "scripts/analyze-betting-factors.mjs"
+      - "scripts/search-betting-policy-v2.mjs"
       - "src/v1/**"
       - "package.json"
   schedule:
@@ -38,7 +39,7 @@ jobs:
         id: existing
         shell: bash
         run: |
-          if [[ -f analysis-results/policy-analysis.json && "${{ github.event_name }}" == "schedule" ]]; then
+          if [[ -f analysis-results/expanded-policy-search.json && "${{ github.event_name }}" == "schedule" ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -73,17 +74,24 @@ jobs:
           set -o pipefail
           node scripts/analyze-betting-factors.mjs 2>&1 | tee betting-factor-analysis.log
 
+      - name: Search expanded candidate universe
+        if: steps.existing.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/search-betting-policy-v2.mjs 2>&1 | tee expanded-policy-search.log
+
       - name: Publish result in workflow summary
         if: steps.existing.outputs.skip != 'true' && hashFiles('policy-analysis.json') != ''
         shell: bash
         run: |
-          echo "## 5R-plus betting policy analysis" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Current policy analysis" >> "$GITHUB_STEP_SUMMARY"
           echo '```json' >> "$GITHUB_STEP_SUMMARY"
           cat policy-analysis.json >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "## Betting factor decomposition" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Expanded candidate policy search" >> "$GITHUB_STEP_SUMMARY"
           echo '```json' >> "$GITHUB_STEP_SUMMARY"
-          cat betting-factor-analysis.json >> "$GITHUB_STEP_SUMMARY"
+          cat expanded-policy-search.json >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload analysis result and diagnostics
@@ -96,6 +104,8 @@ jobs:
             policy-analysis.log
             betting-factor-analysis.json
             betting-factor-analysis.log
+            expanded-policy-search.json
+            expanded-policy-search.log
           if-no-files-found: warn
           retention-days: 30
 
@@ -108,16 +118,20 @@ jobs:
           cp policy-analysis.log analysis-results/policy-analysis.log
           cp betting-factor-analysis.json analysis-results/betting-factor-analysis.json
           cp betting-factor-analysis.log analysis-results/betting-factor-analysis.log
+          cp expanded-policy-search.json analysis-results/expanded-policy-search.json
+          cp expanded-policy-search.log analysis-results/expanded-policy-search.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f \
             analysis-results/policy-analysis.json \
             analysis-results/policy-analysis.log \
             analysis-results/betting-factor-analysis.json \
-            analysis-results/betting-factor-analysis.log
+            analysis-results/betting-factor-analysis.log \
+            analysis-results/expanded-policy-search.json \
+            analysis-results/expanded-policy-search.log
           if git diff --cached --quiet; then
             echo "No result change to commit."
           else
-            git commit -m "Save betting policy and factor analysis results"
+            git commit -m "Save expanded betting policy search result"
             git push
           fi
