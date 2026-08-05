@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T15:29:36.283Z",
+  "generatedAt": "2026-08-05T15:32:03.479Z",
   "method": "Standalone direct barbell search using exact payouts. Separate anchor and upside tickets; jointly optimize race count, filters and stake split on validation only.",
   "targetRoiPct": 200,
   "requiredHitRatePct": 36.8,
@@ -27,71 +27,8 @@
   "validation": {
     "ライト": {
       "passed": false,
-      "triedPolicies": 12000,
+      "triedPolicies": 2500,
       "bestNearMisses": [
-        {
-          "policy": {
-            "raceCount": 5,
-            "anchorTypes": [
-              "単勝",
-              "ワイド",
-              "馬連"
-            ],
-            "upsideTypes": [
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 1,
-            "upsideCount": 2,
-            "anchorShare": 0.5,
-            "anchorMinRoi": 70,
-            "anchorMinHit": 0.18,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.4,
-            "maxRank": 6,
-            "includeFirstMode": "any",
-            "raceMode": "balanced"
-          },
-          "roi": 81.2,
-          "hit": 35.2,
-          "minMonth": 73.7,
-          "monthlyRois": {
-            "2026-05": 87,
-            "2026-06": 73.7
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 5,
-            "anchorTypes": [
-              "単勝",
-              "ワイド"
-            ],
-            "upsideTypes": [
-              "馬連",
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 2,
-            "upsideCount": 1,
-            "anchorShare": 0.7,
-            "anchorMinRoi": 0,
-            "anchorMinHit": 0,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.25,
-            "maxRank": 5,
-            "includeFirstMode": "any",
-            "raceMode": "upside"
-          },
-          "roi": 81.3,
-          "hit": 50.4,
-          "minMonth": 64,
-          "monthlyRois": {
-            "2026-05": 64,
-            "2026-06": 103.3
-          }
-        },
         {
           "policy": {
             "raceCount": 5,
@@ -127,35 +64,6 @@
           "policy": {
             "raceCount": 5,
             "anchorTypes": [
-              "ワイド"
-            ],
-            "upsideTypes": [
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 1,
-            "upsideCount": 1,
-            "anchorShare": 0.7,
-            "anchorMinRoi": 0,
-            "anchorMinHit": 0.18,
-            "upsideMinRoi": 80,
-            "minConfidence": 0,
-            "maxRank": 7,
-            "includeFirstMode": "any",
-            "raceMode": "balanced"
-          },
-          "roi": 54.1,
-          "hit": 34.4,
-          "minMonth": 50.5,
-          "monthlyRois": {
-            "2026-05": 56.9,
-            "2026-06": 50.5
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 5,
-            "anchorTypes": [
               "ワイド",
               "馬連"
             ],
@@ -180,130 +88,6 @@
           "monthlyRois": {
             "2026-05": 56.8,
             "2026-06": 47.5
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 5,
-            "anchorTypes": [
-              "ワイド"
-            ],
-            "upsideTypes": [
-              "馬連",
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 2,
-            "upsideCount": 2,
-            "anchorShare": 0.5,
-            "anchorMinRoi": 60,
-            "anchorMinHit": 0.12,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.55,
-            "maxRank": 6,
-            "includeFirstMode": "any",
-            "raceMode": "anchor"
-          },
-          "roi": 60.2,
-          "hit": 49.6,
-          "minMonth": 44.8,
-          "monthlyRois": {
-            "2026-05": 44.8,
-            "2026-06": 79.8
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 5,
-            "anchorTypes": [
-              "ワイド",
-              "馬連"
-            ],
-            "upsideTypes": [
-              "馬連",
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 2,
-            "upsideCount": 1,
-            "anchorShare": 0.6,
-            "anchorMinRoi": 0,
-            "anchorMinHit": 0,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.7,
-            "maxRank": 7,
-            "includeFirstMode": "anchor",
-            "raceMode": "upside"
-          },
-          "roi": 47.7,
-          "hit": 47.2,
-          "minMonth": 46.5,
-          "monthlyRois": {
-            "2026-05": 46.5,
-            "2026-06": 49.2
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 6,
-            "anchorTypes": [
-              "ワイド"
-            ],
-            "upsideTypes": [
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 1,
-            "upsideCount": 2,
-            "anchorShare": 0.5,
-            "anchorMinRoi": 60,
-            "anchorMinHit": 0,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.4,
-            "maxRank": 7,
-            "includeFirstMode": "none",
-            "raceMode": "upside"
-          },
-          "roi": 84.2,
-          "hit": 17.7,
-          "minMonth": 52,
-          "monthlyRois": {
-            "2026-05": 109.4,
-            "2026-06": 52
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 5,
-            "anchorTypes": [
-              "単勝",
-              "ワイド"
-            ],
-            "upsideTypes": [
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 1,
-            "upsideCount": 1,
-            "anchorShare": 0.6,
-            "anchorMinRoi": 70,
-            "anchorMinHit": 0.08,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.4,
-            "maxRank": 7,
-            "includeFirstMode": "any",
-            "raceMode": "balanced"
-          },
-          "roi": 46.2,
-          "hit": 34,
-          "minMonth": 38.5,
-          "monthlyRois": {
-            "2026-05": 52.3,
-            "2026-06": 38.5
           }
         },
         {
@@ -336,12 +120,211 @@
             "2026-05": 41.6,
             "2026-06": 36.3
           }
+        },
+        {
+          "policy": {
+            "raceCount": 5,
+            "anchorTypes": [
+              "ワイド",
+              "馬連"
+            ],
+            "upsideTypes": [
+              "馬単",
+              "3連複",
+              "3連単"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 1,
+            "anchorShare": 0.3,
+            "anchorMinRoi": 60,
+            "anchorMinHit": 0.08,
+            "upsideMinRoi": 80,
+            "minConfidence": 0.82,
+            "maxRank": 7,
+            "includeFirstMode": "anchor",
+            "raceMode": "balanced"
+          },
+          "roi": 24.7,
+          "hit": 34.4,
+          "minMonth": 22.4,
+          "monthlyRois": {
+            "2026-05": 26.6,
+            "2026-06": 22.4
+          }
+        },
+        {
+          "policy": {
+            "raceCount": 8,
+            "anchorTypes": [
+              "ワイド"
+            ],
+            "upsideTypes": [
+              "馬単",
+              "3連複",
+              "3連単"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 1,
+            "anchorShare": 0.2,
+            "anchorMinRoi": 0,
+            "anchorMinHit": 0,
+            "upsideMinRoi": 80,
+            "minConfidence": 0.82,
+            "maxRank": 7,
+            "includeFirstMode": "any",
+            "raceMode": "upside"
+          },
+          "roi": 14.7,
+          "hit": 32.3,
+          "minMonth": 14.2,
+          "monthlyRois": {
+            "2026-05": 15.1,
+            "2026-06": 14.2
+          }
+        },
+        {
+          "policy": {
+            "raceCount": 9,
+            "anchorTypes": [
+              "単勝",
+              "ワイド",
+              "馬連"
+            ],
+            "upsideTypes": [
+              "馬連",
+              "馬単",
+              "3連複",
+              "3連単"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 2,
+            "anchorShare": 0.6,
+            "anchorMinRoi": 110,
+            "anchorMinHit": 0,
+            "upsideMinRoi": 260,
+            "minConfidence": 0.55,
+            "maxRank": 6,
+            "includeFirstMode": "none",
+            "raceMode": "balanced"
+          },
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
+        },
+        {
+          "policy": {
+            "raceCount": 9,
+            "anchorTypes": [
+              "単勝",
+              "ワイド",
+              "馬連"
+            ],
+            "upsideTypes": [
+              "馬単",
+              "3連複"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 1,
+            "anchorShare": 0.8,
+            "anchorMinRoi": 100,
+            "anchorMinHit": 0.12,
+            "upsideMinRoi": 320,
+            "minConfidence": 0.7,
+            "maxRank": 6,
+            "includeFirstMode": "anchor",
+            "raceMode": "upside"
+          },
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
+        },
+        {
+          "policy": {
+            "raceCount": 7,
+            "anchorTypes": [
+              "ワイド"
+            ],
+            "upsideTypes": [
+              "馬連",
+              "馬単",
+              "3連複",
+              "3連単"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 3,
+            "anchorShare": 0.7,
+            "anchorMinRoi": 110,
+            "anchorMinHit": 0.08,
+            "upsideMinRoi": 145,
+            "minConfidence": 0.25,
+            "maxRank": 6,
+            "includeFirstMode": "any",
+            "raceMode": "balanced"
+          },
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
+        },
+        {
+          "policy": {
+            "raceCount": 6,
+            "anchorTypes": [
+              "単勝"
+            ],
+            "upsideTypes": [
+              "馬単",
+              "3連複"
+            ],
+            "anchorCount": 2,
+            "upsideCount": 1,
+            "anchorShare": 0.6,
+            "anchorMinRoi": 100,
+            "anchorMinHit": 0.04,
+            "upsideMinRoi": 145,
+            "minConfidence": 0.7,
+            "maxRank": 6,
+            "includeFirstMode": "none",
+            "raceMode": "anchor"
+          },
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
+        },
+        {
+          "policy": {
+            "raceCount": 10,
+            "anchorTypes": [
+              "ワイド"
+            ],
+            "upsideTypes": [
+              "3連複",
+              "3連単"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 1,
+            "anchorShare": 0.4,
+            "anchorMinRoi": 0,
+            "anchorMinHit": 0,
+            "upsideMinRoi": 320,
+            "minConfidence": 0.55,
+            "maxRank": 7,
+            "includeFirstMode": "anchor",
+            "raceMode": "anchor"
+          },
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
         }
       ]
     },
     "スタンダード": {
       "passed": false,
-      "triedPolicies": 12000,
+      "triedPolicies": 2500,
       "bestNearMisses": [
         {
           "policy": {
@@ -372,100 +355,6 @@
           "monthlyRois": {
             "2026-05": 65.3,
             "2026-06": 125.1
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 5,
-            "anchorTypes": [
-              "ワイド",
-              "馬連"
-            ],
-            "upsideTypes": [
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 2,
-            "upsideCount": 2,
-            "anchorShare": 0.8,
-            "anchorMinRoi": 0,
-            "anchorMinHit": 0.04,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.25,
-            "maxRank": 7,
-            "includeFirstMode": "anchor",
-            "raceMode": "upside"
-          },
-          "roi": 66.3,
-          "hit": 47.6,
-          "minMonth": 63.1,
-          "monthlyRois": {
-            "2026-05": 63.1,
-            "2026-06": 70.2
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 7,
-            "anchorTypes": [
-              "ワイド",
-              "馬連"
-            ],
-            "upsideTypes": [
-              "馬連",
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 1,
-            "upsideCount": 3,
-            "anchorShare": 0.7,
-            "anchorMinRoi": 0,
-            "anchorMinHit": 0,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.4,
-            "maxRank": 7,
-            "includeFirstMode": "none",
-            "raceMode": "anchor"
-          },
-          "roi": 71.4,
-          "hit": 20.6,
-          "minMonth": 69.1,
-          "monthlyRois": {
-            "2026-05": 69.1,
-            "2026-06": 74.4
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 5,
-            "anchorTypes": [
-              "単勝",
-              "ワイド"
-            ],
-            "upsideTypes": [
-              "馬連",
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 1,
-            "upsideCount": 3,
-            "anchorShare": 0.4,
-            "anchorMinRoi": 0,
-            "anchorMinHit": 0.25,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.7,
-            "maxRank": 6,
-            "includeFirstMode": "any",
-            "raceMode": "anchor"
-          },
-          "roi": 70.9,
-          "hit": 36.8,
-          "minMonth": 54.5,
-          "monthlyRois": {
-            "2026-05": 54.5,
-            "2026-06": 91.8
           }
         },
         {
@@ -504,102 +393,6 @@
           "policy": {
             "raceCount": 7,
             "anchorTypes": [
-              "ワイド",
-              "馬連"
-            ],
-            "upsideTypes": [
-              "馬連",
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 2,
-            "upsideCount": 1,
-            "anchorShare": 0.7,
-            "anchorMinRoi": 0,
-            "anchorMinHit": 0,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.55,
-            "maxRank": 7,
-            "includeFirstMode": "anchor",
-            "raceMode": "balanced"
-          },
-          "roi": 54.2,
-          "hit": 47.7,
-          "minMonth": 54,
-          "monthlyRois": {
-            "2026-05": 54,
-            "2026-06": 54.5
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 5,
-            "anchorTypes": [
-              "ワイド",
-              "馬連"
-            ],
-            "upsideTypes": [
-              "馬連",
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 1,
-            "upsideCount": 2,
-            "anchorShare": 0.6,
-            "anchorMinRoi": 70,
-            "anchorMinHit": 0.08,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.7,
-            "maxRank": 7,
-            "includeFirstMode": "anchor",
-            "raceMode": "upside"
-          },
-          "roi": 56.9,
-          "hit": 34.8,
-          "minMonth": 51.9,
-          "monthlyRois": {
-            "2026-05": 51.9,
-            "2026-06": 63.3
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 6,
-            "anchorTypes": [
-              "単勝",
-              "ワイド"
-            ],
-            "upsideTypes": [
-              "馬連",
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 2,
-            "upsideCount": 2,
-            "anchorShare": 0.5,
-            "anchorMinRoi": 0,
-            "anchorMinHit": 0.12,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.25,
-            "maxRank": 6,
-            "includeFirstMode": "anchor",
-            "raceMode": "balanced"
-          },
-          "roi": 67.1,
-          "hit": 53,
-          "minMonth": 46.9,
-          "monthlyRois": {
-            "2026-05": 46.9,
-            "2026-06": 92.7
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 7,
-            "anchorTypes": [
               "単勝"
             ],
             "upsideTypes": [
@@ -629,7 +422,7 @@
         },
         {
           "policy": {
-            "raceCount": 6,
+            "raceCount": 8,
             "anchorTypes": [
               "単勝",
               "ワイド"
@@ -641,69 +434,113 @@
               "3連単"
             ],
             "anchorCount": 1,
-            "upsideCount": 2,
-            "anchorShare": 0.7,
-            "anchorMinRoi": 60,
-            "anchorMinHit": 0.12,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.82,
-            "maxRank": 7,
-            "includeFirstMode": "none",
-            "raceMode": "upside"
-          },
-          "roi": 63,
-          "hit": 19,
-          "minMonth": 60.4,
-          "monthlyRois": {
-            "2026-05": 65,
-            "2026-06": 60.4
-          }
-        }
-      ]
-    },
-    "プレミアム": {
-      "passed": false,
-      "triedPolicies": 12000,
-      "bestNearMisses": [
-        {
-          "policy": {
-            "raceCount": 5,
-            "anchorTypes": [
-              "単勝",
-              "ワイド",
-              "馬連"
-            ],
-            "upsideTypes": [
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 1,
             "upsideCount": 1,
-            "anchorShare": 0.8,
+            "anchorShare": 0.7,
             "anchorMinRoi": 0,
             "anchorMinHit": 0.12,
             "upsideMinRoi": 80,
-            "minConfidence": 0.7,
-            "maxRank": 5,
-            "includeFirstMode": "anchor",
+            "minConfidence": 0.4,
+            "maxRank": 7,
+            "includeFirstMode": "any",
             "raceMode": "balanced"
           },
-          "roi": 79.7,
-          "hit": 35.2,
-          "minMonth": 75.1,
+          "roi": 54.3,
+          "hit": 35,
+          "minMonth": 45.3,
           "monthlyRois": {
-            "2026-05": 75.1,
-            "2026-06": 85.5
+            "2026-05": 61.4,
+            "2026-06": 45.3
           }
         },
         {
           "policy": {
             "raceCount": 5,
             "anchorTypes": [
-              "単勝",
+              "ワイド"
+            ],
+            "upsideTypes": [
+              "馬連",
+              "馬単",
+              "3連複",
+              "3連単"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 2,
+            "anchorShare": 0.2,
+            "anchorMinRoi": 0,
+            "anchorMinHit": 0,
+            "upsideMinRoi": 80,
+            "minConfidence": 0.82,
+            "maxRank": 7,
+            "includeFirstMode": "any",
+            "raceMode": "upside"
+          },
+          "roi": 33.8,
+          "hit": 35.2,
+          "minMonth": 16.2,
+          "monthlyRois": {
+            "2026-05": 16.2,
+            "2026-06": 56.2
+          }
+        },
+        {
+          "policy": {
+            "raceCount": 7,
+            "anchorTypes": [
               "ワイド",
               "馬連"
+            ],
+            "upsideTypes": [
+              "3連複"
+            ],
+            "anchorCount": 2,
+            "upsideCount": 1,
+            "anchorShare": 0.8,
+            "anchorMinRoi": 90,
+            "anchorMinHit": 0.04,
+            "upsideMinRoi": 175,
+            "minConfidence": 0,
+            "maxRank": 7,
+            "includeFirstMode": "any",
+            "raceMode": "anchor"
+          },
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
+        },
+        {
+          "policy": {
+            "raceCount": 8,
+            "anchorTypes": [
+              "単勝",
+              "ワイド"
+            ],
+            "upsideTypes": [
+              "馬単",
+              "3連複"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 2,
+            "anchorShare": 0.4,
+            "anchorMinRoi": 70,
+            "anchorMinHit": 0.08,
+            "upsideMinRoi": 210,
+            "minConfidence": 0.82,
+            "maxRank": 3,
+            "includeFirstMode": "none",
+            "raceMode": "upside"
+          },
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
+        },
+        {
+          "policy": {
+            "raceCount": 9,
+            "anchorTypes": [
+              "ワイド"
             ],
             "upsideTypes": [
               "馬連",
@@ -713,53 +550,80 @@
             ],
             "anchorCount": 1,
             "upsideCount": 3,
-            "anchorShare": 0.6,
-            "anchorMinRoi": 60,
-            "anchorMinHit": 0,
-            "upsideMinRoi": 80,
-            "minConfidence": 0,
-            "maxRank": 5,
-            "includeFirstMode": "any",
+            "anchorShare": 0.4,
+            "anchorMinRoi": 90,
+            "anchorMinHit": 0.12,
+            "upsideMinRoi": 210,
+            "minConfidence": 0.55,
+            "maxRank": 7,
+            "includeFirstMode": "none",
             "raceMode": "balanced"
           },
-          "roi": 79.9,
-          "hit": 35.6,
-          "minMonth": 70.4,
-          "monthlyRois": {
-            "2026-05": 70.4,
-            "2026-06": 91.9
-          }
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
         },
         {
           "policy": {
-            "raceCount": 6,
+            "raceCount": 5,
             "anchorTypes": [
-              "ワイド"
+              "ワイド",
+              "馬連"
             ],
             "upsideTypes": [
-              "馬単",
               "3連複",
               "3連単"
             ],
             "anchorCount": 1,
-            "upsideCount": 2,
+            "upsideCount": 1,
             "anchorShare": 0.7,
-            "anchorMinRoi": 70,
-            "anchorMinHit": 0.12,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.55,
-            "maxRank": 7,
-            "includeFirstMode": "any",
+            "anchorMinRoi": 110,
+            "anchorMinHit": 0.35,
+            "upsideMinRoi": 320,
+            "minConfidence": 0,
+            "maxRank": 6,
+            "includeFirstMode": "anchor",
             "raceMode": "anchor"
           },
-          "roi": 70.7,
-          "hit": 37.7,
-          "minMonth": 69.9,
-          "monthlyRois": {
-            "2026-05": 69.9,
-            "2026-06": 71.7
-          }
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
         },
+        {
+          "policy": {
+            "raceCount": 12,
+            "anchorTypes": [
+              "単勝",
+              "ワイド"
+            ],
+            "upsideTypes": [
+              "3連複",
+              "3連単"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 1,
+            "anchorShare": 0.3,
+            "anchorMinRoi": 60,
+            "anchorMinHit": 0.35,
+            "upsideMinRoi": 260,
+            "minConfidence": 0.4,
+            "maxRank": 5,
+            "includeFirstMode": "any",
+            "raceMode": "upside"
+          },
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
+        }
+      ]
+    },
+    "プレミアム": {
+      "passed": false,
+      "triedPolicies": 2500,
+      "bestNearMisses": [
         {
           "policy": {
             "raceCount": 8,
@@ -775,27 +639,91 @@
             ],
             "anchorCount": 2,
             "upsideCount": 1,
-            "anchorShare": 0.8,
-            "anchorMinRoi": 60,
+            "anchorShare": 0.5,
+            "anchorMinRoi": 0,
             "anchorMinHit": 0.12,
             "upsideMinRoi": 80,
-            "minConfidence": 0.82,
+            "minConfidence": 0,
+            "maxRank": 7,
+            "includeFirstMode": "any",
+            "raceMode": "upside"
+          },
+          "roi": 39.6,
+          "hit": 51.5,
+          "minMonth": 38.5,
+          "monthlyRois": {
+            "2026-05": 40.5,
+            "2026-06": 38.5
+          }
+        },
+        {
+          "policy": {
+            "raceCount": 7,
+            "anchorTypes": [
+              "単勝",
+              "ワイド",
+              "馬連"
+            ],
+            "upsideTypes": [
+              "馬単",
+              "3連複",
+              "3連単"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 1,
+            "anchorShare": 0.6,
+            "anchorMinRoi": 0,
+            "anchorMinHit": 0.18,
+            "upsideMinRoi": 80,
+            "minConfidence": 0,
             "maxRank": 7,
             "includeFirstMode": "anchor",
-            "raceMode": "balanced"
+            "raceMode": "upside"
           },
-          "roi": 66.2,
-          "hit": 53.5,
-          "minMonth": 63.5,
+          "roi": 44.3,
+          "hit": 32.6,
+          "minMonth": 34.3,
           "monthlyRois": {
-            "2026-05": 68.4,
-            "2026-06": 63.5
+            "2026-05": 52.1,
+            "2026-06": 34.3
           }
         },
         {
           "policy": {
             "raceCount": 5,
             "anchorTypes": [
+              "単勝",
+              "ワイド"
+            ],
+            "upsideTypes": [
+              "馬単",
+              "3連複",
+              "3連単"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 1,
+            "anchorShare": 0.2,
+            "anchorMinRoi": 60,
+            "anchorMinHit": 0.04,
+            "upsideMinRoi": 80,
+            "minConfidence": 0.55,
+            "maxRank": 6,
+            "includeFirstMode": "anchor",
+            "raceMode": "anchor"
+          },
+          "roi": 87.4,
+          "hit": 35.2,
+          "minMonth": 24.8,
+          "monthlyRois": {
+            "2026-05": 24.8,
+            "2026-06": 167.1
+          }
+        },
+        {
+          "policy": {
+            "raceCount": 5,
+            "anchorTypes": [
+              "単勝",
               "ワイド",
               "馬連"
             ],
@@ -805,66 +733,143 @@
               "3連複",
               "3連単"
             ],
-            "anchorCount": 1,
-            "upsideCount": 3,
-            "anchorShare": 0.7,
-            "anchorMinRoi": 0,
-            "anchorMinHit": 0.08,
+            "anchorCount": 2,
+            "upsideCount": 1,
+            "anchorShare": 0.3,
+            "anchorMinRoi": 60,
+            "anchorMinHit": 0.18,
             "upsideMinRoi": 80,
-            "minConfidence": 0.25,
+            "minConfidence": 0.82,
             "maxRank": 7,
-            "includeFirstMode": "anchor",
-            "raceMode": "balanced"
+            "includeFirstMode": "any",
+            "raceMode": "upside"
           },
-          "roi": 63,
-          "hit": 34.8,
-          "minMonth": 61.1,
+          "roi": 24.3,
+          "hit": 53.2,
+          "minMonth": 23.8,
           "monthlyRois": {
-            "2026-05": 61.1,
-            "2026-06": 65.3
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 8,
-            "anchorTypes": [
-              "単勝",
-              "ワイド",
-              "馬連"
-            ],
-            "upsideTypes": [
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 1,
-            "upsideCount": 2,
-            "anchorShare": 0.6,
-            "anchorMinRoi": 0,
-            "anchorMinHit": 0.04,
-            "upsideMinRoi": 80,
-            "minConfidence": 0,
-            "maxRank": 7,
-            "includeFirstMode": "anchor",
-            "raceMode": "balanced"
-          },
-          "roi": 59.1,
-          "hit": 35,
-          "minMonth": 56.9,
-          "monthlyRois": {
-            "2026-05": 60.9,
-            "2026-06": 56.9
+            "2026-05": 24.7,
+            "2026-06": 23.8
           }
         },
         {
           "policy": {
             "raceCount": 6,
             "anchorTypes": [
+              "ワイド",
+              "馬連"
+            ],
+            "upsideTypes": [
+              "馬単",
+              "3連複",
+              "3連単"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 1,
+            "anchorShare": 0.3,
+            "anchorMinRoi": 60,
+            "anchorMinHit": 0.08,
+            "upsideMinRoi": 80,
+            "minConfidence": 0.82,
+            "maxRank": 7,
+            "includeFirstMode": "anchor",
+            "raceMode": "anchor"
+          },
+          "roi": 25.5,
+          "hit": 37.3,
+          "minMonth": 24.3,
+          "monthlyRois": {
+            "2026-05": 26.4,
+            "2026-06": 24.3
+          }
+        },
+        {
+          "policy": {
+            "raceCount": 7,
+            "anchorTypes": [
+              "単勝"
+            ],
+            "upsideTypes": [
+              "馬単",
+              "3連複"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 1,
+            "anchorShare": 0.8,
+            "anchorMinRoi": 100,
+            "anchorMinHit": 0.12,
+            "upsideMinRoi": 145,
+            "minConfidence": 0.7,
+            "maxRank": 7,
+            "includeFirstMode": "anchor",
+            "raceMode": "anchor"
+          },
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
+        },
+        {
+          "policy": {
+            "raceCount": 9,
+            "anchorTypes": [
+              "ワイド",
+              "馬連"
+            ],
+            "upsideTypes": [
+              "馬単",
+              "3連複"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 1,
+            "anchorShare": 0.3,
+            "anchorMinRoi": 0,
+            "anchorMinHit": 0.12,
+            "upsideMinRoi": 145,
+            "minConfidence": 0.7,
+            "maxRank": 3,
+            "includeFirstMode": "any",
+            "raceMode": "anchor"
+          },
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
+        },
+        {
+          "policy": {
+            "raceCount": 11,
+            "anchorTypes": [
+              "ワイド"
+            ],
+            "upsideTypes": [
+              "馬単",
+              "3連複"
+            ],
+            "anchorCount": 1,
+            "upsideCount": 1,
+            "anchorShare": 0.4,
+            "anchorMinRoi": 80,
+            "anchorMinHit": 0,
+            "upsideMinRoi": 210,
+            "minConfidence": 0.7,
+            "maxRank": 7,
+            "includeFirstMode": "none",
+            "raceMode": "anchor"
+          },
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
+        },
+        {
+          "policy": {
+            "raceCount": 9,
+            "anchorTypes": [
               "単勝",
               "ワイド"
             ],
             "upsideTypes": [
-              "馬連",
               "馬単",
               "3連複",
               "3連単"
@@ -873,85 +878,23 @@
             "upsideCount": 3,
             "anchorShare": 0.4,
             "anchorMinRoi": 60,
-            "anchorMinHit": 0.08,
-            "upsideMinRoi": 80,
-            "minConfidence": 0,
-            "maxRank": 7,
-            "includeFirstMode": "anchor",
-            "raceMode": "anchor"
-          },
-          "roi": 57.1,
-          "hit": 37.3,
-          "minMonth": 54.8,
-          "monthlyRois": {
-            "2026-05": 54.8,
-            "2026-06": 59.9
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 7,
-            "anchorTypes": [
-              "ワイド"
-            ],
-            "upsideTypes": [
-              "馬単",
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 1,
-            "upsideCount": 3,
-            "anchorShare": 0.6,
-            "anchorMinRoi": 0,
-            "anchorMinHit": 0.12,
-            "upsideMinRoi": 80,
-            "minConfidence": 0.25,
-            "maxRank": 7,
-            "includeFirstMode": "anchor",
+            "anchorMinHit": 0.35,
+            "upsideMinRoi": 175,
+            "minConfidence": 0.82,
+            "maxRank": 3,
+            "includeFirstMode": "any",
             "raceMode": "upside"
           },
-          "roi": 60.7,
-          "hit": 33.4,
-          "minMonth": 56.2,
-          "monthlyRois": {
-            "2026-05": 56.2,
-            "2026-06": 66.4
-          }
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
         },
         {
           "policy": {
-            "raceCount": 6,
+            "raceCount": 12,
             "anchorTypes": [
-              "ワイド",
-              "馬連"
-            ],
-            "upsideTypes": [
-              "3連複",
-              "3連単"
-            ],
-            "anchorCount": 1,
-            "upsideCount": 1,
-            "anchorShare": 0.7,
-            "anchorMinRoi": 0,
-            "anchorMinHit": 0.18,
-            "upsideMinRoi": 80,
-            "minConfidence": 0,
-            "maxRank": 7,
-            "includeFirstMode": "any",
-            "raceMode": "anchor"
-          },
-          "roi": 56.8,
-          "hit": 36.7,
-          "minMonth": 52.1,
-          "monthlyRois": {
-            "2026-05": 60.5,
-            "2026-06": 52.1
-          }
-        },
-        {
-          "policy": {
-            "raceCount": 6,
-            "anchorTypes": [
+              "単勝",
               "ワイド",
               "馬連"
             ],
@@ -963,22 +906,19 @@
             ],
             "anchorCount": 1,
             "upsideCount": 2,
-            "anchorShare": 0.6,
-            "anchorMinRoi": 60,
-            "anchorMinHit": 0.04,
+            "anchorShare": 0.5,
+            "anchorMinRoi": 90,
+            "anchorMinHit": 0.35,
             "upsideMinRoi": 80,
-            "minConfidence": 0.7,
-            "maxRank": 7,
+            "minConfidence": 0.4,
+            "maxRank": 3,
             "includeFirstMode": "any",
-            "raceMode": "upside"
+            "raceMode": "anchor"
           },
-          "roi": 60.4,
-          "hit": 34,
-          "minMonth": 52,
-          "monthlyRois": {
-            "2026-05": 52,
-            "2026-06": 71.2
-          }
+          "roi": 0,
+          "hit": 0,
+          "minMonth": 0,
+          "monthlyRois": {}
         }
       ]
     }
