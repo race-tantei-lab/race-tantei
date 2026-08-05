@@ -1,5 +1,6 @@
 name: Nonlinear v4 allocation refinement
 
+# Explicit trigger after workflow registration.
 on:
   workflow_dispatch:
   push:
