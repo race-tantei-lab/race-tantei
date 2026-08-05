@@ -1,0 +1,92 @@
+{
+  "generatedAt": "2026-08-05T13:13:17.789Z",
+  "targetRoiPct": 200,
+  "minimumRacesPerVenueDay": 5,
+  "method": "Use exact JRA payout_yen as return per 100 yen and zero for losing combinations. No inferred multi-bet odds, odds buckets or odds filters are used for training or selection.",
+  "training": {
+    "races": 3422,
+    "tickets": 703658,
+    "globalTicketRoi": 65.1,
+    "globalTicketHitPct": 2.3
+  },
+  "selectedRaceConfiguration": {
+    "mode": "roi",
+    "count": 8
+  },
+  "validation": {
+    "ライト": {
+      "policy": {
+        "profile": "singleWide",
+        "stakeMode": "equal",
+        "minLearnedRoi": 0,
+        "minLearnedHit": 0,
+        "maxRank": 3,
+        "includesFirst": "any",
+        "ticketCount": 6,
+        "hedge": "none"
+      },
+      "roi": 81.3,
+      "hit": 73.5,
+      "minMonth": 81.1,
+      "profit": -119970,
+      "hitRequirementMet": true
+    },
+    "スタンダード": {
+      "policy": {
+        "profile": "singleWide",
+        "stakeMode": "equal",
+        "minLearnedRoi": 0,
+        "minLearnedHit": 0,
+        "maxRank": 3,
+        "includesFirst": "any",
+        "ticketCount": 6,
+        "hedge": "none"
+      },
+      "roi": 82.4,
+      "hit": 73.5,
+      "minMonth": 82,
+      "profit": -295820,
+      "hitRequirementMet": true
+    },
+    "プレミアム": {
+      "policy": {
+        "profile": "stable",
+        "stakeMode": "roi",
+        "minLearnedRoi": 0,
+        "minLearnedHit": 0,
+        "maxRank": 3,
+        "includesFirst": "any",
+        "ticketCount": 6,
+        "hedge": "none"
+      },
+      "roi": 82.2,
+      "hit": 73.5,
+      "minMonth": 82,
+      "profit": -625280,
+      "hitRequirementMet": true
+    }
+  },
+  "holdout": {
+    "ライト": {
+      "roi": 81.3,
+      "hit": 72.4,
+      "profit": -57570,
+      "pass200": false,
+      "hitRequirementMet": true
+    },
+    "スタンダード": {
+      "roi": 81.9,
+      "hit": 72.4,
+      "profit": -146020,
+      "pass200": false,
+      "hitRequirementMet": true
+    },
+    "プレミアム": {
+      "roi": 81.8,
+      "hit": 72.4,
+      "profit": -307190,
+      "pass200": false,
+      "hitRequirementMet": true
+    }
+  }
+}
