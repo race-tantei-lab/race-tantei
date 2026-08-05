@@ -1,5 +1,6 @@
 name: Market residual ranking v3
 
+# Explicit trigger after workflow registration.
 on:
   workflow_dispatch:
   push:
