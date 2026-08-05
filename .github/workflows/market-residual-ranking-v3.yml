@@ -9,6 +9,7 @@ on:
     paths:
       - ".github/workflows/market-residual-ranking-v3.yml"
       - "scripts/train-market-residual-ranking-v3.py"
+      - "scripts/run-market-residual-ranking-v3-fixed.py"
       - "scripts/train-runner-ranking-v2.mjs"
       - "src/v1/betting-candidate-universe.ts"
       - "src/v1/budget-courses.ts"
@@ -56,15 +57,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/train-market-residual-ranking-v3.py')
-          source = path.read_text()
-          source = source.replace('.replaceAll(', '.replace(')
-          source = source.replace("model_selection + '  function buildBettingRecords('", 'model_selection')
-          path.write_text(source)
-          PY
-          python scripts/train-market-residual-ranking-v3.py 2>&1 | tee market-residual-ranking-v3.log
+          python scripts/run-market-residual-ranking-v3-fixed.py 2>&1 | tee market-residual-ranking-v3.log
 
       - name: Upload result and log
         if: always()
