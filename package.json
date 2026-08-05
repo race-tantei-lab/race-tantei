@@ -15,7 +15,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "learning:local": "npm run build:test && node scripts/run-walk-forward-local.mjs",
-    "learning:local:once": "npm run build:test && node scripts/run-walk-forward-local.mjs --once"
+    "learning:local:once": "npm run build:test && node scripts/run-walk-forward-local.mjs --once",
+    "learning:analyze": "npm run build:test && node scripts/analyze-betting-policy.mjs"
   },
   "devDependencies": {
     "typescript": "^5.8.3",
