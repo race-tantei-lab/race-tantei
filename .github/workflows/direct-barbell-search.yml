@@ -1,6 +1,6 @@
 name: Direct barbell betting search
 
-# Explicit trigger after workflow registration.
+# Fast first-pass search; expand after a valid result is recorded.
 on:
   workflow_dispatch:
   push:
@@ -51,6 +51,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          sed -i 's/const searchIterations = 12000;/const searchIterations = 2500;/' scripts/train-direct-barbell-search.mjs
           node scripts/train-direct-barbell-search.mjs 2>&1 | tee direct-barbell-search.log
 
       - name: Upload result and log
