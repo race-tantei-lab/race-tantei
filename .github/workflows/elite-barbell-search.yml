@@ -1,5 +1,6 @@
 name: Elite segment barbell search
 
+# Explicit trigger after workflow registration.
 on:
   workflow_dispatch:
   push:
