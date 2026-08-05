@@ -1,5 +1,6 @@
 name: Payout segment ensemble
 
+# Emergency rerun after light-search generator failure.
 on:
   workflow_dispatch:
   push:
