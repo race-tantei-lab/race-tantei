@@ -56,7 +56,14 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          sed -i 's/\.replaceAll(/.replace(/g' scripts/train-market-residual-ranking-v3.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/train-market-residual-ranking-v3.py')
+          source = path.read_text()
+          source = source.replace('.replaceAll(', '.replace(')
+          source = source.replace("model_selection + '  function buildBettingRecords('", 'model_selection')
+          path.write_text(source)
+          PY
           python scripts/train-market-residual-ranking-v3.py 2>&1 | tee market-residual-ranking-v3.log
 
       - name: Upload result and log
