@@ -8,13 +8,14 @@ on:
     paths:
       - ".github/workflows/analyze-betting-policy.yml"
       - "scripts/analyze-betting-policy.mjs"
+      - "src/v1/**"
       - "package.json"
   schedule:
     - cron: "15 0 * * *"
 
 concurrency:
   group: analyze-5r-plus-betting-policy
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -36,7 +37,7 @@ jobs:
         id: existing
         shell: bash
         run: |
-          if [[ -f analysis-results/policy-analysis.json && "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+          if [[ -f analysis-results/policy-analysis.json && "${{ github.event_name }}" == "schedule" ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
