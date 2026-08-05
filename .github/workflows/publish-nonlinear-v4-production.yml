@@ -1,5 +1,6 @@
 name: Publish nonlinear v4 production predictions
 
+# Explicit production trigger after workflow registration.
 on:
   workflow_dispatch:
   schedule:
