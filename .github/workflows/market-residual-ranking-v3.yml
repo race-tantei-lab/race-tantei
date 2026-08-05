@@ -56,6 +56,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          sed -i 's/\.replaceAll(/.replace(/g' scripts/train-market-residual-ranking-v3.py
           python scripts/train-market-residual-ranking-v3.py 2>&1 | tee market-residual-ranking-v3.log
 
       - name: Upload result and log
