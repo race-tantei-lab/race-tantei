@@ -1,0 +1,89 @@
+name: Market residual ranking v3
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/market-residual-ranking-v3.yml"
+      - "scripts/train-market-residual-ranking-v3.py"
+      - "scripts/train-runner-ranking-v2.mjs"
+      - "src/v1/betting-candidate-universe.ts"
+      - "src/v1/budget-courses.ts"
+      - "src/v1/walk-forward-scope.ts"
+      - "package.json"
+
+concurrency:
+  group: market-residual-ranking-v3
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build analysis modules
+        run: npm run build:test
+
+      - name: Train market residual ranking model
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/train-market-residual-ranking-v3.py 2>&1 | tee market-residual-ranking-v3.log
+
+      - name: Upload result and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-residual-ranking-v3
+          path: |
+            market-residual-ranking-v3.json
+            market-residual-ranking-v3.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Save result to GitHub
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p analysis-results
+          for file in market-residual-ranking-v3.json market-residual-ranking-v3.log; do
+            if [[ -f "$file" ]]; then
+              cp "$file" "analysis-results/$file"
+              git add -f "analysis-results/$file"
+            fi
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then
+            echo "No result change to commit."
+          else
+            git commit -m "Save market residual ranking v3 analysis"
+            git push
+          fi
