@@ -1,0 +1,150 @@
+{
+  "generatedAt": "2026-08-05T16:17:47Z",
+  "method": "Nonlinear market blend v4 using chronological rolling factors and HistGradientBoostingClassifier.",
+  "targetRoiPct": 200.0,
+  "minimumRacesPerVenueDay": 5,
+  "samples": {
+    "train": 3425,
+    "validation": 600,
+    "holdout": 288
+  },
+  "selectedModel": {
+    "max_leaf_nodes": 15,
+    "learning_rate": 0.035,
+    "max_iter": 180,
+    "l2_regularization": 2.0,
+    "longshotPower": 0.0,
+    "blend": 1.0
+  },
+  "ranking": {
+    "marketValidation": {
+      "races": 600.0,
+      "logLoss": 2.0939,
+      "top1Pct": 30.6667,
+      "top3Pct": 60.3333,
+      "top1Roi": 71.6333,
+      "monthlyTop1Roi": {
+        "2026-05": 76.369,
+        "2026-06": 65.6061
+      }
+    },
+    "modelValidation": {
+      "races": 600.0,
+      "logLoss": 1.9495,
+      "top1Pct": 34.6667,
+      "top3Pct": 67.3333,
+      "top1Roi": 129.4333,
+      "monthlyTop1Roi": {
+        "2026-05": 150.7738,
+        "2026-06": 102.2727
+      }
+    },
+    "marketHoldout": {
+      "races": 288.0,
+      "logLoss": 1.98,
+      "top1Pct": 34.375,
+      "top3Pct": 66.3194,
+      "top1Roi": 78.5069,
+      "monthlyTop1Roi": {
+        "2026-07": 78.5069
+      }
+    },
+    "modelHoldout": {
+      "races": 288.0,
+      "logLoss": 1.8956,
+      "top1Pct": 36.1111,
+      "top3Pct": 69.7917,
+      "top1Roi": 108.6458,
+      "monthlyTop1Roi": {
+        "2026-07": 108.6458
+      }
+    }
+  },
+  "selectedRaceConfiguration": {
+    "mode": "disagreement",
+    "count": 5
+  },
+  "validation": {
+    "ライト": {
+      "template": "mixed",
+      "races": 250.0,
+      "roi": 332.16,
+      "hit": 50.8,
+      "minMonth": 180.8636,
+      "monthlyRois": {
+        "2026-05": 451.0357,
+        "2026-06": 180.8636
+      },
+      "profit": 1160800.0,
+      "objective": 222.9343
+    },
+    "スタンダード": {
+      "template": "mixed",
+      "races": 250.0,
+      "roi": 325.4944,
+      "hit": 50.8,
+      "minMonth": 178.4673,
+      "monthlyRois": {
+        "2026-05": 441.0157,
+        "2026-06": 178.4673
+      },
+      "profit": 2818680.0,
+      "objective": 219.096
+    },
+    "プレミアム": {
+      "template": "mixed",
+      "races": 250.0,
+      "roi": 332.16,
+      "hit": 50.8,
+      "minMonth": 180.8636,
+      "monthlyRois": {
+        "2026-05": 451.0357,
+        "2026-06": 180.8636
+      },
+      "profit": 5804000.0,
+      "objective": 222.9343
+    }
+  },
+  "holdout": {
+    "ライト": {
+      "races": 120.0,
+      "roi": 199.4583,
+      "hit": 48.3333,
+      "minMonth": 199.4583,
+      "monthlyRois": {
+        "2026-07": 199.4583
+      },
+      "profit": 238700.0,
+      "objective": 169.2333,
+      "pass200": false,
+      "hitRequirementMet": true
+    },
+    "スタンダード": {
+      "races": 120.0,
+      "roi": 197.2,
+      "hit": 48.3333,
+      "minMonth": 197.2,
+      "monthlyRois": {
+        "2026-07": 197.2
+      },
+      "profit": 583200.0,
+      "objective": 167.4267,
+      "pass200": false,
+      "hitRequirementMet": true
+    },
+    "プレミアム": {
+      "races": 120.0,
+      "roi": 199.4583,
+      "hit": 48.3333,
+      "minMonth": 199.4583,
+      "monthlyRois": {
+        "2026-07": 199.4583
+      },
+      "profit": 1193500.0,
+      "objective": 169.2333,
+      "pass200": false,
+      "hitRequirementMet": true
+    }
+  },
+  "promotionEligible": false
+}
