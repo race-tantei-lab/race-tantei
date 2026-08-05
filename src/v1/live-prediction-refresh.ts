@@ -1,3 +1,4 @@
+import { isApprovedProductionModelVersion } from "./approved-production-model.js";
 import { savePredictionWithCourses } from "./course-db.js";
 import { getRace, getRunnerHistoryStats, getRunners } from "./db.js";
 import { generatePrediction } from "./model.js";
@@ -16,10 +17,28 @@ export interface LivePredictionRefreshResult {
   venueQuotas: Array<{ raceDate: string; venues: VenueQuotaVenueResult[] }>;
 }
 
+function emptyResult(): LivePredictionRefreshResult {
+  return {
+    candidates: 0,
+    generated: 0,
+    withBets: 0,
+    skipped: 0,
+    errors: 0,
+    quotaAddedRaces: 0,
+    quotaAddedTickets: 0,
+    venueQuotas: []
+  };
+}
+
 export async function refreshMissingLivePredictions(
   env: Env,
   limit = 60
 ): Promise<LivePredictionRefreshResult> {
+  // The approved nonlinear model is trained and published by the dedicated
+  // GitHub Actions job. The Worker must not overwrite its probabilities,
+  // five-race selection, or fixed 10/10/80 allocation with the legacy model.
+  if (isApprovedProductionModelVersion(env.MODEL_VERSION)) return emptyResult();
+
   const rows = await env.DB.prepare(`
     SELECT r.race_id AS raceId
     FROM rt_races r
@@ -40,16 +59,8 @@ export async function refreshMissingLivePredictions(
     LIMIT ?
   `).bind(env.MODEL_VERSION, limit).all<{ raceId: string }>();
 
-  const result: LivePredictionRefreshResult = {
-    candidates: rows.results.length,
-    generated: 0,
-    withBets: 0,
-    skipped: 0,
-    errors: 0,
-    quotaAddedRaces: 0,
-    quotaAddedTickets: 0,
-    venueQuotas: []
-  };
+  const result = emptyResult();
+  result.candidates = rows.results.length;
   const now = Date.now();
 
   for (const row of rows.results) {

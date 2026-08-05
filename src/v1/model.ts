@@ -1,3 +1,4 @@
+import { isApprovedProductionModelVersion } from "./approved-production-model.js";
 import type {
   PredictionOutput,
   RaceRecord,
@@ -118,5 +119,8 @@ export function generatePrediction(
     : maxRaceBudgetYen <= 5000
       ? allBets.filter((bet) => bet.course !== "プレミアム")
       : allBets;
-  return { modelVersion, runners: predictions, bets, generatedAt: nowIso() };
+  const storedModelVersion = isApprovedProductionModelVersion(modelVersion)
+    ? `${modelVersion}-worker-shadow`
+    : modelVersion;
+  return { modelVersion: storedModelVersion, runners: predictions, bets, generatedAt: nowIso() };
 }
