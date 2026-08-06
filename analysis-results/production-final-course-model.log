@@ -1,1 +1,8 @@
-{"modelVersion": "v5.0.0-nonlinear-course-policy", "trainingRaces": 4385, "futureRaces": 0, "selectedRaces": 0, "published": 0, "tickets": 0, "lockedSkipped": 0}
+Traceback (most recent call last):
+  File "/home/runner/work/race-tantei/race-tantei/scripts/run-final-course-production.py", line 126, in <module>
+    main()
+  File "/home/runner/work/race-tantei/race-tantei/scripts/run-final-course-production.py", line 119, in main
+    require_approved_model()
+  File "/home/runner/work/race-tantei/race-tantei/scripts/run-final-course-production.py", line 21, in require_approved_model
+    raise RuntimeError(
+RuntimeError: PRODUCTION_MODEL_LOCKED:NO_MODEL_PASSED_ALL_ROI_200_AND_FIXED_CONSTRAINT_GATES
