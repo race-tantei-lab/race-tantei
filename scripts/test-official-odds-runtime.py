@@ -31,6 +31,8 @@ def main():
         ("2026-08-08", "札幌", 11),
         "page-identity",
     )
+    expect(runtime.base.normalize_combination("馬連", [7, 2]), "2-7", "unordered-combination")
+    expect(runtime.base.normalize_combination("馬単", [7, 2]), "7-2", "ordered-combination")
 
     calls = []
     original = runtime.base.d1_query
