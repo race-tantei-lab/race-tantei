@@ -1,0 +1,7029 @@
+{
+  "generatedAt": "2026-08-06",
+  "modelVersion": "v7.2-shadow-enriched-ranking",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "method": "Create chronological pre-race features for distance/surface/venue/class changes, rest, jockey and trainer changes, recent finish/speed/final-3F trends, historical market residuals, exact context records and entity interactions. Train pointwise, pairwise and ensemble market-free ranking models before every target month, force five races per venue/day, select a full-budget course policy only from earlier rolling OOS months, and reserve May-August 2026 as a final holdout.",
+  "guardrails": {
+    "selectedRacesPerVenueDay": 5,
+    "noEmptyRaceSelection": true,
+    "fullBudgetEverySelectedRace": true,
+    "currentRaceMarketRemovedFromPromotableModels": true,
+    "marketAuditCannotPromote": true,
+    "policyCountPerCourse": 1400,
+    "finalHoldoutStart": "2026-05"
+  },
+  "period": {
+    "dataStart": "2024-05-04",
+    "dataEnd": "2026-08-02",
+    "finishedRaces": 7695,
+    "rollingMonths": [
+      "2024-11",
+      "2024-12",
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08"
+    ],
+    "evaluationMonths": [
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08"
+    ]
+  },
+  "modelAudit": {
+    "2024-11": {
+      "trainRaces": 1643,
+      "targetRaces": 299
+    },
+    "2024-12": {
+      "trainRaces": 1942,
+      "targetRaces": 252
+    },
+    "2025-01": {
+      "trainRaces": 2194,
+      "targetRaces": 228
+    },
+    "2025-02": {
+      "trainRaces": 2422,
+      "targetRaces": 288
+    },
+    "2025-03": {
+      "trainRaces": 2710,
+      "targetRaces": 336
+    },
+    "2025-04": {
+      "trainRaces": 3046,
+      "targetRaces": 264
+    },
+    "2025-05": {
+      "trainRaces": 3310,
+      "targetRaces": 311
+    },
+    "2025-06": {
+      "trainRaces": 3621,
+      "targetRaces": 288
+    },
+    "2025-07": {
+      "trainRaces": 3909,
+      "targetRaces": 288
+    },
+    "2025-08": {
+      "trainRaces": 4197,
+      "targetRaces": 360
+    },
+    "2025-09": {
+      "trainRaces": 4557,
+      "targetRaces": 240
+    },
+    "2025-10": {
+      "trainRaces": 4797,
+      "targetRaces": 252
+    },
+    "2025-11": {
+      "trainRaces": 5049,
+      "targetRaces": 312
+    },
+    "2025-12": {
+      "trainRaces": 5361,
+      "targetRaces": 264
+    },
+    "2026-01": {
+      "trainRaces": 5625,
+      "targetRaces": 276
+    },
+    "2026-02": {
+      "trainRaces": 5901,
+      "targetRaces": 270
+    },
+    "2026-03": {
+      "trainRaces": 6171,
+      "targetRaces": 300
+    },
+    "2026-04": {
+      "trainRaces": 6471,
+      "targetRaces": 264
+    },
+    "2026-05": {
+      "trainRaces": 6735,
+      "targetRaces": 336
+    },
+    "2026-06": {
+      "trainRaces": 7071,
+      "targetRaces": 264
+    },
+    "2026-07": {
+      "trainRaces": 7335,
+      "targetRaces": 288
+    },
+    "2026-08": {
+      "trainRaces": 7623,
+      "targetRaces": 72
+    }
+  },
+  "coverage": {
+    "point:confidence": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "point:concentration": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "point:entropy": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "pair:confidence": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "pair:concentration": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "pair:entropy": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "ensemble:confidence": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "ensemble:concentration": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "ensemble:entropy": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "market_audit:confidence": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "market_audit:concentration": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "market_audit:entropy": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    }
+  },
+  "courses": {
+    "ライト": {
+      "development": {
+        "months": 12,
+        "races": 1430,
+        "stakeYen": 2288000,
+        "returnYen": 1704500,
+        "profitYen": -583500,
+        "roiPct": 74.49737762237763,
+        "cappedRoiPct": 57.3243006993007,
+        "hitRatePct": 53.21678321678322,
+        "winningMonths": 1,
+        "winningMonthPct": 8.333333333333332,
+        "minimumMonthlyRoiPct": 39.11363636363636,
+        "medianMonthlyRoiPct": 73.37655279503105,
+        "q25MonthlyRoiPct": 62.00373641304348,
+        "maxSingleReturnShare": 0.03215019067175125
+      },
+      "finalHoldout": {
+        "months": 4,
+        "races": 400,
+        "stakeYen": 640000,
+        "returnYen": 417920,
+        "profitYen": -222080,
+        "roiPct": 65.3,
+        "cappedRoiPct": 52.296875,
+        "hitRatePct": 35.0,
+        "winningMonths": 0,
+        "winningMonthPct": 0.0,
+        "minimumMonthlyRoiPct": 29.333333333333332,
+        "medianMonthlyRoiPct": 61.889813311688314,
+        "q25MonthlyRoiPct": 41.92373511904762,
+        "maxSingleReturnShare": 0.06388782542113323
+      },
+      "full": {
+        "months": 16,
+        "races": 1830,
+        "stakeYen": 2928000,
+        "returnYen": 2122420,
+        "profitYen": -805580,
+        "roiPct": 72.4870218579235,
+        "cappedRoiPct": 56.22540983606557,
+        "hitRatePct": 49.23497267759563,
+        "winningMonths": 1,
+        "winningMonthPct": 6.25,
+        "minimumMonthlyRoiPct": 29.333333333333332,
+        "medianMonthlyRoiPct": 73.37655279503105,
+        "q25MonthlyRoiPct": 54.07058423913043,
+        "maxSingleReturnShare": 0.025819583305848985
+      },
+      "monthly": [
+        {
+          "month": "2025-05",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 71.47804764293828,
+            "historyRawRoiPct": 101.90737410071942,
+            "historyCappedRoiPct": 70.78956834532374,
+            "historyHitRatePct": 65.46762589928058,
+            "historyWinningMonths": 3,
+            "historyQ25CappedRoiPct": 68.34375,
+            "historyMaxSingleReturnShare": 0.0613919750090451
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "S2",
+              "betType": "単勝",
+              "predictedRanks": [
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "W23",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "Q24",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 200
+            }
+          ],
+          "result": {
+            "month": "2025-05",
+            "races": 130,
+            "stakeYen": 208000,
+            "returnYen": 137970,
+            "cappedReturnYen": 123170,
+            "profitYen": -70030,
+            "roiPct": 66.33173076923077,
+            "cappedRoiPct": 59.21634615384615,
+            "hitRatePct": 61.53846153846154,
+            "maxSingleReturnYen": 17330
+          }
+        },
+        {
+          "month": "2025-06",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 64.01174960839599,
+            "historyRawRoiPct": 89.92727272727272,
+            "historyCappedRoiPct": 72.56136363636364,
+            "historyHitRatePct": 38.42424242424242,
+            "historyWinningMonths": 4,
+            "historyQ25CappedRoiPct": 63.64992559523809,
+            "historyMaxSingleReturnShare": 0.05135463000404367
+          },
+          "policy": [
+            {
+              "code": "Q12",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "Q13",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                3
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W34",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                4
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 100
+            }
+          ],
+          "result": {
+            "month": "2025-06",
+            "races": 120,
+            "stakeYen": 192000,
+            "returnYen": 123540,
+            "cappedReturnYen": 114230,
+            "profitYen": -68460,
+            "roiPct": 64.34375,
+            "cappedRoiPct": 59.49479166666667,
+            "hitRatePct": 40.0,
+            "maxSingleReturnYen": 12600
+          }
+        },
+        {
+          "month": "2025-07",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 68.69650097496314,
+            "historyRawRoiPct": 98.7579365079365,
+            "historyCappedRoiPct": 71.32671957671958,
+            "historyHitRatePct": 55.55555555555556,
+            "historyWinningMonths": 4,
+            "historyQ25CappedRoiPct": 66.82147129186603,
+            "historyMaxSingleReturnShare": 0.05388355366255475
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "W23",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "W34",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                4
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q35",
+              "betType": "馬連",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 100
+            }
+          ],
+          "result": {
+            "month": "2025-07",
+            "races": 120,
+            "stakeYen": 192000,
+            "returnYen": 148750,
+            "cappedReturnYen": 135370,
+            "profitYen": -43250,
+            "roiPct": 77.47395833333334,
+            "cappedRoiPct": 70.50520833333334,
+            "hitRatePct": 57.49999999999999,
+            "maxSingleReturnYen": 18480
+          }
+        },
+        {
+          "month": "2025-08",
+          "key": "point:confidence",
+          "variant": "point",
+          "mode": "confidence",
+          "productionSafe": true,
+          "history": {
+            "score": 60.18836287261046,
+            "historyRawRoiPct": 107.81514084507042,
+            "historyCappedRoiPct": 60.55927230046948,
+            "historyHitRatePct": 52.394366197183096,
+            "historyWinningMonths": 5,
+            "historyQ25CappedRoiPct": 52.53289473684211,
+            "historyMaxSingleReturnShare": 0.06229690230082137
+          },
+          "policy": [
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "W13",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                3
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "W23",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 800
+            }
+          ],
+          "result": {
+            "month": "2025-08",
+            "races": 150,
+            "stakeYen": 240000,
+            "returnYen": 269880,
+            "cappedReturnYen": 156320,
+            "profitYen": 29880,
+            "roiPct": 112.45,
+            "cappedRoiPct": 65.13333333333333,
+            "hitRatePct": 57.333333333333336,
+            "maxSingleReturnYen": 38680
+          }
+        },
+        {
+          "month": "2025-09",
+          "key": "point:confidence",
+          "variant": "point",
+          "mode": "confidence",
+          "productionSafe": true,
+          "history": {
+            "score": 62.13289499365699,
+            "historyRawRoiPct": 99.26286008230453,
+            "historyCappedRoiPct": 65.95370370370371,
+            "historyHitRatePct": 41.23456790123457,
+            "historyWinningMonths": 5,
+            "historyQ25CappedRoiPct": 59.45982142857142,
+            "historyMaxSingleReturnShare": 0.05357392714816523
+          },
+          "policy": [
+            {
+              "code": "W13",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                3
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "Q15",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                5
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 800
+            },
+            {
+              "code": "W24",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                4
+              ],
+              "stakeYen": 100
+            }
+          ],
+          "result": {
+            "month": "2025-09",
+            "races": 100,
+            "stakeYen": 160000,
+            "returnYen": 82130,
+            "cappedReturnYen": 66760,
+            "profitYen": -77870,
+            "roiPct": 51.33125,
+            "cappedRoiPct": 41.725,
+            "hitRatePct": 40.0,
+            "maxSingleReturnYen": 20810
+          }
+        },
+        {
+          "month": "2025-10",
+          "key": "point:confidence",
+          "variant": "point",
+          "mode": "confidence",
+          "productionSafe": true,
+          "history": {
+            "score": 59.45729305275473,
+            "historyRawRoiPct": 88.47623574144487,
+            "historyCappedRoiPct": 62.88022813688213,
+            "historyHitRatePct": 47.68060836501901,
+            "historyWinningMonths": 5,
+            "historyQ25CappedRoiPct": 56.60434210526316,
+            "historyMaxSingleReturnShare": 0.04878756298548514
+          },
+          "policy": [
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "Q14",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "W24",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                4
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W25",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 100
+            }
+          ],
+          "result": {
+            "month": "2025-10",
+            "races": 105,
+            "stakeYen": 168000,
+            "returnYen": 123330,
+            "cappedReturnYen": 112280,
+            "profitYen": -44670,
+            "roiPct": 73.41071428571428,
+            "cappedRoiPct": 66.83333333333333,
+            "hitRatePct": 49.523809523809526,
+            "maxSingleReturnYen": 11550
+          }
+        },
+        {
+          "month": "2025-11",
+          "key": "point:confidence",
+          "variant": "point",
+          "mode": "confidence",
+          "productionSafe": true,
+          "history": {
+            "score": 58.689616341520775,
+            "historyRawRoiPct": 100.69454225352112,
+            "historyCappedRoiPct": 59.140404929577464,
+            "historyHitRatePct": 52.53521126760563,
+            "historyWinningMonths": 6,
+            "historyQ25CappedRoiPct": 52.506642206477736,
+            "historyMaxSingleReturnShare": 0.05002666340294958
+          },
+          "policy": [
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "W13",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                3
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "W23",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 800
+            }
+          ],
+          "result": {
+            "month": "2025-11",
+            "races": 130,
+            "stakeYen": 208000,
+            "returnYen": 168840,
+            "cappedReturnYen": 99280,
+            "profitYen": -39160,
+            "roiPct": 81.17307692307692,
+            "cappedRoiPct": 47.73076923076923,
+            "hitRatePct": 57.692307692307686,
+            "maxSingleReturnYen": 41500
+          }
+        },
+        {
+          "month": "2025-12",
+          "key": "point:confidence",
+          "variant": "point",
+          "mode": "confidence",
+          "productionSafe": true,
+          "history": {
+            "score": 58.161587158808935,
+            "historyRawRoiPct": 99.05725806451613,
+            "historyCappedRoiPct": 58.18346774193548,
+            "historyHitRatePct": 52.96774193548387,
+            "historyWinningMonths": 6,
+            "historyQ25CappedRoiPct": 52.42788461538461,
+            "historyMaxSingleReturnShare": 0.04658840195064764
+          },
+          "policy": [
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "W13",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                3
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "W23",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 800
+            }
+          ],
+          "result": {
+            "month": "2025-12",
+            "races": 110,
+            "stakeYen": 176000,
+            "returnYen": 68840,
+            "cappedReturnYen": 49910,
+            "profitYen": -107160,
+            "roiPct": 39.11363636363636,
+            "cappedRoiPct": 28.357954545454543,
+            "hitRatePct": 55.45454545454545,
+            "maxSingleReturnYen": 24250
+          }
+        },
+        {
+          "month": "2026-01",
+          "key": "point:confidence",
+          "variant": "point",
+          "mode": "confidence",
+          "productionSafe": true,
+          "history": {
+            "score": 37.76859398320054,
+            "historyRawRoiPct": 95.08509036144578,
+            "historyCappedRoiPct": 56.207078313253014,
+            "historyHitRatePct": 53.13253012048193,
+            "historyWinningMonths": 6,
+            "historyQ25CappedRoiPct": 48.90504807692308,
+            "historyMaxSingleReturnShare": 0.045318476633959756
+          },
+          "policy": [
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "W13",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                3
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "W23",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 800
+            }
+          ],
+          "result": {
+            "month": "2026-01",
+            "races": 115,
+            "stakeYen": 184000,
+            "returnYen": 101170,
+            "cappedReturnYen": 94000,
+            "profitYen": -82830,
+            "roiPct": 54.983695652173914,
+            "cappedRoiPct": 51.08695652173913,
+            "hitRatePct": 54.78260869565217,
+            "maxSingleReturnYen": 12600
+          }
+        },
+        {
+          "month": "2026-02",
+          "key": "ensemble:concentration",
+          "variant": "ensemble",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 46.60520729974251,
+            "historyRawRoiPct": 82.20845070422536,
+            "historyCappedRoiPct": 69.09225352112676,
+            "historyHitRatePct": 49.690140845070424,
+            "historyWinningMonths": 6,
+            "historyQ25CappedRoiPct": 62.86538461538461,
+            "historyMaxSingleReturnShare": 0.02920692845394737
+          },
+          "policy": [
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "W15",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W25",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "Q35",
+              "betType": "馬連",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 300
+            }
+          ],
+          "result": {
+            "month": "2026-02",
+            "races": 115,
+            "stakeYen": 184000,
+            "returnYen": 134950,
+            "cappedReturnYen": 131960,
+            "profitYen": -49050,
+            "roiPct": 73.34239130434783,
+            "cappedRoiPct": 71.71739130434783,
+            "hitRatePct": 51.30434782608696,
+            "maxSingleReturnYen": 9990
+          }
+        },
+        {
+          "month": "2026-03",
+          "key": "ensemble:concentration",
+          "variant": "ensemble",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 30.036029479779472,
+            "historyRawRoiPct": 81.66898148148148,
+            "historyCappedRoiPct": 69.25198412698413,
+            "historyHitRatePct": 49.78835978835979,
+            "historyWinningMonths": 6,
+            "historyQ25CappedRoiPct": 63.86778846153846,
+            "historyMaxSingleReturnShare": 0.027610976365263374
+          },
+          "policy": [
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "W15",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W25",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "Q35",
+              "betType": "馬連",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 300
+            }
+          ],
+          "result": {
+            "month": "2026-03",
+            "races": 125,
+            "stakeYen": 200000,
+            "returnYen": 199530,
+            "cappedReturnYen": 139430,
+            "profitYen": -470,
+            "roiPct": 99.765,
+            "cappedRoiPct": 69.715,
+            "hitRatePct": 52.0,
+            "maxSingleReturnYen": 43560
+          }
+        },
+        {
+          "month": "2026-04",
+          "key": "point:confidence",
+          "variant": "point",
+          "mode": "confidence",
+          "productionSafe": true,
+          "history": {
+            "score": 38.09926332520916,
+            "historyRawRoiPct": 91.41656327543424,
+            "historyCappedRoiPct": 56.674317617866,
+            "historyHitRatePct": 53.89578163771712,
+            "historyWinningMonths": 7,
+            "historyQ25CappedRoiPct": 51.08695652173913,
+            "historyMaxSingleReturnShare": 0.03883254672968544
+          },
+          "policy": [
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "W13",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                3
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "W23",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 800
+            }
+          ],
+          "result": {
+            "month": "2026-04",
+            "races": 110,
+            "stakeYen": 176000,
+            "returnYen": 145570,
+            "cappedReturnYen": 88870,
+            "profitYen": -30430,
+            "roiPct": 82.71022727272728,
+            "cappedRoiPct": 50.49431818181817,
+            "hitRatePct": 57.27272727272727,
+            "maxSingleReturnYen": 54800
+          }
+        },
+        {
+          "month": "2026-05",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 24.483581440985482,
+            "historyRawRoiPct": 84.68970588235294,
+            "historyCappedRoiPct": 64.08411764705882,
+            "historyHitRatePct": 40.141176470588235,
+            "historyWinningMonths": 7,
+            "historyQ25CappedRoiPct": 57.65215773809524,
+            "historyMaxSingleReturnShare": 0.039469343103717726
+          },
+          "policy": [
+            {
+              "code": "Q12",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "W14",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "Q35",
+              "betType": "馬連",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "W45",
+              "betType": "ワイド",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 100
+            }
+          ],
+          "result": {
+            "month": "2026-05",
+            "races": 140,
+            "stakeYen": 224000,
+            "returnYen": 103310,
+            "cappedReturnYen": 102010,
+            "profitYen": -120690,
+            "roiPct": 46.120535714285715,
+            "cappedRoiPct": 45.54017857142857,
+            "hitRatePct": 37.857142857142854,
+            "maxSingleReturnYen": 9300
+          }
+        },
+        {
+          "month": "2026-06",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 23.254575269768146,
+            "historyRawRoiPct": 82.30573951434879,
+            "historyCappedRoiPct": 62.937913907284766,
+            "historyHitRatePct": 40.0,
+            "historyWinningMonths": 7,
+            "historyQ25CappedRoiPct": 56.086730072463766,
+            "historyMaxSingleReturnShare": 0.03810229451917017
+          },
+          "policy": [
+            {
+              "code": "Q12",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "W14",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "Q35",
+              "betType": "馬連",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "W45",
+              "betType": "ワイド",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 100
+            }
+          ],
+          "result": {
+            "month": "2026-06",
+            "races": 110,
+            "stakeYen": 176000,
+            "returnYen": 136680,
+            "cappedReturnYen": 102300,
+            "profitYen": -39320,
+            "roiPct": 77.6590909090909,
+            "cappedRoiPct": 58.12500000000001,
+            "hitRatePct": 35.45454545454545,
+            "maxSingleReturnYen": 23000
+          }
+        },
+        {
+          "month": "2026-07",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 23.094126240192878,
+            "historyRawRoiPct": 82.09052631578948,
+            "historyCappedRoiPct": 62.715,
+            "historyHitRatePct": 39.78947368421053,
+            "historyWinningMonths": 7,
+            "historyQ25CappedRoiPct": 56.67357336956522,
+            "historyMaxSingleReturnShare": 0.03643282127561357
+          },
+          "policy": [
+            {
+              "code": "Q12",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "W14",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "Q35",
+              "betType": "馬連",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "W45",
+              "betType": "ワイド",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 100
+            }
+          ],
+          "result": {
+            "month": "2026-07",
+            "races": 120,
+            "stakeYen": 192000,
+            "returnYen": 163850,
+            "cappedReturnYen": 116310,
+            "profitYen": -28150,
+            "roiPct": 85.33854166666667,
+            "cappedRoiPct": 60.57812500000001,
+            "hitRatePct": 34.166666666666664,
+            "maxSingleReturnYen": 26700
+          }
+        },
+        {
+          "month": "2026-08",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 6.141670304895513,
+            "historyRawRoiPct": 82.24674348697395,
+            "historyCappedRoiPct": 62.6122244488978,
+            "historyHitRatePct": 39.519038076152306,
+            "historyWinningMonths": 7,
+            "historyQ25CappedRoiPct": 57.26041666666667,
+            "historyMaxSingleReturnShare": 0.034614670041330495
+          },
+          "policy": [
+            {
+              "code": "Q12",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "W14",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "Q35",
+              "betType": "馬連",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "W45",
+              "betType": "ワイド",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 100
+            }
+          ],
+          "result": {
+            "month": "2026-08",
+            "races": 30,
+            "stakeYen": 48000,
+            "returnYen": 14080,
+            "cappedReturnYen": 14080,
+            "profitYen": -33920,
+            "roiPct": 29.333333333333332,
+            "cappedRoiPct": 29.333333333333332,
+            "hitRatePct": 23.333333333333332,
+            "maxSingleReturnYen": 4560
+          }
+        }
+      ]
+    },
+    "スタンダード": {
+      "development": {
+        "months": 12,
+        "races": 1430,
+        "stakeYen": 6006000,
+        "returnYen": 4470970,
+        "profitYen": -1535030,
+        "roiPct": 74.44172494172494,
+        "cappedRoiPct": 62.95304695304695,
+        "hitRatePct": 57.55244755244755,
+        "winningMonths": 0,
+        "winningMonthPct": 0.0,
+        "minimumMonthlyRoiPct": 48.75155279503105,
+        "medianMonthlyRoiPct": 76.53553391053391,
+        "q25MonthlyRoiPct": 63.04481292517008,
+        "maxSingleReturnShare": 0.03832725337007405
+      },
+      "finalHoldout": {
+        "months": 4,
+        "races": 400,
+        "stakeYen": 1680000,
+        "returnYen": 1028750,
+        "profitYen": -651250,
+        "roiPct": 61.235119047619044,
+        "cappedRoiPct": 49.851190476190474,
+        "hitRatePct": 42.75,
+        "winningMonths": 1,
+        "winningMonthPct": 25.0,
+        "minimumMonthlyRoiPct": 46.420634920634924,
+        "medianMonthlyRoiPct": 59.32282003710576,
+        "q25MonthlyRoiPct": 47.632756132756136,
+        "maxSingleReturnShare": 0.08019441069258809
+      },
+      "full": {
+        "months": 16,
+        "races": 1830,
+        "stakeYen": 7686000,
+        "returnYen": 5499720,
+        "profitYen": -2186280,
+        "roiPct": 71.55503512880563,
+        "cappedRoiPct": 60.08925318761384,
+        "hitRatePct": 54.31693989071038,
+        "winningMonths": 1,
+        "winningMonthPct": 6.25,
+        "minimumMonthlyRoiPct": 46.420634920634924,
+        "medianMonthlyRoiPct": 72.1516439909297,
+        "q25MonthlyRoiPct": 53.48203194321207,
+        "maxSingleReturnShare": 0.031157949859265562
+      },
+      "monthly": [
+        {
+          "month": "2025-05",
+          "key": "ensemble:concentration",
+          "variant": "ensemble",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 75.08572175747342,
+            "historyRawRoiPct": 93.7070914696814,
+            "historyCappedRoiPct": 78.91640972935937,
+            "historyHitRatePct": 69.92805755395683,
+            "historyWinningMonths": 3,
+            "historyQ25CappedRoiPct": 70.49513888888889,
+            "historyMaxSingleReturnShare": 0.05846503686967839
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "S3",
+              "betType": "単勝",
+              "predictedRanks": [
+                3
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q12",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 1000
+            },
+            {
+              "code": "W14",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W15",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                5
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "W23",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "Q35",
+              "betType": "馬連",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T123",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                3
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T124",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T235",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                5
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 200
+            }
+          ],
+          "result": {
+            "month": "2025-05",
+            "races": 130,
+            "stakeYen": 546000,
+            "returnYen": 367490,
+            "cappedReturnYen": 366310,
+            "profitYen": -178510,
+            "roiPct": 67.3058608058608,
+            "cappedRoiPct": 67.08974358974359,
+            "hitRatePct": 62.30769230769231,
+            "maxSingleReturnYen": 30580
+          }
+        },
+        {
+          "month": "2025-06",
+          "key": "ensemble:concentration",
+          "variant": "ensemble",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 68.57844993218978,
+            "historyRawRoiPct": 94.3930735930736,
+            "historyCappedRoiPct": 70.24877344877345,
+            "historyHitRatePct": 58.90909090909091,
+            "historyWinningMonths": 4,
+            "historyQ25CappedRoiPct": 66.68856936714079,
+            "historyMaxSingleReturnShare": 0.07130845807650915
+          },
+          "policy": [
+            {
+              "code": "S2",
+              "betType": "単勝",
+              "predictedRanks": [
+                2
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "W13",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W15",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                5
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q15",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "W25",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "E42",
+              "betType": "馬単",
+              "predictedRanks": [
+                4,
+                2
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T124",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T125",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T235",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 400
+            }
+          ],
+          "result": {
+            "month": "2025-06",
+            "races": 120,
+            "stakeYen": 504000,
+            "returnYen": 458320,
+            "cappedReturnYen": 426390,
+            "profitYen": -45680,
+            "roiPct": 90.93650793650794,
+            "cappedRoiPct": 84.60119047619048,
+            "hitRatePct": 66.66666666666666,
+            "maxSingleReturnYen": 49930
+          }
+        },
+        {
+          "month": "2025-07",
+          "key": "ensemble:concentration",
+          "variant": "ensemble",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 72.0965687487116,
+            "historyRawRoiPct": 95.83749055177626,
+            "historyCappedRoiPct": 75.29629629629629,
+            "historyHitRatePct": 59.36507936507937,
+            "historyWinningMonths": 4,
+            "historyQ25CappedRoiPct": 70.26972789115646,
+            "historyMaxSingleReturnShare": 0.05876244482476688
+          },
+          "policy": [
+            {
+              "code": "W13",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                3
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W15",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                5
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "W24",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "Q24",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                4
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 1200
+            },
+            {
+              "code": "E12",
+              "betType": "馬単",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "E32",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                2
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "E43",
+              "betType": "馬単",
+              "predictedRanks": [
+                4,
+                3
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "T235",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                5
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T245",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                4,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 200
+            }
+          ],
+          "result": {
+            "month": "2025-07",
+            "races": 120,
+            "stakeYen": 504000,
+            "returnYen": 371420,
+            "cappedReturnYen": 325920,
+            "profitYen": -132580,
+            "roiPct": 73.69444444444444,
+            "cappedRoiPct": 64.66666666666666,
+            "hitRatePct": 60.83333333333333,
+            "maxSingleReturnYen": 68960
+          }
+        },
+        {
+          "month": "2025-08",
+          "key": "point:confidence",
+          "variant": "point",
+          "mode": "confidence",
+          "productionSafe": true,
+          "history": {
+            "score": 66.70780799153897,
+            "historyRawRoiPct": 96.38587078023698,
+            "historyCappedRoiPct": 70.75564498099709,
+            "historyHitRatePct": 48.35680751173709,
+            "historyWinningMonths": 5,
+            "historyQ25CappedRoiPct": 66.7032967032967,
+            "historyMaxSingleReturnShare": 0.07030528791512615
+          },
+          "policy": [
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 800
+            },
+            {
+              "code": "W13",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                3
+              ],
+              "stakeYen": 800
+            },
+            {
+              "code": "E24",
+              "betType": "馬単",
+              "predictedRanks": [
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "E32",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                2
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "T123",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                3
+              ],
+              "stakeYen": 1100
+            },
+            {
+              "code": "T145",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                4,
+                5
+              ],
+              "stakeYen": 300
+            }
+          ],
+          "result": {
+            "month": "2025-08",
+            "races": 150,
+            "stakeYen": 630000,
+            "returnYen": 604030,
+            "cappedReturnYen": 477850,
+            "profitYen": -25970,
+            "roiPct": 95.87777777777777,
+            "cappedRoiPct": 75.84920634920634,
+            "hitRatePct": 55.333333333333336,
+            "maxSingleReturnYen": 99360
+          }
+        },
+        {
+          "month": "2025-09",
+          "key": "ensemble:concentration",
+          "variant": "ensemble",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 68.95487235136636,
+            "historyRawRoiPct": 98.67195767195767,
+            "historyCappedRoiPct": 73.26259063296101,
+            "historyHitRatePct": 47.983539094650205,
+            "historyWinningMonths": 5,
+            "historyQ25CappedRoiPct": 69.03208616780046,
+            "historyMaxSingleReturnShare": 0.07652480621540625
+          },
+          "policy": [
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 1300
+            },
+            {
+              "code": "Q12",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W25",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "E23",
+              "betType": "馬単",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "E34",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T125",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 600
+            }
+          ],
+          "result": {
+            "month": "2025-09",
+            "races": 100,
+            "stakeYen": 420000,
+            "returnYen": 277870,
+            "cappedReturnYen": 268440,
+            "profitYen": -142130,
+            "roiPct": 66.15952380952382,
+            "cappedRoiPct": 63.91428571428571,
+            "hitRatePct": 52.0,
+            "maxSingleReturnYen": 38830
+          }
+        },
+        {
+          "month": "2025-10",
+          "key": "ensemble:concentration",
+          "variant": "ensemble",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 67.33894701106377,
+            "historyRawRoiPct": 96.19952924135433,
+            "historyCappedRoiPct": 72.55169292051421,
+            "historyHitRatePct": 48.28897338403042,
+            "historyWinningMonths": 5,
+            "historyQ25CappedRoiPct": 66.31904761904761,
+            "historyMaxSingleReturnShare": 0.0725226327379496
+          },
+          "policy": [
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 1300
+            },
+            {
+              "code": "Q12",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W25",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "E23",
+              "betType": "馬単",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "E34",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T125",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 600
+            }
+          ],
+          "result": {
+            "month": "2025-10",
+            "races": 105,
+            "stakeYen": 441000,
+            "returnYen": 236820,
+            "cappedReturnYen": 236820,
+            "profitYen": -204180,
+            "roiPct": 53.70068027210885,
+            "cappedRoiPct": 53.70068027210885,
+            "hitRatePct": 46.666666666666664,
+            "maxSingleReturnYen": 16050
+          }
+        },
+        {
+          "month": "2025-11",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 63.972000927543284,
+            "historyRawRoiPct": 97.57042253521126,
+            "historyCappedRoiPct": 67.11703554661301,
+            "historyHitRatePct": 56.61971830985915,
+            "historyWinningMonths": 6,
+            "historyQ25CappedRoiPct": 58.198674341531486,
+            "historyMaxSingleReturnShare": 0.1042497980787407
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 1100
+            },
+            {
+              "code": "Q14",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 1600
+            },
+            {
+              "code": "T125",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 800
+            }
+          ],
+          "result": {
+            "month": "2025-11",
+            "races": 130,
+            "stakeYen": 546000,
+            "returnYen": 435060,
+            "cappedReturnYen": 347430,
+            "profitYen": -110940,
+            "roiPct": 79.68131868131869,
+            "cappedRoiPct": 63.63186813186813,
+            "hitRatePct": 64.61538461538461,
+            "maxSingleReturnYen": 72510
+          }
+        },
+        {
+          "month": "2025-12",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 63.90101973295521,
+            "historyRawRoiPct": 96.07004608294932,
+            "historyCappedRoiPct": 66.8247311827957,
+            "historyHitRatePct": 57.29032258064516,
+            "historyWinningMonths": 6,
+            "historyQ25CappedRoiPct": 58.32234432234432,
+            "historyMaxSingleReturnShare": 0.0969978382388682
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 1100
+            },
+            {
+              "code": "Q14",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 1600
+            },
+            {
+              "code": "T125",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 800
+            }
+          ],
+          "result": {
+            "month": "2025-12",
+            "races": 110,
+            "stakeYen": 462000,
+            "returnYen": 366720,
+            "cappedReturnYen": 232200,
+            "profitYen": -95280,
+            "roiPct": 79.37662337662339,
+            "cappedRoiPct": 50.25974025974026,
+            "hitRatePct": 49.09090909090909,
+            "maxSingleReturnYen": 163920
+          }
+        },
+        {
+          "month": "2026-01",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 46.171004111350484,
+            "historyRawRoiPct": 94.96385542168674,
+            "historyCappedRoiPct": 65.72705106138841,
+            "historyHitRatePct": 56.74698795180723,
+            "historyWinningMonths": 6,
+            "historyQ25CappedRoiPct": 57.9513343799058,
+            "historyMaxSingleReturnShare": 0.09162528243979652
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 1100
+            },
+            {
+              "code": "Q14",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 1600
+            },
+            {
+              "code": "T125",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 800
+            }
+          ],
+          "result": {
+            "month": "2026-01",
+            "races": 115,
+            "stakeYen": 483000,
+            "returnYen": 235470,
+            "cappedReturnYen": 224710,
+            "profitYen": -247530,
+            "roiPct": 48.75155279503105,
+            "cappedRoiPct": 46.523809523809526,
+            "hitRatePct": 57.391304347826086,
+            "maxSingleReturnYen": 40160
+          }
+        },
+        {
+          "month": "2026-02",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 44.80211399348472,
+            "historyRawRoiPct": 91.96981891348088,
+            "historyCappedRoiPct": 64.48289738430583,
+            "historyHitRatePct": 56.7887323943662,
+            "historyWinningMonths": 6,
+            "historyQ25CappedRoiPct": 56.51601473922902,
+            "historyMaxSingleReturnShare": 0.08847856366725736
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 1100
+            },
+            {
+              "code": "Q14",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 1600
+            },
+            {
+              "code": "T125",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 800
+            }
+          ],
+          "result": {
+            "month": "2026-02",
+            "races": 115,
+            "stakeYen": 483000,
+            "returnYen": 255150,
+            "cappedReturnYen": 255150,
+            "profitYen": -227850,
+            "roiPct": 52.826086956521735,
+            "cappedRoiPct": 52.826086956521735,
+            "hitRatePct": 55.65217391304348,
+            "maxSingleReturnYen": 23840
+          }
+        },
+        {
+          "month": "2026-03",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 26.84778109729585,
+            "historyRawRoiPct": 89.58805744520029,
+            "historyCappedRoiPct": 63.773620559334844,
+            "historyHitRatePct": 56.71957671957672,
+            "historyWinningMonths": 6,
+            "historyQ25CappedRoiPct": 54.60979554865425,
+            "historyMaxSingleReturnShare": 0.08530408493285524
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 1100
+            },
+            {
+              "code": "Q14",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 1600
+            },
+            {
+              "code": "T125",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 800
+            }
+          ],
+          "result": {
+            "month": "2026-03",
+            "races": 125,
+            "stakeYen": 525000,
+            "returnYen": 489930,
+            "cappedReturnYen": 389010,
+            "profitYen": -35070,
+            "roiPct": 93.32000000000001,
+            "cappedRoiPct": 74.09714285714286,
+            "hitRatePct": 65.60000000000001,
+            "maxSingleReturnYen": 118720
+          }
+        },
+        {
+          "month": "2026-04",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 42.144935978000504,
+            "historyRawRoiPct": 90.79250856670211,
+            "historyCappedRoiPct": 62.50277679309937,
+            "historyHitRatePct": 53.15136476426799,
+            "historyWinningMonths": 7,
+            "historyQ25CappedRoiPct": 53.60317460317461,
+            "historyMaxSingleReturnShare": 0.060790471344144864
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 800
+            },
+            {
+              "code": "W23",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "W34",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                4
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "E32",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                2
+              ],
+              "stakeYen": 1300
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 600
+            }
+          ],
+          "result": {
+            "month": "2026-04",
+            "races": 110,
+            "stakeYen": 462000,
+            "returnYen": 372690,
+            "cappedReturnYen": 230730,
+            "profitYen": -89310,
+            "roiPct": 80.66883116883116,
+            "cappedRoiPct": 49.94155844155844,
+            "hitRatePct": 50.0,
+            "maxSingleReturnYen": 171360
+          }
+        },
+        {
+          "month": "2026-05",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 35.6365512402985,
+            "historyRawRoiPct": 91.21478991596639,
+            "historyCappedRoiPct": 55.153053221288516,
+            "historyHitRatePct": 44.84705882352941,
+            "historyWinningMonths": 8,
+            "historyQ25CappedRoiPct": 50.87592120181406,
+            "historyMaxSingleReturnShare": 0.05535615139320863
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "E23",
+              "betType": "馬単",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "E32",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                2
+              ],
+              "stakeYen": 1500
+            },
+            {
+              "code": "E42",
+              "betType": "馬単",
+              "predictedRanks": [
+                4,
+                2
+              ],
+              "stakeYen": 1000
+            },
+            {
+              "code": "T123",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                3
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 500
+            }
+          ],
+          "result": {
+            "month": "2026-05",
+            "races": 140,
+            "stakeYen": 588000,
+            "returnYen": 415180,
+            "cappedReturnYen": 355080,
+            "profitYen": -172820,
+            "roiPct": 70.60884353741497,
+            "cappedRoiPct": 60.38775510204082,
+            "hitRatePct": 42.142857142857146,
+            "maxSingleReturnYen": 57300
+          }
+        },
+        {
+          "month": "2026-06",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 35.784768239150054,
+            "historyRawRoiPct": 89.9411331861663,
+            "historyCappedRoiPct": 55.47661095343214,
+            "historyHitRatePct": 44.67991169977925,
+            "historyWinningMonths": 8,
+            "historyQ25CappedRoiPct": 50.900651927437636,
+            "historyMaxSingleReturnShare": 0.0526700248945197
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "E23",
+              "betType": "馬単",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "E32",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                2
+              ],
+              "stakeYen": 1500
+            },
+            {
+              "code": "E42",
+              "betType": "馬単",
+              "predictedRanks": [
+                4,
+                2
+              ],
+              "stakeYen": 1000
+            },
+            {
+              "code": "T123",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                3
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 500
+            }
+          ],
+          "result": {
+            "month": "2026-06",
+            "races": 110,
+            "stakeYen": 462000,
+            "returnYen": 221930,
+            "cappedReturnYen": 210530,
+            "profitYen": -240070,
+            "roiPct": 48.03679653679654,
+            "cappedRoiPct": 45.56926406926407,
+            "hitRatePct": 46.36363636363636,
+            "maxSingleReturnYen": 40800
+          }
+        },
+        {
+          "month": "2026-07",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 35.252572222375534,
+            "historyRawRoiPct": 88.0003007518797,
+            "historyCappedRoiPct": 55.017744360902256,
+            "historyHitRatePct": 44.757894736842104,
+            "historyWinningMonths": 8,
+            "historyQ25CappedRoiPct": 50.79017857142857,
+            "historyMaxSingleReturnShare": 0.05133839825108823
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "E23",
+              "betType": "馬単",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "E32",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                2
+              ],
+              "stakeYen": 1500
+            },
+            {
+              "code": "E42",
+              "betType": "馬単",
+              "predictedRanks": [
+                4,
+                2
+              ],
+              "stakeYen": 1000
+            },
+            {
+              "code": "T123",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                3
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 500
+            }
+          ],
+          "result": {
+            "month": "2026-07",
+            "races": 120,
+            "stakeYen": 504000,
+            "returnYen": 233960,
+            "cappedReturnYen": 179410,
+            "profitYen": -270040,
+            "roiPct": 46.420634920634924,
+            "cappedRoiPct": 35.59722222222222,
+            "hitRatePct": 42.5,
+            "maxSingleReturnYen": 69100
+          }
+        },
+        {
+          "month": "2026-08",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 17.58496006856013,
+            "historyRawRoiPct": 86.00047714476572,
+            "historyCappedRoiPct": 54.083691191907626,
+            "historyHitRatePct": 44.64929859719439,
+            "historyWinningMonths": 8,
+            "historyQ25CappedRoiPct": 50.60714285714286,
+            "historyMaxSingleReturnShare": 0.05000560364580964
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "E23",
+              "betType": "馬単",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "E32",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                2
+              ],
+              "stakeYen": 1500
+            },
+            {
+              "code": "E42",
+              "betType": "馬単",
+              "predictedRanks": [
+                4,
+                2
+              ],
+              "stakeYen": 1000
+            },
+            {
+              "code": "T123",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                3
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 500
+            }
+          ],
+          "result": {
+            "month": "2026-08",
+            "races": 30,
+            "stakeYen": 126000,
+            "returnYen": 157680,
+            "cappedReturnYen": 92480,
+            "profitYen": 31680,
+            "roiPct": 125.14285714285714,
+            "cappedRoiPct": 73.39682539682539,
+            "hitRatePct": 33.33333333333333,
+            "maxSingleReturnYen": 82500
+          }
+        }
+      ]
+    },
+    "プレミアム": {
+      "development": {
+        "months": 12,
+        "races": 1430,
+        "stakeYen": 12584000,
+        "returnYen": 9762100,
+        "profitYen": -2821900,
+        "roiPct": 77.57549268912905,
+        "cappedRoiPct": 57.141449459631275,
+        "hitRatePct": 57.41258741258741,
+        "winningMonths": 3,
+        "winningMonthPct": 25.0,
+        "minimumMonthlyRoiPct": 34.276859504132226,
+        "medianMonthlyRoiPct": 66.96281291172596,
+        "q25MonthlyRoiPct": 56.8793081918082,
+        "maxSingleReturnShare": 0.06621321232111943
+      },
+      "finalHoldout": {
+        "months": 4,
+        "races": 400,
+        "stakeYen": 3520000,
+        "returnYen": 2228850,
+        "profitYen": -1291150,
+        "roiPct": 63.31960227272727,
+        "cappedRoiPct": 43.554829545454545,
+        "hitRatePct": 59.0,
+        "winningMonths": 0,
+        "winningMonthPct": 0.0,
+        "minimumMonthlyRoiPct": 20.950757575757574,
+        "medianMonthlyRoiPct": 59.7299414600551,
+        "q25MonthlyRoiPct": 39.719223484848484,
+        "maxSingleReturnShare": 0.16495053502927517
+      },
+      "full": {
+        "months": 16,
+        "races": 1830,
+        "stakeYen": 16104000,
+        "returnYen": 11990950,
+        "profitYen": -4113050,
+        "roiPct": 74.45945106805763,
+        "cappedRoiPct": 54.17169647292598,
+        "hitRatePct": 57.759562841530055,
+        "winningMonths": 3,
+        "winningMonthPct": 18.75,
+        "minimumMonthlyRoiPct": 20.950757575757574,
+        "medianMonthlyRoiPct": 66.96281291172596,
+        "q25MonthlyRoiPct": 52.819580419580426,
+        "maxSingleReturnShare": 0.05390565384727649
+      },
+      "monthly": [
+        {
+          "month": "2025-05",
+          "key": "ensemble:concentration",
+          "variant": "ensemble",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 76.48353543345962,
+            "historyRawRoiPct": 92.73299542184435,
+            "historyCappedRoiPct": 79.09908436886855,
+            "historyHitRatePct": 66.76258992805755,
+            "historyWinningMonths": 3,
+            "historyQ25CappedRoiPct": 78.33777056277057,
+            "historyMaxSingleReturnShare": 0.08118768237959641
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "S4",
+              "betType": "単勝",
+              "predictedRanks": [
+                4
+              ],
+              "stakeYen": 1400
+            },
+            {
+              "code": "Q12",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 1000
+            },
+            {
+              "code": "W15",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "Q23",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "Q35",
+              "betType": "馬連",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "Q45",
+              "betType": "馬連",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "E12",
+              "betType": "馬単",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 1500
+            },
+            {
+              "code": "E13",
+              "betType": "馬単",
+              "predictedRanks": [
+                1,
+                3
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "E31",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                1
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "E34",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                4
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "X124",
+              "betType": "3連単",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "X231",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                1
+              ],
+              "stakeYen": 1000
+            },
+            {
+              "code": "X234",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X314",
+              "betType": "3連単",
+              "predictedRanks": [
+                3,
+                1,
+                4
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "X324",
+              "betType": "3連単",
+              "predictedRanks": [
+                3,
+                2,
+                4
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "X342",
+              "betType": "3連単",
+              "predictedRanks": [
+                3,
+                4,
+                2
+              ],
+              "stakeYen": 200
+            }
+          ],
+          "result": {
+            "month": "2025-05",
+            "races": 130,
+            "stakeYen": 1144000,
+            "returnYen": 614540,
+            "cappedReturnYen": 599990,
+            "profitYen": -529460,
+            "roiPct": 53.718531468531474,
+            "cappedRoiPct": 52.44667832167832,
+            "hitRatePct": 68.46153846153847,
+            "maxSingleReturnYen": 102550
+          }
+        },
+        {
+          "month": "2025-06",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 67.10399589935584,
+            "historyRawRoiPct": 95.30564738292011,
+            "historyCappedRoiPct": 73.71157024793388,
+            "historyHitRatePct": 45.81818181818182,
+            "historyWinningMonths": 4,
+            "historyQ25CappedRoiPct": 64.46984649122808,
+            "historyMaxSingleReturnShare": 0.06636036877148915
+          },
+          "policy": [
+            {
+              "code": "S2",
+              "betType": "単勝",
+              "predictedRanks": [
+                2
+              ],
+              "stakeYen": 800
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "Q12",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 1800
+            },
+            {
+              "code": "E14",
+              "betType": "馬単",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "E32",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                2
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T145",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                4,
+                5
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X123",
+              "betType": "3連単",
+              "predictedRanks": [
+                1,
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X134",
+              "betType": "3連単",
+              "predictedRanks": [
+                1,
+                3,
+                4
+              ],
+              "stakeYen": 1300
+            },
+            {
+              "code": "X142",
+              "betType": "3連単",
+              "predictedRanks": [
+                1,
+                4,
+                2
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X314",
+              "betType": "3連単",
+              "predictedRanks": [
+                3,
+                1,
+                4
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "X342",
+              "betType": "3連単",
+              "predictedRanks": [
+                3,
+                4,
+                2
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 800
+            }
+          ],
+          "result": {
+            "month": "2025-06",
+            "races": 120,
+            "stakeYen": 1056000,
+            "returnYen": 853120,
+            "cappedReturnYen": 653790,
+            "profitYen": -202880,
+            "roiPct": 80.78787878787878,
+            "cappedRoiPct": 61.91193181818182,
+            "hitRatePct": 48.333333333333336,
+            "maxSingleReturnYen": 280130
+          }
+        },
+        {
+          "month": "2025-07",
+          "key": "ensemble:concentration",
+          "variant": "ensemble",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 68.92032389251831,
+            "historyRawRoiPct": 89.4445646945647,
+            "historyCappedRoiPct": 73.28282828282828,
+            "historyHitRatePct": 52.16931216931217,
+            "historyWinningMonths": 4,
+            "historyQ25CappedRoiPct": 70.9756653708134,
+            "historyMaxSingleReturnShare": 0.06415253132137974
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 1000
+            },
+            {
+              "code": "Q14",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 1700
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 1100
+            },
+            {
+              "code": "Q34",
+              "betType": "馬連",
+              "predictedRanks": [
+                3,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "E14",
+              "betType": "馬単",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T134",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X123",
+              "betType": "3連単",
+              "predictedRanks": [
+                1,
+                2,
+                3
+              ],
+              "stakeYen": 1000
+            },
+            {
+              "code": "X231",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                1
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "X341",
+              "betType": "3連単",
+              "predictedRanks": [
+                3,
+                4,
+                1
+              ],
+              "stakeYen": 500
+            }
+          ],
+          "result": {
+            "month": "2025-07",
+            "races": 120,
+            "stakeYen": 1056000,
+            "returnYen": 652790,
+            "cappedReturnYen": 652790,
+            "profitYen": -403210,
+            "roiPct": 61.817234848484844,
+            "cappedRoiPct": 61.817234848484844,
+            "hitRatePct": 55.00000000000001,
+            "maxSingleReturnYen": 73950
+          }
+        },
+        {
+          "month": "2025-08",
+          "key": "ensemble:confidence",
+          "variant": "ensemble",
+          "mode": "confidence",
+          "productionSafe": true,
+          "history": {
+            "score": 58.77457711595916,
+            "historyRawRoiPct": 96.08002560819462,
+            "historyCappedRoiPct": 66.92616303883909,
+            "historyHitRatePct": 38.309859154929576,
+            "historyWinningMonths": 5,
+            "historyQ25CappedRoiPct": 51.86363636363637,
+            "historyMaxSingleReturnShare": 0.06836490601491234
+          },
+          "policy": [
+            {
+              "code": "W15",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                5
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "Q15",
+              "betType": "馬連",
+              "predictedRanks": [
+                1,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W25",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "E12",
+              "betType": "馬単",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "E31",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                1
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "E32",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                2
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "E34",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                4
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "T235",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                5
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X123",
+              "betType": "3連単",
+              "predictedRanks": [
+                1,
+                2,
+                3
+              ],
+              "stakeYen": 800
+            },
+            {
+              "code": "X231",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                1
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "X314",
+              "betType": "3連単",
+              "predictedRanks": [
+                3,
+                1,
+                4
+              ],
+              "stakeYen": 1100
+            },
+            {
+              "code": "X321",
+              "betType": "3連単",
+              "predictedRanks": [
+                3,
+                2,
+                1
+              ],
+              "stakeYen": 1400
+            },
+            {
+              "code": "X342",
+              "betType": "3連単",
+              "predictedRanks": [
+                3,
+                4,
+                2
+              ],
+              "stakeYen": 1200
+            },
+            {
+              "code": "X412",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                2
+              ],
+              "stakeYen": 100
+            }
+          ],
+          "result": {
+            "month": "2025-08",
+            "races": 150,
+            "stakeYen": 1320000,
+            "returnYen": 824540,
+            "cappedReturnYen": 728900,
+            "profitYen": -495460,
+            "roiPct": 62.46515151515152,
+            "cappedRoiPct": 55.219696969696976,
+            "hitRatePct": 42.0,
+            "maxSingleReturnYen": 171180
+          }
+        },
+        {
+          "month": "2025-09",
+          "key": "point:confidence",
+          "variant": "point",
+          "mode": "confidence",
+          "productionSafe": true,
+          "history": {
+            "score": 62.5389662266962,
+            "historyRawRoiPct": 94.5977366255144,
+            "historyCappedRoiPct": 68.97671156004489,
+            "historyHitRatePct": 47.160493827160494,
+            "historyWinningMonths": 5,
+            "historyQ25CappedRoiPct": 57.425331247699674,
+            "historyMaxSingleReturnShare": 0.06540780017381177
+          },
+          "policy": [
+            {
+              "code": "W14",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W23",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "Q24",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                4
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "W25",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 1000
+            },
+            {
+              "code": "E32",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                2
+              ],
+              "stakeYen": 1700
+            },
+            {
+              "code": "T123",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                3
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T135",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                5
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "X134",
+              "betType": "3連単",
+              "predictedRanks": [
+                1,
+                3,
+                4
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "X214",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                1,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X231",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                1
+              ],
+              "stakeYen": 1400
+            },
+            {
+              "code": "X312",
+              "betType": "3連単",
+              "predictedRanks": [
+                3,
+                1,
+                2
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 800
+            },
+            {
+              "code": "X421",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                2,
+                1
+              ],
+              "stakeYen": 700
+            }
+          ],
+          "result": {
+            "month": "2025-09",
+            "races": 100,
+            "stakeYen": 880000,
+            "returnYen": 441080,
+            "cappedReturnYen": 384140,
+            "profitYen": -438920,
+            "roiPct": 50.122727272727275,
+            "cappedRoiPct": 43.65227272727273,
+            "hitRatePct": 45.0,
+            "maxSingleReturnYen": 144940
+          }
+        },
+        {
+          "month": "2025-10",
+          "key": "point:concentration",
+          "variant": "point",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 60.199183006869546,
+            "historyRawRoiPct": 88.8858451434497,
+            "historyCappedRoiPct": 65.03905979951607,
+            "historyHitRatePct": 50.19011406844106,
+            "historyWinningMonths": 5,
+            "historyQ25CappedRoiPct": 56.14982517482517,
+            "historyMaxSingleReturnShare": 0.06431735963997212
+          },
+          "policy": [
+            {
+              "code": "W14",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                4
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W23",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                3
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "Q24",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                4
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "W25",
+              "betType": "ワイド",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 1000
+            },
+            {
+              "code": "E32",
+              "betType": "馬単",
+              "predictedRanks": [
+                3,
+                2
+              ],
+              "stakeYen": 1700
+            },
+            {
+              "code": "T123",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                3
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "T135",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                5
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "T345",
+              "betType": "3連複",
+              "predictedRanks": [
+                3,
+                4,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "X134",
+              "betType": "3連単",
+              "predictedRanks": [
+                1,
+                3,
+                4
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "X214",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                1,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X231",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                1
+              ],
+              "stakeYen": 1400
+            },
+            {
+              "code": "X312",
+              "betType": "3連単",
+              "predictedRanks": [
+                3,
+                1,
+                2
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 800
+            },
+            {
+              "code": "X421",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                2,
+                1
+              ],
+              "stakeYen": 700
+            }
+          ],
+          "result": {
+            "month": "2025-10",
+            "races": 105,
+            "stakeYen": 924000,
+            "returnYen": 535300,
+            "cappedReturnYen": 535300,
+            "profitYen": -388700,
+            "roiPct": 57.93290043290044,
+            "cappedRoiPct": 57.93290043290044,
+            "hitRatePct": 54.285714285714285,
+            "maxSingleReturnYen": 56910
+          }
+        },
+        {
+          "month": "2025-11",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 50.06104057085007,
+            "historyRawRoiPct": 84.43822023047375,
+            "historyCappedRoiPct": 49.1890204865557,
+            "historyHitRatePct": 62.95774647887324,
+            "historyWinningMonths": 6,
+            "historyQ25CappedRoiPct": 38.163661995898835,
+            "historyMaxSingleReturnShare": 0.09496938794851868
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "Q45",
+              "betType": "馬連",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T124",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T135",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T145",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                4,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T234",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X214",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                1,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X234",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 1800
+            },
+            {
+              "code": "X423",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X431",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                3,
+                1
+              ],
+              "stakeYen": 1900
+            }
+          ],
+          "result": {
+            "month": "2025-11",
+            "races": 130,
+            "stakeYen": 1144000,
+            "returnYen": 878950,
+            "cappedReturnYen": 584630,
+            "profitYen": -265050,
+            "roiPct": 76.8312937062937,
+            "cappedRoiPct": 51.10402097902098,
+            "hitRatePct": 63.07692307692307,
+            "maxSingleReturnYen": 382320
+          }
+        },
+        {
+          "month": "2025-12",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 50.47618376784506,
+            "historyRawRoiPct": 83.80021994134897,
+            "historyCappedRoiPct": 49.349633431085046,
+            "historyHitRatePct": 62.96774193548387,
+            "historyWinningMonths": 6,
+            "historyQ25CappedRoiPct": 38.76406926406926,
+            "historyMaxSingleReturnShare": 0.08766660688430362
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "Q45",
+              "betType": "馬連",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T124",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T135",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T145",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                4,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T234",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X214",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                1,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X234",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 1800
+            },
+            {
+              "code": "X423",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X431",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                3,
+                1
+              ],
+              "stakeYen": 1900
+            }
+          ],
+          "result": {
+            "month": "2025-12",
+            "races": 110,
+            "stakeYen": 968000,
+            "returnYen": 1420140,
+            "cappedReturnYen": 765270,
+            "profitYen": 452140,
+            "roiPct": 146.70867768595042,
+            "cappedRoiPct": 79.05681818181817,
+            "hitRatePct": 65.45454545454545,
+            "maxSingleReturnYen": 646380
+          }
+        },
+        {
+          "month": "2026-01",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 51.31128834541691,
+            "historyRawRoiPct": 87.96885268346112,
+            "historyCappedRoiPct": 51.31818181818182,
+            "historyHitRatePct": 63.13253012048193,
+            "historyWinningMonths": 7,
+            "historyQ25CappedRoiPct": 38.97021103896104,
+            "historyMaxSingleReturnShare": 0.07797834946371694
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "Q45",
+              "betType": "馬連",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T124",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T135",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T145",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                4,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T234",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X214",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                1,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X234",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 1800
+            },
+            {
+              "code": "X423",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X431",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                3,
+                1
+              ],
+              "stakeYen": 1900
+            }
+          ],
+          "result": {
+            "month": "2026-01",
+            "races": 115,
+            "stakeYen": 1012000,
+            "returnYen": 723180,
+            "cappedReturnYen": 612160,
+            "profitYen": -288820,
+            "roiPct": 71.46047430830039,
+            "cappedRoiPct": 60.4901185770751,
+            "hitRatePct": 61.73913043478261,
+            "maxSingleReturnYen": 185660
+          }
+        },
+        {
+          "month": "2026-02",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 51.359323307614275,
+            "historyRawRoiPct": 86.89929577464788,
+            "historyCappedRoiPct": 51.9124199743918,
+            "historyHitRatePct": 63.04225352112676,
+            "historyWinningMonths": 7,
+            "historyQ25CappedRoiPct": 39.176352813852816,
+            "historyMaxSingleReturnShare": 0.07382380741538581
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "Q45",
+              "betType": "馬連",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T124",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T135",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T145",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                4,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T234",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X214",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                1,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X234",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 1800
+            },
+            {
+              "code": "X423",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X431",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                3,
+                1
+              ],
+              "stakeYen": 1900
+            }
+          ],
+          "result": {
+            "month": "2026-02",
+            "races": 115,
+            "stakeYen": 1012000,
+            "returnYen": 1132260,
+            "cappedReturnYen": 534350,
+            "profitYen": 120260,
+            "roiPct": 111.88339920948616,
+            "cappedRoiPct": 52.80138339920949,
+            "hitRatePct": 55.65217391304348,
+            "maxSingleReturnYen": 414120
+          }
+        },
+        {
+          "month": "2026-03",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 51.542363010516425,
+            "historyRawRoiPct": 88.41949254449254,
+            "historyCappedRoiPct": 51.96651034151034,
+            "historyHitRatePct": 62.592592592592595,
+            "historyWinningMonths": 8,
+            "historyQ25CappedRoiPct": 39.38249458874459,
+            "historyMaxSingleReturnShare": 0.0681398592268561
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "Q45",
+              "betType": "馬連",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T124",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T135",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T145",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                4,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T234",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X214",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                1,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X234",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 1800
+            },
+            {
+              "code": "X423",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X431",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                3,
+                1
+              ],
+              "stakeYen": 1900
+            }
+          ],
+          "result": {
+            "month": "2026-03",
+            "races": 125,
+            "stakeYen": 1100000,
+            "returnYen": 1354400,
+            "cappedReturnYen": 807560,
+            "profitYen": 254400,
+            "roiPct": 123.12727272727273,
+            "cappedRoiPct": 73.41454545454546,
+            "hitRatePct": 68.8,
+            "maxSingleReturnYen": 385620
+          }
+        },
+        {
+          "month": "2026-04",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 52.134826202023774,
+            "historyRawRoiPct": 90.5725806451613,
+            "historyCappedRoiPct": 53.29703361154974,
+            "historyHitRatePct": 62.977667493796524,
+            "historyWinningMonths": 9,
+            "historyQ25CappedRoiPct": 39.58863636363637,
+            "historyMaxSingleReturnShare": 0.062393487555984214
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "Q45",
+              "betType": "馬連",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T124",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T135",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T145",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                4,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T234",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X214",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                1,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X234",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 1800
+            },
+            {
+              "code": "X423",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X431",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                3,
+                1
+              ],
+              "stakeYen": 1900
+            }
+          ],
+          "result": {
+            "month": "2026-04",
+            "races": 110,
+            "stakeYen": 968000,
+            "returnYen": 331800,
+            "cappedReturnYen": 331800,
+            "profitYen": -636200,
+            "roiPct": 34.276859504132226,
+            "cappedRoiPct": 34.276859504132226,
+            "hitRatePct": 61.81818181818181,
+            "maxSingleReturnYen": 45920
+          }
+        },
+        {
+          "month": "2026-05",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 51.4531847984235,
+            "historyRawRoiPct": 87.65844919786096,
+            "historyCappedRoiPct": 52.31245989304813,
+            "historyHitRatePct": 62.917647058823526,
+            "historyWinningMonths": 9,
+            "historyQ25CappedRoiPct": 38.97021103896104,
+            "historyMaxSingleReturnShare": 0.061130554723516715
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "Q45",
+              "betType": "馬連",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T124",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T135",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T145",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                4,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T234",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X214",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                1,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X234",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 1800
+            },
+            {
+              "code": "X423",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X431",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                3,
+                1
+              ],
+              "stakeYen": 1900
+            }
+          ],
+          "result": {
+            "month": "2026-05",
+            "races": 140,
+            "stakeYen": 1232000,
+            "returnYen": 976710,
+            "cappedReturnYen": 601460,
+            "profitYen": -255290,
+            "roiPct": 79.27840909090908,
+            "cappedRoiPct": 48.81980519480519,
+            "hitRatePct": 58.57142857142858,
+            "maxSingleReturnYen": 367650
+          }
+        },
+        {
+          "month": "2026-06",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 51.34605486250655,
+            "historyRawRoiPct": 87.14047762392133,
+            "historyCappedRoiPct": 52.09657836644592,
+            "historyHitRatePct": 62.64900662251656,
+            "historyWinningMonths": 9,
+            "historyQ25CappedRoiPct": 39.176352813852816,
+            "historyMaxSingleReturnShare": 0.057692972011947834
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "Q45",
+              "betType": "馬連",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T124",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T135",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T145",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                4,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T234",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X214",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                1,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X234",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 1800
+            },
+            {
+              "code": "X423",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X431",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                3,
+                1
+              ],
+              "stakeYen": 1900
+            }
+          ],
+          "result": {
+            "month": "2026-06",
+            "races": 110,
+            "stakeYen": 968000,
+            "returnYen": 711330,
+            "cappedReturnYen": 390860,
+            "profitYen": -256670,
+            "roiPct": 73.48450413223141,
+            "cappedRoiPct": 40.378099173553714,
+            "hitRatePct": 60.0,
+            "maxSingleReturnYen": 331360
+          }
+        },
+        {
+          "month": "2026-07",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 51.22353409807896,
+            "historyRawRoiPct": 86.507990430622,
+            "historyCappedRoiPct": 51.553827751196174,
+            "historyHitRatePct": 62.526315789473685,
+            "historyWinningMonths": 9,
+            "historyQ25CappedRoiPct": 39.38249458874459,
+            "historyMaxSingleReturnShare": 0.05542315144160702
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "Q45",
+              "betType": "馬連",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T124",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T135",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T145",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                4,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T234",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X214",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                1,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X234",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 1800
+            },
+            {
+              "code": "X423",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X431",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                3,
+                1
+              ],
+              "stakeYen": 1900
+            }
+          ],
+          "result": {
+            "month": "2026-07",
+            "races": 120,
+            "stakeYen": 1056000,
+            "returnYen": 485500,
+            "cappedReturnYen": 485500,
+            "profitYen": -570500,
+            "roiPct": 45.97537878787879,
+            "cappedRoiPct": 45.97537878787879,
+            "hitRatePct": 62.5,
+            "maxSingleReturnYen": 67860
+          }
+        },
+        {
+          "month": "2026-08",
+          "key": "pair:concentration",
+          "variant": "pair",
+          "mode": "concentration",
+          "productionSafe": true,
+          "history": {
+            "score": 34.033869652391694,
+            "historyRawRoiPct": 84.55852614319548,
+            "historyCappedRoiPct": 51.285525596647844,
+            "historyHitRatePct": 62.5250501002004,
+            "historyWinningMonths": 9,
+            "historyQ25CappedRoiPct": 39.58863636363637,
+            "historyMaxSingleReturnShare": 0.053973812956925334
+          },
+          "policy": [
+            {
+              "code": "S1",
+              "betType": "単勝",
+              "predictedRanks": [
+                1
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "W12",
+              "betType": "ワイド",
+              "predictedRanks": [
+                1,
+                2
+              ],
+              "stakeYen": 100
+            },
+            {
+              "code": "Q25",
+              "betType": "馬連",
+              "predictedRanks": [
+                2,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "W35",
+              "betType": "ワイド",
+              "predictedRanks": [
+                3,
+                5
+              ],
+              "stakeYen": 700
+            },
+            {
+              "code": "Q45",
+              "betType": "馬連",
+              "predictedRanks": [
+                4,
+                5
+              ],
+              "stakeYen": 400
+            },
+            {
+              "code": "T124",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                2,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T135",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                3,
+                5
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "T145",
+              "betType": "3連複",
+              "predictedRanks": [
+                1,
+                4,
+                5
+              ],
+              "stakeYen": 200
+            },
+            {
+              "code": "T234",
+              "betType": "3連複",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X214",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                1,
+                4
+              ],
+              "stakeYen": 500
+            },
+            {
+              "code": "X234",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                3,
+                4
+              ],
+              "stakeYen": 900
+            },
+            {
+              "code": "X241",
+              "betType": "3連単",
+              "predictedRanks": [
+                2,
+                4,
+                1
+              ],
+              "stakeYen": 600
+            },
+            {
+              "code": "X413",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                1,
+                3
+              ],
+              "stakeYen": 1800
+            },
+            {
+              "code": "X423",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                2,
+                3
+              ],
+              "stakeYen": 300
+            },
+            {
+              "code": "X431",
+              "betType": "3連単",
+              "predictedRanks": [
+                4,
+                3,
+                1
+              ],
+              "stakeYen": 1900
+            }
+          ],
+          "result": {
+            "month": "2026-08",
+            "races": 30,
+            "stakeYen": 264000,
+            "returnYen": 55310,
+            "cappedReturnYen": 55310,
+            "profitYen": -208690,
+            "roiPct": 20.950757575757574,
+            "cappedRoiPct": 20.950757575757574,
+            "hitRatePct": 43.333333333333336,
+            "maxSingleReturnYen": 36100
+          }
+        }
+      ]
+    }
+  }
+}
