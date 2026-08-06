@@ -167,9 +167,10 @@ async function validationPanel(db: D1Database): Promise<string> {
 }
 
 function rewriteBackfillNotice(html: string): string {
-  return html
-    .replace("<b>調整期間</b>　このレースはモデル調整に使用した8月1日・2日のデータです。買い目は表示しますが、主要な累計回収率には含めません。", "<b>8月v4再計算</b>　このレースは当日より前のデータだけで現行v4モデルを再学習した後追い計算です。8月集計に含めますが、発走前公開ではありません。")
-    .replaceAll("過去検証", "8月v4再計算");
+  return html.replace(
+    "<b>調整期間</b>　このレースはモデル調整に使用した8月1日・2日のデータです。買い目は表示しますが、主要な累計回収率には含めません。",
+    "<b>8月v4再計算</b>　このレースは当日より前のデータだけで現行v4モデルを再学習した後追い計算です。8月集計に含めますが、発走前公開ではありません。"
+  );
 }
 
 async function transformHtmlResponse(response: Response, transform: (html: string) => string | Promise<string>): Promise<Response> {
