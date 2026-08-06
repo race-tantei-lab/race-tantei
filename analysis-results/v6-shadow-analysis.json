@@ -1,0 +1,181 @@
+{
+  "generatedAt": "2026-08-06",
+  "modelVersion": "v6-shadow-pairwise-ranking",
+  "productionChanged": false,
+  "method": "Pairwise horse-ranking model blended with market probability; hyperparameters and 5R selection are chosen on May-June only, then retrained chronologically for July and August.",
+  "samples": {
+    "trainRaces": 3425,
+    "validationRaces": 600,
+    "julyRaces": 288,
+    "augustRaces": 72
+  },
+  "selected": {
+    "config": {
+      "max_leaf_nodes": 31,
+      "learning_rate": 0.02,
+      "max_iter": 260,
+      "l2_regularization": 8.0
+    },
+    "blend": 0.6,
+    "temperature": 1.3,
+    "raceSelectionMode": "disagreement",
+    "validationRankingByMonth": {
+      "2026-05": {
+        "races": 336,
+        "logLoss": 2.0850981672749773,
+        "top1Pct": 38.98809523809524,
+        "top3Pct": 69.64285714285714,
+        "top1Roi": 169.10714285714286
+      },
+      "2026-06": {
+        "races": 264,
+        "logLoss": 2.089772300456841,
+        "top1Pct": 32.57575757575758,
+        "top3Pct": 65.53030303030303,
+        "top1Roi": 116.17424242424241
+      }
+    },
+    "validationPortfolio": {
+      "ライト": {
+        "races": 250,
+        "tickets": 1500,
+        "stakeYen": 400000,
+        "returnYen": 1589670,
+        "profitYen": 1189670,
+        "roiPct": 397.4175,
+        "hitRatePct": 38.0,
+        "monthlyRois": {
+          "2026-05": 430.8884,
+          "2026-06": 354.8182
+        }
+      },
+      "スタンダード": {
+        "races": 250,
+        "tickets": 3750,
+        "stakeYen": 1050000,
+        "returnYen": 4974390,
+        "profitYen": 3924390,
+        "roiPct": 473.7514,
+        "hitRatePct": 39.6,
+        "monthlyRois": {
+          "2026-05": 493.5833,
+          "2026-06": 448.5108
+        }
+      },
+      "プレミアム": {
+        "races": 250,
+        "tickets": 4000,
+        "stakeYen": 2200000,
+        "returnYen": 28543240,
+        "profitYen": 26343240,
+        "roiPct": 1297.42,
+        "hitRatePct": 54.0,
+        "monthlyRois": {
+          "2026-05": 1122.086,
+          "2026-06": 1520.5723
+        }
+      }
+    }
+  },
+  "july": {
+    "rankingByMonth": {
+      "2026-07": {
+        "races": 288,
+        "logLoss": 2.000537758313973,
+        "top1Pct": 37.84722222222222,
+        "top3Pct": 71.18055555555556,
+        "top1Roi": 125.59027777777779
+      }
+    },
+    "selectedRaces": 120,
+    "portfolio": {
+      "ライト": {
+        "races": 120,
+        "tickets": 720,
+        "stakeYen": 192000,
+        "returnYen": 603440,
+        "profitYen": 411440,
+        "roiPct": 314.2917,
+        "hitRatePct": 28.3333,
+        "monthlyRois": {
+          "2026-07": 314.2917
+        }
+      },
+      "スタンダード": {
+        "races": 120,
+        "tickets": 1800,
+        "stakeYen": 504000,
+        "returnYen": 1820530,
+        "profitYen": 1316530,
+        "roiPct": 361.2163,
+        "hitRatePct": 29.1667,
+        "monthlyRois": {
+          "2026-07": 361.2163
+        }
+      },
+      "プレミアム": {
+        "races": 120,
+        "tickets": 1920,
+        "stakeYen": 1056000,
+        "returnYen": 6983670,
+        "profitYen": 5927670,
+        "roiPct": 661.3324,
+        "hitRatePct": 54.1667,
+        "monthlyRois": {
+          "2026-07": 661.3324
+        }
+      }
+    }
+  },
+  "august": {
+    "rankingByMonth": {
+      "2026-08": {
+        "races": 72,
+        "logLoss": 1.9566519221414436,
+        "top1Pct": 36.11111111111111,
+        "top3Pct": 75.0,
+        "top1Roi": 83.33333333333334
+      }
+    },
+    "selectedRaces": 30,
+    "portfolio": {
+      "ライト": {
+        "races": 30,
+        "tickets": 180,
+        "stakeYen": 48000,
+        "returnYen": 0,
+        "profitYen": -48000,
+        "roiPct": 0.0,
+        "hitRatePct": 0.0,
+        "monthlyRois": {
+          "2026-08": 0.0
+        }
+      },
+      "スタンダード": {
+        "races": 30,
+        "tickets": 450,
+        "stakeYen": 126000,
+        "returnYen": 59330,
+        "profitYen": -66670,
+        "roiPct": 47.0873,
+        "hitRatePct": 10.0,
+        "monthlyRois": {
+          "2026-08": 47.0873
+        }
+      },
+      "プレミアム": {
+        "races": 30,
+        "tickets": 480,
+        "stakeYen": 264000,
+        "returnYen": 323930,
+        "profitYen": 59930,
+        "roiPct": 122.7008,
+        "hitRatePct": 60.0,
+        "monthlyRois": {
+          "2026-08": 122.7008
+        }
+      }
+    }
+  },
+  "promotionEligible": false
+}
