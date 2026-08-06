@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "scripts/backfill-history-v2.mjs"
+      - "src/v1/three-month-archive.ts"
+      - "src/v1/three-month-desktop.ts"
       - ".github/workflows/backfill-history.yml"
   workflow_dispatch:
     inputs:
@@ -29,6 +31,32 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       BACKFILL_CONCURRENCY: ${{ inputs.concurrency || '24' }}
       BACKFILL_RACES_PER_FILE: "40"
+      MARKET_AUDIT_SQL: >-
+        WITH per_race AS (
+          SELECT r.race_id, r.race_date,
+            SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS active_runners,
+            SUM(CASE WHEN rr.runner_status='active' AND rr.win_odds IS NOT NULL AND rr.win_odds>1
+              AND rr.popularity BETWEEN 1 AND 18 THEN 1 ELSE 0 END) AS valid_market_runners,
+            COUNT(DISTINCT CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS distinct_popularity,
+            MIN(CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS min_popularity,
+            MAX(CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS max_popularity
+          FROM rt_races r
+          JOIN rt_runners rr ON rr.race_id=r.race_id
+          WHERE r.status='finished' AND r.race_date BETWEEN '2024-05-01' AND '2026-08-02'
+          GROUP BY r.race_id, r.race_date
+        )
+        SELECT COUNT(*) AS races,
+          SUM(CASE WHEN active_runners>=2 THEN 1 ELSE 0 END) AS auditable_races,
+          SUM(CASE WHEN active_runners>=2 AND (
+            valid_market_runners<>active_runners OR
+            distinct_popularity<>active_runners OR
+            min_popularity<>1 OR
+            max_popularity<>active_runners
+          ) THEN 1 ELSE 0 END) AS invalid_races,
+          SUM(CASE WHEN active_runners>=2 AND max_popularity>18 THEN 1 ELSE 0 END) AS popularity_over_18_races,
+          MIN(race_date) AS first_date,
+          MAX(race_date) AS last_date
+        FROM per_race;
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,6 +73,15 @@ jobs:
       - name: Compile parsers
         run: npm run build:test
 
+      - name: Audit D1 market data before reload
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/history-backfill
+          npx wrangler d1 execute race-tantei-phase0 --remote --command "$MARKET_AUDIT_SQL" --json --config wrangler.jsonc \
+            > tmp/history-backfill/market-audit-before.json
+          cat tmp/history-backfill/market-audit-before.json
+
       - name: Download and parse all history pages in parallel
         run: node scripts/backfill-history-v2.mjs
 
@@ -52,11 +89,47 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in tmp/history-backfill/backfill-*.sql; do
+          shopt -s nullglob
+          files=(tmp/history-backfill/backfill-*.sql)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No generated history SQL files" >&2
+            exit 1
+          fi
+          for file in "${files[@]}"; do
             echo "Loading $file"
             npx wrangler d1 execute race-tantei-phase0 --remote --file "$file" --config wrangler.jsonc
           done
           npx wrangler d1 execute race-tantei-phase0 --remote --file tmp/history-backfill/zzzz-state.sql --config wrangler.jsonc
+
+      - name: Audit D1 market data after reload
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --command "$MARKET_AUDIT_SQL" --json --config wrangler.jsonc \
+            > tmp/history-backfill/market-audit-after.json
+          cat tmp/history-backfill/market-audit-after.json
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+          const payload = JSON.parse(await readFile("tmp/history-backfill/market-audit-after.json", "utf8"));
+          const queue = [payload];
+          let row = null;
+          while (queue.length > 0 && !row) {
+            const value = queue.shift();
+            if (Array.isArray(value)) {
+              queue.push(...value);
+            } else if (value && typeof value === "object") {
+              if (Object.prototype.hasOwnProperty.call(value, "invalid_races")) row = value;
+              else queue.push(...Object.values(value));
+            }
+          }
+          if (!row) throw new Error("MARKET_AUDIT_RESULT_NOT_FOUND");
+          const invalid = Number(row.invalid_races ?? -1);
+          const auditable = Number(row.auditable_races ?? 0);
+          console.log(JSON.stringify({ auditableRaces: auditable, invalidRaces: invalid }));
+          if (!Number.isFinite(invalid) || invalid !== 0) {
+            throw new Error(`MARKET_AUDIT_FAILED:${invalid}`);
+          }
+          NODE
 
       - name: Upload backfill report
         if: always()
@@ -66,5 +139,7 @@ jobs:
           path: |
             tmp/history-backfill/summary.json
             tmp/history-backfill/failures.json
+            tmp/history-backfill/market-audit-before.json
+            tmp/history-backfill/market-audit-after.json
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 30

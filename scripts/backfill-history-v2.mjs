@@ -47,6 +47,23 @@ function sortedUniqueUrls(values) {
   });
 }
 
+function validateRunnerMarket(runners) {
+  const active = runners.filter((runner) => runner.runnerStatus === "active");
+  const ranks = active.map((runner) => runner.popularity);
+  const complete = active.length >= 2
+    && active.length <= 18
+    && ranks.every((rank) => Number.isInteger(rank) && rank >= 1 && rank <= active.length)
+    && new Set(ranks).size === active.length
+    && active.every((runner) => Number.isFinite(runner.winOdds) && runner.winOdds > 1);
+  return {
+    complete,
+    activeRunners: active.length,
+    ranks,
+    missingOdds: active.filter((runner) => !Number.isFinite(runner.winOdds) || runner.winOdds <= 1)
+      .map((runner) => runner.horseNo)
+  };
+}
+
 function raceSql(bundle) {
   const r = bundle.race;
   const out = [];
@@ -86,8 +103,8 @@ function raceSql(bundle) {
     ) VALUES (
       ${sql(r.raceId)},${sql(x.horseNo)},${sql(x.finishPosition)},${sql(x.resultStatus)},${sql(x.timeText)},${sql(x.marginText)},${sql(x.final3f)},CURRENT_TIMESTAMP
     ) ON CONFLICT(race_id,horse_no) DO UPDATE SET
-      finish_position=excluded.finish_position,result_status=excluded.resultStatus,time_text=excluded.time_text,
-      margin_text=excluded.margin_text,final3f=excluded.final3f,updated_at=CURRENT_TIMESTAMP;`.replace("excluded.resultStatus", "excluded.result_status"));
+      finish_position=excluded.finish_position,result_status=excluded.result_status,time_text=excluded.time_text,
+      margin_text=excluded.margin_text,final3f=excluded.final3f,updated_at=CURRENT_TIMESTAMP;`);
   }
 
   for (const x of bundle.payouts) {
@@ -110,10 +127,11 @@ async function fetchBundle(url) {
       const parsed = parseResultPage(page.html, page.url);
       if (!isWalkForwardArchiveDate(parsed.race.raceDate)) throw new Error(`OUT_OF_SCOPE:${parsed.race.raceDate}`);
       const runners = parseDesktopResultRunners(page.html);
-      const payouts = parsed.payouts.length > 0 ? parsed.payouts : parseDesktopPayouts(page.html);
-      if (runners.filter((x) => x.runnerStatus === "active" && x.winOdds !== null).length < 2) {
-        throw new Error(`RUNNERS_NOT_FOUND:${runners.length}`);
+      const market = validateRunnerMarket(runners);
+      if (!market.complete) {
+        throw new Error(`RUNNER_MARKET_INVALID:${JSON.stringify(market)}`);
       }
+      const payouts = parsed.payouts.length > 0 ? parsed.payouts : parseDesktopPayouts(page.html);
       if (parsed.race.status !== "cancelled" && payouts.length === 0) throw new Error("PAYOUTS_NOT_FOUND");
       return { bundle: { ...parsed, runners, payouts }, error: null };
     } catch (error) {
@@ -136,7 +154,7 @@ async function main() {
     });
   }));
   const urls = sortedUniqueUrls(monthLists.flat());
-  console.log(`discovered ${urls.length} result pages across ${WALK_FORWARD_ARCHIVE_MONTHS.length} months`);
+  console.log(`discovered ${urls.length} desktop result pages across ${WALK_FORWARD_ARCHIVE_MONTHS.length} months`);
 
   let cursor = 0;
   let completed = 0;
@@ -152,7 +170,7 @@ async function main() {
         await writeFile(path.join(RAW_DIR, `${String(index).padStart(6, "0")}.sql`), raceSql(result.bundle));
         completed += 1;
       } else {
-        failures.push({ url, attempts: 0, error: result.error });
+        failures.push({ url, attempts: MAX_ATTEMPTS, error: result.error });
       }
       if ((index + 1) % 100 === 0 || index + 1 === urls.length) {
         console.log(`${index + 1}/${urls.length}; success=${completed}; failed=${failures.length}`);
@@ -187,7 +205,9 @@ COMMIT;\n`;
     completed,
     failures: failures.length,
     concurrency: FETCH_CONCURRENCY,
-    sqlFiles: outputIndex
+    sqlFiles: outputIndex,
+    desktopOnly: true,
+    completePopularityRequired: true
   }, null, 2));
   if (failures.length) await writeFile(path.join(OUTPUT_DIR, "failures.json"), JSON.stringify(failures, null, 2));
   console.log(`finished: success=${completed}, failed=${failures.length}, sqlFiles=${outputIndex}`);

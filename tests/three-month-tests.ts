@@ -1,11 +1,20 @@
 import { strict as assert } from "node:assert";
 import { summarizeThreeMonthPeriod } from "../src/v1/three-month-evaluation.js";
-import { parseHistoricalMeetings } from "../src/v1/three-month-history.js";
+import {
+  archiveResultUrl,
+  parseArchiveResultCnames
+} from "../src/v1/three-month-archive.js";
+import { parseDesktopResultRunners } from "../src/v1/three-month-desktop.js";
+import {
+  parseHistoricalMeetings,
+  parseHistoricalResultRunners
+} from "../src/v1/three-month-history.js";
 import type { ThreeMonthValidationSnapshot } from "../src/v1/three-month-validation.js";
 import {
   THREE_MONTH_END_DATE,
   THREE_MONTH_EVALUATION_END_DATE,
   THREE_MONTH_RACE_DATES,
+  THREE_MONTH_SCOPE_VERSION,
   THREE_MONTH_START_DATE,
   THREE_MONTH_TUNING_START_DATE,
   THREE_MONTH_VALIDATION_CONFIGS,
@@ -14,6 +23,7 @@ import {
 import type { BudgetCourse } from "../src/v1/types.js";
 import type { CourseValidationSummary, ValidationDateSnapshot } from "../src/v1/validation.js";
 
+assert.equal(THREE_MONTH_SCOPE_VERSION, "three-month-2026-05-02-to-2026-08-02-v2-correct-popularity");
 assert.equal(THREE_MONTH_START_DATE, "2026-05-02");
 assert.equal(THREE_MONTH_EVALUATION_END_DATE, "2026-07-26");
 assert.equal(THREE_MONTH_TUNING_START_DATE, "2026-08-01");
@@ -45,6 +55,100 @@ assert.deepEqual(
     { venue: "東京", meetingNo: 2, meetingDay: 3 }
   ].sort((a, b) => a.venue.localeCompare(b.venue, "ja"))
 );
+
+const canonicalCnames = parseArchiveResultCnames(`
+  <a href="/JRADB/accessS.html?CNAME=sw01sde0105202602050120260509/26">mobile duplicate</a>
+  <a href="/JRADB/accessS.html?CNAME=pw01sde0105202602050120260509/26">desktop</a>
+  <script>const next = "sw01sde0108202603050720260509/73";</script>
+`);
+assert.deepEqual(canonicalCnames, [
+  "pw01sde0105202602050120260509/26",
+  "pw01sde0108202603050720260509/73"
+]);
+assert.equal(
+  archiveResultUrl("sw01sde0105202602050120260509/26"),
+  "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0105202602050120260509%2F26"
+);
+
+const runnerTableHtml = `
+  <table>
+    <tr>
+      <td>1</td><td>2</td><td>5</td><td>キタノスター</td><td>牝4</td><td>55.0</td>
+      <td>C.ルメール</td><td>1:33.4</td><td></td><td>1-1</td><td>34.4</td>
+      <td>466kg(-4)</td><td>[栗東]矢作 芳人</td><td>1</td>
+    </tr>
+    <tr>
+      <td>2</td><td>1</td><td>2</td><td>アオイホース</td><td>牡3</td><td>57.0</td>
+      <td>横山 武史</td><td>1:33.5</td><td>クビ</td><td>3-3</td><td>34.1</td>
+      <td>480kg(+2)</td><td>美浦・田中 博康</td><td>2</td>
+    </tr>
+    <tr>
+      <td>3</td><td>3</td><td>7</td><td>ミナミノカゼ</td><td>セ5</td><td>58</td>
+      <td>坂井 瑠星</td><td>1:33.7</td><td>1</td><td>5-5</td><td>34.2</td>
+      <td>502(0)</td><td>栗東 矢野 英一</td><td>3</td>
+    </tr>
+  </table>
+`;
+const resultRunners = parseHistoricalResultRunners(runnerTableHtml);
+
+assert.equal(resultRunners.length, 3);
+const favorite = resultRunners.find((row) => row.horseNo === 5);
+const secondFavorite = resultRunners.find((row) => row.horseNo === 2);
+const thirdFavorite = resultRunners.find((row) => row.horseNo === 7);
+assert.equal(favorite?.horseName, "キタノスター");
+assert.equal(favorite?.sexAge, "牝4");
+assert.equal(favorite?.assignedWeight, 55);
+assert.equal(favorite?.jockey, "C.ルメール");
+assert.equal(favorite?.horseWeight, 466);
+assert.equal(favorite?.weightChange, -4);
+assert.equal(favorite?.trainer, "矢作 芳人");
+assert.equal(favorite?.stable, "栗東");
+assert.equal(favorite?.popularity, 1);
+assert.equal(secondFavorite?.popularity, 2);
+assert.equal(secondFavorite?.horseWeight, 480);
+assert.equal(secondFavorite?.weightChange, 2);
+assert.equal(secondFavorite?.trainer, "田中 博康");
+assert.equal(secondFavorite?.stable, "美浦");
+assert.equal(thirdFavorite?.popularity, 3);
+assert.ok((favorite?.winOdds ?? 999) < (secondFavorite?.winOdds ?? 0));
+assert.ok((secondFavorite?.winOdds ?? 999) < (thirdFavorite?.winOdds ?? 0));
+
+const desktopRunners = parseDesktopResultRunners(runnerTableHtml);
+assert.equal(desktopRunners.length, 3);
+assert.equal(desktopRunners.find((row) => row.horseNo === 5)?.popularity, 1);
+assert.equal(desktopRunners.find((row) => row.horseNo === 2)?.popularity, 2);
+assert.ok(
+  (desktopRunners.find((row) => row.horseNo === 5)?.winOdds ?? 999)
+    < (desktopRunners.find((row) => row.horseNo === 2)?.winOdds ?? 0)
+);
+
+const corruptPopularityHtml = `
+  <table>
+    <tr>
+      <td>1</td><td>1</td><td>1</td><td>ホースワン</td><td>牡3</td><td>57</td>
+      <td>騎手A</td><td>1:35.0</td><td></td><td>1-1</td><td>35.0</td>
+      <td>480(0)</td><td>美浦・調教師A</td><td>63</td>
+    </tr>
+    <tr>
+      <td>2</td><td>2</td><td>2</td><td>ホースツー</td><td>牝3</td><td>55</td>
+      <td>騎手B</td><td>1:35.1</td><td>クビ</td><td>2-2</td><td>35.1</td>
+      <td>470(+2)</td><td>栗東・調教師B</td><td>77</td>
+    </tr>
+  </table>
+`;
+const corruptPopularityRunners = parseHistoricalResultRunners(corruptPopularityHtml);
+assert.equal(corruptPopularityRunners.length, 2);
+assert.equal(corruptPopularityRunners[0]?.popularity, null);
+assert.equal(corruptPopularityRunners[1]?.popularity, null);
+assert.equal(corruptPopularityRunners[0]?.winOdds, null);
+assert.equal(corruptPopularityRunners[1]?.winOdds, null);
+
+const corruptDesktopRunners = parseDesktopResultRunners(corruptPopularityHtml);
+assert.equal(corruptDesktopRunners.length, 2);
+assert.equal(corruptDesktopRunners[0]?.popularity, null);
+assert.equal(corruptDesktopRunners[1]?.popularity, null);
+assert.equal(corruptDesktopRunners[0]?.winOdds, null);
+assert.equal(corruptDesktopRunners[1]?.winOdds, null);
 
 function courseSummary(
   course: BudgetCourse,
