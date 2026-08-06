@@ -12,9 +12,19 @@ on:
       - "scripts/analyze-v6-course-policy.py"
       - "scripts/analyze-v6-shadow.py"
       - "scripts/train-nonlinear-market-blend-v4.py"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/v6-7-full-period-walkforward.yml"
+      - "scripts/analyze-v6-7-full-period-walkforward.py"
+      - "scripts/analyze-v6-rolling-oos.py"
+      - "scripts/analyze-v6-course-policy.py"
+      - "scripts/analyze-v6-shadow.py"
+      - "scripts/train-nonlinear-market-blend-v4.py"
 
 concurrency:
-  group: v6-7-full-period-walkforward
+  group: v6-7-full-period-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -54,7 +64,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
       - name: Save report to branch
-        if: always()
+        if: always() && github.event_name == 'push'
         shell: bash
         run: |
           mkdir -p analysis-results
