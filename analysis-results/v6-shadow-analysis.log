@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/home/runner/work/race-tantei/race-tantei/scripts/analyze-v6-shadow.py", line 359, in <module>
+    main()
+  File "/home/runner/work/race-tantei/race-tantei/scripts/analyze-v6-shadow.py", line 291, in main
+    "score": portfolio_score(metrics),
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/race-tantei/race-tantei/scripts/analyze-v6-shadow.py", line 238, in portfolio_score
+    monthly = list(row["monthlyRois"].values())
+                   ~~~^^^^^^^^^^^^^^^
+KeyError: 'monthlyRois'
