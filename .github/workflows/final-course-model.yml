@@ -10,7 +10,7 @@ on:
       - "scripts/final-course-policy.py"
       - "scripts/analyze-final-course-model.py"
       - "scripts/run-final-course-production.py"
-      - "scripts/backfill-final-course-august.py"
+      - "scripts/backfill-final-course-august-fast.py"
       - "scripts/publish-nonlinear-v4-production.py"
       - "scripts/train-nonlinear-market-blend-v4.py"
       - "analysis-results/nonlinear-market-blend-v4.json"
@@ -25,7 +25,7 @@ permissions:
 jobs:
   analyze-and-backfill:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 30
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
@@ -33,54 +33,23 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Install model dependencies
         run: python -m pip install --disable-pip-version-check numpy scikit-learn
-
-      - name: Run final pipeline with diagnostics
+      - name: Verify sources
+        run: python -m py_compile scripts/final-course-policy.py scripts/analyze-final-course-model.py scripts/run-final-course-production.py scripts/backfill-final-course-august-fast.py
+      - name: Analyze final v5
         shell: bash
         run: |
-          set +e
-          : > final-course-diagnostic.log
-
-          echo "[compile]" | tee -a final-course-diagnostic.log
-          python -m py_compile \
-            scripts/final-course-policy.py \
-            scripts/analyze-final-course-model.py \
-            scripts/run-final-course-production.py \
-            scripts/backfill-final-course-august.py \
-            >> final-course-diagnostic.log 2>&1
-          compile_status=$?
-          echo "compile_status=$compile_status" | tee -a final-course-diagnostic.log
-
-          analysis_status=99
-          backfill_status=99
-          if [[ $compile_status -eq 0 ]]; then
-            echo "[analysis]" | tee -a final-course-diagnostic.log
-            python scripts/analyze-final-course-model.py \
-              > final-course-model-analysis.log 2>&1
-            analysis_status=$?
-            cat final-course-model-analysis.log >> final-course-diagnostic.log
-            echo "analysis_status=$analysis_status" | tee -a final-course-diagnostic.log
-          fi
-
-          if [[ $compile_status -eq 0 && $analysis_status -eq 0 ]]; then
-            echo "[backfill]" | tee -a final-course-diagnostic.log
-            python scripts/backfill-final-course-august.py \
-              > final-course-august-backfill.log 2>&1
-            backfill_status=$?
-            cat final-course-august-backfill.log >> final-course-diagnostic.log
-            echo "backfill_status=$backfill_status" | tee -a final-course-diagnostic.log
-          fi
-
-          if [[ $compile_status -ne 0 || $analysis_status -ne 0 || $backfill_status -ne 0 ]]; then
-            exit 1
-          fi
-
+          set -o pipefail
+          python scripts/analyze-final-course-model.py 2>&1 | tee final-course-model-analysis.log
+      - name: Fast August recalculation
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/backfill-final-course-august-fast.py 2>&1 | tee final-course-august-backfill.log
       - name: Upload reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -91,21 +60,14 @@ jobs:
             final-course-model-analysis.log
             final-course-august-backfill.json
             final-course-august-backfill.log
-            final-course-diagnostic.log
           if-no-files-found: warn
           retention-days: 30
-
       - name: Save reports
         if: always()
         shell: bash
         run: |
           mkdir -p analysis-results
-          for file in \
-            final-course-model-analysis.json \
-            final-course-model-analysis.log \
-            final-course-august-backfill.json \
-            final-course-august-backfill.log \
-            final-course-diagnostic.log; do
+          for file in final-course-model-analysis.json final-course-model-analysis.log final-course-august-backfill.json final-course-august-backfill.log; do
             if [[ -f "$file" ]]; then
               cp "$file" "analysis-results/$file"
               git add -f "analysis-results/$file"
@@ -116,9 +78,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No report changes."
           else
-            git commit -m "Save final course model diagnostics"
+            git commit -m "Save final v5 analysis and August results"
             git pull --rebase origin main
             git push origin HEAD:main
           fi
-
-# Retry after the previous run finished, so the diagnostic job is not cancelled.
