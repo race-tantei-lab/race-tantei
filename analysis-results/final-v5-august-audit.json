@@ -1,0 +1,121 @@
+{
+  "generatedAt": "2026-08-06T04:42:35Z",
+  "modelVersion": "v5.0.0-nonlinear-course-policy",
+  "summary": {
+    "predictions": 72,
+    "predictionRaces": 72,
+    "runnerRows": 920,
+    "bets": 1110,
+    "selectedRaces": 30,
+    "settledBets": 1110,
+    "unsettledBets": 0
+  },
+  "complete": true,
+  "dates": {
+    "2026-08-01": {
+      "スタンダード": {
+        "races": 15,
+        "tickets": 225,
+        "stakeYen": 63000,
+        "returnYen": 25490,
+        "profitYen": -37510,
+        "roiPct": 40.4603,
+        "hitRaces": 4,
+        "hitRatePct": 26.6667,
+        "unsettledTickets": 0
+      },
+      "プレミアム": {
+        "races": 15,
+        "tickets": 240,
+        "stakeYen": 132000,
+        "returnYen": 21490,
+        "profitYen": -110510,
+        "roiPct": 16.2803,
+        "hitRaces": 10,
+        "hitRatePct": 66.6667,
+        "unsettledTickets": 0
+      },
+      "ライト": {
+        "races": 15,
+        "tickets": 90,
+        "stakeYen": 24000,
+        "returnYen": 16430,
+        "profitYen": -7570,
+        "roiPct": 68.4583,
+        "hitRaces": 9,
+        "hitRatePct": 60.0,
+        "unsettledTickets": 0
+      }
+    },
+    "2026-08-02": {
+      "スタンダード": {
+        "races": 15,
+        "tickets": 225,
+        "stakeYen": 63000,
+        "returnYen": 9370,
+        "profitYen": -53630,
+        "roiPct": 14.873,
+        "hitRaces": 6,
+        "hitRatePct": 40.0,
+        "unsettledTickets": 0
+      },
+      "プレミアム": {
+        "races": 15,
+        "tickets": 240,
+        "stakeYen": 132000,
+        "returnYen": 16240,
+        "profitYen": -115760,
+        "roiPct": 12.303,
+        "hitRaces": 9,
+        "hitRatePct": 60.0,
+        "unsettledTickets": 0
+      },
+      "ライト": {
+        "races": 15,
+        "tickets": 90,
+        "stakeYen": 24000,
+        "returnYen": 10960,
+        "profitYen": -13040,
+        "roiPct": 45.6667,
+        "hitRaces": 8,
+        "hitRatePct": 53.3333,
+        "unsettledTickets": 0
+      }
+    }
+  },
+  "aggregate": {
+    "スタンダード": {
+      "races": 30,
+      "tickets": 450,
+      "stakeYen": 126000,
+      "returnYen": 34860,
+      "hitRaces": 10,
+      "unsettledTickets": 0,
+      "profitYen": -91140,
+      "roiPct": 27.6667,
+      "hitRatePct": 33.3333
+    },
+    "プレミアム": {
+      "races": 30,
+      "tickets": 480,
+      "stakeYen": 264000,
+      "returnYen": 37730,
+      "hitRaces": 19,
+      "unsettledTickets": 0,
+      "profitYen": -226270,
+      "roiPct": 14.2917,
+      "hitRatePct": 63.3333
+    },
+    "ライト": {
+      "races": 30,
+      "tickets": 180,
+      "stakeYen": 48000,
+      "returnYen": 27390,
+      "hitRaces": 17,
+      "unsettledTickets": 0,
+      "profitYen": -20610,
+      "roiPct": 57.0625,
+      "hitRatePct": 56.6667
+    }
+  }
+}
