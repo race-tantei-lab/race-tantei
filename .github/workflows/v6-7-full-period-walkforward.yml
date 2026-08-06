@@ -1,29 +1,29 @@
-name: V6.7 full-period walk-forward analysis
+name: V6.7 full-period walk-forward
 
 on:
   workflow_dispatch:
-  pull_request:
+  push:
     branches:
-      - main
+      - analysis/v6-7-full-period-walkforward
     paths:
       - ".github/workflows/v6-7-full-period-walkforward.yml"
-      - "scripts/analyze-v6-full-period-walkforward.py"
+      - "scripts/analyze-v6-7-full-period-walkforward.py"
       - "scripts/analyze-v6-rolling-oos.py"
       - "scripts/analyze-v6-course-policy.py"
       - "scripts/analyze-v6-shadow.py"
       - "scripts/train-nonlinear-market-blend-v4.py"
 
 concurrency:
-  group: v6-7-full-period-${{ github.ref }}
+  group: v6-7-full-period-walkforward
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 115
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
@@ -31,30 +31,45 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Install analysis dependencies
+      - name: Install dependencies
         run: python -m pip install --disable-pip-version-check numpy scikit-learn
-
-      - name: Compile analysis
-        run: python -m py_compile scripts/analyze-v6-full-period-walkforward.py
-
+      - name: Verify source
+        run: python -m py_compile scripts/analyze-v6-7-full-period-walkforward.py
       - name: Run full-period analysis
         shell: bash
         run: |
           set -o pipefail
-          python scripts/analyze-v6-full-period-walkforward.py 2>&1 | tee v6-7-full-period-analysis.log
-
-      - name: Upload analysis
+          python scripts/analyze-v6-7-full-period-walkforward.py 2>&1 | tee v6-7-full-period-walkforward.log
+      - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v6-7-full-period-analysis
+          name: v6-7-full-period-walkforward
           path: |
-            v6-7-full-period-analysis.json
-            v6-7-full-period-analysis.log
+            v6-7-full-period-walkforward.json
+            v6-7-full-period-walkforward.log
           if-no-files-found: warn
           retention-days: 30
+      - name: Save report to branch
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p analysis-results
+          for file in v6-7-full-period-walkforward.json v6-7-full-period-walkforward.log; do
+            if [[ -f "$file" ]]; then
+              cp "$file" "analysis-results/$file"
+              git add -f "analysis-results/$file"
+            fi
+          done
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then
+            echo "No report changes."
+          else
+            git commit -m "Save v6.7 full-period analysis"
+            git pull --rebase origin analysis/v6-7-full-period-walkforward
+            git push origin HEAD:analysis/v6-7-full-period-walkforward
+          fi
