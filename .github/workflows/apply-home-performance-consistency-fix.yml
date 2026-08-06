@@ -1,10 +1,10 @@
 name: Apply v4 home consistency fix
 
-# Registered on branch; this second push starts the one-time patch.
+# One-time main patch; the job deletes this workflow after verification.
 on:
   push:
     branches:
-      - agent/fix-home-performance-consistency
+      - main
     paths:
       - ".github/workflows/apply-home-performance-consistency-fix.yml"
 
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: agent/fix-home-performance-consistency
+          ref: main
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -150,4 +150,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/v1/phase-a-dashboard.ts src/production-ui-entry.ts .github/workflows/apply-home-performance-consistency-fix.yml
           git commit -m "Align home race details with v4 aggregate"
-          git push origin HEAD:agent/fix-home-performance-consistency
+          git pull --rebase origin main
+          git push origin HEAD:main
