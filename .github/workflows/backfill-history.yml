@@ -47,6 +47,16 @@ jobs:
             SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS active_runners,
             SUM(CASE WHEN rr.runner_status='active' AND rr.win_odds IS NOT NULL AND rr.win_odds>1
               AND rr.popularity BETWEEN 1 AND 18 THEN 1 ELSE 0 END) AS valid_market_runners,
+            SUM(CASE WHEN rr.runner_status='active' AND (
+              rr.win_odds IS NULL OR rr.win_odds<=1 OR
+              rr.popularity IS NULL OR rr.popularity<1 OR rr.popularity>18 OR
+              rr.popularity <> 1 + (
+                SELECT COUNT(*) FROM rt_runners better
+                WHERE better.race_id=rr.race_id
+                  AND better.runner_status='active'
+                  AND better.popularity < rr.popularity
+              )
+            ) THEN 1 ELSE 0 END) AS invalid_market_runners,
             COUNT(DISTINCT CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS distinct_popularity,
             MIN(CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS min_popularity,
             MAX(CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS max_popularity
@@ -57,12 +67,7 @@ jobs:
         )
         SELECT COUNT(*) AS races,
           SUM(CASE WHEN active_runners>=2 THEN 1 ELSE 0 END) AS auditable_races,
-          SUM(CASE WHEN active_runners>=2 AND (
-            valid_market_runners<>active_runners OR
-            distinct_popularity<>active_runners OR
-            min_popularity<>1 OR
-            max_popularity<>active_runners
-          ) THEN 1 ELSE 0 END) AS invalid_races,
+          SUM(CASE WHEN active_runners>=2 AND invalid_market_runners>0 THEN 1 ELSE 0 END) AS invalid_races,
           SUM(CASE WHEN active_runners>=2 AND max_popularity>18 THEN 1 ELSE 0 END) AS popularity_over_18_races,
           MIN(race_date) AS first_date,
           MAX(race_date) AS last_date
@@ -73,6 +78,16 @@ jobs:
             SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS active_runners,
             SUM(CASE WHEN rr.runner_status='active' AND rr.win_odds IS NOT NULL AND rr.win_odds>1
               AND rr.popularity BETWEEN 1 AND 18 THEN 1 ELSE 0 END) AS valid_market_runners,
+            SUM(CASE WHEN rr.runner_status='active' AND (
+              rr.win_odds IS NULL OR rr.win_odds<=1 OR
+              rr.popularity IS NULL OR rr.popularity<1 OR rr.popularity>18 OR
+              rr.popularity <> 1 + (
+                SELECT COUNT(*) FROM rt_runners better
+                WHERE better.race_id=rr.race_id
+                  AND better.runner_status='active'
+                  AND better.popularity < rr.popularity
+              )
+            ) THEN 1 ELSE 0 END) AS invalid_market_runners,
             COUNT(DISTINCT CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS distinct_popularity,
             MIN(CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS min_popularity,
             MAX(CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS max_popularity
@@ -82,16 +97,11 @@ jobs:
           GROUP BY r.race_id
         )
         SELECT r.race_id, r.race_date, r.venue, r.race_no, r.result_url,
-          p.active_runners, p.valid_market_runners, p.distinct_popularity,
-          p.min_popularity, p.max_popularity
+          p.active_runners, p.valid_market_runners, p.invalid_market_runners,
+          p.distinct_popularity, p.min_popularity, p.max_popularity
         FROM per_race p
         JOIN rt_races r ON r.race_id=p.race_id
-        WHERE p.active_runners>=2 AND (
-          p.valid_market_runners<>p.active_runners OR
-          p.distinct_popularity<>p.active_runners OR
-          p.min_popularity<>1 OR
-          p.max_popularity<>p.active_runners
-        )
+        WHERE p.active_runners>=2 AND p.invalid_market_runners>0
         ORDER BY r.race_date, r.venue, r.race_no;
 
     steps:
@@ -101,7 +111,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='history/backfill' \
-            -f description='準備中：不正人気レースの限定修復' \
+            -f description='準備中：人気データの限定修復' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Checkout
@@ -123,7 +133,11 @@ jobs:
           node --check scripts/repair-invalid-market-history.mjs
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
-          import { isOfficialJraResultUrl } from './scripts/repair-invalid-market-history.mjs';
+          import {
+            canonicalOfficialJraResultUrl,
+            hasValidPopularityRanks,
+            isOfficialJraResultUrl
+          } from './scripts/repair-invalid-market-history.mjs';
           assert.equal(isOfficialJraResultUrl('https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde01'), true);
           assert.equal(isOfficialJraResultUrl('https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde01'), true);
           assert.equal(isOfficialJraResultUrl('https://jra.go.jp/JRADB/accessS.html?CNAME=pw01sde01'), true);
@@ -131,7 +145,16 @@ jobs:
           assert.equal(isOfficialJraResultUrl('https://evil-jra.jp/JRADB/accessS.html'), false);
           assert.equal(isOfficialJraResultUrl('https://sp.jra.jp.example.com/JRADB/accessS.html'), false);
           assert.equal(isOfficialJraResultUrl('https://sp.jra.jp/not-jradb'), false);
-          console.log('official JRA repair URL tests passed');
+          const canonical = new URL(canonicalOfficialJraResultUrl(
+            'https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde1001202601030120260801/DC'
+          ));
+          assert.equal(canonical.hostname, 'www.jra.go.jp');
+          assert.equal(canonical.searchParams.get('CNAME'), 'pw01sde1001202601030120260801/DC');
+          assert.equal(hasValidPopularityRanks([1, 2, 2, 4], 4), true);
+          assert.equal(hasValidPopularityRanks([1, 2, 3, 4], 4), true);
+          assert.equal(hasValidPopularityRanks([1, 2, 2, 3], 4), false);
+          assert.equal(hasValidPopularityRanks([2, 2], 2), false);
+          console.log('history repair validation tests passed');
           NODE
 
       - name: Publish pre-audit status
@@ -179,7 +202,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='history/backfill' \
-            -f description='処理中：不正レースのみ低速で公式結果を再取得' \
+            -f description='処理中：修復対象のみ公式結果を再取得' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Fetch and validate targeted official results
@@ -270,7 +293,7 @@ jobs:
         run: |
           if [ "${{ job.status }}" = "success" ]; then
             STATE=success
-            DESCRIPTION='完了：全期間の不正人気0件・修復監査合格'
+            DESCRIPTION='完了：全期間の修復対象0件・監査合格'
           else
             STATE=failure
             DESCRIPTION='失敗：限定履歴修復のログ確認が必要'
