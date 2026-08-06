@@ -1,0 +1,42 @@
+name: Audit home consistency fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/audit-home-consistency-fix.yml"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Capture target workflow status and log
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          mkdir -p analysis-results
+          gh run list --workflow apply-home-performance-consistency-fix.yml --limit 5 --json databaseId,status,conclusion,headSha,createdAt,updatedAt,url > analysis-results/home-consistency-workflow-runs.json
+          RUN_ID="$(gh run list --workflow apply-home-performance-consistency-fix.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+          if [[ -n "$RUN_ID" ]]; then
+            gh run view "$RUN_ID" --log > analysis-results/home-consistency-workflow.log 2>&1 || true
+          fi
+      - name: Save audit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f analysis-results/home-consistency-workflow-runs.json analysis-results/home-consistency-workflow.log
+          git commit -m "Save home consistency workflow audit" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
