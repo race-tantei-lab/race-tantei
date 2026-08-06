@@ -46,13 +46,25 @@ const result = parseResultPage(resultPage.html, resultPage.url);
 const runners = parseDesktopResultRunners(resultPage.html);
 const payouts = parseDesktopPayouts(resultPage.html);
 const plain = desktopResultPlainText(resultPage.html);
+const activeRunners = runners.filter((row) => row.runnerStatus === "active");
 
 assert.equal(result.race.raceDate, sampleDate);
 assert.ok(result.results.some((row) => row.finishPosition === 1));
 assert.ok(runners.length >= 5, `too few desktop runners: ${runners.length}`);
 assert.ok(runners.every((row) => row.horseName.length > 0), "desktop horse names were not parsed");
 assert.ok(
-  runners.filter((row) => row.runnerStatus === "active").every((row) => row.winOdds !== null && row.winOdds > 1),
+  activeRunners.every(
+    (row) => row.popularity !== null && row.popularity >= 1 && row.popularity <= activeRunners.length
+  ),
+  `desktop popularity ranks were invalid: ${JSON.stringify(activeRunners.map((row) => ({ horseNo: row.horseNo, popularity: row.popularity })))}`
+);
+assert.equal(
+  new Set(activeRunners.map((row) => row.popularity)).size,
+  activeRunners.length,
+  "desktop popularity ranks must be unique among active runners"
+);
+assert.ok(
+  activeRunners.every((row) => row.winOdds !== null && row.winOdds > 1),
   "desktop popularity proxy odds were not parsed"
 );
 if (payouts.length < 6) {
