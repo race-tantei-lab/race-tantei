@@ -12,7 +12,7 @@ on:
 
 concurrency:
   group: v6-course-policy-v2-analysis
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -39,7 +39,8 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python scripts/analyze-v6-course-policy-v2.py 2>&1 | tee v6-course-policy-analysis-v2.log
+          echo "V6_2_ANALYSIS_STARTED" | tee v6-course-policy-analysis-v2.log
+          python -u scripts/analyze-v6-course-policy-v2.py 2>&1 | tee -a v6-course-policy-analysis-v2.log
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
@@ -70,5 +71,3 @@ jobs:
             git pull --rebase origin main
             git push origin HEAD:main
           fi
-
-# Triggered after registration on main.
