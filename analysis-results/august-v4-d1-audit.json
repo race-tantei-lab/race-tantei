@@ -1,0 +1,75 @@
+[
+  {
+    "results": [
+      {
+        "raceDate": "2026-08-01",
+        "predictedRaces": 2,
+        "selectedRaces": 0,
+        "tickets": 0,
+        "stakeYen": 0,
+        "returnYen": 0,
+        "pendingTickets": 0
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 1.3348
+      },
+      "duration": 1.3348,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 82219008,
+      "rows_read": 77,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 15.1644
+      },
+      "duration": 15.1644,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 82219008,
+      "rows_read": 44599,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1534
+      },
+      "duration": 0.1534,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 82219008,
+      "rows_read": 0,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
