@@ -1,0 +1,4228 @@
+{
+  "generatedAt": "2026-08-06",
+  "modelVersion": "v10-shadow-robust-high-roi",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "sourceDataFrozen": true,
+  "actualJraPayoutsUsed": true,
+  "syntheticOddsUsed": false,
+  "officialPreRaceCombinationOddsAvailable": false,
+  "guardrails": {
+    "trainA": "2025-05-01..2025-11-01",
+    "trainB": "2025-11-01..2026-05-01",
+    "finalHoldout": "2026-05-01..end",
+    "minimumTrainRaces": 120,
+    "minimumValidationRaces": 120,
+    "filtersChosenWithoutFinalHoldout": true,
+    "fiveRacesPerVenueDay": true,
+    "noMarketAuditVariant": true,
+    "noSyntheticOdds": true
+  },
+  "period": {
+    "dataStart": "2024-05-04",
+    "dataEnd": "2026-08-02",
+    "finishedRaces": 7695,
+    "months": [
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08"
+    ]
+  },
+  "modelAudit": {
+    "2025-05": {
+      "trainRaces": 3310,
+      "targetRaces": 311
+    },
+    "2025-06": {
+      "trainRaces": 3621,
+      "targetRaces": 288
+    },
+    "2025-07": {
+      "trainRaces": 3909,
+      "targetRaces": 288
+    },
+    "2025-08": {
+      "trainRaces": 4197,
+      "targetRaces": 360
+    },
+    "2025-09": {
+      "trainRaces": 4557,
+      "targetRaces": 240
+    },
+    "2025-10": {
+      "trainRaces": 4797,
+      "targetRaces": 252
+    },
+    "2025-11": {
+      "trainRaces": 5049,
+      "targetRaces": 312
+    },
+    "2025-12": {
+      "trainRaces": 5361,
+      "targetRaces": 264
+    },
+    "2026-01": {
+      "trainRaces": 5625,
+      "targetRaces": 276
+    },
+    "2026-02": {
+      "trainRaces": 5901,
+      "targetRaces": 270
+    },
+    "2026-03": {
+      "trainRaces": 6171,
+      "targetRaces": 300
+    },
+    "2026-04": {
+      "trainRaces": 6471,
+      "targetRaces": 264
+    },
+    "2026-05": {
+      "trainRaces": 6735,
+      "targetRaces": 336
+    },
+    "2026-06": {
+      "trainRaces": 7071,
+      "targetRaces": 264
+    },
+    "2026-07": {
+      "trainRaces": 7335,
+      "targetRaces": 288
+    },
+    "2026-08": {
+      "trainRaces": 7623,
+      "targetRaces": 72
+    }
+  },
+  "summary": {
+    "bestByPreHoldoutSelection": [
+      {
+        "variant": "point",
+        "selectionMode": "concentration",
+        "filter": {
+          "name": "raceBand=late",
+          "kind": "category",
+          "field": "raceBand",
+          "value": "late"
+        },
+        "code": "E41",
+        "betType": "馬単",
+        "predictedRanks": [
+          4,
+          1
+        ],
+        "selectionScore": 154.37580845380262,
+        "developmentA": {
+          "races": 160,
+          "hits": 5,
+          "stakeYen": 16000,
+          "returnYen": 14420,
+          "profitYen": -1580,
+          "roiPct": 90.125,
+          "hitRatePct": 3.125,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 20.27027027027027,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 6580,
+          "maxSingleReturnShare": 0.4563106796116505,
+          "roiWithoutTop1Pct": 49.0,
+          "roiWithoutTop3Pct": 10.875
+        },
+        "developmentB": {
+          "races": 129,
+          "hits": 12,
+          "stakeYen": 12900,
+          "returnYen": 33370,
+          "profitYen": 20470,
+          "roiPct": 258.6821705426357,
+          "hitRatePct": 9.30232558139535,
+          "winningMonths": 6,
+          "months": 6,
+          "medianMonthlyRoiPct": 196.0284280936455,
+          "q25MonthlyRoiPct": 159.39102564102564,
+          "minimumMonthlyRoiPct": 133.88888888888889,
+          "maxSinglePayoutYen": 6840,
+          "maxSingleReturnShare": 0.2049745280191789,
+          "roiWithoutTop1Pct": 205.65891472868216,
+          "roiWithoutTop3Pct": 129.68992248062014
+        },
+        "finalHoldout": {
+          "races": 98,
+          "hits": 2,
+          "stakeYen": 9800,
+          "returnYen": 4470,
+          "profitYen": -5330,
+          "roiPct": 45.61224489795918,
+          "hitRatePct": 2.0408163265306123,
+          "winningMonths": 0,
+          "months": 4,
+          "medianMonthlyRoiPct": 25.967741935483872,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 2860,
+          "maxSingleReturnShare": 0.639821029082774,
+          "roiWithoutTop1Pct": 16.428571428571427,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 26,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "races": 30,
+            "returnYen": 2860,
+            "roiPct": 95.33333333333334,
+            "hitRatePct": 3.3333333333333335
+          },
+          "2026-07": {
+            "races": 31,
+            "returnYen": 1610,
+            "roiPct": 51.935483870967744,
+            "hitRatePct": 3.225806451612903
+          },
+          "2026-08": {
+            "races": 11,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "point",
+        "selectionMode": "concentration",
+        "filter": {
+          "name": "distanceBand=sprint&raceBand=late",
+          "kind": "double_category",
+          "firstField": "distanceBand",
+          "firstValue": "sprint",
+          "secondField": "raceBand",
+          "secondValue": "late"
+        },
+        "code": "E41",
+        "betType": "馬単",
+        "predictedRanks": [
+          4,
+          1
+        ],
+        "selectionScore": 154.37580845380262,
+        "developmentA": {
+          "races": 160,
+          "hits": 5,
+          "stakeYen": 16000,
+          "returnYen": 14420,
+          "profitYen": -1580,
+          "roiPct": 90.125,
+          "hitRatePct": 3.125,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 20.27027027027027,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 6580,
+          "maxSingleReturnShare": 0.4563106796116505,
+          "roiWithoutTop1Pct": 49.0,
+          "roiWithoutTop3Pct": 10.875
+        },
+        "developmentB": {
+          "races": 129,
+          "hits": 12,
+          "stakeYen": 12900,
+          "returnYen": 33370,
+          "profitYen": 20470,
+          "roiPct": 258.6821705426357,
+          "hitRatePct": 9.30232558139535,
+          "winningMonths": 6,
+          "months": 6,
+          "medianMonthlyRoiPct": 196.0284280936455,
+          "q25MonthlyRoiPct": 159.39102564102564,
+          "minimumMonthlyRoiPct": 133.88888888888889,
+          "maxSinglePayoutYen": 6840,
+          "maxSingleReturnShare": 0.2049745280191789,
+          "roiWithoutTop1Pct": 205.65891472868216,
+          "roiWithoutTop3Pct": 129.68992248062014
+        },
+        "finalHoldout": {
+          "races": 88,
+          "hits": 2,
+          "stakeYen": 8800,
+          "returnYen": 4470,
+          "profitYen": -4330,
+          "roiPct": 50.79545454545455,
+          "hitRatePct": 2.272727272727273,
+          "winningMonths": 0,
+          "months": 4,
+          "medianMonthlyRoiPct": 25.967741935483872,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 2860,
+          "maxSingleReturnShare": 0.639821029082774,
+          "roiWithoutTop1Pct": 18.295454545454547,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 26,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "races": 29,
+            "returnYen": 2860,
+            "roiPct": 98.62068965517241,
+            "hitRatePct": 3.4482758620689653
+          },
+          "2026-07": {
+            "races": 31,
+            "returnYen": 1610,
+            "roiPct": 51.935483870967744,
+            "hitRatePct": 3.225806451612903
+          },
+          "2026-08": {
+            "races": 2,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "point",
+        "selectionMode": "entropy",
+        "filter": {
+          "name": "probabilityGap:high:q50",
+          "kind": "threshold",
+          "field": "probabilityGap",
+          "direction": "high",
+          "threshold": 0.06606992207405543,
+          "trainQuantile": 0.5
+        },
+        "code": "X412",
+        "betType": "3連単",
+        "predictedRanks": [
+          4,
+          1,
+          2
+        ],
+        "selectionScore": 147.14391449459632,
+        "developmentA": {
+          "races": 363,
+          "hits": 6,
+          "stakeYen": 36300,
+          "returnYen": 25530,
+          "profitYen": -10770,
+          "roiPct": 70.33057851239668,
+          "hitRatePct": 1.6528925619834711,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 66.98426573426573,
+          "q25MonthlyRoiPct": 6.136363636363637,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 8420,
+          "maxSingleReturnShare": 0.32980806893850373,
+          "roiWithoutTop1Pct": 47.13498622589532,
+          "roiWithoutTop3Pct": 16.28099173553719
+        },
+        "developmentB": {
+          "races": 325,
+          "hits": 10,
+          "stakeYen": 32500,
+          "returnYen": 80010,
+          "profitYen": 47510,
+          "roiPct": 246.1846153846154,
+          "hitRatePct": 3.076923076923077,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 185.26834381551362,
+          "q25MonthlyRoiPct": 83.28019323671498,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 24420,
+          "maxSingleReturnShare": 0.3052118485189351,
+          "roiWithoutTop1Pct": 171.04615384615386,
+          "roiWithoutTop3Pct": 109.75384615384615
+        },
+        "finalHoldout": {
+          "races": 202,
+          "hits": 5,
+          "stakeYen": 20200,
+          "returnYen": 31170,
+          "profitYen": 10970,
+          "roiPct": 154.30693069306932,
+          "hitRatePct": 2.4752475247524752,
+          "winningMonths": 3,
+          "months": 4,
+          "medianMonthlyRoiPct": 122.91353383458646,
+          "q25MonthlyRoiPct": 85.26315789473684,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 8490,
+          "maxSingleReturnShare": 0.27237728585178056,
+          "roiWithoutTop1Pct": 112.2772277227723,
+          "roiWithoutTop3Pct": 45.79207920792079
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 70,
+            "returnYen": 9250,
+            "roiPct": 132.14285714285714,
+            "hitRatePct": 2.857142857142857
+          },
+          "2026-06": {
+            "races": 57,
+            "returnYen": 6480,
+            "roiPct": 113.68421052631578,
+            "hitRatePct": 1.7543859649122806
+          },
+          "2026-07": {
+            "races": 67,
+            "returnYen": 15440,
+            "roiPct": 230.44776119402982,
+            "hitRatePct": 2.9850746268656714
+          },
+          "2026-08": {
+            "races": 8,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "ensemble",
+        "selectionMode": "confidence",
+        "filter": {
+          "name": "probabilityGap:high:q50",
+          "kind": "threshold",
+          "field": "probabilityGap",
+          "direction": "high",
+          "threshold": 0.06528370513998284,
+          "trainQuantile": 0.5
+        },
+        "code": "X413",
+        "betType": "3連単",
+        "predictedRanks": [
+          4,
+          1,
+          3
+        ],
+        "selectionScore": 142.90784397484626,
+        "developmentA": {
+          "races": 363,
+          "hits": 5,
+          "stakeYen": 36300,
+          "returnYen": 46150,
+          "profitYen": 9850,
+          "roiPct": 127.13498622589532,
+          "hitRatePct": 1.3774104683195594,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 11.58227848101266,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 19390,
+          "maxSingleReturnShare": 0.4201516793066089,
+          "roiWithoutTop1Pct": 73.71900826446281,
+          "roiWithoutTop3Pct": 16.060606060606062
+        },
+        "developmentB": {
+          "races": 288,
+          "hits": 4,
+          "stakeYen": 28800,
+          "returnYen": 65120,
+          "profitYen": 36320,
+          "roiPct": 226.11111111111111,
+          "hitRatePct": 1.3888888888888888,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 245.0,
+          "q25MonthlyRoiPct": 35.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 24420,
+          "maxSingleReturnShare": 0.375,
+          "roiWithoutTop1Pct": 141.31944444444443,
+          "roiWithoutTop3Pct": 18.958333333333332
+        },
+        "finalHoldout": {
+          "races": 199,
+          "hits": 1,
+          "stakeYen": 19900,
+          "returnYen": 6480,
+          "profitYen": -13420,
+          "roiPct": 32.562814070351756,
+          "hitRatePct": 0.5025125628140703,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 0.0,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 6480,
+          "maxSingleReturnShare": 1.0,
+          "roiWithoutTop1Pct": 0.0,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 61,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "races": 61,
+            "returnYen": 6480,
+            "roiPct": 106.2295081967213,
+            "hitRatePct": 1.639344262295082
+          },
+          "2026-07": {
+            "races": 65,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "races": 12,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "point",
+        "selectionMode": "concentration",
+        "filter": {
+          "name": "fieldBand=medium",
+          "kind": "category",
+          "field": "fieldBand",
+          "value": "medium"
+        },
+        "code": "X412",
+        "betType": "3連単",
+        "predictedRanks": [
+          4,
+          1,
+          2
+        ],
+        "selectionScore": 140.64210420956303,
+        "developmentA": {
+          "races": 248,
+          "hits": 4,
+          "stakeYen": 24800,
+          "returnYen": 20830,
+          "profitYen": -3970,
+          "roiPct": 83.99193548387098,
+          "hitRatePct": 1.6129032258064515,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 65.5952380952381,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 8420,
+          "maxSingleReturnShare": 0.4042246759481517,
+          "roiWithoutTop1Pct": 50.04032258064516,
+          "roiWithoutTop3Pct": 11.733870967741936
+        },
+        "developmentB": {
+          "races": 240,
+          "hits": 6,
+          "stakeYen": 24000,
+          "returnYen": 57540,
+          "profitYen": 33540,
+          "roiPct": 239.75,
+          "hitRatePct": 2.5,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 177.718085106383,
+          "q25MonthlyRoiPct": 86.5163043478261,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 24420,
+          "maxSingleReturnShare": 0.424400417101147,
+          "roiWithoutTop1Pct": 138.0,
+          "roiWithoutTop3Pct": 55.00000000000001
+        },
+        "finalHoldout": {
+          "races": 129,
+          "hits": 2,
+          "stakeYen": 12900,
+          "returnYen": 9500,
+          "profitYen": -3400,
+          "roiPct": 73.64341085271317,
+          "hitRatePct": 1.550387596899225,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 0.0,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 5390,
+          "maxSingleReturnShare": 0.5673684210526316,
+          "roiWithoutTop1Pct": 31.86046511627907,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 51,
+            "returnYen": 9500,
+            "roiPct": 186.27450980392157,
+            "hitRatePct": 3.9215686274509802
+          },
+          "2026-06": {
+            "races": 27,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-07": {
+            "races": 36,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "races": 15,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "point",
+        "selectionMode": "concentration",
+        "filter": {
+          "name": "surface=unknown&fieldBand=medium",
+          "kind": "double_category",
+          "firstField": "surface",
+          "firstValue": "unknown",
+          "secondField": "fieldBand",
+          "secondValue": "medium"
+        },
+        "code": "X412",
+        "betType": "3連単",
+        "predictedRanks": [
+          4,
+          1,
+          2
+        ],
+        "selectionScore": 140.64210420956303,
+        "developmentA": {
+          "races": 248,
+          "hits": 4,
+          "stakeYen": 24800,
+          "returnYen": 20830,
+          "profitYen": -3970,
+          "roiPct": 83.99193548387098,
+          "hitRatePct": 1.6129032258064515,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 65.5952380952381,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 8420,
+          "maxSingleReturnShare": 0.4042246759481517,
+          "roiWithoutTop1Pct": 50.04032258064516,
+          "roiWithoutTop3Pct": 11.733870967741936
+        },
+        "developmentB": {
+          "races": 240,
+          "hits": 6,
+          "stakeYen": 24000,
+          "returnYen": 57540,
+          "profitYen": 33540,
+          "roiPct": 239.75,
+          "hitRatePct": 2.5,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 177.718085106383,
+          "q25MonthlyRoiPct": 86.5163043478261,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 24420,
+          "maxSingleReturnShare": 0.424400417101147,
+          "roiWithoutTop1Pct": 138.0,
+          "roiWithoutTop3Pct": 55.00000000000001
+        },
+        "finalHoldout": {
+          "races": 114,
+          "hits": 2,
+          "stakeYen": 11400,
+          "returnYen": 9500,
+          "profitYen": -1900,
+          "roiPct": 83.33333333333334,
+          "hitRatePct": 1.7543859649122806,
+          "winningMonths": 1,
+          "months": 3,
+          "medianMonthlyRoiPct": 0.0,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 5390,
+          "maxSingleReturnShare": 0.5673684210526316,
+          "roiWithoutTop1Pct": 36.05263157894737,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 51,
+            "returnYen": 9500,
+            "roiPct": 186.27450980392157,
+            "hitRatePct": 3.9215686274509802
+          },
+          "2026-06": {
+            "races": 27,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-07": {
+            "races": 36,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "ensemble",
+        "selectionMode": "concentration",
+        "filter": {
+          "name": "fieldBand=large",
+          "kind": "category",
+          "field": "fieldBand",
+          "value": "large"
+        },
+        "code": "Q45",
+        "betType": "馬連",
+        "predictedRanks": [
+          4,
+          5
+        ],
+        "selectionScore": 140.56689357769545,
+        "developmentA": {
+          "races": 159,
+          "hits": 4,
+          "stakeYen": 15900,
+          "returnYen": 10410,
+          "profitYen": -5490,
+          "roiPct": 65.47169811320754,
+          "hitRatePct": 2.515723270440252,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 27.750000000000004,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 3820,
+          "maxSingleReturnShare": 0.366954851104707,
+          "roiWithoutTop1Pct": 41.44654088050315,
+          "roiWithoutTop3Pct": 9.119496855345911
+        },
+        "developmentB": {
+          "races": 259,
+          "hits": 8,
+          "stakeYen": 25900,
+          "returnYen": 66720,
+          "profitYen": 40820,
+          "roiPct": 257.6061776061776,
+          "hitRatePct": 3.088803088803089,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 178.49358974358972,
+          "q25MonthlyRoiPct": 43.333333333333336,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 26840,
+          "maxSingleReturnShare": 0.40227817745803357,
+          "roiWithoutTop1Pct": 153.97683397683397,
+          "roiWithoutTop3Pct": 66.98841698841699
+        },
+        "finalHoldout": {
+          "races": 114,
+          "hits": 3,
+          "stakeYen": 11400,
+          "returnYen": 17520,
+          "profitYen": 6120,
+          "roiPct": 153.68421052631578,
+          "hitRatePct": 2.631578947368421,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 121.65714285714286,
+          "q25MonthlyRoiPct": 44.699999999999996,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 8110,
+          "maxSingleReturnShare": 0.4628995433789954,
+          "roiWithoutTop1Pct": 82.54385964912281,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 50,
+            "returnYen": 2980,
+            "roiPct": 59.599999999999994,
+            "hitRatePct": 2.0
+          },
+          "2026-06": {
+            "races": 35,
+            "returnYen": 6430,
+            "roiPct": 183.71428571428572,
+            "hitRatePct": 2.857142857142857
+          },
+          "2026-07": {
+            "races": 26,
+            "returnYen": 8110,
+            "roiPct": 311.9230769230769,
+            "hitRatePct": 3.8461538461538463
+          },
+          "2026-08": {
+            "races": 3,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "ensemble",
+        "selectionMode": "concentration",
+        "filter": {
+          "name": "surface=unknown&fieldBand=large",
+          "kind": "double_category",
+          "firstField": "surface",
+          "firstValue": "unknown",
+          "secondField": "fieldBand",
+          "secondValue": "large"
+        },
+        "code": "Q45",
+        "betType": "馬連",
+        "predictedRanks": [
+          4,
+          5
+        ],
+        "selectionScore": 140.56689357769545,
+        "developmentA": {
+          "races": 159,
+          "hits": 4,
+          "stakeYen": 15900,
+          "returnYen": 10410,
+          "profitYen": -5490,
+          "roiPct": 65.47169811320754,
+          "hitRatePct": 2.515723270440252,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 27.750000000000004,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 3820,
+          "maxSingleReturnShare": 0.366954851104707,
+          "roiWithoutTop1Pct": 41.44654088050315,
+          "roiWithoutTop3Pct": 9.119496855345911
+        },
+        "developmentB": {
+          "races": 259,
+          "hits": 8,
+          "stakeYen": 25900,
+          "returnYen": 66720,
+          "profitYen": 40820,
+          "roiPct": 257.6061776061776,
+          "hitRatePct": 3.088803088803089,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 178.49358974358972,
+          "q25MonthlyRoiPct": 43.333333333333336,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 26840,
+          "maxSingleReturnShare": 0.40227817745803357,
+          "roiWithoutTop1Pct": 153.97683397683397,
+          "roiWithoutTop3Pct": 66.98841698841699
+        },
+        "finalHoldout": {
+          "races": 110,
+          "hits": 3,
+          "stakeYen": 11000,
+          "returnYen": 17520,
+          "profitYen": 6520,
+          "roiPct": 159.27272727272728,
+          "hitRatePct": 2.727272727272727,
+          "winningMonths": 2,
+          "months": 3,
+          "medianMonthlyRoiPct": 183.71428571428572,
+          "q25MonthlyRoiPct": 122.26530612244898,
+          "minimumMonthlyRoiPct": 60.816326530612244,
+          "maxSinglePayoutYen": 8110,
+          "maxSingleReturnShare": 0.4628995433789954,
+          "roiWithoutTop1Pct": 85.54545454545455,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 49,
+            "returnYen": 2980,
+            "roiPct": 60.816326530612244,
+            "hitRatePct": 2.0408163265306123
+          },
+          "2026-06": {
+            "races": 35,
+            "returnYen": 6430,
+            "roiPct": 183.71428571428572,
+            "hitRatePct": 2.857142857142857
+          },
+          "2026-07": {
+            "races": 26,
+            "returnYen": 8110,
+            "roiPct": 311.9230769230769,
+            "hitRatePct": 3.8461538461538463
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "pair",
+        "selectionMode": "confidence",
+        "filter": {
+          "name": "raceBand=late",
+          "kind": "category",
+          "field": "raceBand",
+          "value": "late"
+        },
+        "code": "E34",
+        "betType": "馬単",
+        "predictedRanks": [
+          3,
+          4
+        ],
+        "selectionScore": 134.82750533393423,
+        "developmentA": {
+          "races": 217,
+          "hits": 5,
+          "stakeYen": 21700,
+          "returnYen": 29920,
+          "profitYen": 8220,
+          "roiPct": 137.88018433179724,
+          "hitRatePct": 2.3041474654377883,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 48.00531914893617,
+          "q25MonthlyRoiPct": 4.375,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 15440,
+          "maxSingleReturnShare": 0.516042780748663,
+          "roiWithoutTop1Pct": 66.72811059907833,
+          "roiWithoutTop3Pct": 12.119815668202765
+        },
+        "developmentB": {
+          "races": 221,
+          "hits": 4,
+          "stakeYen": 22100,
+          "returnYen": 54210,
+          "profitYen": 32110,
+          "roiPct": 245.29411764705884,
+          "hitRatePct": 1.809954751131222,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 16.666666666666664,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 21790,
+          "maxSingleReturnShare": 0.40195535878989114,
+          "roiWithoutTop1Pct": 146.6968325791855,
+          "roiWithoutTop3Pct": 5.429864253393665
+        },
+        "finalHoldout": {
+          "races": 135,
+          "hits": 2,
+          "stakeYen": 13500,
+          "returnYen": 2840,
+          "profitYen": -10660,
+          "roiPct": 21.037037037037038,
+          "hitRatePct": 1.4814814814814816,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 0.0,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 2250,
+          "maxSingleReturnShare": 0.7922535211267606,
+          "roiWithoutTop1Pct": 4.37037037037037,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 39,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "races": 42,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-07": {
+            "races": 41,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "races": 13,
+            "returnYen": 2840,
+            "roiPct": 218.46153846153845,
+            "hitRatePct": 15.384615384615385
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "pair",
+        "selectionMode": "confidence",
+        "filter": {
+          "name": "distanceBand=sprint&raceBand=late",
+          "kind": "double_category",
+          "firstField": "distanceBand",
+          "firstValue": "sprint",
+          "secondField": "raceBand",
+          "secondValue": "late"
+        },
+        "code": "E34",
+        "betType": "馬単",
+        "predictedRanks": [
+          3,
+          4
+        ],
+        "selectionScore": 134.82750533393423,
+        "developmentA": {
+          "races": 217,
+          "hits": 5,
+          "stakeYen": 21700,
+          "returnYen": 29920,
+          "profitYen": 8220,
+          "roiPct": 137.88018433179724,
+          "hitRatePct": 2.3041474654377883,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 48.00531914893617,
+          "q25MonthlyRoiPct": 4.375,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 15440,
+          "maxSingleReturnShare": 0.516042780748663,
+          "roiWithoutTop1Pct": 66.72811059907833,
+          "roiWithoutTop3Pct": 12.119815668202765
+        },
+        "developmentB": {
+          "races": 221,
+          "hits": 4,
+          "stakeYen": 22100,
+          "returnYen": 54210,
+          "profitYen": 32110,
+          "roiPct": 245.29411764705884,
+          "hitRatePct": 1.809954751131222,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 16.666666666666664,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 21790,
+          "maxSingleReturnShare": 0.40195535878989114,
+          "roiWithoutTop1Pct": 146.6968325791855,
+          "roiWithoutTop3Pct": 5.429864253393665
+        },
+        "finalHoldout": {
+          "races": 124,
+          "hits": 0,
+          "stakeYen": 12400,
+          "returnYen": 0,
+          "profitYen": -12400,
+          "roiPct": 0.0,
+          "hitRatePct": 0.0,
+          "winningMonths": 0,
+          "months": 4,
+          "medianMonthlyRoiPct": 0.0,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 0,
+          "maxSingleReturnShare": 1.0,
+          "roiWithoutTop1Pct": 0.0,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 39,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "races": 41,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-07": {
+            "races": 41,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "races": 3,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      }
+    ],
+    "bestFinalAmongPreselectedTop30": [
+      {
+        "variant": "point",
+        "selectionMode": "confidence",
+        "filter": {
+          "name": "topProbability:high:q65",
+          "kind": "threshold",
+          "field": "topProbability",
+          "direction": "high",
+          "threshold": 0.29959326597305014,
+          "trainQuantile": 0.65
+        },
+        "code": "Q35",
+        "betType": "馬連",
+        "predictedRanks": [
+          3,
+          5
+        ],
+        "selectionScore": 122.10865841885767,
+        "developmentA": {
+          "races": 254,
+          "hits": 8,
+          "stakeYen": 25400,
+          "returnYen": 18010,
+          "profitYen": -7390,
+          "roiPct": 70.90551181102363,
+          "hitRatePct": 3.149606299212598,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 77.65030946065428,
+          "q25MonthlyRoiPct": 45.844551282051285,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 4060,
+          "maxSingleReturnShare": 0.22543031649083842,
+          "roiWithoutTop1Pct": 54.92125984251969,
+          "roiWithoutTop3Pct": 31.456692913385826
+        },
+        "developmentB": {
+          "races": 184,
+          "hits": 6,
+          "stakeYen": 18400,
+          "returnYen": 40850,
+          "profitYen": 22450,
+          "roiPct": 222.01086956521738,
+          "hitRatePct": 3.260869565217391,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 40.282805429864254,
+          "q25MonthlyRoiPct": 9.038461538461538,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 14520,
+          "maxSingleReturnShare": 0.3554467564259486,
+          "roiWithoutTop1Pct": 143.0978260869565,
+          "roiWithoutTop3Pct": 49.29347826086957
+        },
+        "finalHoldout": {
+          "races": 138,
+          "hits": 8,
+          "stakeYen": 13800,
+          "returnYen": 27820,
+          "profitYen": 14020,
+          "roiPct": 201.59420289855072,
+          "hitRatePct": 5.797101449275362,
+          "winningMonths": 3,
+          "months": 4,
+          "medianMonthlyRoiPct": 250.61111111111111,
+          "q25MonthlyRoiPct": 154.66666666666669,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 6430,
+          "maxSingleReturnShare": 0.23112868439971243,
+          "roiWithoutTop1Pct": 155.0,
+          "roiWithoutTop3Pct": 81.3768115942029
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 45,
+            "returnYen": 9280,
+            "roiPct": 206.22222222222223,
+            "hitRatePct": 8.88888888888889
+          },
+          "2026-06": {
+            "races": 44,
+            "returnYen": 12980,
+            "roiPct": 295.0,
+            "hitRatePct": 6.8181818181818175
+          },
+          "2026-07": {
+            "races": 46,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "races": 3,
+            "returnYen": 5560,
+            "roiPct": 1853.3333333333335,
+            "hitRatePct": 33.33333333333333
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "point",
+        "selectionMode": "concentration",
+        "filter": {
+          "name": "topProbability:high:q65",
+          "kind": "threshold",
+          "field": "topProbability",
+          "direction": "high",
+          "threshold": 0.30244595185185397,
+          "trainQuantile": 0.65
+        },
+        "code": "Q35",
+        "betType": "馬連",
+        "predictedRanks": [
+          3,
+          5
+        ],
+        "selectionScore": 126.74387121547942,
+        "developmentA": {
+          "races": 254,
+          "hits": 8,
+          "stakeYen": 25400,
+          "returnYen": 18010,
+          "profitYen": -7390,
+          "roiPct": 70.90551181102363,
+          "hitRatePct": 3.149606299212598,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 78.52901484480432,
+          "q25MonthlyRoiPct": 45.844551282051285,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 4060,
+          "maxSingleReturnShare": 0.22543031649083842,
+          "roiWithoutTop1Pct": 54.92125984251969,
+          "roiWithoutTop3Pct": 31.456692913385826
+        },
+        "developmentB": {
+          "races": 176,
+          "hits": 6,
+          "stakeYen": 17600,
+          "returnYen": 40850,
+          "profitYen": 23250,
+          "roiPct": 232.10227272727272,
+          "hitRatePct": 3.4090909090909087,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 42.64780405405405,
+          "q25MonthlyRoiPct": 9.527027027027026,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 14520,
+          "maxSingleReturnShare": 0.3554467564259486,
+          "roiWithoutTop1Pct": 149.60227272727275,
+          "roiWithoutTop3Pct": 51.534090909090914
+        },
+        "finalHoldout": {
+          "races": 137,
+          "hits": 7,
+          "stakeYen": 13700,
+          "returnYen": 25180,
+          "profitYen": 11480,
+          "roiPct": 183.79562043795622,
+          "hitRatePct": 5.109489051094891,
+          "winningMonths": 3,
+          "months": 4,
+          "medianMonthlyRoiPct": 226.384778012685,
+          "q25MonthlyRoiPct": 113.18181818181819,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 6430,
+          "maxSingleReturnShare": 0.25536139793486895,
+          "roiWithoutTop1Pct": 136.86131386861314,
+          "roiWithoutTop3Pct": 62.7007299270073
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 44,
+            "returnYen": 6640,
+            "roiPct": 150.9090909090909,
+            "hitRatePct": 6.8181818181818175
+          },
+          "2026-06": {
+            "races": 43,
+            "returnYen": 12980,
+            "roiPct": 301.86046511627904,
+            "hitRatePct": 6.976744186046512
+          },
+          "2026-07": {
+            "races": 47,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "races": 3,
+            "returnYen": 5560,
+            "roiPct": 1853.3333333333335,
+            "hitRatePct": 33.33333333333333
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "point",
+        "selectionMode": "entropy",
+        "filter": {
+          "name": "probabilityGap:high:q50",
+          "kind": "threshold",
+          "field": "probabilityGap",
+          "direction": "high",
+          "threshold": 0.06606992207405543,
+          "trainQuantile": 0.5
+        },
+        "code": "X412",
+        "betType": "3連単",
+        "predictedRanks": [
+          4,
+          1,
+          2
+        ],
+        "selectionScore": 147.14391449459632,
+        "developmentA": {
+          "races": 363,
+          "hits": 6,
+          "stakeYen": 36300,
+          "returnYen": 25530,
+          "profitYen": -10770,
+          "roiPct": 70.33057851239668,
+          "hitRatePct": 1.6528925619834711,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 66.98426573426573,
+          "q25MonthlyRoiPct": 6.136363636363637,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 8420,
+          "maxSingleReturnShare": 0.32980806893850373,
+          "roiWithoutTop1Pct": 47.13498622589532,
+          "roiWithoutTop3Pct": 16.28099173553719
+        },
+        "developmentB": {
+          "races": 325,
+          "hits": 10,
+          "stakeYen": 32500,
+          "returnYen": 80010,
+          "profitYen": 47510,
+          "roiPct": 246.1846153846154,
+          "hitRatePct": 3.076923076923077,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 185.26834381551362,
+          "q25MonthlyRoiPct": 83.28019323671498,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 24420,
+          "maxSingleReturnShare": 0.3052118485189351,
+          "roiWithoutTop1Pct": 171.04615384615386,
+          "roiWithoutTop3Pct": 109.75384615384615
+        },
+        "finalHoldout": {
+          "races": 202,
+          "hits": 5,
+          "stakeYen": 20200,
+          "returnYen": 31170,
+          "profitYen": 10970,
+          "roiPct": 154.30693069306932,
+          "hitRatePct": 2.4752475247524752,
+          "winningMonths": 3,
+          "months": 4,
+          "medianMonthlyRoiPct": 122.91353383458646,
+          "q25MonthlyRoiPct": 85.26315789473684,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 8490,
+          "maxSingleReturnShare": 0.27237728585178056,
+          "roiWithoutTop1Pct": 112.2772277227723,
+          "roiWithoutTop3Pct": 45.79207920792079
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 70,
+            "returnYen": 9250,
+            "roiPct": 132.14285714285714,
+            "hitRatePct": 2.857142857142857
+          },
+          "2026-06": {
+            "races": 57,
+            "returnYen": 6480,
+            "roiPct": 113.68421052631578,
+            "hitRatePct": 1.7543859649122806
+          },
+          "2026-07": {
+            "races": 67,
+            "returnYen": 15440,
+            "roiPct": 230.44776119402982,
+            "hitRatePct": 2.9850746268656714
+          },
+          "2026-08": {
+            "races": 8,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "ensemble",
+        "selectionMode": "concentration",
+        "filter": {
+          "name": "surface=unknown&fieldBand=large",
+          "kind": "double_category",
+          "firstField": "surface",
+          "firstValue": "unknown",
+          "secondField": "fieldBand",
+          "secondValue": "large"
+        },
+        "code": "Q45",
+        "betType": "馬連",
+        "predictedRanks": [
+          4,
+          5
+        ],
+        "selectionScore": 140.56689357769545,
+        "developmentA": {
+          "races": 159,
+          "hits": 4,
+          "stakeYen": 15900,
+          "returnYen": 10410,
+          "profitYen": -5490,
+          "roiPct": 65.47169811320754,
+          "hitRatePct": 2.515723270440252,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 27.750000000000004,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 3820,
+          "maxSingleReturnShare": 0.366954851104707,
+          "roiWithoutTop1Pct": 41.44654088050315,
+          "roiWithoutTop3Pct": 9.119496855345911
+        },
+        "developmentB": {
+          "races": 259,
+          "hits": 8,
+          "stakeYen": 25900,
+          "returnYen": 66720,
+          "profitYen": 40820,
+          "roiPct": 257.6061776061776,
+          "hitRatePct": 3.088803088803089,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 178.49358974358972,
+          "q25MonthlyRoiPct": 43.333333333333336,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 26840,
+          "maxSingleReturnShare": 0.40227817745803357,
+          "roiWithoutTop1Pct": 153.97683397683397,
+          "roiWithoutTop3Pct": 66.98841698841699
+        },
+        "finalHoldout": {
+          "races": 110,
+          "hits": 3,
+          "stakeYen": 11000,
+          "returnYen": 17520,
+          "profitYen": 6520,
+          "roiPct": 159.27272727272728,
+          "hitRatePct": 2.727272727272727,
+          "winningMonths": 2,
+          "months": 3,
+          "medianMonthlyRoiPct": 183.71428571428572,
+          "q25MonthlyRoiPct": 122.26530612244898,
+          "minimumMonthlyRoiPct": 60.816326530612244,
+          "maxSinglePayoutYen": 8110,
+          "maxSingleReturnShare": 0.4628995433789954,
+          "roiWithoutTop1Pct": 85.54545454545455,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 49,
+            "returnYen": 2980,
+            "roiPct": 60.816326530612244,
+            "hitRatePct": 2.0408163265306123
+          },
+          "2026-06": {
+            "races": 35,
+            "returnYen": 6430,
+            "roiPct": 183.71428571428572,
+            "hitRatePct": 2.857142857142857
+          },
+          "2026-07": {
+            "races": 26,
+            "returnYen": 8110,
+            "roiPct": 311.9230769230769,
+            "hitRatePct": 3.8461538461538463
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "ensemble",
+        "selectionMode": "concentration",
+        "filter": {
+          "name": "fieldBand=large",
+          "kind": "category",
+          "field": "fieldBand",
+          "value": "large"
+        },
+        "code": "Q45",
+        "betType": "馬連",
+        "predictedRanks": [
+          4,
+          5
+        ],
+        "selectionScore": 140.56689357769545,
+        "developmentA": {
+          "races": 159,
+          "hits": 4,
+          "stakeYen": 15900,
+          "returnYen": 10410,
+          "profitYen": -5490,
+          "roiPct": 65.47169811320754,
+          "hitRatePct": 2.515723270440252,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 27.750000000000004,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 3820,
+          "maxSingleReturnShare": 0.366954851104707,
+          "roiWithoutTop1Pct": 41.44654088050315,
+          "roiWithoutTop3Pct": 9.119496855345911
+        },
+        "developmentB": {
+          "races": 259,
+          "hits": 8,
+          "stakeYen": 25900,
+          "returnYen": 66720,
+          "profitYen": 40820,
+          "roiPct": 257.6061776061776,
+          "hitRatePct": 3.088803088803089,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 178.49358974358972,
+          "q25MonthlyRoiPct": 43.333333333333336,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 26840,
+          "maxSingleReturnShare": 0.40227817745803357,
+          "roiWithoutTop1Pct": 153.97683397683397,
+          "roiWithoutTop3Pct": 66.98841698841699
+        },
+        "finalHoldout": {
+          "races": 114,
+          "hits": 3,
+          "stakeYen": 11400,
+          "returnYen": 17520,
+          "profitYen": 6120,
+          "roiPct": 153.68421052631578,
+          "hitRatePct": 2.631578947368421,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 121.65714285714286,
+          "q25MonthlyRoiPct": 44.699999999999996,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 8110,
+          "maxSingleReturnShare": 0.4628995433789954,
+          "roiWithoutTop1Pct": 82.54385964912281,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 50,
+            "returnYen": 2980,
+            "roiPct": 59.599999999999994,
+            "hitRatePct": 2.0
+          },
+          "2026-06": {
+            "races": 35,
+            "returnYen": 6430,
+            "roiPct": 183.71428571428572,
+            "hitRatePct": 2.857142857142857
+          },
+          "2026-07": {
+            "races": 26,
+            "returnYen": 8110,
+            "roiPct": 311.9230769230769,
+            "hitRatePct": 3.8461538461538463
+          },
+          "2026-08": {
+            "races": 3,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "ensemble",
+        "selectionMode": "confidence",
+        "filter": {
+          "name": "topProbability:high:q35",
+          "kind": "threshold",
+          "field": "topProbability",
+          "direction": "high",
+          "threshold": 0.20097602283760305,
+          "trainQuantile": 0.35
+        },
+        "code": "E43",
+        "betType": "馬単",
+        "predictedRanks": [
+          4,
+          3
+        ],
+        "selectionScore": 123.63701989101929,
+        "developmentA": {
+          "races": 471,
+          "hits": 11,
+          "stakeYen": 47100,
+          "returnYen": 36170,
+          "profitYen": -10930,
+          "roiPct": 76.79405520169851,
+          "hitRatePct": 2.335456475583864,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 80.81323438466296,
+          "q25MonthlyRoiPct": 58.42651515151515,
+          "minimumMonthlyRoiPct": 21.066666666666666,
+          "maxSinglePayoutYen": 5770,
+          "maxSingleReturnShare": 0.159524467790987,
+          "roiWithoutTop1Pct": 64.54352441613588,
+          "roiWithoutTop3Pct": 42.823779193205944
+        },
+        "developmentB": {
+          "races": 387,
+          "hits": 10,
+          "stakeYen": 38700,
+          "returnYen": 71070,
+          "profitYen": 32370,
+          "roiPct": 183.64341085271317,
+          "hitRatePct": 2.5839793281653747,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 232.59004884004884,
+          "q25MonthlyRoiPct": 56.15079365079365,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 21790,
+          "maxSingleReturnShare": 0.30659912762065566,
+          "roiWithoutTop1Pct": 127.33850129198967,
+          "roiWithoutTop3Pct": 75.73643410852713
+        },
+        "finalHoldout": {
+          "races": 256,
+          "hits": 5,
+          "stakeYen": 25600,
+          "returnYen": 24670,
+          "profitYen": -930,
+          "roiPct": 96.3671875,
+          "hitRatePct": 1.953125,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 72.3170731707317,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 6800,
+          "maxSingleReturnShare": 0.2756384272395622,
+          "roiWithoutTop1Pct": 69.8046875,
+          "roiWithoutTop3Pct": 23.4765625
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 82,
+            "returnYen": 11860,
+            "roiPct": 144.6341463414634,
+            "hitRatePct": 3.6585365853658534
+          },
+          "2026-06": {
+            "races": 77,
+            "returnYen": 12810,
+            "roiPct": 166.36363636363635,
+            "hitRatePct": 2.5974025974025974
+          },
+          "2026-07": {
+            "races": 87,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "races": 10,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "ensemble",
+        "selectionMode": "concentration",
+        "filter": {
+          "name": "fieldBand=medium",
+          "kind": "category",
+          "field": "fieldBand",
+          "value": "medium"
+        },
+        "code": "Q35",
+        "betType": "馬連",
+        "predictedRanks": [
+          3,
+          5
+        ],
+        "selectionScore": 120.82407301502776,
+        "developmentA": {
+          "races": 248,
+          "hits": 6,
+          "stakeYen": 24800,
+          "returnYen": 33450,
+          "profitYen": 8650,
+          "roiPct": 134.8790322580645,
+          "hitRatePct": 2.4193548387096775,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 100.1804915514593,
+          "q25MonthlyRoiPct": 3.1547619047619047,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 13560,
+          "maxSingleReturnShare": 0.4053811659192825,
+          "roiWithoutTop1Pct": 80.20161290322581,
+          "roiWithoutTop3Pct": 20.201612903225808
+        },
+        "developmentB": {
+          "races": 255,
+          "hits": 10,
+          "stakeYen": 25500,
+          "returnYen": 39040,
+          "profitYen": 13540,
+          "roiPct": 153.09803921568627,
+          "hitRatePct": 3.9215686274509802,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 133.12252964426878,
+          "q25MonthlyRoiPct": 80.5965909090909,
+          "minimumMonthlyRoiPct": 48.75,
+          "maxSinglePayoutYen": 7830,
+          "maxSingleReturnShare": 0.20056352459016394,
+          "roiWithoutTop1Pct": 122.3921568627451,
+          "roiWithoutTop3Pct": 79.52941176470588
+        },
+        "finalHoldout": {
+          "races": 139,
+          "hits": 3,
+          "stakeYen": 13900,
+          "returnYen": 22200,
+          "profitYen": 8300,
+          "roiPct": 159.71223021582733,
+          "hitRatePct": 2.158273381294964,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 108.7202380952381,
+          "q25MonthlyRoiPct": 48.080357142857146,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 14010,
+          "maxSingleReturnShare": 0.6310810810810811,
+          "roiWithoutTop1Pct": 58.92086330935252,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 56,
+            "returnYen": 3590,
+            "roiPct": 64.10714285714286,
+            "hitRatePct": 1.7857142857142856
+          },
+          "2026-06": {
+            "races": 30,
+            "returnYen": 4600,
+            "roiPct": 153.33333333333334,
+            "hitRatePct": 3.3333333333333335
+          },
+          "2026-07": {
+            "races": 38,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "races": 15,
+            "returnYen": 14010,
+            "roiPct": 934.0,
+            "hitRatePct": 6.666666666666667
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "point",
+        "selectionMode": "concentration",
+        "filter": {
+          "name": "probabilityGap:high:q50",
+          "kind": "threshold",
+          "field": "probabilityGap",
+          "direction": "high",
+          "threshold": 0.10035980063732211,
+          "trainQuantile": 0.5
+        },
+        "code": "T235",
+        "betType": "3連複",
+        "predictedRanks": [
+          2,
+          3,
+          5
+        ],
+        "selectionScore": 126.48792641203103,
+        "developmentA": {
+          "races": 363,
+          "hits": 12,
+          "stakeYen": 36300,
+          "returnYen": 67120,
+          "profitYen": 30820,
+          "roiPct": 184.90358126721762,
+          "hitRatePct": 3.3057851239669422,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 152.4784358826912,
+          "q25MonthlyRoiPct": 50.80378250591016,
+          "minimumMonthlyRoiPct": 36.59090909090909,
+          "maxSinglePayoutYen": 20600,
+          "maxSingleReturnShare": 0.3069129916567342,
+          "roiWithoutTop1Pct": 128.15426997245177,
+          "roiWithoutTop3Pct": 57.906336088154276
+        },
+        "developmentB": {
+          "races": 302,
+          "hits": 9,
+          "stakeYen": 30200,
+          "returnYen": 46270,
+          "profitYen": 16070,
+          "roiPct": 153.21192052980132,
+          "hitRatePct": 2.980132450331126,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 50.083333333333336,
+          "q25MonthlyRoiPct": 4.791666666666667,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 13730,
+          "maxSingleReturnShare": 0.2967365463583315,
+          "roiWithoutTop1Pct": 107.74834437086093,
+          "roiWithoutTop3Pct": 31.456953642384107
+        },
+        "finalHoldout": {
+          "races": 200,
+          "hits": 5,
+          "stakeYen": 20000,
+          "returnYen": 16700,
+          "profitYen": -3300,
+          "roiPct": 83.5,
+          "hitRatePct": 2.5,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 108.8978732831192,
+          "q25MonthlyRoiPct": 62.70491803278689,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 5320,
+          "maxSingleReturnShare": 0.318562874251497,
+          "roiWithoutTop1Pct": 56.89999999999999,
+          "roiWithoutTop3Pct": 18.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 74,
+            "returnYen": 9930,
+            "roiPct": 134.1891891891892,
+            "hitRatePct": 4.054054054054054
+          },
+          "2026-06": {
+            "races": 55,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-07": {
+            "races": 61,
+            "returnYen": 5100,
+            "roiPct": 83.60655737704919,
+            "hitRatePct": 1.639344262295082
+          },
+          "2026-08": {
+            "races": 10,
+            "returnYen": 1670,
+            "roiPct": 167.0,
+            "hitRatePct": 10.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "ensemble",
+        "selectionMode": "confidence",
+        "filter": {
+          "name": "top3Concentration:high:q35",
+          "kind": "threshold",
+          "field": "top3Concentration",
+          "direction": "high",
+          "threshold": 0.44885847024284103,
+          "trainQuantile": 0.35
+        },
+        "code": "E43",
+        "betType": "馬単",
+        "predictedRanks": [
+          4,
+          3
+        ],
+        "selectionScore": 122.44809965356893,
+        "developmentA": {
+          "races": 471,
+          "hits": 11,
+          "stakeYen": 47100,
+          "returnYen": 33710,
+          "profitYen": -13390,
+          "roiPct": 71.57112526539278,
+          "hitRatePct": 2.335456475583864,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 59.75574048389582,
+          "q25MonthlyRoiPct": 54.75485436893204,
+          "minimumMonthlyRoiPct": 19.26829268292683,
+          "maxSinglePayoutYen": 5770,
+          "maxSingleReturnShare": 0.17116582616434292,
+          "roiWithoutTop1Pct": 59.32059447983015,
+          "roiWithoutTop3Pct": 39.74522292993631
+        },
+        "developmentB": {
+          "races": 416,
+          "hits": 11,
+          "stakeYen": 41600,
+          "returnYen": 77150,
+          "profitYen": 35550,
+          "roiPct": 185.45673076923077,
+          "hitRatePct": 2.644230769230769,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 220.1464148877942,
+          "q25MonthlyRoiPct": 120.00937031484258,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 21790,
+          "maxSingleReturnShare": 0.28243681140635124,
+          "roiWithoutTop1Pct": 133.07692307692307,
+          "roiWithoutTop3Pct": 85.07211538461539
+        },
+        "finalHoldout": {
+          "races": 246,
+          "hits": 4,
+          "stakeYen": 24600,
+          "returnYen": 17870,
+          "profitYen": -6730,
+          "roiPct": 72.64227642276423,
+          "hitRatePct": 1.6260162601626018,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 41.736111111111114,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 6010,
+          "maxSingleReturnShare": 0.33631785114717405,
+          "roiWithoutTop1Pct": 48.21138211382114,
+          "roiWithoutTop3Pct": 7.8861788617886175
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 84,
+            "returnYen": 11860,
+            "roiPct": 141.1904761904762,
+            "hitRatePct": 3.571428571428571
+          },
+          "2026-06": {
+            "races": 72,
+            "returnYen": 6010,
+            "roiPct": 83.47222222222223,
+            "hitRatePct": 1.3888888888888888
+          },
+          "2026-07": {
+            "races": 78,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "races": 12,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      },
+      {
+        "variant": "point",
+        "selectionMode": "confidence",
+        "filter": {
+          "name": "distanceBand=sprint&raceBand=late",
+          "kind": "double_category",
+          "firstField": "distanceBand",
+          "firstValue": "sprint",
+          "secondField": "raceBand",
+          "secondValue": "late"
+        },
+        "code": "T235",
+        "betType": "3連複",
+        "predictedRanks": [
+          2,
+          3,
+          5
+        ],
+        "selectionScore": 131.49529765838923,
+        "developmentA": {
+          "races": 170,
+          "hits": 4,
+          "stakeYen": 17000,
+          "returnYen": 48510,
+          "profitYen": 31510,
+          "roiPct": 285.3529411764706,
+          "hitRatePct": 2.3529411764705883,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.96551724137933,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 20600,
+          "maxSingleReturnShare": 0.4246547103689961,
+          "roiWithoutTop1Pct": 164.1764705882353,
+          "roiWithoutTop3Pct": 14.176470588235293
+        },
+        "developmentB": {
+          "races": 147,
+          "hits": 5,
+          "stakeYen": 14700,
+          "returnYen": 24920,
+          "profitYen": 10220,
+          "roiPct": 169.52380952380952,
+          "hitRatePct": 3.4013605442176873,
+          "winningMonths": 2,
+          "months": 6,
+          "medianMonthlyRoiPct": 35.625,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 13730,
+          "maxSingleReturnShare": 0.5509630818619583,
+          "roiWithoutTop1Pct": 76.12244897959184,
+          "roiWithoutTop3Pct": 19.183673469387756
+        },
+        "finalHoldout": {
+          "races": 101,
+          "hits": 3,
+          "stakeYen": 10100,
+          "returnYen": 9810,
+          "profitYen": -290,
+          "roiPct": 97.12871287128712,
+          "hitRatePct": 2.9702970297029703,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 0.0,
+          "q25MonthlyRoiPct": 0.0,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSinglePayoutYen": 5320,
+          "maxSingleReturnShare": 0.5423037716615698,
+          "roiWithoutTop1Pct": 44.45544554455446,
+          "roiWithoutTop3Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "races": 30,
+            "returnYen": 9810,
+            "roiPct": 327.0,
+            "hitRatePct": 10.0
+          },
+          "2026-06": {
+            "races": 32,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-07": {
+            "races": 35,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "races": 4,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        },
+        "coverage": [
+          {
+            "month": "2025-05",
+            "sourceRaces": 311,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-06",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2025-08",
+            "sourceRaces": 360,
+            "selectedRaces": 150,
+            "expectedSelectedRaces": 150
+          },
+          {
+            "month": "2025-09",
+            "sourceRaces": 240,
+            "selectedRaces": 100,
+            "expectedSelectedRaces": 100
+          },
+          {
+            "month": "2025-10",
+            "sourceRaces": 252,
+            "selectedRaces": 105,
+            "expectedSelectedRaces": 105
+          },
+          {
+            "month": "2025-11",
+            "sourceRaces": 312,
+            "selectedRaces": 130,
+            "expectedSelectedRaces": 130
+          },
+          {
+            "month": "2025-12",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-01",
+            "sourceRaces": 276,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-02",
+            "sourceRaces": 270,
+            "selectedRaces": 115,
+            "expectedSelectedRaces": 115
+          },
+          {
+            "month": "2026-03",
+            "sourceRaces": 300,
+            "selectedRaces": 125,
+            "expectedSelectedRaces": 125
+          },
+          {
+            "month": "2026-04",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-05",
+            "sourceRaces": 336,
+            "selectedRaces": 140,
+            "expectedSelectedRaces": 140
+          },
+          {
+            "month": "2026-06",
+            "sourceRaces": 264,
+            "selectedRaces": 110,
+            "expectedSelectedRaces": 110
+          },
+          {
+            "month": "2026-07",
+            "sourceRaces": 288,
+            "selectedRaces": 120,
+            "expectedSelectedRaces": 120
+          },
+          {
+            "month": "2026-08",
+            "sourceRaces": 72,
+            "selectedRaces": 30,
+            "expectedSelectedRaces": 30
+          }
+        ]
+      }
+    ],
+    "x431RobustnessAudit": {
+      "variant": "ensemble",
+      "selectionMode": "confidence",
+      "filter": {
+        "name": "all",
+        "kind": "all"
+      },
+      "code": "X431",
+      "betType": "3連単",
+      "predictedRanks": [
+        4,
+        3,
+        1
+      ],
+      "selectionScore": 92.01733440808724,
+      "developmentA": {
+        "races": 725,
+        "hits": 7,
+        "stakeYen": 72500,
+        "returnYen": 118200,
+        "profitYen": 45700,
+        "roiPct": 163.0344827586207,
+        "hitRatePct": 0.9655172413793104,
+        "winningMonths": 3,
+        "months": 6,
+        "medianMonthlyRoiPct": 125.41666666666667,
+        "q25MonthlyRoiPct": 18.5,
+        "minimumMonthlyRoiPct": 0.0,
+        "maxSinglePayoutYen": 46030,
+        "maxSingleReturnShare": 0.38942470389170897,
+        "roiWithoutTop1Pct": 99.54482758620689,
+        "roiWithoutTop3Pct": 47.682758620689654
+      },
+      "developmentB": {
+        "races": 705,
+        "hits": 5,
+        "stakeYen": 70500,
+        "returnYen": 79990,
+        "profitYen": 9490,
+        "roiPct": 113.46099290780143,
+        "hitRatePct": 0.7092198581560284,
+        "winningMonths": 2,
+        "months": 6,
+        "medianMonthlyRoiPct": 71.0909090909091,
+        "q25MonthlyRoiPct": 36.03496503496504,
+        "minimumMonthlyRoiPct": 0.0,
+        "maxSinglePayoutYen": 42490,
+        "maxSingleReturnShare": 0.5311913989248656,
+        "roiWithoutTop1Pct": 53.191489361702125,
+        "roiWithoutTop3Pct": 13.957446808510637
+      },
+      "finalHoldout": {
+        "races": 400,
+        "hits": 6,
+        "stakeYen": 40000,
+        "returnYen": 112230,
+        "profitYen": 72230,
+        "roiPct": 280.57500000000005,
+        "hitRatePct": 1.5,
+        "winningMonths": 2,
+        "months": 4,
+        "medianMonthlyRoiPct": 346.90909090909093,
+        "q25MonthlyRoiPct": 44.25,
+        "minimumMonthlyRoiPct": 0.0,
+        "maxSinglePayoutYen": 34140,
+        "maxSingleReturnShare": 0.3041967388398824,
+        "roiWithoutTop1Pct": 195.225,
+        "roiWithoutTop3Pct": 89.1
+      },
+      "finalMonthly": {
+        "2026-05": {
+          "races": 140,
+          "returnYen": 8260,
+          "roiPct": 59.0,
+          "hitRatePct": 0.7142857142857143
+        },
+        "2026-06": {
+          "races": 110,
+          "returnYen": 69830,
+          "roiPct": 634.8181818181819,
+          "hitRatePct": 3.6363636363636362
+        },
+        "2026-07": {
+          "races": 120,
+          "returnYen": 0,
+          "roiPct": 0.0,
+          "hitRatePct": 0.0
+        },
+        "2026-08": {
+          "races": 30,
+          "returnYen": 34140,
+          "roiPct": 1138.0,
+          "hitRatePct": 3.3333333333333335
+        }
+      },
+      "coverage": [
+        {
+          "month": "2025-05",
+          "sourceRaces": 311,
+          "selectedRaces": 130,
+          "expectedSelectedRaces": 130
+        },
+        {
+          "month": "2025-06",
+          "sourceRaces": 288,
+          "selectedRaces": 120,
+          "expectedSelectedRaces": 120
+        },
+        {
+          "month": "2025-07",
+          "sourceRaces": 288,
+          "selectedRaces": 120,
+          "expectedSelectedRaces": 120
+        },
+        {
+          "month": "2025-08",
+          "sourceRaces": 360,
+          "selectedRaces": 150,
+          "expectedSelectedRaces": 150
+        },
+        {
+          "month": "2025-09",
+          "sourceRaces": 240,
+          "selectedRaces": 100,
+          "expectedSelectedRaces": 100
+        },
+        {
+          "month": "2025-10",
+          "sourceRaces": 252,
+          "selectedRaces": 105,
+          "expectedSelectedRaces": 105
+        },
+        {
+          "month": "2025-11",
+          "sourceRaces": 312,
+          "selectedRaces": 130,
+          "expectedSelectedRaces": 130
+        },
+        {
+          "month": "2025-12",
+          "sourceRaces": 264,
+          "selectedRaces": 110,
+          "expectedSelectedRaces": 110
+        },
+        {
+          "month": "2026-01",
+          "sourceRaces": 276,
+          "selectedRaces": 115,
+          "expectedSelectedRaces": 115
+        },
+        {
+          "month": "2026-02",
+          "sourceRaces": 270,
+          "selectedRaces": 115,
+          "expectedSelectedRaces": 115
+        },
+        {
+          "month": "2026-03",
+          "sourceRaces": 300,
+          "selectedRaces": 125,
+          "expectedSelectedRaces": 125
+        },
+        {
+          "month": "2026-04",
+          "sourceRaces": 264,
+          "selectedRaces": 110,
+          "expectedSelectedRaces": 110
+        },
+        {
+          "month": "2026-05",
+          "sourceRaces": 336,
+          "selectedRaces": 140,
+          "expectedSelectedRaces": 140
+        },
+        {
+          "month": "2026-06",
+          "sourceRaces": 264,
+          "selectedRaces": 110,
+          "expectedSelectedRaces": 110
+        },
+        {
+          "month": "2026-07",
+          "sourceRaces": 288,
+          "selectedRaces": 120,
+          "expectedSelectedRaces": 120
+        },
+        {
+          "month": "2026-08",
+          "sourceRaces": 72,
+          "selectedRaces": 30,
+          "expectedSelectedRaces": 30
+        }
+      ]
+    }
+  },
+  "candidateCount": 11578
+}
