@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -8,6 +9,7 @@ SOURCE_PATH = ROOT / "scripts" / "publish-nonlinear-v4-production.py"
 POLICY_PATH = ROOT / "scripts" / "final-course-policy.py"
 APPROVAL_PATH = ROOT / "config" / "approved-production-model.json"
 APPROVAL_VERIFIER = ROOT / "scripts" / "verify-approved-production-model.py"
+THIS_RUNNER = ROOT / "scripts" / "run-final-course-production.py"
 
 PRODUCTION_COURSE_TARGET_STAKES = {
     "ライト": 2000,
@@ -26,6 +28,24 @@ def require_approved_model():
         cwd=ROOT,
         check=True,
     )
+
+
+def dispatch_approved_runner():
+    approval = json.loads(APPROVAL_PATH.read_text(encoding="utf-8"))
+    raw_path = approval.get("implementation", {}).get("productionRunnerPath")
+    if not raw_path:
+        raw_path = approval.get("productionRunnerPath")
+    if not raw_path:
+        return False
+    runner = (ROOT / str(raw_path)).resolve()
+    if not runner.is_relative_to(ROOT):
+        raise RuntimeError(f"APPROVED_RUNNER_OUTSIDE_REPOSITORY:{runner}")
+    if runner == THIS_RUNNER.resolve():
+        return False
+    if not runner.exists():
+        raise RuntimeError(f"APPROVED_RUNNER_MISSING:{runner}")
+    subprocess.run([sys.executable, str(runner)], cwd=ROOT, check=True)
+    return True
 
 
 def load_policy():
@@ -119,6 +139,8 @@ def configure_namespace(namespace, policy):
 
 def main():
     require_approved_model()
+    if dispatch_approved_runner():
+        return
     policy = load_policy()
     namespace = configure_namespace(load_production_namespace(), policy)
     namespace["main"]()
