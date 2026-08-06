@@ -3,6 +3,23 @@ import { clamp, decodeEntities, stripHtml } from "./utils.js";
 
 const MARKET_TAKEOUT_FACTOR = 0.8;
 const POPULARITY_POWER = 1.07;
+const RESULT_COLUMN_COUNT = 14;
+const RESULT_COLUMN = {
+  finish: 0,
+  frameNo: 1,
+  horseNo: 2,
+  horseName: 3,
+  sexAge: 4,
+  assignedWeight: 5,
+  jockey: 6,
+  time: 7,
+  margin: 8,
+  passingOrder: 9,
+  final3f: 10,
+  horseWeight: 11,
+  trainer: 12,
+  popularity: 13
+} as const;
 
 function normalizedText(value: string): string {
   return decodeEntities(value)
@@ -20,55 +37,83 @@ function tableRows(html: string): string[][] {
   for (const rowMatch of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
     const cells = [...(rowMatch[1] ?? "").matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)]
       .map((cell) => normalizedText(cell[1] ?? ""));
-    if (cells.length >= 10 && (/^\d+$/.test(cells[2] ?? "") || cells.some((cell) => /取消|除外|中止|失格/.test(cell)))) {
+    const horseNo = cells[RESULT_COLUMN.horseNo] ?? "";
+    const statusRow = cells.some((cell) => /取消|除外|中止|失格/.test(cell));
+    if (/^\d{1,2}$/.test(horseNo) && (cells.length >= RESULT_COLUMN_COUNT || statusRow)) {
       rows.push(cells);
     }
   }
   return rows;
 }
 
-function popularityOdds(runners: Array<{ horseNo: number; popularity: number | null; active: boolean }>): Map<number, number> {
+function completePopularity(
+  runners: Array<{ horseNo: number; popularity: number | null; active: boolean }>
+): boolean {
   const active = runners.filter((runner) => runner.active);
-  const fallbackStart = Math.max(active.length, ...active.map((runner) => runner.popularity ?? 0), 1);
+  if (active.length < 2 || active.length > 18) return false;
+  const ranks = active.map((runner) => runner.popularity);
+  if (ranks.some((rank) => rank === null || !Number.isInteger(rank))) return false;
+  const values = ranks as number[];
+  return values.every((rank) => rank >= 1 && rank <= active.length)
+    && new Set(values).size === active.length;
+}
+
+function popularityOdds(
+  runners: Array<{ horseNo: number; popularity: number | null; active: boolean }>
+): Map<number, number> {
+  const active = runners.filter((runner) => runner.active);
+  if (!completePopularity(runners)) return new Map();
+
   const weights = new Map<number, number>();
-  let fallbackOffset = 0;
   for (const runner of active) {
-    const rank = runner.popularity ?? fallbackStart + (++fallbackOffset);
-    weights.set(runner.horseNo, Math.pow(Math.max(1, rank), -POPULARITY_POWER));
+    const rank = runner.popularity as number;
+    weights.set(runner.horseNo, Math.pow(rank, -POPULARITY_POWER));
   }
   const total = [...weights.values()].reduce((sum, value) => sum + value, 0);
   const odds = new Map<number, number>();
   for (const runner of active) {
     const probability = total > 0
       ? (weights.get(runner.horseNo) ?? 0) / total
-      : 1 / Math.max(1, active.length);
+      : 0;
     const decimalOdds = clamp(MARKET_TAKEOUT_FACTOR / Math.max(0.0001, probability), 1.1, 999.9);
     odds.set(runner.horseNo, Math.floor(decimalOdds * 10) / 10);
   }
   return odds;
 }
 
+function resultPopularity(value: string | undefined): number | null {
+  const text = (value ?? "").trim();
+  if (!/^\d{1,2}$/.test(text)) return null;
+  const parsed = Number(text);
+  return parsed >= 1 && parsed <= 18 ? parsed : null;
+}
+
 export function parseDesktopResultRunners(html: string): RunnerRecord[] {
   const parsed: RunnerRecord[] = [];
   for (const cells of tableRows(html)) {
-    const horseNo = /^\d{1,2}$/.test(cells[2] ?? "") ? Number(cells[2]) : null;
+    const horseNo = /^\d{1,2}$/.test(cells[RESULT_COLUMN.horseNo] ?? "")
+      ? Number(cells[RESULT_COLUMN.horseNo])
+      : null;
     if (!horseNo || horseNo < 1 || horseNo > 18) continue;
+
     const joined = cells.join(" ");
     const runnerStatus: RunnerRecord["runnerStatus"] = /除外/.test(joined)
       ? "excluded"
       : /取消/.test(joined)
         ? "scratched"
         : "active";
-    const frameMatch = (cells[1] ?? "").match(/(?:枠)?(\d{1,2})/);
-    const sexAge = cells[4]?.match(/[牡牝騸セ]\d+/)?.[0] ?? null;
-    const assignedWeight = cells[5]?.match(/\d+(?:\.\d+)?/)?.[0];
-    const body = (cells[11] ?? joined).match(/(\d{3})\s*\(([+-]?\d+)\)/);
-    const popularityCell = cells.at(-1) ?? "";
-    const popularity = popularityCell.match(/^\d+$/)?.[0]
-      ?? popularityCell.match(/(\d+)番人気/)?.[1]
-      ?? null;
-    const horseName = (cells[3] ?? "").replace(/ブリンカー着用/g, "").trim();
+    const frameMatch = (cells[RESULT_COLUMN.frameNo] ?? "").match(/(?:枠)?(\d{1,2})/);
+    const sexAge = cells[RESULT_COLUMN.sexAge]?.match(/[牡牝騸セ]\d+/)?.[0] ?? null;
+    const assignedWeight = cells[RESULT_COLUMN.assignedWeight]?.match(/\d+(?:\.\d+)?/)?.[0];
+    const body = (cells[RESULT_COLUMN.horseWeight] ?? "").match(/(\d{3})\s*\((?:([+-]?\d+)|初出走)\)/);
+    const popularity = runnerStatus === "active"
+      ? resultPopularity(cells[RESULT_COLUMN.popularity])
+      : null;
+    const horseName = (cells[RESULT_COLUMN.horseName] ?? "")
+      .replace(/ブリンカー着用/g, "")
+      .trim();
     if (!horseName) continue;
+
     parsed.push({
       horseNo,
       frameNo: frameMatch?.[1] ? Number(frameMatch[1]) : null,
@@ -77,11 +122,11 @@ export function parseDesktopResultRunners(html: string): RunnerRecord[] {
       coatColor: null,
       horseWeight: body?.[1] ? Number(body[1]) : null,
       weightChange: body?.[2] ? Number(body[2]) : null,
-      jockey: cells[6]?.trim() || null,
+      jockey: cells[RESULT_COLUMN.jockey]?.trim() || null,
       assignedWeight: assignedWeight ? Number(assignedWeight) : null,
-      trainer: cells[12]?.trim() || null,
+      trainer: cells[RESULT_COLUMN.trainer]?.trim() || null,
       stable: null,
-      popularity: popularity ? Number(popularity) : null,
+      popularity,
       runnerStatus,
       winOdds: null
     });
