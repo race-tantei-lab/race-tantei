@@ -1,0 +1,103 @@
+{
+  "modelVersion": "v4.1.0-nonlinear-hgb-5r",
+  "mode": "retrospective-v4-backfill",
+  "methodology": "Each date is trained only on races strictly before that date; final stored market odds are used for the historical replay.",
+  "includedInAugustAggregate": true,
+  "generatedAt": "2026-08-06T02:24:03Z",
+  "dates": [
+    {
+      "raceDate": "2026-08-01",
+      "trainingCutoffExclusive": "2026-08-01",
+      "trainingRaces": 4313,
+      "targetRaces": 36,
+      "selectedRaces": 15,
+      "removedExistingPredictions": 2,
+      "published": 36,
+      "tickets": 135,
+      "lockedSkipped": 0,
+      "settlement": {
+        "tickets": 135,
+        "returnYen": 46750
+      },
+      "metrics": [
+        {
+          "course": "スタンダード",
+          "races": 15,
+          "tickets": 45,
+          "stakeYen": 75000,
+          "returnYen": 13750,
+          "profitYen": -61250,
+          "roiPct": 18.333333333333332,
+          "ticketHitRatePct": 22.22222222222222
+        },
+        {
+          "course": "プレミアム",
+          "races": 15,
+          "tickets": 45,
+          "stakeYen": 150000,
+          "returnYen": 27500,
+          "profitYen": -122500,
+          "roiPct": 18.333333333333332,
+          "ticketHitRatePct": 22.22222222222222
+        },
+        {
+          "course": "ライト",
+          "races": 15,
+          "tickets": 45,
+          "stakeYen": 30000,
+          "returnYen": 5500,
+          "profitYen": -24500,
+          "roiPct": 18.333333333333332,
+          "ticketHitRatePct": 22.22222222222222
+        }
+      ]
+    },
+    {
+      "raceDate": "2026-08-02",
+      "trainingCutoffExclusive": "2026-08-02",
+      "trainingRaces": 4349,
+      "targetRaces": 36,
+      "selectedRaces": 15,
+      "removedExistingPredictions": 0,
+      "published": 36,
+      "tickets": 135,
+      "lockedSkipped": 0,
+      "settlement": {
+        "tickets": 135,
+        "returnYen": 34850
+      },
+      "metrics": [
+        {
+          "course": "スタンダード",
+          "races": 15,
+          "tickets": 45,
+          "stakeYen": 75000,
+          "returnYen": 10250,
+          "profitYen": -64750,
+          "roiPct": 13.666666666666666,
+          "ticketHitRatePct": 15.555555555555555
+        },
+        {
+          "course": "プレミアム",
+          "races": 15,
+          "tickets": 45,
+          "stakeYen": 150000,
+          "returnYen": 20500,
+          "profitYen": -129500,
+          "roiPct": 13.666666666666666,
+          "ticketHitRatePct": 15.555555555555555
+        },
+        {
+          "course": "ライト",
+          "races": 15,
+          "tickets": 45,
+          "stakeYen": 30000,
+          "returnYen": 4100,
+          "profitYen": -25900,
+          "roiPct": 13.666666666666666,
+          "ticketHitRatePct": 15.555555555555555
+        }
+      ]
+    }
+  ]
+}
