@@ -1,0 +1,105 @@
+name: V9 loss decomposition
+run-name: V9 loss decomposition · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/analyze-v9-loss-decomposition.py"
+      - ".github/workflows/v9-loss-decomposition.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+concurrency:
+  group: v9-loss-decomposition
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Publish analysis start
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='analysis/v9-loss-decomposition' \
+            -f description='分析中：順位・レース選別・券種の損失を分解' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check numpy scikit-learn
+
+      - name: Verify source
+        run: python -m py_compile scripts/analyze-v9-loss-decomposition.py
+
+      - name: Run fixed-data loss decomposition
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/analyze-v9-loss-decomposition.py 2>&1 | tee v9-loss-decomposition.log
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v9-loss-decomposition
+          path: |
+            v9-loss-decomposition.json
+            v9-loss-decomposition.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Save report
+        if: success()
+        shell: bash
+        run: |
+          mkdir -p analysis-results
+          cp v9-loss-decomposition.json analysis-results/v9-loss-decomposition.json
+          cp v9-loss-decomposition.log analysis-results/v9-loss-decomposition.log
+          git add -f analysis-results/v9-loss-decomposition.json analysis-results/v9-loss-decomposition.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then
+            echo "No report changes."
+          else
+            git commit -m "Save v9 loss decomposition"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Publish final status
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            STATE=success
+            DESCRIPTION='完了：順位・選別・券種の損失分解'
+          else
+            STATE=failure
+            DESCRIPTION='失敗：v9損失分解ログ確認が必要'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$STATE" \
+            -f context='analysis/v9-loss-decomposition' \
+            -f description="$DESCRIPTION" \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
