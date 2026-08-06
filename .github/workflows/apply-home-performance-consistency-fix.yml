@@ -1,6 +1,6 @@
 name: Apply v4 home consistency fix
 
-# One-time main patch; the job deletes this workflow after verification.
+# Registered on main; this follow-up push starts the one-time patch.
 on:
   push:
     branches:
