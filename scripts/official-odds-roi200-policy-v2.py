@@ -16,11 +16,14 @@ for name in dir(base):
         globals()[name] = getattr(base, name)
 
 MODEL_VERSION = "v14.1-official-odds-constrained-roi200"
+OFFICIAL_ODDS_SOURCE = "jra_official"
 
 
 def selected_race_ids(races):
     grouped = defaultdict(list)
     for race in races:
+        if race.get("oddsSource") != OFFICIAL_ODDS_SOURCE:
+            continue
         if race.get("officialOdds"):
             grouped[(race["raceDate"], race["venue"])].append(race)
 
@@ -58,6 +61,8 @@ def selected_race_ids(races):
 
 
 def build_bets(race):
+    if race.get("oddsSource") != OFFICIAL_ODDS_SOURCE:
+        return []
     summary = race.get("officialOddsRoi200Summary") or plans_for_race(race)
     if not summary:
         return []
