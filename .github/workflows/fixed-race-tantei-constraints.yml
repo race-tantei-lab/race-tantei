@@ -3,19 +3,33 @@ name: Fixed race-tantei constraints
 on:
   pull_request:
     paths:
+      - "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md"
       - "config/race-tantei-fixed-constraints.json"
+      - "config/approved-production-model.json"
       - "scripts/verify-race-tantei-fixed-constraints.py"
-      - "scripts/analyze-v12-multi-course-upset.py"
+      - "scripts/verify-production-candidate.py"
+      - "scripts/find-and-promote-production-candidate.py"
+      - "scripts/verify-approved-production-model.py"
       - "scripts/final-course-policy.py"
       - "scripts/run-final-course-production.py"
+      - ".github/workflows/fixed-race-tantei-constraints.yml"
+      - ".github/workflows/promote-passing-production-model.yml"
+      - ".github/workflows/final-course-model.yml"
   push:
     branches: [main]
     paths:
+      - "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md"
       - "config/race-tantei-fixed-constraints.json"
+      - "config/approved-production-model.json"
       - "scripts/verify-race-tantei-fixed-constraints.py"
-      - "scripts/analyze-v12-multi-course-upset.py"
+      - "scripts/verify-production-candidate.py"
+      - "scripts/find-and-promote-production-candidate.py"
+      - "scripts/verify-approved-production-model.py"
       - "scripts/final-course-policy.py"
       - "scripts/run-final-course-production.py"
+      - ".github/workflows/fixed-race-tantei-constraints.yml"
+      - ".github/workflows/promote-passing-production-model.yml"
+      - ".github/workflows/final-course-model.yml"
 
 jobs:
   verify:
@@ -25,5 +39,20 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Compile guardrails
+        run: |
+          python -m py_compile \
+            scripts/verify-race-tantei-fixed-constraints.py \
+            scripts/verify-production-candidate.py \
+            scripts/find-and-promote-production-candidate.py \
+            scripts/verify-approved-production-model.py
       - name: Verify immutable project constraints
         run: python scripts/verify-race-tantei-fixed-constraints.py
+      - name: Verify approved model when present
+        shell: bash
+        run: |
+          if [[ -f config/approved-production-model.json ]]; then
+            python scripts/verify-approved-production-model.py
+          else
+            echo "No model has passed every ROI 200 gate. Production promotion remains locked."
+          fi

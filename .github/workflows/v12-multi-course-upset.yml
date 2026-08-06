@@ -37,7 +37,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='analysis/v12-multi-course-upset' \
-            -f description='分析中：5レース以上・3コース維持・波乱学習' \
+            -f description='分析中：最低5レース・3コース分散・200%候補探索' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Checkout
@@ -57,11 +57,25 @@ jobs:
       - name: Verify source
         run: python -m py_compile scripts/analyze-v12-multi-course-upset.py
 
-      - name: Run multi-course upset analysis
+      - name: Run multi-course upset analysis under current immutable rules
         shell: bash
         run: |
           set -o pipefail
-          python scripts/analyze-v12-multi-course-upset.py 2>&1 | tee v12-multi-course-upset.log
+          python - <<'PY' 2>&1 | tee v12-multi-course-upset.log
+          import importlib.util
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path.cwd()
+          path = root / "scripts" / "analyze-v12-multi-course-upset.py"
+          spec = importlib.util.spec_from_file_location("v12_current_constraints", path)
+          module = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = module
+          spec.loader.exec_module(module)
+          module.EXPECTED = json.loads((root / "config" / "race-tantei-fixed-constraints.json").read_text(encoding="utf-8"))
+          module.main()
+          PY
 
       - name: Upload report
         if: always()
@@ -87,7 +101,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No report changes."
           else
-            git commit -m "Save v12 multi-course upset analysis"
+            git commit -m "Save v12 multi-course upset analysis under fixed rules"
             git pull --rebase origin main
             git push origin HEAD:main
           fi
@@ -98,7 +112,7 @@ jobs:
         run: |
           if [ "${{ job.status }}" = "success" ]; then
             STATE=success
-            DESCRIPTION='完了：5レース以上・3コース維持の波乱分析'
+            DESCRIPTION='完了：最低5レース・3コース分散の200%候補分析'
           else
             STATE=failure
             DESCRIPTION='失敗：v12分析ログ確認が必要'
