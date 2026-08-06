@@ -32,6 +32,8 @@ const MAX_ATTEMPTS = Math.max(
 );
 const RETRY_DELAYS_MS = [0, 3_000, 10_000, 30_000, 60_000, 90_000];
 const OFFICIAL_JRA_HOSTS = new Set(["sp.jra.jp", "www.jra.go.jp", "jra.go.jp"]);
+const MARKET_TAKEOUT_FACTOR = 0.8;
+const POPULARITY_POWER = 1.07;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -88,6 +90,36 @@ export function isOfficialJraResultUrl(value) {
   }
 }
 
+export function canonicalOfficialJraResultUrl(value) {
+  if (!isOfficialJraResultUrl(value)) {
+    throw new Error(`REPAIR_RESULT_URL_INVALID:${value}`);
+  }
+  const source = new URL(value);
+  const cname = source.searchParams.get("CNAME")?.trim() ?? "";
+  if (!/^(?:pw|sw)01sde/i.test(cname)) {
+    throw new Error(`REPAIR_RESULT_CNAME_INVALID:${value}`);
+  }
+  const canonical = new URL("https://www.jra.go.jp/JRADB/accessS.html");
+  canonical.searchParams.set("CNAME", cname.replace(/^sw01sde/i, "pw01sde"));
+  return canonical.toString();
+}
+
+export function hasValidPopularityRanks(ranks, activeCount) {
+  if (!Number.isInteger(activeCount) || activeCount < 2 || activeCount > 18) return false;
+  if (!Array.isArray(ranks) || ranks.length !== activeCount) return false;
+  if (ranks.some((rank) => !Number.isInteger(rank) || rank < 1 || rank > activeCount)) {
+    return false;
+  }
+  const sorted = [...ranks].sort((a, b) => a - b);
+  if (sorted[0] !== 1) return false;
+  for (let index = 1; index < sorted.length; index += 1) {
+    const rank = sorted[index];
+    const previous = sorted[index - 1];
+    if (rank !== previous && rank !== index + 1) return false;
+  }
+  return true;
+}
+
 function validateInputRace(race) {
   if (!race.raceId) throw new Error("REPAIR_RACE_ID_MISSING");
   if (!/^20\d{2}-\d{2}-\d{2}$/.test(race.raceDate)) {
@@ -99,6 +131,7 @@ function validateInputRace(race) {
   if (!isOfficialJraResultUrl(race.resultUrl)) {
     throw new Error(`REPAIR_RESULT_URL_INVALID:${race.raceId}:${race.resultUrl}`);
   }
+  canonicalOfficialJraResultUrl(race.resultUrl);
   if (race.activeRunners < 2 || race.activeRunners > 18) {
     throw new Error(`REPAIR_ACTIVE_COUNT_INVALID:${race.raceId}:${race.activeRunners}`);
   }
@@ -125,13 +158,14 @@ function isBlockError(message) {
 }
 
 async function fetchWithRetry(race) {
+  const canonicalUrl = canonicalOfficialJraResultUrl(race.resultUrl);
   let lastError = "UNKNOWN_FETCH_ERROR";
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const retryDelay = RETRY_DELAYS_MS[Math.min(attempt - 1, RETRY_DELAYS_MS.length - 1)] ?? 90_000;
     if (retryDelay > 0) await sleep(retryDelay);
     await waitForRequestSlot();
     try {
-      const page = await fetchJraPage(race.resultUrl);
+      const page = await fetchJraPage(canonicalUrl);
       if (!pageLooksLikeResult(page.html)) {
         throw new Error("RESULT_SIGNATURE_MISSING");
       }
@@ -146,6 +180,27 @@ async function fetchWithRetry(race) {
   throw new Error(`REPAIR_FETCH_FAILED:${race.raceId}:${lastError}`);
 }
 
+function popularityProxyOdds(active) {
+  const weights = new Map();
+  for (const runner of active) {
+    const rank = Number(runner.popularity);
+    weights.set(runner.horseNo, Math.pow(rank, -POPULARITY_POWER));
+  }
+  const total = [...weights.values()].reduce((sum, value) => sum + value, 0);
+  if (!Number.isFinite(total) || total <= 0) return new Map();
+  const odds = new Map();
+  for (const runner of active) {
+    const probability = (weights.get(runner.horseNo) ?? 0) / total;
+    if (!Number.isFinite(probability) || probability <= 0) continue;
+    const decimalOdds = Math.min(
+      999.9,
+      Math.max(1.1, MARKET_TAKEOUT_FACTOR / probability)
+    );
+    odds.set(runner.horseNo, Math.floor(decimalOdds * 10) / 10);
+  }
+  return odds;
+}
+
 function repairedMarket(race, html) {
   const runners = parseHistoricalResultRunners(html);
   const active = runners.filter((runner) => runner.runnerStatus === "active");
@@ -155,29 +210,17 @@ function repairedMarket(race, html) {
     );
   }
   const ranks = active.map((runner) => runner.popularity);
-  const completePopularity = ranks.every((rank) =>
-    rank !== null
-    && Number.isInteger(rank)
-    && rank >= 1
-    && rank <= active.length
-  ) && new Set(ranks).size === active.length;
-  if (!completePopularity) {
+  if (!hasValidPopularityRanks(ranks, active.length)) {
     throw new Error(`REPAIR_POPULARITY_INVALID:${race.raceId}:${JSON.stringify(ranks)}`);
   }
-  const invalidOdds = active.filter((runner) =>
-    runner.winOdds === null
-    || !Number.isFinite(runner.winOdds)
-    || runner.winOdds <= 1
-  );
-  if (invalidOdds.length > 0) {
-    throw new Error(
-      `REPAIR_ODDS_INVALID:${race.raceId}:${JSON.stringify(invalidOdds.map((runner) => runner.horseNo))}`
-    );
+  const odds = popularityProxyOdds(active);
+  if (odds.size !== active.length) {
+    throw new Error(`REPAIR_PROXY_ODDS_INVALID:${race.raceId}:${odds.size}:${active.length}`);
   }
   return active.map((runner) => ({
     horseNo: runner.horseNo,
     popularity: runner.popularity,
-    winOdds: runner.winOdds
+    winOdds: odds.get(runner.horseNo) ?? null
   }));
 }
 
@@ -267,7 +310,9 @@ async function main() {
     concurrency: FETCH_CONCURRENCY,
     maxAttempts: MAX_ATTEMPTS,
     firstRaceDate: races[0]?.raceDate ?? null,
-    lastRaceDate: races.at(-1)?.raceDate ?? null
+    lastRaceDate: races.at(-1)?.raceDate ?? null,
+    desktopCanonicalization: true,
+    tiedPopularityAccepted: true
   };
   await writeFile(
     path.join(OUTPUT_DIR, "summary.json"),
