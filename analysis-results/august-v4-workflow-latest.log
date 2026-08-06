@@ -1,316 +1,406 @@
-backfill	Set up job	﻿2026-08-06T01:46:23.8668883Z Current runner version: '2.336.0'
-backfill	Set up job	2026-08-06T01:46:23.8696147Z ##[group]Runner Image Provisioner
-backfill	Set up job	2026-08-06T01:46:23.8697136Z Hosted Compute Agent
-backfill	Set up job	2026-08-06T01:46:23.8697822Z Version: 20260707.563
-backfill	Set up job	2026-08-06T01:46:23.8698463Z Commit: 02667638d2b423fbc733a8e32a88b44996a3ba6e
-backfill	Set up job	2026-08-06T01:46:23.8699177Z Build Date: 2026-07-07T19:33:50Z
-backfill	Set up job	2026-08-06T01:46:23.8700174Z Worker ID: {535d47f9-b965-4c14-ac1b-54d72941cfe2}
-backfill	Set up job	2026-08-06T01:46:23.8700949Z Azure Region: westus
-backfill	Set up job	2026-08-06T01:46:23.8701585Z ##[endgroup]
-backfill	Set up job	2026-08-06T01:46:23.8703160Z ##[group]Operating System
-backfill	Set up job	2026-08-06T01:46:23.8703858Z Ubuntu
-backfill	Set up job	2026-08-06T01:46:23.8704482Z 24.04.4
-backfill	Set up job	2026-08-06T01:46:23.8705035Z LTS
-backfill	Set up job	2026-08-06T01:46:23.8705598Z ##[endgroup]
-backfill	Set up job	2026-08-06T01:46:23.8706179Z ##[group]Runner Image
-backfill	Set up job	2026-08-06T01:46:23.8706790Z Image: ubuntu-24.04
-backfill	Set up job	2026-08-06T01:46:23.8707822Z Version: 20260720.247.2
-backfill	Set up job	2026-08-06T01:46:23.8708932Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260720.247/images/ubuntu/Ubuntu2404-Readme.md
-backfill	Set up job	2026-08-06T01:46:23.8711163Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260720.247
-backfill	Set up job	2026-08-06T01:46:23.8712140Z ##[endgroup]
-backfill	Set up job	2026-08-06T01:46:23.8713457Z ##[group]GITHUB_TOKEN Permissions
-backfill	Set up job	2026-08-06T01:46:23.8715745Z Contents: write
-backfill	Set up job	2026-08-06T01:46:23.8716457Z Metadata: read
-backfill	Set up job	2026-08-06T01:46:23.8717029Z ##[endgroup]
-backfill	Set up job	2026-08-06T01:46:23.8719216Z Secret source: Actions
-backfill	Set up job	2026-08-06T01:46:23.8720811Z Prepare workflow directory
-backfill	Set up job	2026-08-06T01:46:23.9334285Z Prepare all required actions
-backfill	Set up job	2026-08-06T01:46:23.9385061Z Getting action download info
-backfill	Set up job	2026-08-06T01:46:24.2898393Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
-backfill	Set up job	2026-08-06T01:46:24.7433140Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
-backfill	Set up job	2026-08-06T01:46:24.8235814Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
-backfill	Set up job	2026-08-06T01:46:25.0341524Z Complete job name: backfill
-backfill	Checkout	﻿2026-08-06T01:46:25.1082008Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
-backfill	Checkout	2026-08-06T01:46:25.1091227Z ##[group]Run actions/checkout@v4
-backfill	Checkout	2026-08-06T01:46:25.1092008Z with:
-backfill	Checkout	2026-08-06T01:46:25.1092481Z   repository: race-tantei-lab/race-tantei
-backfill	Checkout	2026-08-06T01:46:25.1096259Z   token: ***
-backfill	Checkout	2026-08-06T01:46:25.1096699Z   ssh-strict: true
-backfill	Checkout	2026-08-06T01:46:25.1097142Z   ssh-user: git
-backfill	Checkout	2026-08-06T01:46:25.1097593Z   persist-credentials: true
-backfill	Checkout	2026-08-06T01:46:25.1098085Z   clean: true
-backfill	Checkout	2026-08-06T01:46:25.1098536Z   sparse-checkout-cone-mode: true
-backfill	Checkout	2026-08-06T01:46:25.1099065Z   fetch-depth: 1
-backfill	Checkout	2026-08-06T01:46:25.1099499Z   fetch-tags: false
-backfill	Checkout	2026-08-06T01:46:25.1100219Z   show-progress: true
-backfill	Checkout	2026-08-06T01:46:25.1100683Z   lfs: false
-backfill	Checkout	2026-08-06T01:46:25.1101093Z   submodules: false
-backfill	Checkout	2026-08-06T01:46:25.1101598Z   set-safe-directory: true
-backfill	Checkout	2026-08-06T01:46:25.1102103Z   allow-unsafe-pr-checkout: false
-backfill	Checkout	2026-08-06T01:46:25.1102892Z env:
-backfill	Checkout	2026-08-06T01:46:25.1103602Z   CLOUDFLARE_API_TOKEN: ***
-backfill	Checkout	2026-08-06T01:46:25.1104185Z   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
-backfill	Checkout	2026-08-06T01:46:25.1104948Z   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-backfill	Checkout	2026-08-06T01:46:25.1105613Z ##[endgroup]
-backfill	Checkout	2026-08-06T01:46:25.2194475Z Syncing repository: race-tantei-lab/race-tantei
-backfill	Checkout	2026-08-06T01:46:25.2196721Z ##[group]Getting Git version info
-backfill	Checkout	2026-08-06T01:46:25.2197541Z Working directory is '/home/runner/work/race-tantei/race-tantei'
-backfill	Checkout	2026-08-06T01:46:25.2198815Z [command]/usr/bin/git version
-backfill	Checkout	2026-08-06T01:46:25.2262767Z git version 2.54.0
-backfill	Checkout	2026-08-06T01:46:25.2294169Z ##[endgroup]
-backfill	Checkout	2026-08-06T01:46:25.2313454Z Temporarily overriding HOME='/home/runner/work/_temp/01a4228e-1c97-4ea8-8492-d4ce5da4c481' before making global git config changes
-backfill	Checkout	2026-08-06T01:46:25.2316322Z Adding repository directory to the temporary git global config as a safe directory
-backfill	Checkout	2026-08-06T01:46:25.2321848Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/race-tantei/race-tantei
-backfill	Checkout	2026-08-06T01:46:25.2378860Z Deleting the contents of '/home/runner/work/race-tantei/race-tantei'
-backfill	Checkout	2026-08-06T01:46:25.2384147Z ##[group]Initializing the repository
-backfill	Checkout	2026-08-06T01:46:25.2389041Z [command]/usr/bin/git init /home/runner/work/race-tantei/race-tantei
-backfill	Checkout	2026-08-06T01:46:25.2502705Z hint: Using 'master' as the name for the initial branch. This default branch name
-backfill	Checkout	2026-08-06T01:46:25.2503928Z hint: will change to "main" in Git 3.0. To configure the initial branch name
-backfill	Checkout	2026-08-06T01:46:25.2504966Z hint: to use in all of your new repositories, which will suppress this warning,
-backfill	Checkout	2026-08-06T01:46:25.2505704Z hint: call:
-backfill	Checkout	2026-08-06T01:46:25.2506101Z hint:
-backfill	Checkout	2026-08-06T01:46:25.2506630Z hint: 	git config --global init.defaultBranch <name>
-backfill	Checkout	2026-08-06T01:46:25.2507249Z hint:
-backfill	Checkout	2026-08-06T01:46:25.2507864Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
-backfill	Checkout	2026-08-06T01:46:25.2508789Z hint: 'development'. The just-created branch can be renamed via this command:
-backfill	Checkout	2026-08-06T01:46:25.2509509Z hint:
-backfill	Checkout	2026-08-06T01:46:25.2510129Z hint: 	git branch -m <name>
-backfill	Checkout	2026-08-06T01:46:25.2510613Z hint:
-backfill	Checkout	2026-08-06T01:46:25.2511235Z hint: Disable this message with "git config set advice.defaultBranchName false"
-backfill	Checkout	2026-08-06T01:46:25.2520297Z Initialized empty Git repository in /home/runner/work/race-tantei/race-tantei/.git/
-backfill	Checkout	2026-08-06T01:46:25.2532588Z [command]/usr/bin/git remote add origin https://github.com/race-tantei-lab/race-tantei
-backfill	Checkout	2026-08-06T01:46:25.2625605Z ##[endgroup]
-backfill	Checkout	2026-08-06T01:46:25.2626973Z ##[group]Disabling automatic garbage collection
-backfill	Checkout	2026-08-06T01:46:25.2631262Z [command]/usr/bin/git config --local gc.auto 0
-backfill	Checkout	2026-08-06T01:46:25.2670300Z ##[endgroup]
-backfill	Checkout	2026-08-06T01:46:25.2671694Z ##[group]Setting up auth
-backfill	Checkout	2026-08-06T01:46:25.2680825Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-backfill	Checkout	2026-08-06T01:46:25.2725830Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-backfill	Checkout	2026-08-06T01:46:25.3123096Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
-backfill	Checkout	2026-08-06T01:46:25.3169552Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
-backfill	Checkout	2026-08-06T01:46:25.3407978Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
-backfill	Checkout	2026-08-06T01:46:25.3447642Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
-backfill	Checkout	2026-08-06T01:46:25.3682643Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
-backfill	Checkout	2026-08-06T01:46:25.3725244Z ##[endgroup]
-backfill	Checkout	2026-08-06T01:46:25.3726238Z ##[group]Fetching the repository
-backfill	Checkout	2026-08-06T01:46:25.3737084Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +2dcb81ff32d4b2a7e8445b71d6e5272b1e42fd63:refs/remotes/origin/main
-backfill	Checkout	2026-08-06T01:46:25.8922513Z From https://github.com/race-tantei-lab/race-tantei
-backfill	Checkout	2026-08-06T01:46:25.8924351Z  * [new ref]         2dcb81ff32d4b2a7e8445b71d6e5272b1e42fd63 -> origin/main
-backfill	Checkout	2026-08-06T01:46:25.8962004Z ##[endgroup]
-backfill	Checkout	2026-08-06T01:46:25.8963736Z ##[group]Determining the checkout info
-backfill	Checkout	2026-08-06T01:46:25.8965718Z ##[endgroup]
-backfill	Checkout	2026-08-06T01:46:25.8972192Z [command]/usr/bin/git sparse-checkout disable
-backfill	Checkout	2026-08-06T01:46:25.9028173Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
-backfill	Checkout	2026-08-06T01:46:25.9066448Z ##[group]Checking out the ref
-backfill	Checkout	2026-08-06T01:46:25.9073125Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
-backfill	Checkout	2026-08-06T01:46:25.9285026Z Switched to a new branch 'main'
-backfill	Checkout	2026-08-06T01:46:25.9289221Z branch 'main' set up to track 'origin/main'.
-backfill	Checkout	2026-08-06T01:46:25.9294741Z ##[endgroup]
-backfill	Checkout	2026-08-06T01:46:25.9355341Z [command]/usr/bin/git log -1 --format=%H
-backfill	Checkout	2026-08-06T01:46:25.9390459Z 2dcb81ff32d4b2a7e8445b71d6e5272b1e42fd63
-backfill	Setup Python	﻿2026-08-06T01:46:25.9805886Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
-backfill	Setup Python	2026-08-06T01:46:25.9809190Z ##[group]Run actions/setup-python@v5
-backfill	Setup Python	2026-08-06T01:46:25.9810014Z with:
-backfill	Setup Python	2026-08-06T01:46:25.9810479Z   python-version: 3.12
-backfill	Setup Python	2026-08-06T01:46:25.9810994Z   check-latest: false
-backfill	Setup Python	2026-08-06T01:46:25.9814915Z   token: ***
-backfill	Setup Python	2026-08-06T01:46:25.9815409Z   update-environment: true
-backfill	Setup Python	2026-08-06T01:46:25.9815940Z   allow-prereleases: false
-backfill	Setup Python	2026-08-06T01:46:25.9816460Z   freethreaded: false
-backfill	Setup Python	2026-08-06T01:46:25.9816966Z env:
-backfill	Setup Python	2026-08-06T01:46:25.9817688Z   CLOUDFLARE_API_TOKEN: ***
-backfill	Setup Python	2026-08-06T01:46:25.9818315Z   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
-backfill	Setup Python	2026-08-06T01:46:25.9819137Z   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-backfill	Setup Python	2026-08-06T01:46:25.9820051Z ##[endgroup]
-backfill	Setup Python	2026-08-06T01:46:26.1297532Z ##[group]Installed versions
-backfill	Setup Python	2026-08-06T01:46:26.1419791Z (node:2252) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
-backfill	Setup Python	2026-08-06T01:46:26.1422640Z (Use `node --trace-deprecation ...` to show where the warning was created)
-backfill	Setup Python	2026-08-06T01:46:26.1425223Z Successfully set up CPython (3.12.13)
-backfill	Setup Python	2026-08-06T01:46:26.1445321Z ##[endgroup]
-backfill	Install model dependencies	﻿2026-08-06T01:46:26.1629517Z ##[group]Run python -m pip install --disable-pip-version-check numpy scikit-learn
-backfill	Install model dependencies	2026-08-06T01:46:26.1631310Z ^[[36;1mpython -m pip install --disable-pip-version-check numpy scikit-learn^[[0m
-backfill	Install model dependencies	2026-08-06T01:46:26.1778109Z shell: /usr/bin/bash -e {0}
-backfill	Install model dependencies	2026-08-06T01:46:26.1779936Z env:
-backfill	Install model dependencies	2026-08-06T01:46:26.1781979Z   CLOUDFLARE_API_TOKEN: ***
-backfill	Install model dependencies	2026-08-06T01:46:26.1783453Z   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
-backfill	Install model dependencies	2026-08-06T01:46:26.1785380Z   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-backfill	Install model dependencies	2026-08-06T01:46:26.1786776Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Install model dependencies	2026-08-06T01:46:26.1788533Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib/pkgconfig
-backfill	Install model dependencies	2026-08-06T01:46:26.1790724Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Install model dependencies	2026-08-06T01:46:26.1791678Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Install model dependencies	2026-08-06T01:46:26.1792876Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Install model dependencies	2026-08-06T01:46:26.1793804Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib
-backfill	Install model dependencies	2026-08-06T01:46:26.1794832Z ##[endgroup]
-backfill	Install model dependencies	2026-08-06T01:46:29.1732912Z Collecting numpy
-backfill	Install model dependencies	2026-08-06T01:46:29.2236219Z   Downloading numpy-2.5.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
-backfill	Install model dependencies	2026-08-06T01:46:29.3030560Z Collecting scikit-learn
-backfill	Install model dependencies	2026-08-06T01:46:29.3068394Z   Downloading scikit_learn-1.9.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (11 kB)
-backfill	Install model dependencies	2026-08-06T01:46:29.4359007Z Collecting scipy>=1.10.0 (from scikit-learn)
-backfill	Install model dependencies	2026-08-06T01:46:29.4391905Z   Downloading scipy-1.18.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
-backfill	Install model dependencies	2026-08-06T01:46:29.4800081Z Collecting joblib>=1.4.0 (from scikit-learn)
-backfill	Install model dependencies	2026-08-06T01:46:29.4834278Z   Downloading joblib-1.5.3-py3-none-any.whl.metadata (5.5 kB)
-backfill	Install model dependencies	2026-08-06T01:46:29.5173708Z Collecting narwhals>=2.0.1 (from scikit-learn)
-backfill	Install model dependencies	2026-08-06T01:46:29.5206501Z   Downloading narwhals-2.24.0-py3-none-any.whl.metadata (15 kB)
-backfill	Install model dependencies	2026-08-06T01:46:29.5338123Z Collecting threadpoolctl>=3.5.0 (from scikit-learn)
-backfill	Install model dependencies	2026-08-06T01:46:29.5378109Z   Downloading threadpoolctl-3.6.0-py3-none-any.whl.metadata (13 kB)
-backfill	Install model dependencies	2026-08-06T01:46:29.5490337Z Downloading numpy-2.5.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.7 MB)
-backfill	Install model dependencies	2026-08-06T01:46:29.6111153Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.7/16.7 MB 297.5 MB/s  0:00:00
-backfill	Install model dependencies	2026-08-06T01:46:29.6142190Z Downloading scikit_learn-1.9.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (9.1 MB)
-backfill	Install model dependencies	2026-08-06T01:46:29.6432971Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 9.1/9.1 MB 335.6 MB/s  0:00:00
-backfill	Install model dependencies	2026-08-06T01:46:29.6467308Z Downloading joblib-1.5.3-py3-none-any.whl (309 kB)
-backfill	Install model dependencies	2026-08-06T01:46:29.6537484Z Downloading narwhals-2.24.0-py3-none-any.whl (461 kB)
-backfill	Install model dependencies	2026-08-06T01:46:29.6622223Z Downloading scipy-1.18.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.3 MB)
-backfill	Install model dependencies	2026-08-06T01:46:29.8002925Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.3/35.3 MB 259.2 MB/s  0:00:00
-backfill	Install model dependencies	2026-08-06T01:46:29.8043364Z Downloading threadpoolctl-3.6.0-py3-none-any.whl (18 kB)
-backfill	Install model dependencies	2026-08-06T01:46:29.9684163Z Installing collected packages: threadpoolctl, numpy, narwhals, joblib, scipy, scikit-learn
-backfill	Install model dependencies	2026-08-06T01:46:39.8484021Z 
-backfill	Install model dependencies	2026-08-06T01:46:39.8500497Z Successfully installed joblib-1.5.3 narwhals-2.24.0 numpy-2.5.1 scikit-learn-1.9.0 scipy-1.18.0 threadpoolctl-3.6.0
-backfill	Recalculate and settle August 1-2	﻿2026-08-06T01:46:39.9321462Z ##[group]Run set -o pipefail
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9321847Z ^[[36;1mset -o pipefail^[[0m
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9322441Z ^[[36;1mpython scripts/backfill-nonlinear-v4-august.py 2>&1 | tee production-nonlinear-v4-august-backfill.log^[[0m
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9371872Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9372325Z env:
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9373167Z   CLOUDFLARE_API_TOKEN: ***
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9373567Z   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9374099Z   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9374618Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9375155Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib/pkgconfig
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9375696Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9376197Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9376681Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9377220Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib
-backfill	Recalculate and settle August 1-2	2026-08-06T01:46:39.9377634Z ##[endgroup]
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7341788Z Traceback (most recent call last):
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7350866Z   File "/home/runner/work/race-tantei/race-tantei/scripts/backfill-nonlinear-v4-august.py", line 219, in <module>
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7351893Z     main()
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7352925Z   File "/home/runner/work/race-tantei/race-tantei/scripts/backfill-nonlinear-v4-august.py", line 201, in main
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7355900Z     results = [backfill_date(all_rows, race_date) for race_date in TARGET_DATES]
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7356368Z                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7357016Z   File "/home/runner/work/race-tantei/race-tantei/scripts/backfill-nonlinear-v4-august.py", line 170, in backfill_date
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7357690Z     result = prod["publish_race"](race, race["raceId"] in selected)
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7358061Z              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7358696Z   File "/home/runner/work/race-tantei/race-tantei/scripts/publish-nonlinear-v4-production.py", line 403, in publish_race
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7359410Z     prediction_id,horse_no,horse_name,predicted_order,win_probability,place_probability,
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7360181Z ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7360812Z   File "/home/runner/work/race-tantei/race-tantei/scripts/publish-nonlinear-v4-production.py", line 350, in insert_many
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7361345Z     
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7361831Z   File "/home/runner/work/race-tantei/race-tantei/scripts/publish-nonlinear-v4-production.py", line 342, in execute
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7362350Z     
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7362817Z   File "/home/runner/work/race-tantei/race-tantei/scripts/train-nonlinear-market-blend-v4.py", line 48, in sql
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7363731Z     with urllib.request.urlopen(request, timeout=90) as response:
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7364105Z          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7364630Z   File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/urllib/request.py", line 215, in urlopen
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7435490Z     return opener.open(url, data, timeout)
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7436196Z            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7437338Z   File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/urllib/request.py", line 521, in open
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7531336Z     response = meth(req, response)
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7532439Z                ^^^^^^^^^^^^^^^^^^^
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7533611Z   File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/urllib/request.py", line 630, in http_response
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7534628Z     response = self.parent.error(
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7535014Z                ^^^^^^^^^^^^^^^^^^
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7535786Z   File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/urllib/request.py", line 559, in error
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7537220Z     return self._call_chain(*args)
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7550584Z            ^^^^^^^^^^^^^^^^^^^^^^^
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7551422Z   File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/urllib/request.py", line 492, in _call_chain
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7552074Z     result = func(*args)
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7552355Z              ^^^^^^^^^^^
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7552996Z   File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/urllib/request.py", line 639, in http_error_default
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7553755Z     raise HTTPError(req.full_url, code, msg, hdrs, fp)
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:02.7554204Z urllib.error.HTTPError: HTTP Error 400: Bad Request
-backfill	Recalculate and settle August 1-2	2026-08-06T01:48:03.4476046Z ##[error]Process completed with exit code 1.
-backfill	Upload backfill report	﻿2026-08-06T01:48:03.4562559Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
-backfill	Upload backfill report	2026-08-06T01:48:03.4563904Z ##[group]Run actions/upload-artifact@v4
-backfill	Upload backfill report	2026-08-06T01:48:03.4564174Z with:
-backfill	Upload backfill report	2026-08-06T01:48:03.4564411Z   name: production-nonlinear-v4-august-backfill
-backfill	Upload backfill report	2026-08-06T01:48:03.4564955Z   path: production-nonlinear-v4-august-backfill.json
+backfill	Set up job	﻿2026-08-06T02:15:51.1234803Z Current runner version: '2.336.0'
+backfill	Set up job	2026-08-06T02:15:51.1263109Z ##[group]Runner Image Provisioner
+backfill	Set up job	2026-08-06T02:15:51.1263962Z Hosted Compute Agent
+backfill	Set up job	2026-08-06T02:15:51.1264691Z Version: 20260707.563
+backfill	Set up job	2026-08-06T02:15:51.1265338Z Commit: 02667638d2b423fbc733a8e32a88b44996a3ba6e
+backfill	Set up job	2026-08-06T02:15:51.1266431Z Build Date: 2026-07-07T19:33:50Z
+backfill	Set up job	2026-08-06T02:15:51.1267254Z Worker ID: {991ecdce-796c-4bd2-bb73-795e6b544b7e}
+backfill	Set up job	2026-08-06T02:15:51.1268001Z Azure Region: northcentralus
+backfill	Set up job	2026-08-06T02:15:51.1268666Z ##[endgroup]
+backfill	Set up job	2026-08-06T02:15:51.1270191Z ##[group]Operating System
+backfill	Set up job	2026-08-06T02:15:51.1270858Z Ubuntu
+backfill	Set up job	2026-08-06T02:15:51.1271508Z 24.04.4
+backfill	Set up job	2026-08-06T02:15:51.1272025Z LTS
+backfill	Set up job	2026-08-06T02:15:51.1272963Z ##[endgroup]
+backfill	Set up job	2026-08-06T02:15:51.1273588Z ##[group]Runner Image
+backfill	Set up job	2026-08-06T02:15:51.1274197Z Image: ubuntu-24.04
+backfill	Set up job	2026-08-06T02:15:51.1274811Z Version: 20260720.247.2
+backfill	Set up job	2026-08-06T02:15:51.1276259Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260720.247/images/ubuntu/Ubuntu2404-Readme.md
+backfill	Set up job	2026-08-06T02:15:51.1278117Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260720.247
+backfill	Set up job	2026-08-06T02:15:51.1279070Z ##[endgroup]
+backfill	Set up job	2026-08-06T02:15:51.1280198Z ##[group]GITHUB_TOKEN Permissions
+backfill	Set up job	2026-08-06T02:15:51.1282143Z Contents: write
+backfill	Set up job	2026-08-06T02:15:51.1282878Z Metadata: read
+backfill	Set up job	2026-08-06T02:15:51.1283456Z ##[endgroup]
+backfill	Set up job	2026-08-06T02:15:51.1285458Z Secret source: Actions
+backfill	Set up job	2026-08-06T02:15:51.1286983Z Prepare workflow directory
+backfill	Set up job	2026-08-06T02:15:51.2016346Z Prepare all required actions
+backfill	Set up job	2026-08-06T02:15:51.2087382Z Getting action download info
+backfill	Set up job	2026-08-06T02:15:51.4288742Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+backfill	Set up job	2026-08-06T02:15:51.8541964Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+backfill	Set up job	2026-08-06T02:15:51.9341742Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+backfill	Set up job	2026-08-06T02:15:52.1803172Z Complete job name: backfill
+backfill	Checkout	﻿2026-08-06T02:15:52.2601138Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+backfill	Checkout	2026-08-06T02:15:52.2610438Z ##[group]Run actions/checkout@v4
+backfill	Checkout	2026-08-06T02:15:52.2611247Z with:
+backfill	Checkout	2026-08-06T02:15:52.2611699Z   fetch-depth: 0
+backfill	Checkout	2026-08-06T02:15:52.2612200Z   repository: race-tantei-lab/race-tantei
+backfill	Checkout	2026-08-06T02:15:52.2616583Z   token: ***
+backfill	Checkout	2026-08-06T02:15:52.2617063Z   ssh-strict: true
+backfill	Checkout	2026-08-06T02:15:52.2617517Z   ssh-user: git
+backfill	Checkout	2026-08-06T02:15:52.2617965Z   persist-credentials: true
+backfill	Checkout	2026-08-06T02:15:52.2618465Z   clean: true
+backfill	Checkout	2026-08-06T02:15:52.2618922Z   sparse-checkout-cone-mode: true
+backfill	Checkout	2026-08-06T02:15:52.2619493Z   fetch-tags: false
+backfill	Checkout	2026-08-06T02:15:52.2619936Z   show-progress: true
+backfill	Checkout	2026-08-06T02:15:52.2620397Z   lfs: false
+backfill	Checkout	2026-08-06T02:15:52.2620850Z   submodules: false
+backfill	Checkout	2026-08-06T02:15:52.2621344Z   set-safe-directory: true
+backfill	Checkout	2026-08-06T02:15:52.2621854Z   allow-unsafe-pr-checkout: false
+backfill	Checkout	2026-08-06T02:15:52.2622682Z env:
+backfill	Checkout	2026-08-06T02:15:52.2623466Z   CLOUDFLARE_API_TOKEN: ***
+backfill	Checkout	2026-08-06T02:15:52.2624230Z   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+backfill	Checkout	2026-08-06T02:15:52.2625014Z   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+backfill	Checkout	2026-08-06T02:15:52.2625955Z ##[endgroup]
+backfill	Checkout	2026-08-06T02:15:52.3656107Z Syncing repository: race-tantei-lab/race-tantei
+backfill	Checkout	2026-08-06T02:15:52.3658809Z ##[group]Getting Git version info
+backfill	Checkout	2026-08-06T02:15:52.3660017Z Working directory is '/home/runner/work/race-tantei/race-tantei'
+backfill	Checkout	2026-08-06T02:15:52.3661685Z [command]/usr/bin/git version
+backfill	Checkout	2026-08-06T02:15:52.5590916Z git version 2.54.0
+backfill	Checkout	2026-08-06T02:15:52.5644848Z ##[endgroup]
+backfill	Checkout	2026-08-06T02:15:52.5662869Z Temporarily overriding HOME='/home/runner/work/_temp/b1da6606-b6ff-49d0-b22e-7e540fd39302' before making global git config changes
+backfill	Checkout	2026-08-06T02:15:52.5667196Z Adding repository directory to the temporary git global config as a safe directory
+backfill	Checkout	2026-08-06T02:15:52.5670333Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/race-tantei/race-tantei
+backfill	Checkout	2026-08-06T02:15:52.5729197Z Deleting the contents of '/home/runner/work/race-tantei/race-tantei'
+backfill	Checkout	2026-08-06T02:15:52.5733296Z ##[group]Initializing the repository
+backfill	Checkout	2026-08-06T02:15:52.5737356Z [command]/usr/bin/git init /home/runner/work/race-tantei/race-tantei
+backfill	Checkout	2026-08-06T02:15:52.5866878Z hint: Using 'master' as the name for the initial branch. This default branch name
+backfill	Checkout	2026-08-06T02:15:52.5869205Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+backfill	Checkout	2026-08-06T02:15:52.5871289Z hint: to use in all of your new repositories, which will suppress this warning,
+backfill	Checkout	2026-08-06T02:15:52.5873408Z hint: call:
+backfill	Checkout	2026-08-06T02:15:52.5874668Z hint:
+backfill	Checkout	2026-08-06T02:15:52.5876793Z hint: 	git config --global init.defaultBranch <name>
+backfill	Checkout	2026-08-06T02:15:52.5879072Z hint:
+backfill	Checkout	2026-08-06T02:15:52.5881111Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+backfill	Checkout	2026-08-06T02:15:52.5884288Z hint: 'development'. The just-created branch can be renamed via this command:
+backfill	Checkout	2026-08-06T02:15:52.5887546Z hint:
+backfill	Checkout	2026-08-06T02:15:52.5889209Z hint: 	git branch -m <name>
+backfill	Checkout	2026-08-06T02:15:52.5891104Z hint:
+backfill	Checkout	2026-08-06T02:15:52.5893429Z hint: Disable this message with "git config set advice.defaultBranchName false"
+backfill	Checkout	2026-08-06T02:15:52.5897304Z Initialized empty Git repository in /home/runner/work/race-tantei/race-tantei/.git/
+backfill	Checkout	2026-08-06T02:15:52.5901928Z [command]/usr/bin/git remote add origin https://github.com/race-tantei-lab/race-tantei
+backfill	Checkout	2026-08-06T02:15:52.5939314Z ##[endgroup]
+backfill	Checkout	2026-08-06T02:15:52.5941613Z ##[group]Disabling automatic garbage collection
+backfill	Checkout	2026-08-06T02:15:52.5943647Z [command]/usr/bin/git config --local gc.auto 0
+backfill	Checkout	2026-08-06T02:15:52.5977161Z ##[endgroup]
+backfill	Checkout	2026-08-06T02:15:52.5979029Z ##[group]Setting up auth
+backfill	Checkout	2026-08-06T02:15:52.5983854Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+backfill	Checkout	2026-08-06T02:15:52.6028194Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+backfill	Checkout	2026-08-06T02:15:52.6408834Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+backfill	Checkout	2026-08-06T02:15:52.6448120Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+backfill	Checkout	2026-08-06T02:15:52.6671622Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+backfill	Checkout	2026-08-06T02:15:52.6713480Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+backfill	Checkout	2026-08-06T02:15:52.6937804Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+backfill	Checkout	2026-08-06T02:15:52.6975361Z ##[endgroup]
+backfill	Checkout	2026-08-06T02:15:52.6977469Z ##[group]Fetching the repository
+backfill	Checkout	2026-08-06T02:15:52.6987113Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+backfill	Checkout	2026-08-06T02:15:53.2422692Z From https://github.com/race-tantei-lab/race-tantei
+backfill	Checkout	2026-08-06T02:15:53.2426717Z  * [new branch]      agent/adaptive-100-imports -> origin/agent/adaptive-100-imports
+backfill	Checkout	2026-08-06T02:15:53.2430631Z  * [new branch]      agent/add-cloudflare-deploy -> origin/agent/add-cloudflare-deploy
+backfill	Checkout	2026-08-06T02:15:53.2434657Z  * [new branch]      agent/aggregate-three-month-snapshot -> origin/agent/aggregate-three-month-snapshot
+backfill	Checkout	2026-08-06T02:15:53.2437740Z  * [new branch]      agent/analysis-roi-120  -> origin/agent/analysis-roi-120
+backfill	Checkout	2026-08-06T02:15:53.2440102Z  * [new branch]      agent/apply-roi-policy-v1 -> origin/agent/apply-roi-policy-v1
+backfill	Checkout	2026-08-06T02:15:53.2442760Z  * [new branch]      agent/audit-freeze-and-reconcile -> origin/agent/audit-freeze-and-reconcile
+backfill	Checkout	2026-08-06T02:15:53.2446307Z  * [new branch]      agent/august-production-start -> origin/agent/august-production-start
+backfill	Checkout	2026-08-06T02:15:53.2449045Z  * [new branch]      agent/auto-run-audited-repair -> origin/agent/auto-run-audited-repair
+backfill	Checkout	2026-08-06T02:15:53.2452108Z  * [new branch]      agent/backfill-august-v4-and-fix-archive -> origin/agent/backfill-august-v4-and-fix-archive
+backfill	Checkout	2026-08-06T02:15:53.2455197Z  * [new branch]      agent/batch-history-d1-writes -> origin/agent/batch-history-d1-writes
+backfill	Checkout	2026-08-06T02:15:53.2458156Z  * [new branch]      agent/betting-factor-analysis -> origin/agent/betting-factor-analysis
+backfill	Checkout	2026-08-06T02:15:53.2461098Z  * [new branch]      agent/cap-selected-races-per-venue -> origin/agent/cap-selected-races-per-venue
+backfill	Checkout	2026-08-06T02:15:53.2463919Z  * [new branch]      agent/checkpoint-jra-import -> origin/agent/checkpoint-jra-import
+backfill	Checkout	2026-08-06T02:15:53.2466850Z  * [new branch]      agent/cron-progress-single-read -> origin/agent/cron-progress-single-read
+backfill	Checkout	2026-08-06T02:15:53.2469505Z  * [new branch]      agent/d1-rest-local-runner -> origin/agent/d1-rest-local-runner
+backfill	Checkout	2026-08-06T02:15:53.2472824Z  * [new branch]      agent/dedicated-runner-ranking-workflow -> origin/agent/dedicated-runner-ranking-workflow
+backfill	Checkout	2026-08-06T02:15:53.2476542Z  * [new branch]      agent/expanded-candidate-policy-search -> origin/agent/expanded-candidate-policy-search
+backfill	Checkout	2026-08-06T02:15:53.2479756Z  * [new branch]      agent/finalize-audited-history-fix -> origin/agent/finalize-audited-history-fix
+backfill	Checkout	2026-08-06T02:15:53.2483693Z  * [new branch]      agent/finish-three-month-normalization -> origin/agent/finish-three-month-normalization
+backfill	Checkout	2026-08-06T02:15:53.2487174Z  * [new branch]      agent/fix-checkpoint-query-budget -> origin/agent/fix-checkpoint-query-budget
+backfill	Checkout	2026-08-06T02:15:53.2490138Z  * [new branch]      agent/fix-cron-background-progress -> origin/agent/fix-cron-background-progress
+backfill	Checkout	2026-08-06T02:15:53.2492877Z  * [new branch]      agent/fix-cron-query-budget -> origin/agent/fix-cron-query-budget
+backfill	Checkout	2026-08-06T02:15:53.2495915Z  * [new branch]      agent/fix-free-d1-query-limit -> origin/agent/fix-free-d1-query-limit
+backfill	Checkout	2026-08-06T02:15:53.2499505Z  * [new branch]      agent/fix-full-history-home -> origin/agent/fix-full-history-home
+backfill	Checkout	2026-08-06T02:15:53.2502455Z  * [new branch]      agent/fix-policy-analysis-empty-candidate -> origin/agent/fix-policy-analysis-empty-candidate
+backfill	Checkout	2026-08-06T02:15:53.2506287Z  * [new branch]      agent/github-actions-learning-runner -> origin/agent/github-actions-learning-runner
+backfill	Checkout	2026-08-06T02:15:53.2509353Z  * [new branch]      agent/github-policy-analysis-runner -> origin/agent/github-policy-analysis-runner
+backfill	Checkout	2026-08-06T02:15:53.2512630Z  * [new branch]      agent/home-performance-history -> origin/agent/home-performance-history
+backfill	Checkout	2026-08-06T02:15:53.2515217Z  * [new branch]      agent/inspect-production-roi -> origin/agent/inspect-production-roi
+backfill	Checkout	2026-08-06T02:15:53.2518173Z  * [new branch]      agent/inspect-three-month-progress -> origin/agent/inspect-three-month-progress
+backfill	Checkout	2026-08-06T02:15:53.2521427Z  * [new branch]      agent/isolate-incomplete-three-month-results -> origin/agent/isolate-incomplete-three-month-results
+backfill	Checkout	2026-08-06T02:15:53.2524395Z  * [new branch]      agent/light-barbell-search -> origin/agent/light-barbell-search
+backfill	Checkout	2026-08-06T02:15:53.2527146Z  * [new branch]      agent/light-policy-aware-search -> origin/agent/light-policy-aware-search
+backfill	Checkout	2026-08-06T02:15:53.2529843Z  * [new branch]      agent/light-specialized-search -> origin/agent/light-specialized-search
+backfill	Checkout	2026-08-06T02:15:53.2534027Z  * [new branch]      agent/mac-free-learning-runner-v1 -> origin/agent/mac-free-learning-runner-v1
+backfill	Checkout	2026-08-06T02:15:53.2542324Z  * [new branch]      agent/market-residual-ranking-v3 -> origin/agent/market-residual-ranking-v3
+backfill	Checkout	2026-08-06T02:15:53.2545016Z  * [new branch]      agent/nonlinear-market-blend-v4 -> origin/agent/nonlinear-market-blend-v4
+backfill	Checkout	2026-08-06T02:15:53.2548123Z  * [new branch]      agent/nonlinear-v4-allocation-refinement -> origin/agent/nonlinear-v4-allocation-refinement
+backfill	Checkout	2026-08-06T02:15:53.2551216Z  * [new branch]      agent/nonlinear-v4-hit-buffer -> origin/agent/nonlinear-v4-hit-buffer
+backfill	Checkout	2026-08-06T02:15:53.2553763Z  * [new branch]      agent/optimize-analysis-roi-120 -> origin/agent/optimize-analysis-roi-120
+backfill	Checkout	2026-08-06T02:15:53.2556553Z  * [new branch]      agent/optimize-full-history-home -> origin/agent/optimize-full-history-home
+backfill	Checkout	2026-08-06T02:15:53.2560505Z  * [new branch]      agent/payout-monthly-profit-gate -> origin/agent/payout-monthly-profit-gate
+backfill	Checkout	2026-08-06T02:15:53.2562961Z  * [new branch]      agent/payout-only-policy -> origin/agent/payout-only-policy
+backfill	Checkout	2026-08-06T02:15:53.2565316Z  * [new branch]      agent/payout-segment-ensemble -> origin/agent/payout-segment-ensemble
+backfill	Checkout	2026-08-06T02:15:53.2570352Z  * [new branch]      agent/persist-policy-analysis-results -> origin/agent/persist-policy-analysis-results
+backfill	Checkout	2026-08-06T02:15:53.2573240Z  * [new branch]      agent/poison-race-isolation -> origin/agent/poison-race-isolation
+backfill	Checkout	2026-08-06T02:15:53.2576033Z  * [new branch]      agent/policy-data-analysis-v1 -> origin/agent/policy-data-analysis-v1
+backfill	Checkout	2026-08-06T02:15:53.2578944Z  * [new branch]      agent/promote-nonlinear-v4-production -> origin/agent/promote-nonlinear-v4-production
+backfill	Checkout	2026-08-06T02:15:53.2581751Z  * [new branch]      agent/queue-bulk-save-failures -> origin/agent/queue-bulk-save-failures
+backfill	Checkout	2026-08-06T02:15:53.2584396Z  * [new branch]      agent/read-only-roi-verification -> origin/agent/read-only-roi-verification
+backfill	Checkout	2026-08-06T02:15:53.2587183Z  * [new branch]      agent/reanalyze-on-model-change -> origin/agent/reanalyze-on-model-change
+backfill	Checkout	2026-08-06T02:15:53.2590353Z  * [new branch]      agent/rebuild-historical-performance-correctly -> origin/agent/rebuild-historical-performance-correctly
+backfill	Checkout	2026-08-06T02:15:53.2593782Z  * [new branch]      agent/record-invalid-three-month-audit -> origin/agent/record-invalid-three-month-audit
+backfill	Checkout	2026-08-06T02:15:53.2597008Z  * [new branch]      agent/reduce-cron-progress-queries -> origin/agent/reduce-cron-progress-queries
+backfill	Checkout	2026-08-06T02:15:53.2599935Z  * [new branch]      agent/remove-budget-clarity-ui -> origin/agent/remove-budget-clarity-ui
+backfill	Checkout	2026-08-06T02:15:53.2602535Z  * [new branch]      agent/remove-budget-guidance-v2 -> origin/agent/remove-budget-guidance-v2
+backfill	Checkout	2026-08-06T02:15:53.2605184Z  * [new branch]      agent/require-production-roi-120 -> origin/agent/require-production-roi-120
+backfill	Checkout	2026-08-06T02:15:53.2607976Z  * [new branch]      agent/restore-100-json-bulk -> origin/agent/restore-100-json-bulk
+backfill	Checkout	2026-08-06T02:15:53.2610565Z  * [new branch]      agent/restore-fast-performance-api -> origin/agent/restore-fast-performance-api
+backfill	Checkout	2026-08-06T02:15:53.2613239Z  * [new branch]      agent/roi-200-acceptance-gate -> origin/agent/roi-200-acceptance-gate
+backfill	Checkout	2026-08-06T02:15:53.2616195Z  * [new branch]      agent/run-three-month-reconciliation -> origin/agent/run-three-month-reconciliation
+backfill	Checkout	2026-08-06T02:15:53.2619589Z  * [new branch]      agent/speed-official-archive-import -> origin/agent/speed-official-archive-import
+backfill	Checkout	2026-08-06T02:15:53.2622466Z  * [new branch]      agent/speed-three-month-backfill -> origin/agent/speed-three-month-backfill
+backfill	Checkout	2026-08-06T02:15:53.2625045Z  * [new branch]      agent/speed-up-history-import -> origin/agent/speed-up-history-import
+backfill	Checkout	2026-08-06T02:15:53.2627993Z  * [new branch]      agent/split-validation-production-ui -> origin/agent/split-validation-production-ui
+backfill	Checkout	2026-08-06T02:15:53.2630887Z  * [new branch]      agent/stabilize-cron-state-writes -> origin/agent/stabilize-cron-state-writes
+backfill	Checkout	2026-08-06T02:15:53.2633620Z  * [new branch]      agent/stabilize-learning-pipeline -> origin/agent/stabilize-learning-pipeline
+backfill	Checkout	2026-08-06T02:15:53.2637699Z  * [new branch]      agent/stream-history-features -> origin/agent/stream-history-features
+backfill	Checkout	2026-08-06T02:15:53.2641590Z  * [new branch]      agent/sync-roi-normalization -> origin/agent/sync-roi-normalization
+backfill	Checkout	2026-08-06T02:15:53.2645766Z  * [new branch]      agent/three-month-backtest -> origin/agent/three-month-backtest
+backfill	Checkout	2026-08-06T02:15:53.2650135Z  * [new branch]      agent/tolerate-current-archive-month -> origin/agent/tolerate-current-archive-month
+backfill	Checkout	2026-08-06T02:15:53.2655077Z  * [new branch]      agent/train-longshot-value-model -> origin/agent/train-longshot-value-model
+backfill	Checkout	2026-08-06T02:15:53.2659494Z  * [new branch]      agent/train-realized-ticket-edge -> origin/agent/train-realized-ticket-edge
+backfill	Checkout	2026-08-06T02:15:53.2663761Z  * [new branch]      agent/train-runner-ranking-v2 -> origin/agent/train-runner-ranking-v2
+backfill	Checkout	2026-08-06T02:15:53.2668526Z  * [new branch]      agent/two-stage-three-month-backfill -> origin/agent/two-stage-three-month-backfill
+backfill	Checkout	2026-08-06T02:15:53.2673771Z  * [new branch]      agent/unify-performance-budget-stakes -> origin/agent/unify-performance-budget-stakes
+backfill	Checkout	2026-08-06T02:15:53.2678285Z  * [new branch]      agent/use-jra-archive-search -> origin/agent/use-jra-archive-search
+backfill	Checkout	2026-08-06T02:15:53.2682742Z  * [new branch]      agent/verify-full-history-production -> origin/agent/verify-full-history-production
+backfill	Checkout	2026-08-06T02:15:53.2686206Z  * [new branch]      agent/verify-full-history-production-v2 -> origin/agent/verify-full-history-production-v2
+backfill	Checkout	2026-08-06T02:15:53.2689425Z  * [new branch]      agent/verify-full-history-production-v3 -> origin/agent/verify-full-history-production-v3
+backfill	Checkout	2026-08-06T02:15:53.2693028Z  * [new branch]      agent/verify-home-performance-layout -> origin/agent/verify-home-performance-layout
+backfill	Checkout	2026-08-06T02:15:53.2696542Z  * [new branch]      agent/walk-forward-12m-learning -> origin/agent/walk-forward-12m-learning
+backfill	Checkout	2026-08-06T02:15:53.2699095Z  * [new branch]      agent/worker-native-calibration -> origin/agent/worker-native-calibration
+backfill	Checkout	2026-08-06T02:15:53.2701467Z  * [new branch]      agent/wrangler-cron-deploy -> origin/agent/wrangler-cron-deploy
+backfill	Checkout	2026-08-06T02:15:53.2703501Z  * [new branch]      complete-live-v2        -> origin/complete-live-v2
+backfill	Checkout	2026-08-06T02:15:53.2705275Z  * [new branch]      complete-v1             -> origin/complete-v1
+backfill	Checkout	2026-08-06T02:15:53.2707559Z  * [new branch]      decouple-quota-normalization -> origin/decouple-quota-normalization
+backfill	Checkout	2026-08-06T02:15:53.2710524Z  * [new branch]      diagnose-live-buy-count -> origin/diagnose-live-buy-count
+backfill	Checkout	2026-08-06T02:15:53.2714084Z  * [new branch]      diagnose-live-race-name -> origin/diagnose-live-race-name
+backfill	Checkout	2026-08-06T02:15:53.2718254Z  * [new branch]      diagnose-unified-production -> origin/diagnose-unified-production
+backfill	Checkout	2026-08-06T02:15:53.2722803Z  * [new branch]      fix-background-budget-normalization -> origin/fix-background-budget-normalization
+backfill	Checkout	2026-08-06T02:15:53.2729888Z  * [new branch]      fix-course-grouping-and-backtest -> origin/fix-course-grouping-and-backtest
+backfill	Checkout	2026-08-06T02:15:53.2733984Z  * [new branch]      fix-course-tabs-runner-list -> origin/fix-course-tabs-runner-list
+backfill	Checkout	2026-08-06T02:15:53.2737857Z  * [new branch]      fix-discovery-version-refresh -> origin/fix-discovery-version-refresh
+backfill	Checkout	2026-08-06T02:15:53.2740233Z  * [new branch]      fix-hierarchical-race-ui -> origin/fix-hierarchical-race-ui
+backfill	Checkout	2026-08-06T02:15:53.2742318Z  * [new branch]      fix-jst-dates-and-bets  -> origin/fix-jst-dates-and-bets
+backfill	Checkout	2026-08-06T02:15:53.2744353Z  * [new branch]      fix-race-name-refresh   -> origin/fix-race-name-refresh
+backfill	Checkout	2026-08-06T02:15:53.2747518Z  * [new branch]      fix-readable-trifecta   -> origin/fix-readable-trifecta
+backfill	Checkout	2026-08-06T02:15:53.2750016Z  * [new branch]      fix-refresh-new-model-predictions -> origin/fix-refresh-new-model-predictions
+backfill	Checkout	2026-08-06T02:15:53.2752412Z  * [new branch]      fix-show-cumulative-roi -> origin/fix-show-cumulative-roi
+backfill	Checkout	2026-08-06T02:15:53.2754382Z  * [new branch]      fix-ticket-list-v6      -> origin/fix-ticket-list-v6
+backfill	Checkout	2026-08-06T02:15:53.2756970Z  * [new branch]      fix-zero-buy-stakes     -> origin/fix-zero-buy-stakes
+backfill	Checkout	2026-08-06T02:15:53.2760298Z  * [new branch]      hotfix-isolated-schema  -> origin/hotfix-isolated-schema
+backfill	Checkout	2026-08-06T02:15:53.2763724Z  * [new branch]      hotfix-race-detail-production -> origin/hotfix-race-detail-production
+backfill	Checkout	2026-08-06T02:15:53.2767245Z  * [new branch]      hotfix-worker-1101      -> origin/hotfix-worker-1101
+backfill	Checkout	2026-08-06T02:15:53.2770076Z  * [new branch]      main                    -> origin/main
+backfill	Checkout	2026-08-06T02:15:53.2772639Z  * [new branch]      phase-a-ui              -> origin/phase-a-ui
+backfill	Checkout	2026-08-06T02:15:53.2774909Z  * [new branch]      phase-b-value-engine    -> origin/phase-b-value-engine
+backfill	Checkout	2026-08-06T02:15:53.2778543Z  * [new branch]      phase-c-deploy-proof    -> origin/phase-c-deploy-proof
+backfill	Checkout	2026-08-06T02:15:53.2780756Z  * [new branch]      phase-c-validation      -> origin/phase-c-validation
+backfill	Checkout	2026-08-06T02:15:53.2782894Z  * [new branch]      phase-d-venue-five-roi  -> origin/phase-d-venue-five-roi
+backfill	Checkout	2026-08-06T02:15:53.2785513Z  * [new branch]      unify-results-and-scale-course-budgets -> origin/unify-results-and-scale-course-budgets
+backfill	Checkout	2026-08-06T02:15:53.2788270Z  * [new branch]      verify-all-race-records -> origin/verify-all-race-records
+backfill	Checkout	2026-08-06T02:15:53.2790415Z  * [new branch]      verify-backtest-build   -> origin/verify-backtest-build
+backfill	Checkout	2026-08-06T02:15:53.2792445Z  * [new branch]      verify-final-production -> origin/verify-final-production
+backfill	Checkout	2026-08-06T02:15:53.2794958Z  * [new branch]      verify-full-weekend-ingestion -> origin/verify-full-weekend-ingestion
+backfill	Checkout	2026-08-06T02:15:53.2798375Z  * [new branch]      verify-multibet-fix     -> origin/verify-multibet-fix
+backfill	Checkout	2026-08-06T02:15:53.2801273Z  * [new branch]      verify-production-v2    -> origin/verify-production-v2
+backfill	Checkout	2026-08-06T02:15:53.2803766Z  * [new branch]      verify-v1-build         -> origin/verify-v1-build
+backfill	Checkout	2026-08-06T02:15:53.2806984Z  * [new branch]      verify/per-course-audit-repair -> origin/verify/per-course-audit-repair
+backfill	Checkout	2026-08-06T02:15:53.2877372Z [command]/usr/bin/git branch --list --remote origin/main
+backfill	Checkout	2026-08-06T02:15:53.2879737Z   origin/main
+backfill	Checkout	2026-08-06T02:15:53.2882858Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+backfill	Checkout	2026-08-06T02:15:53.2884313Z 0ebefba7d09177eac95617959ae124172aa3e55e
+backfill	Checkout	2026-08-06T02:15:53.2887491Z ##[endgroup]
+backfill	Checkout	2026-08-06T02:15:53.2888985Z ##[group]Determining the checkout info
+backfill	Checkout	2026-08-06T02:15:53.2890876Z ##[endgroup]
+backfill	Checkout	2026-08-06T02:15:53.2892150Z [command]/usr/bin/git sparse-checkout disable
+backfill	Checkout	2026-08-06T02:15:53.2895053Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+backfill	Checkout	2026-08-06T02:15:53.2898602Z ##[group]Checking out the ref
+backfill	Checkout	2026-08-06T02:15:53.2900189Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+backfill	Checkout	2026-08-06T02:15:53.3091716Z Switched to a new branch 'main'
+backfill	Checkout	2026-08-06T02:15:53.3094745Z branch 'main' set up to track 'origin/main'.
+backfill	Checkout	2026-08-06T02:15:53.3103934Z ##[endgroup]
+backfill	Checkout	2026-08-06T02:15:53.3150546Z [command]/usr/bin/git log -1 --format=%H
+backfill	Checkout	2026-08-06T02:15:53.3179499Z 0ebefba7d09177eac95617959ae124172aa3e55e
+backfill	Setup Python	﻿2026-08-06T02:15:53.3531827Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+backfill	Setup Python	2026-08-06T02:15:53.3538931Z ##[group]Run actions/setup-python@v5
+backfill	Setup Python	2026-08-06T02:15:53.3540030Z with:
+backfill	Setup Python	2026-08-06T02:15:53.3540839Z   python-version: 3.12
+backfill	Setup Python	2026-08-06T02:15:53.3541775Z   check-latest: false
+backfill	Setup Python	2026-08-06T02:15:53.3551472Z   token: ***
+backfill	Setup Python	2026-08-06T02:15:53.3552386Z   update-environment: true
+backfill	Setup Python	2026-08-06T02:15:53.3553381Z   allow-prereleases: false
+backfill	Setup Python	2026-08-06T02:15:53.3554355Z   freethreaded: false
+backfill	Setup Python	2026-08-06T02:15:53.3555237Z env:
+backfill	Setup Python	2026-08-06T02:15:53.3556743Z   CLOUDFLARE_API_TOKEN: ***
+backfill	Setup Python	2026-08-06T02:15:53.3557906Z   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+backfill	Setup Python	2026-08-06T02:15:53.3559460Z   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+backfill	Setup Python	2026-08-06T02:15:53.3560883Z ##[endgroup]
+backfill	Setup Python	2026-08-06T02:15:53.5167107Z ##[group]Installed versions
+backfill	Setup Python	2026-08-06T02:15:53.5270723Z (node:2404) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+backfill	Setup Python	2026-08-06T02:15:53.5275170Z (Use `node --trace-deprecation ...` to show where the warning was created)
+backfill	Setup Python	2026-08-06T02:15:53.5278035Z Successfully set up CPython (3.12.13)
+backfill	Setup Python	2026-08-06T02:15:53.5279787Z ##[endgroup]
+backfill	Install model dependencies	﻿2026-08-06T02:15:53.5460363Z ##[group]Run python -m pip install --disable-pip-version-check numpy scikit-learn
+backfill	Install model dependencies	2026-08-06T02:15:53.5462545Z ^[[36;1mpython -m pip install --disable-pip-version-check numpy scikit-learn^[[0m
+backfill	Install model dependencies	2026-08-06T02:15:53.5536909Z shell: /usr/bin/bash -e {0}
+backfill	Install model dependencies	2026-08-06T02:15:53.5537925Z env:
+backfill	Install model dependencies	2026-08-06T02:15:53.5539325Z   CLOUDFLARE_API_TOKEN: ***
+backfill	Install model dependencies	2026-08-06T02:15:53.5540477Z   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+backfill	Install model dependencies	2026-08-06T02:15:53.5542001Z   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+backfill	Install model dependencies	2026-08-06T02:15:53.5543560Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Install model dependencies	2026-08-06T02:15:53.5545204Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib/pkgconfig
+backfill	Install model dependencies	2026-08-06T02:15:53.5547655Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Install model dependencies	2026-08-06T02:15:53.5550320Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Install model dependencies	2026-08-06T02:15:53.5552849Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Install model dependencies	2026-08-06T02:15:53.5555199Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib
+backfill	Install model dependencies	2026-08-06T02:15:53.5557353Z ##[endgroup]
+backfill	Install model dependencies	2026-08-06T02:15:54.6682580Z Collecting numpy
+backfill	Install model dependencies	2026-08-06T02:15:54.7198069Z   Downloading numpy-2.5.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)
+backfill	Install model dependencies	2026-08-06T02:15:54.7986049Z Collecting scikit-learn
+backfill	Install model dependencies	2026-08-06T02:15:54.8019514Z   Downloading scikit_learn-1.9.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (11 kB)
+backfill	Install model dependencies	2026-08-06T02:15:54.9314551Z Collecting scipy>=1.10.0 (from scikit-learn)
+backfill	Install model dependencies	2026-08-06T02:15:54.9348503Z   Downloading scipy-1.18.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+backfill	Install model dependencies	2026-08-06T02:15:54.9768364Z Collecting joblib>=1.4.0 (from scikit-learn)
+backfill	Install model dependencies	2026-08-06T02:15:54.9798375Z   Downloading joblib-1.5.3-py3-none-any.whl.metadata (5.5 kB)
+backfill	Install model dependencies	2026-08-06T02:15:55.0095520Z Collecting narwhals>=2.0.1 (from scikit-learn)
+backfill	Install model dependencies	2026-08-06T02:15:55.0125186Z   Downloading narwhals-2.24.0-py3-none-any.whl.metadata (15 kB)
+backfill	Install model dependencies	2026-08-06T02:15:55.0254554Z Collecting threadpoolctl>=3.5.0 (from scikit-learn)
+backfill	Install model dependencies	2026-08-06T02:15:55.0284923Z   Downloading threadpoolctl-3.6.0-py3-none-any.whl.metadata (13 kB)
+backfill	Install model dependencies	2026-08-06T02:15:55.0395933Z Downloading numpy-2.5.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.7 MB)
+backfill	Install model dependencies	2026-08-06T02:15:55.1039667Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.7/16.7 MB 276.0 MB/s  0:00:00
+backfill	Install model dependencies	2026-08-06T02:15:55.1079022Z Downloading scikit_learn-1.9.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (9.1 MB)
+backfill	Install model dependencies	2026-08-06T02:15:55.1409633Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 9.1/9.1 MB 290.2 MB/s  0:00:00
+backfill	Install model dependencies	2026-08-06T02:15:55.1443048Z Downloading joblib-1.5.3-py3-none-any.whl (309 kB)
+backfill	Install model dependencies	2026-08-06T02:15:55.1508001Z Downloading narwhals-2.24.0-py3-none-any.whl (461 kB)
+backfill	Install model dependencies	2026-08-06T02:15:55.1598528Z Downloading scipy-1.18.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.3 MB)
+backfill	Install model dependencies	2026-08-06T02:15:55.2903343Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.3/35.3 MB 274.9 MB/s  0:00:00
+backfill	Install model dependencies	2026-08-06T02:15:55.2943575Z Downloading threadpoolctl-3.6.0-py3-none-any.whl (18 kB)
+backfill	Install model dependencies	2026-08-06T02:15:55.4181451Z Installing collected packages: threadpoolctl, numpy, narwhals, joblib, scipy, scikit-learn
+backfill	Install model dependencies	2026-08-06T02:16:04.6871271Z 
+backfill	Install model dependencies	2026-08-06T02:16:04.6886148Z Successfully installed joblib-1.5.3 narwhals-2.24.0 numpy-2.5.1 scikit-learn-1.9.0 scipy-1.18.0 threadpoolctl-3.6.0
+backfill	Recalculate and settle August 1-2	﻿2026-08-06T02:16:04.7474821Z ##[group]Run set -o pipefail
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7475184Z ^[[36;1mset -o pipefail^[[0m
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7476184Z ^[[36;1mpython scripts/backfill-nonlinear-v4-august.py 2>&1 | tee production-nonlinear-v4-august-backfill.log^[[0m
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7523542Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7523913Z env:
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7524379Z   CLOUDFLARE_API_TOKEN: ***
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7524678Z   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7525285Z   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7526038Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7526591Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib/pkgconfig
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7527018Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7527403Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7527778Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7528199Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib
+backfill	Recalculate and settle August 1-2	2026-08-06T02:16:04.7528514Z ##[endgroup]
+backfill	Recalculate and settle August 1-2	2026-08-06T02:24:03.8884556Z {"modelVersion": "v4.1.0-nonlinear-hgb-5r", "mode": "retrospective-v4-backfill", "methodology": "Each date is trained only on races strictly before that date; final stored market odds are used for the historical replay.", "includedInAugustAggregate": true, "generatedAt": "2026-08-06T02:24:03Z", "dates": [{"raceDate": "2026-08-01", "trainingCutoffExclusive": "2026-08-01", "trainingRaces": 4313, "targetRaces": 36, "selectedRaces": 15, "removedExistingPredictions": 2, "published": 36, "tickets": 135, "lockedSkipped": 0, "settlement": {"tickets": 135, "returnYen": 46750}, "metrics": [{"course": "スタンダード", "races": 15, "tickets": 45, "stakeYen": 75000, "returnYen": 13750, "profitYen": -61250, "roiPct": 18.333333333333332, "ticketHitRatePct": 22.22222222222222}, {"course": "プレミアム", "races": 15, "tickets": 45, "stakeYen": 150000, "returnYen": 27500, "profitYen": -122500, "roiPct": 18.333333333333332, "ticketHitRatePct": 22.22222222222222}, {"course": "ライト", "races": 15, "tickets": 45, "stakeYen": 30000, "returnYen": 5500, "profitYen": -24500, "roiPct": 18.333333333333332, "ticketHitRatePct": 22.22222222222222}]}, {"raceDate": "2026-08-02", "trainingCutoffExclusive": "2026-08-02", "trainingRaces": 4349, "targetRaces": 36, "selectedRaces": 15, "removedExistingPredictions": 0, "published": 36, "tickets": 135, "lockedSkipped": 0, "settlement": {"tickets": 135, "returnYen": 34850}, "metrics": [{"course": "スタンダード", "races": 15, "tickets": 45, "stakeYen": 75000, "returnYen": 10250, "profitYen": -64750, "roiPct": 13.666666666666666, "ticketHitRatePct": 15.555555555555555}, {"course": "プレミアム", "races": 15, "tickets": 45, "stakeYen": 150000, "returnYen": 20500, "profitYen": -129500, "roiPct": 13.666666666666666, "ticketHitRatePct": 15.555555555555555}, {"course": "ライト", "races": 15, "tickets": 45, "stakeYen": 30000, "returnYen": 4100, "profitYen": -25900, "roiPct": 13.666666666666666, "ticketHitRatePct": 15.555555555555555}]}]}
+backfill	Upload backfill report	﻿2026-08-06T02:24:03.9813896Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+backfill	Upload backfill report	2026-08-06T02:24:03.9815215Z ##[group]Run actions/upload-artifact@v4
+backfill	Upload backfill report	2026-08-06T02:24:03.9815506Z with:
+backfill	Upload backfill report	2026-08-06T02:24:03.9816119Z   name: production-nonlinear-v4-august-backfill
+backfill	Upload backfill report	2026-08-06T02:24:03.9816756Z   path: production-nonlinear-v4-august-backfill.json
 backfill	Upload backfill report	production-nonlinear-v4-august-backfill.log
 backfill	Upload backfill report	
-backfill	Upload backfill report	2026-08-06T01:48:03.4565473Z   if-no-files-found: warn
-backfill	Upload backfill report	2026-08-06T01:48:03.4565706Z   retention-days: 30
-backfill	Upload backfill report	2026-08-06T01:48:03.4565917Z   compression-level: 6
-backfill	Upload backfill report	2026-08-06T01:48:03.4566130Z   overwrite: false
-backfill	Upload backfill report	2026-08-06T01:48:03.4566338Z   include-hidden-files: false
-backfill	Upload backfill report	2026-08-06T01:48:03.4566567Z env:
-backfill	Upload backfill report	2026-08-06T01:48:03.4567009Z   CLOUDFLARE_API_TOKEN: ***
-backfill	Upload backfill report	2026-08-06T01:48:03.4567300Z   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
-backfill	Upload backfill report	2026-08-06T01:48:03.4567756Z   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-backfill	Upload backfill report	2026-08-06T01:48:03.4568171Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Upload backfill report	2026-08-06T01:48:03.4568598Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib/pkgconfig
-backfill	Upload backfill report	2026-08-06T01:48:03.4569016Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Upload backfill report	2026-08-06T01:48:03.4569389Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Upload backfill report	2026-08-06T01:48:03.4569965Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Upload backfill report	2026-08-06T01:48:03.4570359Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib
-backfill	Upload backfill report	2026-08-06T01:48:03.4570685Z ##[endgroup]
-backfill	Upload backfill report	2026-08-06T01:48:03.6293843Z (node:2327) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
-backfill	Upload backfill report	2026-08-06T01:48:03.6294954Z (Use `node --trace-deprecation ...` to show where the warning was created)
-backfill	Upload backfill report	2026-08-06T01:48:03.6351268Z Multiple search paths detected. Calculating the least common ancestor of all paths
-backfill	Upload backfill report	2026-08-06T01:48:03.6369110Z The least common ancestor is /home/runner/work/race-tantei/race-tantei. This will be the root directory of the artifact
-backfill	Upload backfill report	2026-08-06T01:48:03.6370397Z With the provided path, there will be 1 file uploaded
-backfill	Upload backfill report	2026-08-06T01:48:03.6372350Z Artifact name is valid!
-backfill	Upload backfill report	2026-08-06T01:48:03.6372948Z Root directory input is valid!
-backfill	Upload backfill report	2026-08-06T01:48:03.9862371Z Beginning upload of artifact content to blob storage
-backfill	Upload backfill report	2026-08-06T01:48:04.0060577Z (node:2327) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
-backfill	Upload backfill report	2026-08-06T01:48:04.2828326Z Uploaded bytes 866
-backfill	Upload backfill report	2026-08-06T01:48:04.3625657Z Finished uploading artifact content to blob storage!
-backfill	Upload backfill report	2026-08-06T01:48:04.3626957Z SHA256 digest of uploaded artifact zip is 3e7ffbcee2e7a618bf3e3336cf2d750e4b847a5733b250be8e24e5c548f3543b
-backfill	Upload backfill report	2026-08-06T01:48:04.3628753Z Finalizing artifact upload
-backfill	Upload backfill report	2026-08-06T01:48:04.5810941Z Artifact production-nonlinear-v4-august-backfill.zip successfully finalized. Artifact ID 8953081629
-backfill	Upload backfill report	2026-08-06T01:48:04.5812547Z Artifact production-nonlinear-v4-august-backfill has been successfully uploaded! Final size is 866 bytes. Artifact ID is 8953081629
-backfill	Upload backfill report	2026-08-06T01:48:04.5814091Z Artifact download URL: https://github.com/race-tantei-lab/race-tantei/actions/runs/31063685993/artifacts/8953081629
-backfill	Save backfill report	﻿2026-08-06T01:48:04.5958226Z ##[group]Run mkdir -p analysis-results
-backfill	Save backfill report	2026-08-06T01:48:04.5958612Z ^[[36;1mmkdir -p analysis-results^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5959190Z ^[[36;1mfor file in production-nonlinear-v4-august-backfill.json production-nonlinear-v4-august-backfill.log; do^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5960098Z ^[[36;1m  if [[ -f "$file" ]]; then^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5960399Z ^[[36;1m    cp "$file" "analysis-results/$file"^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5960727Z ^[[36;1m    git add -f "analysis-results/$file"^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5961010Z ^[[36;1m  fi^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5961206Z ^[[36;1mdone^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5961440Z ^[[36;1mgit config user.name "github-actions[bot]"^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5961910Z ^[[36;1mgit config user.email "41898282+github-actions[bot]@users.noreply.github.com"^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5962366Z ^[[36;1mif git diff --cached --quiet; then^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5962681Z ^[[36;1m  echo "No backfill report change."^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5962964Z ^[[36;1melse^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5963222Z ^[[36;1m  git commit -m "Save August v4 backfill report"^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5963574Z ^[[36;1m  git push^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.5963780Z ^[[36;1mfi^[[0m
-backfill	Save backfill report	2026-08-06T01:48:04.6009198Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
-backfill	Save backfill report	2026-08-06T01:48:04.6009768Z env:
-backfill	Save backfill report	2026-08-06T01:48:04.6010249Z   CLOUDFLARE_API_TOKEN: ***
-backfill	Save backfill report	2026-08-06T01:48:04.6010554Z   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
-backfill	Save backfill report	2026-08-06T01:48:04.6010969Z   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-backfill	Save backfill report	2026-08-06T01:48:04.6011394Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Save backfill report	2026-08-06T01:48:04.6011826Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib/pkgconfig
-backfill	Save backfill report	2026-08-06T01:48:04.6012271Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Save backfill report	2026-08-06T01:48:04.6012665Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Save backfill report	2026-08-06T01:48:04.6013060Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
-backfill	Save backfill report	2026-08-06T01:48:04.6013453Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib
-backfill	Save backfill report	2026-08-06T01:48:04.6013794Z ##[endgroup]
-backfill	Save backfill report	2026-08-06T01:48:04.6314561Z [main a9de41f] Save August v4 backfill report
-backfill	Save backfill report	2026-08-06T01:48:04.6315144Z  1 file changed, 37 insertions(+)
-backfill	Save backfill report	2026-08-06T01:48:04.6315802Z  create mode 100644 analysis-results/production-nonlinear-v4-august-backfill.log
-backfill	Save backfill report	2026-08-06T01:48:05.2768901Z To https://github.com/race-tantei-lab/race-tantei
-backfill	Save backfill report	2026-08-06T01:48:05.2770600Z  ! [rejected]        main -> main (fetch first)
-backfill	Save backfill report	2026-08-06T01:48:05.2772063Z error: failed to push some refs to 'https://github.com/race-tantei-lab/race-tantei'
-backfill	Save backfill report	2026-08-06T01:48:05.2784147Z hint: Updates were rejected because the remote contains work that you do not
-backfill	Save backfill report	2026-08-06T01:48:05.2785467Z hint: have locally. This is usually caused by another repository pushing to
-backfill	Save backfill report	2026-08-06T01:48:05.2786229Z hint: the same ref. If you want to integrate the remote changes, use
-backfill	Save backfill report	2026-08-06T01:48:05.2786815Z hint: 'git pull' before pushing again.
-backfill	Save backfill report	2026-08-06T01:48:05.2787413Z hint: See the 'Note about fast-forwards' in 'git push --help' for details.
-backfill	Save backfill report	2026-08-06T01:48:05.2792054Z ##[error]Process completed with exit code 1.
-backfill	Post Checkout	﻿2026-08-06T01:48:05.2921326Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
-backfill	Post Checkout	2026-08-06T01:48:05.2922621Z Post job cleanup.
-backfill	Post Checkout	2026-08-06T01:48:05.3840775Z [command]/usr/bin/git version
-backfill	Post Checkout	2026-08-06T01:48:05.3887234Z git version 2.54.0
-backfill	Post Checkout	2026-08-06T01:48:05.3933828Z Temporarily overriding HOME='/home/runner/work/_temp/558ea3ab-a571-4d01-8178-c6fabd867f66' before making global git config changes
-backfill	Post Checkout	2026-08-06T01:48:05.3935682Z Adding repository directory to the temporary git global config as a safe directory
-backfill	Post Checkout	2026-08-06T01:48:05.3940693Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/race-tantei/race-tantei
-backfill	Post Checkout	2026-08-06T01:48:05.3984609Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-backfill	Post Checkout	2026-08-06T01:48:05.4028547Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-backfill	Post Checkout	2026-08-06T01:48:05.4323247Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
-backfill	Post Checkout	2026-08-06T01:48:05.4363550Z http.https://github.com/.extraheader
-backfill	Post Checkout	2026-08-06T01:48:05.4377200Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
-backfill	Post Checkout	2026-08-06T01:48:05.4418375Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
-backfill	Post Checkout	2026-08-06T01:48:05.4697451Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
-backfill	Post Checkout	2026-08-06T01:48:05.4738921Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
-backfill	Complete job	﻿2026-08-06T01:48:05.5178848Z Cleaning up orphan processes
-backfill	Complete job	2026-08-06T01:48:05.5492209Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+backfill	Upload backfill report	2026-08-06T02:24:03.9817274Z   if-no-files-found: warn
+backfill	Upload backfill report	2026-08-06T02:24:03.9817499Z   retention-days: 30
+backfill	Upload backfill report	2026-08-06T02:24:03.9817711Z   compression-level: 6
+backfill	Upload backfill report	2026-08-06T02:24:03.9817928Z   overwrite: false
+backfill	Upload backfill report	2026-08-06T02:24:03.9818134Z   include-hidden-files: false
+backfill	Upload backfill report	2026-08-06T02:24:03.9818364Z env:
+backfill	Upload backfill report	2026-08-06T02:24:03.9818794Z   CLOUDFLARE_API_TOKEN: ***
+backfill	Upload backfill report	2026-08-06T02:24:03.9819085Z   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+backfill	Upload backfill report	2026-08-06T02:24:03.9819505Z   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+backfill	Upload backfill report	2026-08-06T02:24:03.9819901Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Upload backfill report	2026-08-06T02:24:03.9820355Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib/pkgconfig
+backfill	Upload backfill report	2026-08-06T02:24:03.9820781Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Upload backfill report	2026-08-06T02:24:03.9821353Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Upload backfill report	2026-08-06T02:24:03.9821727Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Upload backfill report	2026-08-06T02:24:03.9822105Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib
+backfill	Upload backfill report	2026-08-06T02:24:03.9822421Z ##[endgroup]
+backfill	Upload backfill report	2026-08-06T02:24:04.1436873Z (node:2582) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+backfill	Upload backfill report	2026-08-06T02:24:04.1438624Z (Use `node --trace-deprecation ...` to show where the warning was created)
+backfill	Upload backfill report	2026-08-06T02:24:04.1519681Z Multiple search paths detected. Calculating the least common ancestor of all paths
+backfill	Upload backfill report	2026-08-06T02:24:04.1523240Z The least common ancestor is /home/runner/work/race-tantei/race-tantei. This will be the root directory of the artifact
+backfill	Upload backfill report	2026-08-06T02:24:04.1555764Z With the provided path, there will be 2 files uploaded
+backfill	Upload backfill report	2026-08-06T02:24:04.1587057Z Artifact name is valid!
+backfill	Upload backfill report	2026-08-06T02:24:04.1587563Z Root directory input is valid!
+backfill	Upload backfill report	2026-08-06T02:24:04.3539392Z Beginning upload of artifact content to blob storage
+backfill	Upload backfill report	2026-08-06T02:24:04.3752680Z (node:2582) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+backfill	Upload backfill report	2026-08-06T02:24:04.4787072Z Uploaded bytes 1638
+backfill	Upload backfill report	2026-08-06T02:24:04.5146432Z Finished uploading artifact content to blob storage!
+backfill	Upload backfill report	2026-08-06T02:24:04.5147266Z SHA256 digest of uploaded artifact zip is ca9deaa819b4859dd741ba4a2e2df122fde504f1cb20da8d41ee75b59cac13bc
+backfill	Upload backfill report	2026-08-06T02:24:04.5147846Z Finalizing artifact upload
+backfill	Upload backfill report	2026-08-06T02:24:04.6661363Z Artifact production-nonlinear-v4-august-backfill.zip successfully finalized. Artifact ID 8953675225
+backfill	Upload backfill report	2026-08-06T02:24:04.6663212Z Artifact production-nonlinear-v4-august-backfill has been successfully uploaded! Final size is 1638 bytes. Artifact ID is 8953675225
+backfill	Upload backfill report	2026-08-06T02:24:04.6669957Z Artifact download URL: https://github.com/race-tantei-lab/race-tantei/actions/runs/31065089332/artifacts/8953675225
+backfill	Save backfill report	﻿2026-08-06T02:24:04.6783104Z ##[group]Run mkdir -p analysis-results
+backfill	Save backfill report	2026-08-06T02:24:04.6783492Z ^[[36;1mmkdir -p analysis-results^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6784084Z ^[[36;1mfor file in production-nonlinear-v4-august-backfill.json production-nonlinear-v4-august-backfill.log; do^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6784678Z ^[[36;1m  if [[ -f "$file" ]]; then^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6785001Z ^[[36;1m    cp "$file" "analysis-results/$file"^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6785350Z ^[[36;1m    git add -f "analysis-results/$file"^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6785934Z ^[[36;1m  fi^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6786154Z ^[[36;1mdone^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6786414Z ^[[36;1mgit config user.name "github-actions[bot]"^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6786899Z ^[[36;1mgit config user.email "41898282+github-actions[bot]@users.noreply.github.com"^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6787382Z ^[[36;1mif git diff --cached --quiet; then^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6787711Z ^[[36;1m  echo "No backfill report change."^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6788024Z ^[[36;1melse^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6788309Z ^[[36;1m  git commit -m "Save August v4 backfill report"^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6788696Z ^[[36;1m  git pull --rebase origin main^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6789005Z ^[[36;1m  git push origin HEAD:main^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6789270Z ^[[36;1mfi^[[0m
+backfill	Save backfill report	2026-08-06T02:24:04.6834871Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+backfill	Save backfill report	2026-08-06T02:24:04.6835235Z env:
+backfill	Save backfill report	2026-08-06T02:24:04.6836007Z   CLOUDFLARE_API_TOKEN: ***
+backfill	Save backfill report	2026-08-06T02:24:04.6836351Z   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+backfill	Save backfill report	2026-08-06T02:24:04.6836782Z   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+backfill	Save backfill report	2026-08-06T02:24:04.6837216Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Save backfill report	2026-08-06T02:24:04.6837664Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib/pkgconfig
+backfill	Save backfill report	2026-08-06T02:24:04.6838103Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Save backfill report	2026-08-06T02:24:04.6838495Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Save backfill report	2026-08-06T02:24:04.6839084Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.13/x64
+backfill	Save backfill report	2026-08-06T02:24:04.6839501Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.13/x64/lib
+backfill	Save backfill report	2026-08-06T02:24:04.6839859Z ##[endgroup]
+backfill	Save backfill report	2026-08-06T02:24:04.7188764Z [main 508ee40] Save August v4 backfill report
+backfill	Save backfill report	2026-08-06T02:24:04.7189429Z  2 files changed, 104 insertions(+)
+backfill	Save backfill report	2026-08-06T02:24:04.7190207Z  create mode 100644 analysis-results/production-nonlinear-v4-august-backfill.json
+backfill	Save backfill report	2026-08-06T02:24:04.7190927Z  create mode 100644 analysis-results/production-nonlinear-v4-august-backfill.log
+backfill	Save backfill report	2026-08-06T02:24:05.0306728Z From https://github.com/race-tantei-lab/race-tantei
+backfill	Save backfill report	2026-08-06T02:24:05.0307216Z  * branch            main       -> FETCH_HEAD
+backfill	Save backfill report	2026-08-06T02:24:05.0307559Z    0ebefba..f98a6fc  main       -> origin/main
+backfill	Save backfill report	2026-08-06T02:24:05.0482789Z Rebasing (1/1)
+backfill	Save backfill report	2026-08-06T02:24:05.0483284Z Successfully rebased and updated refs/heads/main.
+backfill	Save backfill report	2026-08-06T02:24:05.9113159Z To https://github.com/race-tantei-lab/race-tantei
+backfill	Save backfill report	2026-08-06T02:24:05.9113944Z    f98a6fc..c37bdb4  HEAD -> main
+backfill	Post Setup Python	﻿2026-08-06T02:24:05.9231718Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+backfill	Post Setup Python	2026-08-06T02:24:05.9232996Z Post job cleanup.
+backfill	Post Setup Python	2026-08-06T02:24:06.0396884Z (node:2632) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+backfill	Post Setup Python	2026-08-06T02:24:06.0397925Z (Use `node --trace-deprecation ...` to show where the warning was created)
+backfill	Post Checkout	﻿2026-08-06T02:24:06.0614790Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+backfill	Post Checkout	2026-08-06T02:24:06.0616921Z Post job cleanup.
+backfill	Post Checkout	2026-08-06T02:24:06.1527826Z [command]/usr/bin/git version
+backfill	Post Checkout	2026-08-06T02:24:06.1571699Z git version 2.54.0
+backfill	Post Checkout	2026-08-06T02:24:06.1610320Z Temporarily overriding HOME='/home/runner/work/_temp/c3fd246d-c017-4022-a67e-caae7a80b968' before making global git config changes
+backfill	Post Checkout	2026-08-06T02:24:06.1611653Z Adding repository directory to the temporary git global config as a safe directory
+backfill	Post Checkout	2026-08-06T02:24:06.1615874Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/race-tantei/race-tantei
+backfill	Post Checkout	2026-08-06T02:24:06.1655768Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+backfill	Post Checkout	2026-08-06T02:24:06.1692361Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+backfill	Post Checkout	2026-08-06T02:24:06.1941541Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+backfill	Post Checkout	2026-08-06T02:24:06.1998188Z http.https://github.com/.extraheader
+backfill	Post Checkout	2026-08-06T02:24:06.2011036Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+backfill	Post Checkout	2026-08-06T02:24:06.2046165Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+backfill	Post Checkout	2026-08-06T02:24:06.2312366Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+backfill	Post Checkout	2026-08-06T02:24:06.2356184Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+backfill	Complete job	﻿2026-08-06T02:24:06.2771491Z Cleaning up orphan processes
+backfill	Complete job	2026-08-06T02:24:06.3089184Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

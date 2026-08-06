@@ -3,11 +3,20 @@
     "results": [
       {
         "raceDate": "2026-08-01",
-        "predictedRaces": 2,
-        "selectedRaces": 0,
-        "tickets": 0,
-        "stakeYen": 0,
-        "returnYen": 0,
+        "predictedRaces": 36,
+        "selectedRaces": 15,
+        "tickets": 135,
+        "stakeYen": 255000,
+        "returnYen": 46750,
+        "pendingTickets": 0
+      },
+      {
+        "raceDate": "2026-08-02",
+        "predictedRaces": 36,
+        "selectedRaces": 15,
+        "tickets": 135,
+        "stakeYen": 255000,
+        "returnYen": 34850,
         "pendingTickets": 0
       }
     ],
@@ -18,20 +27,48 @@
       "served_by_colo": "SIN",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.5704
+        "sql_duration_ms": 1.234
       },
-      "duration": 0.5704,
+      "duration": 1.234,
       "changes": 0,
-      "last_row_id": 2832,
+      "last_row_id": 2847,
       "changed_db": false,
-      "size_after": 82219008,
-      "rows_read": 77,
+      "size_after": 82456576,
+      "rows_read": 446,
       "rows_written": 0,
       "total_attempts": 1
     }
   },
   {
-    "results": [],
+    "results": [
+      {
+        "course": "スタンダード",
+        "races": 30,
+        "tickets": 90,
+        "stakeYen": 150000,
+        "returnYen": 24000,
+        "hits": 17,
+        "pendingTickets": 0
+      },
+      {
+        "course": "プレミアム",
+        "races": 30,
+        "tickets": 90,
+        "stakeYen": 300000,
+        "returnYen": 48000,
+        "hits": 17,
+        "pendingTickets": 0
+      },
+      {
+        "course": "ライト",
+        "races": 30,
+        "tickets": 90,
+        "stakeYen": 60000,
+        "returnYen": 9600,
+        "hits": 17,
+        "pendingTickets": 0
+      }
+    ],
     "success": true,
     "meta": {
       "served_by": "v3-prod",
@@ -39,20 +76,26 @@
       "served_by_colo": "SIN",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 10.5579
+        "sql_duration_ms": 13.9838
       },
-      "duration": 10.5579,
+      "duration": 13.9838,
       "changes": 0,
-      "last_row_id": 2832,
+      "last_row_id": 2847,
       "changed_db": false,
-      "size_after": 82219008,
-      "rows_read": 44599,
+      "size_after": 82456576,
+      "rows_read": 45678,
       "rows_written": 0,
       "total_attempts": 1
     }
   },
   {
-    "results": [],
+    "results": [
+      {
+        "state_key": "production_model:v4.1.0-nonlinear-hgb-5r:august_backfill",
+        "state_value": "{\"modelVersion\":\"v4.1.0-nonlinear-hgb-5r\",\"mode\":\"retrospective-v4-backfill\",\"methodology\":\"Each date is trained only on races strictly before that date; final stored market odds are used for the historical replay.\",\"includedInAugustAggregate\":true,\"generatedAt\":\"2026-08-06T02:24:03Z\",\"dates\":[{\"raceDate\":\"2026-08-01\",\"trainingCutoffExclusive\":\"2026-08-01\",\"trainingRaces\":4313,\"targetRaces\":36,\"selectedRaces\":15,\"removedExistingPredictions\":2,\"published\":36,\"tickets\":135,\"lockedSkipped\":0,\"settlement\":{\"tickets\":135,\"returnYen\":46750},\"metrics\":[{\"course\":\"スタンダード\",\"races\":15,\"tickets\":45,\"stakeYen\":75000,\"returnYen\":13750,\"profitYen\":-61250,\"roiPct\":18.333333333333332,\"ticketHitRatePct\":22.22222222222222},{\"course\":\"プレミアム\",\"races\":15,\"tickets\":45,\"stakeYen\":150000,\"returnYen\":27500,\"profitYen\":-122500,\"roiPct\":18.333333333333332,\"ticketHitRatePct\":22.22222222222222},{\"course\":\"ライト\",\"races\":15,\"tickets\":45,\"stakeYen\":30000,\"returnYen\":5500,\"profitYen\":-24500,\"roiPct\":18.333333333333332,\"ticketHitRatePct\":22.22222222222222}]},{\"raceDate\":\"2026-08-02\",\"trainingCutoffExclusive\":\"2026-08-02\",\"trainingRaces\":4349,\"targetRaces\":36,\"selectedRaces\":15,\"removedExistingPredictions\":0,\"published\":36,\"tickets\":135,\"lockedSkipped\":0,\"settlement\":{\"tickets\":135,\"returnYen\":34850},\"metrics\":[{\"course\":\"スタンダード\",\"races\":15,\"tickets\":45,\"stakeYen\":75000,\"returnYen\":10250,\"profitYen\":-64750,\"roiPct\":13.666666666666666,\"ticketHitRatePct\":15.555555555555555},{\"course\":\"プレミアム\",\"races\":15,\"tickets\":45,\"stakeYen\":150000,\"returnYen\":20500,\"profitYen\":-129500,\"roiPct\":13.666666666666666,\"ticketHitRatePct\":15.555555555555555},{\"course\":\"ライト\",\"races\":15,\"tickets\":45,\"stakeYen\":30000,\"returnYen\":4100,\"profitYen\":-25900,\"roiPct\":13.666666666666666,\"ticketHitRatePct\":15.555555555555555}]}]}",
+        "updated_at": "2026-08-06 02:24:03"
+      }
+    ],
     "success": true,
     "meta": {
       "served_by": "v3-prod",
@@ -60,14 +103,14 @@
       "served_by_colo": "SIN",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.0985
+        "sql_duration_ms": 0.1963
       },
-      "duration": 0.0985,
+      "duration": 0.1963,
       "changes": 0,
-      "last_row_id": 2832,
+      "last_row_id": 2847,
       "changed_db": false,
-      "size_after": 82219008,
-      "rows_read": 0,
+      "size_after": 82456576,
+      "rows_read": 1,
       "rows_written": 0,
       "total_attempts": 1
     }
