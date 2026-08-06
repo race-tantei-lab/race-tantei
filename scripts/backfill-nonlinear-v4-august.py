@@ -29,6 +29,24 @@ MODEL_VERSION = prod["MODEL_VERSION"]
 execute = prod["execute"]
 
 
+def d1_safe_insert_many(table_sql, rows, columns_per_row):
+    """Keep each D1 request below the bound-parameter ceiling."""
+    if not rows:
+        return
+    chunk_size = max(1, 80 // columns_per_row)
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start:start + chunk_size]
+        placeholders = ",".join(
+            ["(" + ",".join(["?"] * columns_per_row) + ")"] * len(chunk)
+        )
+        params = [value for row in chunk for value in row]
+        execute(table_sql.format(values=placeholders), params)
+
+
+# publish_race resolves globals dynamically from this namespace.
+prod["insert_many"] = d1_safe_insert_many
+
+
 def now_iso():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -92,7 +110,7 @@ def settle_date(race_date):
         horses = {int(value) for value in re.findall(r"\d{1,2}", str(bet["combination"] or ""))}
         try:
             refunds = {int(value) for value in json.loads(bet.get("refunds") or "[]")}
-        except (TypeError, ValueError, json.JSONDecodeError):
+        except (TypeError, ValueError):
             refunds = set()
         stake = int(bet["stakeYen"] or 0)
         if horses & refunds:
