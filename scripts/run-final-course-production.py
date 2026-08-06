@@ -6,6 +6,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_PATH = ROOT / "scripts" / "publish-nonlinear-v4-production.py"
 POLICY_PATH = ROOT / "scripts" / "final-course-policy.py"
 
+PRODUCTION_COURSE_TARGET_STAKES = {
+    "ライト": 2000,
+    "スタンダード": 5000,
+    "プレミアム": 10000,
+}
+
 
 def load_policy():
     spec = importlib.util.spec_from_file_location("final_course_policy", POLICY_PATH)
@@ -14,6 +20,7 @@ def load_policy():
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    module.COURSE_TARGET_STAKES = dict(PRODUCTION_COURSE_TARGET_STAKES)
     return module
 
 
@@ -88,7 +95,7 @@ def load_production_namespace():
 
 def configure_namespace(namespace, policy):
     namespace["MODEL_VERSION"] = policy.MODEL_VERSION
-    namespace["COURSE_BUDGETS"] = dict(policy.COURSE_TARGET_STAKES)
+    namespace["COURSE_BUDGETS"] = dict(PRODUCTION_COURSE_TARGET_STAKES)
     namespace["build_bets"] = policy.build_bets
     return namespace
 
