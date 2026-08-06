@@ -37,6 +37,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          echo "Retrying after Cloudflare token permission update"
           npx wrangler deploy 2>&1 | tee production-deployment.log
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
