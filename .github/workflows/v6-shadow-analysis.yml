@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/v6-shadow-analysis.yml"
       - "scripts/analyze-v6-shadow.py"
+      - "scripts/run-v6-shadow-fixed.py"
       - "scripts/train-nonlinear-market-blend-v4.py"
       - "scripts/final-course-policy.py"
 
@@ -38,13 +39,15 @@ jobs:
         run: python -m pip install --disable-pip-version-check numpy scikit-learn
 
       - name: Verify source
-        run: python -m py_compile scripts/analyze-v6-shadow.py
+        run: |
+          python -m py_compile scripts/analyze-v6-shadow.py
+          python -m py_compile scripts/run-v6-shadow-fixed.py
 
       - name: Run shadow analysis
         shell: bash
         run: |
           set -o pipefail
-          python scripts/analyze-v6-shadow.py 2>&1 | tee v6-shadow-analysis.log
+          python scripts/run-v6-shadow-fixed.py 2>&1 | tee v6-shadow-analysis.log
 
       - name: Upload report
         if: always()
@@ -77,5 +80,3 @@ jobs:
             git pull --rebase origin main
             git push origin HEAD:main
           fi
-
-# Triggered after registration on main.
