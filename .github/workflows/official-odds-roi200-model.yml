@@ -3,15 +3,30 @@ run-name: Official odds ROI 200 model · ${{ github.sha }}
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/collect-jra-official-odds.py"
+      - "scripts/production_base_loader.py"
+      - "scripts/generate-official-odds-roi200-shadow-v2.py"
+      - "scripts/search-official-odds-roi200-forward-v2.py"
+      - "scripts/prepare-official-odds-roi200-promotion-v2.py"
+      - "scripts/official-odds-roi200-policy.py"
+      - "scripts/official-odds-roi200-policy-v2.py"
+      - "scripts/publish-official-odds-roi200-production-v2.py"
+      - "scripts/run-final-course-production.py"
+      - ".github/workflows/official-odds-roi200-model.yml"
   push:
     branches: [main]
     paths:
       - "scripts/collect-jra-official-odds.py"
-      - "scripts/generate-official-odds-roi200-shadow.py"
-      - "scripts/search-official-odds-roi200-forward.py"
-      - "scripts/prepare-official-odds-roi200-promotion.py"
+      - "scripts/production_base_loader.py"
+      - "scripts/generate-official-odds-roi200-shadow-v2.py"
+      - "scripts/search-official-odds-roi200-forward-v2.py"
+      - "scripts/prepare-official-odds-roi200-promotion-v2.py"
       - "scripts/official-odds-roi200-policy.py"
-      - "scripts/publish-official-odds-roi200-production.py"
+      - "scripts/official-odds-roi200-policy-v2.py"
+      - "scripts/publish-official-odds-roi200-production-v2.py"
+      - "scripts/run-final-course-production.py"
       - ".github/workflows/official-odds-roi200-model.yml"
   schedule:
     - cron: "*/30 * * * 5,6,0"
@@ -21,7 +36,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: official-odds-roi200-model
+  group: official-odds-roi200-model-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
   cancel-in-progress: true
 
 jobs:
@@ -60,41 +75,51 @@ jobs:
         run: |
           python -m py_compile \
             scripts/collect-jra-official-odds.py \
+            scripts/production_base_loader.py \
             scripts/generate-official-odds-roi200-shadow.py \
-            scripts/search-official-odds-roi200-forward.py \
-            scripts/prepare-official-odds-roi200-promotion.py \
+            scripts/generate-official-odds-roi200-shadow-v2.py \
+            scripts/search-official-odds-roi200-forward-v2.py \
+            scripts/prepare-official-odds-roi200-promotion-v2.py \
             scripts/official-odds-roi200-policy.py \
-            scripts/publish-official-odds-roi200-production.py
+            scripts/official-odds-roi200-policy-v2.py \
+            scripts/publish-official-odds-roi200-production.py \
+            scripts/publish-official-odds-roi200-production-v2.py \
+            scripts/run-final-course-production.py
           python scripts/verify-race-tantei-fixed-constraints.py
           if grep -R "PAYOUT_RATIO.*market_probability\|payout_ratio /\|assumed_odds(probability" \
             scripts/official-odds-roi200-policy.py \
+            scripts/official-odds-roi200-policy-v2.py \
             scripts/collect-jra-official-odds.py \
-            scripts/generate-official-odds-roi200-shadow.py \
-            scripts/search-official-odds-roi200-forward.py; then
+            scripts/generate-official-odds-roi200-shadow-v2.py \
+            scripts/search-official-odds-roi200-forward-v2.py; then
             echo "Synthetic odds logic found in official-odds model" >&2
             exit 1
           fi
 
       - name: Collect JRA official combination odds
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -o pipefail
           python scripts/collect-jra-official-odds.py 2>&1 | tee official-odds-collection.log
 
       - name: Generate shadow value candidates
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -o pipefail
-          python scripts/generate-official-odds-roi200-shadow.py 2>&1 | tee official-odds-roi200-shadow.log
+          python scripts/generate-official-odds-roi200-shadow-v2.py 2>&1 | tee official-odds-roi200-shadow.log
 
       - name: Search only for a genuine ROI 200 forward model
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -o pipefail
-          python scripts/search-official-odds-roi200-forward.py 2>&1 | tee official-odds-roi200-forward-search.log
-          python scripts/prepare-official-odds-roi200-promotion.py 2>&1 | tee official-odds-roi200-promotion.log
+          python scripts/search-official-odds-roi200-forward-v2.py 2>&1 | tee official-odds-roi200-forward-search.log
+          python scripts/prepare-official-odds-roi200-promotion-v2.py 2>&1 | tee official-odds-roi200-promotion.log
 
       - name: Verify promotion candidate when created
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           if [[ -f official-odds-roi200-promotion-candidate.json ]]; then
@@ -106,7 +131,7 @@ jobs:
           fi
 
       - name: Upload complete result
-        if: always()
+        if: always() && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: official-odds-roi200-model
@@ -159,12 +184,15 @@ jobs:
           if [ "${{ job.status }}" != "success" ]; then
             STATE=failure
             DESCRIPTION='失敗：公式オッズ200%モデルのログを確認'
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            STATE=success
+            DESCRIPTION='確認完了：公式オッズ200%モデルの実装'
           elif [ -f official-odds-roi200-promotion-candidate.json ]; then
             STATE=success
             DESCRIPTION='合格：公式オッズで全3コース200%以上を確認'
           else
             STATE=success
-            DESCRIPTION='継続：公式オッズ前向きデータを収集中'
+            DESCRIPTION='稼働中：公式オッズ200%モデルを前向き検証'
           fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state="$STATE" \
