@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -26,8 +27,12 @@ def sql(query, params=None):
         headers={"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=90) as response:
-        payload = json.loads(response.read().decode())
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            payload = json.loads(response.read().decode())
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode(errors="replace")
+        raise RuntimeError(f"FINAL_V5_AUDIT_HTTP_{error.code}:{detail}") from error
     if not payload.get("success"):
         raise RuntimeError(f"FINAL_V5_AUDIT_D1_ERROR:{payload.get('errors')}")
     return payload.get("result", [{}])[0].get("results", [])
@@ -38,28 +43,29 @@ def n(value):
 
 
 def main():
-    summary = sql(
-        """
-        WITH target_predictions AS (
-          SELECT p.id,p.race_id
-          FROM rt_predictions p
-          JOIN rt_races r ON r.race_id=p.race_id
-          WHERE p.model_version=? AND r.race_date BETWEEN ? AND ?
-        ), prediction_summary AS (
-          SELECT COUNT(*) predictions,COUNT(DISTINCT race_id) predictionRaces FROM target_predictions
-        ), runner_summary AS (
-          SELECT COUNT(*) runnerRows FROM rt_prediction_runners pr
-          JOIN target_predictions p ON p.id=pr.prediction_id
-        ), bet_summary AS (
-          SELECT COUNT(*) bets,COUNT(DISTINCT race_id) selectedRaces,
-            COALESCE(SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END),0) settledBets,
-            COALESCE(SUM(CASE WHEN settlement_status<>'settled' THEN 1 ELSE 0 END),0) unsettledBets
-          FROM rt_bets b JOIN target_predictions p ON p.id=b.prediction_id
-        )
-        SELECT * FROM prediction_summary,runner_summary,bet_summary
-        """,
+    prediction = sql(
+        """SELECT COUNT(*) predictions,COUNT(DISTINCT p.race_id) predictionRaces
+        FROM rt_predictions p JOIN rt_races r ON r.race_id=p.race_id
+        WHERE p.model_version=? AND r.race_date BETWEEN ? AND ?""",
         [MODEL, START, END],
     )[0]
+    runner = sql(
+        """SELECT COUNT(*) runnerRows
+        FROM rt_prediction_runners pr JOIN rt_predictions p ON p.id=pr.prediction_id
+        JOIN rt_races r ON r.race_id=p.race_id
+        WHERE p.model_version=? AND r.race_date BETWEEN ? AND ?""",
+        [MODEL, START, END],
+    )[0]
+    bet = sql(
+        """SELECT COUNT(*) bets,COUNT(DISTINCT b.race_id) selectedRaces,
+          COALESCE(SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END),0) settledBets,
+          COALESCE(SUM(CASE WHEN b.settlement_status<>'settled' THEN 1 ELSE 0 END),0) unsettledBets
+        FROM rt_bets b JOIN rt_predictions p ON p.id=b.prediction_id
+        JOIN rt_races r ON r.race_id=p.race_id
+        WHERE p.model_version=? AND r.race_date BETWEEN ? AND ?""",
+        [MODEL, START, END],
+    )[0]
+    summary = {**prediction, **runner, **bet}
     rows = sql(
         """
         SELECT r.race_date raceDate,
@@ -108,11 +114,12 @@ def main():
         row["profitYen"] = row["returnYen"] - row["stakeYen"]
         row["roiPct"] = round(row["returnYen"] / row["stakeYen"] * 100, 4) if row["stakeYen"] else None
         row["hitRatePct"] = round(row["hitRaces"] / row["races"] * 100, 4) if row["races"] else None
+    numeric_summary = {key: n(value) for key, value in summary.items()}
     report = {
         "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "modelVersion": MODEL,
-        "summary": {key: n(value) for key, value in summary.items()},
-        "complete": n(summary["predictionRaces"]) == 72 and n(summary["selectedRaces"]) == 30 and n(summary["bets"]) > 0 and n(summary["unsettledBets"]) == 0,
+        "summary": numeric_summary,
+        "complete": numeric_summary["predictionRaces"] == 72 and numeric_summary["selectedRaces"] == 30 and numeric_summary["bets"] > 0 and numeric_summary["unsettledBets"] == 0,
         "dates": dates,
         "aggregate": aggregate,
     }
