@@ -1,0 +1,3477 @@
+{
+  "generatedAt": "2026-08-06",
+  "modelVersion": "v7.1-shadow-regime-policy",
+  "productionChanged": false,
+  "method": "Keep five races per venue/day and spend the full course budget on every selected race. For every target month, choose fixed-budget ticket policies separately for pre-race regimes using only earlier rolling out-of-sample months. Select the regime scheme and race-selection variant on May 2025-April 2026, then evaluate May-August 2026 as a final untouched holdout.",
+  "factors": [
+    "surface",
+    "distance band",
+    "race class",
+    "field size",
+    "race-number band",
+    "track condition",
+    "top-win probability",
+    "normalized entropy"
+  ],
+  "guardrails": {
+    "selectedRacesPerVenueDay": 5,
+    "noEmptyRaceSelection": true,
+    "fullBudgetEverySelectedRace": true,
+    "policyCountPerCourse": 1200,
+    "minimumRegimeRaces": 60,
+    "minimumRegimeMonths": 3,
+    "developmentEnd": "2026-04",
+    "finalHoldoutStart": "2026-05"
+  },
+  "period": {
+    "dataStart": "2024-05-04",
+    "dataEnd": "2026-08-02",
+    "finishedRaces": 7695,
+    "rollingMonths": [
+      "2024-11",
+      "2024-12",
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06",
+      "2026-07",
+      "2026-08"
+    ]
+  },
+  "modelAudit": {
+    "2024-11": {
+      "trainRaces": 1643,
+      "targetRaces": 299,
+      "targetStart": "2024-11-01",
+      "targetEnd": "2024-11-30"
+    },
+    "2024-12": {
+      "trainRaces": 1942,
+      "targetRaces": 252,
+      "targetStart": "2024-12-01",
+      "targetEnd": "2024-12-31"
+    },
+    "2025-01": {
+      "trainRaces": 2194,
+      "targetRaces": 228,
+      "targetStart": "2025-01-01",
+      "targetEnd": "2025-01-31"
+    },
+    "2025-02": {
+      "trainRaces": 2422,
+      "targetRaces": 288,
+      "targetStart": "2025-02-01",
+      "targetEnd": "2025-02-28"
+    },
+    "2025-03": {
+      "trainRaces": 2710,
+      "targetRaces": 336,
+      "targetStart": "2025-03-01",
+      "targetEnd": "2025-03-31"
+    },
+    "2025-04": {
+      "trainRaces": 3046,
+      "targetRaces": 264,
+      "targetStart": "2025-04-01",
+      "targetEnd": "2025-04-30"
+    },
+    "2025-05": {
+      "trainRaces": 3310,
+      "targetRaces": 311,
+      "targetStart": "2025-05-01",
+      "targetEnd": "2025-05-31"
+    },
+    "2025-06": {
+      "trainRaces": 3621,
+      "targetRaces": 288,
+      "targetStart": "2025-06-01",
+      "targetEnd": "2025-06-30"
+    },
+    "2025-07": {
+      "trainRaces": 3909,
+      "targetRaces": 288,
+      "targetStart": "2025-07-01",
+      "targetEnd": "2025-07-31"
+    },
+    "2025-08": {
+      "trainRaces": 4197,
+      "targetRaces": 360,
+      "targetStart": "2025-08-01",
+      "targetEnd": "2025-08-31"
+    },
+    "2025-09": {
+      "trainRaces": 4557,
+      "targetRaces": 240,
+      "targetStart": "2025-09-01",
+      "targetEnd": "2025-09-30"
+    },
+    "2025-10": {
+      "trainRaces": 4797,
+      "targetRaces": 252,
+      "targetStart": "2025-10-01",
+      "targetEnd": "2025-10-31"
+    },
+    "2025-11": {
+      "trainRaces": 5049,
+      "targetRaces": 312,
+      "targetStart": "2025-11-01",
+      "targetEnd": "2025-11-30"
+    },
+    "2025-12": {
+      "trainRaces": 5361,
+      "targetRaces": 264,
+      "targetStart": "2025-12-01",
+      "targetEnd": "2025-12-31"
+    },
+    "2026-01": {
+      "trainRaces": 5625,
+      "targetRaces": 276,
+      "targetStart": "2026-01-01",
+      "targetEnd": "2026-01-31"
+    },
+    "2026-02": {
+      "trainRaces": 5901,
+      "targetRaces": 270,
+      "targetStart": "2026-02-01",
+      "targetEnd": "2026-02-28"
+    },
+    "2026-03": {
+      "trainRaces": 6171,
+      "targetRaces": 300,
+      "targetStart": "2026-03-01",
+      "targetEnd": "2026-03-31"
+    },
+    "2026-04": {
+      "trainRaces": 6471,
+      "targetRaces": 264,
+      "targetStart": "2026-04-01",
+      "targetEnd": "2026-04-30"
+    },
+    "2026-05": {
+      "trainRaces": 6735,
+      "targetRaces": 336,
+      "targetStart": "2026-05-01",
+      "targetEnd": "2026-05-31"
+    },
+    "2026-06": {
+      "trainRaces": 7071,
+      "targetRaces": 264,
+      "targetStart": "2026-06-01",
+      "targetEnd": "2026-06-30"
+    },
+    "2026-07": {
+      "trainRaces": 7335,
+      "targetRaces": 288,
+      "targetStart": "2026-07-01",
+      "targetEnd": "2026-07-31"
+    },
+    "2026-08": {
+      "trainRaces": 7623,
+      "targetRaces": 72,
+      "targetStart": "2026-08-01",
+      "targetEnd": "2026-08-31"
+    }
+  },
+  "coverage": {
+    "form_only:confidence": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "form_only:concentration": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "form_only:entropy": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "market_blend_audit:confidence": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "market_blend_audit:disagreement": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    },
+    "market_blend_audit:entropy": {
+      "2024-11": {
+        "sourceRaces": 299,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2024-12": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-01": {
+        "sourceRaces": 228,
+        "selectedRaces": 95,
+        "expectedSelectedRaces": 95
+      },
+      "2025-02": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-03": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2025-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2025-05": {
+        "sourceRaces": 311,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-06": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2025-08": {
+        "sourceRaces": 360,
+        "selectedRaces": 150,
+        "expectedSelectedRaces": 150
+      },
+      "2025-09": {
+        "sourceRaces": 240,
+        "selectedRaces": 100,
+        "expectedSelectedRaces": 100
+      },
+      "2025-10": {
+        "sourceRaces": 252,
+        "selectedRaces": 105,
+        "expectedSelectedRaces": 105
+      },
+      "2025-11": {
+        "sourceRaces": 312,
+        "selectedRaces": 130,
+        "expectedSelectedRaces": 130
+      },
+      "2025-12": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-01": {
+        "sourceRaces": 276,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-02": {
+        "sourceRaces": 270,
+        "selectedRaces": 115,
+        "expectedSelectedRaces": 115
+      },
+      "2026-03": {
+        "sourceRaces": 300,
+        "selectedRaces": 125,
+        "expectedSelectedRaces": 125
+      },
+      "2026-04": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-05": {
+        "sourceRaces": 336,
+        "selectedRaces": 140,
+        "expectedSelectedRaces": 140
+      },
+      "2026-06": {
+        "sourceRaces": 264,
+        "selectedRaces": 110,
+        "expectedSelectedRaces": 110
+      },
+      "2026-07": {
+        "sourceRaces": 288,
+        "selectedRaces": 120,
+        "expectedSelectedRaces": 120
+      },
+      "2026-08": {
+        "sourceRaces": 72,
+        "selectedRaces": 30,
+        "expectedSelectedRaces": 30
+      }
+    }
+  },
+  "chosen": {
+    "ライト": {
+      "bestOverall": {
+        "key": "market_blend_audit:confidence",
+        "variant": "market_blend_audit",
+        "productionSafe": false,
+        "scheme": "uncertainty",
+        "developmentScore": 63.374532206471066,
+        "development": {
+          "months": 12,
+          "races": 1430,
+          "stakeYen": 2288000,
+          "returnYen": 1973030,
+          "profitYen": -314970,
+          "roiPct": 86.23382867132867,
+          "cappedRoiPct": 77.30550699300699,
+          "hitRatePct": 61.18881118881119,
+          "winningMonths": 2,
+          "winningMonthPct": 16.666666666666664,
+          "minimumMonthlyRoiPct": 50.583333333333336,
+          "medianMonthlyRoiPct": 82.77031249999999,
+          "q25MonthlyRoiPct": 76.00574832775919,
+          "maxSingleReturnShare": 0.01970066344657709
+        },
+        "holdout": {
+          "months": 4,
+          "races": 400,
+          "stakeYen": 640000,
+          "returnYen": 494060,
+          "profitYen": -145940,
+          "roiPct": 77.19687499999999,
+          "cappedRoiPct": 59.768750000000004,
+          "hitRatePct": 56.5,
+          "winningMonths": 1,
+          "winningMonthPct": 25.0,
+          "minimumMonthlyRoiPct": 62.034090909090914,
+          "medianMonthlyRoiPct": 68.86904761904762,
+          "q25MonthlyRoiPct": 63.00071022727273,
+          "maxSingleReturnShare": 0.15413107719710156
+        },
+        "full": {
+          "months": 16,
+          "races": 1830,
+          "stakeYen": 2928000,
+          "returnYen": 2467090,
+          "profitYen": -460910,
+          "roiPct": 84.25853825136612,
+          "cappedRoiPct": 73.47233606557377,
+          "hitRatePct": 60.16393442622951,
+          "winningMonths": 3,
+          "winningMonthPct": 18.75,
+          "minimumMonthlyRoiPct": 50.583333333333336,
+          "medianMonthlyRoiPct": 82.37533967391305,
+          "q25MonthlyRoiPct": 69.84832015810278,
+          "maxSingleReturnShare": 0.03086632429299296
+        },
+        "monthly": [
+          {
+            "month": "2025-05",
+            "races": 130,
+            "stakeYen": 208000,
+            "returnYen": 162320,
+            "cappedReturnYen": 162320,
+            "profitYen": -45680,
+            "roiPct": 78.03846153846153,
+            "cappedRoiPct": 78.03846153846153,
+            "hitRatePct": 73.07692307692307,
+            "maxSingleReturnYen": 6840,
+            "regimePolicies": 1,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2025-06",
+            "races": 120,
+            "stakeYen": 192000,
+            "returnYen": 158370,
+            "cappedReturnYen": 156770,
+            "profitYen": -33630,
+            "roiPct": 82.484375,
+            "cappedRoiPct": 81.65104166666667,
+            "hitRatePct": 78.33333333333333,
+            "maxSingleReturnYen": 9600,
+            "regimePolicies": 1,
+            "fallbackRaces": 3
+          },
+          {
+            "month": "2025-07",
+            "races": 120,
+            "stakeYen": 192000,
+            "returnYen": 97120,
+            "cappedReturnYen": 96740,
+            "profitYen": -94880,
+            "roiPct": 50.583333333333336,
+            "cappedRoiPct": 50.38541666666667,
+            "hitRatePct": 59.166666666666664,
+            "maxSingleReturnYen": 8380,
+            "regimePolicies": 1,
+            "fallbackRaces": 3
+          },
+          {
+            "month": "2025-08",
+            "races": 150,
+            "stakeYen": 240000,
+            "returnYen": 219830,
+            "cappedReturnYen": 188810,
+            "profitYen": -20170,
+            "roiPct": 91.59583333333333,
+            "cappedRoiPct": 78.67083333333333,
+            "hitRatePct": 49.333333333333336,
+            "maxSingleReturnYen": 25310,
+            "regimePolicies": 1,
+            "fallbackRaces": 1
+          },
+          {
+            "month": "2025-09",
+            "races": 100,
+            "stakeYen": 160000,
+            "returnYen": 132890,
+            "cappedReturnYen": 132740,
+            "profitYen": -27110,
+            "roiPct": 83.05624999999999,
+            "cappedRoiPct": 82.96249999999999,
+            "hitRatePct": 55.00000000000001,
+            "maxSingleReturnYen": 8150,
+            "regimePolicies": 1,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2025-10",
+            "races": 105,
+            "stakeYen": 168000,
+            "returnYen": 155390,
+            "cappedReturnYen": 146770,
+            "profitYen": -12610,
+            "roiPct": 92.49404761904762,
+            "cappedRoiPct": 87.36309523809524,
+            "hitRatePct": 58.0952380952381,
+            "maxSingleReturnYen": 13440,
+            "regimePolicies": 1,
+            "fallbackRaces": 3
+          },
+          {
+            "month": "2025-11",
+            "races": 130,
+            "stakeYen": 208000,
+            "returnYen": 205410,
+            "cappedReturnYen": 192420,
+            "profitYen": -2590,
+            "roiPct": 98.7548076923077,
+            "cappedRoiPct": 92.50961538461539,
+            "hitRatePct": 60.0,
+            "maxSingleReturnYen": 16830,
+            "regimePolicies": 1,
+            "fallbackRaces": 4
+          },
+          {
+            "month": "2025-12",
+            "races": 110,
+            "stakeYen": 176000,
+            "returnYen": 184410,
+            "cappedReturnYen": 152110,
+            "profitYen": 8410,
+            "roiPct": 104.7784090909091,
+            "cappedRoiPct": 86.42613636363636,
+            "hitRatePct": 59.09090909090909,
+            "maxSingleReturnYen": 19160,
+            "regimePolicies": 1,
+            "fallbackRaces": 3
+          },
+          {
+            "month": "2026-01",
+            "races": 115,
+            "stakeYen": 184000,
+            "returnYen": 128630,
+            "cappedReturnYen": 122190,
+            "profitYen": -55370,
+            "roiPct": 69.90760869565219,
+            "cappedRoiPct": 66.40760869565217,
+            "hitRatePct": 63.47826086956522,
+            "maxSingleReturnYen": 14440,
+            "regimePolicies": 1,
+            "fallbackRaces": 5
+          },
+          {
+            "month": "2026-02",
+            "races": 115,
+            "stakeYen": 184000,
+            "returnYen": 151370,
+            "cappedReturnYen": 133800,
+            "profitYen": -32630,
+            "roiPct": 82.2663043478261,
+            "cappedRoiPct": 72.71739130434783,
+            "hitRatePct": 60.0,
+            "maxSingleReturnYen": 17410,
+            "regimePolicies": 1,
+            "fallbackRaces": 9
+          },
+          {
+            "month": "2026-03",
+            "races": 125,
+            "stakeYen": 200000,
+            "returnYen": 254670,
+            "cappedReturnYen": 175930,
+            "profitYen": 54670,
+            "roiPct": 127.335,
+            "cappedRoiPct": 87.965,
+            "hitRatePct": 63.2,
+            "maxSingleReturnYen": 38870,
+            "regimePolicies": 1,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2026-04",
+            "races": 110,
+            "stakeYen": 176000,
+            "returnYen": 122620,
+            "cappedReturnYen": 108150,
+            "profitYen": -53380,
+            "roiPct": 69.67045454545455,
+            "cappedRoiPct": 61.44886363636364,
+            "hitRatePct": 55.45454545454545,
+            "maxSingleReturnYen": 22470,
+            "regimePolicies": 1,
+            "fallbackRaces": 1
+          },
+          {
+            "month": "2026-05",
+            "races": 140,
+            "stakeYen": 224000,
+            "returnYen": 166690,
+            "cappedReturnYen": 138960,
+            "profitYen": -57310,
+            "roiPct": 74.41517857142857,
+            "cappedRoiPct": 62.035714285714285,
+            "hitRatePct": 55.00000000000001,
+            "maxSingleReturnYen": 19390,
+            "regimePolicies": 1,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2026-06",
+            "races": 110,
+            "stakeYen": 176000,
+            "returnYen": 109180,
+            "cappedReturnYen": 98890,
+            "profitYen": -66820,
+            "roiPct": 62.034090909090914,
+            "cappedRoiPct": 56.1875,
+            "hitRatePct": 55.45454545454545,
+            "maxSingleReturnYen": 13380,
+            "regimePolicies": 2,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-07",
+            "races": 120,
+            "stakeYen": 192000,
+            "returnYen": 121580,
+            "cappedReturnYen": 116210,
+            "profitYen": -70420,
+            "roiPct": 63.322916666666664,
+            "cappedRoiPct": 60.526041666666664,
+            "hitRatePct": 59.166666666666664,
+            "maxSingleReturnYen": 12470,
+            "regimePolicies": 2,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-08",
+            "races": 30,
+            "stakeYen": 48000,
+            "returnYen": 96610,
+            "cappedReturnYen": 28460,
+            "profitYen": 48610,
+            "roiPct": 201.27083333333334,
+            "cappedRoiPct": 59.291666666666664,
+            "hitRatePct": 56.666666666666664,
+            "maxSingleReturnYen": 76150,
+            "regimePolicies": 2,
+            "fallbackRaces": 7
+          }
+        ]
+      },
+      "bestProductionSafe": {
+        "key": "form_only:confidence",
+        "variant": "form_only",
+        "productionSafe": true,
+        "scheme": "track_context",
+        "developmentScore": 59.55084172620858,
+        "development": {
+          "months": 12,
+          "races": 1430,
+          "stakeYen": 2288000,
+          "returnYen": 1849780,
+          "profitYen": -438220,
+          "roiPct": 80.84702797202797,
+          "cappedRoiPct": 69.80944055944056,
+          "hitRatePct": 49.09090909090909,
+          "winningMonths": 3,
+          "winningMonthPct": 25.0,
+          "minimumMonthlyRoiPct": 54.04326923076923,
+          "medianMonthlyRoiPct": 78.42267786561266,
+          "q25MonthlyRoiPct": 71.4679008152174,
+          "maxSingleReturnShare": 0.031084777649233963
+        },
+        "holdout": {
+          "months": 4,
+          "races": 400,
+          "stakeYen": 640000,
+          "returnYen": 393120,
+          "profitYen": -246880,
+          "roiPct": 61.425,
+          "cappedRoiPct": 57.3453125,
+          "hitRatePct": 40.5,
+          "winningMonths": 0,
+          "winningMonthPct": 0.0,
+          "minimumMonthlyRoiPct": 52.145833333333336,
+          "medianMonthlyRoiPct": 61.999797077922075,
+          "q25MonthlyRoiPct": 58.300662878787875,
+          "maxSingleReturnShare": 0.06341575091575091
+        },
+        "full": {
+          "months": 16,
+          "races": 1830,
+          "stakeYen": 2928000,
+          "returnYen": 2242900,
+          "profitYen": -685100,
+          "roiPct": 76.60177595628416,
+          "cappedRoiPct": 67.08504098360656,
+          "hitRatePct": 47.21311475409836,
+          "winningMonths": 3,
+          "winningMonthPct": 18.75,
+          "minimumMonthlyRoiPct": 52.145833333333336,
+          "medianMonthlyRoiPct": 76.08389945652175,
+          "q25MonthlyRoiPct": 65.71495535714286,
+          "maxSingleReturnShare": 0.025636452806634267
+        },
+        "monthly": [
+          {
+            "month": "2025-05",
+            "races": 130,
+            "stakeYen": 208000,
+            "returnYen": 112410,
+            "cappedReturnYen": 111560,
+            "profitYen": -95590,
+            "roiPct": 54.04326923076923,
+            "cappedRoiPct": 53.63461538461538,
+            "hitRatePct": 43.07692307692308,
+            "maxSingleReturnYen": 8730,
+            "regimePolicies": 3,
+            "fallbackRaces": 81
+          },
+          {
+            "month": "2025-06",
+            "races": 120,
+            "stakeYen": 192000,
+            "returnYen": 145230,
+            "cappedReturnYen": 134130,
+            "profitYen": -46770,
+            "roiPct": 75.640625,
+            "cappedRoiPct": 69.859375,
+            "hitRatePct": 46.666666666666664,
+            "maxSingleReturnYen": 17200,
+            "regimePolicies": 5,
+            "fallbackRaces": 3
+          },
+          {
+            "month": "2025-07",
+            "races": 120,
+            "stakeYen": 192000,
+            "returnYen": 132150,
+            "cappedReturnYen": 129160,
+            "profitYen": -59850,
+            "roiPct": 68.828125,
+            "cappedRoiPct": 67.27083333333333,
+            "hitRatePct": 45.83333333333333,
+            "maxSingleReturnYen": 10990,
+            "regimePolicies": 5,
+            "fallbackRaces": 14
+          },
+          {
+            "month": "2025-08",
+            "races": 150,
+            "stakeYen": 240000,
+            "returnYen": 159370,
+            "cappedReturnYen": 155930,
+            "profitYen": -80630,
+            "roiPct": 66.40416666666667,
+            "cappedRoiPct": 64.97083333333333,
+            "hitRatePct": 54.666666666666664,
+            "maxSingleReturnYen": 11440,
+            "regimePolicies": 6,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2025-09",
+            "races": 100,
+            "stakeYen": 160000,
+            "returnYen": 165520,
+            "cappedReturnYen": 131900,
+            "profitYen": 5520,
+            "roiPct": 103.45,
+            "cappedRoiPct": 82.4375,
+            "hitRatePct": 64.0,
+            "maxSingleReturnYen": 41620,
+            "regimePolicies": 6,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2025-10",
+            "races": 105,
+            "stakeYen": 168000,
+            "returnYen": 144410,
+            "cappedReturnYen": 128300,
+            "profitYen": -23590,
+            "roiPct": 85.95833333333334,
+            "cappedRoiPct": 76.36904761904762,
+            "hitRatePct": 49.523809523809526,
+            "maxSingleReturnYen": 20200,
+            "regimePolicies": 6,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2025-11",
+            "races": 130,
+            "stakeYen": 208000,
+            "returnYen": 172720,
+            "cappedReturnYen": 153370,
+            "profitYen": -35280,
+            "roiPct": 83.03846153846153,
+            "cappedRoiPct": 73.73557692307692,
+            "hitRatePct": 52.307692307692314,
+            "maxSingleReturnYen": 26030,
+            "regimePolicies": 6,
+            "fallbackRaces": 1
+          },
+          {
+            "month": "2025-12",
+            "races": 110,
+            "stakeYen": 176000,
+            "returnYen": 141360,
+            "cappedReturnYen": 137420,
+            "profitYen": -34640,
+            "roiPct": 80.31818181818183,
+            "cappedRoiPct": 78.07954545454545,
+            "hitRatePct": 52.72727272727272,
+            "maxSingleReturnYen": 10850,
+            "regimePolicies": 6,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2026-01",
+            "races": 115,
+            "stakeYen": 184000,
+            "returnYen": 140810,
+            "cappedReturnYen": 127020,
+            "profitYen": -43190,
+            "roiPct": 76.52717391304348,
+            "cappedRoiPct": 69.03260869565217,
+            "hitRatePct": 46.08695652173913,
+            "maxSingleReturnYen": 15440,
+            "regimePolicies": 6,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-02",
+            "races": 115,
+            "stakeYen": 184000,
+            "returnYen": 133120,
+            "cappedReturnYen": 124740,
+            "profitYen": -50880,
+            "roiPct": 72.34782608695653,
+            "cappedRoiPct": 67.79347826086956,
+            "hitRatePct": 46.08695652173913,
+            "maxSingleReturnYen": 13650,
+            "regimePolicies": 6,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-03",
+            "races": 125,
+            "stakeYen": 200000,
+            "returnYen": 225650,
+            "cappedReturnYen": 154360,
+            "profitYen": 25650,
+            "roiPct": 112.825,
+            "cappedRoiPct": 77.18,
+            "hitRatePct": 46.400000000000006,
+            "maxSingleReturnYen": 57500,
+            "regimePolicies": 6,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-04",
+            "races": 110,
+            "stakeYen": 176000,
+            "returnYen": 177030,
+            "cappedReturnYen": 109350,
+            "profitYen": 1030,
+            "roiPct": 100.58522727272728,
+            "cappedRoiPct": 62.13068181818182,
+            "hitRatePct": 42.72727272727273,
+            "maxSingleReturnYen": 45920,
+            "regimePolicies": 6,
+            "fallbackRaces": 1
+          },
+          {
+            "month": "2026-05",
+            "races": 140,
+            "stakeYen": 224000,
+            "returnYen": 142570,
+            "cappedReturnYen": 139870,
+            "profitYen": -81430,
+            "roiPct": 63.64732142857142,
+            "cappedRoiPct": 62.44196428571429,
+            "hitRatePct": 45.0,
+            "maxSingleReturnYen": 10480,
+            "regimePolicies": 6,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2026-06",
+            "races": 110,
+            "stakeYen": 176000,
+            "returnYen": 106220,
+            "cappedReturnYen": 106220,
+            "profitYen": -69780,
+            "roiPct": 60.35227272727273,
+            "cappedRoiPct": 60.35227272727273,
+            "hitRatePct": 44.54545454545455,
+            "maxSingleReturnYen": 7800,
+            "regimePolicies": 6,
+            "fallbackRaces": 6
+          },
+          {
+            "month": "2026-07",
+            "races": 120,
+            "stakeYen": 192000,
+            "returnYen": 100120,
+            "cappedReturnYen": 93640,
+            "profitYen": -91880,
+            "roiPct": 52.145833333333336,
+            "cappedRoiPct": 48.770833333333336,
+            "hitRatePct": 35.0,
+            "maxSingleReturnYen": 14480,
+            "regimePolicies": 6,
+            "fallbackRaces": 10
+          },
+          {
+            "month": "2026-08",
+            "races": 30,
+            "stakeYen": 48000,
+            "returnYen": 44210,
+            "cappedReturnYen": 27280,
+            "profitYen": -3790,
+            "roiPct": 92.10416666666667,
+            "cappedRoiPct": 56.833333333333336,
+            "hitRatePct": 26.666666666666668,
+            "maxSingleReturnYen": 24930,
+            "regimePolicies": 6,
+            "fallbackRaces": 25
+          }
+        ]
+      },
+      "topDevelopmentCandidates": [
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "uncertainty",
+          "productionSafe": false,
+          "developmentScore": 63.374532206471066,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 2288000,
+            "returnYen": 1973030,
+            "profitYen": -314970,
+            "roiPct": 86.23382867132867,
+            "cappedRoiPct": 77.30550699300699,
+            "hitRatePct": 61.18881118881119,
+            "winningMonths": 2,
+            "winningMonthPct": 16.666666666666664,
+            "minimumMonthlyRoiPct": 50.583333333333336,
+            "medianMonthlyRoiPct": 82.77031249999999,
+            "q25MonthlyRoiPct": 76.00574832775919,
+            "maxSingleReturnShare": 0.01970066344657709
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 640000,
+            "returnYen": 494060,
+            "profitYen": -145940,
+            "roiPct": 77.19687499999999,
+            "cappedRoiPct": 59.768750000000004,
+            "hitRatePct": 56.5,
+            "winningMonths": 1,
+            "winningMonthPct": 25.0,
+            "minimumMonthlyRoiPct": 62.034090909090914,
+            "medianMonthlyRoiPct": 68.86904761904762,
+            "q25MonthlyRoiPct": 63.00071022727273,
+            "maxSingleReturnShare": 0.15413107719710156
+          }
+        },
+        {
+          "key": "market_blend_audit:entropy",
+          "scheme": "track_context",
+          "productionSafe": false,
+          "developmentScore": 59.950912289703055,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 2288000,
+            "returnYen": 1843440,
+            "profitYen": -444560,
+            "roiPct": 80.56993006993008,
+            "cappedRoiPct": 78.45454545454545,
+            "hitRatePct": 57.69230769230769,
+            "winningMonths": 1,
+            "winningMonthPct": 8.333333333333332,
+            "minimumMonthlyRoiPct": 59.951086956521735,
+            "medianMonthlyRoiPct": 79.08453525641025,
+            "q25MonthlyRoiPct": 71.53422867892976,
+            "maxSingleReturnShare": 0.008543809399817732
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 640000,
+            "returnYen": 491900,
+            "profitYen": -148100,
+            "roiPct": 76.859375,
+            "cappedRoiPct": 76.090625,
+            "hitRatePct": 54.5,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 69.88541666666667,
+            "medianMonthlyRoiPct": 78.23200757575756,
+            "q25MonthlyRoiPct": 75.04947916666666,
+            "maxSingleReturnShare": 0.022911160805041676
+          }
+        },
+        {
+          "key": "form_only:confidence",
+          "scheme": "track_context",
+          "productionSafe": true,
+          "developmentScore": 59.55084172620858,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 2288000,
+            "returnYen": 1849780,
+            "profitYen": -438220,
+            "roiPct": 80.84702797202797,
+            "cappedRoiPct": 69.80944055944056,
+            "hitRatePct": 49.09090909090909,
+            "winningMonths": 3,
+            "winningMonthPct": 25.0,
+            "minimumMonthlyRoiPct": 54.04326923076923,
+            "medianMonthlyRoiPct": 78.42267786561266,
+            "q25MonthlyRoiPct": 71.4679008152174,
+            "maxSingleReturnShare": 0.031084777649233963
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 640000,
+            "returnYen": 393120,
+            "profitYen": -246880,
+            "roiPct": 61.425,
+            "cappedRoiPct": 57.3453125,
+            "hitRatePct": 40.5,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 52.145833333333336,
+            "medianMonthlyRoiPct": 61.999797077922075,
+            "q25MonthlyRoiPct": 58.300662878787875,
+            "maxSingleReturnShare": 0.06341575091575091
+          }
+        },
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "track_context",
+          "productionSafe": false,
+          "developmentScore": 59.28118020928348,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 2288000,
+            "returnYen": 1822480,
+            "profitYen": -465520,
+            "roiPct": 79.65384615384615,
+            "cappedRoiPct": 76.0812937062937,
+            "hitRatePct": 54.96503496503497,
+            "winningMonths": 1,
+            "winningMonthPct": 8.333333333333332,
+            "minimumMonthlyRoiPct": 51.05208333333333,
+            "medianMonthlyRoiPct": 78.61865942028986,
+            "q25MonthlyRoiPct": 73.37514204545455,
+            "maxSingleReturnShare": 0.011967209516702515
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 640000,
+            "returnYen": 555740,
+            "profitYen": -84260,
+            "roiPct": 86.834375,
+            "cappedRoiPct": 70.4515625,
+            "hitRatePct": 53.75,
+            "winningMonths": 1,
+            "winningMonthPct": 25.0,
+            "minimumMonthlyRoiPct": 62.515625,
+            "medianMonthlyRoiPct": 80.12540584415584,
+            "q25MonthlyRoiPct": 63.42862215909091,
+            "maxSingleReturnShare": 0.13702450786338935
+          }
+        },
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "global",
+          "productionSafe": false,
+          "developmentScore": 58.79478841719876,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 2288000,
+            "returnYen": 1887750,
+            "profitYen": -400250,
+            "roiPct": 82.50655594405595,
+            "cappedRoiPct": 72.92089160839161,
+            "hitRatePct": 52.58741258741259,
+            "winningMonths": 2,
+            "winningMonthPct": 16.666666666666664,
+            "minimumMonthlyRoiPct": 54.869791666666664,
+            "medianMonthlyRoiPct": 77.98407738095239,
+            "q25MonthlyRoiPct": 69.84832015810278,
+            "maxSingleReturnShare": 0.02059065024500066
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 640000,
+            "returnYen": 496530,
+            "profitYen": -143470,
+            "roiPct": 77.5828125,
+            "cappedRoiPct": 60.1546875,
+            "hitRatePct": 56.75,
+            "winningMonths": 1,
+            "winningMonthPct": 25.0,
+            "minimumMonthlyRoiPct": 62.034090909090914,
+            "medianMonthlyRoiPct": 68.86904761904762,
+            "q25MonthlyRoiPct": 63.00071022727273,
+            "maxSingleReturnShare": 0.15336434857913922
+          }
+        },
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "surface_distance",
+          "productionSafe": false,
+          "developmentScore": 58.79478841719876,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 2288000,
+            "returnYen": 1887750,
+            "profitYen": -400250,
+            "roiPct": 82.50655594405595,
+            "cappedRoiPct": 72.92089160839161,
+            "hitRatePct": 52.58741258741259,
+            "winningMonths": 2,
+            "winningMonthPct": 16.666666666666664,
+            "minimumMonthlyRoiPct": 54.869791666666664,
+            "medianMonthlyRoiPct": 77.98407738095239,
+            "q25MonthlyRoiPct": 69.84832015810278,
+            "maxSingleReturnShare": 0.02059065024500066
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 640000,
+            "returnYen": 496530,
+            "profitYen": -143470,
+            "roiPct": 77.5828125,
+            "cappedRoiPct": 60.1546875,
+            "hitRatePct": 56.75,
+            "winningMonths": 1,
+            "winningMonthPct": 25.0,
+            "minimumMonthlyRoiPct": 62.034090909090914,
+            "medianMonthlyRoiPct": 68.86904761904762,
+            "q25MonthlyRoiPct": 63.00071022727273,
+            "maxSingleReturnShare": 0.15336434857913922
+          }
+        },
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "class_surface",
+          "productionSafe": false,
+          "developmentScore": 58.79478841719876,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 2288000,
+            "returnYen": 1887750,
+            "profitYen": -400250,
+            "roiPct": 82.50655594405595,
+            "cappedRoiPct": 72.92089160839161,
+            "hitRatePct": 52.58741258741259,
+            "winningMonths": 2,
+            "winningMonthPct": 16.666666666666664,
+            "minimumMonthlyRoiPct": 54.869791666666664,
+            "medianMonthlyRoiPct": 77.98407738095239,
+            "q25MonthlyRoiPct": 69.84832015810278,
+            "maxSingleReturnShare": 0.02059065024500066
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 640000,
+            "returnYen": 496530,
+            "profitYen": -143470,
+            "roiPct": 77.5828125,
+            "cappedRoiPct": 60.1546875,
+            "hitRatePct": 56.75,
+            "winningMonths": 1,
+            "winningMonthPct": 25.0,
+            "minimumMonthlyRoiPct": 62.034090909090914,
+            "medianMonthlyRoiPct": 68.86904761904762,
+            "q25MonthlyRoiPct": 63.00071022727273,
+            "maxSingleReturnShare": 0.15336434857913922
+          }
+        },
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "field_race_band",
+          "productionSafe": false,
+          "developmentScore": 57.590879390898955,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 2288000,
+            "returnYen": 1768520,
+            "profitYen": -519480,
+            "roiPct": 77.29545454545455,
+            "cappedRoiPct": 72.62674825174825,
+            "hitRatePct": 56.43356643356643,
+            "winningMonths": 1,
+            "winningMonthPct": 8.333333333333332,
+            "minimumMonthlyRoiPct": 58.70673076923077,
+            "medianMonthlyRoiPct": 73.965,
+            "q25MonthlyRoiPct": 72.22051630434783,
+            "maxSingleReturnShare": 0.030992015922918597
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 640000,
+            "returnYen": 433240,
+            "profitYen": -206760,
+            "roiPct": 67.69375,
+            "cappedRoiPct": 62.684375,
+            "hitRatePct": 51.5,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 48.1875,
+            "medianMonthlyRoiPct": 60.889813311688314,
+            "q25MonthlyRoiPct": 52.61931818181819,
+            "maxSingleReturnShare": 0.05752008124826886
+          }
+        }
+      ]
+    },
+    "スタンダード": {
+      "bestOverall": {
+        "key": "market_blend_audit:entropy",
+        "variant": "market_blend_audit",
+        "productionSafe": false,
+        "scheme": "track_context",
+        "developmentScore": 59.062332667332676,
+        "development": {
+          "months": 12,
+          "races": 1430,
+          "stakeYen": 6006000,
+          "returnYen": 4702630,
+          "profitYen": -1303370,
+          "roiPct": 78.2988677988678,
+          "cappedRoiPct": 73.14319014319014,
+          "hitRatePct": 59.65034965034965,
+          "winningMonths": 2,
+          "winningMonthPct": 16.666666666666664,
+          "minimumMonthlyRoiPct": 53.45787545787546,
+          "medianMonthlyRoiPct": 74.19047619047619,
+          "q25MonthlyRoiPct": 68.79662698412699,
+          "maxSingleReturnShare": 0.01728394536674159
+        },
+        "holdout": {
+          "months": 4,
+          "races": 400,
+          "stakeYen": 1680000,
+          "returnYen": 1377780,
+          "profitYen": -302220,
+          "roiPct": 82.01071428571429,
+          "cappedRoiPct": 68.23630952380952,
+          "hitRatePct": 50.0,
+          "winningMonths": 1,
+          "winningMonthPct": 25.0,
+          "minimumMonthlyRoiPct": 57.30753968253969,
+          "medianMonthlyRoiPct": 81.12121212121212,
+          "q25MonthlyRoiPct": 65.04441738816739,
+          "maxSingleReturnShare": 0.059007969341984934
+        },
+        "full": {
+          "months": 16,
+          "races": 1830,
+          "stakeYen": 7686000,
+          "returnYen": 6080410,
+          "profitYen": -1605590,
+          "roiPct": 79.11020036429872,
+          "cappedRoiPct": 72.07064793130367,
+          "hitRatePct": 57.540983606557376,
+          "winningMonths": 3,
+          "winningMonthPct": 18.75,
+          "minimumMonthlyRoiPct": 53.45787545787546,
+          "medianMonthlyRoiPct": 74.19047619047619,
+          "q25MonthlyRoiPct": 67.16594516594516,
+          "maxSingleReturnShare": 0.013370808876375113
+        },
+        "monthly": [
+          {
+            "month": "2025-05",
+            "races": 130,
+            "stakeYen": 546000,
+            "returnYen": 291880,
+            "cappedReturnYen": 291880,
+            "profitYen": -254120,
+            "roiPct": 53.45787545787546,
+            "cappedRoiPct": 53.45787545787546,
+            "hitRatePct": 54.61538461538461,
+            "maxSingleReturnYen": 17400,
+            "regimePolicies": 4,
+            "fallbackRaces": 43
+          },
+          {
+            "month": "2025-06",
+            "races": 120,
+            "stakeYen": 504000,
+            "returnYen": 366360,
+            "cappedReturnYen": 340940,
+            "profitYen": -137640,
+            "roiPct": 72.69047619047619,
+            "cappedRoiPct": 67.64682539682539,
+            "hitRatePct": 76.66666666666667,
+            "maxSingleReturnYen": 47280,
+            "regimePolicies": 4,
+            "fallbackRaces": 14
+          },
+          {
+            "month": "2025-07",
+            "races": 120,
+            "stakeYen": 504000,
+            "returnYen": 427920,
+            "cappedReturnYen": 408420,
+            "profitYen": -76080,
+            "roiPct": 84.9047619047619,
+            "cappedRoiPct": 81.03571428571429,
+            "hitRatePct": 65.83333333333333,
+            "maxSingleReturnYen": 43900,
+            "regimePolicies": 5,
+            "fallbackRaces": 14
+          },
+          {
+            "month": "2025-08",
+            "races": 150,
+            "stakeYen": 630000,
+            "returnYen": 414500,
+            "cappedReturnYen": 395600,
+            "profitYen": -215500,
+            "roiPct": 65.7936507936508,
+            "cappedRoiPct": 62.79365079365079,
+            "hitRatePct": 54.0,
+            "maxSingleReturnYen": 48300,
+            "regimePolicies": 6,
+            "fallbackRaces": 1
+          },
+          {
+            "month": "2025-09",
+            "races": 100,
+            "stakeYen": 420000,
+            "returnYen": 293150,
+            "cappedReturnYen": 293150,
+            "profitYen": -126850,
+            "roiPct": 69.79761904761905,
+            "cappedRoiPct": 69.79761904761905,
+            "hitRatePct": 61.0,
+            "maxSingleReturnYen": 24770,
+            "regimePolicies": 6,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2025-10",
+            "races": 105,
+            "stakeYen": 441000,
+            "returnYen": 533270,
+            "cappedReturnYen": 497200,
+            "profitYen": 92270,
+            "roiPct": 120.92290249433107,
+            "cappedRoiPct": 112.7437641723356,
+            "hitRatePct": 68.57142857142857,
+            "maxSingleReturnYen": 57540,
+            "regimePolicies": 6,
+            "fallbackRaces": 3
+          },
+          {
+            "month": "2025-11",
+            "races": 130,
+            "stakeYen": 546000,
+            "returnYen": 481950,
+            "cappedReturnYen": 446770,
+            "profitYen": -64050,
+            "roiPct": 88.26923076923077,
+            "cappedRoiPct": 81.82600732600733,
+            "hitRatePct": 69.23076923076923,
+            "maxSingleReturnYen": 54940,
+            "regimePolicies": 6,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2025-12",
+            "races": 110,
+            "stakeYen": 462000,
+            "returnYen": 352070,
+            "cappedReturnYen": 352070,
+            "profitYen": -109930,
+            "roiPct": 76.2056277056277,
+            "cappedRoiPct": 76.2056277056277,
+            "hitRatePct": 55.45454545454545,
+            "maxSingleReturnYen": 27180,
+            "regimePolicies": 6,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-01",
+            "races": 115,
+            "stakeYen": 483000,
+            "returnYen": 364530,
+            "cappedReturnYen": 330520,
+            "profitYen": -118470,
+            "roiPct": 75.472049689441,
+            "cappedRoiPct": 68.43064182194617,
+            "hitRatePct": 58.26086956521739,
+            "maxSingleReturnYen": 63410,
+            "regimePolicies": 6,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-02",
+            "races": 115,
+            "stakeYen": 483000,
+            "returnYen": 352150,
+            "cappedReturnYen": 323630,
+            "profitYen": -130850,
+            "roiPct": 72.90890269151139,
+            "cappedRoiPct": 67.00414078674947,
+            "hitRatePct": 50.43478260869565,
+            "maxSingleReturnYen": 55490,
+            "regimePolicies": 6,
+            "fallbackRaces": 1
+          },
+          {
+            "month": "2026-03",
+            "races": 125,
+            "stakeYen": 525000,
+            "returnYen": 527240,
+            "cappedReturnYen": 448430,
+            "profitYen": 2240,
+            "roiPct": 100.42666666666666,
+            "cappedRoiPct": 85.4152380952381,
+            "hitRatePct": 52.0,
+            "maxSingleReturnYen": 81280,
+            "regimePolicies": 6,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-04",
+            "races": 110,
+            "stakeYen": 462000,
+            "returnYen": 297610,
+            "cappedReturnYen": 264370,
+            "profitYen": -164390,
+            "roiPct": 64.41774891774892,
+            "cappedRoiPct": 57.22294372294372,
+            "hitRatePct": 50.90909090909091,
+            "maxSingleReturnYen": 62640,
+            "regimePolicies": 6,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-05",
+            "races": 140,
+            "stakeYen": 588000,
+            "returnYen": 657310,
+            "cappedReturnYen": 494200,
+            "profitYen": 69310,
+            "roiPct": 111.78741496598639,
+            "cappedRoiPct": 84.04761904761905,
+            "hitRatePct": 42.142857142857146,
+            "maxSingleReturnYen": 81300,
+            "regimePolicies": 6,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2026-06",
+            "races": 110,
+            "stakeYen": 462000,
+            "returnYen": 312420,
+            "cappedReturnYen": 283000,
+            "profitYen": -149580,
+            "roiPct": 67.62337662337661,
+            "cappedRoiPct": 61.25541125541125,
+            "hitRatePct": 59.09090909090909,
+            "maxSingleReturnYen": 58820,
+            "regimePolicies": 6,
+            "fallbackRaces": 3
+          },
+          {
+            "month": "2026-07",
+            "races": 120,
+            "stakeYen": 504000,
+            "returnYen": 288830,
+            "cappedReturnYen": 268710,
+            "profitYen": -215170,
+            "roiPct": 57.30753968253969,
+            "cappedRoiPct": 53.31547619047618,
+            "hitRatePct": 48.333333333333336,
+            "maxSingleReturnYen": 45600,
+            "regimePolicies": 6,
+            "fallbackRaces": 11
+          },
+          {
+            "month": "2026-08",
+            "races": 30,
+            "stakeYen": 126000,
+            "returnYen": 119220,
+            "cappedReturnYen": 100460,
+            "profitYen": -6780,
+            "roiPct": 94.61904761904762,
+            "cappedRoiPct": 79.73015873015873,
+            "hitRatePct": 60.0,
+            "maxSingleReturnYen": 48160,
+            "regimePolicies": 6,
+            "fallbackRaces": 27
+          }
+        ]
+      },
+      "bestProductionSafe": {
+        "key": "form_only:confidence",
+        "variant": "form_only",
+        "productionSafe": true,
+        "scheme": "track_context",
+        "developmentScore": 56.69841966970228,
+        "development": {
+          "months": 12,
+          "races": 1430,
+          "stakeYen": 6006000,
+          "returnYen": 4706560,
+          "profitYen": -1299440,
+          "roiPct": 78.36430236430236,
+          "cappedRoiPct": 69.3984348984349,
+          "hitRatePct": 57.97202797202797,
+          "winningMonths": 1,
+          "winningMonthPct": 8.333333333333332,
+          "minimumMonthlyRoiPct": 56.454365079365076,
+          "medianMonthlyRoiPct": 75.90484817115252,
+          "q25MonthlyRoiPct": 70.23928571428571,
+          "maxSingleReturnShare": 0.026006255099265706
+        },
+        "holdout": {
+          "months": 4,
+          "races": 400,
+          "stakeYen": 1680000,
+          "returnYen": 1061360,
+          "profitYen": -618640,
+          "roiPct": 63.17619047619048,
+          "cappedRoiPct": 61.39285714285714,
+          "hitRatePct": 56.5,
+          "winningMonths": 0,
+          "winningMonthPct": 0.0,
+          "minimumMonthlyRoiPct": 49.93290043290043,
+          "medianMonthlyRoiPct": 66.32752267573696,
+          "q25MonthlyRoiPct": 60.2347132034632,
+          "maxSingleReturnShare": 0.04996419687947539
+        },
+        "full": {
+          "months": 16,
+          "races": 1830,
+          "stakeYen": 7686000,
+          "returnYen": 5767920,
+          "profitYen": -1918080,
+          "roiPct": 75.04449648711943,
+          "cappedRoiPct": 67.64858183710642,
+          "hitRatePct": 57.650273224043715,
+          "winningMonths": 1,
+          "winningMonthPct": 6.25,
+          "minimumMonthlyRoiPct": 49.93290043290043,
+          "medianMonthlyRoiPct": 73.77225672877847,
+          "q25MonthlyRoiPct": 67.18040293040293,
+          "maxSingleReturnShare": 0.021220821370615404
+        },
+        "monthly": [
+          {
+            "month": "2025-05",
+            "races": 130,
+            "stakeYen": 546000,
+            "returnYen": 483140,
+            "cappedReturnYen": 363580,
+            "profitYen": -62860,
+            "roiPct": 88.48717948717949,
+            "cappedRoiPct": 66.58974358974359,
+            "hitRatePct": 57.692307692307686,
+            "maxSingleReturnYen": 103000,
+            "regimePolicies": 3,
+            "fallbackRaces": 81
+          },
+          {
+            "month": "2025-06",
+            "races": 120,
+            "stakeYen": 504000,
+            "returnYen": 391420,
+            "cappedReturnYen": 390920,
+            "profitYen": -112580,
+            "roiPct": 77.66269841269842,
+            "cappedRoiPct": 77.56349206349206,
+            "hitRatePct": 61.66666666666667,
+            "maxSingleReturnYen": 29680,
+            "regimePolicies": 5,
+            "fallbackRaces": 3
+          },
+          {
+            "month": "2025-07",
+            "races": 120,
+            "stakeYen": 504000,
+            "returnYen": 284530,
+            "cappedReturnYen": 284530,
+            "profitYen": -219470,
+            "roiPct": 56.454365079365076,
+            "cappedRoiPct": 56.454365079365076,
+            "hitRatePct": 65.83333333333333,
+            "maxSingleReturnYen": 24600,
+            "regimePolicies": 5,
+            "fallbackRaces": 14
+          },
+          {
+            "month": "2025-08",
+            "races": 150,
+            "stakeYen": 630000,
+            "returnYen": 505930,
+            "cappedReturnYen": 446060,
+            "profitYen": -124070,
+            "roiPct": 80.30634920634921,
+            "cappedRoiPct": 70.8031746031746,
+            "hitRatePct": 60.66666666666667,
+            "maxSingleReturnYen": 79220,
+            "regimePolicies": 6,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2025-09",
+            "races": 100,
+            "stakeYen": 420000,
+            "returnYen": 298340,
+            "cappedReturnYen": 256760,
+            "profitYen": -121660,
+            "roiPct": 71.03333333333333,
+            "cappedRoiPct": 61.133333333333326,
+            "hitRatePct": 62.0,
+            "maxSingleReturnYen": 56980,
+            "regimePolicies": 6,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2025-10",
+            "races": 105,
+            "stakeYen": 441000,
+            "returnYen": 537320,
+            "cappedReturnYen": 358780,
+            "profitYen": 96320,
+            "roiPct": 121.84126984126983,
+            "cappedRoiPct": 81.35600907029479,
+            "hitRatePct": 58.0952380952381,
+            "maxSingleReturnYen": 122400,
+            "regimePolicies": 6,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2025-11",
+            "races": 130,
+            "stakeYen": 546000,
+            "returnYen": 355720,
+            "cappedReturnYen": 340950,
+            "profitYen": -190280,
+            "roiPct": 65.15018315018315,
+            "cappedRoiPct": 62.44505494505495,
+            "hitRatePct": 53.07692307692308,
+            "maxSingleReturnYen": 44170,
+            "regimePolicies": 6,
+            "fallbackRaces": 1
+          },
+          {
+            "month": "2025-12",
+            "races": 110,
+            "stakeYen": 462000,
+            "returnYen": 370780,
+            "cappedReturnYen": 348060,
+            "profitYen": -91220,
+            "roiPct": 80.25541125541126,
+            "cappedRoiPct": 75.33766233766234,
+            "hitRatePct": 52.72727272727272,
+            "maxSingleReturnYen": 39130,
+            "regimePolicies": 6,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2026-01",
+            "races": 115,
+            "stakeYen": 483000,
+            "returnYen": 354510,
+            "cappedReturnYen": 339630,
+            "profitYen": -128490,
+            "roiPct": 73.3975155279503,
+            "cappedRoiPct": 70.3167701863354,
+            "hitRatePct": 55.65217391304348,
+            "maxSingleReturnYen": 44280,
+            "regimePolicies": 6,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-02",
+            "races": 115,
+            "stakeYen": 483000,
+            "returnYen": 358130,
+            "cappedReturnYen": 293000,
+            "profitYen": -124870,
+            "roiPct": 74.14699792960663,
+            "cappedRoiPct": 60.66252587991718,
+            "hitRatePct": 53.91304347826087,
+            "maxSingleReturnYen": 83850,
+            "regimePolicies": 6,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-03",
+            "races": 125,
+            "stakeYen": 525000,
+            "returnYen": 453240,
+            "cappedReturnYen": 440180,
+            "profitYen": -71760,
+            "roiPct": 86.33142857142857,
+            "cappedRoiPct": 83.84380952380953,
+            "hitRatePct": 64.0,
+            "maxSingleReturnYen": 36660,
+            "regimePolicies": 6,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-04",
+            "races": 110,
+            "stakeYen": 462000,
+            "returnYen": 313500,
+            "cappedReturnYen": 305620,
+            "profitYen": -148500,
+            "roiPct": 67.85714285714286,
+            "cappedRoiPct": 66.15151515151516,
+            "hitRatePct": 49.09090909090909,
+            "maxSingleReturnYen": 37280,
+            "regimePolicies": 6,
+            "fallbackRaces": 1
+          },
+          {
+            "month": "2026-05",
+            "races": 140,
+            "stakeYen": 588000,
+            "returnYen": 405640,
+            "cappedReturnYen": 382010,
+            "profitYen": -182360,
+            "roiPct": 68.98639455782313,
+            "cappedRoiPct": 64.96768707482993,
+            "hitRatePct": 62.857142857142854,
+            "maxSingleReturnYen": 53030,
+            "regimePolicies": 6,
+            "fallbackRaces": 2
+          },
+          {
+            "month": "2026-06",
+            "races": 110,
+            "stakeYen": 462000,
+            "returnYen": 230690,
+            "cappedReturnYen": 230690,
+            "profitYen": -231310,
+            "roiPct": 49.93290043290043,
+            "cappedRoiPct": 49.93290043290043,
+            "hitRatePct": 56.36363636363636,
+            "maxSingleReturnYen": 17080,
+            "regimePolicies": 6,
+            "fallbackRaces": 6
+          },
+          {
+            "month": "2026-07",
+            "races": 120,
+            "stakeYen": 504000,
+            "returnYen": 320890,
+            "cappedReturnYen": 320890,
+            "profitYen": -183110,
+            "roiPct": 63.66865079365079,
+            "cappedRoiPct": 63.66865079365079,
+            "hitRatePct": 53.333333333333336,
+            "maxSingleReturnYen": 26160,
+            "regimePolicies": 6,
+            "fallbackRaces": 10
+          },
+          {
+            "month": "2026-08",
+            "races": 30,
+            "stakeYen": 126000,
+            "returnYen": 104140,
+            "cappedReturnYen": 97810,
+            "profitYen": -21860,
+            "roiPct": 82.65079365079366,
+            "cappedRoiPct": 77.62698412698413,
+            "hitRatePct": 40.0,
+            "maxSingleReturnYen": 35730,
+            "regimePolicies": 6,
+            "fallbackRaces": 25
+          }
+        ]
+      },
+      "topDevelopmentCandidates": [
+        {
+          "key": "market_blend_audit:entropy",
+          "scheme": "track_context",
+          "productionSafe": false,
+          "developmentScore": 59.062332667332676,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 6006000,
+            "returnYen": 4702630,
+            "profitYen": -1303370,
+            "roiPct": 78.2988677988678,
+            "cappedRoiPct": 73.14319014319014,
+            "hitRatePct": 59.65034965034965,
+            "winningMonths": 2,
+            "winningMonthPct": 16.666666666666664,
+            "minimumMonthlyRoiPct": 53.45787545787546,
+            "medianMonthlyRoiPct": 74.19047619047619,
+            "q25MonthlyRoiPct": 68.79662698412699,
+            "maxSingleReturnShare": 0.01728394536674159
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 1680000,
+            "returnYen": 1377780,
+            "profitYen": -302220,
+            "roiPct": 82.01071428571429,
+            "cappedRoiPct": 68.23630952380952,
+            "hitRatePct": 50.0,
+            "winningMonths": 1,
+            "winningMonthPct": 25.0,
+            "minimumMonthlyRoiPct": 57.30753968253969,
+            "medianMonthlyRoiPct": 81.12121212121212,
+            "q25MonthlyRoiPct": 65.04441738816739,
+            "maxSingleReturnShare": 0.059007969341984934
+          }
+        },
+        {
+          "key": "market_blend_audit:entropy",
+          "scheme": "field_race_band",
+          "productionSafe": false,
+          "developmentScore": 58.11214551149333,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 6006000,
+            "returnYen": 4645230,
+            "profitYen": -1360770,
+            "roiPct": 77.34315684315685,
+            "cappedRoiPct": 73.25058275058275,
+            "hitRatePct": 67.06293706293707,
+            "winningMonths": 1,
+            "winningMonthPct": 8.333333333333332,
+            "minimumMonthlyRoiPct": 48.32900432900433,
+            "medianMonthlyRoiPct": 75.56771911663216,
+            "q25MonthlyRoiPct": 66.52926587301587,
+            "maxSingleReturnShare": 0.015738725531351517
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 1680000,
+            "returnYen": 1232400,
+            "profitYen": -447600,
+            "roiPct": 73.35714285714286,
+            "cappedRoiPct": 71.80535714285713,
+            "hitRatePct": 58.75,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 60.10822510822511,
+            "medianMonthlyRoiPct": 64.86507936507937,
+            "q25MonthlyRoiPct": 63.253246753246756,
+            "maxSingleReturnShare": 0.034899383317104835
+          }
+        },
+        {
+          "key": "form_only:confidence",
+          "scheme": "track_context",
+          "productionSafe": true,
+          "developmentScore": 56.69841966970228,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 6006000,
+            "returnYen": 4706560,
+            "profitYen": -1299440,
+            "roiPct": 78.36430236430236,
+            "cappedRoiPct": 69.3984348984349,
+            "hitRatePct": 57.97202797202797,
+            "winningMonths": 1,
+            "winningMonthPct": 8.333333333333332,
+            "minimumMonthlyRoiPct": 56.454365079365076,
+            "medianMonthlyRoiPct": 75.90484817115252,
+            "q25MonthlyRoiPct": 70.23928571428571,
+            "maxSingleReturnShare": 0.026006255099265706
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 1680000,
+            "returnYen": 1061360,
+            "profitYen": -618640,
+            "roiPct": 63.17619047619048,
+            "cappedRoiPct": 61.39285714285714,
+            "hitRatePct": 56.5,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 49.93290043290043,
+            "medianMonthlyRoiPct": 66.32752267573696,
+            "q25MonthlyRoiPct": 60.2347132034632,
+            "maxSingleReturnShare": 0.04996419687947539
+          }
+        },
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "global",
+          "productionSafe": false,
+          "developmentScore": 56.5026867335563,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 6006000,
+            "returnYen": 4896440,
+            "profitYen": -1109560,
+            "roiPct": 81.52580752580752,
+            "cappedRoiPct": 64.52780552780553,
+            "hitRatePct": 49.09090909090909,
+            "winningMonths": 1,
+            "winningMonthPct": 8.333333333333332,
+            "minimumMonthlyRoiPct": 26.830952380952382,
+            "medianMonthlyRoiPct": 88.32505175983437,
+            "q25MonthlyRoiPct": 73.04166666666667,
+            "maxSingleReturnShare": 0.024287033028077543
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 1680000,
+            "returnYen": 1028290,
+            "profitYen": -651710,
+            "roiPct": 61.2077380952381,
+            "cappedRoiPct": 51.38095238095238,
+            "hitRatePct": 43.75,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 36.507936507936506,
+            "medianMonthlyRoiPct": 60.3125,
+            "q25MonthlyRoiPct": 53.91269841269842,
+            "maxSingleReturnShare": 0.07760456680508417
+          }
+        },
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "surface_distance",
+          "productionSafe": false,
+          "developmentScore": 56.5026867335563,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 6006000,
+            "returnYen": 4896440,
+            "profitYen": -1109560,
+            "roiPct": 81.52580752580752,
+            "cappedRoiPct": 64.52780552780553,
+            "hitRatePct": 49.09090909090909,
+            "winningMonths": 1,
+            "winningMonthPct": 8.333333333333332,
+            "minimumMonthlyRoiPct": 26.830952380952382,
+            "medianMonthlyRoiPct": 88.32505175983437,
+            "q25MonthlyRoiPct": 73.04166666666667,
+            "maxSingleReturnShare": 0.024287033028077543
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 1680000,
+            "returnYen": 1028290,
+            "profitYen": -651710,
+            "roiPct": 61.2077380952381,
+            "cappedRoiPct": 51.38095238095238,
+            "hitRatePct": 43.75,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 36.507936507936506,
+            "medianMonthlyRoiPct": 60.3125,
+            "q25MonthlyRoiPct": 53.91269841269842,
+            "maxSingleReturnShare": 0.07760456680508417
+          }
+        },
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "class_surface",
+          "productionSafe": false,
+          "developmentScore": 56.5026867335563,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 6006000,
+            "returnYen": 4896440,
+            "profitYen": -1109560,
+            "roiPct": 81.52580752580752,
+            "cappedRoiPct": 64.52780552780553,
+            "hitRatePct": 49.09090909090909,
+            "winningMonths": 1,
+            "winningMonthPct": 8.333333333333332,
+            "minimumMonthlyRoiPct": 26.830952380952382,
+            "medianMonthlyRoiPct": 88.32505175983437,
+            "q25MonthlyRoiPct": 73.04166666666667,
+            "maxSingleReturnShare": 0.024287033028077543
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 1680000,
+            "returnYen": 1028290,
+            "profitYen": -651710,
+            "roiPct": 61.2077380952381,
+            "cappedRoiPct": 51.38095238095238,
+            "hitRatePct": 43.75,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 36.507936507936506,
+            "medianMonthlyRoiPct": 60.3125,
+            "q25MonthlyRoiPct": 53.91269841269842,
+            "maxSingleReturnShare": 0.07760456680508417
+          }
+        },
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "track_context",
+          "productionSafe": false,
+          "developmentScore": 55.88654626774192,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 6006000,
+            "returnYen": 4583320,
+            "profitYen": -1422680,
+            "roiPct": 76.31235431235432,
+            "cappedRoiPct": 71.65984015984016,
+            "hitRatePct": 55.59440559440559,
+            "winningMonths": 1,
+            "winningMonthPct": 8.333333333333332,
+            "minimumMonthlyRoiPct": 55.41125541125541,
+            "medianMonthlyRoiPct": 76.68116605616606,
+            "q25MonthlyRoiPct": 65.15226802183324,
+            "maxSingleReturnShare": 0.019302601607568314
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 1680000,
+            "returnYen": 1419500,
+            "profitYen": -260500,
+            "roiPct": 84.49404761904762,
+            "cappedRoiPct": 69.69047619047619,
+            "hitRatePct": 53.75,
+            "winningMonths": 1,
+            "winningMonthPct": 25.0,
+            "minimumMonthlyRoiPct": 55.73809523809524,
+            "medianMonthlyRoiPct": 62.54392135642136,
+            "q25MonthlyRoiPct": 59.10010822510823,
+            "maxSingleReturnShare": 0.1121169425854174
+          }
+        },
+        {
+          "key": "market_blend_audit:entropy",
+          "scheme": "uncertainty",
+          "productionSafe": false,
+          "developmentScore": 55.31751835121401,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 6006000,
+            "returnYen": 4646770,
+            "profitYen": -1359230,
+            "roiPct": 77.36879786879787,
+            "cappedRoiPct": 64.37246087246086,
+            "hitRatePct": 58.11188811188811,
+            "winningMonths": 2,
+            "winningMonthPct": 16.666666666666664,
+            "minimumMonthlyRoiPct": 36.64047619047619,
+            "medianMonthlyRoiPct": 70.7129718107979,
+            "q25MonthlyRoiPct": 66.3517316017316,
+            "maxSingleReturnShare": 0.03708597584989143
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 1680000,
+            "returnYen": 1238390,
+            "profitYen": -441610,
+            "roiPct": 73.71369047619048,
+            "cappedRoiPct": 58.20595238095238,
+            "hitRatePct": 47.25,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 62.638888888888886,
+            "medianMonthlyRoiPct": 77.27790661719234,
+            "q25MonthlyRoiPct": 70.96456916099774,
+            "maxSingleReturnShare": 0.06564975492373162
+          }
+        }
+      ]
+    },
+    "プレミアム": {
+      "bestOverall": {
+        "key": "market_blend_audit:confidence",
+        "variant": "market_blend_audit",
+        "productionSafe": false,
+        "scheme": "field_race_band",
+        "developmentScore": 67.82760741152786,
+        "development": {
+          "months": 12,
+          "races": 1430,
+          "stakeYen": 12584000,
+          "returnYen": 12636310,
+          "profitYen": 52310,
+          "roiPct": 100.41568658614113,
+          "cappedRoiPct": 76.7212333121424,
+          "hitRatePct": 54.47552447552447,
+          "winningMonths": 5,
+          "winningMonthPct": 41.66666666666667,
+          "minimumMonthlyRoiPct": 71.7104743083004,
+          "medianMonthlyRoiPct": 83.31752622377621,
+          "q25MonthlyRoiPct": 78.005423553719,
+          "maxSingleReturnShare": 0.07935544474613238
+        },
+        "holdout": {
+          "months": 4,
+          "races": 400,
+          "stakeYen": 3520000,
+          "returnYen": 2255440,
+          "profitYen": -1264560,
+          "roiPct": 64.075,
+          "cappedRoiPct": 57.53380681818182,
+          "hitRatePct": 48.25,
+          "winningMonths": 0,
+          "winningMonthPct": 0.0,
+          "minimumMonthlyRoiPct": 35.06060606060606,
+          "medianMonthlyRoiPct": 55.298811983471076,
+          "q25MonthlyRoiPct": 49.85399449035813,
+          "maxSingleReturnShare": 0.09113964459262938
+        },
+        "full": {
+          "months": 16,
+          "races": 1830,
+          "stakeYen": 16104000,
+          "returnYen": 14891750,
+          "profitYen": -1212250,
+          "roiPct": 92.47236711376055,
+          "cappedRoiPct": 72.527260307998,
+          "hitRatePct": 53.114754098360656,
+          "winningMonths": 5,
+          "winningMonthPct": 31.25,
+          "minimumMonthlyRoiPct": 35.06060606060606,
+          "medianMonthlyRoiPct": 81.1416083916084,
+          "q25MonthlyRoiPct": 72.89995059288538,
+          "maxSingleReturnShare": 0.06733661255393086
+        },
+        "monthly": [
+          {
+            "month": "2025-05",
+            "races": 130,
+            "stakeYen": 1144000,
+            "returnYen": 942290,
+            "cappedReturnYen": 867240,
+            "profitYen": -201710,
+            "roiPct": 82.36800699300699,
+            "cappedRoiPct": 75.8076923076923,
+            "hitRatePct": 55.38461538461539,
+            "maxSingleReturnYen": 163050,
+            "regimePolicies": 6,
+            "fallbackRaces": 32
+          },
+          {
+            "month": "2025-06",
+            "races": 120,
+            "stakeYen": 1056000,
+            "returnYen": 889860,
+            "cappedReturnYen": 818300,
+            "profitYen": -166140,
+            "roiPct": 84.26704545454545,
+            "cappedRoiPct": 77.4905303030303,
+            "hitRatePct": 46.666666666666664,
+            "maxSingleReturnYen": 124320,
+            "regimePolicies": 7,
+            "fallbackRaces": 14
+          },
+          {
+            "month": "2025-07",
+            "races": 120,
+            "stakeYen": 1056000,
+            "returnYen": 2067800,
+            "cappedReturnYen": 656930,
+            "profitYen": 1011800,
+            "roiPct": 195.81439393939394,
+            "cappedRoiPct": 62.2092803030303,
+            "hitRatePct": 48.333333333333336,
+            "maxSingleReturnYen": 1002760,
+            "regimePolicies": 8,
+            "fallbackRaces": 14
+          },
+          {
+            "month": "2025-08",
+            "races": 150,
+            "stakeYen": 1320000,
+            "returnYen": 1619920,
+            "cappedReturnYen": 1317470,
+            "profitYen": 299920,
+            "roiPct": 122.72121212121212,
+            "cappedRoiPct": 99.80833333333334,
+            "hitRatePct": 54.0,
+            "maxSingleReturnYen": 200940,
+            "regimePolicies": 8,
+            "fallbackRaces": 20
+          },
+          {
+            "month": "2025-09",
+            "races": 100,
+            "stakeYen": 880000,
+            "returnYen": 655500,
+            "cappedReturnYen": 655500,
+            "profitYen": -224500,
+            "roiPct": 74.48863636363636,
+            "cappedRoiPct": 74.48863636363636,
+            "hitRatePct": 57.99999999999999,
+            "maxSingleReturnYen": 46080,
+            "regimePolicies": 8,
+            "fallbackRaces": 13
+          },
+          {
+            "month": "2025-10",
+            "races": 105,
+            "stakeYen": 924000,
+            "returnYen": 975030,
+            "cappedReturnYen": 859030,
+            "profitYen": 51030,
+            "roiPct": 105.52272727272727,
+            "cappedRoiPct": 92.96861471861472,
+            "hitRatePct": 56.19047619047619,
+            "maxSingleReturnYen": 190420,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2025-11",
+            "races": 130,
+            "stakeYen": 1144000,
+            "returnYen": 914230,
+            "cappedReturnYen": 820260,
+            "profitYen": -229770,
+            "roiPct": 79.9152097902098,
+            "cappedRoiPct": 71.70104895104895,
+            "hitRatePct": 61.53846153846154,
+            "maxSingleReturnYen": 181970,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2025-12",
+            "races": 110,
+            "stakeYen": 968000,
+            "returnYen": 1099350,
+            "cappedReturnYen": 773200,
+            "profitYen": 131350,
+            "roiPct": 113.56921487603306,
+            "cappedRoiPct": 79.87603305785123,
+            "hitRatePct": 51.81818181818182,
+            "maxSingleReturnYen": 307230,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-01",
+            "races": 115,
+            "stakeYen": 1012000,
+            "returnYen": 725710,
+            "cappedReturnYen": 644350,
+            "profitYen": -286290,
+            "roiPct": 71.7104743083004,
+            "cappedRoiPct": 63.67094861660079,
+            "hitRatePct": 45.21739130434783,
+            "maxSingleReturnYen": 141480,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-02",
+            "races": 115,
+            "stakeYen": 1012000,
+            "returnYen": 741760,
+            "cappedReturnYen": 691550,
+            "profitYen": -270240,
+            "roiPct": 73.29644268774703,
+            "cappedRoiPct": 68.33498023715416,
+            "hitRatePct": 53.91304347826087,
+            "maxSingleReturnYen": 128170,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-03",
+            "races": 125,
+            "stakeYen": 1100000,
+            "returnYen": 1238420,
+            "cappedReturnYen": 817020,
+            "profitYen": 138420,
+            "roiPct": 112.58363636363637,
+            "cappedRoiPct": 74.27454545454546,
+            "hitRatePct": 64.8,
+            "maxSingleReturnYen": 387820,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-04",
+            "races": 110,
+            "stakeYen": 968000,
+            "returnYen": 766440,
+            "cappedReturnYen": 733750,
+            "profitYen": -201560,
+            "roiPct": 79.17768595041322,
+            "cappedRoiPct": 75.80061983471074,
+            "hitRatePct": 57.27272727272727,
+            "maxSingleReturnYen": 120690,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-05",
+            "races": 140,
+            "stakeYen": 1232000,
+            "returnYen": 1043180,
+            "cappedReturnYen": 812930,
+            "profitYen": -188820,
+            "roiPct": 84.6737012987013,
+            "cappedRoiPct": 65.98457792207793,
+            "hitRatePct": 44.285714285714285,
+            "maxSingleReturnYen": 205560,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-06",
+            "races": 110,
+            "stakeYen": 968000,
+            "returnYen": 530320,
+            "cappedReturnYen": 530320,
+            "profitYen": -437680,
+            "roiPct": 54.78512396694215,
+            "cappedRoiPct": 54.78512396694215,
+            "hitRatePct": 51.81818181818182,
+            "maxSingleReturnYen": 60520,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-07",
+            "races": 120,
+            "stakeYen": 1056000,
+            "returnYen": 589380,
+            "cappedReturnYen": 589380,
+            "profitYen": -466620,
+            "roiPct": 55.8125,
+            "cappedRoiPct": 55.8125,
+            "hitRatePct": 48.333333333333336,
+            "maxSingleReturnYen": 46480,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-08",
+            "races": 30,
+            "stakeYen": 264000,
+            "returnYen": 92560,
+            "cappedReturnYen": 92560,
+            "profitYen": -171440,
+            "roiPct": 35.06060606060606,
+            "cappedRoiPct": 35.06060606060606,
+            "hitRatePct": 53.333333333333336,
+            "maxSingleReturnYen": 21210,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          }
+        ]
+      },
+      "bestProductionSafe": {
+        "key": "form_only:entropy",
+        "variant": "form_only",
+        "productionSafe": true,
+        "scheme": "field_race_band",
+        "developmentScore": 56.11801315219695,
+        "development": {
+          "months": 12,
+          "races": 1430,
+          "stakeYen": 12584000,
+          "returnYen": 10075260,
+          "profitYen": -2508740,
+          "roiPct": 80.06404958677686,
+          "cappedRoiPct": 71.22949777495232,
+          "hitRatePct": 52.16783216783217,
+          "winningMonths": 2,
+          "winningMonthPct": 16.666666666666664,
+          "minimumMonthlyRoiPct": 42.739510489510494,
+          "medianMonthlyRoiPct": 74.64186429512516,
+          "q25MonthlyRoiPct": 62.86276223776224,
+          "maxSingleReturnShare": 0.03313264372333816
+        },
+        "holdout": {
+          "months": 4,
+          "races": 400,
+          "stakeYen": 3520000,
+          "returnYen": 2906350,
+          "profitYen": -613650,
+          "roiPct": 82.56676136363636,
+          "cappedRoiPct": 64.58323863636363,
+          "hitRatePct": 51.0,
+          "winningMonths": 2,
+          "winningMonthPct": 50.0,
+          "minimumMonthlyRoiPct": 46.917355371900825,
+          "medianMonthlyRoiPct": 84.54274891774892,
+          "q25MonthlyRoiPct": 54.026416765053135,
+          "maxSingleReturnShare": 0.16684845252636468
+        },
+        "full": {
+          "months": 16,
+          "races": 1830,
+          "stakeYen": 16104000,
+          "returnYen": 12981610,
+          "profitYen": -3122390,
+          "roiPct": 80.61109041231992,
+          "cappedRoiPct": 69.77676353700943,
+          "hitRatePct": 51.91256830601093,
+          "winningMonths": 4,
+          "winningMonthPct": 25.0,
+          "minimumMonthlyRoiPct": 42.739510489510494,
+          "medianMonthlyRoiPct": 74.64186429512516,
+          "q25MonthlyRoiPct": 59.479926323676324,
+          "maxSingleReturnShare": 0.03735438054293728
+        },
+        "monthly": [
+          {
+            "month": "2025-05",
+            "races": 130,
+            "stakeYen": 1144000,
+            "returnYen": 692210,
+            "cappedReturnYen": 629510,
+            "profitYen": -451790,
+            "roiPct": 60.50786713286713,
+            "cappedRoiPct": 55.0270979020979,
+            "hitRatePct": 49.23076923076923,
+            "maxSingleReturnYen": 150700,
+            "regimePolicies": 5,
+            "fallbackRaces": 39
+          },
+          {
+            "month": "2025-06",
+            "races": 120,
+            "stakeYen": 1056000,
+            "returnYen": 935300,
+            "cappedReturnYen": 811220,
+            "profitYen": -120700,
+            "roiPct": 88.57007575757576,
+            "cappedRoiPct": 76.82007575757575,
+            "hitRatePct": 50.83333333333333,
+            "maxSingleReturnYen": 212080,
+            "regimePolicies": 8,
+            "fallbackRaces": 3
+          },
+          {
+            "month": "2025-07",
+            "races": 120,
+            "stakeYen": 1056000,
+            "returnYen": 905670,
+            "cappedReturnYen": 785890,
+            "profitYen": -150330,
+            "roiPct": 85.76420454545455,
+            "cappedRoiPct": 74.42140151515152,
+            "hitRatePct": 48.333333333333336,
+            "maxSingleReturnYen": 192360,
+            "regimePolicies": 8,
+            "fallbackRaces": 16
+          },
+          {
+            "month": "2025-08",
+            "races": 150,
+            "stakeYen": 1320000,
+            "returnYen": 1027580,
+            "cappedReturnYen": 1000610,
+            "profitYen": -292420,
+            "roiPct": 77.8469696969697,
+            "cappedRoiPct": 75.80378787878787,
+            "hitRatePct": 60.66666666666667,
+            "maxSingleReturnYen": 114970,
+            "regimePolicies": 8,
+            "fallbackRaces": 20
+          },
+          {
+            "month": "2025-09",
+            "races": 100,
+            "stakeYen": 880000,
+            "returnYen": 457960,
+            "cappedReturnYen": 457960,
+            "profitYen": -422040,
+            "roiPct": 52.040909090909096,
+            "cappedRoiPct": 52.040909090909096,
+            "hitRatePct": 61.0,
+            "maxSingleReturnYen": 61630,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2025-10",
+            "races": 105,
+            "stakeYen": 924000,
+            "returnYen": 656440,
+            "cappedReturnYen": 605920,
+            "profitYen": -267560,
+            "roiPct": 71.04329004329004,
+            "cappedRoiPct": 65.57575757575758,
+            "hitRatePct": 53.333333333333336,
+            "maxSingleReturnYen": 138520,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2025-11",
+            "races": 130,
+            "stakeYen": 1144000,
+            "returnYen": 488940,
+            "cappedReturnYen": 488940,
+            "profitYen": -655060,
+            "roiPct": 42.739510489510494,
+            "cappedRoiPct": 42.739510489510494,
+            "hitRatePct": 47.69230769230769,
+            "maxSingleReturnYen": 56020,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2025-12",
+            "races": 110,
+            "stakeYen": 968000,
+            "returnYen": 616110,
+            "cappedReturnYen": 616110,
+            "profitYen": -351890,
+            "roiPct": 63.64772727272727,
+            "cappedRoiPct": 63.64772727272727,
+            "hitRatePct": 49.09090909090909,
+            "maxSingleReturnYen": 64800,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-01",
+            "races": 115,
+            "stakeYen": 1012000,
+            "returnYen": 722940,
+            "cappedReturnYen": 717290,
+            "profitYen": -289060,
+            "roiPct": 71.43675889328063,
+            "cappedRoiPct": 70.8784584980237,
+            "hitRatePct": 46.95652173913044,
+            "maxSingleReturnYen": 93650,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-02",
+            "races": 115,
+            "stakeYen": 1012000,
+            "returnYen": 863800,
+            "cappedReturnYen": 795300,
+            "profitYen": -148200,
+            "roiPct": 85.35573122529644,
+            "cappedRoiPct": 78.58695652173913,
+            "hitRatePct": 48.69565217391305,
+            "maxSingleReturnYen": 146040,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-03",
+            "races": 125,
+            "stakeYen": 1100000,
+            "returnYen": 1348090,
+            "cappedReturnYen": 1058110,
+            "profitYen": 248090,
+            "roiPct": 122.55363636363637,
+            "cappedRoiPct": 96.19181818181818,
+            "hitRatePct": 56.00000000000001,
+            "maxSingleReturnYen": 218810,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-04",
+            "races": 110,
+            "stakeYen": 968000,
+            "returnYen": 1360220,
+            "cappedReturnYen": 996660,
+            "profitYen": 392220,
+            "roiPct": 140.51859504132233,
+            "cappedRoiPct": 102.9607438016529,
+            "hitRatePct": 53.63636363636364,
+            "maxSingleReturnYen": 333820,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-05",
+            "races": 140,
+            "stakeYen": 1232000,
+            "returnYen": 694800,
+            "cappedReturnYen": 694800,
+            "profitYen": -537200,
+            "roiPct": 56.3961038961039,
+            "cappedRoiPct": 56.3961038961039,
+            "hitRatePct": 46.42857142857143,
+            "maxSingleReturnYen": 73950,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-06",
+            "races": 110,
+            "stakeYen": 968000,
+            "returnYen": 454160,
+            "cappedReturnYen": 454160,
+            "profitYen": -513840,
+            "roiPct": 46.917355371900825,
+            "cappedRoiPct": 46.917355371900825,
+            "hitRatePct": 53.63636363636364,
+            "maxSingleReturnYen": 33810,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-07",
+            "races": 120,
+            "stakeYen": 1056000,
+            "returnYen": 1190000,
+            "cappedReturnYen": 953900,
+            "profitYen": 134000,
+            "roiPct": 112.68939393939394,
+            "cappedRoiPct": 90.33143939393939,
+            "hitRatePct": 57.49999999999999,
+            "maxSingleReturnYen": 321540,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          },
+          {
+            "month": "2026-08",
+            "races": 30,
+            "stakeYen": 264000,
+            "returnYen": 567390,
+            "cappedReturnYen": 170470,
+            "profitYen": 303390,
+            "roiPct": 214.92045454545456,
+            "cappedRoiPct": 64.5719696969697,
+            "hitRatePct": 36.666666666666664,
+            "maxSingleReturnYen": 484920,
+            "regimePolicies": 9,
+            "fallbackRaces": 0
+          }
+        ]
+      },
+      "topDevelopmentCandidates": [
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "field_race_band",
+          "productionSafe": false,
+          "developmentScore": 67.82760741152786,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 12584000,
+            "returnYen": 12636310,
+            "profitYen": 52310,
+            "roiPct": 100.41568658614113,
+            "cappedRoiPct": 76.7212333121424,
+            "hitRatePct": 54.47552447552447,
+            "winningMonths": 5,
+            "winningMonthPct": 41.66666666666667,
+            "minimumMonthlyRoiPct": 71.7104743083004,
+            "medianMonthlyRoiPct": 83.31752622377621,
+            "q25MonthlyRoiPct": 78.005423553719,
+            "maxSingleReturnShare": 0.07935544474613238
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 3520000,
+            "returnYen": 2255440,
+            "profitYen": -1264560,
+            "roiPct": 64.075,
+            "cappedRoiPct": 57.53380681818182,
+            "hitRatePct": 48.25,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 35.06060606060606,
+            "medianMonthlyRoiPct": 55.298811983471076,
+            "q25MonthlyRoiPct": 49.85399449035813,
+            "maxSingleReturnShare": 0.09113964459262938
+          }
+        },
+        {
+          "key": "form_only:entropy",
+          "scheme": "field_race_band",
+          "productionSafe": true,
+          "developmentScore": 56.11801315219695,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 12584000,
+            "returnYen": 10075260,
+            "profitYen": -2508740,
+            "roiPct": 80.06404958677686,
+            "cappedRoiPct": 71.22949777495232,
+            "hitRatePct": 52.16783216783217,
+            "winningMonths": 2,
+            "winningMonthPct": 16.666666666666664,
+            "minimumMonthlyRoiPct": 42.739510489510494,
+            "medianMonthlyRoiPct": 74.64186429512516,
+            "q25MonthlyRoiPct": 62.86276223776224,
+            "maxSingleReturnShare": 0.03313264372333816
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 3520000,
+            "returnYen": 2906350,
+            "profitYen": -613650,
+            "roiPct": 82.56676136363636,
+            "cappedRoiPct": 64.58323863636363,
+            "hitRatePct": 51.0,
+            "winningMonths": 2,
+            "winningMonthPct": 50.0,
+            "minimumMonthlyRoiPct": 46.917355371900825,
+            "medianMonthlyRoiPct": 84.54274891774892,
+            "q25MonthlyRoiPct": 54.026416765053135,
+            "maxSingleReturnShare": 0.16684845252636468
+          }
+        },
+        {
+          "key": "market_blend_audit:entropy",
+          "scheme": "uncertainty",
+          "productionSafe": false,
+          "developmentScore": 56.020070168467896,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 12584000,
+            "returnYen": 10127020,
+            "profitYen": -2456980,
+            "roiPct": 80.47536554354735,
+            "cappedRoiPct": 67.39375397329943,
+            "hitRatePct": 51.95804195804196,
+            "winningMonths": 3,
+            "winningMonthPct": 25.0,
+            "minimumMonthlyRoiPct": 49.01962809917355,
+            "medianMonthlyRoiPct": 81.66136363636363,
+            "q25MonthlyRoiPct": 56.01292613636363,
+            "maxSingleReturnShare": 0.049394589918850755
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 3520000,
+            "returnYen": 2529290,
+            "profitYen": -990710,
+            "roiPct": 71.85482954545455,
+            "cappedRoiPct": 65.11448863636363,
+            "hitRatePct": 41.75,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 55.24431818181819,
+            "medianMonthlyRoiPct": 66.29396645021646,
+            "q25MonthlyRoiPct": 60.04403409090909,
+            "maxSingleReturnShare": 0.0660422490105919
+          }
+        },
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "global",
+          "productionSafe": false,
+          "developmentScore": 55.98229149161116,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 12584000,
+            "returnYen": 10463330,
+            "profitYen": -2120670,
+            "roiPct": 83.14788620470439,
+            "cappedRoiPct": 67.04156071201525,
+            "hitRatePct": 60.0,
+            "winningMonths": 2,
+            "winningMonthPct": 16.666666666666664,
+            "minimumMonthlyRoiPct": 51.28068181818182,
+            "medianMonthlyRoiPct": 76.49613927738928,
+            "q25MonthlyRoiPct": 61.53275691699605,
+            "maxSingleReturnShare": 0.09239410398028161
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 3520000,
+            "returnYen": 2387570,
+            "profitYen": -1132430,
+            "roiPct": 67.82869318181818,
+            "cappedRoiPct": 60.25284090909091,
+            "hitRatePct": 60.5,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 40.02272727272727,
+            "medianMonthlyRoiPct": 60.82548701298701,
+            "q25MonthlyRoiPct": 52.12926136363636,
+            "maxSingleReturnShare": 0.10554664365861524
+          }
+        },
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "surface_distance",
+          "productionSafe": false,
+          "developmentScore": 55.98229149161116,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 12584000,
+            "returnYen": 10463330,
+            "profitYen": -2120670,
+            "roiPct": 83.14788620470439,
+            "cappedRoiPct": 67.04156071201525,
+            "hitRatePct": 60.0,
+            "winningMonths": 2,
+            "winningMonthPct": 16.666666666666664,
+            "minimumMonthlyRoiPct": 51.28068181818182,
+            "medianMonthlyRoiPct": 76.49613927738928,
+            "q25MonthlyRoiPct": 61.53275691699605,
+            "maxSingleReturnShare": 0.09239410398028161
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 3520000,
+            "returnYen": 2387570,
+            "profitYen": -1132430,
+            "roiPct": 67.82869318181818,
+            "cappedRoiPct": 60.25284090909091,
+            "hitRatePct": 60.5,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 40.02272727272727,
+            "medianMonthlyRoiPct": 60.82548701298701,
+            "q25MonthlyRoiPct": 52.12926136363636,
+            "maxSingleReturnShare": 0.10554664365861524
+          }
+        },
+        {
+          "key": "market_blend_audit:confidence",
+          "scheme": "class_surface",
+          "productionSafe": false,
+          "developmentScore": 55.98229149161116,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 12584000,
+            "returnYen": 10463330,
+            "profitYen": -2120670,
+            "roiPct": 83.14788620470439,
+            "cappedRoiPct": 67.04156071201525,
+            "hitRatePct": 60.0,
+            "winningMonths": 2,
+            "winningMonthPct": 16.666666666666664,
+            "minimumMonthlyRoiPct": 51.28068181818182,
+            "medianMonthlyRoiPct": 76.49613927738928,
+            "q25MonthlyRoiPct": 61.53275691699605,
+            "maxSingleReturnShare": 0.09239410398028161
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 3520000,
+            "returnYen": 2387570,
+            "profitYen": -1132430,
+            "roiPct": 67.82869318181818,
+            "cappedRoiPct": 60.25284090909091,
+            "hitRatePct": 60.5,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 40.02272727272727,
+            "medianMonthlyRoiPct": 60.82548701298701,
+            "q25MonthlyRoiPct": 52.12926136363636,
+            "maxSingleReturnShare": 0.10554664365861524
+          }
+        },
+        {
+          "key": "market_blend_audit:entropy",
+          "scheme": "global",
+          "productionSafe": false,
+          "developmentScore": 55.19698823903369,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 12584000,
+            "returnYen": 10167510,
+            "profitYen": -2416490,
+            "roiPct": 80.79712333121424,
+            "cappedRoiPct": 66.16163382072473,
+            "hitRatePct": 45.10489510489511,
+            "winningMonths": 3,
+            "winningMonthPct": 25.0,
+            "minimumMonthlyRoiPct": 40.17159090909091,
+            "medianMonthlyRoiPct": 78.97945804195805,
+            "q25MonthlyRoiPct": 59.583005536130536,
+            "maxSingleReturnShare": 0.04425468969295334
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 3520000,
+            "returnYen": 2470690,
+            "profitYen": -1049310,
+            "roiPct": 70.19005681818183,
+            "cappedRoiPct": 66.53323863636363,
+            "hitRatePct": 51.5,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 52.46022727272728,
+            "medianMonthlyRoiPct": 72.55505952380952,
+            "q25MonthlyRoiPct": 59.85673701298701,
+            "maxSingleReturnShare": 0.06232671844707349
+          }
+        },
+        {
+          "key": "market_blend_audit:entropy",
+          "scheme": "surface_distance",
+          "productionSafe": false,
+          "developmentScore": 55.19698823903369,
+          "development": {
+            "months": 12,
+            "races": 1430,
+            "stakeYen": 12584000,
+            "returnYen": 10167510,
+            "profitYen": -2416490,
+            "roiPct": 80.79712333121424,
+            "cappedRoiPct": 66.16163382072473,
+            "hitRatePct": 45.10489510489511,
+            "winningMonths": 3,
+            "winningMonthPct": 25.0,
+            "minimumMonthlyRoiPct": 40.17159090909091,
+            "medianMonthlyRoiPct": 78.97945804195805,
+            "q25MonthlyRoiPct": 59.583005536130536,
+            "maxSingleReturnShare": 0.04425468969295334
+          },
+          "holdout": {
+            "months": 4,
+            "races": 400,
+            "stakeYen": 3520000,
+            "returnYen": 2470690,
+            "profitYen": -1049310,
+            "roiPct": 70.19005681818183,
+            "cappedRoiPct": 66.53323863636363,
+            "hitRatePct": 51.5,
+            "winningMonths": 0,
+            "winningMonthPct": 0.0,
+            "minimumMonthlyRoiPct": 52.46022727272728,
+            "medianMonthlyRoiPct": 72.55505952380952,
+            "q25MonthlyRoiPct": 59.85673701298701,
+            "maxSingleReturnShare": 0.06232671844707349
+          }
+        }
+      ]
+    }
+  },
+  "overallHoldoutPass200": false,
+  "productionSafeHoldoutPass200": false
+}
