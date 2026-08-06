@@ -1,24 +1,36 @@
-import importlib.util
 import json
 import os
-import sys
 import time
+import urllib.request
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "scripts" / "train-nonlinear-market-blend-v4.py"
-OUTPUT = ROOT / "final-v5-august-audit.json"
+OUTPUT = Path("final-v5-august-audit.json")
 MODEL = "v5.0.0-nonlinear-course-policy"
 START = "2026-08-01"
 END = "2026-08-02"
+TOKEN = os.environ.get("CLOUDFLARE_API_TOKEN")
+ACCOUNT = os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+DATABASE = os.environ.get("CLOUDFLARE_D1_DATABASE_ID")
 
-spec = importlib.util.spec_from_file_location("final_v5_audit_sql", SOURCE)
-if spec is None or spec.loader is None:
-    raise RuntimeError("AUDIT_SQL_MODULE_LOAD_FAILED")
-module = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = module
-spec.loader.exec_module(module)
-sql = module.sql
+if not TOKEN or not ACCOUNT or not DATABASE:
+    raise RuntimeError("FINAL_V5_AUDIT_CLOUDFLARE_ENV_MISSING")
+
+ENDPOINT = f"https://api.cloudflare.com/client/v4/accounts/{ACCOUNT}/d1/database/{DATABASE}/query"
+
+
+def sql(query, params=None):
+    body = json.dumps({"sql": query, "params": params or []}).encode()
+    request = urllib.request.Request(
+        ENDPOINT,
+        data=body,
+        headers={"Authorization": f"Bearer {TOKEN}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=90) as response:
+        payload = json.loads(response.read().decode())
+    if not payload.get("success"):
+        raise RuntimeError(f"FINAL_V5_AUDIT_D1_ERROR:{payload.get('errors')}")
+    return payload.get("result", [{}])[0].get("results", [])
 
 
 def n(value):
@@ -28,19 +40,23 @@ def n(value):
 def main():
     summary = sql(
         """
-        SELECT
-          COUNT(DISTINCT p.id) predictions,
-          COUNT(DISTINCT p.race_id) predictionRaces,
-          COUNT(DISTINCT CASE WHEN b.id IS NOT NULL THEN b.race_id END) selectedRaces,
-          COUNT(DISTINCT pr.id) runnerRows,
-          COUNT(DISTINCT b.id) bets,
-          COALESCE(SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END),0) settledBets,
-          COALESCE(SUM(CASE WHEN b.settlement_status<>'settled' THEN 1 ELSE 0 END),0) unsettledBets
-        FROM rt_predictions p
-        JOIN rt_races r ON r.race_id=p.race_id
-        LEFT JOIN rt_prediction_runners pr ON pr.prediction_id=p.id
-        LEFT JOIN rt_bets b ON b.prediction_id=p.id
-        WHERE p.model_version=? AND r.race_date BETWEEN ? AND ?
+        WITH target_predictions AS (
+          SELECT p.id,p.race_id
+          FROM rt_predictions p
+          JOIN rt_races r ON r.race_id=p.race_id
+          WHERE p.model_version=? AND r.race_date BETWEEN ? AND ?
+        ), prediction_summary AS (
+          SELECT COUNT(*) predictions,COUNT(DISTINCT race_id) predictionRaces FROM target_predictions
+        ), runner_summary AS (
+          SELECT COUNT(*) runnerRows FROM rt_prediction_runners pr
+          JOIN target_predictions p ON p.id=pr.prediction_id
+        ), bet_summary AS (
+          SELECT COUNT(*) bets,COUNT(DISTINCT race_id) selectedRaces,
+            COALESCE(SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END),0) settledBets,
+            COALESCE(SUM(CASE WHEN settlement_status<>'settled' THEN 1 ELSE 0 END),0) unsettledBets
+          FROM rt_bets b JOIN target_predictions p ON p.id=b.prediction_id
+        )
+        SELECT * FROM prediction_summary,runner_summary,bet_summary
         """,
         [MODEL, START, END],
     )[0]
@@ -68,7 +84,7 @@ def main():
     dates = {}
     aggregate = {}
     for row in rows:
-        date = row["raceDate"]
+        race_date = row["raceDate"]
         course = row["course"]
         stake = n(row["stakeYen"])
         returned = n(row["returnYen"])
@@ -84,11 +100,11 @@ def main():
             "hitRatePct": round(n(row["hitRaces"]) / races * 100, 4) if races else None,
             "unsettledTickets": n(row["unsettledTickets"]),
         }
-        dates.setdefault(date, {})[course] = item
+        dates.setdefault(race_date, {})[course] = item
         agg = aggregate.setdefault(course, {"races": 0, "tickets": 0, "stakeYen": 0, "returnYen": 0, "hitRaces": 0, "unsettledTickets": 0})
         for key in ("races", "tickets", "stakeYen", "returnYen", "hitRaces", "unsettledTickets"):
             agg[key] += item[key]
-    for course, row in aggregate.items():
+    for row in aggregate.values():
         row["profitYen"] = row["returnYen"] - row["stakeYen"]
         row["roiPct"] = round(row["returnYen"] / row["stakeYen"] * 100, 4) if row["stakeYen"] else None
         row["hitRatePct"] = round(row["hitRaces"] / row["races"] * 100, 4) if row["races"] else None
