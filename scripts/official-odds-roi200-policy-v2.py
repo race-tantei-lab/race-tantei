@@ -21,7 +21,8 @@ MODEL_VERSION = "v14.1-official-odds-constrained-roi200"
 def selected_race_ids(races):
     grouped = defaultdict(list)
     for race in races:
-        grouped[(race["raceDate"], race["venue"])].append(race)
+        if race.get("officialOdds"):
+            grouped[(race["raceDate"], race["venue"])].append(race)
 
     selected = set()
     incomplete_groups = []
