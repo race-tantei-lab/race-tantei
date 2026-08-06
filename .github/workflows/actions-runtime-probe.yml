@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - ".github/workflows/actions-runtime-probe.yml"
+  pull_request:
+    paths:
+      - "actions-probe-trigger.txt"
   workflow_dispatch:
 
 permissions:
@@ -17,7 +20,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+      - name: Confirm runner execution
+        if: github.event_name == 'pull_request'
+        run: echo "github actions pull request execution confirmed"
       - name: Write execution marker
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           mkdir -p analysis-results
