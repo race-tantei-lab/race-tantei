@@ -1,11 +1,12 @@
-name: V13 constrained ROI 200 search
-run-name: V13 constrained ROI 200 search · ${{ github.sha }}
+name: V14 historical payout ROI 200 search
+run-name: V14 historical payout ROI 200 search · ${{ github.sha }}
 
 on:
   push:
     branches: [main]
     paths:
       - "scripts/analyze-v13-constrained-roi-200-search.py"
+      - "scripts/analyze-v14-historical-roi200.py"
       - "scripts/run-final-course-production.py"
       - "config/race-tantei-fixed-constraints.json"
       - ".github/workflows/v13-constrained-roi-200-search.yml"
@@ -16,13 +17,13 @@ permissions:
   statuses: write
 
 concurrency:
-  group: v13-constrained-roi-200-search
+  group: v14-historical-payout-roi200
   cancel-in-progress: true
 
 jobs:
   search:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       GH_TOKEN: ${{ github.token }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -36,17 +37,15 @@ jobs:
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
-            -f context='analysis/v13-constrained-roi-200-search' \
-            -f description='探索中：全条件固定で3コース最低ROIを最大化' \
+            -f context='analysis/v14-historical-payout-roi200' \
+            -f description='探索中：過去払戻し学習で全3コース200%以上を直接最大化' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -56,51 +55,56 @@ jobs:
       - name: Verify immutable rules and source
         run: |
           python scripts/verify-race-tantei-fixed-constraints.py
-          python -m py_compile scripts/analyze-v13-constrained-roi-200-search.py scripts/run-final-course-production.py
+          python -m py_compile \
+            scripts/analyze-v13-constrained-roi-200-search.py \
+            scripts/analyze-v14-historical-roi200.py \
+            scripts/run-final-course-production.py
 
-      - name: Run constrained ROI 200 search
+      - name: Train historical payout-value model and generate upcoming predictions
         shell: bash
         run: |
           set -o pipefail
-          python scripts/analyze-v13-constrained-roi-200-search.py 2>&1 | tee v13-constrained-roi-200-search.log
+          python scripts/analyze-v13-constrained-roi-200-search.py 2>&1 | tee v14-historical-roi200-search.log
 
-      - name: Stage analysis result
+      - name: Stage analysis and upcoming predictions
         if: success()
         shell: bash
         run: |
-          mkdir -p analysis-results candidate-policies
+          mkdir -p analysis-results
           cp v13-constrained-roi-200-search.json analysis-results/v13-constrained-roi-200-search.json
-          git add -f analysis-results/v13-constrained-roi-200-search.json
-          if [[ -f candidate-policies/v13-constrained-roi-200.py ]]; then
-            python -m py_compile candidate-policies/v13-constrained-roi-200.py
-            git add candidate-policies/v13-constrained-roi-200.py
-          fi
+          cp v14-historical-roi200-search.json analysis-results/v14-historical-roi200-search.json
+          cp v14-upcoming-predictions.json analysis-results/v14-upcoming-predictions.json
+          git add -f \
+            analysis-results/v13-constrained-roi-200-search.json \
+            analysis-results/v14-historical-roi200-search.json \
+            analysis-results/v14-upcoming-predictions.json
 
-      - name: Promote only when every gate passed
+      - name: Promote only when every historical gate passed
         if: success()
         shell: bash
         run: |
           set -o pipefail
-          python scripts/find-and-promote-production-candidate.py | tee v13-production-promotion.log
+          python scripts/find-and-promote-production-candidate.py | tee v14-production-promotion.log
           if [[ -f config/approved-production-model.json ]]; then
             python scripts/verify-approved-production-model.py
             git add scripts/final-course-policy.py config/approved-production-model.json
           fi
 
-      - name: Upload reports
+      - name: Upload complete result
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v13-constrained-roi-200-search
+          name: v14-historical-payout-roi200
           path: |
             v13-constrained-roi-200-search.json
-            v13-constrained-roi-200-search.log
-            v13-production-promotion.log
-            candidate-policies/v13-constrained-roi-200.py
+            v14-historical-roi200-search.json
+            v14-upcoming-predictions.json
+            v14-historical-roi200-search.log
+            v14-production-promotion.log
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Save result and approved model
+      - name: Save result
         if: success()
         shell: bash
         run: |
@@ -109,7 +113,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to save."
           else
-            git commit -m "Save v13 constrained ROI 200 search"
+            git commit -m "Save v14 historical payout ROI 200 result"
             git pull --rebase origin main
             git push origin HEAD:main
           fi
@@ -120,16 +124,16 @@ jobs:
         run: |
           if [ "${{ job.status }}" != "success" ]; then
             STATE=failure
-            DESCRIPTION='失敗：v13制約付き探索ログを確認'
+            DESCRIPTION='失敗：v14過去払戻しモデルのログを確認'
           elif [[ -f config/approved-production-model.json ]]; then
             STATE=success
-            DESCRIPTION='合格：全条件を満たす200%以上モデルを本番昇格'
+            DESCRIPTION='合格：過去検証200%以上のモデルを本番昇格'
           else
             STATE=success
-            DESCRIPTION='探索完了：合格前のため本番変更なし'
+            DESCRIPTION='探索完了：予想生成済み・200%合格前は本番変更なし'
           fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state="$STATE" \
-            -f context='analysis/v13-constrained-roi-200-search' \
+            -f context='analysis/v14-historical-payout-roi200' \
             -f description="$DESCRIPTION" \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
