@@ -1,16 +1,31 @@
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_PATH = ROOT / "scripts" / "publish-nonlinear-v4-production.py"
 POLICY_PATH = ROOT / "scripts" / "final-course-policy.py"
+APPROVAL_PATH = ROOT / "config" / "approved-production-model.json"
+APPROVAL_VERIFIER = ROOT / "scripts" / "verify-approved-production-model.py"
 
 PRODUCTION_COURSE_TARGET_STAKES = {
     "ライト": 2000,
     "スタンダード": 5000,
     "プレミアム": 10000,
 }
+
+
+def require_approved_model():
+    if not APPROVAL_PATH.exists():
+        raise RuntimeError(
+            "PRODUCTION_MODEL_LOCKED:NO_MODEL_PASSED_ALL_ROI_200_AND_FIXED_CONSTRAINT_GATES"
+        )
+    subprocess.run(
+        [sys.executable, str(APPROVAL_VERIFIER)],
+        cwd=ROOT,
+        check=True,
+    )
 
 
 def load_policy():
@@ -101,6 +116,7 @@ def configure_namespace(namespace, policy):
 
 
 def main():
+    require_approved_model()
     policy = load_policy()
     namespace = configure_namespace(load_production_namespace(), policy)
     namespace["main"]()
