@@ -100,16 +100,25 @@ function extractCnames(html: string, marker: RegExp): string[] {
     .filter((value) => marker.test(value));
 }
 
+function desktopResultCname(value: string): string {
+  const normalized = value.trim().replace(/^sw01sde/i, "pw01sde");
+  if (!/^pw01sde/i.test(normalized)) throw new Error(`INVALID_RESULT_CNAME:${value}`);
+  return normalized;
+}
+
 export function parseArchiveMeetingCnames(html: string): string[] {
   return extractCnames(html, /^(?:pw|sw)01srl/i);
 }
 
 export function parseArchiveResultCnames(html: string): string[] {
-  return extractCnames(html, /^(?:pw|sw)01sde/i);
+  return unique(
+    extractCnames(html, /^(?:pw|sw)01sde/i)
+      .map(desktopResultCname)
+  );
 }
 
 export function archiveResultUrl(cname: string): string {
-  return `${ARCHIVE_ENDPOINT}?CNAME=${encodeURIComponent(cname)}`;
+  return `${ARCHIVE_ENDPOINT}?CNAME=${encodeURIComponent(desktopResultCname(cname))}`;
 }
 
 export async function getArchiveMonthChecksum(
