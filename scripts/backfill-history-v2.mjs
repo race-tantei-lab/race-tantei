@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
@@ -5,22 +6,73 @@ import {
   pageLooksLikeResult,
   parseResultPage
 } from "../dist-test/src/v1/jra.js";
-import { getArchiveResultUrls } from "../dist-test/src/v1/three-month-archive.js";
 import {
   parseDesktopPayouts,
   parseDesktopResultRunners
 } from "../dist-test/src/v1/three-month-desktop.js";
 import {
-  WALK_FORWARD_ARCHIVE_MONTHS,
   WALK_FORWARD_SCOPE_VERSION,
   isWalkForwardArchiveDate
 } from "../dist-test/src/v1/walk-forward-scope.js";
 
 const OUTPUT_DIR = path.resolve("tmp/history-backfill");
 const RAW_DIR = path.join(OUTPUT_DIR, "raw");
-const FETCH_CONCURRENCY = Math.max(4, Number(process.env.BACKFILL_CONCURRENCY ?? 24));
+const FETCH_CONCURRENCY = Math.min(2, Math.max(1, Number(process.env.BACKFILL_CONCURRENCY ?? 2)));
 const RACES_PER_SQL_FILE = Math.max(10, Number(process.env.BACKFILL_RACES_PER_FILE ?? 40));
-const MAX_ATTEMPTS = 4;
+const MAX_ATTEMPTS = 5;
+const MIN_REQUEST_INTERVAL_MS = 1_250;
+const MAX_TARGET_RACES = 1_500;
+
+const INVALID_TARGET_SQL = `
+WITH per_race AS (
+  SELECT r.race_id,
+    SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS active_runners,
+    SUM(CASE WHEN rr.runner_status='active'
+      AND rr.win_odds IS NOT NULL
+      AND rr.win_odds>1
+      AND rr.popularity BETWEEN 1 AND 18 THEN 1 ELSE 0 END) AS valid_market_runners,
+    COUNT(DISTINCT CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS distinct_popularity,
+    MIN(CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS min_popularity,
+    MAX(CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS max_popularity
+  FROM rt_races r
+  JOIN rt_runners rr ON rr.race_id=r.race_id
+  WHERE r.status='finished'
+    AND r.race_date BETWEEN '2024-05-01' AND '2026-08-02'
+  GROUP BY r.race_id
+)
+SELECT r.race_id, r.race_date, r.result_url
+FROM per_race p
+JOIN rt_races r ON r.race_id=p.race_id
+WHERE p.active_runners>=2
+  AND (
+    p.valid_market_runners<>p.active_runners OR
+    p.distinct_popularity<>p.active_runners OR
+    p.min_popularity<>1 OR
+    p.max_popularity<>p.active_runners
+  )
+  AND r.result_url IS NOT NULL
+  AND r.result_url<>''
+ORDER BY r.race_date, r.venue, r.race_no;
+`;
+
+let nextRequestAt = 0;
+let blockedUntil = 0;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForRequestSlot() {
+  const now = Date.now();
+  const scheduled = Math.max(now, nextRequestAt, blockedUntil);
+  nextRequestAt = scheduled + MIN_REQUEST_INTERVAL_MS;
+  if (scheduled > now) await sleep(scheduled - now);
+}
+
+function noteRemoteBlock(attempt) {
+  const cooldown = Math.min(120_000, 15_000 * (2 ** Math.max(0, attempt - 1)));
+  blockedUntil = Math.max(blockedUntil, Date.now() + cooldown);
+}
 
 function sql(value) {
   if (value === null || value === undefined) return "NULL";
@@ -33,18 +85,64 @@ function cname(url) {
   catch { return ""; }
 }
 
-function archiveRaceDate(url) {
-  const match = cname(url).match(/(20\d{6})\/[0-9A-F]{2}$/i);
-  if (!match?.[1]) return null;
-  const raw = match[1];
-  return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+function canonicalResultUrl(rawUrl) {
+  const url = new URL(rawUrl);
+  const currentCname = decodeURIComponent(url.searchParams.get("CNAME") ?? "");
+  if (!currentCname) throw new Error(`RESULT_CNAME_MISSING:${rawUrl}`);
+  const desktopCname = currentCname.replace(/^sw01sde/i, "pw01sde");
+  if (!/^pw01sde/i.test(desktopCname)) throw new Error(`RESULT_CNAME_INVALID:${currentCname}`);
+  url.protocol = "https:";
+  url.hostname = "www.jra.go.jp";
+  url.pathname = "/JRADB/accessS.html";
+  url.search = "";
+  url.searchParams.set("CNAME", desktopCname);
+  return url.toString();
 }
 
 function sortedUniqueUrls(values) {
-  return [...new Set(values.filter(Boolean))].sort((a, b) => {
-    const dateOrder = (archiveRaceDate(a) ?? "").localeCompare(archiveRaceDate(b) ?? "");
-    return dateOrder !== 0 ? dateOrder : cname(a).localeCompare(cname(b));
-  });
+  return [...new Set(values.filter(Boolean).map(canonicalResultUrl))]
+    .sort((a, b) => cname(a).localeCompare(cname(b)));
+}
+
+function collectResultRows(value, rows = []) {
+  if (Array.isArray(value)) {
+    for (const item of value) collectResultRows(item, rows);
+    return rows;
+  }
+  if (!value || typeof value !== "object") return rows;
+  if (typeof value.result_url === "string") rows.push(value);
+  for (const nested of Object.values(value)) collectResultRows(nested, rows);
+  return rows;
+}
+
+function loadInvalidTargetUrls() {
+  const stdout = execFileSync(
+    "npx",
+    [
+      "wrangler",
+      "d1",
+      "execute",
+      "race-tantei-phase0",
+      "--remote",
+      "--command",
+      INVALID_TARGET_SQL,
+      "--json",
+      "--config",
+      "wrangler.jsonc"
+    ],
+    {
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+      env: process.env
+    }
+  );
+  const payload = JSON.parse(stdout);
+  const rows = collectResultRows(payload);
+  const urls = sortedUniqueUrls(rows.map((row) => row.result_url));
+  if (urls.length > MAX_TARGET_RACES) {
+    throw new Error(`REPAIR_TARGET_COUNT_TOO_LARGE:${urls.length}`);
+  }
+  return urls;
 }
 
 function validateRunnerMarket(runners) {
@@ -122,43 +220,79 @@ async function fetchBundle(url) {
   let lastError = "UNKNOWN_ERROR";
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
+      await waitForRequestSlot();
       const page = await fetchJraPage(url);
       if (!pageLooksLikeResult(page.html)) throw new Error("RESULT_SIGNATURE_MISSING");
       const parsed = parseResultPage(page.html, page.url);
-      if (!isWalkForwardArchiveDate(parsed.race.raceDate)) throw new Error(`OUT_OF_SCOPE:${parsed.race.raceDate}`);
+      if (!isWalkForwardArchiveDate(parsed.race.raceDate)) {
+        throw new Error(`OUT_OF_SCOPE:${parsed.race.raceDate}`);
+      }
       const runners = parseDesktopResultRunners(page.html);
       const market = validateRunnerMarket(runners);
       if (!market.complete) {
         throw new Error(`RUNNER_MARKET_INVALID:${JSON.stringify(market)}`);
       }
       const payouts = parsed.payouts.length > 0 ? parsed.payouts : parseDesktopPayouts(page.html);
-      if (parsed.race.status !== "cancelled" && payouts.length === 0) throw new Error("PAYOUTS_NOT_FOUND");
+      if (parsed.race.status !== "cancelled" && payouts.length === 0) {
+        throw new Error("PAYOUTS_NOT_FOUND");
+      }
       return { bundle: { ...parsed, runners, payouts }, error: null };
     } catch (error) {
       lastError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-      if (attempt < MAX_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+      if (/HTTP_(403|429|503)|BLOCKED_PAGE/.test(lastError)) noteRemoteBlock(attempt);
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(Math.min(30_000, 2_000 * (2 ** (attempt - 1))));
+      }
     }
   }
   return { bundle: null, error: lastError };
+}
+
+async function writeSummary(values) {
+  await writeFile(
+    path.join(OUTPUT_DIR, "summary.json"),
+    JSON.stringify(values, null, 2)
+  );
 }
 
 async function main() {
   await rm(OUTPUT_DIR, { recursive: true, force: true });
   await mkdir(RAW_DIR, { recursive: true });
 
-  const monthLists = await Promise.all(WALK_FORWARD_ARCHIVE_MONTHS.map(async (month) => {
-    const discovered = await getArchiveResultUrls(month);
-    return discovered.filter((url) => {
-      const date = archiveRaceDate(url);
-      return date !== null && isWalkForwardArchiveDate(date);
+  const urls = loadInvalidTargetUrls();
+  console.log(`repair targets from D1 audit: ${urls.length}`);
+
+  if (urls.length === 0) {
+    await writeFile(path.join(OUTPUT_DIR, "backfill-0000.sql"), "SELECT 1;\n");
+    await writeFile(
+      path.join(OUTPUT_DIR, "zzzz-state.sql"),
+      `INSERT INTO rt_system_state(state_key,state_value,updated_at)
+VALUES (
+  ${sql(`walk_forward_history:${WALK_FORWARD_SCOPE_VERSION}:last_market_repair`)},
+  ${sql(JSON.stringify({ repairedRaces: 0, completedAt: new Date().toISOString() }))},
+  CURRENT_TIMESTAMP
+)
+ON CONFLICT(state_key) DO UPDATE SET
+  state_value=excluded.state_value,
+  updated_at=CURRENT_TIMESTAMP;\n`
+    );
+    await writeSummary({
+      scopeVersion: WALK_FORWARD_SCOPE_VERSION,
+      targets: 0,
+      completed: 0,
+      failures: 0,
+      concurrency: FETCH_CONCURRENCY,
+      sqlFiles: 1,
+      targetedRepair: true
     });
-  }));
-  const urls = sortedUniqueUrls(monthLists.flat());
-  console.log(`discovered ${urls.length} desktop result pages across ${WALK_FORWARD_ARCHIVE_MONTHS.length} months`);
+    console.log("no invalid races remain");
+    return;
+  }
 
   let cursor = 0;
   let completed = 0;
   const failures = [];
+  const startedAt = Date.now();
 
   async function worker() {
     while (true) {
@@ -172,13 +306,28 @@ async function main() {
       } else {
         failures.push({ url, attempts: MAX_ATTEMPTS, error: result.error });
       }
-      if ((index + 1) % 100 === 0 || index + 1 === urls.length) {
-        console.log(`${index + 1}/${urls.length}; success=${completed}; failed=${failures.length}`);
+      if ((index + 1) % 25 === 0 || index + 1 === urls.length) {
+        const elapsedMinutes = Math.round((Date.now() - startedAt) / 6000) / 10;
+        console.log(`${index + 1}/${urls.length}; success=${completed}; failed=${failures.length}; elapsed=${elapsedMinutes}m`);
       }
     }
   }
 
   await Promise.all(Array.from({ length: FETCH_CONCURRENCY }, () => worker()));
+
+  if (failures.length > 0) {
+    await writeFile(path.join(OUTPUT_DIR, "failures.json"), JSON.stringify(failures, null, 2));
+    await writeSummary({
+      scopeVersion: WALK_FORWARD_SCOPE_VERSION,
+      targets: urls.length,
+      completed,
+      failures: failures.length,
+      concurrency: FETCH_CONCURRENCY,
+      sqlFiles: 0,
+      targetedRepair: true
+    });
+    throw new Error(`TARGETED_REPAIR_FETCH_FAILED:${failures.length}/${urls.length}`);
+  }
 
   const rawFiles = (await readdir(RAW_DIR)).filter((name) => name.endsWith(".sql")).sort();
   let outputIndex = 0;
@@ -186,31 +335,35 @@ async function main() {
     const group = rawFiles.slice(offset, offset + RACES_PER_SQL_FILE);
     const bodies = await Promise.all(group.map((name) => readFile(path.join(RAW_DIR, name), "utf8")));
     const outputName = `backfill-${String(outputIndex).padStart(4, "0")}.sql`;
-    await writeFile(path.join(OUTPUT_DIR, outputName), `BEGIN TRANSACTION;\n${bodies.join("\n")}\nCOMMIT;\n`);
+    await writeFile(path.join(OUTPUT_DIR, outputName), `${bodies.join("\n")}\n`);
     outputIndex += 1;
   }
 
-  const prefix = `walk_forward_history:${WALK_FORWARD_SCOPE_VERSION}`;
-  const stateSql = `BEGIN TRANSACTION;
-INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES
-  (${sql(`${prefix}:month_index`)},${sql(String(WALK_FORWARD_ARCHIVE_MONTHS.length))},CURRENT_TIMESTAMP),
-  (${sql(`${prefix}:url_index`)},${sql(String(urls.length))},CURRENT_TIMESTAMP),
-  (${sql(`${prefix}:failures`)},${sql(JSON.stringify(failures))},CURRENT_TIMESTAMP)
-ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP;
-COMMIT;\n`;
+  const stateSql = `INSERT INTO rt_system_state(state_key,state_value,updated_at)
+VALUES (
+  ${sql(`walk_forward_history:${WALK_FORWARD_SCOPE_VERSION}:last_market_repair`)},
+  ${sql(JSON.stringify({
+    repairedRaces: completed,
+    completedAt: new Date().toISOString()
+  }))},
+  CURRENT_TIMESTAMP
+)
+ON CONFLICT(state_key) DO UPDATE SET
+  state_value=excluded.state_value,
+  updated_at=CURRENT_TIMESTAMP;\n`;
   await writeFile(path.join(OUTPUT_DIR, "zzzz-state.sql"), stateSql);
-  await writeFile(path.join(OUTPUT_DIR, "summary.json"), JSON.stringify({
+
+  await writeSummary({
     scopeVersion: WALK_FORWARD_SCOPE_VERSION,
-    urls: urls.length,
+    targets: urls.length,
     completed,
-    failures: failures.length,
+    failures: 0,
     concurrency: FETCH_CONCURRENCY,
     sqlFiles: outputIndex,
-    desktopOnly: true,
+    targetedRepair: true,
     completePopularityRequired: true
-  }, null, 2));
-  if (failures.length) await writeFile(path.join(OUTPUT_DIR, "failures.json"), JSON.stringify(failures, null, 2));
-  console.log(`finished: success=${completed}, failed=${failures.length}, sqlFiles=${outputIndex}`);
+  });
+  console.log(`finished targeted repair: success=${completed}, failed=0, sqlFiles=${outputIndex}`);
 }
 
 main().catch((error) => {
