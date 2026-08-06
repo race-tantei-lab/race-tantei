@@ -2,6 +2,10 @@ name: Audit official combination odds storage
 run-name: Audit official combination odds storage · ${{ github.sha }}
 
 on:
+  pull_request:
+    paths:
+      - "scripts/audit-official-combination-odds-storage.py"
+      - ".github/workflows/audit-official-combination-odds-storage.yml"
   push:
     branches: [main]
     paths:
@@ -59,7 +63,7 @@ jobs:
           retention-days: 30
 
       - name: Save audit
-        if: success()
+        if: success() && github.event_name == 'push'
         shell: bash
         run: |
           mkdir -p analysis-results
