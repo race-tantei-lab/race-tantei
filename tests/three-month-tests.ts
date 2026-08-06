@@ -1,4 +1,5 @@
 import { strict as assert } from "node:assert";
+import { parseDesktopResultRunners } from "../src/v1/three-month-desktop.js";
 import { summarizeThreeMonthPeriod } from "../src/v1/three-month-evaluation.js";
 import { parseHistoricalMeetings } from "../src/v1/three-month-history.js";
 import type { ThreeMonthValidationSnapshot } from "../src/v1/three-month-validation.js";
@@ -24,6 +25,34 @@ assert.equal(new Set(THREE_MONTH_VALIDATION_CONFIGS.map((row) => row.modelVersio
 assert.equal(isThreeMonthTuningDate("2026-07-26"), false);
 assert.equal(isThreeMonthTuningDate("2026-08-01"), true);
 assert.equal(isThreeMonthTuningDate("2026-08-02"), true);
+
+const parsedDesktopRunners = parseDesktopResultRunners(`
+  <table>
+    <tr>
+      <th>着順</th><th>枠</th><th>馬番</th><th>馬名</th><th>性齢</th><th>斤量</th><th>騎手</th>
+      <th>タイム</th><th>着差</th><th>単勝</th><th>人気</th><th>馬体重</th><th>調教師</th><th>指数</th>
+    </tr>
+    <tr>
+      <td>1</td><td>1</td><td>3</td><td>テストホースA</td><td>牡3</td><td>56.0</td><td>騎手A</td>
+      <td>1:34.5</td><td></td><td>2.4</td><td>1</td><td>480(+2)</td><td>調教師A</td><td>87</td>
+    </tr>
+    <tr>
+      <td>2</td><td>2</td><td>5</td><td>テストホースB</td><td>牝3</td><td>54.0</td><td>騎手B</td>
+      <td>1:34.7</td><td>1</td><td>4.8</td><td>2</td><td>458(-4)</td><td>調教師B</td><td>93</td>
+    </tr>
+  </table>
+`);
+
+assert.equal(parsedDesktopRunners.length, 2);
+assert.deepEqual(parsedDesktopRunners.map((runner) => runner.popularity), [1, 2]);
+assert.ok(
+  parsedDesktopRunners.every((runner) => runner.popularity !== 87 && runner.popularity !== 93),
+  "a trailing numeric result column must not be stored as popularity"
+);
+assert.ok(
+  parsedDesktopRunners.every((runner) => runner.winOdds !== null && runner.winOdds > 1),
+  "valid popularity ranks should generate proxy odds"
+);
 
 const meetings = parseHistoricalMeetings(`
   <main>
