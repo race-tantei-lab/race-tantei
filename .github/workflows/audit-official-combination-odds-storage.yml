@@ -1,0 +1,93 @@
+name: Audit official combination odds storage
+run-name: Audit official combination odds storage · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/audit-official-combination-odds-storage.py"
+      - ".github/workflows/audit-official-combination-odds-storage.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish audit start
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='data/official-combination-odds-audit' \
+            -f description='監査中：券種別公式オッズの保存状況' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify and run audit
+        shell: bash
+        run: |
+          python -m py_compile scripts/audit-official-combination-odds-storage.py
+          python scripts/audit-official-combination-odds-storage.py | tee official-combination-odds-storage-audit.log
+
+      - name: Upload audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-combination-odds-storage-audit
+          path: |
+            official-combination-odds-storage-audit.json
+            official-combination-odds-storage-audit.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Save audit
+        if: success()
+        shell: bash
+        run: |
+          mkdir -p analysis-results
+          cp official-combination-odds-storage-audit.json analysis-results/official-combination-odds-storage-audit.json
+          git add -f analysis-results/official-combination-odds-storage-audit.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then
+            echo "No audit changes."
+          else
+            git commit -m "Save official combination odds storage audit"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Publish final status
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            STATE=success
+            DESCRIPTION='完了：券種別公式オッズ保存監査'
+          else
+            STATE=failure
+            DESCRIPTION='失敗：公式オッズ保存監査ログを確認'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$STATE" \
+            -f context='data/official-combination-odds-audit' \
+            -f description="$DESCRIPTION" \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
