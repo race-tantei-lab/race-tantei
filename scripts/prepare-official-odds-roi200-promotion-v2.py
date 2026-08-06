@@ -7,6 +7,7 @@ SOURCE = ROOT / "official-odds-roi200-forward-search.json"
 OUTPUT = ROOT / "official-odds-roi200-promotion-candidate.json"
 POLICY = ROOT / "scripts" / "official-odds-roi200-policy-v2.py"
 MODEL_VERSION = "v14.1-official-odds-constrained-roi200"
+MINIMUM_FINAL_HOLDOUT_RACES_PER_COURSE = 100
 
 TEMPLATES = {
     "ライト": [
@@ -38,13 +39,17 @@ TEMPLATES = {
 }
 
 
+def reject(reason):
+    OUTPUT.unlink(missing_ok=True)
+    print(json.dumps({"promotionCandidateCreated": False, "reason": reason}, ensure_ascii=False))
+
+
 def main():
     if not SOURCE.exists():
         raise SystemExit("OFFICIAL_ODDS_FORWARD_REPORT_MISSING")
     source = json.loads(SOURCE.read_text(encoding="utf-8"))
     if source.get("promotionEligible") is not True:
-        OUTPUT.unlink(missing_ok=True)
-        print(json.dumps({"promotionCandidateCreated": False, "status": source.get("status")}, ensure_ascii=False))
+        reject(source.get("status") or "NOT_PROMOTION_ELIGIBLE")
         return
 
     holdout = source.get("finalHoldout") or {}
@@ -52,17 +57,25 @@ def main():
     coverage = holdout.get("coverage") or []
     minimum_coverage = min((int(row.get("selected") or 0) for row in coverage), default=0)
     if minimum_coverage < 5:
-        raise SystemExit(f"OFFICIAL_ODDS_PROMOTION_COVERAGE_BELOW_FIVE:{minimum_coverage}")
+        reject(f"COVERAGE_BELOW_FIVE:{minimum_coverage}")
+        return
 
     courses = {}
     for course, template in TEMPLATES.items():
         result = holdout_courses.get(course)
         if not isinstance(result, dict):
-            raise SystemExit(f"OFFICIAL_ODDS_PROMOTION_COURSE_MISSING:{course}")
+            reject(f"COURSE_MISSING:{course}")
+            return
+        races = int(result.get("races") or 0)
+        if races < MINIMUM_FINAL_HOLDOUT_RACES_PER_COURSE:
+            reject(f"FINAL_HOLDOUT_RACES_TOO_FEW:{course}:{races}")
+            return
         if float(result.get("roiPct") or 0) < 200.0:
-            raise SystemExit(f"OFFICIAL_ODDS_PROMOTION_ROI_BELOW_200:{course}:{result.get('roiPct')}")
+            reject(f"ROI_BELOW_200:{course}:{result.get('roiPct')}")
+            return
         if float(result.get("roiWithoutTop1Pct") or 0) < 100.0:
-            raise SystemExit(f"OFFICIAL_ODDS_PROMOTION_TOP1_DEPENDENCE:{course}")
+            reject(f"TOP1_DEPENDENCE:{course}")
+            return
         courses[course] = {
             "finalHoldout": result,
             "coverage": {"minimumSelectedRaces": minimum_coverage},
