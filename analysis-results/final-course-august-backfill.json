@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-08-06T08:10:18Z",
+  "generatedAt": "2026-08-06T13:09:12Z",
   "modelVersion": "v5.0.0-nonlinear-course-policy",
   "sourcePredictionModel": "v4.1.0-nonlinear-hgb-5r",
   "mode": "bulk-saved-ranking-final-course-policy",
   "courseTargetStakes": {
-    "ライト": 1600,
-    "スタンダード": 4200,
-    "プレミアム": 8800
+    "ライト": 2000,
+    "スタンダード": 5000,
+    "プレミアム": 10000
   },
   "sourceRaces": 72,
   "selectedRaces": 30,
@@ -14,108 +14,74 @@
   "dates": {
     "2026-08-01": {
       "スタンダード": {
-        "races": 15,
-        "tickets": 225,
-        "stakeYen": 63000,
-        "returnYen": 25490,
-        "profitYen": -37510,
-        "roiPct": 40.4603,
+        "races": 11,
+        "tickets": 165,
+        "stakeYen": 55000,
+        "returnYen": 27640,
+        "profitYen": -27360,
+        "roiPct": 50.2545,
         "hitRaces": 4,
-        "hitRatePct": 26.6667,
-        "targetStakePerRace": 4200
+        "hitRatePct": 36.3636,
+        "targetStakePerRace": 5000
       },
       "プレミアム": {
-        "races": 15,
-        "tickets": 240,
-        "stakeYen": 132000,
-        "returnYen": 21490,
-        "profitYen": -110510,
-        "roiPct": 16.2803,
-        "hitRaces": 10,
-        "hitRatePct": 66.6667,
-        "targetStakePerRace": 8800
+        "races": 11,
+        "tickets": 176,
+        "stakeYen": 110000,
+        "returnYen": 17410,
+        "profitYen": -92590,
+        "roiPct": 15.8273,
+        "hitRaces": 7,
+        "hitRatePct": 63.6364,
+        "targetStakePerRace": 10000
       },
       "ライト": {
-        "races": 15,
-        "tickets": 90,
-        "stakeYen": 24000,
-        "returnYen": 16430,
-        "profitYen": -7570,
-        "roiPct": 68.4583,
-        "hitRaces": 9,
-        "hitRatePct": 60.0,
-        "targetStakePerRace": 1600
+        "races": 11,
+        "tickets": 66,
+        "stakeYen": 22000,
+        "returnYen": 11860,
+        "profitYen": -10140,
+        "roiPct": 53.9091,
+        "hitRaces": 6,
+        "hitRatePct": 54.5455,
+        "targetStakePerRace": 2000
       }
     },
-    "2026-08-02": {
-      "スタンダード": {
-        "races": 15,
-        "tickets": 225,
-        "stakeYen": 63000,
-        "returnYen": 9370,
-        "profitYen": -53630,
-        "roiPct": 14.873,
-        "hitRaces": 6,
-        "hitRatePct": 40.0,
-        "targetStakePerRace": 4200
-      },
-      "プレミアム": {
-        "races": 15,
-        "tickets": 240,
-        "stakeYen": 132000,
-        "returnYen": 16240,
-        "profitYen": -115760,
-        "roiPct": 12.303,
-        "hitRaces": 9,
-        "hitRatePct": 60.0,
-        "targetStakePerRace": 8800
-      },
-      "ライト": {
-        "races": 15,
-        "tickets": 90,
-        "stakeYen": 24000,
-        "returnYen": 10960,
-        "profitYen": -13040,
-        "roiPct": 45.6667,
-        "hitRaces": 8,
-        "hitRatePct": 53.3333,
-        "targetStakePerRace": 1600
-      }
-    }
+    "2026-08-02": {}
   },
   "aggregate": {
     "スタンダード": {
-      "races": 30,
-      "tickets": 450,
-      "stakeYen": 126000,
-      "returnYen": 34860,
-      "profitYen": -91140,
-      "roiPct": 27.6667,
-      "hitRaces": 10,
-      "hitRatePct": 33.3333,
-      "targetStakePerRace": 4200
+      "races": 11,
+      "tickets": 165,
+      "stakeYen": 55000,
+      "returnYen": 27640,
+      "profitYen": -27360,
+      "roiPct": 50.2545,
+      "hitRaces": 4,
+      "hitRatePct": 36.3636,
+      "targetStakePerRace": 5000
     },
     "プレミアム": {
-      "races": 30,
-      "tickets": 480,
-      "stakeYen": 264000,
-      "returnYen": 37730,
-      "profitYen": -226270,
-      "roiPct": 14.2917,
-      "hitRaces": 19,
-      "hitRatePct": 63.3333,
-      "targetStakePerRace": 8800
+      "races": 11,
+      "tickets": 176,
+      "stakeYen": 110000,
+      "returnYen": 17410,
+      "profitYen": -92590,
+      "roiPct": 15.8273,
+      "hitRaces": 7,
+      "hitRatePct": 63.6364,
+      "targetStakePerRace": 10000
     },
     "ライト": {
-      "races": 30,
-      "tickets": 180,
-      "stakeYen": 48000,
-      "returnYen": 27390,
-      "profitYen": -20610,
-      "roiPct": 57.0625,
-      "hitRaces": 17,
-      "hitRatePct": 56.6667,
-      "targetStakePerRace": 1600
+      "races": 11,
+      "tickets": 66,
+      "stakeYen": 22000,
+      "returnYen": 11860,
+      "profitYen": -10140,
+      "roiPct": 53.9091,
+      "hitRaces": 6,
+      "hitRatePct": 54.5455,
+      "targetStakePerRace": 2000
     }
   }
 }
