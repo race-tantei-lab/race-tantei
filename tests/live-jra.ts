@@ -30,7 +30,7 @@ async function findAvailableEntry(urls: string[]): Promise<{
       const entry = parseEntryPage(page.html, page.url);
       if (entry.runners.length >= 5) return { page, entry, url };
     } catch {
-      // Finished or not-yet-published races are normal for live discovery.
+      // Finished, not-yet-published, or temporarily absent pages are normal.
     }
   }
   return null;
@@ -38,11 +38,9 @@ async function findAvailableEntry(urls: string[]): Promise<{
 
 const expiredFixtureUrl = "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030520260801%2F15";
 const allDiscovered = await discoverRaceUrls("https://sp.jra.jp/", [expiredFixtureUrl]);
-assert.ok(allDiscovered.length >= 1, "official race URL discovery returned no candidates");
-
-const liveEntry = await findAvailableEntry(
-  allDiscovered.filter((url) => url !== expiredFixtureUrl)
-);
+const liveEntry = allDiscovered.length > 0
+  ? await findAvailableEntry(allDiscovered.filter((url) => url !== expiredFixtureUrl))
+  : null;
 let liveSummary: Record<string, unknown> = {
   available: false,
   discovered: allDiscovered.length
@@ -75,7 +73,9 @@ if (liveEntry) {
 } else {
   console.warn(JSON.stringify({
     stage: "current-entry-skip",
-    reason: "NO_CURRENT_ENTRY_PAGE_AVAILABLE",
+    reason: allDiscovered.length === 0
+      ? "NO_CURRENT_RACE_URLS_PUBLISHED"
+      : "NO_CURRENT_ENTRY_PAGE_AVAILABLE",
     discovered: allDiscovered.length,
     sample: allDiscovered.slice(0, 5)
   }));
