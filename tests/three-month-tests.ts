@@ -1,6 +1,11 @@
 import { strict as assert } from "node:assert";
 import { summarizeThreeMonthPeriod } from "../src/v1/three-month-evaluation.js";
 import {
+  archiveResultUrl,
+  parseArchiveResultCnames
+} from "../src/v1/three-month-archive.js";
+import { parseDesktopResultRunners } from "../src/v1/three-month-desktop.js";
+import {
   parseHistoricalMeetings,
   parseHistoricalResultRunners
 } from "../src/v1/three-month-history.js";
@@ -51,7 +56,21 @@ assert.deepEqual(
   ].sort((a, b) => a.venue.localeCompare(b.venue, "ja"))
 );
 
-const resultRunners = parseHistoricalResultRunners(`
+const canonicalCnames = parseArchiveResultCnames(`
+  <a href="/JRADB/accessS.html?CNAME=sw01sde0105202602050120260509/26">mobile duplicate</a>
+  <a href="/JRADB/accessS.html?CNAME=pw01sde0105202602050120260509/26">desktop</a>
+  <script>const next = "sw01sde0108202603050720260509/73";</script>
+`);
+assert.deepEqual(canonicalCnames, [
+  "pw01sde0105202602050120260509/26",
+  "pw01sde0108202603050720260509/73"
+]);
+assert.equal(
+  archiveResultUrl("sw01sde0105202602050120260509/26"),
+  "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0105202602050120260509%2F26"
+);
+
+const runnerTableHtml = `
   <table>
     <tr>
       <td>1</td><td>2</td><td>5</td><td>キタノスター</td><td>牝4</td><td>55.0</td>
@@ -69,7 +88,8 @@ const resultRunners = parseHistoricalResultRunners(`
       <td>502(0)</td><td>栗東 矢野 英一</td><td>3</td>
     </tr>
   </table>
-`);
+`;
+const resultRunners = parseHistoricalResultRunners(runnerTableHtml);
 
 assert.equal(resultRunners.length, 3);
 const favorite = resultRunners.find((row) => row.horseNo === 5);
@@ -93,7 +113,16 @@ assert.equal(thirdFavorite?.popularity, 3);
 assert.ok((favorite?.winOdds ?? 999) < (secondFavorite?.winOdds ?? 0));
 assert.ok((secondFavorite?.winOdds ?? 999) < (thirdFavorite?.winOdds ?? 0));
 
-const corruptPopularityRunners = parseHistoricalResultRunners(`
+const desktopRunners = parseDesktopResultRunners(runnerTableHtml);
+assert.equal(desktopRunners.length, 3);
+assert.equal(desktopRunners.find((row) => row.horseNo === 5)?.popularity, 1);
+assert.equal(desktopRunners.find((row) => row.horseNo === 2)?.popularity, 2);
+assert.ok(
+  (desktopRunners.find((row) => row.horseNo === 5)?.winOdds ?? 999)
+    < (desktopRunners.find((row) => row.horseNo === 2)?.winOdds ?? 0)
+);
+
+const corruptPopularityHtml = `
   <table>
     <tr>
       <td>1</td><td>1</td><td>1</td><td>ホースワン</td><td>牡3</td><td>57</td>
@@ -106,12 +135,20 @@ const corruptPopularityRunners = parseHistoricalResultRunners(`
       <td>470(+2)</td><td>栗東・調教師B</td><td>77</td>
     </tr>
   </table>
-`);
+`;
+const corruptPopularityRunners = parseHistoricalResultRunners(corruptPopularityHtml);
 assert.equal(corruptPopularityRunners.length, 2);
 assert.equal(corruptPopularityRunners[0]?.popularity, null);
 assert.equal(corruptPopularityRunners[1]?.popularity, null);
 assert.equal(corruptPopularityRunners[0]?.winOdds, null);
 assert.equal(corruptPopularityRunners[1]?.winOdds, null);
+
+const corruptDesktopRunners = parseDesktopResultRunners(corruptPopularityHtml);
+assert.equal(corruptDesktopRunners.length, 2);
+assert.equal(corruptDesktopRunners[0]?.popularity, null);
+assert.equal(corruptDesktopRunners[1]?.popularity, null);
+assert.equal(corruptDesktopRunners[0]?.winOdds, null);
+assert.equal(corruptDesktopRunners[1]?.winOdds, null);
 
 function courseSummary(
   course: BudgetCourse,
