@@ -1,8 +1,27 @@
 Traceback (most recent call last):
-  File "/home/runner/work/race-tantei/race-tantei/scripts/audit-final-v5-august.py", line 20, in <module>
-    spec.loader.exec_module(module)
-  File "<frozen importlib._bootstrap_external>", line 999, in exec_module
-  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
-  File "/home/runner/work/race-tantei/race-tantei/scripts/train-nonlinear-market-blend-v4.py", line 14, in <module>
-    import numpy as np
-ModuleNotFoundError: No module named 'numpy'
+  File "/home/runner/work/race-tantei/race-tantei/scripts/audit-final-v5-august.py", line 124, in <module>
+    main()
+  File "/home/runner/work/race-tantei/race-tantei/scripts/audit-final-v5-august.py", line 41, in main
+    summary = sql(
+              ^^^^
+  File "/home/runner/work/race-tantei/race-tantei/scripts/audit-final-v5-august.py", line 29, in sql
+    with urllib.request.urlopen(request, timeout=90) as response:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/urllib/request.py", line 215, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/urllib/request.py", line 521, in open
+    response = meth(req, response)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/urllib/request.py", line 630, in http_response
+    response = self.parent.error(
+               ^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/urllib/request.py", line 559, in error
+    return self._call_chain(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/urllib/request.py", line 492, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.13/x64/lib/python3.12/urllib/request.py", line 639, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 400: Bad Request
