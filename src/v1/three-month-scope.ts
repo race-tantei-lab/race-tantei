@@ -1,6 +1,6 @@
 import type { ValidationConfig } from "./validation.js";
 
-export const THREE_MONTH_SCOPE_VERSION = "three-month-2026-05-02-to-2026-08-02-v1";
+export const THREE_MONTH_SCOPE_VERSION = "three-month-2026-05-02-to-2026-08-02-v2-correct-popularity";
 export const THREE_MONTH_START_DATE = "2026-05-02";
 export const THREE_MONTH_EVALUATION_END_DATE = "2026-07-26";
 export const THREE_MONTH_TUNING_START_DATE = "2026-08-01";
