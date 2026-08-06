@@ -1,0 +1,2760 @@
+{
+  "generatedAt": "2026-08-06",
+  "modelVersion": "v11-shadow-portfolio-high-roi",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "actualJraPayoutsUsed": true,
+  "syntheticOddsUsed": false,
+  "sourceDataFrozen": true,
+  "guardrails": {
+    "portfolioChosenOnlyOnDevelopmentAAndB": true,
+    "finalHoldoutNotUsedForSelection": true,
+    "portfolioSizes": [
+      2,
+      3
+    ],
+    "candidatePool": 80,
+    "minimumTicketsPerDevelopmentHalf": 400,
+    "minimumHitsPerDevelopmentHalf": 8,
+    "fiveRacesPerVenueDay": true
+  },
+  "period": {
+    "dataStart": "2024-05-04",
+    "dataEnd": "2026-08-02",
+    "finishedRaces": 7695
+  },
+  "modelAudit": {
+    "2025-05": {
+      "trainRaces": 3310,
+      "targetRaces": 311
+    },
+    "2025-06": {
+      "trainRaces": 3621,
+      "targetRaces": 288
+    },
+    "2025-07": {
+      "trainRaces": 3909,
+      "targetRaces": 288
+    },
+    "2025-08": {
+      "trainRaces": 4197,
+      "targetRaces": 360
+    },
+    "2025-09": {
+      "trainRaces": 4557,
+      "targetRaces": 240
+    },
+    "2025-10": {
+      "trainRaces": 4797,
+      "targetRaces": 252
+    },
+    "2025-11": {
+      "trainRaces": 5049,
+      "targetRaces": 312
+    },
+    "2025-12": {
+      "trainRaces": 5361,
+      "targetRaces": 264
+    },
+    "2026-01": {
+      "trainRaces": 5625,
+      "targetRaces": 276
+    },
+    "2026-02": {
+      "trainRaces": 5901,
+      "targetRaces": 270
+    },
+    "2026-03": {
+      "trainRaces": 6171,
+      "targetRaces": 300
+    },
+    "2026-04": {
+      "trainRaces": 6471,
+      "targetRaces": 264
+    },
+    "2026-05": {
+      "trainRaces": 6735,
+      "targetRaces": 336
+    },
+    "2026-06": {
+      "trainRaces": 7071,
+      "targetRaces": 264
+    },
+    "2026-07": {
+      "trainRaces": 7335,
+      "targetRaces": 288
+    },
+    "2026-08": {
+      "trainRaces": 7623,
+      "targetRaces": 72
+    }
+  },
+  "candidateCount": 11578,
+  "portfolioCount": 83784,
+  "summary": {
+    "bestByPreHoldoutSelection": [
+      {
+        "score": 189.5205871913189,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=middle",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 592,
+          "hits": 12,
+          "stakeYen": 59200,
+          "returnYen": 138160,
+          "profitYen": 78960,
+          "roiPct": 233.37837837837836,
+          "hitRatePct": 2.027027027027027,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 252.62135922330094,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 180.23648648648648,
+          "roiWithoutTop3Pct": 110.64189189189189
+        },
+        "developmentB": {
+          "tickets": 533,
+          "hits": 15,
+          "stakeYen": 53300,
+          "returnYen": 120470,
+          "profitYen": 67170,
+          "roiPct": 226.02251407129455,
+          "hitRatePct": 2.8142589118198873,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 198.8372093023256,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.26944467502282726,
+          "roiWithoutTop1Pct": 165.1219512195122,
+          "roiWithoutTop3Pct": 107.27954971857412
+        },
+        "finalHoldout": {
+          "tickets": 356,
+          "hits": 8,
+          "stakeYen": 35600,
+          "returnYen": 27730,
+          "profitYen": -7870,
+          "roiPct": 77.8932584269663,
+          "hitRatePct": 2.247191011235955,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 77.98076923076923,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22574828705373243,
+          "roiWithoutTop1Pct": 60.30898876404495,
+          "roiWithoutTop3Pct": 30.421348314606746
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 117,
+            "returnYen": 19620,
+            "roiPct": 167.6923076923077,
+            "hitRatePct": 5.128205128205128
+          },
+          "2026-06": {
+            "tickets": 104,
+            "returnYen": 8110,
+            "roiPct": 77.98076923076923,
+            "hitRatePct": 1.9230769230769231
+          },
+          "2026-07": {
+            "tickets": 110,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 25,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 189.5205871913189,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=middle",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 592,
+          "hits": 12,
+          "stakeYen": 59200,
+          "returnYen": 138160,
+          "profitYen": 78960,
+          "roiPct": 233.37837837837836,
+          "hitRatePct": 2.027027027027027,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 252.62135922330094,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 180.23648648648648,
+          "roiWithoutTop3Pct": 110.64189189189189
+        },
+        "developmentB": {
+          "tickets": 533,
+          "hits": 15,
+          "stakeYen": 53300,
+          "returnYen": 120470,
+          "profitYen": 67170,
+          "roiPct": 226.02251407129455,
+          "hitRatePct": 2.8142589118198873,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 198.8372093023256,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.26944467502282726,
+          "roiWithoutTop1Pct": 165.1219512195122,
+          "roiWithoutTop3Pct": 107.27954971857412
+        },
+        "finalHoldout": {
+          "tickets": 348,
+          "hits": 8,
+          "stakeYen": 34800,
+          "returnYen": 27730,
+          "profitYen": -7070,
+          "roiPct": 79.68390804597702,
+          "hitRatePct": 2.2988505747126435,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 77.98076923076923,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22574828705373243,
+          "roiWithoutTop1Pct": 61.695402298850574,
+          "roiWithoutTop3Pct": 31.120689655172413
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 115,
+            "returnYen": 19620,
+            "roiPct": 170.6086956521739,
+            "hitRatePct": 5.217391304347826
+          },
+          "2026-06": {
+            "tickets": 104,
+            "returnYen": 8110,
+            "roiPct": 77.98076923076923,
+            "hitRatePct": 1.9230769230769231
+          },
+          "2026-07": {
+            "tickets": 110,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 19,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=middle",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 353,
+          "hits": 9,
+          "stakeYen": 35300,
+          "returnYen": 30940,
+          "profitYen": -4360,
+          "roiPct": 87.64872521246458,
+          "hitRatePct": 2.5495750708215295,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 110.98039215686275,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.20232708468002586,
+          "roiWithoutTop1Pct": 69.91501416430594,
+          "roiWithoutTop3Pct": 39.773371104815865
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 113,
+            "returnYen": 19620,
+            "roiPct": 173.6283185840708,
+            "hitRatePct": 5.3097345132743365
+          },
+          "2026-06": {
+            "tickets": 102,
+            "returnYen": 11320,
+            "roiPct": 110.98039215686275,
+            "hitRatePct": 2.941176470588235
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 32,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=middle",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 343,
+          "hits": 8,
+          "stakeYen": 34300,
+          "returnYen": 27730,
+          "profitYen": -6570,
+          "roiPct": 80.84548104956268,
+          "hitRatePct": 2.3323615160349855,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 80.2970297029703,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22574828705373243,
+          "roiWithoutTop1Pct": 62.59475218658892,
+          "roiWithoutTop3Pct": 31.574344023323615
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 113,
+            "returnYen": 19620,
+            "roiPct": 173.6283185840708,
+            "hitRatePct": 5.3097345132743365
+          },
+          "2026-06": {
+            "tickets": 101,
+            "returnYen": 8110,
+            "roiPct": 80.2970297029703,
+            "hitRatePct": 1.9801980198019802
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 23,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=middle",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 345,
+          "hits": 9,
+          "stakeYen": 34500,
+          "returnYen": 30940,
+          "profitYen": -3560,
+          "roiPct": 89.68115942028986,
+          "hitRatePct": 2.608695652173913,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 110.98039215686275,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.20232708468002586,
+          "roiWithoutTop1Pct": 71.53623188405797,
+          "roiWithoutTop3Pct": 40.69565217391305
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 111,
+            "returnYen": 19620,
+            "roiPct": 176.75675675675674,
+            "hitRatePct": 5.405405405405405
+          },
+          "2026-06": {
+            "tickets": 102,
+            "returnYen": 11320,
+            "roiPct": 110.98039215686275,
+            "hitRatePct": 2.941176470588235
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 26,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=middle",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 335,
+          "hits": 8,
+          "stakeYen": 33500,
+          "returnYen": 27730,
+          "profitYen": -5770,
+          "roiPct": 82.77611940298507,
+          "hitRatePct": 2.3880597014925375,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 80.2970297029703,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22574828705373243,
+          "roiWithoutTop1Pct": 64.08955223880596,
+          "roiWithoutTop3Pct": 32.32835820895522
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 111,
+            "returnYen": 19620,
+            "roiPct": 176.75675675675674,
+            "hitRatePct": 5.405405405405405
+          },
+          "2026-06": {
+            "tickets": 101,
+            "returnYen": 8110,
+            "roiPct": 80.2970297029703,
+            "hitRatePct": 1.9801980198019802
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 17,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=middle",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 344,
+          "hits": 9,
+          "stakeYen": 34400,
+          "returnYen": 30940,
+          "profitYen": -3460,
+          "roiPct": 89.94186046511628,
+          "hitRatePct": 2.616279069767442,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 110.98039215686275,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.20232708468002586,
+          "roiWithoutTop1Pct": 71.74418604651163,
+          "roiWithoutTop3Pct": 40.81395348837209
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 113,
+            "returnYen": 19620,
+            "roiPct": 173.6283185840708,
+            "hitRatePct": 5.3097345132743365
+          },
+          "2026-06": {
+            "tickets": 102,
+            "returnYen": 11320,
+            "roiPct": 110.98039215686275,
+            "hitRatePct": 2.941176470588235
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 23,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=middle",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 334,
+          "hits": 8,
+          "stakeYen": 33400,
+          "returnYen": 27730,
+          "profitYen": -5670,
+          "roiPct": 83.02395209580838,
+          "hitRatePct": 2.3952095808383236,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 80.2970297029703,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22574828705373243,
+          "roiWithoutTop1Pct": 64.28143712574851,
+          "roiWithoutTop3Pct": 32.4251497005988
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 113,
+            "returnYen": 19620,
+            "roiPct": 173.6283185840708,
+            "hitRatePct": 5.3097345132743365
+          },
+          "2026-06": {
+            "tickets": 101,
+            "returnYen": 8110,
+            "roiPct": 80.2970297029703,
+            "hitRatePct": 1.9801980198019802
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 14,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=middle",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 336,
+          "hits": 9,
+          "stakeYen": 33600,
+          "returnYen": 30940,
+          "profitYen": -2660,
+          "roiPct": 92.08333333333333,
+          "hitRatePct": 2.6785714285714284,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 110.98039215686275,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.20232708468002586,
+          "roiWithoutTop1Pct": 73.45238095238096,
+          "roiWithoutTop3Pct": 41.785714285714285
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 111,
+            "returnYen": 19620,
+            "roiPct": 176.75675675675674,
+            "hitRatePct": 5.405405405405405
+          },
+          "2026-06": {
+            "tickets": 102,
+            "returnYen": 11320,
+            "roiPct": 110.98039215686275,
+            "hitRatePct": 2.941176470588235
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 17,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=middle",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 326,
+          "hits": 8,
+          "stakeYen": 32600,
+          "returnYen": 27730,
+          "profitYen": -4870,
+          "roiPct": 85.06134969325153,
+          "hitRatePct": 2.4539877300613497,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 80.2970297029703,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22574828705373243,
+          "roiWithoutTop1Pct": 65.85889570552148,
+          "roiWithoutTop3Pct": 33.220858895705526
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 111,
+            "returnYen": 19620,
+            "roiPct": 176.75675675675674,
+            "hitRatePct": 5.405405405405405
+          },
+          "2026-06": {
+            "tickets": 101,
+            "returnYen": 8110,
+            "roiPct": 80.2970297029703,
+            "hitRatePct": 1.9801980198019802
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 8,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      }
+    ],
+    "bestFinalAmongPreselectedTop50": [
+      {
+        "score": 185.19797807825978,
+        "members": [
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=middle",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 572,
+          "hits": 12,
+          "stakeYen": 57200,
+          "returnYen": 138160,
+          "profitYen": 80960,
+          "roiPct": 241.53846153846152,
+          "hitRatePct": 2.097902097902098,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 285.9340659340659,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 186.53846153846155,
+          "roiWithoutTop3Pct": 114.51048951048952
+        },
+        "developmentB": {
+          "tickets": 497,
+          "hits": 13,
+          "stakeYen": 49700,
+          "returnYen": 108010,
+          "profitYen": 58310,
+          "roiPct": 217.32394366197184,
+          "hitRatePct": 2.61569416498994,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 208.53658536585365,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.30052772891398943,
+          "roiWithoutTop1Pct": 152.01207243460763,
+          "roiWithoutTop3Pct": 89.97987927565393
+        },
+        "finalHoldout": {
+          "tickets": 323,
+          "hits": 9,
+          "stakeYen": 32300,
+          "returnYen": 30940,
+          "profitYen": -1360,
+          "roiPct": 95.78947368421052,
+          "hitRatePct": 2.786377708978328,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 114.34343434343435,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.20232708468002586,
+          "roiWithoutTop1Pct": 76.40866873065015,
+          "roiWithoutTop3Pct": 43.46749226006192
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 107,
+            "returnYen": 19620,
+            "roiPct": 183.3644859813084,
+            "hitRatePct": 5.607476635514018
+          },
+          "2026-06": {
+            "tickets": 99,
+            "returnYen": 11320,
+            "roiPct": 114.34343434343435,
+            "hitRatePct": 3.0303030303030303
+          },
+          "2026-07": {
+            "tickets": 102,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 15,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 185.19797807825978,
+        "members": [
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=middle",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 572,
+          "hits": 12,
+          "stakeYen": 57200,
+          "returnYen": 138160,
+          "profitYen": 80960,
+          "roiPct": 241.53846153846152,
+          "hitRatePct": 2.097902097902098,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 285.9340659340659,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 186.53846153846155,
+          "roiWithoutTop3Pct": 114.51048951048952
+        },
+        "developmentB": {
+          "tickets": 497,
+          "hits": 13,
+          "stakeYen": 49700,
+          "returnYen": 108010,
+          "profitYen": 58310,
+          "roiPct": 217.32394366197184,
+          "hitRatePct": 2.61569416498994,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 208.53658536585365,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.30052772891398943,
+          "roiWithoutTop1Pct": 152.01207243460763,
+          "roiWithoutTop3Pct": 89.97987927565393
+        },
+        "finalHoldout": {
+          "tickets": 331,
+          "hits": 9,
+          "stakeYen": 33100,
+          "returnYen": 30940,
+          "profitYen": -2160,
+          "roiPct": 93.47432024169184,
+          "hitRatePct": 2.719033232628399,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 114.34343434343435,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.20232708468002586,
+          "roiWithoutTop1Pct": 74.5619335347432,
+          "roiWithoutTop3Pct": 42.41691842900302
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 109,
+            "returnYen": 19620,
+            "roiPct": 180.0,
+            "hitRatePct": 5.5045871559633035
+          },
+          "2026-06": {
+            "tickets": 99,
+            "returnYen": 11320,
+            "roiPct": 114.34343434343435,
+            "hitRatePct": 3.0303030303030303
+          },
+          "2026-07": {
+            "tickets": 102,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 21,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=middle",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 336,
+          "hits": 9,
+          "stakeYen": 33600,
+          "returnYen": 30940,
+          "profitYen": -2660,
+          "roiPct": 92.08333333333333,
+          "hitRatePct": 2.6785714285714284,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 110.98039215686275,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.20232708468002586,
+          "roiWithoutTop1Pct": 73.45238095238096,
+          "roiWithoutTop3Pct": 41.785714285714285
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 111,
+            "returnYen": 19620,
+            "roiPct": 176.75675675675674,
+            "hitRatePct": 5.405405405405405
+          },
+          "2026-06": {
+            "tickets": 102,
+            "returnYen": 11320,
+            "roiPct": 110.98039215686275,
+            "hitRatePct": 2.941176470588235
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 17,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=middle",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 344,
+          "hits": 9,
+          "stakeYen": 34400,
+          "returnYen": 30940,
+          "profitYen": -3460,
+          "roiPct": 89.94186046511628,
+          "hitRatePct": 2.616279069767442,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 110.98039215686275,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.20232708468002586,
+          "roiWithoutTop1Pct": 71.74418604651163,
+          "roiWithoutTop3Pct": 40.81395348837209
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 113,
+            "returnYen": 19620,
+            "roiPct": 173.6283185840708,
+            "hitRatePct": 5.3097345132743365
+          },
+          "2026-06": {
+            "tickets": 102,
+            "returnYen": 11320,
+            "roiPct": 110.98039215686275,
+            "hitRatePct": 2.941176470588235
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 23,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=middle",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 345,
+          "hits": 9,
+          "stakeYen": 34500,
+          "returnYen": 30940,
+          "profitYen": -3560,
+          "roiPct": 89.68115942028986,
+          "hitRatePct": 2.608695652173913,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 110.98039215686275,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.20232708468002586,
+          "roiWithoutTop1Pct": 71.53623188405797,
+          "roiWithoutTop3Pct": 40.69565217391305
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 111,
+            "returnYen": 19620,
+            "roiPct": 176.75675675675674,
+            "hitRatePct": 5.405405405405405
+          },
+          "2026-06": {
+            "tickets": 102,
+            "returnYen": 11320,
+            "roiPct": 110.98039215686275,
+            "hitRatePct": 2.941176470588235
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 26,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=middle",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 353,
+          "hits": 9,
+          "stakeYen": 35300,
+          "returnYen": 30940,
+          "profitYen": -4360,
+          "roiPct": 87.64872521246458,
+          "hitRatePct": 2.5495750708215295,
+          "winningMonths": 2,
+          "months": 4,
+          "medianMonthlyRoiPct": 110.98039215686275,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.20232708468002586,
+          "roiWithoutTop1Pct": 69.91501416430594,
+          "roiWithoutTop3Pct": 39.773371104815865
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 113,
+            "returnYen": 19620,
+            "roiPct": 173.6283185840708,
+            "hitRatePct": 5.3097345132743365
+          },
+          "2026-06": {
+            "tickets": 102,
+            "returnYen": 11320,
+            "roiPct": 110.98039215686275,
+            "hitRatePct": 2.941176470588235
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 32,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=middle",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 326,
+          "hits": 8,
+          "stakeYen": 32600,
+          "returnYen": 27730,
+          "profitYen": -4870,
+          "roiPct": 85.06134969325153,
+          "hitRatePct": 2.4539877300613497,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 80.2970297029703,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22574828705373243,
+          "roiWithoutTop1Pct": 65.85889570552148,
+          "roiWithoutTop3Pct": 33.220858895705526
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 111,
+            "returnYen": 19620,
+            "roiPct": 176.75675675675674,
+            "hitRatePct": 5.405405405405405
+          },
+          "2026-06": {
+            "tickets": 101,
+            "returnYen": 8110,
+            "roiPct": 80.2970297029703,
+            "hitRatePct": 1.9801980198019802
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 8,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=middle",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 334,
+          "hits": 8,
+          "stakeYen": 33400,
+          "returnYen": 27730,
+          "profitYen": -5670,
+          "roiPct": 83.02395209580838,
+          "hitRatePct": 2.3952095808383236,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 80.2970297029703,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22574828705373243,
+          "roiWithoutTop1Pct": 64.28143712574851,
+          "roiWithoutTop3Pct": 32.4251497005988
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 113,
+            "returnYen": 19620,
+            "roiPct": 173.6283185840708,
+            "hitRatePct": 5.3097345132743365
+          },
+          "2026-06": {
+            "tickets": 101,
+            "returnYen": 8110,
+            "roiPct": 80.2970297029703,
+            "hitRatePct": 1.9801980198019802
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 14,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=middle",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 335,
+          "hits": 8,
+          "stakeYen": 33500,
+          "returnYen": 27730,
+          "profitYen": -5770,
+          "roiPct": 82.77611940298507,
+          "hitRatePct": 2.3880597014925375,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 80.2970297029703,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22574828705373243,
+          "roiWithoutTop1Pct": 64.08955223880596,
+          "roiWithoutTop3Pct": 32.32835820895522
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 111,
+            "returnYen": 19620,
+            "roiPct": 176.75675675675674,
+            "hitRatePct": 5.405405405405405
+          },
+          "2026-06": {
+            "tickets": 101,
+            "returnYen": 8110,
+            "roiPct": 80.2970297029703,
+            "hitRatePct": 1.9801980198019802
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 17,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "score": 187.98369732759483,
+        "members": [
+          {
+            "variant": "point",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=middle",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "middle"
+            },
+            "code": "X142",
+            "betType": "3連単",
+            "predictedRanks": [
+              1,
+              4,
+              2
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "T235",
+            "betType": "3連複",
+            "predictedRanks": [
+              2,
+              3,
+              5
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 582,
+          "hits": 12,
+          "stakeYen": 58200,
+          "returnYen": 138160,
+          "profitYen": 79960,
+          "roiPct": 237.38831615120276,
+          "hitRatePct": 2.0618556701030926,
+          "winningMonths": 3,
+          "months": 6,
+          "medianMonthlyRoiPct": 268.24742268041234,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22770700636942676,
+          "roiWithoutTop1Pct": 183.33333333333331,
+          "roiWithoutTop3Pct": 112.54295532646049
+        },
+        "developmentB": {
+          "tickets": 515,
+          "hits": 14,
+          "stakeYen": 51500,
+          "returnYen": 114240,
+          "profitYen": 62740,
+          "roiPct": 221.82524271844662,
+          "hitRatePct": 2.7184466019417477,
+          "winningMonths": 4,
+          "months": 6,
+          "medianMonthlyRoiPct": 203.57142857142856,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.28413865546218486,
+          "roiWithoutTop1Pct": 158.79611650485435,
+          "roiWithoutTop3Pct": 98.93203883495146
+        },
+        "finalHoldout": {
+          "tickets": 343,
+          "hits": 8,
+          "stakeYen": 34300,
+          "returnYen": 27730,
+          "profitYen": -6570,
+          "roiPct": 80.84548104956268,
+          "hitRatePct": 2.3323615160349855,
+          "winningMonths": 1,
+          "months": 4,
+          "medianMonthlyRoiPct": 80.2970297029703,
+          "minimumMonthlyRoiPct": 0.0,
+          "maxSingleReturnShare": 0.22574828705373243,
+          "roiWithoutTop1Pct": 62.59475218658892,
+          "roiWithoutTop3Pct": 31.574344023323615
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 113,
+            "returnYen": 19620,
+            "roiPct": 173.6283185840708,
+            "hitRatePct": 5.3097345132743365
+          },
+          "2026-06": {
+            "tickets": 101,
+            "returnYen": 8110,
+            "roiPct": 80.2970297029703,
+            "hitRatePct": 1.9801980198019802
+          },
+          "2026-07": {
+            "tickets": 106,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 23,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      }
+    ]
+  }
+}
