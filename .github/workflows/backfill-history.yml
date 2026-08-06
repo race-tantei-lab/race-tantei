@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "scripts/backfill-history-v2.mjs"
+      - "src/v1/three-month-desktop.ts"
       - ".github/workflows/backfill-history.yml"
   workflow_dispatch:
     inputs:
@@ -58,6 +59,23 @@ jobs:
           done
           npx wrangler d1 execute race-tantei-phase0 --remote --file tmp/history-backfill/zzzz-state.sql --config wrangler.jsonc
 
+      - name: Verify repaired popularity ranks
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --config wrangler.jsonc --command "
+            SELECT COUNT(*) AS invalid_popularity_rows
+            FROM rt_runners rr
+            JOIN rt_races r ON r.race_id = rr.race_id
+            WHERE r.race_date BETWEEN '2024-05-01' AND '2026-08-31'
+              AND rr.runner_status = 'active'
+              AND (rr.popularity IS NULL OR rr.popularity < 1 OR rr.popularity > 18);
+          " | tee popularity-integrity.txt
+          if grep -Eq 'invalid_popularity_rows[^0-9]*[1-9][0-9]*' popularity-integrity.txt; then
+            echo "Invalid popularity rows remain after backfill"
+            exit 1
+          fi
+
       - name: Upload backfill report
         if: always()
         uses: actions/upload-artifact@v4
@@ -66,5 +84,6 @@ jobs:
           path: |
             tmp/history-backfill/summary.json
             tmp/history-backfill/failures.json
+            popularity-integrity.txt
           if-no-files-found: ignore
           retention-days: 14
