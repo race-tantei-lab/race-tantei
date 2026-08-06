@@ -1,22 +1,23 @@
 
  ⛅️ wrangler 4.118.0
 ────────────────────
+Total Upload: 454.14 KiB / gzip: 102.47 KiB
+Worker Startup Time: 1 ms
+Your Worker has access to the following bindings:
+Binding                                                                   Resource                  
+env.DB (race-tantei-phase0)                                               D1 Database               
+env.ENVIRONMENT ("production")                                            Environment Variable      
+env.DEPLOY_REVISION ("nonlinear-hgb-v4-production")                       Environment Variable      
+env.MODEL_VERSION ("v4.1.0-nonlinear-hgb-5r")                             Environment Variable      
+env.JRA_HOME_URL ("https://sp.jra.jp/")                                   Environment Variable      
+env.JRA_SEED_ENTRY_URLS ("https://sp.jra.jp/JRADB/accessD.html?...")      Environment Variable      
+env.MIN_EXPECTED_VALUE ("108")                                            Environment Variable      
+env.MAX_RACE_BUDGET_YEN ("10000")                                         Environment Variable      
+env.SYNC_BATCH_SIZE ("12")                                                Environment Variable      
+
+Uploaded race-tantei-phase0 (1.71 sec)
+Deployed race-tantei-phase0 triggers (0.61 sec)
+  https://race-tantei-phase0.race-tantei.workers.dev
+Current Version ID: a9bea117-1603-4fa5-b0c4-ea1116041dfa
 
 Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
-
-[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mA request to the Cloudflare API (/accounts/3c6d1826b573b2e68cb13ec37e9e8ade/workers/services/race-tantei-phase0) failed.[0m
-
-  Authentication error [code: 10000]
-
-
-📎 It looks like you are authenticating Wrangler via a custom API token set in an environment variable.
-Please ensure it has the correct permissions for this operation.
-
-Getting User settings...
-
-[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mFailed to automatically retrieve account IDs for the logged in user.[0m
-
-  You may have incorrect permissions on your API token, or your authentication may have expired. Try running `wrangler login` to re-authenticate. You can also skip this account check by adding an `account_id` in your Wrangler configuration file, or by setting the value of CLOUDFLARE_ACCOUNT_ID
-
-
-🪵  Logs were written to "/home/runner/.config/.wrangler/logs/wrangler-2026-08-05_22-56-03_342.log"
