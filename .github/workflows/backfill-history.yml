@@ -121,6 +121,18 @@ jobs:
         run: |
           npm run build:test
           node --check scripts/repair-invalid-market-history.mjs
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { isOfficialJraResultUrl } from './scripts/repair-invalid-market-history.mjs';
+          assert.equal(isOfficialJraResultUrl('https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde01'), true);
+          assert.equal(isOfficialJraResultUrl('https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde01'), true);
+          assert.equal(isOfficialJraResultUrl('https://jra.go.jp/JRADB/accessS.html?CNAME=pw01sde01'), true);
+          assert.equal(isOfficialJraResultUrl('http://sp.jra.jp/JRADB/accessS.html'), false);
+          assert.equal(isOfficialJraResultUrl('https://evil-jra.jp/JRADB/accessS.html'), false);
+          assert.equal(isOfficialJraResultUrl('https://sp.jra.jp.example.com/JRADB/accessS.html'), false);
+          assert.equal(isOfficialJraResultUrl('https://sp.jra.jp/not-jradb'), false);
+          console.log('official JRA repair URL tests passed');
+          NODE
 
       - name: Publish pre-audit status
         shell: bash
