@@ -43,6 +43,23 @@ const MARKET_TAKEOUT_FACTOR = 0.8;
 const POPULARITY_POWER = 1.07;
 const HISTORICAL_TRANSITION_SUFFIX = "34";
 
+const RESULT_COLUMN = {
+  finish: 0,
+  frameNo: 1,
+  horseNo: 2,
+  horseName: 3,
+  sexAge: 4,
+  assignedWeight: 5,
+  jockey: 6,
+  time: 7,
+  margin: 8,
+  passingOrder: 9,
+  final3f: 10,
+  horseWeight: 11,
+  trainer: 12,
+  popularity: 13
+} as const;
+
 export interface HistoricalMeetingTask {
   raceDate: string;
   venue: string;
@@ -112,6 +129,50 @@ function compactText(html: string): string {
   ).replace(/\s+/g, " ");
 }
 
+function cleanCell(value: string | undefined): string {
+  return (value ?? "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function integerCell(value: string | undefined): number | null {
+  const text = cleanCell(value);
+  return /^\d{1,3}$/.test(text) ? Number(text) : null;
+}
+
+function decimalCell(value: string | undefined): number | null {
+  const match = cleanCell(value).match(/-?\d+(?:\.\d+)?/);
+  if (!match?.[0]) return null;
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseBodyWeight(value: string | undefined): {
+  horseWeight: number | null;
+  weightChange: number | null;
+} {
+  const text = cleanCell(value);
+  const match = text.match(/(\d{3})(?:kg)?\s*\(([+-]?\d+)\)/i);
+  if (!match) return { horseWeight: null, weightChange: null };
+  return {
+    horseWeight: Number(match[1]),
+    weightChange: Number(match[2])
+  };
+}
+
+function parseTrainer(value: string | undefined): {
+  trainer: string | null;
+  stable: string | null;
+} {
+  const text = cleanCell(value);
+  if (!text) return { trainer: null, stable: null };
+  const stableMatch = text.match(/(?:\[|\(|（)?(美浦|栗東|本会外)(?:\]|\)|）|[・\s])?/);
+  const stable = stableMatch?.[1] ?? null;
+  const trainer = text
+    .replace(/(?:\[|\(|（)?(?:美浦|栗東|本会外)(?:\]|\)|）|[・\s])?/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return { trainer: trainer || null, stable };
+}
+
 export function parseHistoricalMeetings(html: string, raceDate: string): HistoricalMeetingTask[] {
   const text = compactText(html);
   const found = new Map<string, HistoricalMeetingTask>();
@@ -134,77 +195,86 @@ function resultTableRows(html: string): string[][] {
   const rows: string[][] = [];
   for (const match of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
     const cells = [...(match[1] ?? "").matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)]
-      .map((cell) => stripHtml(cell[1] ?? "").replace(/\s+/g, " ").trim());
+      .map((cell) => cleanCell(stripHtml(cell[1] ?? "")));
     if (cells.some((cell) => /(?:\d+:\d{2}\.\d|除外|中止|失格|取消)/.test(cell))) rows.push(cells);
   }
   return rows;
 }
 
+function popularityCell(cells: string[]): number | null {
+  const fixed = integerCell(cells[RESULT_COLUMN.popularity]);
+  if (fixed !== null && fixed >= 1 && fixed <= 18) return fixed;
+
+  // Some mobile result variants omit an unused column. Popularity is still the
+  // final standalone integer cell, so only inspect the last two cells. Never
+  // scan the whole row: frame, horse number and finish are also integers.
+  for (const value of cells.slice(-2).reverse()) {
+    const parsed = integerCell(value);
+    if (parsed !== null && parsed >= 1 && parsed <= 18) return parsed;
+  }
+  return null;
+}
+
 function parseDetailedRunner(cells: string[]): ParsedHistoricalRunner | null {
-  const frameNo = /^\d{1,2}$/.test(cells[1] ?? "") ? Number(cells[1]) : null;
-  const horseNo = /^\d{1,2}$/.test(cells[2] ?? "") ? Number(cells[2]) : null;
+  const frameNo = integerCell(cells[RESULT_COLUMN.frameNo]);
+  const horseNo = integerCell(cells[RESULT_COLUMN.horseNo]);
   if (!horseNo || horseNo < 1 || horseNo > 18) return null;
-  const detail = cells.slice(3).join(" ").replace(/\s+/g, " ").trim();
-  const status: RunnerRecord["runnerStatus"] = /除外/.test(detail)
+
+  const rowText = cells.join(" ");
+  const status: RunnerRecord["runnerStatus"] = /除外/.test(rowText)
     ? "excluded"
-    : /取消/.test(detail)
+    : /取消/.test(rowText)
       ? "scratched"
       : "active";
-  const popularityMatch = detail.match(/(\d+)番人気/);
-  const popularity = popularityMatch?.[1] ? Number(popularityMatch[1]) : null;
-  const horseName = (popularityMatch?.index !== undefined
-    ? detail.slice(0, popularityMatch.index)
-    : detail.split(/\s+(?:[牡牝騸セ]\d+|除外|取消)/)[0] ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
+  const horseName = cleanCell(cells[RESULT_COLUMN.horseName]);
   if (!horseName) return null;
 
-  const sexAgeMatch = detail.match(/([牡牝騸セ])(\d+)/);
-  const bodyMatch = detail.match(/(\d{3})kg\(([+-]?\d+)\)/);
-  const peopleMatch = bodyMatch
-    ? detail.slice((bodyMatch.index ?? 0) + bodyMatch[0].length)
-      .match(/^\s*(.+?)\s+\((\d+(?:\.\d+)?)\)\s+(.+?)\s+\((美浦|栗東|本会外)\)/)
-    : null;
+  const sexAgeMatch = cleanCell(cells[RESULT_COLUMN.sexAge]).match(/([牡牝騸セ])(\d+)/);
+  const body = parseBodyWeight(cells[RESULT_COLUMN.horseWeight]);
+  const trainer = parseTrainer(cells[RESULT_COLUMN.trainer]);
+  const popularity = status === "active" ? popularityCell(cells) : null;
 
   return {
     horseNo,
     frameNo,
     horseName,
     sexAge: sexAgeMatch ? `${sexAgeMatch[1]}${sexAgeMatch[2]}` : null,
-    horseWeight: bodyMatch?.[1] ? Number(bodyMatch[1]) : null,
-    weightChange: bodyMatch?.[2] ? Number(bodyMatch[2]) : null,
-    jockey: peopleMatch?.[1]?.trim() || null,
-    assignedWeight: peopleMatch?.[2] ? Number(peopleMatch[2]) : null,
-    trainer: peopleMatch?.[3]?.trim() || null,
-    stable: peopleMatch?.[4] ?? null,
+    horseWeight: body.horseWeight,
+    weightChange: body.weightChange,
+    jockey: cleanCell(cells[RESULT_COLUMN.jockey]) || null,
+    assignedWeight: decimalCell(cells[RESULT_COLUMN.assignedWeight]),
+    trainer: trainer.trainer,
+    stable: trainer.stable,
     popularity,
     runnerStatus: status
   };
 }
 
+function hasCompletePopularity(runners: ParsedHistoricalRunner[]): boolean {
+  const active = runners.filter((runner) => runner.runnerStatus === "active");
+  if (active.length < 2 || active.length > 18) return false;
+  const values = active.map((runner) => runner.popularity);
+  if (values.some((value) => value === null || !Number.isInteger(value))) return false;
+  const ranks = values as number[];
+  return ranks.every((rank) => rank >= 1 && rank <= active.length)
+    && new Set(ranks).size === active.length;
+}
+
 function popularityProxyOdds(runners: ParsedHistoricalRunner[]): Map<number, number> {
   const active = runners.filter((runner) => runner.runnerStatus === "active");
-  const fallbackStart = Math.max(
-    active.length,
-    ...active.map((runner) => runner.popularity ?? 0),
-    1
-  );
-  const ranks = new Map<number, number>();
-  let fallbackOffset = 0;
-  for (const runner of active) {
-    ranks.set(runner.horseNo, runner.popularity ?? fallbackStart + (++fallbackOffset));
-  }
+  if (!hasCompletePopularity(runners)) return new Map();
+
   const weights = new Map<number, number>();
   for (const runner of active) {
-    const rank = ranks.get(runner.horseNo) ?? fallbackStart + 1;
-    weights.set(runner.horseNo, Math.pow(Math.max(1, rank), -POPULARITY_POWER));
+    const rank = runner.popularity as number;
+    weights.set(runner.horseNo, Math.pow(rank, -POPULARITY_POWER));
   }
   const total = [...weights.values()].reduce((sum, value) => sum + value, 0);
   const odds = new Map<number, number>();
   for (const runner of active) {
     const probability = total > 0
       ? (weights.get(runner.horseNo) ?? 0) / total
-      : 1 / Math.max(1, active.length);
+      : 0;
     const decimalOdds = clamp(MARKET_TAKEOUT_FACTOR / Math.max(0.0001, probability), 1.1, 999.9);
     odds.set(runner.horseNo, Math.floor(decimalOdds * 10) / 10);
   }
@@ -253,15 +323,36 @@ export function historicalResultUrl(task: HistoricalMeetingTask, raceNo: number)
 async function alreadyComplete(db: D1Database, task: HistoricalMeetingTask, raceNo: number): Promise<boolean> {
   const row = await db.prepare(`
     SELECT r.status,
-      (SELECT COUNT(*) FROM rt_runners rr WHERE rr.race_id=r.race_id AND rr.runner_status='active' AND rr.win_odds IS NOT NULL) AS runners,
+      (SELECT COUNT(*) FROM rt_runners rr
+        WHERE rr.race_id=r.race_id AND rr.runner_status='active') AS active_runners,
+      (SELECT COUNT(*) FROM rt_runners rr
+        WHERE rr.race_id=r.race_id AND rr.runner_status='active'
+          AND rr.win_odds IS NOT NULL
+          AND rr.popularity BETWEEN 1 AND 18) AS valid_market_runners,
+      (SELECT COUNT(DISTINCT rr.popularity) FROM rt_runners rr
+        WHERE rr.race_id=r.race_id AND rr.runner_status='active') AS distinct_popularity,
+      (SELECT MAX(rr.popularity) FROM rt_runners rr
+        WHERE rr.race_id=r.race_id AND rr.runner_status='active') AS max_popularity,
       (SELECT COUNT(*) FROM rt_results rs WHERE rs.race_id=r.race_id) AS results,
       (SELECT COUNT(*) FROM rt_payouts p WHERE p.race_id=r.race_id) AS payouts
     FROM rt_races r
     WHERE r.race_date=? AND r.venue=? AND r.race_no=?
   `).bind(task.raceDate, task.venue, raceNo)
-    .first<{ status: string; runners: number; results: number; payouts: number }>();
+    .first<{
+      status: string;
+      active_runners: number;
+      valid_market_runners: number;
+      distinct_popularity: number;
+      max_popularity: number | null;
+      results: number;
+      payouts: number;
+    }>();
+  const activeRunners = Number(row?.active_runners ?? 0);
   return row?.status === "finished"
-    && Number(row.runners ?? 0) >= 2
+    && activeRunners >= 2
+    && Number(row.valid_market_runners ?? 0) === activeRunners
+    && Number(row.distinct_popularity ?? 0) === activeRunners
+    && Number(row.max_popularity ?? 99) <= activeRunners
     && Number(row.results ?? 0) >= 2
     && Number(row.payouts ?? 0) >= 1;
 }
@@ -281,9 +372,18 @@ async function importHistoricalRace(
     throw new Error(`RESULT_RACE_MISMATCH:${result.race.raceDate}:${result.race.venue}:${result.race.raceNo}`);
   }
   const runners = parseHistoricalResultRunners(resultPage.html);
-  if (runners.filter((runner) => runner.runnerStatus === "active" && runner.winOdds !== null).length < 2) {
-    throw new Error(`HISTORY_RUNNERS_NOT_FOUND:${runners.length}`);
+  const active = runners.filter((runner) => runner.runnerStatus === "active");
+  const popularity = active.map((runner) => runner.popularity);
+  const completePopularity = active.length >= 2
+    && popularity.every((value) => value !== null && Number.isInteger(value) && value >= 1 && value <= active.length)
+    && new Set(popularity).size === active.length;
+  if (!completePopularity) {
+    throw new Error(`HISTORY_POPULARITY_INVALID:${active.length}:${JSON.stringify(popularity)}`);
   }
+  if (active.some((runner) => runner.winOdds === null)) {
+    throw new Error(`HISTORY_PROXY_ODDS_INVALID:${active.length}`);
+  }
+
   const entry: RaceBundle = {
     race: { ...result.race, status: "scheduled" },
     runners,
