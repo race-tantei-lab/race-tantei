@@ -25,6 +25,17 @@ def number(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def safe_repo_path(value: Any) -> Path:
+    require(isinstance(value, str) and value.strip(), "IMPLEMENTATION_PATH_MISSING")
+    path = (ROOT / value).resolve()
+    require(path.is_relative_to(ROOT), f"IMPLEMENTATION_PATH_OUTSIDE_REPOSITORY:{value}")
+    return path
+
+
 def find_ticket_lists(value: Any) -> list[list[dict[str, Any]]]:
     found: list[list[dict[str, Any]]] = []
     if isinstance(value, list):
@@ -49,7 +60,28 @@ def flag(report: dict[str, Any], name: str) -> bool:
     return False
 
 
-def validate_report(report: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+def validate_implementation(report: dict[str, Any]) -> dict[str, Any]:
+    implementation = report.get("productionImplementation")
+    require(isinstance(implementation, dict), "PRODUCTION_IMPLEMENTATION_MISSING")
+    candidate_policy = safe_repo_path(implementation.get("candidatePolicyPath"))
+    require(candidate_policy.exists(), f"CANDIDATE_POLICY_NOT_FOUND:{candidate_policy}")
+    require(candidate_policy.suffix == ".py", "CANDIDATE_POLICY_MUST_BE_PYTHON")
+    expected_sha = implementation.get("candidatePolicySha256")
+    require(isinstance(expected_sha, str) and len(expected_sha) == 64, "CANDIDATE_POLICY_SHA256_MISSING")
+    actual_sha = file_sha256(candidate_policy)
+    require(actual_sha == expected_sha, "CANDIDATE_POLICY_SHA256_MISMATCH")
+
+    runner = safe_repo_path(implementation.get("productionRunnerPath", "scripts/run-final-course-production.py"))
+    require(runner.exists(), f"PRODUCTION_RUNNER_NOT_FOUND:{runner}")
+    return {
+        "candidatePolicyPath": str(candidate_policy.relative_to(ROOT)),
+        "candidatePolicySha256": actual_sha,
+        "productionPolicyPath": "scripts/final-course-policy.py",
+        "productionRunnerPath": str(runner.relative_to(ROOT)),
+    }
+
+
+def validate_report(report: dict[str, Any], config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     promotion = config["promotionRules"]
     rules = config["immutableProjectRules"]
 
@@ -61,10 +93,7 @@ def validate_report(report: dict[str, Any], config: dict[str, Any]) -> dict[str,
     require(report.get("postResultLeakageUsed") is False or flag(report, "postResultLeakageForbidden"), "POST_RESULT_LEAKAGE_NOT_FORBIDDEN")
     require(
         flag(report, "officialOddsOnly")
-        or (
-            report.get("officialWinOddsUsed") is True
-            and report.get("syntheticOddsUsed") is False
-        ),
+        or (report.get("officialWinOddsUsed") is True and report.get("syntheticOddsUsed") is False),
         "OFFICIAL_ODDS_ONLY_NOT_CONFIRMED",
     )
     require(
@@ -99,10 +128,7 @@ def validate_report(report: dict[str, Any], config: dict[str, Any]) -> dict[str,
         coverage = course.get("coverage")
         require(isinstance(coverage, dict), f"COVERAGE_MISSING:{course_name}")
         minimum_coverage = int(number(coverage.get("minimumSelectedRaces")))
-        require(
-            minimum_coverage >= minimum_selected,
-            f"RACES_PER_VENUE_DAY_BELOW_MINIMUM:{course_name}:{minimum_coverage}",
-        )
+        require(minimum_coverage >= minimum_selected, f"RACES_PER_VENUE_DAY_BELOW_MINIMUM:{course_name}:{minimum_coverage}")
 
         policy = course.get("policy")
         require(policy is not None, f"POLICY_MISSING:{course_name}")
@@ -112,7 +138,7 @@ def validate_report(report: dict[str, Any], config: dict[str, Any]) -> dict[str,
         required_distinct = int(course_config["minimumDistinctBetTypes"])
         for index, tickets in enumerate(ticket_lists):
             bet_types = {str(ticket.get("betType")) for ticket in tickets}
-            require("単勝" not in bet_types or len(bet_types) > 1, f"SINGLE_ONLY_POLICY:{course_name}:{index}")
+            require(not (bet_types == {"単勝"}), f"SINGLE_ONLY_POLICY:{course_name}:{index}")
             require(allowed.issubset(bet_types), f"BET_TYPE_DIVERSIFICATION_MISSING:{course_name}:{index}:{sorted(bet_types)}")
             require(len(bet_types) >= required_distinct, f"DISTINCT_BET_TYPES_TOO_FEW:{course_name}:{index}")
             stakes = [int(number(ticket.get("stakeYen"))) for ticket in tickets if "stakeYen" in ticket]
@@ -128,7 +154,8 @@ def validate_report(report: dict[str, Any], config: dict[str, Any]) -> dict[str,
             "requiredBetTypes": course_config["allowedBetTypes"],
         }
 
-    return approved_courses
+    implementation = validate_implementation(report)
+    return approved_courses, implementation
 
 
 def main() -> None:
@@ -143,7 +170,7 @@ def main() -> None:
     raw = report_path.read_bytes()
     report = json.loads(raw.decode("utf-8"))
     require(isinstance(report, dict), "REPORT_ROOT_MUST_BE_OBJECT")
-    approved_courses = validate_report(report, config)
+    approved_courses, implementation = validate_report(report, config)
 
     approval = {
         "productionPromotionApproved": True,
@@ -153,6 +180,7 @@ def main() -> None:
         "modelVersion": report.get("modelVersion"),
         "sourceReport": str(report_path.relative_to(ROOT)) if report_path.is_relative_to(ROOT) else str(report_path),
         "sourceReportSha256": hashlib.sha256(raw).hexdigest(),
+        "implementation": implementation,
         "courses": approved_courses,
     }
 
