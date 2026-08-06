@@ -49,13 +49,7 @@ jobs:
               AND rr.popularity BETWEEN 1 AND 18 THEN 1 ELSE 0 END) AS valid_market_runners,
             SUM(CASE WHEN rr.runner_status='active' AND (
               rr.win_odds IS NULL OR rr.win_odds<=1 OR
-              rr.popularity IS NULL OR rr.popularity<1 OR rr.popularity>18 OR
-              rr.popularity <> 1 + (
-                SELECT COUNT(*) FROM rt_runners better
-                WHERE better.race_id=rr.race_id
-                  AND better.runner_status='active'
-                  AND better.popularity < rr.popularity
-              )
+              rr.popularity IS NULL OR rr.popularity<1 OR rr.popularity>18
             ) THEN 1 ELSE 0 END) AS invalid_market_runners,
             COUNT(DISTINCT CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS distinct_popularity,
             MIN(CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS min_popularity,
@@ -67,7 +61,7 @@ jobs:
         )
         SELECT COUNT(*) AS races,
           SUM(CASE WHEN active_runners>=2 THEN 1 ELSE 0 END) AS auditable_races,
-          SUM(CASE WHEN active_runners>=2 AND invalid_market_runners>0 THEN 1 ELSE 0 END) AS invalid_races,
+          SUM(CASE WHEN active_runners>=2 AND (invalid_market_runners>0 OR min_popularity<>1) THEN 1 ELSE 0 END) AS invalid_races,
           SUM(CASE WHEN active_runners>=2 AND max_popularity>18 THEN 1 ELSE 0 END) AS popularity_over_18_races,
           MIN(race_date) AS first_date,
           MAX(race_date) AS last_date
@@ -80,13 +74,7 @@ jobs:
               AND rr.popularity BETWEEN 1 AND 18 THEN 1 ELSE 0 END) AS valid_market_runners,
             SUM(CASE WHEN rr.runner_status='active' AND (
               rr.win_odds IS NULL OR rr.win_odds<=1 OR
-              rr.popularity IS NULL OR rr.popularity<1 OR rr.popularity>18 OR
-              rr.popularity <> 1 + (
-                SELECT COUNT(*) FROM rt_runners better
-                WHERE better.race_id=rr.race_id
-                  AND better.runner_status='active'
-                  AND better.popularity < rr.popularity
-              )
+              rr.popularity IS NULL OR rr.popularity<1 OR rr.popularity>18
             ) THEN 1 ELSE 0 END) AS invalid_market_runners,
             COUNT(DISTINCT CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS distinct_popularity,
             MIN(CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS min_popularity,
@@ -101,7 +89,7 @@ jobs:
           p.distinct_popularity, p.min_popularity, p.max_popularity
         FROM per_race p
         JOIN rt_races r ON r.race_id=p.race_id
-        WHERE p.active_runners>=2 AND p.invalid_market_runners>0
+        WHERE p.active_runners>=2 AND (p.invalid_market_runners>0 OR p.min_popularity<>1)
         ORDER BY r.race_date, r.venue, r.race_no;
 
     steps:
