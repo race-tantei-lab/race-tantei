@@ -1,0 +1,104 @@
+name: Official JRA odds safety gate
+run-name: Remove synthetic odds bets · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/final-course-policy.py"
+      - ".github/workflows/official-odds-safety.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start status
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='production/official-odds-only' \
+            -f description='処理中：推定オッズ買い目を停止' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify synthetic odds are impossible
+        shell: bash
+        run: |
+          python -m py_compile scripts/final-course-policy.py
+          python - <<'PY'
+          import importlib.util
+          from pathlib import Path
+
+          path = Path('scripts/final-course-policy.py')
+          source = path.read_text(encoding='utf-8')
+          forbidden = ['payout_ratio', '/ market_probability', 'assumed_odds(probability']
+          for token in forbidden:
+              if token in source:
+                  raise SystemExit(f'SYNTHETIC_ODDS_CODE_REMAINS:{token}')
+
+          spec = importlib.util.spec_from_file_location('policy', path)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          race_without_official_odds = {
+              'runners': [
+                  {'horseNo': 1, 'probability': 0.5},
+                  {'horseNo': 2, 'probability': 0.3},
+                  {'horseNo': 3, 'probability': 0.2},
+              ]
+          }
+          assert module.build_bets(race_without_official_odds) == []
+          print('official-odds-only safety test passed')
+          PY
+
+      - name: Delete pending synthetic-odds recommendations
+        shell: bash
+        run: |
+          npx wrangler d1 execute race-tantei-phase0 --remote --config wrangler.jsonc --command "
+            DELETE FROM rt_bets
+            WHERE settlement_status='pending'
+              AND prediction_id IN (
+                SELECT id FROM rt_predictions
+                WHERE model_version='v5.0.0-nonlinear-course-policy'
+              );
+          "
+
+      - name: Publish final status
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            STATE=success
+            DESCRIPTION='完了：推定オッズ買い目を停止・削除'
+          else
+            STATE=failure
+            DESCRIPTION='失敗：推定オッズ停止処理を確認'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$STATE" \
+            -f context='production/official-odds-only' \
+            -f description="$DESCRIPTION" \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null

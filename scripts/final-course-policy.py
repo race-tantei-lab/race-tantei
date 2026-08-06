@@ -3,18 +3,10 @@ import math
 from collections import defaultdict
 
 MODEL_VERSION = "v5.0.0-nonlinear-course-policy"
-COURSE_TARGET_STAKES = {"ライト": 1600, "スタンダード": 4200, "プレミアム": 8800}
+COURSE_TARGET_STAKES = {"ライト": 2000, "スタンダード": 5000, "プレミアム": 10000}
 COURSES = tuple(COURSE_TARGET_STAKES)
 UNORDERED_TYPES = {"ワイド", "馬連", "3連複"}
-
-TICKET_CONFIG = {
-    "単勝": {"payout_ratio": 1.0, "reliability": 0.98},
-    "ワイド": {"payout_ratio": 0.77, "reliability": 0.92},
-    "馬連": {"payout_ratio": 0.77, "reliability": 0.89},
-    "馬単": {"payout_ratio": 0.75, "reliability": 0.85},
-    "3連複": {"payout_ratio": 0.75, "reliability": 0.82},
-    "3連単": {"payout_ratio": 0.72, "reliability": 0.76},
-}
+OFFICIAL_ODDS_SOURCE = "jra_official"
 
 TICKET_POLICIES = {
     "ライト": {
@@ -57,27 +49,12 @@ def clamp(value, low, high):
     return max(low, min(high, value))
 
 
-def normalized_weights(runners, key, fallback_key=None):
-    raw = []
-    for runner in runners:
-        value = float(runner.get(key) or 0)
-        if value <= 0 and fallback_key:
-            value = float(runner.get(fallback_key) or 0)
-        raw.append(max(0.0, value))
+def normalized_weights(runners, key):
+    raw = [max(0.0, float(runner.get(key) or 0)) for runner in runners]
     total = sum(raw)
     if total <= 0:
         return {int(runner["horseNo"]): 1 / max(1, len(runners)) for runner in runners}
     return {int(runner["horseNo"]): value / total for runner, value in zip(runners, raw)}
-
-
-def market_weights(runners):
-    raw = []
-    for runner in runners:
-        odds = float(runner.get("winOdds") or 0)
-        probability = 1 / odds if odds > 1 else max(0.0001, float(runner.get("probability") or 0))
-        raw.append(probability)
-    total = sum(raw)
-    return {int(runner["horseNo"]): value / max(1e-12, total) for runner, value in zip(runners, raw)}
 
 
 def ordered_probability(order, weights):
@@ -131,11 +108,33 @@ def canonical_horses(bet_type, horses):
     return tuple(sorted(values)) if bet_type in UNORDERED_TYPES else values
 
 
+def odds_key(bet_type, horses):
+    values = canonical_horses(bet_type, horses)
+    return f'{bet_type}:{"-".join(str(value) for value in values)}'
+
+
+def official_odds_map(race):
+    if race.get("oddsSource") != OFFICIAL_ODDS_SOURCE:
+        return {}
+    raw = race.get("officialOdds")
+    if not isinstance(raw, dict):
+        return {}
+    cleaned = {}
+    for key, value in raw.items():
+        try:
+            odds = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(odds) and odds > 1.0:
+            cleaned[str(key)] = math.floor(odds * 10) / 10
+    return cleaned
+
+
 def candidate_score(candidate, policy):
     return (
         policy["ev_weight"] * math.log(max(0.05, candidate["expectedValuePct"] / 100))
         + policy["probability_weight"] * math.log(max(0.000001, candidate["hitProbability"]))
-        + policy["odds_weight"] * math.log(max(1.1, candidate["assumedOdds"]))
+        + policy["odds_weight"] * math.log(max(1.1, candidate["officialOdds"]))
         + policy["rank_weight"] * candidate["rankSum"]
         + policy["first_weight"] * (1 if candidate["includesFirst"] else 0)
         + policy["type_bias"].get(candidate["betType"], -99)
@@ -143,13 +142,18 @@ def candidate_score(candidate, policy):
 
 
 def build_candidates(race):
-    ranked = sorted([runner for runner in race.get("runners", []) if float(runner.get("probability") or 0) > 0], key=lambda row: -float(row.get("probability") or 0))
+    official = official_odds_map(race)
+    if not official:
+        return []
+    ranked = sorted(
+        [runner for runner in race.get("runners", []) if float(runner.get("probability") or 0) > 0],
+        key=lambda row: -float(row.get("probability") or 0),
+    )
     if not ranked:
         return []
     for index, runner in enumerate(ranked, start=1):
         runner.setdefault("predictedOrder", index)
     model = normalized_weights(ranked, "probability")
-    market = market_weights(ranked)
     by_horse = {int(runner["horseNo"]): runner for runner in ranked}
     first_horse = int(ranked[0]["horseNo"])
     pool = ranked[:6]
@@ -161,29 +165,24 @@ def build_candidates(race):
         key = (bet_type, horses)
         if key in seen or len(set(horses)) != len(horses):
             return
-        model_probability = event_probability(bet_type, horses, model)
-        market_probability = event_probability(bet_type, horses, market)
-        if model_probability <= 0 or market_probability <= 0:
+        published_odds = official.get(odds_key(bet_type, horses))
+        if published_odds is None:
             return
-        config = TICKET_CONFIG[bet_type]
-        if bet_type == "単勝":
-            odds = float(by_horse[horses[0]].get("winOdds") or 0)
-            if odds <= 1:
-                return
-        else:
-            odds = config["payout_ratio"] / market_probability
-        odds = math.floor(clamp(odds, 1.1, 2500.0) * 10) / 10
-        expected_value = clamp(model_probability * odds * 100 * config["reliability"], 1.0, 9999.0)
+        model_probability = event_probability(bet_type, horses, model)
+        if model_probability <= 0:
+            return
+        expected_value = clamp(model_probability * published_odds * 100, 1.0, 9999.0)
         rank_sum = sum(int(by_horse[horse].get("predictedOrder") or 99) for horse in horses)
         candidates.append({
             "betType": bet_type,
             "horses": horses,
             "combination": "-".join(str(value) for value in horses),
-            "assumedOdds": odds,
+            "officialOdds": published_odds,
             "hitProbability": model_probability,
             "expectedValuePct": expected_value,
             "rankSum": rank_sum,
             "includesFirst": first_horse in horses,
+            "oddsSource": OFFICIAL_ODDS_SOURCE,
         })
         seen.add(key)
 
@@ -242,6 +241,8 @@ def allocate_stakes(course, selected):
 
 def build_bets(race):
     candidates = build_candidates(race)
+    if not candidates:
+        return []
     bets = []
     signatures = {}
     for course in COURSES:
@@ -253,11 +254,14 @@ def build_bets(race):
                 "betType": f'{course}｜{item["betType"]}',
                 "combination": item["combination"],
                 "stakeYen": stake,
-                "assumedOdds": item["assumedOdds"],
+                "assumedOdds": item["officialOdds"],
+                "officialOdds": item["officialOdds"],
+                "oddsSource": OFFICIAL_ODDS_SOURCE,
                 "hitProbability": item["hitProbability"],
                 "expectedValuePct": item["expectedValuePct"],
             })
-    if len(set(signatures.values())) != len(COURSES):
+    nonempty = [signature for signature in signatures.values() if signature]
+    if nonempty and len(set(nonempty)) != len(nonempty):
         raise RuntimeError(f"FINAL_POLICY_COURSES_NOT_DISTINCT:{signatures}")
     return bets
 
@@ -269,9 +273,24 @@ def payout_key(bet_type, combination):
 
 
 def evaluate(races):
-    aggregate = {course: {"races": 0, "tickets": 0, "stakeYen": 0, "returnYen": 0, "hitRaces": 0, "monthly": defaultdict(lambda: [0, 0])} for course in COURSES}
+    aggregate = {
+        course: {
+            "races": 0,
+            "tickets": 0,
+            "stakeYen": 0,
+            "returnYen": 0,
+            "hitRaces": 0,
+            "skippedNoOfficialOdds": 0,
+            "monthly": defaultdict(lambda: [0, 0]),
+        }
+        for course in COURSES
+    }
     for race in races:
         bets = build_bets(race)
+        if not bets:
+            for course in COURSES:
+                aggregate[course]["skippedNoOfficialOdds"] += 1
+            continue
         race_returns = defaultdict(int)
         for bet in bets:
             course, ticket = bet["betType"].split("｜", 1)
@@ -306,5 +325,7 @@ def evaluate(races):
             "monthlyRoiPct": monthly,
             "minimumMonthlyRoiPct": min(monthly.values()) if monthly else None,
             "targetStakePerRace": COURSE_TARGET_STAKES[course],
+            "skippedNoOfficialOdds": row["skippedNoOfficialOdds"],
+            "oddsSource": OFFICIAL_ODDS_SOURCE,
         }
     return result
