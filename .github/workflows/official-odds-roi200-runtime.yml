@@ -1,11 +1,13 @@
-name: Official odds ROI 200 model
-run-name: Official odds ROI 200 model · ${{ github.sha }}
+name: Official odds ROI 200 runtime
+run-name: Official odds ROI 200 runtime · ${{ github.sha }}
 
 on:
   workflow_dispatch:
   pull_request:
     paths:
       - "scripts/collect-jra-official-odds.py"
+      - "scripts/collect-jra-official-odds-runtime.py"
+      - "scripts/test-official-odds-runtime.py"
       - "scripts/production_base_loader.py"
       - "scripts/generate-official-odds-roi200-shadow-v2.py"
       - "scripts/search-official-odds-roi200-forward-v2.py"
@@ -13,12 +15,13 @@ on:
       - "scripts/official-odds-roi200-policy.py"
       - "scripts/official-odds-roi200-policy-v2.py"
       - "scripts/publish-official-odds-roi200-production-v2.py"
-      - "scripts/run-final-course-production.py"
-      - ".github/workflows/official-odds-roi200-model.yml"
+      - ".github/workflows/official-odds-roi200-runtime.yml"
   push:
     branches: [main]
     paths:
       - "scripts/collect-jra-official-odds.py"
+      - "scripts/collect-jra-official-odds-runtime.py"
+      - "scripts/test-official-odds-runtime.py"
       - "scripts/production_base_loader.py"
       - "scripts/generate-official-odds-roi200-shadow-v2.py"
       - "scripts/search-official-odds-roi200-forward-v2.py"
@@ -26,8 +29,7 @@ on:
       - "scripts/official-odds-roi200-policy.py"
       - "scripts/official-odds-roi200-policy-v2.py"
       - "scripts/publish-official-odds-roi200-production-v2.py"
-      - "scripts/run-final-course-production.py"
-      - ".github/workflows/official-odds-roi200-model.yml"
+      - ".github/workflows/official-odds-roi200-runtime.yml"
   schedule:
     - cron: "*/30 * * * 5,6,0"
 
@@ -70,26 +72,28 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --disable-pip-version-check numpy scikit-learn
 
-      - name: Verify source and immutable rules
+      - name: Verify source, parser and fixed rules
         shell: bash
         run: |
           python -m py_compile \
             scripts/collect-jra-official-odds.py \
+            scripts/collect-jra-official-odds-runtime.py \
+            scripts/test-official-odds-runtime.py \
             scripts/production_base_loader.py \
-            scripts/generate-official-odds-roi200-shadow.py \
             scripts/generate-official-odds-roi200-shadow-v2.py \
             scripts/search-official-odds-roi200-forward-v2.py \
             scripts/prepare-official-odds-roi200-promotion-v2.py \
             scripts/official-odds-roi200-policy.py \
             scripts/official-odds-roi200-policy-v2.py \
-            scripts/publish-official-odds-roi200-production.py \
             scripts/publish-official-odds-roi200-production-v2.py \
             scripts/run-final-course-production.py
+          python scripts/test-official-odds-runtime.py
           python scripts/verify-race-tantei-fixed-constraints.py
           if grep -R "PAYOUT_RATIO.*market_probability\|payout_ratio /\|assumed_odds(probability" \
             scripts/official-odds-roi200-policy.py \
             scripts/official-odds-roi200-policy-v2.py \
             scripts/collect-jra-official-odds.py \
+            scripts/collect-jra-official-odds-runtime.py \
             scripts/generate-official-odds-roi200-shadow-v2.py \
             scripts/search-official-odds-roi200-forward-v2.py; then
             echo "Synthetic odds logic found in official-odds model" >&2
@@ -101,7 +105,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python scripts/collect-jra-official-odds.py 2>&1 | tee official-odds-collection.log
+          python scripts/collect-jra-official-odds-runtime.py 2>&1 | tee official-odds-collection.log
 
       - name: Generate shadow value candidates
         if: github.event_name != 'pull_request'
