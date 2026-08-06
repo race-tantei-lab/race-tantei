@@ -1,0 +1,110 @@
+name: Promote only passing production model
+run-name: Promote only passing production model · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "analysis-results/*.json"
+      - "candidate-policies/*.py"
+      - "config/race-tantei-fixed-constraints.json"
+      - "scripts/find-and-promote-production-candidate.py"
+      - "scripts/verify-production-candidate.py"
+      - "scripts/verify-approved-production-model.py"
+      - ".github/workflows/promote-passing-production-model.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+concurrency:
+  group: promote-passing-production-model
+  cancel-in-progress: true
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish gate start
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='production/roi-200-promotion-gate' \
+            -f description='確認中：全3コース200%以上の候補だけを昇格' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify immutable rules
+        run: python scripts/verify-race-tantei-fixed-constraints.py
+
+      - name: Search and promote only a passing candidate
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/find-and-promote-production-candidate.py | tee production-promotion-gate.log
+
+      - name: Verify promoted files
+        id: promoted
+        shell: bash
+        run: |
+          if git diff --quiet -- scripts/final-course-policy.py config/approved-production-model.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No candidate passed every gate. Production remains unchanged."
+          else
+            python -m py_compile scripts/final-course-policy.py
+            python scripts/verify-approved-production-model.py
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit approved production model
+        if: steps.promoted.outputs.changed == 'true'
+        shell: bash
+        run: |
+          git add scripts/final-course-policy.py config/approved-production-model.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Promote model that passed all ROI 200 gates"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Upload gate log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-roi-200-promotion-gate
+          path: production-promotion-gate.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish final status
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ job.status }}" != "success" ]; then
+            STATE=failure
+            DESCRIPTION='失敗：200%昇格ゲートを確認'
+          elif [ "${{ steps.promoted.outputs.changed }}" = "true" ]; then
+            STATE=success
+            DESCRIPTION='合格：全条件200%以上のモデルだけを本番昇格'
+          else
+            STATE=success
+            DESCRIPTION='本番変更なし：全条件合格モデルなし'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$STATE" \
+            -f context='production/roi-200-promotion-gate' \
+            -f description="$DESCRIPTION" \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
