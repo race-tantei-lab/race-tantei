@@ -9,14 +9,36 @@
   "syntheticOddsUsed": false,
   "postResultLeakageUsed": false,
   "constraints": {
-    "version": 1,
+    "version": 2,
+    "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
     "immutableProjectRules": {
       "minimumRacesPerVenueDay": 5,
       "mayIncreaseRaces": true,
       "mayDecreaseBelowMinimum": false,
       "officialOddsOnly": true,
+      "officialCombinationOddsRequiredForLiveBets": true,
       "syntheticOddsForbidden": true,
-      "postResultLeakageForbidden": true
+      "missingHistoricalOddsMustRemainMissing": true,
+      "actualJraPayoutsOnly": true,
+      "postResultLeakageForbidden": true,
+      "singleOnlyPortfolioForbidden": true
+    },
+    "promotionRules": {
+      "targetRoiPct": 200.0,
+      "minimumFinalHoldoutRacesPerCourse": 100,
+      "requireEveryCourseToPass": true,
+      "requireRoiWithoutTop1Pct": 100.0,
+      "implementationBeforeAllGatesPassForbidden": true,
+      "failedCandidateMayBeRecordedButNotPromoted": true,
+      "automaticProductionChangeFromFailedCandidateForbidden": true
+    },
+    "operationRules": {
+      "explainWorkBeforeStarting": true,
+      "provideEstimatedDurationBeforeStarting": true,
+      "maximumSilentMinutes": 30,
+      "continueWithoutRepeatedUserApproval": true,
+      "progressReportsUseKeyNumbersOnly": true,
+      "finalReportFocusesOnResult": true
     },
     "courses": {
       "ライト": {
@@ -27,7 +49,8 @@
           "ワイド",
           "馬連"
         ],
-        "requireEveryAllowedBetType": true
+        "requireEveryAllowedBetType": true,
+        "minimumDistinctBetTypes": 3
       },
       "スタンダード": {
         "budgetYen": 5000,
@@ -39,7 +62,8 @@
           "馬単",
           "3連複"
         ],
-        "requireEveryAllowedBetType": true
+        "requireEveryAllowedBetType": true,
+        "minimumDistinctBetTypes": 5
       },
       "プレミアム": {
         "budgetYen": 10000,
@@ -52,7 +76,8 @@
           "3連複",
           "3連単"
         ],
-        "requireEveryAllowedBetType": true
+        "requireEveryAllowedBetType": true,
+        "minimumDistinctBetTypes": 6
       }
     }
   },
