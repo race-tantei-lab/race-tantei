@@ -1,0 +1,205 @@
+name: Official odds ROI 200 runtime
+run-name: Official odds ROI 200 runtime · ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/collect-jra-official-odds.py"
+      - "scripts/collect-jra-official-odds-runtime.py"
+      - "scripts/test-official-odds-runtime.py"
+      - "scripts/production_base_loader.py"
+      - "scripts/generate-official-odds-roi200-shadow-v2.py"
+      - "scripts/search-official-odds-roi200-forward-v2.py"
+      - "scripts/prepare-official-odds-roi200-promotion-v2.py"
+      - "scripts/official-odds-roi200-policy.py"
+      - "scripts/official-odds-roi200-policy-v2.py"
+      - "scripts/publish-official-odds-roi200-production-v2.py"
+      - ".github/workflows/official-odds-roi200-runtime.yml"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/collect-jra-official-odds.py"
+      - "scripts/collect-jra-official-odds-runtime.py"
+      - "scripts/test-official-odds-runtime.py"
+      - "scripts/production_base_loader.py"
+      - "scripts/generate-official-odds-roi200-shadow-v2.py"
+      - "scripts/search-official-odds-roi200-forward-v2.py"
+      - "scripts/prepare-official-odds-roi200-promotion-v2.py"
+      - "scripts/official-odds-roi200-policy.py"
+      - "scripts/official-odds-roi200-policy-v2.py"
+      - "scripts/publish-official-odds-roi200-production-v2.py"
+      - ".github/workflows/official-odds-roi200-runtime.yml"
+  schedule:
+    - cron: "*/30 * * * 5,6,0"
+
+permissions:
+  contents: write
+  statuses: write
+
+concurrency:
+  group: official-odds-roi200-model-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  cancel-in-progress: true
+
+jobs:
+  collect-search-promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start status
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='analysis/official-odds-roi200' \
+            -f description='実行中：JRA公式オッズで3コース200%モデルを構築' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check numpy scikit-learn
+
+      - name: Verify source, parser and fixed rules
+        shell: bash
+        run: |
+          python -m py_compile \
+            scripts/collect-jra-official-odds.py \
+            scripts/collect-jra-official-odds-runtime.py \
+            scripts/test-official-odds-runtime.py \
+            scripts/production_base_loader.py \
+            scripts/generate-official-odds-roi200-shadow-v2.py \
+            scripts/search-official-odds-roi200-forward-v2.py \
+            scripts/prepare-official-odds-roi200-promotion-v2.py \
+            scripts/official-odds-roi200-policy.py \
+            scripts/official-odds-roi200-policy-v2.py \
+            scripts/publish-official-odds-roi200-production-v2.py \
+            scripts/run-final-course-production.py
+          python scripts/test-official-odds-runtime.py
+          python scripts/verify-race-tantei-fixed-constraints.py
+          if grep -R "PAYOUT_RATIO.*market_probability\|payout_ratio /\|assumed_odds(probability" \
+            scripts/official-odds-roi200-policy.py \
+            scripts/official-odds-roi200-policy-v2.py \
+            scripts/collect-jra-official-odds.py \
+            scripts/collect-jra-official-odds-runtime.py \
+            scripts/generate-official-odds-roi200-shadow-v2.py \
+            scripts/search-official-odds-roi200-forward-v2.py; then
+            echo "Synthetic odds logic found in official-odds model" >&2
+            exit 1
+          fi
+
+      - name: Collect JRA official combination odds
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/collect-jra-official-odds-runtime.py 2>&1 | tee official-odds-collection.log
+
+      - name: Generate shadow value candidates
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/generate-official-odds-roi200-shadow-v2.py 2>&1 | tee official-odds-roi200-shadow.log
+
+      - name: Search only for a genuine ROI 200 forward model
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/search-official-odds-roi200-forward-v2.py 2>&1 | tee official-odds-roi200-forward-search.log
+          python scripts/prepare-official-odds-roi200-promotion-v2.py 2>&1 | tee official-odds-roi200-promotion.log
+
+      - name: Verify promotion candidate when created
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          if [[ -f official-odds-roi200-promotion-candidate.json ]]; then
+            python scripts/verify-production-candidate.py \
+              official-odds-roi200-promotion-candidate.json \
+              --write-approval official-odds-roi200-gate-approval.json
+          else
+            echo "No verified 200% model yet. Production remains unchanged."
+          fi
+
+      - name: Upload complete result
+        if: always() && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: official-odds-roi200-model
+          path: |
+            official-odds-collection-report.json
+            official-odds-collection.log
+            official-odds-roi200-shadow.json
+            official-odds-roi200-shadow.log
+            official-odds-roi200-forward-search.json
+            official-odds-roi200-forward-search.log
+            official-odds-roi200-promotion-candidate.json
+            official-odds-roi200-promotion.log
+            official-odds-roi200-gate-approval.json
+            config/official-odds-calibration.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Save reports and verified candidate
+        if: success() && github.event_name != 'pull_request'
+        shell: bash
+        run: |
+          mkdir -p analysis-results
+          for file in \
+            official-odds-collection-report.json \
+            official-odds-roi200-shadow.json \
+            official-odds-roi200-forward-search.json \
+            official-odds-roi200-promotion-candidate.json; do
+            if [[ -f "$file" ]]; then
+              cp "$file" "analysis-results/$file"
+              git add -f "analysis-results/$file"
+            fi
+          done
+          if [[ -f config/official-odds-calibration.json ]]; then
+            git add config/official-odds-calibration.json
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then
+            echo "No report changes."
+          else
+            git commit -m "Save official odds ROI 200 model result"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Publish final status
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ job.status }}" != "success" ]; then
+            STATE=failure
+            DESCRIPTION='失敗：公式オッズ200%モデルのログを確認'
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            STATE=success
+            DESCRIPTION='確認完了：公式オッズ200%モデルの実装'
+          elif [ -f official-odds-roi200-promotion-candidate.json ]; then
+            STATE=success
+            DESCRIPTION='合格：公式オッズで全3コース200%以上を確認'
+          else
+            STATE=success
+            DESCRIPTION='稼働中：公式オッズ200%モデルを前向き検証'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$STATE" \
+            -f context='analysis/official-odds-roi200' \
+            -f description="$DESCRIPTION" \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
