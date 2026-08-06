@@ -1,0 +1,105 @@
+name: V12 market blend ranking
+run-name: V12 market blend ranking · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/analyze-v12-market-blend-ranking.py"
+      - ".github/workflows/v12-market-blend-ranking.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+concurrency:
+  group: v12-market-blend-ranking
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Publish analysis start
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='analysis/v12-market-blend-ranking' \
+            -f description='分析中：公式単勝オッズと順位モデルを再構成' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check numpy scikit-learn
+
+      - name: Verify source
+        run: python -m py_compile scripts/analyze-v12-market-blend-ranking.py
+
+      - name: Run market blend ranking analysis
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/analyze-v12-market-blend-ranking.py 2>&1 | tee v12-market-blend-ranking.log
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v12-market-blend-ranking
+          path: |
+            v12-market-blend-ranking.json
+            v12-market-blend-ranking.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Save report
+        if: success()
+        shell: bash
+        run: |
+          mkdir -p analysis-results
+          cp v12-market-blend-ranking.json analysis-results/v12-market-blend-ranking.json
+          cp v12-market-blend-ranking.log analysis-results/v12-market-blend-ranking.log
+          git add -f analysis-results/v12-market-blend-ranking.json analysis-results/v12-market-blend-ranking.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then
+            echo "No report changes."
+          else
+            git commit -m "Save v12 market blend ranking analysis"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Publish final status
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            STATE=success
+            DESCRIPTION='完了：公式単勝オッズ混合順位の検証'
+          else
+            STATE=failure
+            DESCRIPTION='失敗：v12順位分析ログ確認が必要'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$STATE" \
+            -f context='analysis/v12-market-blend-ranking' \
+            -f description="$DESCRIPTION" \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
