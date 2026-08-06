@@ -1,5 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   fetchJraPage,
   pageLooksLikeResult
@@ -30,6 +31,7 @@ const MAX_ATTEMPTS = Math.max(
   Number(process.env.REPAIR_MAX_ATTEMPTS ?? 6)
 );
 const RETRY_DELAYS_MS = [0, 3_000, 10_000, 30_000, 60_000, 90_000];
+const OFFICIAL_JRA_HOSTS = new Set(["sp.jra.jp", "www.jra.go.jp", "jra.go.jp"]);
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -75,6 +77,17 @@ function normalizeRace(raw) {
   };
 }
 
+export function isOfficialJraResultUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:"
+      && OFFICIAL_JRA_HOSTS.has(url.hostname.toLowerCase())
+      && url.pathname.startsWith("/JRADB/");
+  } catch {
+    return false;
+  }
+}
+
 function validateInputRace(race) {
   if (!race.raceId) throw new Error("REPAIR_RACE_ID_MISSING");
   if (!/^20\d{2}-\d{2}-\d{2}$/.test(race.raceDate)) {
@@ -83,7 +96,7 @@ function validateInputRace(race) {
   if (!race.venue || race.raceNo < 1 || race.raceNo > 12) {
     throw new Error(`REPAIR_RACE_META_INVALID:${race.raceId}`);
   }
-  if (!/^https:\/\/(?:www\.|sp\.)?jra\.go\.jp\//i.test(race.resultUrl)) {
+  if (!isOfficialJraResultUrl(race.resultUrl)) {
     throw new Error(`REPAIR_RESULT_URL_INVALID:${race.raceId}:${race.resultUrl}`);
   }
   if (race.activeRunners < 2 || race.activeRunners > 18) {
@@ -286,7 +299,9 @@ async function main() {
   console.log(JSON.stringify(summary));
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
