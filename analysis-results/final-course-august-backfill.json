@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-06T13:09:12Z",
+  "generatedAt": "2026-08-06T13:47:38Z",
   "modelVersion": "v5.0.0-nonlinear-course-policy",
   "sourcePredictionModel": "v4.1.0-nonlinear-hgb-5r",
   "mode": "bulk-saved-ranking-final-course-policy",
@@ -10,78 +10,10 @@
   },
   "sourceRaces": 72,
   "selectedRaces": 30,
-  "settledTickets": 1110,
+  "settledTickets": 0,
   "dates": {
-    "2026-08-01": {
-      "スタンダード": {
-        "races": 11,
-        "tickets": 165,
-        "stakeYen": 55000,
-        "returnYen": 27640,
-        "profitYen": -27360,
-        "roiPct": 50.2545,
-        "hitRaces": 4,
-        "hitRatePct": 36.3636,
-        "targetStakePerRace": 5000
-      },
-      "プレミアム": {
-        "races": 11,
-        "tickets": 176,
-        "stakeYen": 110000,
-        "returnYen": 17410,
-        "profitYen": -92590,
-        "roiPct": 15.8273,
-        "hitRaces": 7,
-        "hitRatePct": 63.6364,
-        "targetStakePerRace": 10000
-      },
-      "ライト": {
-        "races": 11,
-        "tickets": 66,
-        "stakeYen": 22000,
-        "returnYen": 11860,
-        "profitYen": -10140,
-        "roiPct": 53.9091,
-        "hitRaces": 6,
-        "hitRatePct": 54.5455,
-        "targetStakePerRace": 2000
-      }
-    },
+    "2026-08-01": {},
     "2026-08-02": {}
   },
-  "aggregate": {
-    "スタンダード": {
-      "races": 11,
-      "tickets": 165,
-      "stakeYen": 55000,
-      "returnYen": 27640,
-      "profitYen": -27360,
-      "roiPct": 50.2545,
-      "hitRaces": 4,
-      "hitRatePct": 36.3636,
-      "targetStakePerRace": 5000
-    },
-    "プレミアム": {
-      "races": 11,
-      "tickets": 176,
-      "stakeYen": 110000,
-      "returnYen": 17410,
-      "profitYen": -92590,
-      "roiPct": 15.8273,
-      "hitRaces": 7,
-      "hitRatePct": 63.6364,
-      "targetStakePerRace": 10000
-    },
-    "ライト": {
-      "races": 11,
-      "tickets": 66,
-      "stakeYen": 22000,
-      "returnYen": 11860,
-      "profitYen": -10140,
-      "roiPct": 53.9091,
-      "hitRaces": 6,
-      "hitRatePct": 54.5455,
-      "targetStakePerRace": 2000
-    }
-  }
+  "aggregate": {}
 }
