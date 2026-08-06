@@ -3,7 +3,8 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   fetchJraPage,
-  pageLooksLikeResult
+  pageLooksLikeResult,
+  parseEntryPage
 } from "../dist-test/src/v1/jra.js";
 import { parseHistoricalResultRunners } from "../dist-test/src/v1/three-month-history.js";
 
@@ -104,6 +105,11 @@ export function canonicalOfficialJraResultUrl(value) {
   return canonical.toString();
 }
 
+export function resultUrlCandidates(value) {
+  const canonical = canonicalOfficialJraResultUrl(value);
+  return [...new Set([canonical, value])];
+}
+
 export function hasValidPopularityRanks(ranks, activeCount) {
   if (!Number.isInteger(activeCount) || activeCount < 2 || activeCount > 18) return false;
   if (!Array.isArray(ranks) || ranks.length !== activeCount) return false;
@@ -131,7 +137,7 @@ function validateInputRace(race) {
   if (!isOfficialJraResultUrl(race.resultUrl)) {
     throw new Error(`REPAIR_RESULT_URL_INVALID:${race.raceId}:${race.resultUrl}`);
   }
-  canonicalOfficialJraResultUrl(race.resultUrl);
+  resultUrlCandidates(race.resultUrl);
   if (race.activeRunners < 2 || race.activeRunners > 18) {
     throw new Error(`REPAIR_ACTIVE_COUNT_INVALID:${race.raceId}:${race.activeRunners}`);
   }
@@ -157,23 +163,30 @@ function isBlockError(message) {
   return /HTTP_403|HTTP_429|HTTP_503|BLOCKED_PAGE|AbortError|fetch failed/i.test(message);
 }
 
+function mayContainResultMarket(html) {
+  return pageLooksLikeResult(html) || /番人気/.test(html);
+}
+
 async function fetchWithRetry(race) {
-  const canonicalUrl = canonicalOfficialJraResultUrl(race.resultUrl);
+  const candidates = resultUrlCandidates(race.resultUrl);
   let lastError = "UNKNOWN_FETCH_ERROR";
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     const retryDelay = RETRY_DELAYS_MS[Math.min(attempt - 1, RETRY_DELAYS_MS.length - 1)] ?? 90_000;
     if (retryDelay > 0) await sleep(retryDelay);
-    await waitForRequestSlot();
-    try {
-      const page = await fetchJraPage(canonicalUrl);
-      if (!pageLooksLikeResult(page.html)) {
-        throw new Error("RESULT_SIGNATURE_MISSING");
-      }
-      return page;
-    } catch (error) {
-      lastError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-      if (isBlockError(lastError)) {
-        nextRequestAt = Math.max(nextRequestAt, Date.now() + Math.min(90_000, 10_000 * attempt));
+
+    for (const url of candidates) {
+      await waitForRequestSlot();
+      try {
+        const page = await fetchJraPage(url);
+        if (!mayContainResultMarket(page.html)) {
+          throw new Error("RESULT_SIGNATURE_MISSING");
+        }
+        return page;
+      } catch (error) {
+        lastError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+        if (isBlockError(lastError)) {
+          nextRequestAt = Math.max(nextRequestAt, Date.now() + Math.min(90_000, 10_000 * attempt));
+        }
       }
     }
   }
@@ -201,27 +214,45 @@ function popularityProxyOdds(active) {
   return odds;
 }
 
-function repairedMarket(race, html) {
-  const runners = parseHistoricalResultRunners(html);
-  const active = runners.filter((runner) => runner.runnerStatus === "active");
-  if (active.length !== race.activeRunners) {
-    throw new Error(
-      `REPAIR_ACTIVE_COUNT_MISMATCH:${race.raceId}:${active.length}:${race.activeRunners}`
-    );
+function runnerCandidates(html, pageUrl) {
+  const candidates = [];
+  try {
+    candidates.push({ source: "historical", runners: parseHistoricalResultRunners(html) });
+  } catch {
+    // Try the mobile result layout below.
   }
-  const ranks = active.map((runner) => runner.popularity);
-  if (!hasValidPopularityRanks(ranks, active.length)) {
-    throw new Error(`REPAIR_POPULARITY_INVALID:${race.raceId}:${JSON.stringify(ranks)}`);
+  try {
+    candidates.push({ source: "mobile", runners: parseEntryPage(html, pageUrl).runners });
+  } catch {
+    // The page may be desktop-only.
   }
-  const odds = popularityProxyOdds(active);
-  if (odds.size !== active.length) {
-    throw new Error(`REPAIR_PROXY_ODDS_INVALID:${race.raceId}:${odds.size}:${active.length}`);
+  return candidates;
+}
+
+function repairedMarket(race, html, pageUrl) {
+  const diagnostics = [];
+  for (const candidate of runnerCandidates(html, pageUrl)) {
+    const active = candidate.runners.filter((runner) => runner.runnerStatus === "active");
+    const ranks = active.map((runner) => runner.popularity);
+    diagnostics.push({
+      source: candidate.source,
+      active: active.length,
+      ranks
+    });
+    if (active.length !== race.activeRunners) continue;
+    if (!hasValidPopularityRanks(ranks, active.length)) continue;
+
+    const odds = popularityProxyOdds(active);
+    if (odds.size !== active.length) continue;
+    return active.map((runner) => ({
+      horseNo: runner.horseNo,
+      popularity: runner.popularity,
+      winOdds: odds.get(runner.horseNo) ?? null
+    }));
   }
-  return active.map((runner) => ({
-    horseNo: runner.horseNo,
-    popularity: runner.popularity,
-    winOdds: odds.get(runner.horseNo) ?? null
-  }));
+  throw new Error(
+    `REPAIR_MARKET_INVALID:${race.raceId}:${JSON.stringify(diagnostics)}`
+  );
 }
 
 function marketSql(race, runners) {
@@ -271,7 +302,7 @@ async function main() {
       const race = races[index];
       try {
         const page = await fetchWithRetry(race);
-        const market = repairedMarket(race, page.html);
+        const market = repairedMarket(race, page.html, page.url);
         repaired[index] = {
           race,
           finalUrl: page.url,
@@ -302,6 +333,19 @@ async function main() {
     JSON.stringify(failures, null, 2) + "\n",
     "utf8"
   );
+
+  const successful = repaired.filter(Boolean);
+  let fileIndex = 0;
+  for (let offset = 0; offset < successful.length; offset += RACES_PER_SQL_FILE) {
+    const group = successful.slice(offset, offset + RACES_PER_SQL_FILE);
+    const body = group
+      .map((item) => marketSql(item.race, item.market))
+      .join("\n");
+    const fileName = `repair-${String(fileIndex).padStart(4, "0")}.sql`;
+    await writeFile(path.join(SQL_DIR, fileName), `${body}\n`, "utf8");
+    fileIndex += 1;
+  }
+
   const summary = {
     targets: races.length,
     completed,
@@ -311,8 +355,11 @@ async function main() {
     maxAttempts: MAX_ATTEMPTS,
     firstRaceDate: races[0]?.raceDate ?? null,
     lastRaceDate: races.at(-1)?.raceDate ?? null,
+    sqlFiles: fileIndex,
     desktopCanonicalization: true,
-    tiedPopularityAccepted: true
+    mobileFallback: true,
+    tiedPopularityAccepted: true,
+    partialSafeLoad: true
   };
   await writeFile(
     path.join(OUTPUT_DIR, "summary.json"),
@@ -320,27 +367,12 @@ async function main() {
     "utf8"
   );
 
-  if (failures.length > 0 || completed !== races.length) {
-    throw new Error(`REPAIR_FETCH_INCOMPLETE:${completed}:${failures.length}:${races.length}`);
+  if (completed === 0 || fileIndex === 0) {
+    throw new Error(`REPAIR_NO_VALID_OUTPUT:${completed}:${failures.length}:${races.length}`);
   }
-
-  let fileIndex = 0;
-  for (let offset = 0; offset < repaired.length; offset += RACES_PER_SQL_FILE) {
-    const group = repaired.slice(offset, offset + RACES_PER_SQL_FILE);
-    const body = group
-      .map((item) => marketSql(item.race, item.market))
-      .join("\n");
-    const fileName = `repair-${String(fileIndex).padStart(4, "0")}.sql`;
-    await writeFile(path.join(SQL_DIR, fileName), `${body}\n`, "utf8");
-    fileIndex += 1;
+  if (failures.length > 0) {
+    console.warn(`REPAIR_PARTIAL:${completed}:${failures.length}:${races.length}`);
   }
-
-  summary.sqlFiles = fileIndex;
-  await writeFile(
-    path.join(OUTPUT_DIR, "summary.json"),
-    JSON.stringify(summary, null, 2) + "\n",
-    "utf8"
-  );
   console.log(JSON.stringify(summary));
 }
 
