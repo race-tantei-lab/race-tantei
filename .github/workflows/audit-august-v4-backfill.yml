@@ -1,5 +1,6 @@
 name: Audit August v4 backfill
 
+# Run after workflow registration to read the actual D1 state.
 on:
   workflow_dispatch:
   push:
