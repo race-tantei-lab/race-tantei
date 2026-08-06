@@ -4,6 +4,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+from production_base_loader import load_production_base
+
 ROOT = Path(__file__).resolve().parents[1]
 BASE_PATH = ROOT / "scripts" / "publish-nonlinear-v4-production.py"
 POLICY_PATH = ROOT / "scripts" / "official-odds-roi200-policy.py"
@@ -20,7 +22,7 @@ def load_module(name, path):
     return module
 
 
-base = load_module("official_odds_shadow_base", BASE_PATH)
+base = load_production_base("official_odds_shadow_base", BASE_PATH)
 policy = load_module("official_odds_shadow_policy", POLICY_PATH)
 
 
