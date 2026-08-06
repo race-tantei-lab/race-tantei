@@ -1,5 +1,6 @@
 name: Apply v4 home consistency fix
 
+# Registered on branch; this second push starts the one-time patch.
 on:
   push:
     branches:
@@ -107,7 +108,7 @@ jobs:
           text = text.replace(day_anchor, day_replacement, 1)
 
           render_anchor = """    <div class="day-summary"><div><h2>${dateLabel(date)}</h2><span>${races.length}R</span></div><p>買い目あり ${buyCount}R　終了 ${finishedCount}R</p></div>
-    <div class="filter-tabs""" 
+    <div class="filter-tabs"""
           render_replacement = """    <div class="day-summary"><div><h2>${dateLabel(date)}</h2><span>${races.length}R</span></div><p>買い目あり ${buyCount}R　終了 ${finishedCount}R</p></div>
     <div class="day-course-totals">${dailyTotals}</div>
     <div class="filter-tabs"""
