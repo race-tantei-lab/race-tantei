@@ -75,3 +75,5 @@ jobs:
             git pull --rebase origin main
             git push origin HEAD:main
           fi
+
+# Triggered after registration on main.
