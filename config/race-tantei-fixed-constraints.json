@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "immutableProjectRules": {
+    "minimumRacesPerVenueDay": 5,
+    "mayIncreaseRaces": true,
+    "mayDecreaseBelowMinimum": false,
+    "officialOddsOnly": true,
+    "syntheticOddsForbidden": true,
+    "postResultLeakageForbidden": true
+  },
+  "courses": {
+    "ライト": {
+      "budgetYen": 2000,
+      "ticketCount": 6,
+      "allowedBetTypes": ["単勝", "ワイド", "馬連"],
+      "requireEveryAllowedBetType": true
+    },
+    "スタンダード": {
+      "budgetYen": 5000,
+      "ticketCount": 15,
+      "allowedBetTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複"],
+      "requireEveryAllowedBetType": true
+    },
+    "プレミアム": {
+      "budgetYen": 10000,
+      "ticketCount": 16,
+      "allowedBetTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"],
+      "requireEveryAllowedBetType": true
+    }
+  }
+}
