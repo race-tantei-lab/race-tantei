@@ -1,0 +1,1437 @@
+{
+  "generatedAt": "2026-08-06",
+  "modelVersion": "v11-shadow-robust-portfolio",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "sourceDataFrozen": true,
+  "actualJraPayoutsUsed": true,
+  "syntheticOddsUsed": false,
+  "selectionUsesFinalHoldout": false,
+  "sourceCandidateRule": "Only the ten candidates ordered by pre-holdout selection score in v10 are combined.",
+  "summary": {
+    "selectedPortfolio": {
+      "selectionScore": 105.86458465822176,
+      "components": [
+        {
+          "variant": "ensemble",
+          "selectionMode": "confidence",
+          "filter": {
+            "name": "probabilityGap:high:q50",
+            "kind": "threshold",
+            "field": "probabilityGap",
+            "direction": "high",
+            "threshold": 0.06528370513998284,
+            "trainQuantile": 0.5
+          },
+          "code": "X413",
+          "betType": "3連単",
+          "predictedRanks": [
+            4,
+            1,
+            3
+          ]
+        },
+        {
+          "variant": "pair",
+          "selectionMode": "confidence",
+          "filter": {
+            "name": "raceBand=late",
+            "kind": "category",
+            "field": "raceBand",
+            "value": "late"
+          },
+          "code": "E34",
+          "betType": "馬単",
+          "predictedRanks": [
+            3,
+            4
+          ]
+        },
+        {
+          "variant": "pair",
+          "selectionMode": "confidence",
+          "filter": {
+            "name": "distanceBand=sprint&raceBand=late",
+            "kind": "double_category",
+            "firstField": "distanceBand",
+            "firstValue": "sprint",
+            "secondField": "raceBand",
+            "secondValue": "late"
+          },
+          "code": "E34",
+          "betType": "馬単",
+          "predictedRanks": [
+            3,
+            4
+          ]
+        }
+      ],
+      "developmentA": {
+        "tickets": 797,
+        "hits": 15,
+        "stakeYen": 79700,
+        "returnYen": 105990,
+        "profitYen": 26290,
+        "roiPct": 132.9861982434128,
+        "hitRatePct": 1.8820577164366372,
+        "maxSinglePayoutYen": 19390,
+        "maxSingleReturnShare": 0.18294178696103405,
+        "roiWithoutTop1Pct": 108.65746549560853
+      },
+      "developmentB": {
+        "tickets": 730,
+        "hits": 12,
+        "stakeYen": 73000,
+        "returnYen": 173540,
+        "profitYen": 100540,
+        "roiPct": 237.72602739726025,
+        "hitRatePct": 1.643835616438356,
+        "maxSinglePayoutYen": 24420,
+        "maxSingleReturnShare": 0.1407168376166878,
+        "roiWithoutTop1Pct": 204.27397260273975
+      },
+      "finalHoldout": {
+        "tickets": 458,
+        "hits": 3,
+        "stakeYen": 45800,
+        "returnYen": 9320,
+        "profitYen": -36480,
+        "roiPct": 20.349344978165938,
+        "hitRatePct": 0.6550218340611353,
+        "maxSinglePayoutYen": 6480,
+        "maxSingleReturnShare": 0.6952789699570815,
+        "roiWithoutTop1Pct": 6.2008733624454155
+      },
+      "finalMonthly": {
+        "2026-05": {
+          "tickets": 139,
+          "hits": 0,
+          "stakeYen": 13900,
+          "returnYen": 0,
+          "roiPct": 0.0,
+          "hitRatePct": 0.0
+        },
+        "2026-06": {
+          "tickets": 144,
+          "hits": 1,
+          "stakeYen": 14400,
+          "returnYen": 6480,
+          "roiPct": 45.0,
+          "hitRatePct": 0.6944444444444444
+        },
+        "2026-07": {
+          "tickets": 147,
+          "hits": 0,
+          "stakeYen": 14700,
+          "returnYen": 0,
+          "roiPct": 0.0,
+          "hitRatePct": 0.0
+        },
+        "2026-08": {
+          "tickets": 28,
+          "hits": 2,
+          "stakeYen": 2800,
+          "returnYen": 2840,
+          "roiPct": 101.42857142857142,
+          "hitRatePct": 7.142857142857142
+        }
+      }
+    },
+    "topPreHoldoutPortfolios": [
+      {
+        "selectionScore": 105.86458465822176,
+        "components": [
+          {
+            "variant": "ensemble",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "probabilityGap:high:q50",
+              "kind": "threshold",
+              "field": "probabilityGap",
+              "direction": "high",
+              "threshold": 0.06528370513998284,
+              "trainQuantile": 0.5
+            },
+            "code": "X413",
+            "betType": "3連単",
+            "predictedRanks": [
+              4,
+              1,
+              3
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 797,
+          "hits": 15,
+          "stakeYen": 79700,
+          "returnYen": 105990,
+          "profitYen": 26290,
+          "roiPct": 132.9861982434128,
+          "hitRatePct": 1.8820577164366372,
+          "maxSinglePayoutYen": 19390,
+          "maxSingleReturnShare": 0.18294178696103405,
+          "roiWithoutTop1Pct": 108.65746549560853
+        },
+        "developmentB": {
+          "tickets": 730,
+          "hits": 12,
+          "stakeYen": 73000,
+          "returnYen": 173540,
+          "profitYen": 100540,
+          "roiPct": 237.72602739726025,
+          "hitRatePct": 1.643835616438356,
+          "maxSinglePayoutYen": 24420,
+          "maxSingleReturnShare": 0.1407168376166878,
+          "roiWithoutTop1Pct": 204.27397260273975
+        },
+        "finalHoldout": {
+          "tickets": 458,
+          "hits": 3,
+          "stakeYen": 45800,
+          "returnYen": 9320,
+          "profitYen": -36480,
+          "roiPct": 20.349344978165938,
+          "hitRatePct": 0.6550218340611353,
+          "maxSinglePayoutYen": 6480,
+          "maxSingleReturnShare": 0.6952789699570815,
+          "roiWithoutTop1Pct": 6.2008733624454155
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 139,
+            "hits": 0,
+            "stakeYen": 13900,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "tickets": 144,
+            "hits": 1,
+            "stakeYen": 14400,
+            "returnYen": 6480,
+            "roiPct": 45.0,
+            "hitRatePct": 0.6944444444444444
+          },
+          "2026-07": {
+            "tickets": 147,
+            "hits": 0,
+            "stakeYen": 14700,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 28,
+            "hits": 2,
+            "stakeYen": 2800,
+            "returnYen": 2840,
+            "roiPct": 101.42857142857142,
+            "hitRatePct": 7.142857142857142
+          }
+        }
+      },
+      {
+        "selectionScore": 105.52037033175553,
+        "components": [
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 434,
+          "hits": 10,
+          "stakeYen": 43400,
+          "returnYen": 59840,
+          "profitYen": 16440,
+          "roiPct": 137.88018433179724,
+          "hitRatePct": 2.3041474654377883,
+          "maxSinglePayoutYen": 15440,
+          "maxSingleReturnShare": 0.2580213903743315,
+          "roiWithoutTop1Pct": 102.3041474654378
+        },
+        "developmentB": {
+          "tickets": 442,
+          "hits": 8,
+          "stakeYen": 44200,
+          "returnYen": 108420,
+          "profitYen": 64220,
+          "roiPct": 245.29411764705884,
+          "hitRatePct": 1.809954751131222,
+          "maxSinglePayoutYen": 21790,
+          "maxSingleReturnShare": 0.20097767939494557,
+          "roiWithoutTop1Pct": 195.99547511312215
+        },
+        "finalHoldout": {
+          "tickets": 259,
+          "hits": 2,
+          "stakeYen": 25900,
+          "returnYen": 2840,
+          "profitYen": -23060,
+          "roiPct": 10.965250965250965,
+          "hitRatePct": 0.7722007722007722,
+          "maxSinglePayoutYen": 2250,
+          "maxSingleReturnShare": 0.7922535211267606,
+          "roiWithoutTop1Pct": 2.277992277992278
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 78,
+            "hits": 0,
+            "stakeYen": 7800,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "tickets": 83,
+            "hits": 0,
+            "stakeYen": 8300,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-07": {
+            "tickets": 82,
+            "hits": 0,
+            "stakeYen": 8200,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 16,
+            "hits": 2,
+            "stakeYen": 1600,
+            "returnYen": 2840,
+            "roiPct": 177.5,
+            "hitRatePct": 12.5
+          }
+        }
+      },
+      {
+        "selectionScore": 102.41462904911181,
+        "components": [
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "E41",
+            "betType": "馬単",
+            "predictedRanks": [
+              4,
+              1
+            ]
+          },
+          {
+            "variant": "ensemble",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "probabilityGap:high:q50",
+              "kind": "threshold",
+              "field": "probabilityGap",
+              "direction": "high",
+              "threshold": 0.06528370513998284,
+              "trainQuantile": 0.5
+            },
+            "code": "X413",
+            "betType": "3連単",
+            "predictedRanks": [
+              4,
+              1,
+              3
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 957,
+          "hits": 20,
+          "stakeYen": 95700,
+          "returnYen": 120410,
+          "profitYen": 24710,
+          "roiPct": 125.82027168234065,
+          "hitRatePct": 2.089864158829676,
+          "maxSinglePayoutYen": 19390,
+          "maxSingleReturnShare": 0.16103313678265924,
+          "roiWithoutTop1Pct": 105.55903866248696
+        },
+        "developmentB": {
+          "tickets": 859,
+          "hits": 24,
+          "stakeYen": 85900,
+          "returnYen": 206910,
+          "profitYen": 121010,
+          "roiPct": 240.87310826542492,
+          "hitRatePct": 2.7939464493597206,
+          "maxSinglePayoutYen": 24420,
+          "maxSingleReturnShare": 0.11802232854864433,
+          "roiWithoutTop1Pct": 212.44470314318974
+        },
+        "finalHoldout": {
+          "tickets": 556,
+          "hits": 5,
+          "stakeYen": 55600,
+          "returnYen": 13790,
+          "profitYen": -41810,
+          "roiPct": 24.802158273381295,
+          "hitRatePct": 0.8992805755395683,
+          "maxSinglePayoutYen": 6480,
+          "maxSingleReturnShare": 0.4699057287889775,
+          "roiWithoutTop1Pct": 13.14748201438849
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 165,
+            "hits": 0,
+            "stakeYen": 16500,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "tickets": 174,
+            "hits": 2,
+            "stakeYen": 17400,
+            "returnYen": 9340,
+            "roiPct": 53.67816091954023,
+            "hitRatePct": 1.1494252873563218
+          },
+          "2026-07": {
+            "tickets": 178,
+            "hits": 1,
+            "stakeYen": 17800,
+            "returnYen": 1610,
+            "roiPct": 9.044943820224718,
+            "hitRatePct": 0.5617977528089888
+          },
+          "2026-08": {
+            "tickets": 39,
+            "hits": 2,
+            "stakeYen": 3900,
+            "returnYen": 2840,
+            "roiPct": 72.82051282051282,
+            "hitRatePct": 5.128205128205128
+          }
+        }
+      },
+      {
+        "selectionScore": 102.41462904911181,
+        "components": [
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "E41",
+            "betType": "馬単",
+            "predictedRanks": [
+              4,
+              1
+            ]
+          },
+          {
+            "variant": "ensemble",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "probabilityGap:high:q50",
+              "kind": "threshold",
+              "field": "probabilityGap",
+              "direction": "high",
+              "threshold": 0.06528370513998284,
+              "trainQuantile": 0.5
+            },
+            "code": "X413",
+            "betType": "3連単",
+            "predictedRanks": [
+              4,
+              1,
+              3
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 957,
+          "hits": 20,
+          "stakeYen": 95700,
+          "returnYen": 120410,
+          "profitYen": 24710,
+          "roiPct": 125.82027168234065,
+          "hitRatePct": 2.089864158829676,
+          "maxSinglePayoutYen": 19390,
+          "maxSingleReturnShare": 0.16103313678265924,
+          "roiWithoutTop1Pct": 105.55903866248696
+        },
+        "developmentB": {
+          "tickets": 859,
+          "hits": 24,
+          "stakeYen": 85900,
+          "returnYen": 206910,
+          "profitYen": 121010,
+          "roiPct": 240.87310826542492,
+          "hitRatePct": 2.7939464493597206,
+          "maxSinglePayoutYen": 24420,
+          "maxSingleReturnShare": 0.11802232854864433,
+          "roiWithoutTop1Pct": 212.44470314318974
+        },
+        "finalHoldout": {
+          "tickets": 546,
+          "hits": 5,
+          "stakeYen": 54600,
+          "returnYen": 13790,
+          "profitYen": -40810,
+          "roiPct": 25.256410256410255,
+          "hitRatePct": 0.9157509157509158,
+          "maxSinglePayoutYen": 6480,
+          "maxSingleReturnShare": 0.4699057287889775,
+          "roiWithoutTop1Pct": 13.388278388278389
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 165,
+            "hits": 0,
+            "stakeYen": 16500,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "tickets": 173,
+            "hits": 2,
+            "stakeYen": 17300,
+            "returnYen": 9340,
+            "roiPct": 53.98843930635838,
+            "hitRatePct": 1.1560693641618496
+          },
+          "2026-07": {
+            "tickets": 178,
+            "hits": 1,
+            "stakeYen": 17800,
+            "returnYen": 1610,
+            "roiPct": 9.044943820224718,
+            "hitRatePct": 0.5617977528089888
+          },
+          "2026-08": {
+            "tickets": 30,
+            "hits": 2,
+            "stakeYen": 3000,
+            "returnYen": 2840,
+            "roiPct": 94.66666666666667,
+            "hitRatePct": 6.666666666666667
+          }
+        }
+      },
+      {
+        "selectionScore": 100.24997019172143,
+        "components": [
+          {
+            "variant": "ensemble",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "probabilityGap:high:q50",
+              "kind": "threshold",
+              "field": "probabilityGap",
+              "direction": "high",
+              "threshold": 0.06528370513998284,
+              "trainQuantile": 0.5
+            },
+            "code": "X413",
+            "betType": "3連単",
+            "predictedRanks": [
+              4,
+              1,
+              3
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 580,
+          "hits": 10,
+          "stakeYen": 58000,
+          "returnYen": 76070,
+          "profitYen": 18070,
+          "roiPct": 131.1551724137931,
+          "hitRatePct": 1.7241379310344827,
+          "maxSinglePayoutYen": 19390,
+          "maxSingleReturnShare": 0.2548968055738136,
+          "roiWithoutTop1Pct": 97.72413793103448
+        },
+        "developmentB": {
+          "tickets": 509,
+          "hits": 8,
+          "stakeYen": 50900,
+          "returnYen": 119330,
+          "profitYen": 68430,
+          "roiPct": 234.44007858546166,
+          "hitRatePct": 1.5717092337917484,
+          "maxSinglePayoutYen": 24420,
+          "maxSingleReturnShare": 0.20464258778178163,
+          "roiWithoutTop1Pct": 186.46365422396855
+        },
+        "finalHoldout": {
+          "tickets": 334,
+          "hits": 3,
+          "stakeYen": 33400,
+          "returnYen": 9320,
+          "profitYen": -24080,
+          "roiPct": 27.904191616766465,
+          "hitRatePct": 0.8982035928143712,
+          "maxSinglePayoutYen": 6480,
+          "maxSingleReturnShare": 0.6952789699570815,
+          "roiWithoutTop1Pct": 8.502994011976048
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 100,
+            "hits": 0,
+            "stakeYen": 10000,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "tickets": 103,
+            "hits": 1,
+            "stakeYen": 10300,
+            "returnYen": 6480,
+            "roiPct": 62.912621359223294,
+            "hitRatePct": 0.9708737864077669
+          },
+          "2026-07": {
+            "tickets": 106,
+            "hits": 0,
+            "stakeYen": 10600,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 25,
+            "hits": 2,
+            "stakeYen": 2500,
+            "returnYen": 2840,
+            "roiPct": 113.6,
+            "hitRatePct": 8.0
+          }
+        }
+      },
+      {
+        "selectionScore": 100.24997019172143,
+        "components": [
+          {
+            "variant": "ensemble",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "probabilityGap:high:q50",
+              "kind": "threshold",
+              "field": "probabilityGap",
+              "direction": "high",
+              "threshold": 0.06528370513998284,
+              "trainQuantile": 0.5
+            },
+            "code": "X413",
+            "betType": "3連単",
+            "predictedRanks": [
+              4,
+              1,
+              3
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 580,
+          "hits": 10,
+          "stakeYen": 58000,
+          "returnYen": 76070,
+          "profitYen": 18070,
+          "roiPct": 131.1551724137931,
+          "hitRatePct": 1.7241379310344827,
+          "maxSinglePayoutYen": 19390,
+          "maxSingleReturnShare": 0.2548968055738136,
+          "roiWithoutTop1Pct": 97.72413793103448
+        },
+        "developmentB": {
+          "tickets": 509,
+          "hits": 8,
+          "stakeYen": 50900,
+          "returnYen": 119330,
+          "profitYen": 68430,
+          "roiPct": 234.44007858546166,
+          "hitRatePct": 1.5717092337917484,
+          "maxSinglePayoutYen": 24420,
+          "maxSingleReturnShare": 0.20464258778178163,
+          "roiWithoutTop1Pct": 186.46365422396855
+        },
+        "finalHoldout": {
+          "tickets": 323,
+          "hits": 1,
+          "stakeYen": 32300,
+          "returnYen": 6480,
+          "profitYen": -25820,
+          "roiPct": 20.061919504643964,
+          "hitRatePct": 0.30959752321981426,
+          "maxSinglePayoutYen": 6480,
+          "maxSingleReturnShare": 1.0,
+          "roiWithoutTop1Pct": 0.0
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 100,
+            "hits": 0,
+            "stakeYen": 10000,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "tickets": 102,
+            "hits": 1,
+            "stakeYen": 10200,
+            "returnYen": 6480,
+            "roiPct": 63.52941176470588,
+            "hitRatePct": 0.9803921568627451
+          },
+          "2026-07": {
+            "tickets": 106,
+            "hits": 0,
+            "stakeYen": 10600,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 15,
+            "hits": 0,
+            "stakeYen": 1500,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          }
+        }
+      },
+      {
+        "selectionScore": 100.13771043771044,
+        "components": [
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "E41",
+            "betType": "馬単",
+            "predictedRanks": [
+              4,
+              1
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 594,
+          "hits": 15,
+          "stakeYen": 59400,
+          "returnYen": 74260,
+          "profitYen": 14860,
+          "roiPct": 125.01683501683503,
+          "hitRatePct": 2.525252525252525,
+          "maxSinglePayoutYen": 15440,
+          "maxSingleReturnShare": 0.20791812550498248,
+          "roiWithoutTop1Pct": 99.02356902356902
+        },
+        "developmentB": {
+          "tickets": 571,
+          "hits": 20,
+          "stakeYen": 57100,
+          "returnYen": 141790,
+          "profitYen": 84690,
+          "roiPct": 248.31873905429075,
+          "hitRatePct": 3.502626970227671,
+          "maxSinglePayoutYen": 21790,
+          "maxSingleReturnShare": 0.15367797446928555,
+          "roiWithoutTop1Pct": 210.15761821366024
+        },
+        "finalHoldout": {
+          "tickets": 357,
+          "hits": 4,
+          "stakeYen": 35700,
+          "returnYen": 7310,
+          "profitYen": -28390,
+          "roiPct": 20.476190476190474,
+          "hitRatePct": 1.1204481792717087,
+          "maxSinglePayoutYen": 2860,
+          "maxSingleReturnShare": 0.3912448700410397,
+          "roiWithoutTop1Pct": 12.46498599439776
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 104,
+            "hits": 0,
+            "stakeYen": 10400,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "tickets": 113,
+            "hits": 1,
+            "stakeYen": 11300,
+            "returnYen": 2860,
+            "roiPct": 25.309734513274336,
+            "hitRatePct": 0.8849557522123894
+          },
+          "2026-07": {
+            "tickets": 113,
+            "hits": 1,
+            "stakeYen": 11300,
+            "returnYen": 1610,
+            "roiPct": 14.24778761061947,
+            "hitRatePct": 0.8849557522123894
+          },
+          "2026-08": {
+            "tickets": 27,
+            "hits": 2,
+            "stakeYen": 2700,
+            "returnYen": 2840,
+            "roiPct": 105.18518518518518,
+            "hitRatePct": 7.4074074074074066
+          }
+        }
+      },
+      {
+        "selectionScore": 100.13771043771044,
+        "components": [
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "E41",
+            "betType": "馬単",
+            "predictedRanks": [
+              4,
+              1
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 594,
+          "hits": 15,
+          "stakeYen": 59400,
+          "returnYen": 74260,
+          "profitYen": 14860,
+          "roiPct": 125.01683501683503,
+          "hitRatePct": 2.525252525252525,
+          "maxSinglePayoutYen": 15440,
+          "maxSingleReturnShare": 0.20791812550498248,
+          "roiWithoutTop1Pct": 99.02356902356902
+        },
+        "developmentB": {
+          "tickets": 571,
+          "hits": 20,
+          "stakeYen": 57100,
+          "returnYen": 141790,
+          "profitYen": 84690,
+          "roiPct": 248.31873905429075,
+          "hitRatePct": 3.502626970227671,
+          "maxSinglePayoutYen": 21790,
+          "maxSingleReturnShare": 0.15367797446928555,
+          "roiWithoutTop1Pct": 210.15761821366024
+        },
+        "finalHoldout": {
+          "tickets": 347,
+          "hits": 4,
+          "stakeYen": 34700,
+          "returnYen": 7310,
+          "profitYen": -27390,
+          "roiPct": 21.06628242074928,
+          "hitRatePct": 1.1527377521613833,
+          "maxSinglePayoutYen": 2860,
+          "maxSingleReturnShare": 0.3912448700410397,
+          "roiWithoutTop1Pct": 12.82420749279539
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 104,
+            "hits": 0,
+            "stakeYen": 10400,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-06": {
+            "tickets": 112,
+            "hits": 1,
+            "stakeYen": 11200,
+            "returnYen": 2860,
+            "roiPct": 25.535714285714285,
+            "hitRatePct": 0.8928571428571428
+          },
+          "2026-07": {
+            "tickets": 113,
+            "hits": 1,
+            "stakeYen": 11300,
+            "returnYen": 1610,
+            "roiPct": 14.24778761061947,
+            "hitRatePct": 0.8849557522123894
+          },
+          "2026-08": {
+            "tickets": 18,
+            "hits": 2,
+            "stakeYen": 1800,
+            "returnYen": 2840,
+            "roiPct": 157.77777777777777,
+            "hitRatePct": 11.11111111111111
+          }
+        }
+      },
+      {
+        "selectionScore": 98.81272727272729,
+        "components": [
+          {
+            "variant": "ensemble",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "probabilityGap:high:q50",
+              "kind": "threshold",
+              "field": "probabilityGap",
+              "direction": "high",
+              "threshold": 0.06528370513998284,
+              "trainQuantile": 0.5
+            },
+            "code": "X413",
+            "betType": "3連単",
+            "predictedRanks": [
+              4,
+              1,
+              3
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "fieldBand=medium",
+              "kind": "category",
+              "field": "fieldBand",
+              "value": "medium"
+            },
+            "code": "X412",
+            "betType": "3連単",
+            "predictedRanks": [
+              4,
+              1,
+              2
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 1045,
+          "hits": 19,
+          "stakeYen": 104500,
+          "returnYen": 126820,
+          "profitYen": 22320,
+          "roiPct": 121.35885167464116,
+          "hitRatePct": 1.8181818181818181,
+          "maxSinglePayoutYen": 19390,
+          "maxSingleReturnShare": 0.1528938653209273,
+          "roiWithoutTop1Pct": 102.80382775119617
+        },
+        "developmentB": {
+          "tickets": 970,
+          "hits": 18,
+          "stakeYen": 97000,
+          "returnYen": 231080,
+          "profitYen": 134080,
+          "roiPct": 238.22680412371136,
+          "hitRatePct": 1.8556701030927836,
+          "maxSinglePayoutYen": 24420,
+          "maxSingleReturnShare": 0.10567768738099359,
+          "roiWithoutTop1Pct": 213.05154639175257
+        },
+        "finalHoldout": {
+          "tickets": 587,
+          "hits": 5,
+          "stakeYen": 58700,
+          "returnYen": 18820,
+          "profitYen": -39880,
+          "roiPct": 32.06132879045997,
+          "hitRatePct": 0.8517887563884157,
+          "maxSinglePayoutYen": 6480,
+          "maxSingleReturnShare": 0.3443145589798087,
+          "roiWithoutTop1Pct": 21.022146507666097
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 190,
+            "hits": 2,
+            "stakeYen": 19000,
+            "returnYen": 9500,
+            "roiPct": 50.0,
+            "hitRatePct": 1.0526315789473684
+          },
+          "2026-06": {
+            "tickets": 171,
+            "hits": 1,
+            "stakeYen": 17100,
+            "returnYen": 6480,
+            "roiPct": 37.89473684210527,
+            "hitRatePct": 0.5847953216374269
+          },
+          "2026-07": {
+            "tickets": 183,
+            "hits": 0,
+            "stakeYen": 18300,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 43,
+            "hits": 2,
+            "stakeYen": 4300,
+            "returnYen": 2840,
+            "roiPct": 66.04651162790698,
+            "hitRatePct": 4.651162790697675
+          }
+        }
+      },
+      {
+        "selectionScore": 98.81272727272729,
+        "components": [
+          {
+            "variant": "ensemble",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "probabilityGap:high:q50",
+              "kind": "threshold",
+              "field": "probabilityGap",
+              "direction": "high",
+              "threshold": 0.06528370513998284,
+              "trainQuantile": 0.5
+            },
+            "code": "X413",
+            "betType": "3連単",
+            "predictedRanks": [
+              4,
+              1,
+              3
+            ]
+          },
+          {
+            "variant": "point",
+            "selectionMode": "concentration",
+            "filter": {
+              "name": "surface=unknown&fieldBand=medium",
+              "kind": "double_category",
+              "firstField": "surface",
+              "firstValue": "unknown",
+              "secondField": "fieldBand",
+              "secondValue": "medium"
+            },
+            "code": "X412",
+            "betType": "3連単",
+            "predictedRanks": [
+              4,
+              1,
+              2
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "raceBand=late",
+              "kind": "category",
+              "field": "raceBand",
+              "value": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          },
+          {
+            "variant": "pair",
+            "selectionMode": "confidence",
+            "filter": {
+              "name": "distanceBand=sprint&raceBand=late",
+              "kind": "double_category",
+              "firstField": "distanceBand",
+              "firstValue": "sprint",
+              "secondField": "raceBand",
+              "secondValue": "late"
+            },
+            "code": "E34",
+            "betType": "馬単",
+            "predictedRanks": [
+              3,
+              4
+            ]
+          }
+        ],
+        "developmentA": {
+          "tickets": 1045,
+          "hits": 19,
+          "stakeYen": 104500,
+          "returnYen": 126820,
+          "profitYen": 22320,
+          "roiPct": 121.35885167464116,
+          "hitRatePct": 1.8181818181818181,
+          "maxSinglePayoutYen": 19390,
+          "maxSingleReturnShare": 0.1528938653209273,
+          "roiWithoutTop1Pct": 102.80382775119617
+        },
+        "developmentB": {
+          "tickets": 970,
+          "hits": 18,
+          "stakeYen": 97000,
+          "returnYen": 231080,
+          "profitYen": 134080,
+          "roiPct": 238.22680412371136,
+          "hitRatePct": 1.8556701030927836,
+          "maxSinglePayoutYen": 24420,
+          "maxSingleReturnShare": 0.10567768738099359,
+          "roiWithoutTop1Pct": 213.05154639175257
+        },
+        "finalHoldout": {
+          "tickets": 572,
+          "hits": 5,
+          "stakeYen": 57200,
+          "returnYen": 18820,
+          "profitYen": -38380,
+          "roiPct": 32.90209790209791,
+          "hitRatePct": 0.8741258741258742,
+          "maxSinglePayoutYen": 6480,
+          "maxSingleReturnShare": 0.3443145589798087,
+          "roiWithoutTop1Pct": 21.573426573426573
+        },
+        "finalMonthly": {
+          "2026-05": {
+            "tickets": 190,
+            "hits": 2,
+            "stakeYen": 19000,
+            "returnYen": 9500,
+            "roiPct": 50.0,
+            "hitRatePct": 1.0526315789473684
+          },
+          "2026-06": {
+            "tickets": 171,
+            "hits": 1,
+            "stakeYen": 17100,
+            "returnYen": 6480,
+            "roiPct": 37.89473684210527,
+            "hitRatePct": 0.5847953216374269
+          },
+          "2026-07": {
+            "tickets": 183,
+            "hits": 0,
+            "stakeYen": 18300,
+            "returnYen": 0,
+            "roiPct": 0.0,
+            "hitRatePct": 0.0
+          },
+          "2026-08": {
+            "tickets": 28,
+            "hits": 2,
+            "stakeYen": 2800,
+            "returnYen": 2840,
+            "roiPct": 101.42857142857142,
+            "hitRatePct": 7.142857142857142
+          }
+        }
+      }
+    ]
+  },
+  "portfolioCount": 375
+}
