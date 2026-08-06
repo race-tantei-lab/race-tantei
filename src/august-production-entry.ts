@@ -1,4 +1,6 @@
 import app from "./production-ui-entry.js";
+import { APPROVED_PRODUCTION_MODEL_VERSION } from "./v1/approved-production-model.js";
+import { renderProductionLatestDetail } from "./v1/production-latest-detail.js";
 import type { Env } from "./v1/types.js";
 
 const PRODUCTION_START_DATE = "2026-08-01";
@@ -23,10 +25,21 @@ function rewriteProductionHtml(source: string): string {
     )
     .replaceAll("本番レースの精算後に自動で追加されます。", "2026年8月の本番レースが精算されると自動で追加されます。")
     .replaceAll("新モデルの本番精算はまだありません", "2026年8月の本番精算はまだありません")
-    .replaceAll("集計開始待ち", "8月集計開始待ち");
+    .replaceAll("集計開始待ち", "8月集計開始待ち")
+    .replace(/(\d+)R／3コース合計/g, (_match, count: string) => `${Math.round(Number(count) / 3)}R（3コース共通）`);
 }
 
-async function rewriteResponse(response: Response, pathname: string): Promise<Response> {
+function replaceLatestDetail(source: string, latestDetail: string): string {
+  if (!latestDetail) return source;
+  const start = source.indexOf('<div class="section-label latest-label">');
+  const footer = start >= 0 ? source.indexOf('<footer class="footer">', start) : -1;
+  if (start >= 0 && footer >= 0) {
+    return `${source.slice(0, start)}${latestDetail}${source.slice(footer)}`;
+  }
+  return source.replace("</main>", `${latestDetail}</main>`);
+}
+
+async function rewriteResponse(response: Response, pathname: string, latestDetail: string): Promise<Response> {
   const contentType = response.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json") && pathname.startsWith("/api/performance/courses")) {
@@ -44,11 +57,12 @@ async function rewriteResponse(response: Response, pathname: string): Promise<Re
     return response;
   }
 
-  const body = rewriteProductionHtml(await response.text());
+  let body = rewriteProductionHtml(await response.text());
+  if (pathname === "/") body = replaceLatestDetail(body, latestDetail);
   const headers = new Headers(response.headers);
   headers.set("cache-control", "no-store, max-age=0");
   headers.set("content-length", String(new TextEncoder().encode(body).length));
-  headers.set("x-race-ui-version", "production-august-start-v1");
+  headers.set("x-race-ui-version", "production-v4-consistent-detail-v2");
   return new Response(body, {
     status: response.status,
     statusText: response.statusText,
@@ -60,7 +74,13 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!app.fetch) return new Response("NOT_FOUND", { status: 404 });
     const pathname = new URL(request.url).pathname;
-    return rewriteResponse(await app.fetch(request, env, ctx), pathname);
+    const [response, latestDetail] = await Promise.all([
+      app.fetch(request, env, ctx),
+      pathname === "/"
+        ? renderProductionLatestDetail(env.DB, APPROVED_PRODUCTION_MODEL_VERSION, PRODUCTION_START_DATE)
+        : Promise.resolve("")
+    ]);
+    return rewriteResponse(response, pathname, latestDetail);
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
