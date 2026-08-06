@@ -9,6 +9,7 @@ import {
   pageLooksLikeResult,
   parseResultPage
 } from "./jra.js";
+import { parseDesktopResultRunners } from "./three-month-desktop.js";
 import {
   THREE_MONTH_END_DATE,
   THREE_MONTH_RACE_DATES,
@@ -205,9 +206,6 @@ function popularityCell(cells: string[]): number | null {
   const fixed = integerCell(cells[RESULT_COLUMN.popularity]);
   if (fixed !== null && fixed >= 1 && fixed <= 18) return fixed;
 
-  // Some mobile result variants omit an unused column. Popularity is still the
-  // final standalone integer cell, so only inspect the last two cells. Never
-  // scan the whole row: frame, horse number and finish are also integers.
   for (const value of cells.slice(-2).reverse()) {
     const parsed = integerCell(value);
     if (parsed !== null && parsed >= 1 && parsed <= 18) return parsed;
@@ -281,7 +279,19 @@ function popularityProxyOdds(runners: ParsedHistoricalRunner[]): Map<number, num
   return odds;
 }
 
+function hasCompleteMarket(runners: RunnerRecord[]): boolean {
+  const active = runners.filter((runner) => runner.runnerStatus === "active");
+  if (active.length < 2 || active.length > 18) return false;
+  const ranks = active.map((runner) => runner.popularity);
+  return ranks.every((rank) => rank !== null && Number.isInteger(rank) && rank >= 1 && rank <= active.length)
+    && new Set(ranks).size === active.length
+    && active.every((runner) => runner.winOdds !== null && runner.winOdds > 1);
+}
+
 export function parseHistoricalResultRunners(html: string): RunnerRecord[] {
+  const desktop = parseDesktopResultRunners(html);
+  if (hasCompleteMarket(desktop)) return desktop;
+
   const parsed = resultTableRows(html)
     .map(parseDetailedRunner)
     .filter((runner): runner is ParsedHistoricalRunner => runner !== null);
@@ -316,8 +326,8 @@ export function historicalResultUrl(task: HistoricalMeetingTask, raceNo: number)
   if (!venueCode) throw new Error(`UNKNOWN_VENUE:${task.venue}`);
   const ymd = task.raceDate.replace(/-/g, "");
   const year = task.raceDate.slice(0, 4);
-  const cname = `sw01sde01${venueCode}${year}${pad2(task.meetingNo)}${pad2(task.meetingDay)}${pad2(raceNo)}${ymd}/${HISTORICAL_TRANSITION_SUFFIX}`;
-  return `https://sp.jra.jp/JRADB/accessS.html?CNAME=${encodeURIComponent(cname)}`;
+  const cname = `pw01sde01${venueCode}${year}${pad2(task.meetingNo)}${pad2(task.meetingDay)}${pad2(raceNo)}${ymd}/${HISTORICAL_TRANSITION_SUFFIX}`;
+  return `https://www.jra.go.jp/JRADB/accessS.html?CNAME=${encodeURIComponent(cname)}`;
 }
 
 async function alreadyComplete(db: D1Database, task: HistoricalMeetingTask, raceNo: number): Promise<boolean> {
@@ -382,6 +392,15 @@ async function importHistoricalRace(
   }
   if (active.some((runner) => runner.winOdds === null)) {
     throw new Error(`HISTORY_PROXY_ODDS_INVALID:${active.length}`);
+  }
+  const incompleteDetails = active.filter((runner) =>
+    !runner.horseName
+    || !runner.jockey
+    || runner.assignedWeight === null
+    || !runner.trainer
+  );
+  if (incompleteDetails.length > 0) {
+    throw new Error(`HISTORY_RUNNER_DETAILS_INVALID:${JSON.stringify(incompleteDetails.map((runner) => runner.horseNo))}`);
   }
 
   const entry: RaceBundle = {
