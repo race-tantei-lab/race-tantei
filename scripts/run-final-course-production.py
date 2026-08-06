@@ -112,6 +112,8 @@ def configure_namespace(namespace, policy):
     namespace["MODEL_VERSION"] = policy.MODEL_VERSION
     namespace["COURSE_BUDGETS"] = dict(PRODUCTION_COURSE_TARGET_STAKES)
     namespace["build_bets"] = policy.build_bets
+    if hasattr(policy, "selected_race_ids"):
+        namespace["selected_race_ids"] = policy.selected_race_ids
     return namespace
 
 
