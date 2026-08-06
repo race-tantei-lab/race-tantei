@@ -1,0 +1,31 @@
+name: Actions runtime probe
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/actions-runtime-probe.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write execution marker
+        shell: bash
+        run: |
+          mkdir -p analysis-results
+          printf '{\n  "status": "github_actions_executed",\n  "sourceSha": "%s",\n  "runId": "%s",\n  "executedAtUtc": "%s"\n}\n' \
+            "$GITHUB_SHA" "$GITHUB_RUN_ID" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > analysis-results/actions-runtime-probe.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f analysis-results/actions-runtime-probe.json
+          git commit -m "Record GitHub Actions runtime probe"
+          git push origin HEAD:main
