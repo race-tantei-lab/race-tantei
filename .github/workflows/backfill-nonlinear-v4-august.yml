@@ -1,5 +1,6 @@
 name: Backfill nonlinear v4 August 1-2
 
+# Trigger once after the workflow has been registered on main.
 on:
   workflow_dispatch:
   push:
