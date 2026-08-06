@@ -1,6 +1,6 @@
 name: Audit August v4 backfill
 
-# Read both D1 state and the actual backfill workflow status.
+# Refresh both D1 state and the actual backfill workflow status.
 on:
   workflow_dispatch:
   push:
