@@ -1,0 +1,50 @@
+{
+  "promotionEligible": false,
+  "courses": {
+    "ライト": {
+      "racesPerVenueDay": 7,
+      "finalHoldout": {
+        "races": 560,
+        "hits": 162,
+        "stakeYen": 1120000,
+        "returnYen": 1043400,
+        "profitYen": -76600,
+        "roiPct": 93.16071428571429,
+        "hitRatePct": 28.92857142857143,
+        "roiWithoutTop1Pct": 88.59107142857144,
+        "maxSingleReturnShare": 0.04905117883841288,
+        "zeroHitMonths": 0
+      }
+    },
+    "スタンダード": {
+      "racesPerVenueDay": 7,
+      "finalHoldout": {
+        "races": 560,
+        "hits": 260,
+        "stakeYen": 2800000,
+        "returnYen": 1905490,
+        "profitYen": -894510,
+        "roiPct": 68.05321428571428,
+        "hitRatePct": 46.42857142857143,
+        "roiWithoutTop1Pct": 65.61178571428572,
+        "maxSingleReturnShare": 0.035875286671669754,
+        "zeroHitMonths": 0
+      }
+    },
+    "プレミアム": {
+      "racesPerVenueDay": 5,
+      "finalHoldout": {
+        "races": 400,
+        "hits": 224,
+        "stakeYen": 4000000,
+        "returnYen": 3309710,
+        "profitYen": -690290,
+        "roiPct": 82.74275,
+        "hitRatePct": 56.00000000000001,
+        "roiWithoutTop1Pct": 78.05825,
+        "maxSingleReturnShare": 0.056615232150248815,
+        "zeroHitMonths": 0
+      }
+    }
+  }
+}
