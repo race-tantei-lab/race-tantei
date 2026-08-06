@@ -1,20 +1,24 @@
 name: One-off history backfill
-run-name: Full history repair · ${{ github.sha }}
+run-name: Targeted history market repair · ${{ github.sha }}
 
 on:
   push:
     branches: [main]
     paths:
-      - "scripts/backfill-history-v2.mjs"
-      - "src/v1/three-month-archive.ts"
+      - "scripts/repair-invalid-market-history.mjs"
+      - "src/v1/three-month-history.ts"
       - "src/v1/three-month-desktop.ts"
       - ".github/workflows/backfill-history.yml"
   workflow_dispatch:
     inputs:
       concurrency:
-        description: "Concurrent JRA page downloads"
+        description: "Concurrent JRA result requests"
         required: false
-        default: "24"
+        default: "2"
+      request_interval_ms:
+        description: "Minimum interval between JRA requests"
+        required: false
+        default: "850"
 
 permissions:
   contents: read
@@ -27,13 +31,15 @@ concurrency:
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     env:
       GH_TOKEN: ${{ github.token }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
-      BACKFILL_CONCURRENCY: ${{ inputs.concurrency || '24' }}
-      BACKFILL_RACES_PER_FILE: "40"
+      REPAIR_CONCURRENCY: ${{ inputs.concurrency || '2' }}
+      REPAIR_REQUEST_INTERVAL_MS: ${{ inputs.request_interval_ms || '850' }}
+      REPAIR_RACES_PER_FILE: "30"
+      REPAIR_MAX_ATTEMPTS: "6"
       STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       MARKET_AUDIT_SQL: >-
         WITH per_race AS (
@@ -61,6 +67,33 @@ jobs:
           MIN(race_date) AS first_date,
           MAX(race_date) AS last_date
         FROM per_race;
+      INVALID_RACES_SQL: >-
+        WITH per_race AS (
+          SELECT r.race_id,
+            SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS active_runners,
+            SUM(CASE WHEN rr.runner_status='active' AND rr.win_odds IS NOT NULL AND rr.win_odds>1
+              AND rr.popularity BETWEEN 1 AND 18 THEN 1 ELSE 0 END) AS valid_market_runners,
+            COUNT(DISTINCT CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS distinct_popularity,
+            MIN(CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS min_popularity,
+            MAX(CASE WHEN rr.runner_status='active' THEN rr.popularity END) AS max_popularity
+          FROM rt_races r
+          JOIN rt_runners rr ON rr.race_id=r.race_id
+          WHERE r.status='finished' AND r.race_date BETWEEN '2024-05-01' AND '2026-08-02'
+          GROUP BY r.race_id
+        )
+        SELECT r.race_id, r.race_date, r.venue, r.race_no, r.result_url,
+          p.active_runners, p.valid_market_runners, p.distinct_popularity,
+          p.min_popularity, p.max_popularity
+        FROM per_race p
+        JOIN rt_races r ON r.race_id=p.race_id
+        WHERE p.active_runners>=2 AND (
+          p.valid_market_runners<>p.active_runners OR
+          p.distinct_popularity<>p.active_runners OR
+          p.min_popularity<>1 OR
+          p.max_popularity<>p.active_runners
+        )
+        ORDER BY r.race_date, r.venue, r.race_no;
+
     steps:
       - name: Publish setup status
         shell: bash
@@ -68,7 +101,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='history/backfill' \
-            -f description='準備中：全27か月の履歴修復' \
+            -f description='準備中：不正人気レースの限定修復' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Checkout
@@ -83,8 +116,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Compile parsers
-        run: npm run build:test
+      - name: Compile parsers and validate script
+        shell: bash
+        run: |
+          npm run build:test
+          node --check scripts/repair-invalid-market-history.mjs
 
       - name: Publish pre-audit status
         shell: bash
@@ -92,54 +128,77 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='history/backfill' \
-            -f description='処理中：修復前のD1人気順位監査' \
+            -f description='処理中：全7,695レースの修復前監査' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
-      - name: Audit D1 market data before reload
+      - name: Audit D1 and export invalid races
+        id: targets
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p tmp/history-backfill
+          mkdir -p tmp/history-market-repair
           npx wrangler d1 execute race-tantei-phase0 --remote --command "$MARKET_AUDIT_SQL" --json --config wrangler.jsonc \
-            > tmp/history-backfill/market-audit-before.json
-          cat tmp/history-backfill/market-audit-before.json
+            > tmp/history-market-repair/market-audit-before.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --command "$INVALID_RACES_SQL" --json --config wrangler.jsonc \
+            > tmp/history-market-repair/invalid-races.json
+          cat tmp/history-market-repair/market-audit-before.json
+          TARGET_COUNT=$(node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const payload = JSON.parse(await readFile('tmp/history-market-repair/invalid-races.json', 'utf8'));
+          const rows = [];
+          const visit = (value) => {
+            if (Array.isArray(value)) return value.forEach(visit);
+            if (!value || typeof value !== 'object') return;
+            if ('race_id' in value && 'result_url' in value) rows.push(value);
+            else Object.values(value).forEach(visit);
+          };
+          visit(payload);
+          const unique = new Set(rows.map((row) => String(row.race_id)));
+          console.log(unique.size);
+          NODE
+          )
+          echo "count=$TARGET_COUNT" >> "$GITHUB_OUTPUT"
+          echo "targeted invalid races: $TARGET_COUNT"
 
-      - name: Publish download status
+      - name: Publish targeted fetch status
+        if: steps.targets.outputs.count != '0'
         shell: bash
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='history/backfill' \
-            -f description='処理中：JRA全期間ページの取得・解析' \
+            -f description='処理中：不正レースのみ低速で公式結果を再取得' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
-      - name: Download and parse all history pages in parallel
-        run: node scripts/backfill-history-v2.mjs
+      - name: Fetch and validate targeted official results
+        if: steps.targets.outputs.count != '0'
+        run: node scripts/repair-invalid-market-history.mjs
 
-      - name: Publish D1 load status
+      - name: Publish D1 repair status
+        if: steps.targets.outputs.count != '0'
         shell: bash
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='history/backfill' \
-            -f description='処理中：修復済み履歴をD1へ再投入' \
+            -f description='処理中：修復済み人気順位をD1へ限定更新' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
-      - name: Bulk load generated SQL into D1
+      - name: Load targeted repair SQL into D1
+        if: steps.targets.outputs.count != '0'
         shell: bash
         run: |
           set -euo pipefail
           shopt -s nullglob
-          files=(tmp/history-backfill/backfill-*.sql)
+          files=(tmp/history-market-repair/sql/repair-*.sql)
           if [ "${#files[@]}" -eq 0 ]; then
-            echo "No generated history SQL files" >&2
+            echo "No targeted repair SQL files" >&2
             exit 1
           fi
           for file in "${files[@]}"; do
             echo "Loading $file"
             npx wrangler d1 execute race-tantei-phase0 --remote --file "$file" --config wrangler.jsonc
           done
-          npx wrangler d1 execute race-tantei-phase0 --remote --file tmp/history-backfill/zzzz-state.sql --config wrangler.jsonc
 
       - name: Publish post-audit status
         shell: bash
@@ -150,23 +209,22 @@ jobs:
             -f description='処理中：修復後の全期間完全性監査' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
-      - name: Audit D1 market data after reload
+      - name: Audit D1 market data after repair
         shell: bash
         run: |
           set -euo pipefail
           npx wrangler d1 execute race-tantei-phase0 --remote --command "$MARKET_AUDIT_SQL" --json --config wrangler.jsonc \
-            > tmp/history-backfill/market-audit-after.json
-          cat tmp/history-backfill/market-audit-after.json
+            > tmp/history-market-repair/market-audit-after.json
+          cat tmp/history-market-repair/market-audit-after.json
           node --input-type=module <<'NODE'
           import { readFile } from "node:fs/promises";
-          const payload = JSON.parse(await readFile("tmp/history-backfill/market-audit-after.json", "utf8"));
+          const payload = JSON.parse(await readFile("tmp/history-market-repair/market-audit-after.json", "utf8"));
           const queue = [payload];
           let row = null;
           while (queue.length > 0 && !row) {
             const value = queue.shift();
-            if (Array.isArray(value)) {
-              queue.push(...value);
-            } else if (value && typeof value === "object") {
+            if (Array.isArray(value)) queue.push(...value);
+            else if (value && typeof value === "object") {
               if (Object.prototype.hasOwnProperty.call(value, "invalid_races")) row = value;
               else queue.push(...Object.values(value));
             }
@@ -180,16 +238,17 @@ jobs:
           }
           NODE
 
-      - name: Upload backfill report
+      - name: Upload repair report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: history-backfill-report
           path: |
-            tmp/history-backfill/summary.json
-            tmp/history-backfill/failures.json
-            tmp/history-backfill/market-audit-before.json
-            tmp/history-backfill/market-audit-after.json
+            tmp/history-market-repair/summary.json
+            tmp/history-market-repair/failures.json
+            tmp/history-market-repair/invalid-races.json
+            tmp/history-market-repair/market-audit-before.json
+            tmp/history-market-repair/market-audit-after.json
           if-no-files-found: ignore
           retention-days: 30
 
@@ -199,10 +258,10 @@ jobs:
         run: |
           if [ "${{ job.status }}" = "success" ]; then
             STATE=success
-            DESCRIPTION='完了：全27か月の履歴修復・監査に合格'
+            DESCRIPTION='完了：全期間の不正人気0件・修復監査合格'
           else
             STATE=failure
-            DESCRIPTION='失敗：全期間履歴修復のログ確認が必要'
+            DESCRIPTION='失敗：限定履歴修復のログ確認が必要'
           fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state="$STATE" \
