@@ -41,25 +41,45 @@ jobs:
       - name: Install model dependencies
         run: python -m pip install --disable-pip-version-check numpy scikit-learn
 
-      - name: Verify Python sources
+      - name: Run final pipeline with diagnostics
+        shell: bash
         run: |
+          set +e
+          : > final-course-diagnostic.log
+
+          echo "[compile]" | tee -a final-course-diagnostic.log
           python -m py_compile \
             scripts/final-course-policy.py \
             scripts/analyze-final-course-model.py \
             scripts/run-final-course-production.py \
-            scripts/backfill-final-course-august.py
+            scripts/backfill-final-course-august.py \
+            >> final-course-diagnostic.log 2>&1
+          compile_status=$?
+          echo "compile_status=$compile_status" | tee -a final-course-diagnostic.log
 
-      - name: Analyze final course model
-        shell: bash
-        run: |
-          set -o pipefail
-          python scripts/analyze-final-course-model.py 2>&1 | tee final-course-model-analysis.log
+          analysis_status=99
+          backfill_status=99
+          if [[ $compile_status -eq 0 ]]; then
+            echo "[analysis]" | tee -a final-course-diagnostic.log
+            python scripts/analyze-final-course-model.py \
+              > final-course-model-analysis.log 2>&1
+            analysis_status=$?
+            cat final-course-model-analysis.log >> final-course-diagnostic.log
+            echo "analysis_status=$analysis_status" | tee -a final-course-diagnostic.log
+          fi
 
-      - name: Recalculate August 1-2
-        shell: bash
-        run: |
-          set -o pipefail
-          python scripts/backfill-final-course-august.py 2>&1 | tee final-course-august-backfill.log
+          if [[ $compile_status -eq 0 && $analysis_status -eq 0 ]]; then
+            echo "[backfill]" | tee -a final-course-diagnostic.log
+            python scripts/backfill-final-course-august.py \
+              > final-course-august-backfill.log 2>&1
+            backfill_status=$?
+            cat final-course-august-backfill.log >> final-course-diagnostic.log
+            echo "backfill_status=$backfill_status" | tee -a final-course-diagnostic.log
+          fi
+
+          if [[ $compile_status -ne 0 || $analysis_status -ne 0 || $backfill_status -ne 0 ]]; then
+            exit 1
+          fi
 
       - name: Upload reports
         if: always()
@@ -71,6 +91,7 @@ jobs:
             final-course-model-analysis.log
             final-course-august-backfill.json
             final-course-august-backfill.log
+            final-course-diagnostic.log
           if-no-files-found: warn
           retention-days: 30
 
@@ -83,7 +104,8 @@ jobs:
             final-course-model-analysis.json \
             final-course-model-analysis.log \
             final-course-august-backfill.json \
-            final-course-august-backfill.log; do
+            final-course-august-backfill.log \
+            final-course-diagnostic.log; do
             if [[ -f "$file" ]]; then
               cp "$file" "analysis-results/$file"
               git add -f "analysis-results/$file"
@@ -94,9 +116,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No report changes."
           else
-            git commit -m "Save final course model results"
+            git commit -m "Save final course model diagnostics"
             git pull --rebase origin main
             git push origin HEAD:main
           fi
-
-# Registered on main; this update starts the first full run.
