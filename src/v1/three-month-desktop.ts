@@ -88,6 +88,20 @@ function resultPopularity(value: string | undefined): number | null {
   return parsed >= 1 && parsed <= 18 ? parsed : null;
 }
 
+function trainerDetails(value: string | undefined): {
+  trainer: string | null;
+  stable: string | null;
+} {
+  const text = (value ?? "").trim();
+  if (!text) return { trainer: null, stable: null };
+  const match = text.match(/^(?:\[|\(|（)?(美浦|栗東|本会外)(?:\]|\)|）|[・\s]+)\s*(.+)$/);
+  if (!match) return { trainer: text, stable: null };
+  return {
+    trainer: match[2]?.trim() || null,
+    stable: match[1] ?? null
+  };
+}
+
 export function parseDesktopResultRunners(html: string): RunnerRecord[] {
   const parsed: RunnerRecord[] = [];
   for (const cells of tableRows(html)) {
@@ -105,7 +119,9 @@ export function parseDesktopResultRunners(html: string): RunnerRecord[] {
     const frameMatch = (cells[RESULT_COLUMN.frameNo] ?? "").match(/(?:枠)?(\d{1,2})/);
     const sexAge = cells[RESULT_COLUMN.sexAge]?.match(/[牡牝騸セ]\d+/)?.[0] ?? null;
     const assignedWeight = cells[RESULT_COLUMN.assignedWeight]?.match(/\d+(?:\.\d+)?/)?.[0];
-    const body = (cells[RESULT_COLUMN.horseWeight] ?? "").match(/(\d{3})\s*\((?:([+-]?\d+)|初出走)\)/);
+    const body = (cells[RESULT_COLUMN.horseWeight] ?? "")
+      .match(/(\d{3})(?:kg)?\s*\((?:([+-]?\d+)|初出走)\)/i);
+    const trainer = trainerDetails(cells[RESULT_COLUMN.trainer]);
     const popularity = runnerStatus === "active"
       ? resultPopularity(cells[RESULT_COLUMN.popularity])
       : null;
@@ -124,8 +140,8 @@ export function parseDesktopResultRunners(html: string): RunnerRecord[] {
       weightChange: body?.[2] ? Number(body[2]) : null,
       jockey: cells[RESULT_COLUMN.jockey]?.trim() || null,
       assignedWeight: assignedWeight ? Number(assignedWeight) : null,
-      trainer: cells[RESULT_COLUMN.trainer]?.trim() || null,
-      stable: null,
+      trainer: trainer.trainer,
+      stable: trainer.stable,
       popularity,
       runnerStatus,
       winOdds: null
