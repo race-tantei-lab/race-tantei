@@ -1,0 +1,92 @@
+name: V11 robust portfolio
+run-name: V11 robust portfolio · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/analyze-v11-robust-portfolio.py"
+      - ".github/workflows/v11-robust-portfolio.yml"
+      - "analysis-results/v10-robust-high-roi.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Publish analysis start
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='analysis/v11-robust-portfolio' \
+            -f description='分析中：上位候補の安定構成を検証' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify source
+        run: python -m py_compile scripts/analyze-v11-robust-portfolio.py
+
+      - name: Run portfolio analysis
+        run: |
+          set -o pipefail
+          python scripts/analyze-v11-robust-portfolio.py 2>&1 | tee v11-robust-portfolio.log
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v11-robust-portfolio
+          path: |
+            v11-robust-portfolio.json
+            v11-robust-portfolio.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Save report
+        if: success()
+        run: |
+          mkdir -p analysis-results
+          cp v11-robust-portfolio.json analysis-results/v11-robust-portfolio.json
+          cp v11-robust-portfolio.log analysis-results/v11-robust-portfolio.log
+          git add -f analysis-results/v11-robust-portfolio.json analysis-results/v11-robust-portfolio.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --cached --quiet; then
+            echo "No report changes."
+          else
+            git commit -m "Save v11 robust portfolio analysis"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Publish final status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            STATE=success
+            DESCRIPTION='完了：上位候補の安定構成を検証'
+          else
+            STATE=failure
+            DESCRIPTION='失敗：v11分析ログ確認が必要'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$STATE" \
+            -f context='analysis/v11-robust-portfolio' \
+            -f description="$DESCRIPTION" \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
