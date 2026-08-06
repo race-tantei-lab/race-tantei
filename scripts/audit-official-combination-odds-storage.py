@@ -1,6 +1,7 @@
 import json
 import os
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -88,6 +89,7 @@ def main():
                 combination_odds_columns.append({"table": table_name, "column": column})
 
     report = {
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
         "officialCombinationOddsStorageFound": bool(combination_odds_columns),
         "candidateTables": candidate_tables,
         "combinationOddsColumns": combination_odds_columns,
@@ -96,6 +98,7 @@ def main():
     }
     OUTPUT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
+        "generatedAt": report["generatedAt"],
         "officialCombinationOddsStorageFound": report["officialCombinationOddsStorageFound"],
         "candidateTables": candidate_tables,
         "combinationOddsColumns": combination_odds_columns,
