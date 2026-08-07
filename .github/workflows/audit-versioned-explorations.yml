@@ -1,0 +1,21 @@
+name: Audit active versioned explorations
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/audit-active-versioned-explorations.py"
+      - ".github/workflows/audit-versioned-explorations.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit current workflows
+        run: python scripts/audit-active-versioned-explorations.py
