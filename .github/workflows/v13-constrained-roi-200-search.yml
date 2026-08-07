@@ -1,5 +1,5 @@
-name: V14 historical payout ROI 200 search
-run-name: V14 historical payout ROI 200 search · ${{ github.sha }}
+name: V15 two-stage ROI 200 search
+run-name: V15 two-stage ROI 200 search · ${{ github.sha }}
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
     paths:
       - "scripts/analyze-v13-constrained-roi-200-search.py"
       - "scripts/analyze-v14-historical-roi200.py"
+      - "scripts/analyze-v15-two-stage-roi200.py"
       - "scripts/run-final-course-production.py"
       - "config/race-tantei-fixed-constraints.json"
       - ".github/workflows/v13-constrained-roi-200-search.yml"
@@ -17,7 +18,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: v14-historical-payout-roi200
+  group: v15-two-stage-roi200
   cancel-in-progress: true
 
 jobs:
@@ -37,8 +38,8 @@ jobs:
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
-            -f context='analysis/v14-historical-payout-roi200' \
-            -f description='探索中：過去払戻し学習で全3コース200%以上を直接最大化' \
+            -f context='analysis/v15-two-stage-roi200' \
+            -f description='探索中：的中確率×的中時払戻しで全3コース200%以上を最大化' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - uses: actions/checkout@v4
@@ -58,13 +59,14 @@ jobs:
           python -m py_compile \
             scripts/analyze-v13-constrained-roi-200-search.py \
             scripts/analyze-v14-historical-roi200.py \
+            scripts/analyze-v15-two-stage-roi200.py \
             scripts/run-final-course-production.py
 
-      - name: Train historical payout-value model and generate upcoming predictions
+      - name: Train two-stage historical model and generate upcoming predictions
         shell: bash
         run: |
           set -o pipefail
-          python scripts/analyze-v13-constrained-roi-200-search.py 2>&1 | tee v14-historical-roi200-search.log
+          python scripts/analyze-v13-constrained-roi-200-search.py 2>&1 | tee v15-two-stage-roi200-search.log
 
       - name: Stage analysis and upcoming predictions
         if: success()
@@ -72,19 +74,19 @@ jobs:
         run: |
           mkdir -p analysis-results
           cp v13-constrained-roi-200-search.json analysis-results/v13-constrained-roi-200-search.json
-          cp v14-historical-roi200-search.json analysis-results/v14-historical-roi200-search.json
-          cp v14-upcoming-predictions.json analysis-results/v14-upcoming-predictions.json
+          cp v14-upcoming-predictions.json analysis-results/v15-upcoming-predictions.json
+          cp v15-two-stage-roi200-search.json analysis-results/v15-two-stage-roi200-search.json
           git add -f \
             analysis-results/v13-constrained-roi-200-search.json \
-            analysis-results/v14-historical-roi200-search.json \
-            analysis-results/v14-upcoming-predictions.json
+            analysis-results/v15-two-stage-roi200-search.json \
+            analysis-results/v15-upcoming-predictions.json
 
       - name: Promote only when every historical gate passed
         if: success()
         shell: bash
         run: |
           set -o pipefail
-          python scripts/find-and-promote-production-candidate.py | tee v14-production-promotion.log
+          python scripts/find-and-promote-production-candidate.py | tee v15-production-promotion.log
           if [[ -f config/approved-production-model.json ]]; then
             python scripts/verify-approved-production-model.py
             git add scripts/final-course-policy.py config/approved-production-model.json
@@ -94,13 +96,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: v14-historical-payout-roi200
+          name: v15-two-stage-roi200
           path: |
             v13-constrained-roi-200-search.json
-            v14-historical-roi200-search.json
+            v15-two-stage-roi200-search.json
             v14-upcoming-predictions.json
-            v14-historical-roi200-search.log
-            v14-production-promotion.log
+            v15-two-stage-roi200-search.log
+            v15-production-promotion.log
           if-no-files-found: warn
           retention-days: 30
 
@@ -113,7 +115,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to save."
           else
-            git commit -m "Save v14 historical payout ROI 200 result"
+            git commit -m "Save v15 two-stage ROI 200 result"
             git pull --rebase origin main
             git push origin HEAD:main
           fi
@@ -124,16 +126,16 @@ jobs:
         run: |
           if [ "${{ job.status }}" != "success" ]; then
             STATE=failure
-            DESCRIPTION='失敗：v14過去払戻しモデルのログを確認'
+            DESCRIPTION='失敗：v15二段階モデルのログを確認'
           elif [[ -f config/approved-production-model.json ]]; then
             STATE=success
             DESCRIPTION='合格：過去検証200%以上のモデルを本番昇格'
           else
             STATE=success
-            DESCRIPTION='探索完了：予想生成済み・200%合格前は本番変更なし'
+            DESCRIPTION='探索完了：200%合格前は本番変更なし'
           fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state="$STATE" \
-            -f context='analysis/v14-historical-payout-roi200' \
+            -f context='analysis/v15-two-stage-roi200' \
             -f description="$DESCRIPTION" \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
