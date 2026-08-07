@@ -1,0 +1,35 @@
+name: Export completion raw categories
+
+on:
+  push:
+    branches:
+      - analysis/completion-search-20260807
+    paths:
+      - scripts/export-completion-raw-categories.py
+      - .github/workflows/export-completion-raw-categories.yml
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: analysis/completion-search-20260807
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Export existing D1 categories
+        run: python scripts/export-completion-raw-categories.py
+      - name: Save export on analysis branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/completion-raw-categories.pkl.gz artifacts/completion-raw-categories-meta.json
+          git commit -m "Save completion raw categories" || exit 0
+          git push origin HEAD:analysis/completion-search-20260807
