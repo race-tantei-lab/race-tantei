@@ -11,6 +11,7 @@ const databaseId = process.env.CLOUDFLARE_D1_DATABASE_ID;
 const token = process.env.CLOUDFLARE_API_TOKEN;
 const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`;
 const homeUrl = process.env.JRA_HOME_URL || "https://sp.jra.jp/";
+const accessDUrl = "https://www.jra.go.jp/JRADB/accessD.html";
 const seedUrls = (process.env.JRA_SEED_ENTRY_URLS || "")
   .split(",")
   .map((value) => value.trim())
@@ -56,6 +57,60 @@ function chunks(values, size) {
   const output = [];
   for (let index = 0; index < values.length; index += size) output.push(values.slice(index, index + size));
   return output;
+}
+
+function normalizeActionCname(value) {
+  return value.replace(/&amp;/gi, "&").replace(/\\u0026/gi, "&").replace(/\\\//g, "/").trim();
+}
+
+function actionEntryUrls(html) {
+  const found = new Map();
+  const patterns = [
+    /doAction\(\s*['"]\/JRADB\/accessD\.html['"]\s*,\s*['"]([^'"]+)['"]\s*\)/gi,
+    /doAction\(\s*['"]https:\/\/www\.jra\.go\.jp\/JRADB\/accessD\.html['"]\s*,\s*['"]([^'"]+)['"]\s*\)/gi,
+    /(?:CNAME|cname)\s*[=:]\s*['"]([^'"]*(?:pw|sw)01dde[^'"]*)['"]/gi
+  ];
+  for (const pattern of patterns) {
+    for (const match of html.matchAll(pattern)) {
+      const cname = normalizeActionCname(match[1] || "");
+      if (!/(?:pw|sw)01dde/i.test(cname)) continue;
+      const url = `${accessDUrl}?CNAME=${encodeURIComponent(cname)}`;
+      found.set(cname, url);
+    }
+  }
+  return [...found.values()];
+}
+
+async function discoverDoActionRaceUrls() {
+  const queue = [homeUrl, accessDUrl, ...seedUrls];
+  const queued = new Set(queue);
+  const visited = new Set();
+  const raceUrls = new Map();
+  const errors = [];
+  const maxPages = 180;
+
+  while (queue.length && visited.size < maxPages) {
+    const url = queue.shift();
+    if (!url || visited.has(url)) continue;
+    visited.add(url);
+    try {
+      const page = await fetchJraPage(url);
+      if (pageLooksLikeEntry(page.html) && /(?:pw|sw)01dde/i.test(decodeURIComponent(page.url))) {
+        const cname = new URL(page.url).searchParams.get("CNAME") || page.url;
+        raceUrls.set(cname, page.url);
+      }
+      for (const child of actionEntryUrls(page.html)) {
+        if (!queued.has(child)) {
+          queued.add(child);
+          queue.push(child);
+        }
+      }
+      await sleep(80);
+    } catch (error) {
+      errors.push({ url, error: `${error?.name || "Error"}:${error?.message || String(error)}` });
+    }
+  }
+  return { urls: [...raceUrls.values()], visitedPages: visited.size, errors };
 }
 
 async function saveRace(bundle) {
@@ -120,9 +175,22 @@ async function saveRace(bundle) {
 
 async function main() {
   const today = jstToday();
-  const urls = await discoverRaceUrls(homeUrl, seedUrls);
+  const [normalUrls, actionDiscovery] = await Promise.all([
+    discoverRaceUrls(homeUrl, seedUrls),
+    discoverDoActionRaceUrls()
+  ]);
+  const unique = new Map();
+  for (const url of [...normalUrls, ...actionDiscovery.urls]) {
+    try {
+      const cname = decodeURIComponent(new URL(url).searchParams.get("CNAME") || url);
+      unique.set(cname, url);
+    } catch {
+      unique.set(url, url);
+    }
+  }
+  const urls = [...unique.values()];
   const reports = [];
-  const errors = [];
+  const errors = [...actionDiscovery.errors];
   for (const url of urls) {
     try {
       const page = await fetchJraPage(url);
@@ -148,6 +216,9 @@ async function main() {
   reports.sort((a, b) => `${a.raceDate}-${a.venue}-${a.raceNo}`.localeCompare(`${b.raceDate}-${b.venue}-${b.raceNo}`, "ja"));
   const output = {
     generatedAtUtc: new Date().toISOString(),
+    normalDiscoveredUrls: normalUrls.length,
+    doActionVisitedPages: actionDiscovery.visitedPages,
+    doActionDiscoveredRaceUrls: actionDiscovery.urls.length,
     discoveredUrls: urls.length,
     storedRaces: reports.length,
     storedActiveRunners: reports.reduce((sum, row) => sum + row.activeRunners, 0),
