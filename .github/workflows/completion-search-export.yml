@@ -11,16 +11,26 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   export:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
+      GH_TOKEN: ${{ github.token }}
+      STATUS_TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
     steps:
+      - name: Publish pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='analysis/completion-dataset-export' \
+            -f description='Exporting frozen completion-search dataset' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -35,3 +45,19 @@ jobs:
             artifacts/completion-search-dataset-meta.json
           compression-level: 0
           retention-days: 1
+      - name: Publish success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='analysis/completion-dataset-export' \
+            -f description='Frozen completion-search dataset exported' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='analysis/completion-dataset-export' \
+            -f description='Completion-search dataset export failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
