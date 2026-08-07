@@ -1,158 +1,355 @@
 {
-  "generatedAtUtc": "2026-08-07T00:47:29.372Z",
-  "normalDiscoveredUrls": 36,
-  "doActionVisitedPages": 38,
-  "doActionDiscoveredRaceUrls": 0,
-  "discoveredUrls": 36,
-  "storedRaces": 0,
-  "storedActiveRunners": 0,
+  "generatedAtUtc": "2026-08-07T01:08:47.205Z",
+  "normalDiscoveredUrls": 72,
+  "doActionVisitedPages": 20,
+  "doActionDiscoveredRaceUrls": 17,
+  "discoveredUrls": 72,
+  "storedRaces": 13,
+  "storedActiveRunners": 178,
   "racesWithAtLeastThreeWinOdds": 0,
-  "races": [],
-  "errorCount": 36,
+  "races": [
+    {
+      "raceId": "2026-08-08-sapporo-01",
+      "raceDate": "2026-08-08",
+      "venue": "札幌",
+      "raceNo": 1,
+      "activeRunners": 14,
+      "runnersWithWinOdds": 0
+    },
+    {
+      "raceId": "2026-08-08-sapporo-10",
+      "raceDate": "2026-08-08",
+      "venue": "札幌",
+      "raceNo": 10,
+      "activeRunners": 8,
+      "runnersWithWinOdds": 0
+    },
+    {
+      "raceId": "2026-08-08-sapporo-12",
+      "raceDate": "2026-08-08",
+      "venue": "札幌",
+      "raceNo": 12,
+      "activeRunners": 13,
+      "runnersWithWinOdds": 0
+    },
+    {
+      "raceId": "2026-08-08-sapporo-02",
+      "raceDate": "2026-08-08",
+      "venue": "札幌",
+      "raceNo": 2,
+      "activeRunners": 13,
+      "runnersWithWinOdds": 0
+    },
+    {
+      "raceId": "2026-08-08-sapporo-03",
+      "raceDate": "2026-08-08",
+      "venue": "札幌",
+      "raceNo": 3,
+      "activeRunners": 14,
+      "runnersWithWinOdds": 0
+    },
+    {
+      "raceId": "2026-08-08-sapporo-04",
+      "raceDate": "2026-08-08",
+      "venue": "札幌",
+      "raceNo": 4,
+      "activeRunners": 14,
+      "runnersWithWinOdds": 0
+    },
+    {
+      "raceId": "2026-08-08-sapporo-05",
+      "raceDate": "2026-08-08",
+      "venue": "札幌",
+      "raceNo": 5,
+      "activeRunners": 12,
+      "runnersWithWinOdds": 0
+    },
+    {
+      "raceId": "2026-08-08-sapporo-06",
+      "raceDate": "2026-08-08",
+      "venue": "札幌",
+      "raceNo": 6,
+      "activeRunners": 16,
+      "runnersWithWinOdds": 0
+    },
+    {
+      "raceId": "2026-08-08-sapporo-07",
+      "raceDate": "2026-08-08",
+      "venue": "札幌",
+      "raceNo": 7,
+      "activeRunners": 12,
+      "runnersWithWinOdds": 0
+    },
+    {
+      "raceId": "2026-08-08-sapporo-08",
+      "raceDate": "2026-08-08",
+      "venue": "札幌",
+      "raceNo": 8,
+      "activeRunners": 16,
+      "runnersWithWinOdds": 0
+    },
+    {
+      "raceId": "2026-08-08-niigata-04",
+      "raceDate": "2026-08-08",
+      "venue": "新潟",
+      "raceNo": 4,
+      "activeRunners": 15,
+      "runnersWithWinOdds": 0
+    },
+    {
+      "raceId": "2026-08-08-niigata-05",
+      "raceDate": "2026-08-08",
+      "venue": "新潟",
+      "raceNo": 5,
+      "activeRunners": 15,
+      "runnersWithWinOdds": 0
+    },
+    {
+      "raceId": "2026-08-08-niigata-07",
+      "raceDate": "2026-08-08",
+      "venue": "新潟",
+      "raceNo": 7,
+      "activeRunners": 16,
+      "runnersWithWinOdds": 0
+    }
+  ],
+  "errorCount": 59,
   "errors": [
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050120260808%2F00#",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050120260808/D4",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050220260808%2F00#",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050120260808/B2",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050320260808%2F00#",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602060120260809/04",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050420260808%2F00#",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060120260809/E2",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050520260808%2F00#",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601060120260809/F5",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050620260808%2F00#",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050920260808/6D",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050720260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601051120260808/17",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050820260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050220260808/89",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050920260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050320260808/3E",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601051020260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050620260808/5D",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601051120260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050820260808/C7",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601051220260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050920260808/7C",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050120260808%2F00#",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602051020260808/71",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050220260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602051120260808/26",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050320260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602051220260808/DB",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050420260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050220260808/67",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050520260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050320260808/1C",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050620260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050420260808/D1",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050720260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050520260808/86",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050820260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050620260808/3B",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050920260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050720260808/F0",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602051020260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050820260808/A5",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602051120260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050920260808/5A",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602051220260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602051020260808/4F",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050120260808%2F00#",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602051120260808/04",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050220260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602051220260808/B9",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050320260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602060220260809/B9",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050420260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602060320260809/6E",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050520260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602060420260809/23",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050620260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602060520260809/D8",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050720260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602060620260809/8D",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050820260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602060720260809/42",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050920260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602060820260809/F7",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602051020260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602060920260809/AC",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602051120260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602061020260809/A1",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     },
     {
-      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602051220260808%2F00",
-      "error": "Error:ENTRY_PAGE_SIGNATURE_MISSING"
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602061120260809/56",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602061220260809/0B",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060220260809/97",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060320260809/4C",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060420260809/01",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060520260809/B6",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060620260809/6B",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060720260809/20",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060820260809/D5",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060920260809/8A",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602061020260809/7F",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602061120260809/34",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602061220260809/E9",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601060220260809/AA",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601060320260809/5F",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601060420260809/14",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601060520260809/C9",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601060620260809/7E",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601060720260809/33",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601060820260809/E8",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601060920260809/9D",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601061020260809/92",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601061120260809/47",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
+    },
+    {
+      "url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601061220260809/FC",
+      "error": "Error:RUNNERS_NOT_FOUND:0"
     }
   ]
 }
