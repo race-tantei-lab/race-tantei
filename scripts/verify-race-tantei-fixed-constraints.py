@@ -9,7 +9,7 @@ PROMOTION_GATE = ROOT / "scripts" / "verify-production-candidate.py"
 PROMOTER = ROOT / "scripts" / "find-and-promote-production-candidate.py"
 
 EXPECTED = {
-    "version": 3,
+    "version": 4,
     "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
     "immutableProjectRules": {
         "minimumRacesPerVenueDay": 5,
@@ -22,6 +22,8 @@ EXPECTED = {
         "actualJraPayoutsOnly": True,
         "postResultLeakageForbidden": True,
         "singleOnlyPortfolioForbidden": True,
+        "fullAvailablePeriodRequired": True,
+        "droppingEvaluationPeriodsForbidden": True,
     },
     "promotionRules": {
         "completionRoiPct": 200.0,
@@ -31,6 +33,7 @@ EXPECTED = {
         "requireFullHistoricalRoiPct": 200.0,
         "requireFinalHoldoutRoiPct": 200.0,
         "requireRoiWithoutTop1Pct": 100.0,
+        "requireFullHistoricalPeriodCoverage": True,
         "candidateVersionNumbersForbidden": True,
         "incompleteCandidateIsNotModel": True,
         "implementationBeforeAllGatesPassForbidden": True,
@@ -76,6 +79,7 @@ REQUIRED_DOC_TEXT = (
     "回収率200%以上は目標ではなく完成条件とする。",
     "探索途中の候補にはバージョン番号を付けない。",
     "`v16` という名称は、全条件と全ゲートを通過した完成物にだけ付与する。",
+    "完成判定の全期間回収率は、利用可能な最初のレースから最新の終了済みレースまでを漏れなく含める。",
     "不合格結果を逐一ユーザーへ並べて報告しない。",
 )
 
@@ -91,7 +95,8 @@ def main() -> None:
     if actual != EXPECTED:
         raise SystemExit(
             "FIXED_CONSTRAINTS_CHANGED: minimum five races, fixed budgets, diversified bets, "
-            "official odds only, completion ROI 200, no candidate version numbers, and reporting rules are immutable."
+            "official odds only, full-period coverage, completion ROI 200, no candidate version numbers, "
+            "and reporting rules are immutable."
         )
 
     if not DOC.exists():
