@@ -73,6 +73,28 @@ def validate_exploration_identity(report: dict[str, Any], config: dict[str, Any]
     return exploration_id.strip()
 
 
+def validate_full_period(report: dict[str, Any], config: dict[str, Any]) -> tuple[str, str]:
+    promotion = config["promotionRules"]
+    rules = config["immutableProjectRules"]
+    if not (rules.get("fullAvailablePeriodRequired") or promotion.get("requireFullHistoricalPeriodCoverage")):
+        return "", ""
+    period = report.get("period")
+    require(isinstance(period, dict), "PERIOD_MISSING")
+    archive_start = str(period.get("archiveStart") or "")
+    archive_end = str(period.get("archiveEnd") or "")
+    full_start = str(period.get("fullHistoricalStart") or "")
+    full_end = str(period.get("fullHistoricalEnd") or "")
+    require(archive_start and archive_end, "ARCHIVE_PERIOD_MISSING")
+    require(full_start and full_end, "FULL_HISTORICAL_PERIOD_MISSING")
+    require(full_start == archive_start, f"FULL_PERIOD_START_DROPPED:{full_start}:{archive_start}")
+    require(full_end == archive_end, f"FULL_PERIOD_END_DROPPED:{full_end}:{archive_end}")
+    archive_finished = int(number(period.get("archiveFinishedRaces")))
+    require(archive_finished > 0, "ARCHIVE_FINISHED_RACES_MISSING")
+    require(flag(report, "fullAvailablePeriodEvaluated"), "FULL_AVAILABLE_PERIOD_NOT_CONFIRMED")
+    require(flag(report, "coldStartIncluded"), "COLD_START_PERIOD_NOT_INCLUDED")
+    return archive_start, archive_end
+
+
 def validate_implementation(report: dict[str, Any]) -> dict[str, Any]:
     implementation = report.get("productionImplementation")
     require(isinstance(implementation, dict), "PRODUCTION_IMPLEMENTATION_MISSING")
@@ -118,6 +140,7 @@ def validate_report(report: dict[str, Any], config: dict[str, Any]) -> tuple[str
         or flag(report, "officialCombinationOddsRequiredForLiveBets"),
         "LIVE_OFFICIAL_COMBINATION_ODDS_GATE_MISSING",
     )
+    archive_start, archive_end = validate_full_period(report, config)
 
     courses = report.get("courses")
     require(isinstance(courses, dict), "COURSES_MISSING")
@@ -140,6 +163,9 @@ def validate_report(report: dict[str, Any], config: dict[str, Any]) -> tuple[str
         full_roi = number(full.get("roiPct"), -1.0)
         require(full_races > 0, f"FULL_HISTORICAL_RACES_MISSING:{course_name}")
         require(full_roi >= full_target, f"FULL_HISTORICAL_ROI_BELOW_200:{course_name}:{full_roi:.6f}")
+        if archive_start or archive_end:
+            require(str(full.get("periodStart") or "") == archive_start, f"COURSE_FULL_START_MISMATCH:{course_name}")
+            require(str(full.get("periodEnd") or "") == archive_end, f"COURSE_FULL_END_MISMATCH:{course_name}")
 
         final = course.get("finalHoldout")
         require(isinstance(final, dict), f"FINAL_HOLDOUT_MISSING:{course_name}")
@@ -154,6 +180,7 @@ def validate_report(report: dict[str, Any], config: dict[str, Any]) -> tuple[str
         require(isinstance(coverage, dict), f"COVERAGE_MISSING:{course_name}")
         minimum_coverage = int(number(coverage.get("minimumSelectedRaces")))
         require(minimum_coverage >= minimum_selected, f"RACES_PER_VENUE_DAY_BELOW_MINIMUM:{course_name}:{minimum_coverage}")
+        require(coverage.get("allEligibleVenueDaysCovered") is True, f"VENUE_DAY_COVERAGE_INCOMPLETE:{course_name}")
 
         policy = course.get("policy")
         require(policy is not None, f"POLICY_MISSING:{course_name}")
@@ -173,6 +200,8 @@ def validate_report(report: dict[str, Any], config: dict[str, Any]) -> tuple[str
         approved_courses[course_name] = {
             "fullHistoricalRaces": full_races,
             "fullHistoricalRoiPct": full_roi,
+            "fullHistoricalPeriodStart": archive_start,
+            "fullHistoricalPeriodEnd": archive_end,
             "finalHoldoutRaces": races,
             "finalHoldoutRoiPct": roi,
             "roiWithoutTop1Pct": trimmed_roi,
