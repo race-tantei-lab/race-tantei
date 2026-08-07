@@ -1,0 +1,47 @@
+name: Probe JRA CNAME suffix
+run-name: Probe JRA CNAME suffix · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/probe-jra-cname-suffix.mjs"
+      - ".github/workflows/probe-jra-cname-suffix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install and compile parser
+        run: |
+          npm ci
+          npm run build:test
+      - name: Probe suffix behavior
+        run: node scripts/probe-jra-cname-suffix.mjs
+      - name: Save result
+        shell: bash
+        run: |
+          mkdir -p analysis-results
+          cp jra-cname-suffix-probe.json analysis-results/jra-cname-suffix-probe.json
+          git add -f analysis-results/jra-cname-suffix-probe.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Save JRA CNAME suffix probe"
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jra-cname-suffix-probe
+          path: jra-cname-suffix-probe.json
+          retention-days: 7
