@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/completion-parser-validation.yml"
       - "scripts/run-completion-parser-validation.py"
+      - "scripts/export-completion-parser-html.py"
       - "scripts/validate-jra-historical-combination-parser.py"
   workflow_dispatch:
 
@@ -30,12 +31,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - run: python scripts/export-completion-parser-html.py
       - run: python scripts/run-completion-parser-validation.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: completion-parser-validation
-          path: analysis-results/jra-historical-combination-parser-validation.json
+          name: completion-parser-debug
+          path: |
+            analysis-results/jra-historical-combination-parser-validation.json
+            artifacts/completion-parser-html/*.html
           retention-days: 1
       - name: Assert full validation
         run: python -c "import json; r=json.load(open('analysis-results/jra-historical-combination-parser-validation.json',encoding='utf-8')); assert r.get('allMatrixBetTypesValidated') is True, r"
