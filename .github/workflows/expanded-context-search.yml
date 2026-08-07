@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "scripts/analyze-expanded-context-search.py"
+      - "scripts/run-expanded-context-search.py"
       - "scripts/verify-race-tantei-fixed-constraints.py"
       - "scripts/verify-production-candidate.py"
       - "scripts/find-and-promote-production-candidate.py"
@@ -59,6 +60,7 @@ jobs:
         run: |
           python -m py_compile \
             scripts/analyze-expanded-context-search.py \
+            scripts/run-expanded-context-search.py \
             scripts/verify-race-tantei-fixed-constraints.py \
             scripts/verify-production-candidate.py \
             scripts/find-and-promote-production-candidate.py \
@@ -69,7 +71,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python scripts/analyze-expanded-context-search.py 2>&1 | tee expanded-context-search.log
+          python scripts/run-expanded-context-search.py 2>&1 | tee expanded-context-search.log
 
       - name: Attempt promotion only through completion gate
         if: success()
