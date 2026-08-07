@@ -10,16 +10,27 @@ on:
 
 permissions:
   contents: write
+  statuses: write
 
 jobs:
   probe:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
+      GH_TOKEN: ${{ github.token }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      - name: Publish probe pending
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='analysis/jra-historical-bet-actions' \
+            -f description='Probing JRA historical venue-day bet actions' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -43,3 +54,21 @@ jobs:
             git pull --rebase origin main
             git push origin HEAD:main
           fi
+      - name: Publish probe success
+        if: success()
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='analysis/jra-historical-bet-actions' \
+            -f description='JRA historical venue-day bet action probe completed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Publish probe failure
+        if: failure()
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='analysis/jra-historical-bet-actions' \
+            -f description='JRA historical venue-day bet action probe failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
