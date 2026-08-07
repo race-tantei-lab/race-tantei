@@ -1,8 +1,8 @@
 Traceback (most recent call last):
-  File "/home/runner/work/race-tantei/race-tantei/scripts/run-final-course-production.py", line 128, in <module>
+  File "/home/runner/work/race-tantei/race-tantei/scripts/run-final-course-production.py", line 150, in <module>
     main()
-  File "/home/runner/work/race-tantei/race-tantei/scripts/run-final-course-production.py", line 121, in main
+  File "/home/runner/work/race-tantei/race-tantei/scripts/run-final-course-production.py", line 141, in main
     require_approved_model()
-  File "/home/runner/work/race-tantei/race-tantei/scripts/run-final-course-production.py", line 21, in require_approved_model
+  File "/home/runner/work/race-tantei/race-tantei/scripts/run-final-course-production.py", line 23, in require_approved_model
     raise RuntimeError(
 RuntimeError: PRODUCTION_MODEL_LOCKED:NO_MODEL_PASSED_ALL_ROI_200_AND_FIXED_CONSTRAINT_GATES
