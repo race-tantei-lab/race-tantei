@@ -1,0 +1,67 @@
+name: Record JRA combination parser validation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "analysis-results/jra-historical-combination-parser-validation.json"
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify every matrix type
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          source=Path('analysis-results/jra-historical-combination-parser-validation.json')
+          report=json.loads(source.read_text(encoding='utf-8'))
+          required=['ワイド','馬連','馬単','3連複','3連単']
+          if report.get('allMatrixBetTypesValidated') is not True:
+              raise SystemExit('ALL_MATRIX_BET_TYPES_NOT_VALIDATED')
+          for bet_type in required:
+              row=report.get('validations',{}).get(bet_type,{})
+              if row.get('validated') is not True:
+                  raise SystemExit(f'BET_TYPE_NOT_VALIDATED:{bet_type}')
+              if row.get('expectedCombinationCount') != row.get('parsedMatrixRowCount'):
+                  raise SystemExit(f'COMBINATION_COUNT_MISMATCH:{bet_type}')
+          output={
+              'validated': True,
+              'source': str(source),
+              'activeHorseCount': report.get('activeHorseCount'),
+              'validatedBetTypes': required,
+          }
+          Path('analysis-results/jra-historical-combination-parser-VALIDATED.json').write_text(
+              json.dumps(output,ensure_ascii=False,indent=2)+'\n', encoding='utf-8'
+          )
+          PY
+      - name: Save validation sentinel
+        run: |
+          git add -f analysis-results/jra-historical-combination-parser-VALIDATED.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --cached --quiet; then
+            git commit -m "Record validated JRA historical combination parser"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Publish success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='analysis/jra-combination-parser-validated' \
+            -f description='All five JRA combination bet matrices validated' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
