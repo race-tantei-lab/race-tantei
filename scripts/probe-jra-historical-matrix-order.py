@@ -4,6 +4,8 @@ import itertools
 import json
 import re
 import sys
+import time
+import urllib.error
 from collections import defaultdict
 from pathlib import Path
 
@@ -27,6 +29,23 @@ def load_collector():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def fetch_retry(collector, cname, attempts=7):
+    last = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return collector.fetch_url(collector.JRA_ODDS_URL, cname=cname)
+        except urllib.error.HTTPError as exc:
+            last = exc
+            if exc.code not in {429, 500, 502, 503, 504} or attempt == attempts:
+                raise
+        except Exception as exc:
+            last = exc
+            if attempt == attempts:
+                raise
+        time.sleep(min(20, 2 * attempt))
+    raise RuntimeError(f"JRA_FETCH_RETRY_EXHAUSTED:{last}")
 
 
 def clean_text(value):
@@ -132,18 +151,26 @@ def evaluate_order(label, horses, rows):
 def main():
     collector = load_collector()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    venue_html = collector.fetch_url(collector.JRA_ODDS_URL, cname=VENUE_DAY_CNAME)
+    venue_html = fetch_retry(collector, VENUE_DAY_CNAME)
     actions = actions_by_label(venue_html)
     pages = {}
+    fetch_errors = {}
     for label in LABELS:
         cnames = actions.get(label) or []
         if len(cnames) < TARGET_RACE_NO:
-            raise RuntimeError(f"TARGET_ACTION_MISSING:{label}:{len(cnames)}")
-        pages[label] = collector.fetch_url(collector.JRA_ODDS_URL, cname=cnames[TARGET_RACE_NO - 1])
+            fetch_errors[label] = f"TARGET_ACTION_MISSING:{len(cnames)}"
+            continue
+        try:
+            pages[label] = fetch_retry(collector, cnames[TARGET_RACE_NO - 1])
+        except Exception as exc:
+            fetch_errors[label] = f"{type(exc).__name__}:{exc}"
 
-    horses = active_horses(collector, pages["単勝"])
     evaluations = {}
+    horses = active_horses(collector, pages["単勝"]) if "単勝" in pages else []
     for label in ("ワイド", "馬連", "馬単", "3連複"):
+        if label not in pages:
+            evaluations[label] = {"error": fetch_errors.get(label, "PAGE_MISSING")}
+            continue
         rows = matrix_rows(collector, pages[label])
         evaluations[label] = evaluate_order(label, horses, rows)
 
@@ -151,16 +178,19 @@ def main():
         "targetRaceNo": TARGET_RACE_NO,
         "activeHorses": horses,
         "activeHorseCount": len(horses),
+        "fetchErrors": fetch_errors,
         "evaluations": evaluations,
     }
     OUTPUT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
         "activeHorseCount": len(horses),
+        "fetchErrors": fetch_errors,
         "checks": {
             label: {
-                "rowCountMatches": row["rowCountMatches"],
-                "displayedHorseSequenceMatches": row["displayedHorseSequenceMatches"],
-                "matrixRowCount": row["matrixRowCount"],
+                "rowCountMatches": row.get("rowCountMatches"),
+                "displayedHorseSequenceMatches": row.get("displayedHorseSequenceMatches"),
+                "matrixRowCount": row.get("matrixRowCount"),
+                "error": row.get("error"),
             }
             for label, row in evaluations.items()
         },
