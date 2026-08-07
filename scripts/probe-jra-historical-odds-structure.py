@@ -52,8 +52,7 @@ def actions_by_label(page_html):
 
 def structural_rows(collector, page_html, limit=30):
     output = []
-    for tr in re.findall(r"<tr\b[^>]*>(.*?)</tr>", page_html, re.I | re.S):
-        cells = collector.extract_cells(tr)
+    for cells in collector.parsed_rows(page_html):
         if not cells:
             continue
         joined = " | ".join(cells)
@@ -103,9 +102,7 @@ def main():
     OUTPUT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
         "actionCounts": report["actionCounts"],
-        "genericParsedRows": {
-            label: row.get("genericParsedRows") for label, row in pages.items()
-        },
+        "genericParsedRows": {label: row.get("genericParsedRows") for label, row in pages.items()},
         "report": str(OUTPUT.relative_to(ROOT)),
     }, ensure_ascii=False))
 
