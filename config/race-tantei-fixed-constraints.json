@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
   "immutableProjectRules": {
     "minimumRacesPerVenueDay": 5,
@@ -11,7 +11,9 @@
     "missingHistoricalOddsMustRemainMissing": true,
     "actualJraPayoutsOnly": true,
     "postResultLeakageForbidden": true,
-    "singleOnlyPortfolioForbidden": true
+    "singleOnlyPortfolioForbidden": true,
+    "fullAvailablePeriodRequired": true,
+    "droppingEvaluationPeriodsForbidden": true
   },
   "promotionRules": {
     "completionRoiPct": 200.0,
@@ -21,6 +23,7 @@
     "requireFullHistoricalRoiPct": 200.0,
     "requireFinalHoldoutRoiPct": 200.0,
     "requireRoiWithoutTop1Pct": 100.0,
+    "requireFullHistoricalPeriodCoverage": true,
     "candidateVersionNumbersForbidden": true,
     "incompleteCandidateIsNotModel": true,
     "implementationBeforeAllGatesPassForbidden": true,
