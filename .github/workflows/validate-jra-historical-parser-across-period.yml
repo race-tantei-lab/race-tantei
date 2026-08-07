@@ -1,0 +1,148 @@
+name: Validate JRA historical parser across archive period
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/validate-jra-historical-parser-across-period.py"
+      - "scripts/validate-jra-historical-combination-parser.py"
+      - ".github/workflows/validate-jra-historical-parser-across-period.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Publish pending
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='analysis/jra-parser-across-period' \
+            -f description='Validating JRA official odds parser across 2024-2026' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify source
+        run: |
+          python -m py_compile \
+            scripts/validate-jra-historical-combination-parser.py \
+            scripts/validate-jra-historical-parser-across-period.py
+
+      - name: Validate actual stored JRA result URLs across period
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/validate-jra-historical-parser-across-period.py | tee jra-parser-across-period.log
+
+      - name: Save diagnostic report
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f analysis-results/jra-historical-parser-across-period-validation.json ]]; then
+            git add -f analysis-results/jra-historical-parser-across-period-validation.json
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if ! git diff --cached --quiet; then
+              git commit -m "Save JRA historical parser period validation"
+              git pull --rebase origin main
+              git push origin HEAD:main
+            fi
+          fi
+
+      - name: Assert every sampled archive period validated
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path('analysis-results/jra-historical-parser-across-period-validation.json')
+          if not path.exists():
+              raise SystemExit('PERIOD_VALIDATION_REPORT_MISSING')
+          report=json.loads(path.read_text(encoding='utf-8'))
+          if report.get('allPeriodsValidated') is not True:
+              raise SystemExit('JRA_HISTORICAL_PARSER_NOT_VALIDATED_ACROSS_PERIOD')
+          samples=report.get('samples', [])
+          required_dates={'2024-05-04','2025-01-05','2026-08-02'}
+          dates={str(row.get('raceDate')) for row in samples if row.get('allMatrixBetTypesValidated') is True}
+          if dates != required_dates:
+              raise SystemExit(f'PERIOD_SAMPLE_SET_INVALID:{sorted(dates)}')
+          PY
+
+      - name: Create validation sentinel
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          source=Path('analysis-results/jra-historical-parser-across-period-validation.json')
+          report=json.loads(source.read_text(encoding='utf-8'))
+          output={
+              'validated': True,
+              'source': str(source),
+              'validatedDates': [row['raceDate'] for row in report['samples']],
+              'allPeriodsValidated': True,
+              'betTypes': ['ワイド','馬連','馬単','3連複','3連単'],
+          }
+          Path('analysis-results/jra-historical-parser-across-period-VALIDATED.json').write_text(
+              json.dumps(output, ensure_ascii=False, indent=2)+'\n', encoding='utf-8'
+          )
+          PY
+          git add -f analysis-results/jra-historical-parser-across-period-VALIDATED.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --cached --quiet; then
+            git commit -m "Record JRA historical parser across-period validation"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Upload validation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jra-historical-parser-across-period
+          path: |
+            analysis-results/jra-historical-parser-across-period-validation.json
+            jra-parser-across-period.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish success
+        if: success()
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='analysis/jra-parser-across-period' \
+            -f description='JRA official odds parser validated across 2024-2026' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Publish failure
+        if: failure()
+        shell: bash
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='analysis/jra-parser-across-period' \
+            -f description='JRA official odds parser period validation incomplete' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
