@@ -5,6 +5,7 @@ on:
     branches: [analysis/completion-search-20260807]
     paths:
       - ".github/workflows/completion-parser-validation.yml"
+      - "scripts/run-completion-parser-validation.py"
       - "scripts/validate-jra-historical-combination-parser.py"
   workflow_dispatch:
 
@@ -29,16 +30,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python scripts/validate-jra-historical-combination-parser.py
+      - run: python scripts/run-completion-parser-validation.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: completion-parser-validation
           path: analysis-results/jra-historical-combination-parser-validation.json
           retention-days: 1
+      - name: Assert full validation
+        run: python -c "import json; r=json.load(open('analysis-results/jra-historical-combination-parser-validation.json',encoding='utf-8')); assert r.get('allMatrixBetTypesValidated') is True, r"
       - name: Publish success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/completion-parser-validation' -f description='Historical JRA odds matrix validation completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/completion-parser-validation' -f description='Historical JRA odds matrices fully validated' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Publish failure
         if: failure()
         run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/completion-parser-validation' -f description='Historical JRA odds matrix validation failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
