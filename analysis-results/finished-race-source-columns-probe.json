@@ -1,0 +1,198 @@
+{
+  "table": "rt_races",
+  "columns": [
+    "race_id",
+    "race_date",
+    "venue",
+    "meeting_no",
+    "meeting_day",
+    "race_no",
+    "race_name",
+    "conditions",
+    "surface",
+    "distance_m",
+    "direction",
+    "start_time_jst",
+    "start_time_utc",
+    "weather",
+    "track_condition",
+    "entry_url",
+    "result_url",
+    "status",
+    "refund_horse_nos_json",
+    "entry_updated_at",
+    "result_updated_at",
+    "created_at",
+    "updated_at"
+  ],
+  "urlOrSourceColumns": [
+    "entry_url",
+    "result_url",
+    "entry_updated_at"
+  ],
+  "identityColumns": [
+    "race_id",
+    "race_date",
+    "venue",
+    "race_no",
+    "status"
+  ],
+  "samples": {
+    "2024-05-04": [
+      {
+        "race_id": "2024-05-04-kyoto-01",
+        "race_date": "2024-05-04",
+        "venue": "京都",
+        "race_no": 1,
+        "status": "finished",
+        "entry_url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1008202403050120240504%2F55",
+        "result_url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202403050120240504%2F55",
+        "entry_updated_at": "2026-08-03T02:32:07.189Z"
+      },
+      {
+        "race_id": "2024-05-04-kyoto-02",
+        "race_date": "2024-05-04",
+        "venue": "京都",
+        "race_no": 2,
+        "status": "finished",
+        "entry_url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1008202403050220240504%2F0A",
+        "result_url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202403050220240504%2F0A",
+        "entry_updated_at": "2026-08-03T02:32:07.189Z"
+      },
+      {
+        "race_id": "2024-05-04-kyoto-03",
+        "race_date": "2024-05-04",
+        "venue": "京都",
+        "race_no": 3,
+        "status": "finished",
+        "entry_url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1008202403050320240504%2FBF",
+        "result_url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202403050320240504%2FBF",
+        "entry_updated_at": "2026-08-03T02:32:07.189Z"
+      },
+      {
+        "race_id": "2024-05-04-kyoto-04",
+        "race_date": "2024-05-04",
+        "venue": "京都",
+        "race_no": 4,
+        "status": "finished",
+        "entry_url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1008202403050420240504%2F74",
+        "result_url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202403050420240504%2F74",
+        "entry_updated_at": "2026-08-03T02:32:07.189Z"
+      },
+      {
+        "race_id": "2024-05-04-kyoto-05",
+        "race_date": "2024-05-04",
+        "venue": "京都",
+        "race_no": 5,
+        "status": "finished",
+        "entry_url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1008202403050520240504%2F29",
+        "result_url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202403050520240504%2F29",
+        "entry_updated_at": "2026-08-03T02:32:07.240Z"
+      }
+    ],
+    "2025-01-05": [
+      {
+        "race_id": "2025-01-05-chukyo-01",
+        "race_date": "2025-01-05",
+        "venue": "中京",
+        "race_no": 1,
+        "status": "finished",
+        "entry_url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1007202501010120250105%2FB5",
+        "result_url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202501010120250105%2FB5",
+        "entry_updated_at": "2026-08-04T18:23:51.374Z"
+      },
+      {
+        "race_id": "2025-01-05-chukyo-02",
+        "race_date": "2025-01-05",
+        "venue": "中京",
+        "race_no": 2,
+        "status": "finished",
+        "entry_url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1007202501010220250105%2F6A",
+        "result_url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202501010220250105%2F6A",
+        "entry_updated_at": "2026-08-04T18:24:03.410Z"
+      },
+      {
+        "race_id": "2025-01-05-chukyo-03",
+        "race_date": "2025-01-05",
+        "venue": "中京",
+        "race_no": 3,
+        "status": "finished",
+        "entry_url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1007202501010320250105%2F1F",
+        "result_url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202501010320250105%2F1F",
+        "entry_updated_at": "2026-08-04T18:24:15.858Z"
+      },
+      {
+        "race_id": "2025-01-05-chukyo-04",
+        "race_date": "2025-01-05",
+        "venue": "中京",
+        "race_no": 4,
+        "status": "finished",
+        "entry_url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1007202501010420250105%2FD4",
+        "result_url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202501010420250105%2FD4",
+        "entry_updated_at": "2026-08-04T18:24:28.431Z"
+      },
+      {
+        "race_id": "2025-01-05-chukyo-05",
+        "race_date": "2025-01-05",
+        "venue": "中京",
+        "race_no": 5,
+        "status": "finished",
+        "entry_url": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1007202501010520250105%2F89",
+        "result_url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202501010520250105%2F89",
+        "entry_updated_at": "2026-08-04T18:24:41.057Z"
+      }
+    ],
+    "2026-08-02": [
+      {
+        "race_id": "2026-08-02-chukyo-01",
+        "race_date": "2026-08-02",
+        "venue": "中京",
+        "race_no": 1,
+        "status": "finished",
+        "entry_url": "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0107202602040120260802/5E",
+        "result_url": "https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0107202602040120260802/1A",
+        "entry_updated_at": "2026-08-02T02:15:46.316Z"
+      },
+      {
+        "race_id": "2026-08-02-chukyo-02",
+        "race_date": "2026-08-02",
+        "venue": "中京",
+        "race_no": 2,
+        "status": "finished",
+        "entry_url": "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0107202602040220260802/13",
+        "result_url": "https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0107202602040220260802/CF",
+        "entry_updated_at": "2026-08-02T02:15:50.420Z"
+      },
+      {
+        "race_id": "2026-08-02-chukyo-03",
+        "race_date": "2026-08-02",
+        "venue": "中京",
+        "race_no": 3,
+        "status": "finished",
+        "entry_url": "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0107202602040320260802/C8",
+        "result_url": "https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0107202602040320260802/84",
+        "entry_updated_at": "2026-08-02T02:20:35.719Z"
+      },
+      {
+        "race_id": "2026-08-02-chukyo-04",
+        "race_date": "2026-08-02",
+        "venue": "中京",
+        "race_no": 4,
+        "status": "finished",
+        "entry_url": "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0107202602040420260802/7D",
+        "result_url": "https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0107202602040420260802/39",
+        "entry_updated_at": "2026-08-02T02:30:17.261Z"
+      },
+      {
+        "race_id": "2026-08-02-chukyo-05",
+        "race_date": "2026-08-02",
+        "venue": "中京",
+        "race_no": 5,
+        "status": "finished",
+        "entry_url": "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0107202602040520260802/32",
+        "result_url": "https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0107202602040520260802/EE",
+        "entry_updated_at": "2026-08-02T03:00:17.194Z"
+      }
+    ]
+  }
+}
