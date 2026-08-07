@@ -1,0 +1,37 @@
+name: Completion search dataset export
+
+on:
+  push:
+    branches:
+      - analysis/completion-search-20260807
+    paths:
+      - scripts/export-completion-dataset.py
+      - .github/workflows/completion-search-export.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_D1_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check numpy scikit-learn
+      - run: python scripts/export-completion-dataset.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: completion-search-dataset
+          path: |
+            artifacts/completion-search-dataset.pkl.gz
+            artifacts/completion-search-dataset-meta.json
+          compression-level: 0
+          retention-days: 1
