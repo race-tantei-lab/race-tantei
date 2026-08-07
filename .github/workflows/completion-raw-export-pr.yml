@@ -24,6 +24,8 @@ jobs:
           python-version: '3.12'
       - name: Export existing D1 categories
         run: python scripts/export-completion-raw-categories.py
+      - name: Probe JRA race-selection links
+        run: python scripts/probe-jra-race-selection-links.py
       - name: Save run pointer
         run: |
           python - <<'PY'
@@ -39,12 +41,13 @@ jobs:
           path: |
             artifacts/completion-raw-categories.pkl.gz
             artifacts/completion-raw-categories-meta.json
+            artifacts/jra-race-selection-links-probe.json
           compression-level: 0
           retention-days: 1
-      - name: Commit pointer and metadata to analysis branch
+      - name: Commit pointer, metadata, and probe to analysis branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add artifacts/completion-raw-categories-meta.json artifacts/completion-raw-run.json
-          git commit -m "Save completion raw export pointer" || exit 0
+          git add artifacts/completion-raw-categories-meta.json artifacts/completion-raw-run.json artifacts/jra-race-selection-links-probe.json
+          git commit -m "Save JRA selection-link probe" || exit 0
           git push origin HEAD:analysis/completion-search-20260807
