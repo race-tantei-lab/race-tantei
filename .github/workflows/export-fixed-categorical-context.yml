@@ -1,0 +1,62 @@
+name: Export fixed categorical context
+
+on:
+  push:
+    branches:
+      - analysis/completion-search-20260807
+    paths:
+      - scripts/export-fixed-categorical-context.py
+      - .github/workflows/export-fixed-categorical-context.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      STATUS_TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='analysis/export-fixed-categorical-context' \
+            -f description='Exporting categorical context from existing fixed archive' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+        with:
+          ref: analysis/completion-search-20260807
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check numpy scikit-learn
+      - run: python scripts/export-fixed-categorical-context.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fixed-categorical-context
+          path: |
+            artifacts/fixed-categorical-context.pkl.gz
+            artifacts/fixed-categorical-context-meta.json
+          retention-days: 1
+      - name: Publish success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='analysis/export-fixed-categorical-context' \
+            -f description='Categorical context export finished' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='analysis/export-fixed-categorical-context' \
+            -f description='Categorical context export failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
