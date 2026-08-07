@@ -1,0 +1,44 @@
+{
+  "generatedAt": "2026-08-08",
+  "status": "exploration_in_progress",
+  "approvedModel": null,
+  "modelVersionAssigned": false,
+  "dataset": {
+    "races": 7695,
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "newIngestionUsed": false,
+    "legacyModelResultsUsed": false
+  },
+  "validation": {
+    "walkForward": true,
+    "minimumRacesPerVenueDay": 5,
+    "courseBudgetsYen": {
+      "ライト": 2000,
+      "スタンダード": 5000,
+      "プレミアム": 10000
+    },
+    "failedExplorationsPromoted": false
+  },
+  "completedExplorationFamilies": [
+    "fixed-ticket walk-forward",
+    "dynamic expected-return regression",
+    "two-stage hit-probability x conditional-payout EV",
+    "market-rank longshot KNN EV through rank 10",
+    "race-wide 752-feature rank-shape model through rank 10"
+  ],
+  "latestCompletedCoverage": [
+    "2024-Q2",
+    "2024-Q3",
+    "2024-Q4",
+    "2025-Q1",
+    "2025-Q2",
+    "2025-Q3",
+    "2025-Q4",
+    "2026-Q1",
+    "2026-Q2",
+    "2026-Q3"
+  ],
+  "latestFamilyGatePassed": false,
+  "nextExploration": "learn race-regime-specific longshot portfolio families from prior-only periods, with quarter-level checkpoints"
+}
