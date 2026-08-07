@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-05T12:49:17.618Z",
+  "generatedAt": "2026-08-07T05:59:26.772Z",
   "targetRoiPct": 200,
   "minimumRacesPerVenueDay": 5,
   "featureCount": 32,
@@ -16,105 +16,105 @@
   "ranking": {
     "marketValidation": {
       "races": 600,
-      "logLoss": 2.0939,
-      "top1Pct": 30.6667,
-      "top3Pct": 60.3333
+      "logLoss": 2.0372,
+      "top1Pct": 33.5,
+      "top3Pct": 65.1667
     },
     "modelValidation": {
       "races": 600,
-      "logLoss": 2.1638,
-      "top1Pct": 31.1667,
-      "top3Pct": 62.1667
+      "logLoss": 2.1071,
+      "top1Pct": 33.5,
+      "top3Pct": 63.8333
     },
     "marketHoldout": {
       "races": 288,
-      "logLoss": 1.98,
-      "top1Pct": 34.375,
-      "top3Pct": 66.3194
+      "logLoss": 1.9573,
+      "top1Pct": 36.1111,
+      "top3Pct": 68.4028
     },
     "modelHoldout": {
       "races": 288,
-      "logLoss": 2.0412,
-      "top1Pct": 34.375,
-      "top3Pct": 66.3194
+      "logLoss": 2.0053,
+      "top1Pct": 35.7639,
+      "top3Pct": 67.0139
     }
   },
   "selectedRaceConfiguration": {
-    "mode": "edge",
-    "count": 6
+    "mode": "confidence",
+    "count": 12
   },
   "validation": {
     "ライト": {
       "policy": {
         "profile": "stable",
-        "stakeMode": "equal",
+        "stakeMode": "hit",
         "minEv": 0,
         "minHit": 0.25,
-        "maxOdds": 40,
+        "maxOdds": 10,
         "maxRank": 2,
         "includesFirst": "yes",
         "ticketCount": 4,
-        "hedge": "wide"
+        "hedge": "hit"
       },
-      "roi": 77.1875,
-      "hit": 51.3333,
-      "minMonth": 70.0047,
+      "roi": 80.5083,
+      "hit": 49.1667,
+      "minMonth": 77.7604,
       "hitRequirementMet": true
     },
     "スタンダード": {
       "policy": {
         "profile": "stable",
-        "stakeMode": "equal",
+        "stakeMode": "hit",
         "minEv": 0,
         "minHit": 0.25,
-        "maxOdds": 40,
+        "maxOdds": 10,
         "maxRank": 2,
         "includesFirst": "yes",
         "ticketCount": 4,
-        "hedge": "wide"
+        "hedge": "hit"
       },
-      "roi": 77.1952,
-      "hit": 51.3333,
-      "minMonth": 70.1696,
+      "roi": 80.5004,
+      "hit": 49.1667,
+      "minMonth": 77.0085,
       "hitRequirementMet": true
     },
     "プレミアム": {
       "policy": {
-        "profile": "noTrifecta",
-        "stakeMode": "equal",
+        "profile": "stable",
+        "stakeMode": "hit",
         "minEv": 0,
         "minHit": 0.25,
-        "maxOdds": 40,
+        "maxOdds": 10,
         "maxRank": 2,
         "includesFirst": "yes",
         "ticketCount": 4,
-        "hedge": "wide"
+        "hedge": "hit"
       },
-      "roi": 77.1417,
-      "hit": 51,
-      "minMonth": 70.5742,
+      "roi": 80.3979,
+      "hit": 49.1667,
+      "minMonth": 76.8298,
       "hitRequirementMet": true
     }
   },
   "holdout": {
     "ライト": {
-      "roi": 74.9609,
-      "hit": 51.3889,
-      "profit": -57690,
+      "roi": 76.0959,
+      "hit": 46.5278,
+      "profit": -110150,
       "pass200": false,
       "hitRequirementMet": true
     },
     "スタンダード": {
-      "roi": 75.0992,
-      "hit": 51.3889,
-      "profit": -150600,
+      "roi": 76.3335,
+      "hit": 46.5278,
+      "profit": -286270,
       "pass200": false,
       "hitRequirementMet": true
     },
     "プレミアム": {
-      "roi": 75.1018,
-      "hit": 51.3889,
-      "profit": -315510,
+      "roi": 76.4935,
+      "hit": 46.5278,
+      "profit": -595750,
       "pass200": false,
       "hitRequirementMet": true
     }

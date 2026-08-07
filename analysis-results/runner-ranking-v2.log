@@ -1,23 +1,23 @@
-Searching ranking-v2 policy for edge/5R...
-ライト: validation ROI 81.86% / hit 48.8% / minMonth 75.8182%
-スタンダード: validation ROI 76.8324% / hit 53.6% / minMonth 69.2035%
-プレミアム: validation ROI 79.265% / hit 53.2% / minMonth 73.7996%
-Searching ranking-v2 policy for edge/8R...
-ライト: validation ROI 73.4547% / hit 52.25% / minMonth 69.1655%
-スタンダード: validation ROI 74.7542% / hit 49.5% / minMonth 71.9602%
-プレミアム: validation ROI 74.754% / hit 49.5% / minMonth 71.906%
-Searching ranking-v2 policy for edge/7R...
-ライト: validation ROI 76.5786% / hit 47.7143% / minMonth 70.3774%
-スタンダード: validation ROI 78.149% / hit 47.7143% / minMonth 72.3191%
-プレミアム: validation ROI 78.1471% / hit 47.7143% / minMonth 72.365%
-Searching ranking-v2 policy for edge/6R...
-ライト: validation ROI 77.1875% / hit 51.3333% / minMonth 70.0047%
-スタンダード: validation ROI 77.1952% / hit 51.3333% / minMonth 70.1696%
-プレミアム: validation ROI 77.1417% / hit 51% / minMonth 70.5742%
-Ranking validation: market logloss 2.0939 / model 2.1638, top1 market 30.6667% / model 31.1667%
-Ranking holdout: market logloss 1.98 / model 2.0412, top1 market 34.375% / model 34.375%
-Winner: edge/6R
-ライト: validation 77.1875% / holdout 74.9609% / hit 51.3889% / 200% FAIL
-スタンダード: validation 77.1952% / holdout 75.0992% / hit 51.3889% / 200% FAIL
-プレミアム: validation 77.1417% / holdout 75.1018% / hit 51.3889% / 200% FAIL
+Searching ranking-v2 policy for edge/11R...
+ライト: validation ROI 75.8432% / hit 53.6364% / minMonth 72.2417%
+スタンダード: validation ROI 78.2394% / hit 48.1818% / minMonth 74.8869%
+プレミアム: validation ROI 78.1636% / hit 48.1818% / minMonth 74.7976%
+Searching ranking-v2 policy for confidence/5R...
+ライト: validation ROI 82.76% / hit 44.8% / minMonth 81.0714%
+スタンダード: validation ROI 75.0867% / hit 52.4% / minMonth 75.0833%
+プレミアム: validation ROI 76.4486% / hit 52.4% / minMonth 74.7784%
+Searching ranking-v2 policy for confidence/12R...
+ライト: validation ROI 80.5083% / hit 49.1667% / minMonth 77.7604%
+スタンダード: validation ROI 80.5004% / hit 49.1667% / minMonth 77.0085%
+プレミアム: validation ROI 80.3979% / hit 49.1667% / minMonth 76.8298%
+Searching ranking-v2 policy for edge/12R...
+ライト: validation ROI 80.5083% / hit 49.1667% / minMonth 77.7604%
+スタンダード: validation ROI 80.5004% / hit 49.1667% / minMonth 77.0085%
+プレミアム: validation ROI 80.3979% / hit 49.1667% / minMonth 76.8298%
+Ranking validation: market logloss 2.0372 / model 2.1071, top1 market 33.5% / model 33.5%
+Ranking holdout: market logloss 1.9573 / model 2.0053, top1 market 36.1111% / model 35.7639%
+Winner: confidence/12R
+ライト: validation 80.5083% / holdout 76.0959% / hit 46.5278% / 200% FAIL
+スタンダード: validation 80.5004% / holdout 76.3335% / hit 46.5278% / 200% FAIL
+プレミアム: validation 80.3979% / holdout 76.4935% / hit 46.5278% / 200% FAIL
 Runner ranking result: runner-ranking-v2.json
