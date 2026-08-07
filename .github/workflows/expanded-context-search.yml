@@ -1,12 +1,12 @@
-name: Expanded context ROI completion search
-run-name: Expanded context ROI completion search · ${{ github.sha }}
+name: Full-period ROI completion search
+run-name: Full-period ROI completion search · ${{ github.sha }}
 
 on:
   push:
     branches: [main]
     paths:
       - "scripts/analyze-expanded-context-search.py"
-      - "scripts/run-expanded-context-search.py"
+      - "scripts/analyze-full-period-online-search.py"
       - "scripts/verify-race-tantei-fixed-constraints.py"
       - "scripts/verify-production-candidate.py"
       - "scripts/find-and-promote-production-candidate.py"
@@ -21,7 +21,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: expanded-context-roi-completion-search
+  group: full-period-roi-completion-search
   cancel-in-progress: true
 
 jobs:
@@ -41,8 +41,8 @@ jobs:
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
-            -f context='analysis/expanded-context-search' \
-            -f description='内部探索中：固定条件を維持したまま完成条件200%以上を探索' \
+            -f context='analysis/full-period-completion-search' \
+            -f description='内部探索中：全期間・固定条件のまま完成条件200%以上を探索' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - uses: actions/checkout@v4
@@ -60,18 +60,18 @@ jobs:
         run: |
           python -m py_compile \
             scripts/analyze-expanded-context-search.py \
-            scripts/run-expanded-context-search.py \
+            scripts/analyze-full-period-online-search.py \
             scripts/verify-race-tantei-fixed-constraints.py \
             scripts/verify-production-candidate.py \
             scripts/find-and-promote-production-candidate.py \
             scripts/verify-approved-production-model.py
           python scripts/verify-race-tantei-fixed-constraints.py
 
-      - name: Run unversioned exploration
+      - name: Run full-period unversioned exploration
         shell: bash
         run: |
           set -o pipefail
-          python scripts/run-expanded-context-search.py 2>&1 | tee expanded-context-search.log
+          python scripts/analyze-full-period-online-search.py 2>&1 | tee full-period-online-search.log
 
       - name: Attempt promotion only through completion gate
         if: success()
@@ -87,7 +87,7 @@ jobs:
         if: success()
         shell: bash
         run: |
-          git add -f analysis-results/exploration-expanded-context.json
+          git add -f analysis-results/exploration-full-period-online.json
           if [[ -f config/approved-production-model.json ]]; then
             git add \
               config/approved-production-model.json \
@@ -99,10 +99,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: expanded-context-search
+          name: full-period-online-search
           path: |
-            analysis-results/exploration-expanded-context.json
-            expanded-context-search.log
+            analysis-results/exploration-full-period-online.json
+            full-period-online-search.log
             exploration-promotion.log
           if-no-files-found: warn
           retention-days: 30
@@ -116,7 +116,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No exploration state changes to save."
           else
-            git commit -m "Save expanded context exploration result"
+            git commit -m "Save full-period online exploration result"
             git pull --rebase origin main
             git push origin HEAD:main
           fi
@@ -137,6 +137,6 @@ jobs:
           fi
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state="$STATE" \
-            -f context='analysis/expanded-context-search' \
+            -f context='analysis/full-period-completion-search' \
             -f description="$DESCRIPTION" \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
