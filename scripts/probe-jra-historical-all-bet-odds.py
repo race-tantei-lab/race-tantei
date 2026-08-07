@@ -23,37 +23,47 @@ def load_collector():
     return module
 
 
+def compact_hint(value: str) -> str:
+    return " ".join((value or "").split())[:300]
+
+
 def main():
     collector = load_collector()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 
-    queue = deque([START_CNAME])
+    queue = deque([(START_CNAME, "単勝 複勝 オッズ")])
     seen = set()
     pages = []
     by_type = {}
 
     while queue and len(seen) < 80:
-        cname = queue.popleft()
+        cname, hint = queue.popleft()
         if cname in seen:
             continue
         seen.add(cname)
         try:
             html = collector.fetch_url(collector.JRA_ODDS_URL, cname=cname)
         except Exception as exc:
-            pages.append({"cname": cname, "error": f"{type(exc).__name__}:{exc}"})
+            pages.append({"cname": cname, "hint": compact_hint(hint), "error": f"{type(exc).__name__}:{exc}"})
             continue
 
         identity = collector.parse_page_identity(html)
-        bet_type = collector.detect_bet_type(html, "")
+        bet_type = collector.detect_bet_type(html, hint)
         parsed = collector.parse_odds_rows(html, bet_type) if bet_type else []
+        actions = collector.action_links(html)
         row = {
             "cname": cname,
+            "hint": compact_hint(hint),
             "identity": list(identity) if identity else None,
             "betType": bet_type,
             "parsedRows": len(parsed),
             "sample": [
                 {"combination": combination, "oddsMin": low, "oddsMax": high}
                 for combination, low, high in parsed[:5]
+            ],
+            "nextOddsLinks": [
+                {"cname": next_cname, "hint": compact_hint(context)}
+                for next_cname, context in actions[:20]
             ],
         }
         pages.append(row)
@@ -63,12 +73,13 @@ def main():
             if current is None or len(parsed) > current["parsedRows"]:
                 by_type[bet_type] = row
 
-        # collector.action_links() already matches only /JRADB/accessO.html
-        # and returns (cname, visible-context) tuples.
-        for next_cname, _context in collector.action_links(html):
+        # action_links() only matches /JRADB/accessO.html and returns
+        # (cname, JRA-visible link context), so preserve that context as the
+        # authoritative hint for the destination odds page.
+        for next_cname, context in actions:
             if next_cname in seen:
                 continue
-            queue.append(next_cname)
+            queue.append((next_cname, context))
 
     report = {
         "target": {"raceDate": TARGET[0], "venue": TARGET[1], "raceNo": TARGET[2]},
