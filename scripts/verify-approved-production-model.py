@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "race-tantei-fixed-constraints.json"
 APPROVAL_PATH = ROOT / "config" / "approved-production-model.json"
 VERIFIER_PATH = ROOT / "scripts" / "verify-production-candidate.py"
+APPROVAL_PLACEHOLDER = "__APPROVED_MODEL_VERSION__"
 
 
 def sha256(path: Path) -> str:
@@ -33,9 +34,16 @@ def main() -> None:
     require(APPROVAL_PATH.exists(), "APPROVAL_MANIFEST_MISSING")
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     approval = json.loads(APPROVAL_PATH.read_text(encoding="utf-8"))
+    promotion = config["promotionRules"]
+
     require(approval.get("productionPromotionApproved") is True, "APPROVAL_FLAG_FALSE")
     require(approval.get("constraintsVersion") == config["version"], "CONSTRAINT_VERSION_MISMATCH")
-    require(float(approval.get("targetRoiPct", 0)) >= float(config["promotionRules"]["targetRoiPct"]), "TARGET_ROI_WEAKENED")
+    require(
+        float(approval.get("completionRoiPct", 0)) >= float(promotion["completionRoiPct"]),
+        "COMPLETION_ROI_WEAKENED",
+    )
+    approved_version = str(promotion["approvedModelVersion"])
+    require(approval.get("modelVersion") == approved_version, "APPROVED_VERSION_MISMATCH")
 
     report_path = (ROOT / approval.get("sourceReport", "")).resolve()
     policy_path = (ROOT / approval.get("productionPolicyPath", "")).resolve()
@@ -47,20 +55,30 @@ def main() -> None:
     require(sha256(report_path) == approval.get("sourceReportSha256"), "SOURCE_REPORT_HASH_MISMATCH")
     require(sha256(policy_path) == approval.get("productionPolicySha256"), "PRODUCTION_POLICY_HASH_MISMATCH")
     require(sha256(candidate_policy_path) == approval.get("candidatePolicySha256"), "CANDIDATE_POLICY_HASH_MISMATCH")
-    require(policy_path.read_bytes() == candidate_policy_path.read_bytes(), "PRODUCTION_POLICY_NOT_APPROVED_CANDIDATE")
+
+    candidate_source = candidate_policy_path.read_text(encoding="utf-8")
+    require(APPROVAL_PLACEHOLDER in candidate_source, "CANDIDATE_POLICY_PLACEHOLDER_MISSING")
+    expected_production_source = candidate_source.replace(APPROVAL_PLACEHOLDER, approved_version)
+    require(
+        policy_path.read_text(encoding="utf-8") == expected_production_source,
+        "PRODUCTION_POLICY_NOT_APPROVED_CANDIDATE_WITH_VERSION_INSERTED",
+    )
 
     report = json.loads(report_path.read_text(encoding="utf-8"))
     verifier = load_verifier()
-    courses, implementation = verifier.validate_report(report, config)
+    exploration_id, courses, implementation = verifier.validate_report(report, config)
+    require(exploration_id == approval.get("sourceExplorationId"), "SOURCE_EXPLORATION_ID_MISMATCH")
     require(set(courses) == set(approval.get("courses", {})), "APPROVED_COURSES_MISMATCH")
     require(implementation["candidatePolicyPath"] == approval.get("candidatePolicyPath"), "APPROVED_POLICY_PATH_MISMATCH")
 
-    model_version = str(approval.get("modelVersion") or "")
-    require(model_version and model_version in policy_path.read_text(encoding="utf-8"), "MODEL_VERSION_NOT_IN_POLICY")
+    production_source = policy_path.read_text(encoding="utf-8")
+    require(f'MODEL_VERSION = "{approved_version}"' in production_source, "MODEL_VERSION_NOT_IN_POLICY")
+    require(APPROVAL_PLACEHOLDER not in production_source, "APPROVAL_PLACEHOLDER_REMAINS_IN_PRODUCTION")
+
     print(json.dumps({
         "approved": True,
-        "modelVersion": model_version,
-        "targetRoiPct": approval["targetRoiPct"],
+        "modelVersion": approved_version,
+        "completionRoiPct": approval["completionRoiPct"],
         "courses": approval["courses"],
     }, ensure_ascii=False))
 
