@@ -1,0 +1,4486 @@
+{
+  "generatedAt": "2026-08-07",
+  "explorationId": "deep-longshot-regime",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "metricCompletionPassed": false,
+  "developmentPassedCompletionRoi": false,
+  "sourceDataFrozen": true,
+  "actualJraPayoutsUsed": true,
+  "actualJraPayoutsOnly": true,
+  "officialOddsOnly": true,
+  "officialWinOddsUsed": true,
+  "syntheticOddsUsed": false,
+  "postResultLeakageUsed": false,
+  "liveBetGenerationRequiresOfficialCombinationOdds": true,
+  "fullAvailablePeriodEvaluated": false,
+  "coldStartIncluded": true,
+  "searchObjective": {
+    "primary": "hierarchical past-only return learning by venue, surface, distance, field size, market shape and chronological form regimes",
+    "completionRoiPct": 200.0,
+    "minimumRacesPerVenueDay": 5,
+    "allCourseBetTypesRequired": true,
+    "finalHoldoutFrozen": true
+  },
+  "period": {
+    "archiveStart": "2024-05-04",
+    "archiveEnd": "2026-08-02",
+    "archiveFinishedRaces": 7695,
+    "fullHistoricalStart": null,
+    "fullHistoricalEnd": null,
+    "developmentStart": "2024-05-04",
+    "developmentEndExclusive": "2026-05-01",
+    "finalHoldoutStart": "2026-05-01"
+  },
+  "modelAudit": {
+    "rankModes": [
+      "balanced_form",
+      "form_heavy"
+    ],
+    "profiles": {
+      "context": {
+        "shrink": 80.0,
+        "probPower": 0.25,
+        "tailBias": 0.05,
+        "weights": {
+          "global": 0.2,
+          "surfaceDistance": 0.2,
+          "venue": 0.12,
+          "marketShape": 0.2,
+          "form": 0.16,
+          "mixed": 0.12
+        }
+      },
+      "form": {
+        "shrink": 65.0,
+        "probPower": 0.3,
+        "tailBias": 0.08,
+        "weights": {
+          "global": 0.18,
+          "surfaceDistance": 0.16,
+          "venue": 0.08,
+          "marketShape": 0.16,
+          "form": 0.28,
+          "mixed": 0.14
+        }
+      },
+      "tail": {
+        "shrink": 110.0,
+        "probPower": 0.12,
+        "tailBias": 0.18,
+        "weights": {
+          "global": 0.28,
+          "surfaceDistance": 0.18,
+          "venue": 0.1,
+          "marketShape": 0.2,
+          "form": 0.12,
+          "mixed": 0.12
+        }
+      }
+    },
+    "candidateConfigurations": 288,
+    "regimes": [
+      "venue",
+      "surfaceDistance",
+      "fieldSize",
+      "marketShape",
+      "chronologicalForm",
+      "mixed"
+    ],
+    "historicalReturnPrior": 0.75,
+    "currentRaceCombinationOddsUsedInBacktest": false
+  },
+  "selectedConfiguration": {
+    "rankMode": "form_heavy",
+    "profile": "tail",
+    "allocationPower": 3.0,
+    "racesPerVenueDay": 5,
+    "raceScoreMode": "mean",
+    "developmentCourses": {
+      "ライト": {
+        "races": 2810,
+        "hits": 401,
+        "stakeYen": 5620000,
+        "returnYen": 4079480,
+        "profitYen": -1540520,
+        "roiPct": 72.58861209964412,
+        "roiWithoutTop1Pct": 67.97508896797153,
+        "hitRatePct": 14.270462633451958,
+        "topReturnYen": 259280
+      },
+      "スタンダード": {
+        "races": 2810,
+        "hits": 625,
+        "stakeYen": 14050000,
+        "returnYen": 10358610,
+        "profitYen": -3691390,
+        "roiPct": 73.7267615658363,
+        "roiWithoutTop1Pct": 68.09843416370107,
+        "hitRatePct": 22.24199288256228,
+        "topReturnYen": 790780
+      },
+      "プレミアム": {
+        "races": 2810,
+        "hits": 486,
+        "stakeYen": 28100000,
+        "returnYen": 21886700,
+        "profitYen": -6213300,
+        "roiPct": 77.88861209964412,
+        "roiWithoutTop1Pct": 71.44733096085409,
+        "hitRatePct": 17.295373665480426,
+        "topReturnYen": 1810000
+      }
+    },
+    "robustnessPeriods": [
+      {
+        "period": "2024-05-01..2024-11-01",
+        "courses": {
+          "ライト": {
+            "races": 685,
+            "hits": 77,
+            "stakeYen": 1370000,
+            "returnYen": 617950,
+            "profitYen": -752050,
+            "roiPct": 45.105839416058394,
+            "roiWithoutTop1Pct": 41.120437956204384,
+            "hitRatePct": 11.24087591240876,
+            "topReturnYen": 54600
+          },
+          "スタンダード": {
+            "races": 685,
+            "hits": 137,
+            "stakeYen": 3425000,
+            "returnYen": 1537250,
+            "profitYen": -1887750,
+            "roiPct": 44.88321167883212,
+            "roiWithoutTop1Pct": 37.68846715328467,
+            "hitRatePct": 20.0,
+            "topReturnYen": 246420
+          },
+          "プレミアム": {
+            "races": 685,
+            "hits": 93,
+            "stakeYen": 6850000,
+            "returnYen": 2882790,
+            "profitYen": -3967210,
+            "roiPct": 42.08452554744525,
+            "roiWithoutTop1Pct": 36.619124087591246,
+            "hitRatePct": 13.576642335766422,
+            "topReturnYen": 374380
+          }
+        }
+      },
+      {
+        "period": "2024-11-01..2025-05-01",
+        "courses": {
+          "ライト": {
+            "races": 695,
+            "hits": 93,
+            "stakeYen": 1390000,
+            "returnYen": 938160,
+            "profitYen": -451840,
+            "roiPct": 67.49352517985612,
+            "roiWithoutTop1Pct": 50.927338129496405,
+            "hitRatePct": 13.381294964028779,
+            "topReturnYen": 230270
+          },
+          "スタンダード": {
+            "races": 695,
+            "hits": 148,
+            "stakeYen": 3475000,
+            "returnYen": 2813180,
+            "profitYen": -661820,
+            "roiPct": 80.95482014388489,
+            "roiWithoutTop1Pct": 58.19856115107913,
+            "hitRatePct": 21.294964028776977,
+            "topReturnYen": 790780
+          },
+          "プレミアム": {
+            "races": 695,
+            "hits": 118,
+            "stakeYen": 6950000,
+            "returnYen": 5611740,
+            "profitYen": -1338260,
+            "roiPct": 80.74446043165467,
+            "roiWithoutTop1Pct": 67.3821582733813,
+            "hitRatePct": 16.97841726618705,
+            "topReturnYen": 928680
+          }
+        }
+      },
+      {
+        "period": "2025-05-01..2025-11-01",
+        "courses": {
+          "ライト": {
+            "races": 725,
+            "hits": 112,
+            "stakeYen": 1450000,
+            "returnYen": 1209330,
+            "profitYen": -240670,
+            "roiPct": 83.40206896551724,
+            "roiWithoutTop1Pct": 72.16068965517242,
+            "hitRatePct": 15.448275862068966,
+            "topReturnYen": 163000
+          },
+          "スタンダード": {
+            "races": 725,
+            "hits": 169,
+            "stakeYen": 3625000,
+            "returnYen": 2832600,
+            "profitYen": -792400,
+            "roiPct": 78.14068965517241,
+            "roiWithoutTop1Pct": 71.93875862068965,
+            "hitRatePct": 23.310344827586206,
+            "topReturnYen": 224820
+          },
+          "プレミアム": {
+            "races": 725,
+            "hits": 131,
+            "stakeYen": 7250000,
+            "returnYen": 7982180,
+            "profitYen": 732180,
+            "roiPct": 110.09903448275861,
+            "roiWithoutTop1Pct": 85.13351724137931,
+            "hitRatePct": 18.068965517241377,
+            "topReturnYen": 1810000
+          }
+        }
+      },
+      {
+        "period": "2025-11-01..2026-05-01",
+        "courses": {
+          "ライト": {
+            "races": 705,
+            "hits": 119,
+            "stakeYen": 1410000,
+            "returnYen": 1314040,
+            "profitYen": -95960,
+            "roiPct": 93.19432624113475,
+            "roiWithoutTop1Pct": 74.80567375886524,
+            "hitRatePct": 16.879432624113473,
+            "topReturnYen": 259280
+          },
+          "スタンダード": {
+            "races": 705,
+            "hits": 171,
+            "stakeYen": 3525000,
+            "returnYen": 3175580,
+            "profitYen": -349420,
+            "roiPct": 90.08737588652482,
+            "roiWithoutTop1Pct": 77.23829787234042,
+            "hitRatePct": 24.25531914893617,
+            "topReturnYen": 452930
+          },
+          "プレミアム": {
+            "races": 705,
+            "hits": 144,
+            "stakeYen": 7050000,
+            "returnYen": 5409990,
+            "profitYen": -1640010,
+            "roiPct": 76.73744680851064,
+            "roiWithoutTop1Pct": 68.9927659574468,
+            "hitRatePct": 20.425531914893615,
+            "topReturnYen": 546000
+          }
+        }
+      }
+    ],
+    "objective": {
+      "minimumDevelopmentCourseRoiPct": 72.58861209964412,
+      "meanDevelopmentCourseRoiPct": 74.73466192170818,
+      "minimumDevelopmentRoiWithoutTop1Pct": 67.97508896797153,
+      "minimumPeriodCourseRoiPct": 42.08452554744525,
+      "q25PeriodCourseRoiPct": 61.89660373890669
+    },
+    "coverage": {
+      "groups": 562,
+      "expectedEligibleGroups": 562,
+      "minimumSelectedRaces": 5,
+      "maximumSelectedRaces": 5
+    }
+  },
+  "topConfigurations": [
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 3.0,
+      "racesPerVenueDay": 5,
+      "raceScoreMode": "mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 2810,
+          "hits": 401,
+          "stakeYen": 5620000,
+          "returnYen": 4079480,
+          "profitYen": -1540520,
+          "roiPct": 72.58861209964412,
+          "roiWithoutTop1Pct": 67.97508896797153,
+          "hitRatePct": 14.270462633451958,
+          "topReturnYen": 259280
+        },
+        "スタンダード": {
+          "races": 2810,
+          "hits": 625,
+          "stakeYen": 14050000,
+          "returnYen": 10358610,
+          "profitYen": -3691390,
+          "roiPct": 73.7267615658363,
+          "roiWithoutTop1Pct": 68.09843416370107,
+          "hitRatePct": 22.24199288256228,
+          "topReturnYen": 790780
+        },
+        "プレミアム": {
+          "races": 2810,
+          "hits": 486,
+          "stakeYen": 28100000,
+          "returnYen": 21886700,
+          "profitYen": -6213300,
+          "roiPct": 77.88861209964412,
+          "roiWithoutTop1Pct": 71.44733096085409,
+          "hitRatePct": 17.295373665480426,
+          "topReturnYen": 1810000
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 685,
+              "hits": 77,
+              "stakeYen": 1370000,
+              "returnYen": 617950,
+              "profitYen": -752050,
+              "roiPct": 45.105839416058394,
+              "roiWithoutTop1Pct": 41.120437956204384,
+              "hitRatePct": 11.24087591240876,
+              "topReturnYen": 54600
+            },
+            "スタンダード": {
+              "races": 685,
+              "hits": 137,
+              "stakeYen": 3425000,
+              "returnYen": 1537250,
+              "profitYen": -1887750,
+              "roiPct": 44.88321167883212,
+              "roiWithoutTop1Pct": 37.68846715328467,
+              "hitRatePct": 20.0,
+              "topReturnYen": 246420
+            },
+            "プレミアム": {
+              "races": 685,
+              "hits": 93,
+              "stakeYen": 6850000,
+              "returnYen": 2882790,
+              "profitYen": -3967210,
+              "roiPct": 42.08452554744525,
+              "roiWithoutTop1Pct": 36.619124087591246,
+              "hitRatePct": 13.576642335766422,
+              "topReturnYen": 374380
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 695,
+              "hits": 93,
+              "stakeYen": 1390000,
+              "returnYen": 938160,
+              "profitYen": -451840,
+              "roiPct": 67.49352517985612,
+              "roiWithoutTop1Pct": 50.927338129496405,
+              "hitRatePct": 13.381294964028779,
+              "topReturnYen": 230270
+            },
+            "スタンダード": {
+              "races": 695,
+              "hits": 148,
+              "stakeYen": 3475000,
+              "returnYen": 2813180,
+              "profitYen": -661820,
+              "roiPct": 80.95482014388489,
+              "roiWithoutTop1Pct": 58.19856115107913,
+              "hitRatePct": 21.294964028776977,
+              "topReturnYen": 790780
+            },
+            "プレミアム": {
+              "races": 695,
+              "hits": 118,
+              "stakeYen": 6950000,
+              "returnYen": 5611740,
+              "profitYen": -1338260,
+              "roiPct": 80.74446043165467,
+              "roiWithoutTop1Pct": 67.3821582733813,
+              "hitRatePct": 16.97841726618705,
+              "topReturnYen": 928680
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 725,
+              "hits": 112,
+              "stakeYen": 1450000,
+              "returnYen": 1209330,
+              "profitYen": -240670,
+              "roiPct": 83.40206896551724,
+              "roiWithoutTop1Pct": 72.16068965517242,
+              "hitRatePct": 15.448275862068966,
+              "topReturnYen": 163000
+            },
+            "スタンダード": {
+              "races": 725,
+              "hits": 169,
+              "stakeYen": 3625000,
+              "returnYen": 2832600,
+              "profitYen": -792400,
+              "roiPct": 78.14068965517241,
+              "roiWithoutTop1Pct": 71.93875862068965,
+              "hitRatePct": 23.310344827586206,
+              "topReturnYen": 224820
+            },
+            "プレミアム": {
+              "races": 725,
+              "hits": 131,
+              "stakeYen": 7250000,
+              "returnYen": 7982180,
+              "profitYen": 732180,
+              "roiPct": 110.09903448275861,
+              "roiWithoutTop1Pct": 85.13351724137931,
+              "hitRatePct": 18.068965517241377,
+              "topReturnYen": 1810000
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 705,
+              "hits": 119,
+              "stakeYen": 1410000,
+              "returnYen": 1314040,
+              "profitYen": -95960,
+              "roiPct": 93.19432624113475,
+              "roiWithoutTop1Pct": 74.80567375886524,
+              "hitRatePct": 16.879432624113473,
+              "topReturnYen": 259280
+            },
+            "スタンダード": {
+              "races": 705,
+              "hits": 171,
+              "stakeYen": 3525000,
+              "returnYen": 3175580,
+              "profitYen": -349420,
+              "roiPct": 90.08737588652482,
+              "roiWithoutTop1Pct": 77.23829787234042,
+              "hitRatePct": 24.25531914893617,
+              "topReturnYen": 452930
+            },
+            "プレミアム": {
+              "races": 705,
+              "hits": 144,
+              "stakeYen": 7050000,
+              "returnYen": 5409990,
+              "profitYen": -1640010,
+              "roiPct": 76.73744680851064,
+              "roiWithoutTop1Pct": 68.9927659574468,
+              "hitRatePct": 20.425531914893615,
+              "topReturnYen": 546000
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 72.58861209964412,
+        "meanDevelopmentCourseRoiPct": 74.73466192170818,
+        "minimumDevelopmentRoiWithoutTop1Pct": 67.97508896797153,
+        "minimumPeriodCourseRoiPct": 42.08452554744525,
+        "q25PeriodCourseRoiPct": 61.89660373890669
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 5,
+        "maximumSelectedRaces": 5
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 1.5,
+      "racesPerVenueDay": 12,
+      "raceScoreMode": "minimum",
+      "developmentCourses": {
+        "ライト": {
+          "races": 6735,
+          "hits": 1005,
+          "stakeYen": 13470000,
+          "returnYen": 9742910,
+          "profitYen": -3727090,
+          "roiPct": 72.33043801039346,
+          "roiWithoutTop1Pct": 70.09970304380104,
+          "hitRatePct": 14.92204899777283,
+          "topReturnYen": 300480
+        },
+        "スタンダード": {
+          "races": 6735,
+          "hits": 1586,
+          "stakeYen": 33675000,
+          "returnYen": 25149460,
+          "profitYen": -8525540,
+          "roiPct": 74.68288047512992,
+          "roiWithoutTop1Pct": 72.6053155159614,
+          "hitRatePct": 23.548626577579807,
+          "topReturnYen": 699620
+        },
+        "プレミアム": {
+          "races": 6735,
+          "hits": 1220,
+          "stakeYen": 67350000,
+          "returnYen": 48972560,
+          "profitYen": -18377440,
+          "roiPct": 72.71352635486265,
+          "roiWithoutTop1Pct": 69.68818114328137,
+          "hitRatePct": 18.114328136599852,
+          "topReturnYen": 2037570
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1643,
+              "hits": 220,
+              "stakeYen": 3286000,
+              "returnYen": 2654970,
+              "profitYen": -631030,
+              "roiPct": 80.79640900791235,
+              "roiWithoutTop1Pct": 71.65216068167986,
+              "hitRatePct": 13.390139987827146,
+              "topReturnYen": 300480
+            },
+            "スタンダード": {
+              "races": 1643,
+              "hits": 370,
+              "stakeYen": 8215000,
+              "returnYen": 5577890,
+              "profitYen": -2637110,
+              "roiPct": 67.89884357881924,
+              "roiWithoutTop1Pct": 62.87924528301887,
+              "hitRatePct": 22.51978088861838,
+              "topReturnYen": 412360
+            },
+            "プレミアム": {
+              "races": 1643,
+              "hits": 261,
+              "stakeYen": 16430000,
+              "returnYen": 10654890,
+              "profitYen": -5775110,
+              "roiPct": 64.85021302495436,
+              "roiWithoutTop1Pct": 60.56725502130249,
+              "hitRatePct": 15.88557516737675,
+              "topReturnYen": 703690
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1667,
+              "hits": 227,
+              "stakeYen": 3334000,
+              "returnYen": 1947150,
+              "profitYen": -1386850,
+              "roiPct": 58.40281943611277,
+              "roiWithoutTop1Pct": 52.73455308938212,
+              "hitRatePct": 13.617276544691062,
+              "topReturnYen": 188980
+            },
+            "スタンダード": {
+              "races": 1667,
+              "hits": 371,
+              "stakeYen": 8335000,
+              "returnYen": 6969690,
+              "profitYen": -1365310,
+              "roiPct": 83.61955608878225,
+              "roiWithoutTop1Pct": 75.22579484103179,
+              "hitRatePct": 22.255548890221956,
+              "topReturnYen": 699620
+            },
+            "プレミアム": {
+              "races": 1667,
+              "hits": 291,
+              "stakeYen": 16670000,
+              "returnYen": 13357610,
+              "profitYen": -3312390,
+              "roiPct": 80.12963407318536,
+              "roiWithoutTop1Pct": 67.90665866826635,
+              "hitRatePct": 17.456508698260347,
+              "topReturnYen": 2037570
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1739,
+              "hits": 292,
+              "stakeYen": 3478000,
+              "returnYen": 2636220,
+              "profitYen": -841780,
+              "roiPct": 75.79700977573319,
+              "roiWithoutTop1Pct": 72.04772857964348,
+              "hitRatePct": 16.791259344450836,
+              "topReturnYen": 130400
+            },
+            "スタンダード": {
+              "races": 1739,
+              "hits": 453,
+              "stakeYen": 8695000,
+              "returnYen": 6527460,
+              "profitYen": -2167540,
+              "roiPct": 75.07142035652674,
+              "roiWithoutTop1Pct": 72.91673375503163,
+              "hitRatePct": 26.049453709028175,
+              "topReturnYen": 187350
+            },
+            "プレミアム": {
+              "races": 1739,
+              "hits": 342,
+              "stakeYen": 17390000,
+              "returnYen": 14042430,
+              "profitYen": -3347570,
+              "roiPct": 80.75002875215641,
+              "roiWithoutTop1Pct": 74.79062679700978,
+              "hitRatePct": 19.66647498562392,
+              "topReturnYen": 1036340
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1686,
+              "hits": 266,
+              "stakeYen": 3372000,
+              "returnYen": 2504570,
+              "profitYen": -867430,
+              "roiPct": 74.27550415183866,
+              "roiWithoutTop1Pct": 68.84489916963227,
+              "hitRatePct": 15.776986951364174,
+              "topReturnYen": 183120
+            },
+            "スタンダード": {
+              "races": 1686,
+              "hits": 392,
+              "stakeYen": 8430000,
+              "returnYen": 6074420,
+              "profitYen": -2355580,
+              "roiPct": 72.05717674970344,
+              "roiWithoutTop1Pct": 66.19217081850533,
+              "hitRatePct": 23.250296559905102,
+              "topReturnYen": 494420
+            },
+            "プレミアム": {
+              "races": 1686,
+              "hits": 326,
+              "stakeYen": 16860000,
+              "returnYen": 10917630,
+              "profitYen": -5942370,
+              "roiPct": 64.75462633451957,
+              "roiWithoutTop1Pct": 58.9841043890866,
+              "hitRatePct": 19.33570581257414,
+              "topReturnYen": 972910
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 72.33043801039346,
+        "meanDevelopmentCourseRoiPct": 73.24228161346201,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.68818114328137,
+        "minimumPeriodCourseRoiPct": 58.40281943611277,
+        "q25PeriodCourseRoiPct": 67.13668594035302
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 12
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 1.5,
+      "racesPerVenueDay": 12,
+      "raceScoreMode": "lower_mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 6735,
+          "hits": 1005,
+          "stakeYen": 13470000,
+          "returnYen": 9742910,
+          "profitYen": -3727090,
+          "roiPct": 72.33043801039346,
+          "roiWithoutTop1Pct": 70.09970304380104,
+          "hitRatePct": 14.92204899777283,
+          "topReturnYen": 300480
+        },
+        "スタンダード": {
+          "races": 6735,
+          "hits": 1586,
+          "stakeYen": 33675000,
+          "returnYen": 25149460,
+          "profitYen": -8525540,
+          "roiPct": 74.68288047512992,
+          "roiWithoutTop1Pct": 72.6053155159614,
+          "hitRatePct": 23.548626577579807,
+          "topReturnYen": 699620
+        },
+        "プレミアム": {
+          "races": 6735,
+          "hits": 1220,
+          "stakeYen": 67350000,
+          "returnYen": 48972560,
+          "profitYen": -18377440,
+          "roiPct": 72.71352635486265,
+          "roiWithoutTop1Pct": 69.68818114328137,
+          "hitRatePct": 18.114328136599852,
+          "topReturnYen": 2037570
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1643,
+              "hits": 220,
+              "stakeYen": 3286000,
+              "returnYen": 2654970,
+              "profitYen": -631030,
+              "roiPct": 80.79640900791235,
+              "roiWithoutTop1Pct": 71.65216068167986,
+              "hitRatePct": 13.390139987827146,
+              "topReturnYen": 300480
+            },
+            "スタンダード": {
+              "races": 1643,
+              "hits": 370,
+              "stakeYen": 8215000,
+              "returnYen": 5577890,
+              "profitYen": -2637110,
+              "roiPct": 67.89884357881924,
+              "roiWithoutTop1Pct": 62.87924528301887,
+              "hitRatePct": 22.51978088861838,
+              "topReturnYen": 412360
+            },
+            "プレミアム": {
+              "races": 1643,
+              "hits": 261,
+              "stakeYen": 16430000,
+              "returnYen": 10654890,
+              "profitYen": -5775110,
+              "roiPct": 64.85021302495436,
+              "roiWithoutTop1Pct": 60.56725502130249,
+              "hitRatePct": 15.88557516737675,
+              "topReturnYen": 703690
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1667,
+              "hits": 227,
+              "stakeYen": 3334000,
+              "returnYen": 1947150,
+              "profitYen": -1386850,
+              "roiPct": 58.40281943611277,
+              "roiWithoutTop1Pct": 52.73455308938212,
+              "hitRatePct": 13.617276544691062,
+              "topReturnYen": 188980
+            },
+            "スタンダード": {
+              "races": 1667,
+              "hits": 371,
+              "stakeYen": 8335000,
+              "returnYen": 6969690,
+              "profitYen": -1365310,
+              "roiPct": 83.61955608878225,
+              "roiWithoutTop1Pct": 75.22579484103179,
+              "hitRatePct": 22.255548890221956,
+              "topReturnYen": 699620
+            },
+            "プレミアム": {
+              "races": 1667,
+              "hits": 291,
+              "stakeYen": 16670000,
+              "returnYen": 13357610,
+              "profitYen": -3312390,
+              "roiPct": 80.12963407318536,
+              "roiWithoutTop1Pct": 67.90665866826635,
+              "hitRatePct": 17.456508698260347,
+              "topReturnYen": 2037570
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1739,
+              "hits": 292,
+              "stakeYen": 3478000,
+              "returnYen": 2636220,
+              "profitYen": -841780,
+              "roiPct": 75.79700977573319,
+              "roiWithoutTop1Pct": 72.04772857964348,
+              "hitRatePct": 16.791259344450836,
+              "topReturnYen": 130400
+            },
+            "スタンダード": {
+              "races": 1739,
+              "hits": 453,
+              "stakeYen": 8695000,
+              "returnYen": 6527460,
+              "profitYen": -2167540,
+              "roiPct": 75.07142035652674,
+              "roiWithoutTop1Pct": 72.91673375503163,
+              "hitRatePct": 26.049453709028175,
+              "topReturnYen": 187350
+            },
+            "プレミアム": {
+              "races": 1739,
+              "hits": 342,
+              "stakeYen": 17390000,
+              "returnYen": 14042430,
+              "profitYen": -3347570,
+              "roiPct": 80.75002875215641,
+              "roiWithoutTop1Pct": 74.79062679700978,
+              "hitRatePct": 19.66647498562392,
+              "topReturnYen": 1036340
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1686,
+              "hits": 266,
+              "stakeYen": 3372000,
+              "returnYen": 2504570,
+              "profitYen": -867430,
+              "roiPct": 74.27550415183866,
+              "roiWithoutTop1Pct": 68.84489916963227,
+              "hitRatePct": 15.776986951364174,
+              "topReturnYen": 183120
+            },
+            "スタンダード": {
+              "races": 1686,
+              "hits": 392,
+              "stakeYen": 8430000,
+              "returnYen": 6074420,
+              "profitYen": -2355580,
+              "roiPct": 72.05717674970344,
+              "roiWithoutTop1Pct": 66.19217081850533,
+              "hitRatePct": 23.250296559905102,
+              "topReturnYen": 494420
+            },
+            "プレミアム": {
+              "races": 1686,
+              "hits": 326,
+              "stakeYen": 16860000,
+              "returnYen": 10917630,
+              "profitYen": -5942370,
+              "roiPct": 64.75462633451957,
+              "roiWithoutTop1Pct": 58.9841043890866,
+              "hitRatePct": 19.33570581257414,
+              "topReturnYen": 972910
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 72.33043801039346,
+        "meanDevelopmentCourseRoiPct": 73.24228161346201,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.68818114328137,
+        "minimumPeriodCourseRoiPct": 58.40281943611277,
+        "q25PeriodCourseRoiPct": 67.13668594035302
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 12
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 1.5,
+      "racesPerVenueDay": 12,
+      "raceScoreMode": "mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 6735,
+          "hits": 1005,
+          "stakeYen": 13470000,
+          "returnYen": 9742910,
+          "profitYen": -3727090,
+          "roiPct": 72.33043801039346,
+          "roiWithoutTop1Pct": 70.09970304380104,
+          "hitRatePct": 14.92204899777283,
+          "topReturnYen": 300480
+        },
+        "スタンダード": {
+          "races": 6735,
+          "hits": 1586,
+          "stakeYen": 33675000,
+          "returnYen": 25149460,
+          "profitYen": -8525540,
+          "roiPct": 74.68288047512992,
+          "roiWithoutTop1Pct": 72.6053155159614,
+          "hitRatePct": 23.548626577579807,
+          "topReturnYen": 699620
+        },
+        "プレミアム": {
+          "races": 6735,
+          "hits": 1220,
+          "stakeYen": 67350000,
+          "returnYen": 48972560,
+          "profitYen": -18377440,
+          "roiPct": 72.71352635486265,
+          "roiWithoutTop1Pct": 69.68818114328137,
+          "hitRatePct": 18.114328136599852,
+          "topReturnYen": 2037570
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1643,
+              "hits": 220,
+              "stakeYen": 3286000,
+              "returnYen": 2654970,
+              "profitYen": -631030,
+              "roiPct": 80.79640900791235,
+              "roiWithoutTop1Pct": 71.65216068167986,
+              "hitRatePct": 13.390139987827146,
+              "topReturnYen": 300480
+            },
+            "スタンダード": {
+              "races": 1643,
+              "hits": 370,
+              "stakeYen": 8215000,
+              "returnYen": 5577890,
+              "profitYen": -2637110,
+              "roiPct": 67.89884357881924,
+              "roiWithoutTop1Pct": 62.87924528301887,
+              "hitRatePct": 22.51978088861838,
+              "topReturnYen": 412360
+            },
+            "プレミアム": {
+              "races": 1643,
+              "hits": 261,
+              "stakeYen": 16430000,
+              "returnYen": 10654890,
+              "profitYen": -5775110,
+              "roiPct": 64.85021302495436,
+              "roiWithoutTop1Pct": 60.56725502130249,
+              "hitRatePct": 15.88557516737675,
+              "topReturnYen": 703690
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1667,
+              "hits": 227,
+              "stakeYen": 3334000,
+              "returnYen": 1947150,
+              "profitYen": -1386850,
+              "roiPct": 58.40281943611277,
+              "roiWithoutTop1Pct": 52.73455308938212,
+              "hitRatePct": 13.617276544691062,
+              "topReturnYen": 188980
+            },
+            "スタンダード": {
+              "races": 1667,
+              "hits": 371,
+              "stakeYen": 8335000,
+              "returnYen": 6969690,
+              "profitYen": -1365310,
+              "roiPct": 83.61955608878225,
+              "roiWithoutTop1Pct": 75.22579484103179,
+              "hitRatePct": 22.255548890221956,
+              "topReturnYen": 699620
+            },
+            "プレミアム": {
+              "races": 1667,
+              "hits": 291,
+              "stakeYen": 16670000,
+              "returnYen": 13357610,
+              "profitYen": -3312390,
+              "roiPct": 80.12963407318536,
+              "roiWithoutTop1Pct": 67.90665866826635,
+              "hitRatePct": 17.456508698260347,
+              "topReturnYen": 2037570
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1739,
+              "hits": 292,
+              "stakeYen": 3478000,
+              "returnYen": 2636220,
+              "profitYen": -841780,
+              "roiPct": 75.79700977573319,
+              "roiWithoutTop1Pct": 72.04772857964348,
+              "hitRatePct": 16.791259344450836,
+              "topReturnYen": 130400
+            },
+            "スタンダード": {
+              "races": 1739,
+              "hits": 453,
+              "stakeYen": 8695000,
+              "returnYen": 6527460,
+              "profitYen": -2167540,
+              "roiPct": 75.07142035652674,
+              "roiWithoutTop1Pct": 72.91673375503163,
+              "hitRatePct": 26.049453709028175,
+              "topReturnYen": 187350
+            },
+            "プレミアム": {
+              "races": 1739,
+              "hits": 342,
+              "stakeYen": 17390000,
+              "returnYen": 14042430,
+              "profitYen": -3347570,
+              "roiPct": 80.75002875215641,
+              "roiWithoutTop1Pct": 74.79062679700978,
+              "hitRatePct": 19.66647498562392,
+              "topReturnYen": 1036340
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1686,
+              "hits": 266,
+              "stakeYen": 3372000,
+              "returnYen": 2504570,
+              "profitYen": -867430,
+              "roiPct": 74.27550415183866,
+              "roiWithoutTop1Pct": 68.84489916963227,
+              "hitRatePct": 15.776986951364174,
+              "topReturnYen": 183120
+            },
+            "スタンダード": {
+              "races": 1686,
+              "hits": 392,
+              "stakeYen": 8430000,
+              "returnYen": 6074420,
+              "profitYen": -2355580,
+              "roiPct": 72.05717674970344,
+              "roiWithoutTop1Pct": 66.19217081850533,
+              "hitRatePct": 23.250296559905102,
+              "topReturnYen": 494420
+            },
+            "プレミアム": {
+              "races": 1686,
+              "hits": 326,
+              "stakeYen": 16860000,
+              "returnYen": 10917630,
+              "profitYen": -5942370,
+              "roiPct": 64.75462633451957,
+              "roiWithoutTop1Pct": 58.9841043890866,
+              "hitRatePct": 19.33570581257414,
+              "topReturnYen": 972910
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 72.33043801039346,
+        "meanDevelopmentCourseRoiPct": 73.24228161346201,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.68818114328137,
+        "minimumPeriodCourseRoiPct": 58.40281943611277,
+        "q25PeriodCourseRoiPct": 67.13668594035302
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 12
+      }
+    },
+    {
+      "rankMode": "balanced_form",
+      "profile": "form",
+      "allocationPower": 3.0,
+      "racesPerVenueDay": 5,
+      "raceScoreMode": "mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 2810,
+          "hits": 467,
+          "stakeYen": 5620000,
+          "returnYen": 4063210,
+          "profitYen": -1556790,
+          "roiPct": 72.2991103202847,
+          "roiWithoutTop1Pct": 69.93220640569395,
+          "hitRatePct": 16.619217081850536,
+          "topReturnYen": 133020
+        },
+        "スタンダード": {
+          "races": 2810,
+          "hits": 721,
+          "stakeYen": 14050000,
+          "returnYen": 10307050,
+          "profitYen": -3742950,
+          "roiPct": 73.35978647686832,
+          "roiWithoutTop1Pct": 69.34953736654805,
+          "hitRatePct": 25.65836298932384,
+          "topReturnYen": 563440
+        },
+        "プレミアム": {
+          "races": 2810,
+          "hits": 504,
+          "stakeYen": 28100000,
+          "returnYen": 22285010,
+          "profitYen": -5814990,
+          "roiPct": 79.30608540925267,
+          "roiWithoutTop1Pct": 74.64565836298932,
+          "hitRatePct": 17.93594306049822,
+          "topReturnYen": 1309580
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 685,
+              "hits": 81,
+              "stakeYen": 1370000,
+              "returnYen": 794680,
+              "profitYen": -575320,
+              "roiPct": 58.00583941605839,
+              "roiWithoutTop1Pct": 48.96204379562044,
+              "hitRatePct": 11.824817518248175,
+              "topReturnYen": 123900
+            },
+            "スタンダード": {
+              "races": 685,
+              "hits": 143,
+              "stakeYen": 3425000,
+              "returnYen": 1441990,
+              "profitYen": -1983010,
+              "roiPct": 42.10189781021898,
+              "roiWithoutTop1Pct": 38.54510948905109,
+              "hitRatePct": 20.875912408759124,
+              "topReturnYen": 121820
+            },
+            "プレミアム": {
+              "races": 685,
+              "hits": 95,
+              "stakeYen": 6850000,
+              "returnYen": 4067120,
+              "profitYen": -2782880,
+              "roiPct": 59.37401459854015,
+              "roiWithoutTop1Pct": 50.82992700729927,
+              "hitRatePct": 13.86861313868613,
+              "topReturnYen": 585270
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 695,
+              "hits": 96,
+              "stakeYen": 1390000,
+              "returnYen": 945280,
+              "profitYen": -444720,
+              "roiPct": 68.00575539568345,
+              "roiWithoutTop1Pct": 58.43597122302159,
+              "hitRatePct": 13.81294964028777,
+              "topReturnYen": 133020
+            },
+            "スタンダード": {
+              "races": 695,
+              "hits": 163,
+              "stakeYen": 3475000,
+              "returnYen": 2145380,
+              "profitYen": -1329620,
+              "roiPct": 61.73755395683453,
+              "roiWithoutTop1Pct": 53.48863309352518,
+              "hitRatePct": 23.453237410071942,
+              "topReturnYen": 286650
+            },
+            "プレミアム": {
+              "races": 695,
+              "hits": 109,
+              "stakeYen": 6950000,
+              "returnYen": 3865040,
+              "profitYen": -3084960,
+              "roiPct": 55.61208633093525,
+              "roiWithoutTop1Pct": 49.03395683453237,
+              "hitRatePct": 15.683453237410072,
+              "topReturnYen": 457180
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 725,
+              "hits": 138,
+              "stakeYen": 1450000,
+              "returnYen": 1150280,
+              "profitYen": -299720,
+              "roiPct": 79.3296551724138,
+              "roiWithoutTop1Pct": 70.30344827586207,
+              "hitRatePct": 19.034482758620687,
+              "topReturnYen": 130880
+            },
+            "スタンダード": {
+              "races": 725,
+              "hits": 216,
+              "stakeYen": 3625000,
+              "returnYen": 3093300,
+              "profitYen": -531700,
+              "roiPct": 85.33241379310344,
+              "roiWithoutTop1Pct": 74.95227586206896,
+              "hitRatePct": 29.793103448275858,
+              "topReturnYen": 376280
+            },
+            "プレミアム": {
+              "races": 725,
+              "hits": 150,
+              "stakeYen": 7250000,
+              "returnYen": 5959010,
+              "profitYen": -1290990,
+              "roiPct": 82.19324137931035,
+              "roiWithoutTop1Pct": 73.28179310344828,
+              "hitRatePct": 20.689655172413794,
+              "topReturnYen": 646080
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 705,
+              "hits": 152,
+              "stakeYen": 1410000,
+              "returnYen": 1172970,
+              "profitYen": -237030,
+              "roiPct": 83.18936170212766,
+              "roiWithoutTop1Pct": 76.7404255319149,
+              "hitRatePct": 21.56028368794326,
+              "topReturnYen": 90930
+            },
+            "スタンダード": {
+              "races": 705,
+              "hits": 199,
+              "stakeYen": 3525000,
+              "returnYen": 3626380,
+              "profitYen": 101380,
+              "roiPct": 102.87602836879432,
+              "roiWithoutTop1Pct": 86.89191489361701,
+              "hitRatePct": 28.22695035460993,
+              "topReturnYen": 563440
+            },
+            "プレミアム": {
+              "races": 705,
+              "hits": 150,
+              "stakeYen": 7050000,
+              "returnYen": 8393840,
+              "profitYen": 1343840,
+              "roiPct": 119.06156028368795,
+              "roiWithoutTop1Pct": 100.4859574468085,
+              "hitRatePct": 21.27659574468085,
+              "topReturnYen": 1309580
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 72.2991103202847,
+        "meanDevelopmentCourseRoiPct": 74.98832740213523,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.34953736654805,
+        "minimumPeriodCourseRoiPct": 42.10189781021898,
+        "q25PeriodCourseRoiPct": 59.03197080291971
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 5,
+        "maximumSelectedRaces": 5
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 10.0,
+      "racesPerVenueDay": 12,
+      "raceScoreMode": "minimum",
+      "developmentCourses": {
+        "ライト": {
+          "races": 6735,
+          "hits": 1005,
+          "stakeYen": 13470000,
+          "returnYen": 9685980,
+          "profitYen": -3784020,
+          "roiPct": 71.90779510022271,
+          "roiWithoutTop1Pct": 69.27869339272458,
+          "hitRatePct": 14.92204899777283,
+          "topReturnYen": 354140
+        },
+        "スタンダード": {
+          "races": 6735,
+          "hits": 1586,
+          "stakeYen": 33675000,
+          "returnYen": 27933730,
+          "profitYen": -5741270,
+          "roiPct": 82.9509428359317,
+          "roiWithoutTop1Pct": 75.27670378619153,
+          "hitRatePct": 23.548626577579807,
+          "topReturnYen": 2584300
+        },
+        "プレミアム": {
+          "races": 6735,
+          "hits": 1220,
+          "stakeYen": 67350000,
+          "returnYen": 56286820,
+          "profitYen": -11063180,
+          "roiPct": 83.5736005939124,
+          "roiWithoutTop1Pct": 76.51414996288047,
+          "hitRatePct": 18.114328136599852,
+          "topReturnYen": 4754540
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1643,
+              "hits": 220,
+              "stakeYen": 3286000,
+              "returnYen": 2402590,
+              "profitYen": -883410,
+              "roiPct": 73.11594643944005,
+              "roiWithoutTop1Pct": 67.30036518563604,
+              "hitRatePct": 13.390139987827146,
+              "topReturnYen": 191100
+            },
+            "スタンダード": {
+              "races": 1643,
+              "hits": 370,
+              "stakeYen": 8215000,
+              "returnYen": 5246400,
+              "profitYen": -2968600,
+              "roiPct": 63.86366402921485,
+              "roiWithoutTop1Pct": 56.3342665855143,
+              "hitRatePct": 22.51978088861838,
+              "topReturnYen": 618540
+            },
+            "プレミアム": {
+              "races": 1643,
+              "hits": 261,
+              "stakeYen": 16430000,
+              "returnYen": 10069730,
+              "profitYen": -6360270,
+              "roiPct": 61.28867924528302,
+              "roiWithoutTop1Pct": 56.67169811320755,
+              "hitRatePct": 15.88557516737675,
+              "topReturnYen": 758570
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1667,
+              "hits": 227,
+              "stakeYen": 3334000,
+              "returnYen": 2025710,
+              "profitYen": -1308290,
+              "roiPct": 60.759148170365926,
+              "roiWithoutTop1Pct": 50.1370725854829,
+              "hitRatePct": 13.617276544691062,
+              "topReturnYen": 354140
+            },
+            "スタンダード": {
+              "races": 1667,
+              "hits": 371,
+              "stakeYen": 8335000,
+              "returnYen": 9130890,
+              "profitYen": 795890,
+              "roiPct": 109.5487702459508,
+              "roiWithoutTop1Pct": 78.54337132573485,
+              "hitRatePct": 22.255548890221956,
+              "topReturnYen": 2584300
+            },
+            "プレミアム": {
+              "races": 1667,
+              "hits": 291,
+              "stakeYen": 16670000,
+              "returnYen": 16948260,
+              "profitYen": 278260,
+              "roiPct": 101.66922615476905,
+              "roiWithoutTop1Pct": 73.14769046190762,
+              "hitRatePct": 17.456508698260347,
+              "topReturnYen": 4754540
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1739,
+              "hits": 292,
+              "stakeYen": 3478000,
+              "returnYen": 2579580,
+              "profitYen": -898420,
+              "roiPct": 74.16848763657275,
+              "roiWithoutTop1Pct": 68.54456584243819,
+              "hitRatePct": 16.791259344450836,
+              "topReturnYen": 195600
+            },
+            "スタンダード": {
+              "races": 1739,
+              "hits": 453,
+              "stakeYen": 8695000,
+              "returnYen": 6848750,
+              "profitYen": -1846250,
+              "roiPct": 78.76653248993675,
+              "roiWithoutTop1Pct": 72.73341000575043,
+              "hitRatePct": 26.049453709028175,
+              "topReturnYen": 524580
+            },
+            "プレミアム": {
+              "races": 1739,
+              "hits": 342,
+              "stakeYen": 17390000,
+              "returnYen": 16564430,
+              "profitYen": -825570,
+              "roiPct": 95.25261644623346,
+              "roiWithoutTop1Pct": 77.68395629672226,
+              "hitRatePct": 19.66647498562392,
+              "topReturnYen": 3055190
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1686,
+              "hits": 266,
+              "stakeYen": 3372000,
+              "returnYen": 2678100,
+              "profitYen": -693900,
+              "roiPct": 79.42170818505339,
+              "roiWithoutTop1Pct": 71.31405693950178,
+              "hitRatePct": 15.776986951364174,
+              "topReturnYen": 273390
+            },
+            "スタンダード": {
+              "races": 1686,
+              "hits": 392,
+              "stakeYen": 8430000,
+              "returnYen": 6707690,
+              "profitYen": -1722310,
+              "roiPct": 79.56927639383156,
+              "roiWithoutTop1Pct": 65.93724792408067,
+              "hitRatePct": 23.250296559905102,
+              "topReturnYen": 1149180
+            },
+            "プレミアム": {
+              "races": 1686,
+              "hits": 326,
+              "stakeYen": 16860000,
+              "returnYen": 12704400,
+              "profitYen": -4155600,
+              "roiPct": 75.3523131672598,
+              "roiWithoutTop1Pct": 61.18457888493476,
+              "hitRatePct": 19.33570581257414,
+              "topReturnYen": 2388680
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 71.90779510022271,
+        "meanDevelopmentCourseRoiPct": 79.47744617668893,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.27869339272458,
+        "minimumPeriodCourseRoiPct": 60.759148170365926,
+        "q25PeriodCourseRoiPct": 70.80287583688376
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 12
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 10.0,
+      "racesPerVenueDay": 12,
+      "raceScoreMode": "lower_mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 6735,
+          "hits": 1005,
+          "stakeYen": 13470000,
+          "returnYen": 9685980,
+          "profitYen": -3784020,
+          "roiPct": 71.90779510022271,
+          "roiWithoutTop1Pct": 69.27869339272458,
+          "hitRatePct": 14.92204899777283,
+          "topReturnYen": 354140
+        },
+        "スタンダード": {
+          "races": 6735,
+          "hits": 1586,
+          "stakeYen": 33675000,
+          "returnYen": 27933730,
+          "profitYen": -5741270,
+          "roiPct": 82.9509428359317,
+          "roiWithoutTop1Pct": 75.27670378619153,
+          "hitRatePct": 23.548626577579807,
+          "topReturnYen": 2584300
+        },
+        "プレミアム": {
+          "races": 6735,
+          "hits": 1220,
+          "stakeYen": 67350000,
+          "returnYen": 56286820,
+          "profitYen": -11063180,
+          "roiPct": 83.5736005939124,
+          "roiWithoutTop1Pct": 76.51414996288047,
+          "hitRatePct": 18.114328136599852,
+          "topReturnYen": 4754540
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1643,
+              "hits": 220,
+              "stakeYen": 3286000,
+              "returnYen": 2402590,
+              "profitYen": -883410,
+              "roiPct": 73.11594643944005,
+              "roiWithoutTop1Pct": 67.30036518563604,
+              "hitRatePct": 13.390139987827146,
+              "topReturnYen": 191100
+            },
+            "スタンダード": {
+              "races": 1643,
+              "hits": 370,
+              "stakeYen": 8215000,
+              "returnYen": 5246400,
+              "profitYen": -2968600,
+              "roiPct": 63.86366402921485,
+              "roiWithoutTop1Pct": 56.3342665855143,
+              "hitRatePct": 22.51978088861838,
+              "topReturnYen": 618540
+            },
+            "プレミアム": {
+              "races": 1643,
+              "hits": 261,
+              "stakeYen": 16430000,
+              "returnYen": 10069730,
+              "profitYen": -6360270,
+              "roiPct": 61.28867924528302,
+              "roiWithoutTop1Pct": 56.67169811320755,
+              "hitRatePct": 15.88557516737675,
+              "topReturnYen": 758570
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1667,
+              "hits": 227,
+              "stakeYen": 3334000,
+              "returnYen": 2025710,
+              "profitYen": -1308290,
+              "roiPct": 60.759148170365926,
+              "roiWithoutTop1Pct": 50.1370725854829,
+              "hitRatePct": 13.617276544691062,
+              "topReturnYen": 354140
+            },
+            "スタンダード": {
+              "races": 1667,
+              "hits": 371,
+              "stakeYen": 8335000,
+              "returnYen": 9130890,
+              "profitYen": 795890,
+              "roiPct": 109.5487702459508,
+              "roiWithoutTop1Pct": 78.54337132573485,
+              "hitRatePct": 22.255548890221956,
+              "topReturnYen": 2584300
+            },
+            "プレミアム": {
+              "races": 1667,
+              "hits": 291,
+              "stakeYen": 16670000,
+              "returnYen": 16948260,
+              "profitYen": 278260,
+              "roiPct": 101.66922615476905,
+              "roiWithoutTop1Pct": 73.14769046190762,
+              "hitRatePct": 17.456508698260347,
+              "topReturnYen": 4754540
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1739,
+              "hits": 292,
+              "stakeYen": 3478000,
+              "returnYen": 2579580,
+              "profitYen": -898420,
+              "roiPct": 74.16848763657275,
+              "roiWithoutTop1Pct": 68.54456584243819,
+              "hitRatePct": 16.791259344450836,
+              "topReturnYen": 195600
+            },
+            "スタンダード": {
+              "races": 1739,
+              "hits": 453,
+              "stakeYen": 8695000,
+              "returnYen": 6848750,
+              "profitYen": -1846250,
+              "roiPct": 78.76653248993675,
+              "roiWithoutTop1Pct": 72.73341000575043,
+              "hitRatePct": 26.049453709028175,
+              "topReturnYen": 524580
+            },
+            "プレミアム": {
+              "races": 1739,
+              "hits": 342,
+              "stakeYen": 17390000,
+              "returnYen": 16564430,
+              "profitYen": -825570,
+              "roiPct": 95.25261644623346,
+              "roiWithoutTop1Pct": 77.68395629672226,
+              "hitRatePct": 19.66647498562392,
+              "topReturnYen": 3055190
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1686,
+              "hits": 266,
+              "stakeYen": 3372000,
+              "returnYen": 2678100,
+              "profitYen": -693900,
+              "roiPct": 79.42170818505339,
+              "roiWithoutTop1Pct": 71.31405693950178,
+              "hitRatePct": 15.776986951364174,
+              "topReturnYen": 273390
+            },
+            "スタンダード": {
+              "races": 1686,
+              "hits": 392,
+              "stakeYen": 8430000,
+              "returnYen": 6707690,
+              "profitYen": -1722310,
+              "roiPct": 79.56927639383156,
+              "roiWithoutTop1Pct": 65.93724792408067,
+              "hitRatePct": 23.250296559905102,
+              "topReturnYen": 1149180
+            },
+            "プレミアム": {
+              "races": 1686,
+              "hits": 326,
+              "stakeYen": 16860000,
+              "returnYen": 12704400,
+              "profitYen": -4155600,
+              "roiPct": 75.3523131672598,
+              "roiWithoutTop1Pct": 61.18457888493476,
+              "hitRatePct": 19.33570581257414,
+              "topReturnYen": 2388680
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 71.90779510022271,
+        "meanDevelopmentCourseRoiPct": 79.47744617668893,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.27869339272458,
+        "minimumPeriodCourseRoiPct": 60.759148170365926,
+        "q25PeriodCourseRoiPct": 70.80287583688376
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 12
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 10.0,
+      "racesPerVenueDay": 12,
+      "raceScoreMode": "mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 6735,
+          "hits": 1005,
+          "stakeYen": 13470000,
+          "returnYen": 9685980,
+          "profitYen": -3784020,
+          "roiPct": 71.90779510022271,
+          "roiWithoutTop1Pct": 69.27869339272458,
+          "hitRatePct": 14.92204899777283,
+          "topReturnYen": 354140
+        },
+        "スタンダード": {
+          "races": 6735,
+          "hits": 1586,
+          "stakeYen": 33675000,
+          "returnYen": 27933730,
+          "profitYen": -5741270,
+          "roiPct": 82.9509428359317,
+          "roiWithoutTop1Pct": 75.27670378619153,
+          "hitRatePct": 23.548626577579807,
+          "topReturnYen": 2584300
+        },
+        "プレミアム": {
+          "races": 6735,
+          "hits": 1220,
+          "stakeYen": 67350000,
+          "returnYen": 56286820,
+          "profitYen": -11063180,
+          "roiPct": 83.5736005939124,
+          "roiWithoutTop1Pct": 76.51414996288047,
+          "hitRatePct": 18.114328136599852,
+          "topReturnYen": 4754540
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1643,
+              "hits": 220,
+              "stakeYen": 3286000,
+              "returnYen": 2402590,
+              "profitYen": -883410,
+              "roiPct": 73.11594643944005,
+              "roiWithoutTop1Pct": 67.30036518563604,
+              "hitRatePct": 13.390139987827146,
+              "topReturnYen": 191100
+            },
+            "スタンダード": {
+              "races": 1643,
+              "hits": 370,
+              "stakeYen": 8215000,
+              "returnYen": 5246400,
+              "profitYen": -2968600,
+              "roiPct": 63.86366402921485,
+              "roiWithoutTop1Pct": 56.3342665855143,
+              "hitRatePct": 22.51978088861838,
+              "topReturnYen": 618540
+            },
+            "プレミアム": {
+              "races": 1643,
+              "hits": 261,
+              "stakeYen": 16430000,
+              "returnYen": 10069730,
+              "profitYen": -6360270,
+              "roiPct": 61.28867924528302,
+              "roiWithoutTop1Pct": 56.67169811320755,
+              "hitRatePct": 15.88557516737675,
+              "topReturnYen": 758570
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1667,
+              "hits": 227,
+              "stakeYen": 3334000,
+              "returnYen": 2025710,
+              "profitYen": -1308290,
+              "roiPct": 60.759148170365926,
+              "roiWithoutTop1Pct": 50.1370725854829,
+              "hitRatePct": 13.617276544691062,
+              "topReturnYen": 354140
+            },
+            "スタンダード": {
+              "races": 1667,
+              "hits": 371,
+              "stakeYen": 8335000,
+              "returnYen": 9130890,
+              "profitYen": 795890,
+              "roiPct": 109.5487702459508,
+              "roiWithoutTop1Pct": 78.54337132573485,
+              "hitRatePct": 22.255548890221956,
+              "topReturnYen": 2584300
+            },
+            "プレミアム": {
+              "races": 1667,
+              "hits": 291,
+              "stakeYen": 16670000,
+              "returnYen": 16948260,
+              "profitYen": 278260,
+              "roiPct": 101.66922615476905,
+              "roiWithoutTop1Pct": 73.14769046190762,
+              "hitRatePct": 17.456508698260347,
+              "topReturnYen": 4754540
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1739,
+              "hits": 292,
+              "stakeYen": 3478000,
+              "returnYen": 2579580,
+              "profitYen": -898420,
+              "roiPct": 74.16848763657275,
+              "roiWithoutTop1Pct": 68.54456584243819,
+              "hitRatePct": 16.791259344450836,
+              "topReturnYen": 195600
+            },
+            "スタンダード": {
+              "races": 1739,
+              "hits": 453,
+              "stakeYen": 8695000,
+              "returnYen": 6848750,
+              "profitYen": -1846250,
+              "roiPct": 78.76653248993675,
+              "roiWithoutTop1Pct": 72.73341000575043,
+              "hitRatePct": 26.049453709028175,
+              "topReturnYen": 524580
+            },
+            "プレミアム": {
+              "races": 1739,
+              "hits": 342,
+              "stakeYen": 17390000,
+              "returnYen": 16564430,
+              "profitYen": -825570,
+              "roiPct": 95.25261644623346,
+              "roiWithoutTop1Pct": 77.68395629672226,
+              "hitRatePct": 19.66647498562392,
+              "topReturnYen": 3055190
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1686,
+              "hits": 266,
+              "stakeYen": 3372000,
+              "returnYen": 2678100,
+              "profitYen": -693900,
+              "roiPct": 79.42170818505339,
+              "roiWithoutTop1Pct": 71.31405693950178,
+              "hitRatePct": 15.776986951364174,
+              "topReturnYen": 273390
+            },
+            "スタンダード": {
+              "races": 1686,
+              "hits": 392,
+              "stakeYen": 8430000,
+              "returnYen": 6707690,
+              "profitYen": -1722310,
+              "roiPct": 79.56927639383156,
+              "roiWithoutTop1Pct": 65.93724792408067,
+              "hitRatePct": 23.250296559905102,
+              "topReturnYen": 1149180
+            },
+            "プレミアム": {
+              "races": 1686,
+              "hits": 326,
+              "stakeYen": 16860000,
+              "returnYen": 12704400,
+              "profitYen": -4155600,
+              "roiPct": 75.3523131672598,
+              "roiWithoutTop1Pct": 61.18457888493476,
+              "hitRatePct": 19.33570581257414,
+              "topReturnYen": 2388680
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 71.90779510022271,
+        "meanDevelopmentCourseRoiPct": 79.47744617668893,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.27869339272458,
+        "minimumPeriodCourseRoiPct": 60.759148170365926,
+        "q25PeriodCourseRoiPct": 70.80287583688376
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 12
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 3.0,
+      "racesPerVenueDay": 12,
+      "raceScoreMode": "minimum",
+      "developmentCourses": {
+        "ライト": {
+          "races": 6735,
+          "hits": 1005,
+          "stakeYen": 13470000,
+          "returnYen": 9664460,
+          "profitYen": -3805540,
+          "roiPct": 71.74803266518188,
+          "roiWithoutTop1Pct": 69.82316258351892,
+          "hitRatePct": 14.92204899777283,
+          "topReturnYen": 259280
+        },
+        "スタンダード": {
+          "races": 6735,
+          "hits": 1586,
+          "stakeYen": 33675000,
+          "returnYen": 25169040,
+          "profitYen": -8505960,
+          "roiPct": 74.7410244988864,
+          "roiWithoutTop1Pct": 71.87907943578323,
+          "hitRatePct": 23.548626577579807,
+          "topReturnYen": 963760
+        },
+        "プレミアム": {
+          "races": 6735,
+          "hits": 1220,
+          "stakeYen": 67350000,
+          "returnYen": 50539100,
+          "profitYen": -16810900,
+          "roiPct": 75.03949517446176,
+          "roiWithoutTop1Pct": 72.14062360801782,
+          "hitRatePct": 18.114328136599852,
+          "topReturnYen": 1952390
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1643,
+              "hits": 220,
+              "stakeYen": 3286000,
+              "returnYen": 2501330,
+              "profitYen": -784670,
+              "roiPct": 76.12081558125381,
+              "roiWithoutTop1Pct": 69.52891052951917,
+              "hitRatePct": 13.390139987827146,
+              "topReturnYen": 216610
+            },
+            "スタンダード": {
+              "races": 1643,
+              "hits": 370,
+              "stakeYen": 8215000,
+              "returnYen": 5350880,
+              "profitYen": -2864120,
+              "roiPct": 65.13548387096773,
+              "roiWithoutTop1Pct": 58.860986001217285,
+              "hitRatePct": 22.51978088861838,
+              "topReturnYen": 515450
+            },
+            "プレミアム": {
+              "races": 1643,
+              "hits": 261,
+              "stakeYen": 16430000,
+              "returnYen": 10373810,
+              "profitYen": -6056190,
+              "roiPct": 63.13944004869142,
+              "roiWithoutTop1Pct": 58.85648204503956,
+              "hitRatePct": 15.88557516737675,
+              "topReturnYen": 703690
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1667,
+              "hits": 227,
+              "stakeYen": 3334000,
+              "returnYen": 1946680,
+              "profitYen": -1387320,
+              "roiPct": 58.388722255548885,
+              "roiWithoutTop1Pct": 51.48200359928015,
+              "hitRatePct": 13.617276544691062,
+              "topReturnYen": 230270
+            },
+            "スタンダード": {
+              "races": 1667,
+              "hits": 371,
+              "stakeYen": 8335000,
+              "returnYen": 7103960,
+              "profitYen": -1231040,
+              "roiPct": 85.23047390521896,
+              "roiWithoutTop1Pct": 73.66766646670666,
+              "hitRatePct": 22.255548890221956,
+              "topReturnYen": 963760
+            },
+            "プレミアム": {
+              "races": 1667,
+              "hits": 291,
+              "stakeYen": 16670000,
+              "returnYen": 14164430,
+              "profitYen": -2505570,
+              "roiPct": 84.96958608278345,
+              "roiWithoutTop1Pct": 73.25758848230353,
+              "hitRatePct": 17.456508698260347,
+              "topReturnYen": 1952390
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1739,
+              "hits": 292,
+              "stakeYen": 3478000,
+              "returnYen": 2628760,
+              "profitYen": -849240,
+              "roiPct": 75.58251868890167,
+              "roiWithoutTop1Pct": 70.89591719378954,
+              "hitRatePct": 16.791259344450836,
+              "topReturnYen": 163000
+            },
+            "スタンダード": {
+              "races": 1739,
+              "hits": 453,
+              "stakeYen": 8695000,
+              "returnYen": 6419040,
+              "profitYen": -2275960,
+              "roiPct": 73.8244968372628,
+              "roiWithoutTop1Pct": 71.23887291546866,
+              "hitRatePct": 26.049453709028175,
+              "topReturnYen": 224820
+            },
+            "プレミアム": {
+              "races": 1739,
+              "hits": 342,
+              "stakeYen": 17390000,
+              "returnYen": 14718680,
+              "profitYen": -2671320,
+              "roiPct": 84.63875790684301,
+              "roiWithoutTop1Pct": 74.23047728579644,
+              "hitRatePct": 19.66647498562392,
+              "topReturnYen": 1810000
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1686,
+              "hits": 266,
+              "stakeYen": 3372000,
+              "returnYen": 2587690,
+              "profitYen": -784310,
+              "roiPct": 76.74051008303677,
+              "roiWithoutTop1Pct": 69.05130486358244,
+              "hitRatePct": 15.776986951364174,
+              "topReturnYen": 259280
+            },
+            "スタンダード": {
+              "races": 1686,
+              "hits": 392,
+              "stakeYen": 8430000,
+              "returnYen": 6295160,
+              "profitYen": -2134840,
+              "roiPct": 74.67568208778174,
+              "roiWithoutTop1Pct": 66.47888493475682,
+              "hitRatePct": 23.250296559905102,
+              "topReturnYen": 690990
+            },
+            "プレミアム": {
+              "races": 1686,
+              "hits": 326,
+              "stakeYen": 16860000,
+              "returnYen": 11282180,
+              "profitYen": -5577820,
+              "roiPct": 66.91684460260973,
+              "roiWithoutTop1Pct": 59.39916963226571,
+              "hitRatePct": 19.33570581257414,
+              "topReturnYen": 1267480
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 71.74803266518188,
+        "meanDevelopmentCourseRoiPct": 73.84285077951002,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.82316258351892,
+        "minimumPeriodCourseRoiPct": 58.388722255548885,
+        "q25PeriodCourseRoiPct": 66.47150441969923
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 12
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 3.0,
+      "racesPerVenueDay": 12,
+      "raceScoreMode": "lower_mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 6735,
+          "hits": 1005,
+          "stakeYen": 13470000,
+          "returnYen": 9664460,
+          "profitYen": -3805540,
+          "roiPct": 71.74803266518188,
+          "roiWithoutTop1Pct": 69.82316258351892,
+          "hitRatePct": 14.92204899777283,
+          "topReturnYen": 259280
+        },
+        "スタンダード": {
+          "races": 6735,
+          "hits": 1586,
+          "stakeYen": 33675000,
+          "returnYen": 25169040,
+          "profitYen": -8505960,
+          "roiPct": 74.7410244988864,
+          "roiWithoutTop1Pct": 71.87907943578323,
+          "hitRatePct": 23.548626577579807,
+          "topReturnYen": 963760
+        },
+        "プレミアム": {
+          "races": 6735,
+          "hits": 1220,
+          "stakeYen": 67350000,
+          "returnYen": 50539100,
+          "profitYen": -16810900,
+          "roiPct": 75.03949517446176,
+          "roiWithoutTop1Pct": 72.14062360801782,
+          "hitRatePct": 18.114328136599852,
+          "topReturnYen": 1952390
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1643,
+              "hits": 220,
+              "stakeYen": 3286000,
+              "returnYen": 2501330,
+              "profitYen": -784670,
+              "roiPct": 76.12081558125381,
+              "roiWithoutTop1Pct": 69.52891052951917,
+              "hitRatePct": 13.390139987827146,
+              "topReturnYen": 216610
+            },
+            "スタンダード": {
+              "races": 1643,
+              "hits": 370,
+              "stakeYen": 8215000,
+              "returnYen": 5350880,
+              "profitYen": -2864120,
+              "roiPct": 65.13548387096773,
+              "roiWithoutTop1Pct": 58.860986001217285,
+              "hitRatePct": 22.51978088861838,
+              "topReturnYen": 515450
+            },
+            "プレミアム": {
+              "races": 1643,
+              "hits": 261,
+              "stakeYen": 16430000,
+              "returnYen": 10373810,
+              "profitYen": -6056190,
+              "roiPct": 63.13944004869142,
+              "roiWithoutTop1Pct": 58.85648204503956,
+              "hitRatePct": 15.88557516737675,
+              "topReturnYen": 703690
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1667,
+              "hits": 227,
+              "stakeYen": 3334000,
+              "returnYen": 1946680,
+              "profitYen": -1387320,
+              "roiPct": 58.388722255548885,
+              "roiWithoutTop1Pct": 51.48200359928015,
+              "hitRatePct": 13.617276544691062,
+              "topReturnYen": 230270
+            },
+            "スタンダード": {
+              "races": 1667,
+              "hits": 371,
+              "stakeYen": 8335000,
+              "returnYen": 7103960,
+              "profitYen": -1231040,
+              "roiPct": 85.23047390521896,
+              "roiWithoutTop1Pct": 73.66766646670666,
+              "hitRatePct": 22.255548890221956,
+              "topReturnYen": 963760
+            },
+            "プレミアム": {
+              "races": 1667,
+              "hits": 291,
+              "stakeYen": 16670000,
+              "returnYen": 14164430,
+              "profitYen": -2505570,
+              "roiPct": 84.96958608278345,
+              "roiWithoutTop1Pct": 73.25758848230353,
+              "hitRatePct": 17.456508698260347,
+              "topReturnYen": 1952390
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1739,
+              "hits": 292,
+              "stakeYen": 3478000,
+              "returnYen": 2628760,
+              "profitYen": -849240,
+              "roiPct": 75.58251868890167,
+              "roiWithoutTop1Pct": 70.89591719378954,
+              "hitRatePct": 16.791259344450836,
+              "topReturnYen": 163000
+            },
+            "スタンダード": {
+              "races": 1739,
+              "hits": 453,
+              "stakeYen": 8695000,
+              "returnYen": 6419040,
+              "profitYen": -2275960,
+              "roiPct": 73.8244968372628,
+              "roiWithoutTop1Pct": 71.23887291546866,
+              "hitRatePct": 26.049453709028175,
+              "topReturnYen": 224820
+            },
+            "プレミアム": {
+              "races": 1739,
+              "hits": 342,
+              "stakeYen": 17390000,
+              "returnYen": 14718680,
+              "profitYen": -2671320,
+              "roiPct": 84.63875790684301,
+              "roiWithoutTop1Pct": 74.23047728579644,
+              "hitRatePct": 19.66647498562392,
+              "topReturnYen": 1810000
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1686,
+              "hits": 266,
+              "stakeYen": 3372000,
+              "returnYen": 2587690,
+              "profitYen": -784310,
+              "roiPct": 76.74051008303677,
+              "roiWithoutTop1Pct": 69.05130486358244,
+              "hitRatePct": 15.776986951364174,
+              "topReturnYen": 259280
+            },
+            "スタンダード": {
+              "races": 1686,
+              "hits": 392,
+              "stakeYen": 8430000,
+              "returnYen": 6295160,
+              "profitYen": -2134840,
+              "roiPct": 74.67568208778174,
+              "roiWithoutTop1Pct": 66.47888493475682,
+              "hitRatePct": 23.250296559905102,
+              "topReturnYen": 690990
+            },
+            "プレミアム": {
+              "races": 1686,
+              "hits": 326,
+              "stakeYen": 16860000,
+              "returnYen": 11282180,
+              "profitYen": -5577820,
+              "roiPct": 66.91684460260973,
+              "roiWithoutTop1Pct": 59.39916963226571,
+              "hitRatePct": 19.33570581257414,
+              "topReturnYen": 1267480
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 71.74803266518188,
+        "meanDevelopmentCourseRoiPct": 73.84285077951002,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.82316258351892,
+        "minimumPeriodCourseRoiPct": 58.388722255548885,
+        "q25PeriodCourseRoiPct": 66.47150441969923
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 12
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 3.0,
+      "racesPerVenueDay": 12,
+      "raceScoreMode": "mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 6735,
+          "hits": 1005,
+          "stakeYen": 13470000,
+          "returnYen": 9664460,
+          "profitYen": -3805540,
+          "roiPct": 71.74803266518188,
+          "roiWithoutTop1Pct": 69.82316258351892,
+          "hitRatePct": 14.92204899777283,
+          "topReturnYen": 259280
+        },
+        "スタンダード": {
+          "races": 6735,
+          "hits": 1586,
+          "stakeYen": 33675000,
+          "returnYen": 25169040,
+          "profitYen": -8505960,
+          "roiPct": 74.7410244988864,
+          "roiWithoutTop1Pct": 71.87907943578323,
+          "hitRatePct": 23.548626577579807,
+          "topReturnYen": 963760
+        },
+        "プレミアム": {
+          "races": 6735,
+          "hits": 1220,
+          "stakeYen": 67350000,
+          "returnYen": 50539100,
+          "profitYen": -16810900,
+          "roiPct": 75.03949517446176,
+          "roiWithoutTop1Pct": 72.14062360801782,
+          "hitRatePct": 18.114328136599852,
+          "topReturnYen": 1952390
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1643,
+              "hits": 220,
+              "stakeYen": 3286000,
+              "returnYen": 2501330,
+              "profitYen": -784670,
+              "roiPct": 76.12081558125381,
+              "roiWithoutTop1Pct": 69.52891052951917,
+              "hitRatePct": 13.390139987827146,
+              "topReturnYen": 216610
+            },
+            "スタンダード": {
+              "races": 1643,
+              "hits": 370,
+              "stakeYen": 8215000,
+              "returnYen": 5350880,
+              "profitYen": -2864120,
+              "roiPct": 65.13548387096773,
+              "roiWithoutTop1Pct": 58.860986001217285,
+              "hitRatePct": 22.51978088861838,
+              "topReturnYen": 515450
+            },
+            "プレミアム": {
+              "races": 1643,
+              "hits": 261,
+              "stakeYen": 16430000,
+              "returnYen": 10373810,
+              "profitYen": -6056190,
+              "roiPct": 63.13944004869142,
+              "roiWithoutTop1Pct": 58.85648204503956,
+              "hitRatePct": 15.88557516737675,
+              "topReturnYen": 703690
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1667,
+              "hits": 227,
+              "stakeYen": 3334000,
+              "returnYen": 1946680,
+              "profitYen": -1387320,
+              "roiPct": 58.388722255548885,
+              "roiWithoutTop1Pct": 51.48200359928015,
+              "hitRatePct": 13.617276544691062,
+              "topReturnYen": 230270
+            },
+            "スタンダード": {
+              "races": 1667,
+              "hits": 371,
+              "stakeYen": 8335000,
+              "returnYen": 7103960,
+              "profitYen": -1231040,
+              "roiPct": 85.23047390521896,
+              "roiWithoutTop1Pct": 73.66766646670666,
+              "hitRatePct": 22.255548890221956,
+              "topReturnYen": 963760
+            },
+            "プレミアム": {
+              "races": 1667,
+              "hits": 291,
+              "stakeYen": 16670000,
+              "returnYen": 14164430,
+              "profitYen": -2505570,
+              "roiPct": 84.96958608278345,
+              "roiWithoutTop1Pct": 73.25758848230353,
+              "hitRatePct": 17.456508698260347,
+              "topReturnYen": 1952390
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1739,
+              "hits": 292,
+              "stakeYen": 3478000,
+              "returnYen": 2628760,
+              "profitYen": -849240,
+              "roiPct": 75.58251868890167,
+              "roiWithoutTop1Pct": 70.89591719378954,
+              "hitRatePct": 16.791259344450836,
+              "topReturnYen": 163000
+            },
+            "スタンダード": {
+              "races": 1739,
+              "hits": 453,
+              "stakeYen": 8695000,
+              "returnYen": 6419040,
+              "profitYen": -2275960,
+              "roiPct": 73.8244968372628,
+              "roiWithoutTop1Pct": 71.23887291546866,
+              "hitRatePct": 26.049453709028175,
+              "topReturnYen": 224820
+            },
+            "プレミアム": {
+              "races": 1739,
+              "hits": 342,
+              "stakeYen": 17390000,
+              "returnYen": 14718680,
+              "profitYen": -2671320,
+              "roiPct": 84.63875790684301,
+              "roiWithoutTop1Pct": 74.23047728579644,
+              "hitRatePct": 19.66647498562392,
+              "topReturnYen": 1810000
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1686,
+              "hits": 266,
+              "stakeYen": 3372000,
+              "returnYen": 2587690,
+              "profitYen": -784310,
+              "roiPct": 76.74051008303677,
+              "roiWithoutTop1Pct": 69.05130486358244,
+              "hitRatePct": 15.776986951364174,
+              "topReturnYen": 259280
+            },
+            "スタンダード": {
+              "races": 1686,
+              "hits": 392,
+              "stakeYen": 8430000,
+              "returnYen": 6295160,
+              "profitYen": -2134840,
+              "roiPct": 74.67568208778174,
+              "roiWithoutTop1Pct": 66.47888493475682,
+              "hitRatePct": 23.250296559905102,
+              "topReturnYen": 690990
+            },
+            "プレミアム": {
+              "races": 1686,
+              "hits": 326,
+              "stakeYen": 16860000,
+              "returnYen": 11282180,
+              "profitYen": -5577820,
+              "roiPct": 66.91684460260973,
+              "roiWithoutTop1Pct": 59.39916963226571,
+              "hitRatePct": 19.33570581257414,
+              "topReturnYen": 1267480
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 71.74803266518188,
+        "meanDevelopmentCourseRoiPct": 73.84285077951002,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.82316258351892,
+        "minimumPeriodCourseRoiPct": 58.388722255548885,
+        "q25PeriodCourseRoiPct": 66.47150441969923
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 12
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 6.0,
+      "racesPerVenueDay": 12,
+      "raceScoreMode": "minimum",
+      "developmentCourses": {
+        "ライト": {
+          "races": 6735,
+          "hits": 1005,
+          "stakeYen": 13470000,
+          "returnYen": 9649320,
+          "profitYen": -3820680,
+          "roiPct": 71.63563474387527,
+          "roiWithoutTop1Pct": 69.6195991091314,
+          "hitRatePct": 14.92204899777283,
+          "topReturnYen": 271560
+        },
+        "スタンダード": {
+          "races": 6735,
+          "hits": 1586,
+          "stakeYen": 33675000,
+          "returnYen": 26449170,
+          "profitYen": -7225830,
+          "roiPct": 78.54244988864143,
+          "roiWithoutTop1Pct": 73.66654788418708,
+          "hitRatePct": 23.548626577579807,
+          "topReturnYen": 1641960
+        },
+        "プレミアム": {
+          "races": 6735,
+          "hits": 1220,
+          "stakeYen": 67350000,
+          "returnYen": 53772950,
+          "profitYen": -13577050,
+          "roiPct": 79.84105419450631,
+          "roiWithoutTop1Pct": 75.3785449146251,
+          "hitRatePct": 18.114328136599852,
+          "topReturnYen": 3005500
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1643,
+              "hits": 220,
+              "stakeYen": 3286000,
+              "returnYen": 2448170,
+              "profitYen": -837830,
+              "roiPct": 74.5030432136336,
+              "roiWithoutTop1Pct": 68.40687766281192,
+              "hitRatePct": 13.390139987827146,
+              "topReturnYen": 200320
+            },
+            "スタンダード": {
+              "races": 1643,
+              "hits": 370,
+              "stakeYen": 8215000,
+              "returnYen": 5211020,
+              "profitYen": -3003980,
+              "roiPct": 63.4329884357882,
+              "roiWithoutTop1Pct": 55.90359099208765,
+              "hitRatePct": 22.51978088861838,
+              "topReturnYen": 618540
+            },
+            "プレミアム": {
+              "races": 1643,
+              "hits": 261,
+              "stakeYen": 16430000,
+              "returnYen": 10611960,
+              "profitYen": -5818040,
+              "roiPct": 64.58892270237371,
+              "roiWithoutTop1Pct": 60.35392574558735,
+              "hitRatePct": 15.88557516737675,
+              "topReturnYen": 695810
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1667,
+              "hits": 227,
+              "stakeYen": 3334000,
+              "returnYen": 1923230,
+              "profitYen": -1410770,
+              "roiPct": 57.685362927414516,
+              "roiWithoutTop1Pct": 49.540191961607675,
+              "hitRatePct": 13.617276544691062,
+              "topReturnYen": 271560
+            },
+            "スタンダード": {
+              "races": 1667,
+              "hits": 371,
+              "stakeYen": 8335000,
+              "returnYen": 7969100,
+              "profitYen": -365900,
+              "roiPct": 95.61007798440312,
+              "roiWithoutTop1Pct": 75.91049790041991,
+              "hitRatePct": 22.255548890221956,
+              "topReturnYen": 1641960
+            },
+            "プレミアム": {
+              "races": 1667,
+              "hits": 291,
+              "stakeYen": 16670000,
+              "returnYen": 15623180,
+              "profitYen": -1046820,
+              "roiPct": 93.72033593281344,
+              "roiWithoutTop1Pct": 75.69094181163767,
+              "hitRatePct": 17.456508698260347,
+              "topReturnYen": 3005500
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1739,
+              "hits": 292,
+              "stakeYen": 3478000,
+              "returnYen": 2629610,
+              "profitYen": -848390,
+              "roiPct": 75.60695802185164,
+              "roiWithoutTop1Pct": 70.13110983323749,
+              "hitRatePct": 16.791259344450836,
+              "topReturnYen": 190450
+            },
+            "スタンダード": {
+              "races": 1739,
+              "hits": 453,
+              "stakeYen": 8695000,
+              "returnYen": 6701490,
+              "profitYen": -1993510,
+              "roiPct": 77.07291546866016,
+              "roiWithoutTop1Pct": 72.76354226566993,
+              "hitRatePct": 26.049453709028175,
+              "topReturnYen": 374700
+            },
+            "プレミアム": {
+              "races": 1739,
+              "hits": 342,
+              "stakeYen": 17390000,
+              "returnYen": 15629420,
+              "profitYen": -1760580,
+              "roiPct": 89.87590569292698,
+              "roiWithoutTop1Pct": 77.2081081081081,
+              "hitRatePct": 19.66647498562392,
+              "topReturnYen": 2202930
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1686,
+              "hits": 266,
+              "stakeYen": 3372000,
+              "returnYen": 2648310,
+              "profitYen": -723690,
+              "roiPct": 78.53825622775801,
+              "roiWithoutTop1Pct": 70.84905100830368,
+              "hitRatePct": 15.776986951364174,
+              "topReturnYen": 259280
+            },
+            "スタンダード": {
+              "races": 1686,
+              "hits": 392,
+              "stakeYen": 8430000,
+              "returnYen": 6567560,
+              "profitYen": -1862440,
+              "roiPct": 77.90699881376038,
+              "roiWithoutTop1Pct": 67.42396204033214,
+              "hitRatePct": 23.250296559905102,
+              "topReturnYen": 883720
+            },
+            "プレミアム": {
+              "races": 1686,
+              "hits": 326,
+              "stakeYen": 16860000,
+              "returnYen": 11908390,
+              "profitYen": -4951610,
+              "roiPct": 70.63102016607354,
+              "roiWithoutTop1Pct": 60.3729537366548,
+              "hitRatePct": 19.33570581257414,
+              "topReturnYen": 1729510
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 71.63563474387527,
+        "meanDevelopmentCourseRoiPct": 76.67304627567434,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.6195991091314,
+        "minimumPeriodCourseRoiPct": 57.685362927414516,
+        "q25PeriodCourseRoiPct": 69.12049580014857
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 12
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 6.0,
+      "racesPerVenueDay": 12,
+      "raceScoreMode": "lower_mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 6735,
+          "hits": 1005,
+          "stakeYen": 13470000,
+          "returnYen": 9649320,
+          "profitYen": -3820680,
+          "roiPct": 71.63563474387527,
+          "roiWithoutTop1Pct": 69.6195991091314,
+          "hitRatePct": 14.92204899777283,
+          "topReturnYen": 271560
+        },
+        "スタンダード": {
+          "races": 6735,
+          "hits": 1586,
+          "stakeYen": 33675000,
+          "returnYen": 26449170,
+          "profitYen": -7225830,
+          "roiPct": 78.54244988864143,
+          "roiWithoutTop1Pct": 73.66654788418708,
+          "hitRatePct": 23.548626577579807,
+          "topReturnYen": 1641960
+        },
+        "プレミアム": {
+          "races": 6735,
+          "hits": 1220,
+          "stakeYen": 67350000,
+          "returnYen": 53772950,
+          "profitYen": -13577050,
+          "roiPct": 79.84105419450631,
+          "roiWithoutTop1Pct": 75.3785449146251,
+          "hitRatePct": 18.114328136599852,
+          "topReturnYen": 3005500
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1643,
+              "hits": 220,
+              "stakeYen": 3286000,
+              "returnYen": 2448170,
+              "profitYen": -837830,
+              "roiPct": 74.5030432136336,
+              "roiWithoutTop1Pct": 68.40687766281192,
+              "hitRatePct": 13.390139987827146,
+              "topReturnYen": 200320
+            },
+            "スタンダード": {
+              "races": 1643,
+              "hits": 370,
+              "stakeYen": 8215000,
+              "returnYen": 5211020,
+              "profitYen": -3003980,
+              "roiPct": 63.4329884357882,
+              "roiWithoutTop1Pct": 55.90359099208765,
+              "hitRatePct": 22.51978088861838,
+              "topReturnYen": 618540
+            },
+            "プレミアム": {
+              "races": 1643,
+              "hits": 261,
+              "stakeYen": 16430000,
+              "returnYen": 10611960,
+              "profitYen": -5818040,
+              "roiPct": 64.58892270237371,
+              "roiWithoutTop1Pct": 60.35392574558735,
+              "hitRatePct": 15.88557516737675,
+              "topReturnYen": 695810
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1667,
+              "hits": 227,
+              "stakeYen": 3334000,
+              "returnYen": 1923230,
+              "profitYen": -1410770,
+              "roiPct": 57.685362927414516,
+              "roiWithoutTop1Pct": 49.540191961607675,
+              "hitRatePct": 13.617276544691062,
+              "topReturnYen": 271560
+            },
+            "スタンダード": {
+              "races": 1667,
+              "hits": 371,
+              "stakeYen": 8335000,
+              "returnYen": 7969100,
+              "profitYen": -365900,
+              "roiPct": 95.61007798440312,
+              "roiWithoutTop1Pct": 75.91049790041991,
+              "hitRatePct": 22.255548890221956,
+              "topReturnYen": 1641960
+            },
+            "プレミアム": {
+              "races": 1667,
+              "hits": 291,
+              "stakeYen": 16670000,
+              "returnYen": 15623180,
+              "profitYen": -1046820,
+              "roiPct": 93.72033593281344,
+              "roiWithoutTop1Pct": 75.69094181163767,
+              "hitRatePct": 17.456508698260347,
+              "topReturnYen": 3005500
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1739,
+              "hits": 292,
+              "stakeYen": 3478000,
+              "returnYen": 2629610,
+              "profitYen": -848390,
+              "roiPct": 75.60695802185164,
+              "roiWithoutTop1Pct": 70.13110983323749,
+              "hitRatePct": 16.791259344450836,
+              "topReturnYen": 190450
+            },
+            "スタンダード": {
+              "races": 1739,
+              "hits": 453,
+              "stakeYen": 8695000,
+              "returnYen": 6701490,
+              "profitYen": -1993510,
+              "roiPct": 77.07291546866016,
+              "roiWithoutTop1Pct": 72.76354226566993,
+              "hitRatePct": 26.049453709028175,
+              "topReturnYen": 374700
+            },
+            "プレミアム": {
+              "races": 1739,
+              "hits": 342,
+              "stakeYen": 17390000,
+              "returnYen": 15629420,
+              "profitYen": -1760580,
+              "roiPct": 89.87590569292698,
+              "roiWithoutTop1Pct": 77.2081081081081,
+              "hitRatePct": 19.66647498562392,
+              "topReturnYen": 2202930
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1686,
+              "hits": 266,
+              "stakeYen": 3372000,
+              "returnYen": 2648310,
+              "profitYen": -723690,
+              "roiPct": 78.53825622775801,
+              "roiWithoutTop1Pct": 70.84905100830368,
+              "hitRatePct": 15.776986951364174,
+              "topReturnYen": 259280
+            },
+            "スタンダード": {
+              "races": 1686,
+              "hits": 392,
+              "stakeYen": 8430000,
+              "returnYen": 6567560,
+              "profitYen": -1862440,
+              "roiPct": 77.90699881376038,
+              "roiWithoutTop1Pct": 67.42396204033214,
+              "hitRatePct": 23.250296559905102,
+              "topReturnYen": 883720
+            },
+            "プレミアム": {
+              "races": 1686,
+              "hits": 326,
+              "stakeYen": 16860000,
+              "returnYen": 11908390,
+              "profitYen": -4951610,
+              "roiPct": 70.63102016607354,
+              "roiWithoutTop1Pct": 60.3729537366548,
+              "hitRatePct": 19.33570581257414,
+              "topReturnYen": 1729510
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 71.63563474387527,
+        "meanDevelopmentCourseRoiPct": 76.67304627567434,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.6195991091314,
+        "minimumPeriodCourseRoiPct": 57.685362927414516,
+        "q25PeriodCourseRoiPct": 69.12049580014857
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 12
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "tail",
+      "allocationPower": 6.0,
+      "racesPerVenueDay": 12,
+      "raceScoreMode": "mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 6735,
+          "hits": 1005,
+          "stakeYen": 13470000,
+          "returnYen": 9649320,
+          "profitYen": -3820680,
+          "roiPct": 71.63563474387527,
+          "roiWithoutTop1Pct": 69.6195991091314,
+          "hitRatePct": 14.92204899777283,
+          "topReturnYen": 271560
+        },
+        "スタンダード": {
+          "races": 6735,
+          "hits": 1586,
+          "stakeYen": 33675000,
+          "returnYen": 26449170,
+          "profitYen": -7225830,
+          "roiPct": 78.54244988864143,
+          "roiWithoutTop1Pct": 73.66654788418708,
+          "hitRatePct": 23.548626577579807,
+          "topReturnYen": 1641960
+        },
+        "プレミアム": {
+          "races": 6735,
+          "hits": 1220,
+          "stakeYen": 67350000,
+          "returnYen": 53772950,
+          "profitYen": -13577050,
+          "roiPct": 79.84105419450631,
+          "roiWithoutTop1Pct": 75.3785449146251,
+          "hitRatePct": 18.114328136599852,
+          "topReturnYen": 3005500
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1643,
+              "hits": 220,
+              "stakeYen": 3286000,
+              "returnYen": 2448170,
+              "profitYen": -837830,
+              "roiPct": 74.5030432136336,
+              "roiWithoutTop1Pct": 68.40687766281192,
+              "hitRatePct": 13.390139987827146,
+              "topReturnYen": 200320
+            },
+            "スタンダード": {
+              "races": 1643,
+              "hits": 370,
+              "stakeYen": 8215000,
+              "returnYen": 5211020,
+              "profitYen": -3003980,
+              "roiPct": 63.4329884357882,
+              "roiWithoutTop1Pct": 55.90359099208765,
+              "hitRatePct": 22.51978088861838,
+              "topReturnYen": 618540
+            },
+            "プレミアム": {
+              "races": 1643,
+              "hits": 261,
+              "stakeYen": 16430000,
+              "returnYen": 10611960,
+              "profitYen": -5818040,
+              "roiPct": 64.58892270237371,
+              "roiWithoutTop1Pct": 60.35392574558735,
+              "hitRatePct": 15.88557516737675,
+              "topReturnYen": 695810
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1667,
+              "hits": 227,
+              "stakeYen": 3334000,
+              "returnYen": 1923230,
+              "profitYen": -1410770,
+              "roiPct": 57.685362927414516,
+              "roiWithoutTop1Pct": 49.540191961607675,
+              "hitRatePct": 13.617276544691062,
+              "topReturnYen": 271560
+            },
+            "スタンダード": {
+              "races": 1667,
+              "hits": 371,
+              "stakeYen": 8335000,
+              "returnYen": 7969100,
+              "profitYen": -365900,
+              "roiPct": 95.61007798440312,
+              "roiWithoutTop1Pct": 75.91049790041991,
+              "hitRatePct": 22.255548890221956,
+              "topReturnYen": 1641960
+            },
+            "プレミアム": {
+              "races": 1667,
+              "hits": 291,
+              "stakeYen": 16670000,
+              "returnYen": 15623180,
+              "profitYen": -1046820,
+              "roiPct": 93.72033593281344,
+              "roiWithoutTop1Pct": 75.69094181163767,
+              "hitRatePct": 17.456508698260347,
+              "topReturnYen": 3005500
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1739,
+              "hits": 292,
+              "stakeYen": 3478000,
+              "returnYen": 2629610,
+              "profitYen": -848390,
+              "roiPct": 75.60695802185164,
+              "roiWithoutTop1Pct": 70.13110983323749,
+              "hitRatePct": 16.791259344450836,
+              "topReturnYen": 190450
+            },
+            "スタンダード": {
+              "races": 1739,
+              "hits": 453,
+              "stakeYen": 8695000,
+              "returnYen": 6701490,
+              "profitYen": -1993510,
+              "roiPct": 77.07291546866016,
+              "roiWithoutTop1Pct": 72.76354226566993,
+              "hitRatePct": 26.049453709028175,
+              "topReturnYen": 374700
+            },
+            "プレミアム": {
+              "races": 1739,
+              "hits": 342,
+              "stakeYen": 17390000,
+              "returnYen": 15629420,
+              "profitYen": -1760580,
+              "roiPct": 89.87590569292698,
+              "roiWithoutTop1Pct": 77.2081081081081,
+              "hitRatePct": 19.66647498562392,
+              "topReturnYen": 2202930
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1686,
+              "hits": 266,
+              "stakeYen": 3372000,
+              "returnYen": 2648310,
+              "profitYen": -723690,
+              "roiPct": 78.53825622775801,
+              "roiWithoutTop1Pct": 70.84905100830368,
+              "hitRatePct": 15.776986951364174,
+              "topReturnYen": 259280
+            },
+            "スタンダード": {
+              "races": 1686,
+              "hits": 392,
+              "stakeYen": 8430000,
+              "returnYen": 6567560,
+              "profitYen": -1862440,
+              "roiPct": 77.90699881376038,
+              "roiWithoutTop1Pct": 67.42396204033214,
+              "hitRatePct": 23.250296559905102,
+              "topReturnYen": 883720
+            },
+            "プレミアム": {
+              "races": 1686,
+              "hits": 326,
+              "stakeYen": 16860000,
+              "returnYen": 11908390,
+              "profitYen": -4951610,
+              "roiPct": 70.63102016607354,
+              "roiWithoutTop1Pct": 60.3729537366548,
+              "hitRatePct": 19.33570581257414,
+              "topReturnYen": 1729510
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 71.63563474387527,
+        "meanDevelopmentCourseRoiPct": 76.67304627567434,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.6195991091314,
+        "minimumPeriodCourseRoiPct": 57.685362927414516,
+        "q25PeriodCourseRoiPct": 69.12049580014857
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 12
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "form",
+      "allocationPower": 10.0,
+      "racesPerVenueDay": 5,
+      "raceScoreMode": "mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 2810,
+          "hits": 544,
+          "stakeYen": 5620000,
+          "returnYen": 4007730,
+          "profitYen": -1612270,
+          "roiPct": 71.31192170818505,
+          "roiWithoutTop1Pct": 66.62117437722421,
+          "hitRatePct": 19.359430604982204,
+          "topReturnYen": 263620
+        },
+        "スタンダード": {
+          "races": 2810,
+          "hits": 766,
+          "stakeYen": 14050000,
+          "returnYen": 10685550,
+          "profitYen": -3364450,
+          "roiPct": 76.05373665480427,
+          "roiWithoutTop1Pct": 68.27067615658363,
+          "hitRatePct": 27.259786476868324,
+          "topReturnYen": 1093520
+        },
+        "プレミアム": {
+          "races": 2810,
+          "hits": 573,
+          "stakeYen": 28100000,
+          "returnYen": 22370460,
+          "profitYen": -5729540,
+          "roiPct": 79.61017793594306,
+          "roiWithoutTop1Pct": 72.62839857651245,
+          "hitRatePct": 20.391459074733095,
+          "topReturnYen": 1961880
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 685,
+              "hits": 98,
+              "stakeYen": 1370000,
+              "returnYen": 610500,
+              "profitYen": -759500,
+              "roiPct": 44.56204379562044,
+              "roiWithoutTop1Pct": 38.88175182481752,
+              "hitRatePct": 14.306569343065693,
+              "topReturnYen": 77820
+            },
+            "スタンダード": {
+              "races": 685,
+              "hits": 158,
+              "stakeYen": 3425000,
+              "returnYen": 1664080,
+              "profitYen": -1760920,
+              "roiPct": 48.58627737226278,
+              "roiWithoutTop1Pct": 37.7836496350365,
+              "hitRatePct": 23.065693430656932,
+              "topReturnYen": 369990
+            },
+            "プレミアム": {
+              "races": 685,
+              "hits": 106,
+              "stakeYen": 6850000,
+              "returnYen": 3794460,
+              "profitYen": -3055540,
+              "roiPct": 55.39357664233576,
+              "roiWithoutTop1Pct": 45.10306569343066,
+              "hitRatePct": 15.474452554744525,
+              "topReturnYen": 704900
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 695,
+              "hits": 123,
+              "stakeYen": 1390000,
+              "returnYen": 1175000,
+              "profitYen": -215000,
+              "roiPct": 84.53237410071942,
+              "roiWithoutTop1Pct": 65.56690647482014,
+              "hitRatePct": 17.697841726618705,
+              "topReturnYen": 263620
+            },
+            "スタンダード": {
+              "races": 695,
+              "hits": 187,
+              "stakeYen": 3475000,
+              "returnYen": 3545750,
+              "profitYen": 70750,
+              "roiPct": 102.03597122302159,
+              "roiWithoutTop1Pct": 70.56776978417267,
+              "hitRatePct": 26.906474820143885,
+              "topReturnYen": 1093520
+            },
+            "プレミアム": {
+              "races": 695,
+              "hits": 145,
+              "stakeYen": 6950000,
+              "returnYen": 7186930,
+              "profitYen": 236930,
+              "roiPct": 103.40906474820144,
+              "roiWithoutTop1Pct": 84.80820143884891,
+              "hitRatePct": 20.863309352517987,
+              "topReturnYen": 1292760
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 725,
+              "hits": 157,
+              "stakeYen": 1450000,
+              "returnYen": 919840,
+              "profitYen": -530160,
+              "roiPct": 63.43724137931035,
+              "roiWithoutTop1Pct": 58.74137931034483,
+              "hitRatePct": 21.655172413793103,
+              "topReturnYen": 68090
+            },
+            "スタンダード": {
+              "races": 725,
+              "hits": 216,
+              "stakeYen": 3625000,
+              "returnYen": 2621910,
+              "profitYen": -1003090,
+              "roiPct": 72.32855172413794,
+              "roiWithoutTop1Pct": 61.92248275862069,
+              "hitRatePct": 29.793103448275858,
+              "topReturnYen": 377220
+            },
+            "プレミアム": {
+              "races": 725,
+              "hits": 158,
+              "stakeYen": 7250000,
+              "returnYen": 6085580,
+              "profitYen": -1164420,
+              "roiPct": 83.93903448275863,
+              "roiWithoutTop1Pct": 56.878620689655165,
+              "hitRatePct": 21.793103448275865,
+              "topReturnYen": 1961880
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 705,
+              "hits": 166,
+              "stakeYen": 1410000,
+              "returnYen": 1302390,
+              "profitYen": -107610,
+              "roiPct": 92.36808510638298,
+              "roiWithoutTop1Pct": 74.41631205673758,
+              "hitRatePct": 23.54609929078014,
+              "topReturnYen": 253120
+            },
+            "スタンダード": {
+              "races": 705,
+              "hits": 205,
+              "stakeYen": 3525000,
+              "returnYen": 2853810,
+              "profitYen": -671190,
+              "roiPct": 80.95914893617021,
+              "roiWithoutTop1Pct": 65.99404255319149,
+              "hitRatePct": 29.078014184397162,
+              "topReturnYen": 527520
+            },
+            "プレミアム": {
+              "races": 705,
+              "hits": 164,
+              "stakeYen": 7050000,
+              "returnYen": 5303490,
+              "profitYen": -1746510,
+              "roiPct": 75.22680851063829,
+              "roiWithoutTop1Pct": 61.51673758865248,
+              "hitRatePct": 23.26241134751773,
+              "topReturnYen": 966560
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 71.31192170818505,
+        "meanDevelopmentCourseRoiPct": 75.65861209964413,
+        "minimumDevelopmentRoiWithoutTop1Pct": 66.62117437722421,
+        "minimumPeriodCourseRoiPct": 44.56204379562044,
+        "q25PeriodCourseRoiPct": 61.4263251950667
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 5,
+        "maximumSelectedRaces": 5
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "form",
+      "allocationPower": 10.0,
+      "racesPerVenueDay": 9,
+      "raceScoreMode": "mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 5056,
+          "hits": 970,
+          "stakeYen": 10112000,
+          "returnYen": 7177400,
+          "profitYen": -2934600,
+          "roiPct": 70.97903481012658,
+          "roiWithoutTop1Pct": 68.3720332278481,
+          "hitRatePct": 19.185126582278482,
+          "topReturnYen": 263620
+        },
+        "スタンダード": {
+          "races": 5056,
+          "hits": 1389,
+          "stakeYen": 25280000,
+          "returnYen": 19199710,
+          "profitYen": -6080290,
+          "roiPct": 75.94821993670887,
+          "roiWithoutTop1Pct": 67.33516613924051,
+          "hitRatePct": 27.47231012658228,
+          "topReturnYen": 2177380
+        },
+        "プレミアム": {
+          "races": 5056,
+          "hits": 1030,
+          "stakeYen": 50560000,
+          "returnYen": 39446870,
+          "profitYen": -11113130,
+          "roiPct": 78.01991693037975,
+          "roiWithoutTop1Pct": 68.88443433544303,
+          "hitRatePct": 20.371835443037973,
+          "topReturnYen": 4618900
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1233,
+              "hits": 172,
+              "stakeYen": 2466000,
+              "returnYen": 1562610,
+              "profitYen": -903390,
+              "roiPct": 63.3661800486618,
+              "roiWithoutTop1Pct": 57.928223844282236,
+              "hitRatePct": 13.949716139497163,
+              "topReturnYen": 134100
+            },
+            "スタンダード": {
+              "races": 1233,
+              "hits": 278,
+              "stakeYen": 6165000,
+              "returnYen": 3695080,
+              "profitYen": -2469920,
+              "roiPct": 59.93641524736415,
+              "roiWithoutTop1Pct": 53.93495539334955,
+              "hitRatePct": 22.54663422546634,
+              "topReturnYen": 369990
+            },
+            "プレミアム": {
+              "races": 1233,
+              "hits": 194,
+              "stakeYen": 12330000,
+              "returnYen": 8161800,
+              "profitYen": -4168200,
+              "roiPct": 66.19464720194648,
+              "roiWithoutTop1Pct": 57.990997566909975,
+              "hitRatePct": 15.73398215733982,
+              "topReturnYen": 1011510
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1251,
+              "hits": 213,
+              "stakeYen": 2502000,
+              "returnYen": 1686750,
+              "profitYen": -815250,
+              "roiPct": 67.41606714628297,
+              "roiWithoutTop1Pct": 56.8796962430056,
+              "hitRatePct": 17.026378896882495,
+              "topReturnYen": 263620
+            },
+            "スタンダード": {
+              "races": 1251,
+              "hits": 317,
+              "stakeYen": 6255000,
+              "returnYen": 6816470,
+              "profitYen": 561470,
+              "roiPct": 108.97633892885692,
+              "roiWithoutTop1Pct": 74.16610711430856,
+              "hitRatePct": 25.33972821742606,
+              "topReturnYen": 2177380
+            },
+            "プレミアム": {
+              "races": 1251,
+              "hits": 241,
+              "stakeYen": 12510000,
+              "returnYen": 13630350,
+              "profitYen": 1120350,
+              "roiPct": 108.95563549160671,
+              "roiWithoutTop1Pct": 72.03397282174261,
+              "hitRatePct": 19.26458832933653,
+              "topReturnYen": 4618900
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1305,
+              "hits": 308,
+              "stakeYen": 2610000,
+              "returnYen": 1972040,
+              "profitYen": -637960,
+              "roiPct": 75.55708812260536,
+              "roiWithoutTop1Pct": 67.40498084291188,
+              "hitRatePct": 23.60153256704981,
+              "topReturnYen": 212770
+            },
+            "スタンダード": {
+              "races": 1305,
+              "hits": 422,
+              "stakeYen": 6525000,
+              "returnYen": 4369110,
+              "profitYen": -2155890,
+              "roiPct": 66.95954022988506,
+              "roiWithoutTop1Pct": 61.178390804597704,
+              "hitRatePct": 32.337164750957854,
+              "topReturnYen": 377220
+            },
+            "プレミアム": {
+              "races": 1305,
+              "hits": 307,
+              "stakeYen": 13050000,
+              "returnYen": 9426230,
+              "profitYen": -3623770,
+              "roiPct": 72.23164750957855,
+              "roiWithoutTop1Pct": 57.19808429118773,
+              "hitRatePct": 23.524904214559385,
+              "topReturnYen": 1961880
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1267,
+              "hits": 277,
+              "stakeYen": 2534000,
+              "returnYen": 1956000,
+              "profitYen": -578000,
+              "roiPct": 77.1902131018153,
+              "roiWithoutTop1Pct": 67.20126282557221,
+              "hitRatePct": 21.86266771902131,
+              "topReturnYen": 253120
+            },
+            "スタンダード": {
+              "races": 1267,
+              "hits": 372,
+              "stakeYen": 6335000,
+              "returnYen": 4319050,
+              "profitYen": -2015950,
+              "roiPct": 68.17758484609313,
+              "roiWithoutTop1Pct": 59.85051302288872,
+              "hitRatePct": 29.36069455406472,
+              "topReturnYen": 527520
+            },
+            "プレミアム": {
+              "races": 1267,
+              "hits": 288,
+              "stakeYen": 12670000,
+              "returnYen": 8228490,
+              "profitYen": -4441510,
+              "roiPct": 64.9446724546172,
+              "roiWithoutTop1Pct": 57.315943172849245,
+              "hitRatePct": 22.730860299921073,
+              "topReturnYen": 966560
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 70.97903481012658,
+        "meanDevelopmentCourseRoiPct": 74.98239055907173,
+        "minimumDevelopmentRoiWithoutTop1Pct": 67.33516613924051,
+        "minimumPeriodCourseRoiPct": 59.93641524736415,
+        "q25PeriodCourseRoiPct": 65.88215351511417
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 9
+      }
+    },
+    {
+      "rankMode": "balanced_form",
+      "profile": "form",
+      "allocationPower": 10.0,
+      "racesPerVenueDay": 5,
+      "raceScoreMode": "lower_mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 2810,
+          "hits": 433,
+          "stakeYen": 5620000,
+          "returnYen": 3983590,
+          "profitYen": -1636410,
+          "roiPct": 70.882384341637,
+          "roiWithoutTop1Pct": 68.31370106761567,
+          "hitRatePct": 15.409252669039144,
+          "topReturnYen": 144360
+        },
+        "スタンダード": {
+          "races": 2810,
+          "hits": 680,
+          "stakeYen": 14050000,
+          "returnYen": 10635990,
+          "profitYen": -3414010,
+          "roiPct": 75.70099644128115,
+          "roiWithoutTop1Pct": 71.40669039145907,
+          "hitRatePct": 24.199288256227756,
+          "topReturnYen": 603350
+        },
+        "プレミアム": {
+          "races": 2810,
+          "hits": 483,
+          "stakeYen": 28100000,
+          "returnYen": 22580860,
+          "profitYen": -5519140,
+          "roiPct": 80.35893238434164,
+          "roiWithoutTop1Pct": 71.54430604982205,
+          "hitRatePct": 17.18861209964413,
+          "topReturnYen": 2476910
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 685,
+              "hits": 75,
+              "stakeYen": 1370000,
+              "returnYen": 750740,
+              "profitYen": -619260,
+              "roiPct": 54.7985401459854,
+              "roiWithoutTop1Pct": 46.8978102189781,
+              "hitRatePct": 10.948905109489052,
+              "topReturnYen": 108240
+            },
+            "スタンダード": {
+              "races": 685,
+              "hits": 135,
+              "stakeYen": 3425000,
+              "returnYen": 1542790,
+              "profitYen": -1882210,
+              "roiPct": 45.04496350364964,
+              "roiWithoutTop1Pct": 40.831240875912414,
+              "hitRatePct": 19.708029197080293,
+              "topReturnYen": 144320
+            },
+            "プレミアム": {
+              "races": 685,
+              "hits": 96,
+              "stakeYen": 6850000,
+              "returnYen": 3459820,
+              "profitYen": -3390180,
+              "roiPct": 50.50832116788321,
+              "roiWithoutTop1Pct": 42.12160583941606,
+              "hitRatePct": 14.014598540145986,
+              "topReturnYen": 574490
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 695,
+              "hits": 90,
+              "stakeYen": 1390000,
+              "returnYen": 829740,
+              "profitYen": -560260,
+              "roiPct": 59.69352517985611,
+              "roiWithoutTop1Pct": 50.12374100719425,
+              "hitRatePct": 12.949640287769784,
+              "topReturnYen": 133020
+            },
+            "スタンダード": {
+              "races": 695,
+              "hits": 155,
+              "stakeYen": 3475000,
+              "returnYen": 2010200,
+              "profitYen": -1464800,
+              "roiPct": 57.84748201438848,
+              "roiWithoutTop1Pct": 49.37870503597122,
+              "hitRatePct": 22.302158273381295,
+              "topReturnYen": 294290
+            },
+            "プレミアム": {
+              "races": 695,
+              "hits": 110,
+              "stakeYen": 6950000,
+              "returnYen": 3657420,
+              "profitYen": -3292580,
+              "roiPct": 52.624748201438855,
+              "roiWithoutTop1Pct": 42.695395683453235,
+              "hitRatePct": 15.827338129496402,
+              "topReturnYen": 690090
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 725,
+              "hits": 124,
+              "stakeYen": 1450000,
+              "returnYen": 1238370,
+              "profitYen": -211630,
+              "roiPct": 85.4048275862069,
+              "roiWithoutTop1Pct": 75.44896551724139,
+              "hitRatePct": 17.103448275862068,
+              "topReturnYen": 144360
+            },
+            "スタンダード": {
+              "races": 725,
+              "hits": 198,
+              "stakeYen": 3625000,
+              "returnYen": 3474020,
+              "profitYen": -150980,
+              "roiPct": 95.83503448275862,
+              "roiWithoutTop1Pct": 79.79006896551725,
+              "hitRatePct": 27.310344827586206,
+              "topReturnYen": 581630
+            },
+            "プレミアム": {
+              "races": 725,
+              "hits": 135,
+              "stakeYen": 7250000,
+              "returnYen": 6498980,
+              "profitYen": -751020,
+              "roiPct": 89.64110344827586,
+              "roiWithoutTop1Pct": 75.64455172413793,
+              "hitRatePct": 18.620689655172416,
+              "topReturnYen": 1014750
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 705,
+              "hits": 144,
+              "stakeYen": 1410000,
+              "returnYen": 1164740,
+              "profitYen": -245260,
+              "roiPct": 82.60567375886525,
+              "roiWithoutTop1Pct": 74.31418439716312,
+              "hitRatePct": 20.425531914893615,
+              "topReturnYen": 116910
+            },
+            "スタンダード": {
+              "races": 705,
+              "hits": 192,
+              "stakeYen": 3525000,
+              "returnYen": 3608980,
+              "profitYen": 83980,
+              "roiPct": 102.38241134751773,
+              "roiWithoutTop1Pct": 85.26609929078013,
+              "hitRatePct": 27.23404255319149,
+              "topReturnYen": 603350
+            },
+            "プレミアム": {
+              "races": 705,
+              "hits": 142,
+              "stakeYen": 7050000,
+              "returnYen": 8964640,
+              "profitYen": 1914640,
+              "roiPct": 127.15801418439716,
+              "roiWithoutTop1Pct": 92.0245390070922,
+              "hitRatePct": 20.141843971631207,
+              "topReturnYen": 2476910
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 70.882384341637,
+        "meanDevelopmentCourseRoiPct": 75.64743772241992,
+        "minimumDevelopmentRoiWithoutTop1Pct": 68.31370106761567,
+        "minimumPeriodCourseRoiPct": 45.04496350364964,
+        "q25PeriodCourseRoiPct": 54.255092159848765
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 5,
+        "maximumSelectedRaces": 5
+      }
+    },
+    {
+      "rankMode": "form_heavy",
+      "profile": "form",
+      "allocationPower": 6.0,
+      "racesPerVenueDay": 5,
+      "raceScoreMode": "mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 2810,
+          "hits": 547,
+          "stakeYen": 5620000,
+          "returnYen": 3947770,
+          "profitYen": -1672230,
+          "roiPct": 70.24501779359431,
+          "roiWithoutTop1Pct": 65.6314946619217,
+          "hitRatePct": 19.466192170818506,
+          "topReturnYen": 259280
+        },
+        "スタンダード": {
+          "races": 2810,
+          "hits": 768,
+          "stakeYen": 14050000,
+          "returnYen": 10753970,
+          "profitYen": -3296030,
+          "roiPct": 76.54071174377223,
+          "roiWithoutTop1Pct": 69.8350177935943,
+          "hitRatePct": 27.330960854092528,
+          "topReturnYen": 942150
+        },
+        "プレミアム": {
+          "races": 2810,
+          "hits": 577,
+          "stakeYen": 28100000,
+          "returnYen": 23062860,
+          "profitYen": -5037140,
+          "roiPct": 82.07423487544484,
+          "roiWithoutTop1Pct": 75.26430604982207,
+          "hitRatePct": 20.533807829181494,
+          "topReturnYen": 1913590
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 685,
+              "hits": 98,
+              "stakeYen": 1370000,
+              "returnYen": 608610,
+              "profitYen": -761390,
+              "roiPct": 44.42408759124088,
+              "roiWithoutTop1Pct": 38.74379562043796,
+              "hitRatePct": 14.306569343065693,
+              "topReturnYen": 77820
+            },
+            "スタンダード": {
+              "races": 685,
+              "hits": 159,
+              "stakeYen": 3425000,
+              "returnYen": 1667050,
+              "profitYen": -1757950,
+              "roiPct": 48.67299270072993,
+              "roiWithoutTop1Pct": 37.87036496350365,
+              "hitRatePct": 23.21167883211679,
+              "topReturnYen": 369990
+            },
+            "プレミアム": {
+              "races": 685,
+              "hits": 108,
+              "stakeYen": 6850000,
+              "returnYen": 4253320,
+              "profitYen": -2596680,
+              "roiPct": 62.09226277372263,
+              "roiWithoutTop1Pct": 51.80175182481752,
+              "hitRatePct": 15.766423357664234,
+              "topReturnYen": 704900
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 695,
+              "hits": 122,
+              "stakeYen": 1390000,
+              "returnYen": 1109600,
+              "profitYen": -280400,
+              "roiPct": 79.82733812949641,
+              "roiWithoutTop1Pct": 63.26115107913669,
+              "hitRatePct": 17.553956834532375,
+              "topReturnYen": 230270
+            },
+            "スタンダード": {
+              "races": 695,
+              "hits": 183,
+              "stakeYen": 3475000,
+              "returnYen": 3408760,
+              "profitYen": -66240,
+              "roiPct": 98.0938129496403,
+              "roiWithoutTop1Pct": 70.98158273381296,
+              "hitRatePct": 26.33093525179856,
+              "topReturnYen": 942150
+            },
+            "プレミアム": {
+              "races": 695,
+              "hits": 142,
+              "stakeYen": 6950000,
+              "returnYen": 7181450,
+              "profitYen": 231450,
+              "roiPct": 103.33021582733812,
+              "roiWithoutTop1Pct": 84.72935251798562,
+              "hitRatePct": 20.431654676258994,
+              "topReturnYen": 1292760
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 725,
+              "hits": 160,
+              "stakeYen": 1450000,
+              "returnYen": 927400,
+              "profitYen": -522600,
+              "roiPct": 63.95862068965518,
+              "roiWithoutTop1Pct": 59.57655172413793,
+              "hitRatePct": 22.06896551724138,
+              "topReturnYen": 63540
+            },
+            "スタンダード": {
+              "races": 725,
+              "hits": 221,
+              "stakeYen": 3625000,
+              "returnYen": 2699450,
+              "profitYen": -925550,
+              "roiPct": 74.46758620689656,
+              "roiWithoutTop1Pct": 64.0615172413793,
+              "hitRatePct": 30.482758620689655,
+              "topReturnYen": 377220
+            },
+            "プレミアム": {
+              "races": 725,
+              "hits": 162,
+              "stakeYen": 7250000,
+              "returnYen": 6197180,
+              "profitYen": -1052820,
+              "roiPct": 85.4783448275862,
+              "roiWithoutTop1Pct": 59.084,
+              "hitRatePct": 22.344827586206897,
+              "topReturnYen": 1913590
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 705,
+              "hits": 167,
+              "stakeYen": 1410000,
+              "returnYen": 1302160,
+              "profitYen": -107840,
+              "roiPct": 92.35177304964539,
+              "roiWithoutTop1Pct": 73.96312056737588,
+              "hitRatePct": 23.68794326241135,
+              "topReturnYen": 259280
+            },
+            "スタンダード": {
+              "races": 705,
+              "hits": 205,
+              "stakeYen": 3525000,
+              "returnYen": 2978710,
+              "profitYen": -546290,
+              "roiPct": 84.50241134751772,
+              "roiWithoutTop1Pct": 71.09418439716312,
+              "hitRatePct": 29.078014184397162,
+              "topReturnYen": 472640
+            },
+            "プレミアム": {
+              "races": 705,
+              "hits": 165,
+              "stakeYen": 7050000,
+              "returnYen": 5430910,
+              "profitYen": -1619090,
+              "roiPct": 77.03418439716312,
+              "roiWithoutTop1Pct": 63.3241134751773,
+              "hitRatePct": 23.404255319148938,
+              "topReturnYen": 966560
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 70.24501779359431,
+        "meanDevelopmentCourseRoiPct": 76.28665480427047,
+        "minimumDevelopmentRoiWithoutTop1Pct": 65.6314946619217,
+        "minimumPeriodCourseRoiPct": 44.42408759124088,
+        "q25PeriodCourseRoiPct": 63.49203121067204
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 5,
+        "maximumSelectedRaces": 5
+      }
+    },
+    {
+      "rankMode": "balanced_form",
+      "profile": "tail",
+      "allocationPower": 1.5,
+      "racesPerVenueDay": 9,
+      "raceScoreMode": "minimum",
+      "developmentCourses": {
+        "ライト": {
+          "races": 5056,
+          "hits": 534,
+          "stakeYen": 10112000,
+          "returnYen": 7208980,
+          "profitYen": -2903020,
+          "roiPct": 71.29133702531647,
+          "roiWithoutTop1Pct": 70.34612341772151,
+          "hitRatePct": 10.561708860759493,
+          "topReturnYen": 95580
+        },
+        "スタンダード": {
+          "races": 5056,
+          "hits": 1023,
+          "stakeYen": 25280000,
+          "returnYen": 17719430,
+          "profitYen": -7560570,
+          "roiPct": 70.09268196202531,
+          "roiWithoutTop1Pct": 69.10977056962025,
+          "hitRatePct": 20.233386075949365,
+          "topReturnYen": 248480
+        },
+        "プレミアム": {
+          "races": 5056,
+          "hits": 833,
+          "stakeYen": 50560000,
+          "returnYen": 36799650,
+          "profitYen": -13760350,
+          "roiPct": 72.78411787974683,
+          "roiWithoutTop1Pct": 71.52353639240506,
+          "hitRatePct": 16.475474683544302,
+          "topReturnYen": 637350
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1233,
+              "hits": 110,
+              "stakeYen": 2466000,
+              "returnYen": 1700560,
+              "profitYen": -765440,
+              "roiPct": 68.9602595296026,
+              "roiWithoutTop1Pct": 65.21411192214111,
+              "hitRatePct": 8.921330089213301,
+              "topReturnYen": 92380
+            },
+            "スタンダード": {
+              "races": 1233,
+              "hits": 221,
+              "stakeYen": 6165000,
+              "returnYen": 3497020,
+              "profitYen": -2667980,
+              "roiPct": 56.72376317923763,
+              "roiWithoutTop1Pct": 55.023033252230334,
+              "hitRatePct": 17.923763179237632,
+              "topReturnYen": 104850
+            },
+            "プレミアム": {
+              "races": 1233,
+              "hits": 164,
+              "stakeYen": 12330000,
+              "returnYen": 7583910,
+              "profitYen": -4746090,
+              "roiPct": 61.50778588807786,
+              "roiWithoutTop1Pct": 56.338686131386865,
+              "hitRatePct": 13.30089213300892,
+              "topReturnYen": 637350
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1251,
+              "hits": 107,
+              "stakeYen": 2502000,
+              "returnYen": 1578720,
+              "profitYen": -923280,
+              "roiPct": 63.09832134292566,
+              "roiWithoutTop1Pct": 59.81374900079936,
+              "hitRatePct": 8.553157474020784,
+              "topReturnYen": 82180
+            },
+            "スタンダード": {
+              "races": 1251,
+              "hits": 221,
+              "stakeYen": 6255000,
+              "returnYen": 3693620,
+              "profitYen": -2561380,
+              "roiPct": 59.05067945643485,
+              "roiWithoutTop1Pct": 56.192006394884096,
+              "hitRatePct": 17.665867306155075,
+              "topReturnYen": 178810
+            },
+            "プレミアム": {
+              "races": 1251,
+              "hits": 193,
+              "stakeYen": 12510000,
+              "returnYen": 8571020,
+              "profitYen": -3938980,
+              "roiPct": 68.51334932054357,
+              "roiWithoutTop1Pct": 65.56610711430856,
+              "hitRatePct": 15.42765787370104,
+              "topReturnYen": 368700
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1305,
+              "hits": 157,
+              "stakeYen": 2610000,
+              "returnYen": 2113240,
+              "profitYen": -496760,
+              "roiPct": 80.96704980842911,
+              "roiWithoutTop1Pct": 77.30498084291187,
+              "hitRatePct": 12.030651340996169,
+              "topReturnYen": 95580
+            },
+            "スタンダード": {
+              "races": 1305,
+              "hits": 300,
+              "stakeYen": 6525000,
+              "returnYen": 5547640,
+              "profitYen": -977360,
+              "roiPct": 85.02130268199234,
+              "roiWithoutTop1Pct": 82.12199233716476,
+              "hitRatePct": 22.988505747126435,
+              "topReturnYen": 189180
+            },
+            "プレミアム": {
+              "races": 1305,
+              "hits": 238,
+              "stakeYen": 13050000,
+              "returnYen": 9734530,
+              "profitYen": -3315470,
+              "roiPct": 74.59409961685823,
+              "roiWithoutTop1Pct": 71.69478927203066,
+              "hitRatePct": 18.237547892720308,
+              "topReturnYen": 378360
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1267,
+              "hits": 160,
+              "stakeYen": 2534000,
+              "returnYen": 1816460,
+              "profitYen": -717540,
+              "roiPct": 71.6835043409629,
+              "roiWithoutTop1Pct": 68.36977111286504,
+              "hitRatePct": 12.628255722178375,
+              "topReturnYen": 83970
+            },
+            "スタンダード": {
+              "races": 1267,
+              "hits": 281,
+              "stakeYen": 6335000,
+              "returnYen": 4981150,
+              "profitYen": -1353850,
+              "roiPct": 78.62904498816101,
+              "roiWithoutTop1Pct": 74.70670876085241,
+              "hitRatePct": 22.17837411207577,
+              "topReturnYen": 248480
+            },
+            "プレミアム": {
+              "races": 1267,
+              "hits": 238,
+              "stakeYen": 12670000,
+              "returnYen": 10910190,
+              "profitYen": -1759810,
+              "roiPct": 86.1104183109708,
+              "roiWithoutTop1Pct": 82.50481452249409,
+              "hitRatePct": 18.784530386740332,
+              "topReturnYen": 456830
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 70.09268196202531,
+        "meanDevelopmentCourseRoiPct": 71.3893789556962,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.10977056962025,
+        "minimumPeriodCourseRoiPct": 56.72376317923763,
+        "q25PeriodCourseRoiPct": 62.70068747921371
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 9
+      }
+    },
+    {
+      "rankMode": "balanced_form",
+      "profile": "tail",
+      "allocationPower": 1.5,
+      "racesPerVenueDay": 9,
+      "raceScoreMode": "lower_mean",
+      "developmentCourses": {
+        "ライト": {
+          "races": 5056,
+          "hits": 528,
+          "stakeYen": 10112000,
+          "returnYen": 7158090,
+          "profitYen": -2953910,
+          "roiPct": 70.78807357594937,
+          "roiWithoutTop1Pct": 69.84285996835443,
+          "hitRatePct": 10.443037974683545,
+          "topReturnYen": 95580
+        },
+        "スタンダード": {
+          "races": 5056,
+          "hits": 1011,
+          "stakeYen": 25280000,
+          "returnYen": 17706210,
+          "profitYen": -7573790,
+          "roiPct": 70.04038765822784,
+          "roiWithoutTop1Pct": 69.05747626582279,
+          "hitRatePct": 19.99604430379747,
+          "topReturnYen": 248480
+        },
+        "プレミアム": {
+          "races": 5056,
+          "hits": 824,
+          "stakeYen": 50560000,
+          "returnYen": 37230700,
+          "profitYen": -13329300,
+          "roiPct": 73.63666930379746,
+          "roiWithoutTop1Pct": 72.29163370253164,
+          "hitRatePct": 16.297468354430382,
+          "topReturnYen": 680050
+        }
+      },
+      "robustnessPeriods": [
+        {
+          "period": "2024-05-01..2024-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1233,
+              "hits": 105,
+              "stakeYen": 2466000,
+              "returnYen": 1655510,
+              "profitYen": -810490,
+              "roiPct": 67.13341443633415,
+              "roiWithoutTop1Pct": 63.38726682887267,
+              "hitRatePct": 8.51581508515815,
+              "topReturnYen": 92380
+            },
+            "スタンダード": {
+              "races": 1233,
+              "hits": 212,
+              "stakeYen": 6165000,
+              "returnYen": 3241160,
+              "profitYen": -2923840,
+              "roiPct": 52.5735604217356,
+              "roiWithoutTop1Pct": 50.88337388483374,
+              "hitRatePct": 17.19383617193836,
+              "topReturnYen": 104200
+            },
+            "プレミアム": {
+              "races": 1233,
+              "hits": 156,
+              "stakeYen": 12330000,
+              "returnYen": 7024740,
+              "profitYen": -5305260,
+              "roiPct": 56.9727493917275,
+              "roiWithoutTop1Pct": 51.8036496350365,
+              "hitRatePct": 12.652068126520682,
+              "topReturnYen": 637350
+            }
+          }
+        },
+        {
+          "period": "2024-11-01..2025-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1251,
+              "hits": 104,
+              "stakeYen": 2502000,
+              "returnYen": 1549700,
+              "profitYen": -952300,
+              "roiPct": 61.93844924060752,
+              "roiWithoutTop1Pct": 58.653876898481215,
+              "hitRatePct": 8.313349320543566,
+              "topReturnYen": 82180
+            },
+            "スタンダード": {
+              "races": 1251,
+              "hits": 220,
+              "stakeYen": 6255000,
+              "returnYen": 3769910,
+              "profitYen": -2485090,
+              "roiPct": 60.270343725019984,
+              "roiWithoutTop1Pct": 57.1039168665068,
+              "hitRatePct": 17.585931254996005,
+              "topReturnYen": 198060
+            },
+            "プレミアム": {
+              "races": 1251,
+              "hits": 191,
+              "stakeYen": 12510000,
+              "returnYen": 8822670,
+              "profitYen": -3687330,
+              "roiPct": 70.52494004796162,
+              "roiWithoutTop1Pct": 67.57769784172662,
+              "hitRatePct": 15.267785771382894,
+              "topReturnYen": 368700
+            }
+          }
+        },
+        {
+          "period": "2025-05-01..2025-11-01",
+          "courses": {
+            "ライト": {
+              "races": 1305,
+              "hits": 162,
+              "stakeYen": 2610000,
+              "returnYen": 2171010,
+              "profitYen": -438990,
+              "roiPct": 83.18045977011495,
+              "roiWithoutTop1Pct": 79.5183908045977,
+              "hitRatePct": 12.413793103448276,
+              "topReturnYen": 95580
+            },
+            "スタンダード": {
+              "races": 1305,
+              "hits": 300,
+              "stakeYen": 6525000,
+              "returnYen": 5630120,
+              "profitYen": -894880,
+              "roiPct": 86.28536398467433,
+              "roiWithoutTop1Pct": 83.38605363984675,
+              "hitRatePct": 22.988505747126435,
+              "topReturnYen": 189180
+            },
+            "プレミアム": {
+              "races": 1305,
+              "hits": 242,
+              "stakeYen": 13050000,
+              "returnYen": 9939190,
+              "profitYen": -3110810,
+              "roiPct": 76.1623754789272,
+              "roiWithoutTop1Pct": 73.26306513409962,
+              "hitRatePct": 18.544061302681992,
+              "topReturnYen": 378360
+            }
+          }
+        },
+        {
+          "period": "2025-11-01..2026-05-01",
+          "courses": {
+            "ライト": {
+              "races": 1267,
+              "hits": 157,
+              "stakeYen": 2534000,
+              "returnYen": 1781870,
+              "profitYen": -752130,
+              "roiPct": 70.31846882399368,
+              "roiWithoutTop1Pct": 67.00473559589581,
+              "hitRatePct": 12.39147592738753,
+              "topReturnYen": 83970
+            },
+            "スタンダード": {
+              "races": 1267,
+              "hits": 279,
+              "stakeYen": 6335000,
+              "returnYen": 5065020,
+              "profitYen": -1269980,
+              "roiPct": 79.95295974743487,
+              "roiWithoutTop1Pct": 76.03062352012628,
+              "hitRatePct": 22.020520915548538,
+              "topReturnYen": 248480
+            },
+            "プレミアム": {
+              "races": 1267,
+              "hits": 235,
+              "stakeYen": 12670000,
+              "returnYen": 11444100,
+              "profitYen": -1225900,
+              "roiPct": 90.32438831886346,
+              "roiWithoutTop1Pct": 84.95698500394633,
+              "hitRatePct": 18.547750591949487,
+              "topReturnYen": 680050
+            }
+          }
+        }
+      ],
+      "objective": {
+        "minimumDevelopmentCourseRoiPct": 70.04038765822784,
+        "meanDevelopmentCourseRoiPct": 71.48837684599157,
+        "minimumDevelopmentRoiWithoutTop1Pct": 69.05747626582279,
+        "minimumPeriodCourseRoiPct": 52.5735604217356,
+        "q25PeriodCourseRoiPct": 61.52142286171063
+      },
+      "coverage": {
+        "groups": 562,
+        "expectedEligibleGroups": 562,
+        "minimumSelectedRaces": 7,
+        "maximumSelectedRaces": 9
+      }
+    }
+  ],
+  "finalHoldoutEvaluated": false,
+  "courses": {}
+}
