@@ -1,0 +1,27 @@
+{
+  "status": "internal_exploration_checkpoint",
+  "approvedModel": false,
+  "modelVersion": null,
+  "dataset": {
+    "races": 7695,
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "runnerFeatureCount": 94
+  },
+  "method": "Quarterly walk-forward CatBoost runner models and pair-ticket hit models. Every target quarter is predicted using only earlier races. Current-race result and payout are excluded from features.",
+  "runnerSkillVsJraMarket": {
+    "2025-Q1": {"winAucModel": 0.8327, "winAucMarket": 0.8318, "top3AucModel": 0.8086, "top3AucMarket": 0.8067},
+    "2025-Q2": {"winAucModel": 0.8241, "winAucMarket": 0.8203, "top3AucModel": 0.8062, "top3AucMarket": 0.8012},
+    "2025-Q3": {"winAucModel": 0.8268, "winAucMarket": 0.8222, "top3AucModel": 0.8099, "top3AucMarket": 0.8053},
+    "2025-Q4": {"winAucModel": 0.8233, "winAucMarket": 0.8178, "top3AucModel": 0.8209, "top3AucMarket": 0.8146},
+    "2026-Q1": {"winAucModel": 0.8220, "winAucMarket": 0.8185, "top3AucModel": 0.8240, "top3AucMarket": 0.8173},
+    "2026-Q2": {"winAucModel": 0.8260, "winAucMarket": 0.8233, "top3AucModel": 0.8187, "top3AucMarket": 0.8138},
+    "2026-Q3": {"winAucModel": 0.8330, "winAucMarket": 0.8275, "top3AucModel": 0.8055, "top3AucMarket": 0.7993}
+  },
+  "diagnosis": {
+    "predictionSkill": "The walk-forward runner model consistently beats the JRA win market on discrimination from 2025-Q1 through 2026-Q3.",
+    "remainingBottleneck": "Turning the probability advantage into the required six-ticket Light portfolio without historical official combination prices. Fixed or payout-pattern-derived Wide/Quinella policies do not transfer reliably across quarters.",
+    "dataObservation": "The frozen export retains complete race count, runner history features, market fields and actual payouts, but most enriched race-level surface/distance metadata fields are defaulted in the export. No new ingestion is performed in this exploration."
+  },
+  "promotionBlocked": true
+}
