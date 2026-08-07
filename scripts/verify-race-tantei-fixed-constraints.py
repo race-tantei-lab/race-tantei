@@ -6,9 +6,10 @@ CONFIG = ROOT / "config" / "race-tantei-fixed-constraints.json"
 DOC = ROOT / "docs" / "RACE_TANTEI_NON_NEGOTIABLE_RULES.md"
 PRODUCTION_POLICY = ROOT / "scripts" / "final-course-policy.py"
 PROMOTION_GATE = ROOT / "scripts" / "verify-production-candidate.py"
+PROMOTER = ROOT / "scripts" / "find-and-promote-production-candidate.py"
 
 EXPECTED = {
-    "version": 2,
+    "version": 3,
     "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
     "immutableProjectRules": {
         "minimumRacesPerVenueDay": 5,
@@ -23,21 +24,26 @@ EXPECTED = {
         "singleOnlyPortfolioForbidden": True,
     },
     "promotionRules": {
-        "targetRoiPct": 200.0,
+        "completionRoiPct": 200.0,
+        "approvedModelVersion": "v16",
         "minimumFinalHoldoutRacesPerCourse": 100,
         "requireEveryCourseToPass": True,
+        "requireFullHistoricalRoiPct": 200.0,
+        "requireFinalHoldoutRoiPct": 200.0,
         "requireRoiWithoutTop1Pct": 100.0,
+        "candidateVersionNumbersForbidden": True,
+        "incompleteCandidateIsNotModel": True,
         "implementationBeforeAllGatesPassForbidden": True,
-        "failedCandidateMayBeRecordedButNotPromoted": True,
+        "failedCandidateMayBeRecordedInternally": True,
         "automaticProductionChangeFromFailedCandidateForbidden": True,
     },
     "operationRules": {
         "explainWorkBeforeStarting": True,
-        "provideEstimatedDurationBeforeStarting": True,
-        "maximumSilentMinutes": 30,
+        "maximumSilentSeconds": 60,
         "continueWithoutRepeatedUserApproval": True,
         "progressReportsUseKeyNumbersOnly": True,
-        "finalReportFocusesOnResult": True,
+        "failedExplorationResultsReportedIndividually": False,
+        "completionClaimBeforeAllGatesPassForbidden": True,
     },
     "courses": {
         "ライト": {
@@ -67,8 +73,10 @@ EXPECTED = {
 REQUIRED_DOC_TEXT = (
     "各開催日・各会場で、購入対象を5レース未満にしてはならない。",
     "単勝だけへ絞ることは禁止する。",
-    "目標回収率は200%以上",
-    "30分以上、説明や途中報告なしで黙り込まない。",
+    "回収率200%以上は目標ではなく完成条件とする。",
+    "探索途中の候補にはバージョン番号を付けない。",
+    "`v16` という名称は、全条件と全ゲートを通過した完成物にだけ付与する。",
+    "不合格結果を逐一ユーザーへ並べて報告しない。",
 )
 
 FORBIDDEN_PRODUCTION_PATTERNS = (
@@ -82,8 +90,8 @@ def main() -> None:
     actual = json.loads(CONFIG.read_text(encoding="utf-8"))
     if actual != EXPECTED:
         raise SystemExit(
-            "FIXED_CONSTRAINTS_CHANGED: minimum five races, diversified course bets, "
-            "official odds only, ROI 200 promotion gate, and reporting rules are immutable."
+            "FIXED_CONSTRAINTS_CHANGED: minimum five races, fixed budgets, diversified bets, "
+            "official odds only, completion ROI 200, no candidate version numbers, and reporting rules are immutable."
         )
 
     if not DOC.exists():
@@ -95,6 +103,8 @@ def main() -> None:
 
     if not PROMOTION_GATE.exists():
         raise SystemExit("PRODUCTION_PROMOTION_GATE_MISSING")
+    if not PROMOTER.exists():
+        raise SystemExit("PRODUCTION_PROMOTER_MISSING")
 
     source = PRODUCTION_POLICY.read_text(encoding="utf-8")
     if 'OFFICIAL_ODDS_SOURCE = "jra_official"' not in source:
@@ -104,6 +114,10 @@ def main() -> None:
     for pattern in FORBIDDEN_PRODUCTION_PATTERNS:
         if pattern in source:
             raise SystemExit(f"SYNTHETIC_ODDS_PATTERN_FOUND:{pattern}")
+
+    promotion_source = PROMOTER.read_text(encoding="utf-8")
+    if 'approvedModelVersion' not in promotion_source or 'modelVersion' not in promotion_source:
+        raise SystemExit("APPROVED_VERSION_MUST_BE_ASSIGNED_ONLY_BY_PROMOTER")
 
     for course, spec in actual["courses"].items():
         if spec["budgetYen"] <= 0:
