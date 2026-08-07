@@ -1,12 +1,15 @@
 import argparse
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT / "config" / "race-tantei-fixed-constraints.json"
+VERSION_PATTERN = re.compile(r"(?i)^v\d+(?:[.\-_].*)?$")
+APPROVAL_PLACEHOLDER = '__APPROVED_MODEL_VERSION__'
 
 
 class CandidateRejected(RuntimeError):
@@ -60,6 +63,16 @@ def flag(report: dict[str, Any], name: str) -> bool:
     return False
 
 
+def validate_exploration_identity(report: dict[str, Any], config: dict[str, Any]) -> str:
+    promotion = config["promotionRules"]
+    if promotion.get("candidateVersionNumbersForbidden"):
+        require(not report.get("modelVersion"), "EXPLORATION_MUST_NOT_HAVE_MODEL_VERSION")
+    exploration_id = report.get("explorationId")
+    require(isinstance(exploration_id, str) and exploration_id.strip(), "EXPLORATION_ID_MISSING")
+    require(not VERSION_PATTERN.match(exploration_id.strip()), "EXPLORATION_ID_MUST_NOT_BE_VERSION_NUMBER")
+    return exploration_id.strip()
+
+
 def validate_implementation(report: dict[str, Any]) -> dict[str, Any]:
     implementation = report.get("productionImplementation")
     require(isinstance(implementation, dict), "PRODUCTION_IMPLEMENTATION_MISSING")
@@ -70,6 +83,9 @@ def validate_implementation(report: dict[str, Any]) -> dict[str, Any]:
     require(isinstance(expected_sha, str) and len(expected_sha) == 64, "CANDIDATE_POLICY_SHA256_MISSING")
     actual_sha = file_sha256(candidate_policy)
     require(actual_sha == expected_sha, "CANDIDATE_POLICY_SHA256_MISMATCH")
+    policy_source = candidate_policy.read_text(encoding="utf-8")
+    require(APPROVAL_PLACEHOLDER in policy_source, "CANDIDATE_POLICY_APPROVAL_PLACEHOLDER_MISSING")
+    require('MODEL_VERSION = "v16"' not in policy_source, "CANDIDATE_POLICY_PREMATURELY_VERSIONED")
 
     runner = safe_repo_path(implementation.get("productionRunnerPath", "scripts/run-final-course-production.py"))
     require(runner.exists(), f"PRODUCTION_RUNNER_NOT_FOUND:{runner}")
@@ -81,9 +97,10 @@ def validate_implementation(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def validate_report(report: dict[str, Any], config: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def validate_report(report: dict[str, Any], config: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, Any]]:
     promotion = config["promotionRules"]
     rules = config["immutableProjectRules"]
+    exploration_id = validate_exploration_identity(report, config)
 
     require(report.get("promotionEligible") is True, "PROMOTION_ELIGIBLE_FALSE")
     require(report.get("productionChanged") is False, "CANDIDATE_MUST_BE_SHADOW_ONLY")
@@ -107,7 +124,8 @@ def validate_report(report: dict[str, Any], config: dict[str, Any]) -> tuple[dic
     require(set(courses) == set(config["courses"]), "COURSE_SET_CHANGED")
 
     approved_courses: dict[str, Any] = {}
-    target_roi = number(promotion["targetRoiPct"])
+    full_target = number(promotion["requireFullHistoricalRoiPct"])
+    final_target = number(promotion["requireFinalHoldoutRoiPct"])
     min_races = int(promotion["minimumFinalHoldoutRacesPerCourse"])
     min_trimmed_roi = number(promotion["requireRoiWithoutTop1Pct"])
     minimum_selected = int(rules["minimumRacesPerVenueDay"])
@@ -115,14 +133,21 @@ def validate_report(report: dict[str, Any], config: dict[str, Any]) -> tuple[dic
     for course_name, course_config in config["courses"].items():
         course = courses[course_name]
         require(isinstance(course, dict), f"COURSE_INVALID:{course_name}")
+
+        full = course.get("fullHistorical")
+        require(isinstance(full, dict), f"FULL_HISTORICAL_MISSING:{course_name}")
+        full_races = int(number(full.get("races")))
+        full_roi = number(full.get("roiPct"), -1.0)
+        require(full_races > 0, f"FULL_HISTORICAL_RACES_MISSING:{course_name}")
+        require(full_roi >= full_target, f"FULL_HISTORICAL_ROI_BELOW_200:{course_name}:{full_roi:.6f}")
+
         final = course.get("finalHoldout")
         require(isinstance(final, dict), f"FINAL_HOLDOUT_MISSING:{course_name}")
-
         races = int(number(final.get("races")))
         roi = number(final.get("roiPct"), -1.0)
         trimmed_roi = number(final.get("roiWithoutTop1Pct"), -1.0)
         require(races >= min_races, f"FINAL_HOLDOUT_RACES_TOO_FEW:{course_name}:{races}")
-        require(roi >= target_roi, f"FINAL_HOLDOUT_ROI_BELOW_200:{course_name}:{roi:.6f}")
+        require(roi >= final_target, f"FINAL_HOLDOUT_ROI_BELOW_200:{course_name}:{roi:.6f}")
         require(trimmed_roi >= min_trimmed_roi, f"TOP1_DEPENDENCE_TOO_HIGH:{course_name}:{trimmed_roi:.6f}")
 
         coverage = course.get("coverage")
@@ -146,6 +171,8 @@ def validate_report(report: dict[str, Any], config: dict[str, Any]) -> tuple[dic
                 require(sum(stakes) == int(course_config["budgetYen"]), f"COURSE_BUDGET_NOT_EXACT:{course_name}:{index}:{sum(stakes)}")
 
         approved_courses[course_name] = {
+            "fullHistoricalRaces": full_races,
+            "fullHistoricalRoiPct": full_roi,
             "finalHoldoutRaces": races,
             "finalHoldoutRoiPct": roi,
             "roiWithoutTop1Pct": trimmed_roi,
@@ -155,7 +182,7 @@ def validate_report(report: dict[str, Any], config: dict[str, Any]) -> tuple[dic
         }
 
     implementation = validate_implementation(report)
-    return approved_courses, implementation
+    return exploration_id, approved_courses, implementation
 
 
 def main() -> None:
@@ -170,14 +197,15 @@ def main() -> None:
     raw = report_path.read_bytes()
     report = json.loads(raw.decode("utf-8"))
     require(isinstance(report, dict), "REPORT_ROOT_MUST_BE_OBJECT")
-    approved_courses, implementation = validate_report(report, config)
+    exploration_id, approved_courses, implementation = validate_report(report, config)
 
     approval = {
         "productionPromotionApproved": True,
         "approvedAt": datetime.now(timezone.utc).isoformat(),
         "constraintsVersion": config["version"],
-        "targetRoiPct": config["promotionRules"]["targetRoiPct"],
-        "modelVersion": report.get("modelVersion"),
+        "completionRoiPct": config["promotionRules"]["completionRoiPct"],
+        "modelVersion": config["promotionRules"]["approvedModelVersion"],
+        "sourceExplorationId": exploration_id,
         "sourceReport": str(report_path.relative_to(ROOT)) if report_path.is_relative_to(ROOT) else str(report_path),
         "sourceReportSha256": hashlib.sha256(raw).hexdigest(),
         "implementation": implementation,
