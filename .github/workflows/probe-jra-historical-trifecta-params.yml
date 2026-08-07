@@ -1,0 +1,63 @@
+name: Probe JRA historical trifecta params
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/probe-jra-historical-trifecta-params.py"
+      - ".github/workflows/probe-jra-historical-trifecta-params.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='analysis/jra-historical-trifecta-params' \
+            -f description='Probing JRA historical trifecta POST params' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run trifecta parameter probe
+        run: python scripts/probe-jra-historical-trifecta-params.py
+      - name: Save report
+        run: |
+          git add -f analysis-results/jra-historical-trifecta-params-probe.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --cached --quiet; then
+            git commit -m "Save JRA historical trifecta parameter probe"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Publish success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='analysis/jra-historical-trifecta-params' \
+            -f description='JRA historical trifecta parameter probe completed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='analysis/jra-historical-trifecta-params' \
+            -f description='JRA historical trifecta parameter probe failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
