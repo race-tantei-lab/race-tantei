@@ -63,11 +63,9 @@ def main():
             if current is None or len(parsed) > current["parsedRows"]:
                 by_type[bet_type] = row
 
-        for action in collector.action_links(html):
-            path = action["path"]
-            next_cname = action["cname"]
-            if "accessO.html" not in path:
-                continue
+        # collector.action_links() already matches only /JRADB/accessO.html
+        # and returns (cname, visible-context) tuples.
+        for next_cname, _context in collector.action_links(html):
             if next_cname in seen:
                 continue
             queue.append(next_cname)
