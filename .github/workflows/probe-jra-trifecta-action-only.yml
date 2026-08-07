@@ -1,0 +1,36 @@
+name: Probe JRA trifecta action only
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/probe-jra-trifecta-action-only.py"
+      - ".github/workflows/probe-jra-trifecta-action-only.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inspect action
+        run: python scripts/probe-jra-trifecta-action-only.py
+      - name: Save report
+        run: |
+          git add -f analysis-results/jra-trifecta-action-only-probe.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --cached --quiet; then
+            git commit -m "Save JRA trifecta action inspection"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
