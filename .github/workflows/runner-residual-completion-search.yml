@@ -1,0 +1,66 @@
+name: Runner residual completion search
+
+on:
+  push:
+    branches:
+      - analysis/completion-search-20260807
+    paths:
+      - scripts/search-runner-residual-walkforward.py
+      - .github/workflows/runner-residual-completion-search.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+jobs:
+  search:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STATUS_TARGET_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Publish pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='analysis/runner-residual-completion-search' \
+            -f description='Running runner-residual three-course search' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+        with:
+          ref: analysis/completion-search-20260807
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check numpy scikit-learn
+      - run: python scripts/export-completion-dataset.py
+      - run: python scripts/search-runner-residual-walkforward.py
+      - name: Commit exploration result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add analysis-results/exploration-runner-residual-walkforward.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Save runner residual completion search result"
+            git push origin HEAD:analysis/completion-search-20260807
+          fi
+      - name: Publish success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='analysis/runner-residual-completion-search' \
+            -f description='Runner-residual completion search finished' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='analysis/runner-residual-completion-search' \
+            -f description='Runner-residual completion search failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
