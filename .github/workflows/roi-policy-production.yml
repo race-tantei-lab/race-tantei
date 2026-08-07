@@ -1,4 +1,4 @@
-name: ROI policy production verification
+name: Approved production policy verification
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Publish ROI verification pending
+      - name: Publish verification pending
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -26,14 +26,37 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='production/roi-policy' \
-            -f description='Reading fixed-policy production results without mutation' \
+            -f description='Checking approved production gate' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
-      - name: Wait for ROI policy deployment
+      - name: Check whether a completed model is approved
+        id: approval
+        shell: bash
+        run: |
+          if [[ -f config/approved-production-model.json ]]; then
+            echo "approved=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "approved=false" >> "$GITHUB_OUTPUT"
+            echo 'No completed model has passed every ROI 200 gate; production remains locked.' > roi-description.txt
+          fi
+
+      - name: Verify approval manifest and immutable constraints
+        if: steps.approval.outputs.approved == 'true'
+        run: |
+          python scripts/verify-race-tantei-fixed-constraints.py
+          python scripts/verify-approved-production-model.py
+
+      - name: Wait for approved deployment
+        if: steps.approval.outputs.approved == 'true'
+        shell: bash
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-          expected="$(grep '"MODEL_VERSION"' wrangler.jsonc | sed -E 's/.*"MODEL_VERSION"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/')"
+          expected="$(python - <<'PY'
+          import json
+          print(json.load(open('config/approved-production-model.json', encoding='utf-8'))['modelVersion'])
+          PY
+          )"
           for attempt in $(seq 1 36); do
             health="$(curl --silent --show-error --max-time 25 "${base}/health" || true)"
             if HEALTH="$health" EXPECTED="$expected" python - <<'PY'
@@ -51,7 +74,9 @@ jobs:
           done
           exit 1
 
-      - name: Verify fixed policy results read-only
+      - name: Verify approved production results read-only
+        if: steps.approval.outputs.approved == 'true'
+        shell: bash
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
@@ -61,31 +86,37 @@ jobs:
           import json, os, sys
           try:
               payload=json.loads(os.environ.get('PERFORMANCE',''))
+              constraints=json.load(open('config/race-tantei-fixed-constraints.json', encoding='utf-8'))
+              approval=json.load(open('config/approved-production-model.json', encoding='utf-8'))
           except Exception:
               sys.exit(1)
-          historical=payload.get('historical', []) if isinstance(payload, dict) else []
-          targets={'ライト':1600,'スタンダード':4200,'プレミアム':8800}
-          valid=len(historical)==3
+          rows=payload.get('historical', []) if isinstance(payload, dict) else []
+          expected_courses=constraints['courses']
+          valid=len(rows)==len(expected_courses)
           summary={}
-          for row in historical:
+          for row in rows:
               course=row.get('course')
-              races=int(row.get('selectedRaces',0))
-              stake=float(row.get('stakeYen',0))
-              roi=float(row.get('roiPct') or 0)
-              hit=float(row.get('hitRatePct') or 0)
-              pending=int(row.get('pendingTickets',0))
+              races=int(row.get('selectedRaces', row.get('settledRaces', 0)) or 0)
+              stake=float(row.get('stakeYen',0) or 0)
+              pending=int(row.get('pendingTickets',0) or 0)
               average=stake/races if races else 0
-              summary[course]={'races':races,'roiPct':roi,'hitRatePct':hit,'averageStake':average,'pending':pending}
-              valid = valid and course in targets and races >= 30 and pending == 0
-              valid = valid and abs(average-targets[course]) < 0.01
-          print(json.dumps({'valid':valid,'historical':summary},ensure_ascii=False))
+              summary[course]={
+                  'races':races,
+                  'averageStake':average,
+                  'pending':pending,
+                  'roiPct':row.get('roiPct'),
+              }
+              valid = valid and course in expected_courses and pending == 0 and races > 0
+              if course in expected_courses:
+                  valid = valid and abs(average-float(expected_courses[course]['budgetYen'])) < 0.01
+          model_version=payload.get('modelVersion') if isinstance(payload, dict) else None
+          if model_version is not None:
+              valid = valid and model_version == approval['modelVersion']
+          print(json.dumps({'valid':valid,'modelVersion':approval['modelVersion'],'historical':summary},ensure_ascii=False))
           if valid:
-              text='ROI L{:.1f}% S{:.1f}% P{:.1f}% integrity verified'.format(
-                  summary['ライト']['roiPct'],
-                  summary['スタンダード']['roiPct'],
-                  summary['プレミアム']['roiPct']
+              open('roi-description.txt','w',encoding='utf-8').write(
+                  f"Approved {approval['modelVersion']} production integrity verified"
               )
-              open('roi-description.txt','w',encoding='utf-8').write(text)
           sys.exit(0 if valid else 1)
           PY
             then
@@ -96,7 +127,8 @@ jobs:
           echo "$performance"
           exit 1
 
-      - name: Publish ROI verification success
+      - name: Publish verification success
+        if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -109,7 +141,7 @@ jobs:
             -f description="$description" \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
-      - name: Publish ROI verification failure
+      - name: Publish verification failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -119,5 +151,5 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/roi-policy' \
-            -f description='Fixed policy integrity verification failed' \
+            -f description='Approved production integrity verification failed' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
