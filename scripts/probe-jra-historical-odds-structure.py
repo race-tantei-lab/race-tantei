@@ -17,6 +17,7 @@ ACTION_RE = re.compile(
     r"doAction\(\s*['\"]\/JRADB\/accessO\.html['\"]\s*,\s*['\"]([^'\"]+)['\"]",
     re.I,
 )
+ODDS_NUMBER_RE = re.compile(r"(?<!\d)(?:\d{1,7}(?:\.\d)?)(?!\d)")
 
 
 def load_collector():
@@ -87,7 +88,7 @@ def main():
                 "identity": list(identity) if identity else None,
                 "detectedBetType": collector.detect_bet_type(page, label),
                 "genericParsedRows": len(parsed),
-                "oddsTokenCount": len(collector.ODDS_TOKEN_RE.findall(page)),
+                "numericTokenCount": len(ODDS_NUMBER_RE.findall(page)),
                 "structuralRows": structural_rows(collector, page),
             }
         except Exception as exc:
