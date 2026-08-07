@@ -1,0 +1,40 @@
+{
+  "targetDates": [
+    "2024-05-04",
+    "2025-01-05",
+    "2026-08-02"
+  ],
+  "samples": [
+    {
+      "raceId": "2024-05-04-kyoto-01",
+      "raceDate": "2024-05-04",
+      "venue": "京都",
+      "raceNo": 1,
+      "resultUrl": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202403050120240504%2F55",
+      "validations": {},
+      "allMatrixBetTypesValidated": false,
+      "error": "RuntimeError:VENUE_DAY_ODDS_ACTION_NOT_DISCOVERED"
+    },
+    {
+      "raceId": "2025-01-05-chukyo-01",
+      "raceDate": "2025-01-05",
+      "venue": "中京",
+      "raceNo": 1,
+      "resultUrl": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202501010120250105%2FB5",
+      "validations": {},
+      "allMatrixBetTypesValidated": false,
+      "error": "RuntimeError:VENUE_DAY_ODDS_ACTION_NOT_DISCOVERED"
+    },
+    {
+      "raceId": "2026-08-02-chukyo-01",
+      "raceDate": "2026-08-02",
+      "venue": "中京",
+      "raceNo": 1,
+      "resultUrl": "https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0107202602040120260802/1A",
+      "validations": {},
+      "allMatrixBetTypesValidated": false,
+      "error": "RuntimeError:VENUE_DAY_ODDS_ACTION_NOT_DISCOVERED"
+    }
+  ],
+  "allPeriodsValidated": false
+}
