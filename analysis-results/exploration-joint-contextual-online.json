@@ -1,0 +1,517 @@
+{
+  "schema": 1,
+  "explorationId": "joint-contextual-online-20260808",
+  "modelVersion": null,
+  "source": {
+    "races": 7695,
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "newRaceIngestion": false,
+    "oldVersionResultsUsed": false,
+    "actualJraPayoutsOnly": true,
+    "currentResultLeakage": false
+  },
+  "algorithm": {
+    "rankingVariants": [
+      "market",
+      "form",
+      "blend",
+      "value"
+    ],
+    "policyCountTargetPerCourse": 4800,
+    "minimumRacesPerVenueDay": 5,
+    "holdoutStart": "2026-01-01",
+    "onlineUpdate": "venue-day results update only after all five selections for that venue-day are frozen",
+    "learningReturnCapMultiples": {
+      "ライト": 8.0,
+      "スタンダード": 12.0,
+      "プレミアム": 18.0
+    },
+    "contextWeights": {
+      "global": 0.12,
+      "venue": 0.23,
+      "race_no": 0.16,
+      "field": 0.12,
+      "venue_field": 0.22,
+      "fav": 0.15
+    }
+  },
+  "policyMeta": {
+    "ライト": {
+      "policies": 4800,
+      "ticketsPerRace": 6,
+      "budgetYen": 2000,
+      "requiredTypes": [
+        "単勝",
+        "ワイド",
+        "馬連"
+      ],
+      "maxTicketShare": 0.4
+    },
+    "スタンダード": {
+      "policies": 4800,
+      "ticketsPerRace": 15,
+      "budgetYen": 5000,
+      "requiredTypes": [
+        "単勝",
+        "ワイド",
+        "馬連",
+        "馬単",
+        "3連複"
+      ],
+      "maxTicketShare": 0.3
+    },
+    "プレミアム": {
+      "policies": 4800,
+      "ticketsPerRace": 16,
+      "budgetYen": 10000,
+      "requiredTypes": [
+        "単勝",
+        "ワイド",
+        "馬連",
+        "馬単",
+        "3連複",
+        "3連単"
+      ],
+      "maxTicketShare": 0.24
+    }
+  },
+  "courses": {
+    "ライト": {
+      "course": "ライト",
+      "full": {
+        "races": 3210,
+        "stakeYen": 6420000,
+        "returnYen": 4668690,
+        "roiPct": 72.72102803738318,
+        "roiWithoutMaxPct": 72.22445482866043,
+        "roiWithoutTop1Pct": 63.718068535825545,
+        "hitRatePct": 43.98753894080997,
+        "maxRaceReturnYen": 31880
+      },
+      "holdout": {
+        "races": 865,
+        "stakeYen": 1730000,
+        "returnYen": 1262980,
+        "roiPct": 73.00462427745664,
+        "roiWithoutMaxPct": 71.82196531791908,
+        "roiWithoutTop1Pct": 64.8578034682081,
+        "hitRatePct": 49.82658959537572,
+        "maxRaceReturnYen": 20460
+      },
+      "coverageFailures": [],
+      "selectedVenueDays": 642,
+      "quarterly": {
+        "2024-Q2": {
+          "races": 230,
+          "stakeYen": 460000,
+          "returnYen": 357970,
+          "roiPct": 77.8195652173913,
+          "roiWithoutMaxPct": 70.88913043478261,
+          "roiWithoutTop1Pct": 62.73478260869565,
+          "hitRatePct": 44.34782608695652,
+          "maxRaceReturnYen": 31880
+        },
+        "2024-Q3": {
+          "races": 335,
+          "stakeYen": 670000,
+          "returnYen": 511530,
+          "roiPct": 76.34776119402986,
+          "roiWithoutMaxPct": 72.10298507462687,
+          "roiWithoutTop1Pct": 63.8910447761194,
+          "hitRatePct": 38.2089552238806,
+          "maxRaceReturnYen": 28440
+        },
+        "2024-Q4": {
+          "races": 350,
+          "stakeYen": 700000,
+          "returnYen": 542230,
+          "roiPct": 77.46142857142857,
+          "roiWithoutMaxPct": 74.86714285714285,
+          "roiWithoutTop1Pct": 68.72428571428571,
+          "hitRatePct": 46.285714285714285,
+          "maxRaceReturnYen": 18160
+        },
+        "2025-Q1": {
+          "races": 355,
+          "stakeYen": 710000,
+          "returnYen": 443980,
+          "roiPct": 62.53239436619719,
+          "roiWithoutMaxPct": 59.498591549295774,
+          "roiWithoutTop1Pct": 52.75915492957747,
+          "hitRatePct": 38.59154929577465,
+          "maxRaceReturnYen": 21540
+        },
+        "2025-Q2": {
+          "races": 360,
+          "stakeYen": 720000,
+          "returnYen": 501170,
+          "roiPct": 69.60694444444444,
+          "roiWithoutMaxPct": 66.8763888888889,
+          "roiWithoutTop1Pct": 60.27083333333333,
+          "hitRatePct": 40.833333333333336,
+          "maxRaceReturnYen": 19660
+        },
+        "2025-Q3": {
+          "races": 370,
+          "stakeYen": 740000,
+          "returnYen": 543740,
+          "roiPct": 73.47837837837838,
+          "roiWithoutMaxPct": 70.9418918918919,
+          "roiWithoutTop1Pct": 64.92702702702702,
+          "hitRatePct": 40.0,
+          "maxRaceReturnYen": 18770
+        },
+        "2025-Q4": {
+          "races": 345,
+          "stakeYen": 690000,
+          "returnYen": 505090,
+          "roiPct": 73.20144927536232,
+          "roiWithoutMaxPct": 71.0913043478261,
+          "roiWithoutTop1Pct": 65.22753623188406,
+          "hitRatePct": 45.507246376811594,
+          "maxRaceReturnYen": 14560
+        },
+        "2026-Q1": {
+          "races": 355,
+          "stakeYen": 710000,
+          "returnYen": 515490,
+          "roiPct": 72.60422535211268,
+          "roiWithoutMaxPct": 69.84507042253522,
+          "roiWithoutTop1Pct": 64.17183098591549,
+          "hitRatePct": 50.70422535211267,
+          "maxRaceReturnYen": 19590
+        },
+        "2026-Q2": {
+          "races": 360,
+          "stakeYen": 720000,
+          "returnYen": 554720,
+          "roiPct": 77.04444444444445,
+          "roiWithoutMaxPct": 74.20277777777777,
+          "roiWithoutTop1Pct": 67.71805555555555,
+          "hitRatePct": 50.83333333333333,
+          "maxRaceReturnYen": 20460
+        },
+        "2026-Q3": {
+          "races": 150,
+          "stakeYen": 300000,
+          "returnYen": 192770,
+          "roiPct": 64.25666666666666,
+          "roiWithoutMaxPct": 59.89,
+          "roiWithoutTop1Pct": 55.61000000000001,
+          "hitRatePct": 45.33333333333333,
+          "maxRaceReturnYen": 13100
+        }
+      },
+      "checks": {
+        "fullRoi200": false,
+        "holdoutRoi200": false,
+        "holdout100Races": true,
+        "top1Trim100": false,
+        "maxTrim100": false,
+        "coverage": true
+      }
+    },
+    "スタンダード": {
+      "course": "スタンダード",
+      "full": {
+        "races": 3210,
+        "stakeYen": 16050000,
+        "returnYen": 12262440,
+        "roiPct": 76.40149532710281,
+        "roiWithoutMaxPct": 75.36361370716511,
+        "roiWithoutTop1Pct": 62.55277258566978,
+        "hitRatePct": 52.46105919003116,
+        "maxRaceReturnYen": 166580
+      },
+      "holdout": {
+        "races": 865,
+        "stakeYen": 4325000,
+        "returnYen": 3492550,
+        "roiPct": 80.75260115606936,
+        "roiWithoutMaxPct": 78.60115606936417,
+        "roiWithoutTop1Pct": 68.54473988439307,
+        "hitRatePct": 59.42196531791908,
+        "maxRaceReturnYen": 93050
+      },
+      "coverageFailures": [],
+      "selectedVenueDays": 642,
+      "quarterly": {
+        "2024-Q2": {
+          "races": 230,
+          "stakeYen": 1150000,
+          "returnYen": 717050,
+          "roiPct": 62.35217391304347,
+          "roiWithoutMaxPct": 54.65913043478261,
+          "roiWithoutTop1Pct": 46.81130434782609,
+          "hitRatePct": 46.08695652173913,
+          "maxRaceReturnYen": 88470
+        },
+        "2024-Q3": {
+          "races": 335,
+          "stakeYen": 1675000,
+          "returnYen": 926140,
+          "roiPct": 55.291940298507456,
+          "roiWithoutMaxPct": 51.115223880597014,
+          "roiWithoutTop1Pct": 44.05014925373134,
+          "hitRatePct": 40.8955223880597,
+          "maxRaceReturnYen": 69960
+        },
+        "2024-Q4": {
+          "races": 350,
+          "stakeYen": 1750000,
+          "returnYen": 1518540,
+          "roiPct": 86.77371428571429,
+          "roiWithoutMaxPct": 80.33257142857143,
+          "roiWithoutTop1Pct": 70.76914285714285,
+          "hitRatePct": 45.14285714285714,
+          "maxRaceReturnYen": 112720
+        },
+        "2025-Q1": {
+          "races": 355,
+          "stakeYen": 1775000,
+          "returnYen": 1142320,
+          "roiPct": 64.35605633802817,
+          "roiWithoutMaxPct": 61.93915492957747,
+          "roiWithoutTop1Pct": 56.12732394366196,
+          "hitRatePct": 52.67605633802817,
+          "maxRaceReturnYen": 42900
+        },
+        "2025-Q2": {
+          "races": 360,
+          "stakeYen": 1800000,
+          "returnYen": 1167870,
+          "roiPct": 64.88166666666667,
+          "roiWithoutMaxPct": 58.62555555555555,
+          "roiWithoutTop1Pct": 50.449444444444445,
+          "hitRatePct": 49.72222222222222,
+          "maxRaceReturnYen": 112610
+        },
+        "2025-Q3": {
+          "races": 370,
+          "stakeYen": 1850000,
+          "returnYen": 1939300,
+          "roiPct": 104.82702702702701,
+          "roiWithoutMaxPct": 95.8227027027027,
+          "roiWithoutTop1Pct": 82.94972972972973,
+          "hitRatePct": 54.864864864864856,
+          "maxRaceReturnYen": 166580
+        },
+        "2025-Q4": {
+          "races": 345,
+          "stakeYen": 1725000,
+          "returnYen": 1358670,
+          "roiPct": 78.76347826086956,
+          "roiWithoutMaxPct": 71.7304347826087,
+          "roiWithoutTop1Pct": 60.764057971014495,
+          "hitRatePct": 57.971014492753625,
+          "maxRaceReturnYen": 121320
+        },
+        "2026-Q1": {
+          "races": 355,
+          "stakeYen": 1775000,
+          "returnYen": 1657600,
+          "roiPct": 93.38591549295775,
+          "roiWithoutMaxPct": 88.143661971831,
+          "roiWithoutTop1Pct": 78.12845070422534,
+          "hitRatePct": 65.35211267605634,
+          "maxRaceReturnYen": 93050
+        },
+        "2026-Q2": {
+          "races": 360,
+          "stakeYen": 1800000,
+          "returnYen": 1249540,
+          "roiPct": 69.41888888888889,
+          "roiWithoutMaxPct": 66.23333333333333,
+          "roiWithoutTop1Pct": 60.402777777777786,
+          "hitRatePct": 57.49999999999999,
+          "maxRaceReturnYen": 57340
+        },
+        "2026-Q3": {
+          "races": 150,
+          "stakeYen": 750000,
+          "returnYen": 585410,
+          "roiPct": 78.05466666666668,
+          "roiWithoutMaxPct": 66.45466666666667,
+          "roiWithoutTop1Pct": 62.27333333333333,
+          "hitRatePct": 50.0,
+          "maxRaceReturnYen": 87000
+        }
+      },
+      "checks": {
+        "fullRoi200": false,
+        "holdoutRoi200": false,
+        "holdout100Races": true,
+        "top1Trim100": false,
+        "maxTrim100": false,
+        "coverage": true
+      }
+    },
+    "プレミアム": {
+      "course": "プレミアム",
+      "full": {
+        "races": 3210,
+        "stakeYen": 32100000,
+        "returnYen": 21722380,
+        "roiPct": 67.67096573208723,
+        "roiWithoutMaxPct": 66.13295950155764,
+        "roiWithoutTop1Pct": 46.56866043613707,
+        "hitRatePct": 36.16822429906542,
+        "maxRaceReturnYen": 493700
+      },
+      "holdout": {
+        "races": 865,
+        "stakeYen": 8650000,
+        "returnYen": 6297350,
+        "roiPct": 72.80173410404625,
+        "roiWithoutMaxPct": 67.68728323699422,
+        "roiWithoutTop1Pct": 53.27317919075144,
+        "hitRatePct": 39.76878612716763,
+        "maxRaceReturnYen": 442400
+      },
+      "coverageFailures": [],
+      "selectedVenueDays": 642,
+      "quarterly": {
+        "2024-Q2": {
+          "races": 230,
+          "stakeYen": 2300000,
+          "returnYen": 1633670,
+          "roiPct": 71.0291304347826,
+          "roiWithoutMaxPct": 59.46478260869566,
+          "roiWithoutTop1Pct": 44.633478260869566,
+          "hitRatePct": 30.0,
+          "maxRaceReturnYen": 265980
+        },
+        "2024-Q3": {
+          "races": 335,
+          "stakeYen": 3350000,
+          "returnYen": 1532560,
+          "roiPct": 45.74805970149254,
+          "roiWithoutMaxPct": 38.017910447761196,
+          "roiWithoutTop1Pct": 28.553731343283584,
+          "hitRatePct": 29.253731343283583,
+          "maxRaceReturnYen": 258960
+        },
+        "2024-Q4": {
+          "races": 350,
+          "stakeYen": 3500000,
+          "returnYen": 2546740,
+          "roiPct": 72.764,
+          "roiWithoutMaxPct": 64.58228571428572,
+          "roiWithoutTop1Pct": 50.191428571428574,
+          "hitRatePct": 34.85714285714286,
+          "maxRaceReturnYen": 286360
+        },
+        "2025-Q1": {
+          "races": 355,
+          "stakeYen": 3550000,
+          "returnYen": 2612290,
+          "roiPct": 73.5856338028169,
+          "roiWithoutMaxPct": 65.10084507042254,
+          "roiWithoutTop1Pct": 51.80084507042253,
+          "hitRatePct": 37.183098591549296,
+          "maxRaceReturnYen": 301210
+        },
+        "2025-Q2": {
+          "races": 360,
+          "stakeYen": 3600000,
+          "returnYen": 2122250,
+          "roiPct": 58.951388888888886,
+          "roiWithoutMaxPct": 51.89805555555556,
+          "roiWithoutTop1Pct": 37.79805555555556,
+          "hitRatePct": 36.94444444444444,
+          "maxRaceReturnYen": 253920
+        },
+        "2025-Q3": {
+          "races": 370,
+          "stakeYen": 3700000,
+          "returnYen": 2634220,
+          "roiPct": 71.19513513513513,
+          "roiWithoutMaxPct": 57.851891891891896,
+          "roiWithoutTop1Pct": 45.163513513513514,
+          "hitRatePct": 35.4054054054054,
+          "maxRaceReturnYen": 493700
+        },
+        "2025-Q4": {
+          "races": 345,
+          "stakeYen": 3450000,
+          "returnYen": 2343300,
+          "roiPct": 67.92173913043477,
+          "roiWithoutMaxPct": 60.823188405797104,
+          "roiWithoutTop1Pct": 44.073913043478264,
+          "hitRatePct": 38.26086956521739,
+          "maxRaceReturnYen": 244900
+        },
+        "2026-Q1": {
+          "races": 355,
+          "stakeYen": 3550000,
+          "returnYen": 1686870,
+          "roiPct": 47.5174647887324,
+          "roiWithoutMaxPct": 44.50619718309859,
+          "roiWithoutTop1Pct": 37.52338028169014,
+          "hitRatePct": 37.183098591549296,
+          "maxRaceReturnYen": 106900
+        },
+        "2026-Q2": {
+          "races": 360,
+          "stakeYen": 3600000,
+          "returnYen": 3615070,
+          "roiPct": 100.4186111111111,
+          "roiWithoutMaxPct": 88.12972222222221,
+          "roiWithoutTop1Pct": 71.04694444444445,
+          "hitRatePct": 40.27777777777778,
+          "maxRaceReturnYen": 442400
+        },
+        "2026-Q3": {
+          "races": 150,
+          "stakeYen": 1500000,
+          "returnYen": 995410,
+          "roiPct": 66.36066666666667,
+          "roiWithoutMaxPct": 58.452000000000005,
+          "roiWithoutTop1Pct": 52.92466666666667,
+          "hitRatePct": 44.666666666666664,
+          "maxRaceReturnYen": 118630
+        }
+      },
+      "checks": {
+        "fullRoi200": false,
+        "holdoutRoi200": false,
+        "holdout100Races": true,
+        "top1Trim100": false,
+        "maxTrim100": false,
+        "coverage": true
+      }
+    }
+  },
+  "completionPassed": false,
+  "promotionEligible": false,
+  "failureReasons": [
+    {
+      "course": "ライト",
+      "failed": [
+        "fullRoi200",
+        "holdoutRoi200",
+        "top1Trim100",
+        "maxTrim100"
+      ]
+    },
+    {
+      "course": "スタンダード",
+      "failed": [
+        "fullRoi200",
+        "holdoutRoi200",
+        "top1Trim100",
+        "maxTrim100"
+      ]
+    },
+    {
+      "course": "プレミアム",
+      "failed": [
+        "fullRoi200",
+        "holdoutRoi200",
+        "top1Trim100",
+        "maxTrim100"
+      ]
+    }
+  ]
+}
