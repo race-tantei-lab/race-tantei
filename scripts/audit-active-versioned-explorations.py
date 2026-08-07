@@ -21,10 +21,12 @@ for path in sorted(SCRIPT_DIR.glob("analyze-v*.py")):
     if "promotionEligible" in text or "ROI" in text or "roi" in text:
         script_hits.append(str(path.relative_to(ROOT)))
 
-print(json.dumps({
+result = {
     "activeVersionedExplorationWorkflows": workflow_hits,
+    "activeVersionedExplorationWorkflowCount": len(workflow_hits),
     "legacyVersionedAnalysisScripts": script_hits,
-}, ensure_ascii=False, indent=2))
+}
+print(json.dumps(result, ensure_ascii=False, indent=2))
 
 if workflow_hits:
     raise SystemExit("ACTIVE_VERSIONED_EXPLORATION_WORKFLOWS_FOUND")
