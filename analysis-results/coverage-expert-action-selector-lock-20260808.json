@@ -1,0 +1,22 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeActionSelectorOosEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "expertFamily":"the 24 experts pre-locked in coverage-first-light-portfolio-lock-20260808.json; no experts may be added or altered after this lock",
+  "trainingRows":"every prior race x every valid fixed expert; counterfactual return for every expert becomes training target only after that race date ends",
+  "actionFeatures":[
+    "race-only pre-race aggregates of the locked 193 runner features: mean, standard deviation, minimum and maximum for a fixed subset of core numeric features",
+    "field size, race number, surface, distance bucket, track condition and venue encoding",
+    "official win-market entropy and top probability gaps",
+    "strict-OOS pairwise-order model disagreement versus market: mean/max/standard-deviation absolute residual and positive residual mass",
+    "expert identity components: probability source, ticket score family, allocation family",
+    "the expert's selected-ticket pre-race summaries: mean/max/min ticket score, mean/max/min official odds, mean predicted probability, ticket-score dispersion, mean model/market ratio where defined"
+  ],
+  "selector":{"type":"LightGBM LambdaRank","group":"raceDate x venue over all race-expert actions","labelBins":{"0":"returnRate<0.5","1":"0.5<=returnRate<1","2":"1<=returnRate<2","3":"2<=returnRate<4","4":"returnRate>=4"},"learningRate":0.03,"numLeaves":15,"minDataInLeaf":100,"featureFraction":0.75,"maxBin":31,"rounds":120,"lambdarankTruncationLevel":20,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"sameDateLearning":false},
+  "decision":"within each race choose the highest-scoring valid expert action; then within each raceDate x venue choose exactly the five races with highest chosen-action score",
+  "coldStartFirst30Dates":{"expert":"market + probability + balanced10","raceSelection":"five races with lowest official win-market entropy in each raceDate x venue"},
+  "budget":{"yenPerSelectedRace":2000,"requiredBetTypes":["win","wide","quinella"],"maximumSingleTicketYen":200,"fullBudget":true},
+  "settlement":"actual fixed-archive JRA payouts only",
+  "completionDiagnostic":{"fullHistoryRoi":true,"largestSingleTicketReturnRemovedRoi":true,"fiveRacesPerRaceDateVenue":true},
+  "promotion":{"notEligibleUntilAllCanonicalThreeCourseGatesPass":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
