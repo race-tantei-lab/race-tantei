@@ -1,0 +1,12 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "supersedesForComputation":"analysis-results/ticket-lambdarank-policy-lock-20260808.json",
+  "lockedBeforeAnyTicketLambdaRankRoiWasEvaluated":true,
+  "reasonForChange":"the 210-date refit exceeds the execution memory/time envelope for approximately 600k pair tickets x 196 features; no ROI from this exploration was inspected before this change",
+  "unchanged":{"fixedArchive":"2024-05-04 through 2026-08-02, 7695 races","features":"unchanged 95 runner / 196 pair direct-ticket features","rankingObjective":"LightGBM lambdarank","label":"0 losing; winning min(15,1+floor(log2(actual_return_rate)))","numBoostRound":40,"maxBin":31,"featureFraction":0.60,"coldStartDateCount":30,"sameDateLearning":false,"officialOddsOnly":true,"actualJraPayoutOnly":true,"fiveRacesPerRaceDateVenue":true,"lightBudgetYen":2000,"requiredBetTypes":["win","wide","quinella"],"maximumSingleTicketShare":0.10},
+  "retrainDateIndices":[30,90,150],
+  "finalBlockRule":"the model fitted using dates strictly before date index 150 is frozen and used for every race from date index 150 through 243",
+  "raceSelection":{"selector":"expanding LightGBM Huber prior-date-only","retrainDateIndices":[30,90,150],"finalBlockFrozen":true},
+  "completionGates":{"lightFullHistoryRoiPctAtLeast":200,"lightLargestTicketRemovedRoiPctAtLeast":100,"allOtherCanonicalConstraints":true},
+  "promotion":{"notEligibleUntilAllThreeCoursesPass":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
