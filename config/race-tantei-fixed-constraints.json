@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
   "immutableProjectRules": {
     "minimumRacesPerVenueDay": 5,
@@ -21,16 +21,18 @@
     "calendarSeasonalityMustBeModeled": true
   },
   "validationProtocol": {
-    "type": "season_stratified_prequential_holdout",
-    "splitConfig": "config/season-stratified-holdout-v1.json",
+    "type": "nested_season_stratified_group_holdout",
+    "visibleDevelopmentValidationConfig": "config/season-stratified-holdout-v1.json",
+    "untouchedFinalAuditConfig": "config/season-stratified-final-audit-v1.json",
     "splitUnit": "raceDate",
     "stratification": "year-month",
-    "holdoutFractionApprox": 0.2,
     "sameDateMustStayTogether": true,
     "randomRaceLevelSplitForbidden": true,
-    "heldoutOutcomeUseBeforeItsRaceDateForbidden": true,
-    "pastHeldoutOutcomeMayEnterFutureTrainingAfterDate": true,
-    "predictionUsesOnlyInformationStrictlyAvailableBeforeRaceDate": true,
+    "finalAuditOutcomeUseForDiscoveryForbidden": true,
+    "developmentMayUseAllNonFinalAuditDates": true,
+    "historicalFinalAuditIsGeneralizationTestNotWalkForwardReplay": true,
+    "nonFinalDatesBeforeOrAfterAHistoricalAuditDateMayBeUsedForModelFitting": true,
+    "livePredictionStillUsesOnlyInformationAvailableAtPredictionTime": true,
     "singleTailPeriodAsSoleCompletionHoldoutForbidden": true,
     "dateFeaturesRequired": [
       "calendarYear",
@@ -51,7 +53,7 @@
     "minimumFinalHoldoutRacesPerCourse": 100,
     "requireEveryCourseToPass": true,
     "requireFullHistoricalRoiPct": 200.0,
-    "requireSeasonStratifiedHoldoutRoiPct": 200.0,
+    "requireSeasonStratifiedFinalAuditRoiPct": 200.0,
     "requireRoiWithoutTop1Pct": 100.0,
     "requireFullHistoricalPeriodCoverage": true,
     "candidateVersionNumbersForbidden": true,
