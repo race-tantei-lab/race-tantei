@@ -72,3 +72,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/recover-canonical-177' -f description='candidate table inspection failed' -f target_url="$TARGET" >/dev/null
+# recovery-run-20260809
