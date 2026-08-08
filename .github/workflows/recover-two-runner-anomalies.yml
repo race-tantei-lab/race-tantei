@@ -1,5 +1,5 @@
-name: Recover two runner anomalies
-run-name: Recover two runner anomalies · ${{ github.sha }}
+name: Recover final runner anomalies
+run-name: Recover final runner anomalies · ${{ github.sha }}
 on:
   push:
     branches: [analysis/unified-dataset-20260808]
@@ -21,7 +21,7 @@ jobs:
       TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Publish start
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/two-runner-anomalies' -f description='残り2レースをJRA公式結果で確認中' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/final-runner-anomalies' -f description='残り4レースをJRA公式結果で確認中' -f target_url="$TARGET" >/dev/null
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
       - run: python -m pip install --disable-pip-version-check beautifulsoup4
@@ -31,19 +31,23 @@ jobs:
           import json,os,urllib.request
           from pathlib import Path
           from bs4 import BeautifulSoup
-          targets={'2026-08-01-niigata-10','2026-08-02-sapporo-06'}
+          targets={'2026-08-01-niigata-04','2026-08-01-niigata-09','2026-08-01-niigata-10','2026-08-02-sapporo-06'}
           acc=os.environ['CLOUDFLARE_ACCOUNT_ID'];db=os.environ['CLOUDFLARE_D1_DATABASE_ID'];tok=os.environ['CLOUDFLARE_API_TOKEN'];ep=f'https://api.cloudflare.com/client/v4/accounts/{acc}/d1/database/{db}/query'
-          body=json.dumps({'sql':"SELECT race_id raceId,result_url resultUrl FROM rt_races WHERE race_id IN (?,?)",'params':sorted(targets)}).encode()
+          qs=','.join('?' for _ in targets)
+          body=json.dumps({'sql':f"SELECT race_id raceId,result_url resultUrl FROM rt_races WHERE race_id IN ({qs})",'params':sorted(targets)}).encode()
           req=urllib.request.Request(ep,data=body,headers={'Authorization':f'Bearer {tok}','Content-Type':'application/json'},method='POST')
           with urllib.request.urlopen(req,timeout=90) as r:p=json.loads(r.read().decode())
           rows=p.get('result',[{}])[0].get('results',[])
+          if len(rows)!=4: raise RuntimeError(f'EXPECTED_4_GOT_{len(rows)}')
           out=[]
           hdr={'User-Agent':'Mozilla/5.0 (compatible; RaceTanteiAudit/1.0; +https://www.jra.go.jp/)','Accept-Language':'ja'}
           for x in rows:
             with urllib.request.urlopen(urllib.request.Request(x['resultUrl'],headers=hdr),timeout=45) as r: raw=r.read()
-            html=raw.decode('utf-8','replace')
-            if '着順' not in html: html=raw.decode('cp932','replace')
-            soup=BeautifulSoup(html,'html.parser')
+            candidates=[]
+            for enc in ('utf-8','cp932'):
+              html=raw.decode(enc,'replace'); soup=BeautifulSoup(html,'html.parser'); txt=' '.join(soup.stripped_strings)
+              candidates.append((txt.count('着順')+txt.count('馬名'),soup,enc))
+            _,soup,enc=max(candidates,key=lambda z:z[0])
             tables=[]
             for t in soup.find_all('table'):
               text=' '.join(t.stripped_strings)
@@ -53,19 +57,20 @@ jobs:
                   cells=[' '.join(c.stripped_strings) for c in tr.find_all(['th','td'])]
                   if cells: trs.append(cells)
                 tables.append(trs)
-            out.append({'raceId':x['raceId'],'resultUrl':x['resultUrl'],'tables':tables})
+            out.append({'raceId':x['raceId'],'resultUrl':x['resultUrl'],'decodedAs':enc,'tables':tables})
           Path('artifacts').mkdir(exist_ok=True)
-          Path('artifacts/two-runner-official-rows.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          Path('artifacts/final-runner-official-rows.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
           print(json.dumps({'races':len(out),'tableCounts':[len(x['tables']) for x in out]},ensure_ascii=False))
+          if any(not x['tables'] for x in out): raise RuntimeError('RESULT_TABLE_MISSING')
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: two-runner-official-rows
-          path: artifacts/two-runner-official-rows.json
+          name: final-runner-official-rows
+          path: artifacts/final-runner-official-rows.json
           retention-days: 7
       - name: Publish success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/two-runner-anomalies' -f description='残り2レースJRA公式確認完了' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/final-runner-anomalies' -f description='残り4レースJRA公式確認完了' -f target_url="$TARGET" >/dev/null
       - name: Publish failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/two-runner-anomalies' -f description='残り2レースJRA公式確認失敗' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/final-runner-anomalies' -f description='残り4レースJRA公式確認失敗' -f target_url="$TARGET" >/dev/null
