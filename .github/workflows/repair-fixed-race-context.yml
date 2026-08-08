@@ -1,0 +1,80 @@
+name: Repair fixed race context
+run-name: Repair fixed race context · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/repair-fixed-race-context.py"
+      - ".github/workflows/repair-fixed-race-context.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+concurrency:
+  group: repair-fixed-race-context
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish repair start
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='analysis/fixed-race-context' \
+            -f description='JRA公式結果から芝ダート・距離を復元中' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install parser
+        run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Verify immutable constraints
+        run: python scripts/verify-race-tantei-fixed-constraints.py
+      - name: Repair fixed race context
+        run: python scripts/repair-fixed-race-context.py
+      - name: Upload repaired context
+        uses: actions/upload-artifact@v4
+        with:
+          name: fixed-race-context
+          path: |
+            artifacts/fixed-race-context.json.gz
+            artifacts/fixed-race-context-meta.json
+          compression-level: 0
+          retention-days: 30
+      - name: Save compact repair metadata
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f artifacts/fixed-race-context-meta.json
+          git commit -m "Save fixed race context repair result" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+      - name: Publish repair success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='analysis/fixed-race-context' \
+            -f description='芝ダート・距離の復元98%以上を確認' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Publish repair failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='analysis/fixed-race-context' \
+            -f description='芝ダート・距離の復元が98%未満' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
