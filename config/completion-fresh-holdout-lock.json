@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "createdAtJst": "2026-08-08T09:15:00+09:00",
+  "purpose": "Preserve a completely unused final holdout for the completion-only v16 gate.",
+  "developmentArchive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "finishedRaces": 7695,
+    "frozen": true
+  },
+  "freshFinalHoldout": {
+    "startDateInclusive": "2026-08-08",
+    "minimumSelectedRacesPerCourse": 100,
+    "mayBeUsedForExploration": false,
+    "mayBeOpenedBeforeDevelopmentGatePasses": false,
+    "singleEvaluationAfterDevelopmentGatePasses": true
+  },
+  "developmentGateBeforeOpeningHoldout": {
+    "allCoursesRequired": true,
+    "minimumFullHistoricalRoiPct": 200.0,
+    "minimumRoiWithoutTop1Pct": 100.0,
+    "minimumRacesPerVenueDay": 5,
+    "allCanonicalCourseBudgetsAndBetTypesRequired": true,
+    "officialOddsAndActualJraPayoutsOnly": true,
+    "postResultLeakageForbidden": true
+  },
+  "statusAtLock": {
+    "completedModelExists": false,
+    "productionChanged": false,
+    "versionAssigned": false,
+    "reason": "The previous 2026-05 final holdout had already been opened by older project runs, so a new clean holdout is required. This lock does not promote any current exploration result."
+  }
+}
