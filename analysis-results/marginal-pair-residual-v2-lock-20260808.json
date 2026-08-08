@@ -1,0 +1,14 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "inputs":"locked 51 pre-race pair features plus official pair market probability/log odds plus relevant top2/top3 horse marginal market and strict-OOS residual features",
+  "marginalPairFeatures":["two horse market marginals: min/max/sum/absdiff","two horse strict-OOS marginals: min/max/sum/absdiff","two horse log OOS/market marginal edges: min/max/sum/absdiff"],
+  "betSpecificSignal":{"quinella":"top2 marginal model","wide":"top3 marginal model"},
+  "model":{"type":"LightGBM binary market-residual classifier with official pair market probability as init_score","learningRate":0.035,"numLeaves":31,"minDataInLeaf":500,"featureFraction":0.80,"rounds":150,"lambdaL2":10.0,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"coldStartDates":30,"sameDateLearning":false},
+  "postPredictionNormalization":{"quinellaRaceMass":1,"wideRaceMass":3},
+  "ticketScore":"strict-OOS pair hit probability multiplied by corresponding JRA official odds; wide ranks on official lower bound",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "completionUse":"final Light still must select exactly five races per raceDate x venue, spend exactly 2000 yen, include win/wide/quinella, and cap each ticket at 200 yen",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
