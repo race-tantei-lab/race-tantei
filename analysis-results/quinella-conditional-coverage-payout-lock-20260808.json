@@ -1,0 +1,17 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "fixedPortfolio":"same fixed nine-quinella-ticket + mandatory win/wide Light portfolio as quinella-coverage-payout-decomposition-lock-20260808.json",
+  "coverageModel":"unchanged strict-OOS LightGBM binary model for whether a winning quinella is inside the fixed top-nine set",
+  "conditionalPayoutTarget":"min(actual winning quinella payout multiplier,50), trained only on prior races where the fixed top-nine set actually contained a winning quinella",
+  "conditionalPayoutModel":{"type":"LightGBM Huber regression","learningRate":0.03,"numLeaves":7,"minDataInLeaf":20,"featureFraction":0.85,"rounds":100,"lambdaL2":8.0,"predictionClippedTo":[0,50]},
+  "features":"same locked 44 pre-race race/portfolio summary features",
+  "oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],
+  "predictedQuinellaTop9Return":"coverageProbability * predictedConditionalClippedPayout / 9",
+  "predictedLightRaceReturn":"0.90*predictedQuinellaTop9Return + 0.05*mandatoryWinPreRaceEV + 0.05*mandatoryWidePreRaceEV",
+  "raceSelection":"exactly five highest predictedLightRaceReturn races per raceDate x venue; never fewer",
+  "sameDateLearning":false,
+  "settlement":"actual fixed-archive JRA payouts only; clipping is used only for selection-model target, not settlement",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
