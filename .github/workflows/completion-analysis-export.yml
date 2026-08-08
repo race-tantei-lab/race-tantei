@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: write
+  statuses: write
 
 concurrency:
   group: completion-analysis-dataset-export
@@ -21,10 +22,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      GH_TOKEN: ${{ github.token }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      - name: Publish export start
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='analysis/completion-dataset-export' \
+            -f description='固定7,695レースの履歴・払戻データを出力中' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -58,3 +68,19 @@ jobs:
           git commit -m "Save completion analysis dataset pointer" || exit 0
           git pull --rebase origin main
           git push origin HEAD:main
+      - name: Publish export success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='analysis/completion-dataset-export' \
+            -f description='固定解析データ出力完了' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Publish export failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='analysis/completion-dataset-export' \
+            -f description='固定解析データ出力失敗' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
