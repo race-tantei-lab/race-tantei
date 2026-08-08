@@ -1,0 +1,56 @@
+name: Export selected historical official odds
+run-name: Export selected historical official odds · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/export-selected-historical-official-odds.py"
+      - ".github/workflows/export-selected-historical-official-odds.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: export-selected-historical-official-odds
+  cancel-in-progress: true
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/historical-official-odds-export' -f description='固定3,210レースのJRA公式オッズを復元中' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Verify constraints
+        run: python scripts/verify-race-tantei-fixed-constraints.py
+      - name: Export official odds
+        run: python scripts/export-selected-historical-official-odds.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: selected-historical-official-odds
+          path: |
+            artifacts/selected-historical-official-odds.jsonl.gz
+            artifacts/selected-historical-official-odds-meta.json
+          compression-level: 0
+          retention-days: 14
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/historical-official-odds-export' -f description='固定レースJRA公式オッズ復元成功' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/historical-official-odds-export' -f description='固定レースJRA公式オッズ復元失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
