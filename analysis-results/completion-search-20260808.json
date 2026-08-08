@@ -1,0 +1,103 @@
+{
+  "generatedAt": "2026-08-08",
+  "purpose": "internal completion search record; not a model and not production",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "versionAssigned": false,
+  "finalHoldoutOpened": false,
+  "finalHoldoutStart": "2026-05-01",
+  "fixedData": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "finishedRaces": 7695,
+    "runners": 106122,
+    "resultRows": 106114,
+    "payoutRows": 91856,
+    "missingPayoutRaces": 0
+  },
+  "fixedRulesObserved": {
+    "minimumRacesPerVenueDay": 5,
+    "completionRoiPct": 200.0,
+    "requireEveryCourseToPass": true,
+    "requireFullHistoricalRoiPct": 200.0,
+    "requireFinalHoldoutRoiPct": 200.0,
+    "requireRoiWithoutTop1Pct": 100.0,
+    "officialOddsOnly": true,
+    "actualJraPayoutsOnly": true,
+    "syntheticOddsForbidden": true,
+    "postResultLeakageForbidden": true,
+    "candidateVersionNumbersForbidden": true,
+    "incompleteCandidateIsNotModel": true
+  },
+  "courses": {
+    "ライト": {"budgetYen": 2000, "ticketCount": 6, "betTypes": ["単勝", "ワイド", "馬連"]},
+    "スタンダード": {"budgetYen": 5000, "ticketCount": 15, "betTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複"]},
+    "プレミアム": {"budgetYen": 10000, "ticketCount": 16, "betTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"]}
+  },
+  "searchAudit": {
+    "strictFeatureTiming": "same-day results are added only after every prediction/selection for that date has been fixed",
+    "runnerFeatureCount": 174,
+    "historicalFeatures": [
+      "official win odds and popularity",
+      "horse/jockey/trainer chronological win and top3 records",
+      "horse-jockey and venue interaction histories",
+      "assigned weight, horse weight and weight change",
+      "recent finish trend",
+      "relative historical race-time trend",
+      "relative historical final-3F trend",
+      "historical market residuals"
+    ],
+    "modelFamiliesTried": [
+      "expanding-window HistGradientBoosting winner/top3 models",
+      "direct realized single-return regression",
+      "second-stage race selection models",
+      "online rank-pattern learning",
+      "LightGBM LambdaRank and rank_xendcg expanding-window ranking",
+      "expanded rank-pattern portfolio search"
+    ],
+    "staticPatternUpperBound": {
+      "note": "These numbers were selected after observing the development payouts and are therefore diagnostics only, not valid candidates.",
+      "lightRoiPct": 232.50925266903914,
+      "standardRobustRoiPct": 328.44,
+      "premiumRobustRoiPct": 1142.9193238434164,
+      "disqualifiedAsPostHocPatternMining": true
+    },
+    "strictTransferCheck": {
+      "method": "choose rules from 2024-05-04..2025-04-30 only, then freeze and evaluate 2025-05-01..2026-04-30",
+      "lightValidationRoiPct": 46.15244755244755,
+      "standardValidationRoiPct": 14.484055944055942,
+      "premiumValidationRoiPct": 7.881538461538462,
+      "interpretation": "static high-ROI rank patterns did not transfer"
+    },
+    "bestFullyChronologicalOnlinePortfolio": {
+      "decisionRule": "each date is selected and bet using only statistics available before that date; all same-date outcomes are incorporated only afterwards",
+      "minimumRacesPerVenueDay": 5,
+      "selectedRacesPerCourse": 2810,
+      "light": {
+        "roiPct": 97.14857651245552,
+        "roiWithoutTop1Pct": 86.13790035587189,
+        "halfYearRoiPct": [105.68394160583942, 94.45323741007195, 86.91586206896552, 102.03546099290782]
+      },
+      "standard": {
+        "roiPct": 85.52099644128114,
+        "roiWithoutTop1Pct": 74.33786476868327,
+        "halfYearRoiPct": [101.98218978102189, 91.14647482014388, 80.08827586206897, 69.56794326241135]
+      },
+      "premium": {
+        "roiPct": 91.34046263345196,
+        "roiWithoutTop1Pct": 73.09505338078291,
+        "halfYearRoiPct": [125.17708029197081, 90.82733812949641, 84.37255172413794, 66.13517730496454]
+      }
+    }
+  },
+  "dataLimitation": {
+    "description": "For most of the frozen historical archive, race_name is a placeholder and conditions/surface/distance are missing, so race distance/surface/class cannot be reconstructed from the stored pre-race fields without inference or external repair.",
+    "syntheticRepairUsed": false
+  },
+  "conclusion": {
+    "completedModelExists": false,
+    "reason": "No leakage-safe development policy found in this search reaches the mandatory 200% ROI in every course. The apparent 200%+ static patterns fail forward transfer and are rejected rather than promoted.",
+    "holdoutAction": "untouched because the development completion gate did not pass",
+    "productionAction": "none"
+  }
+}
