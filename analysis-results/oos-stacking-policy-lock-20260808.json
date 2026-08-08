@@ -1,0 +1,16 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeStackedReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "purpose":"learn when to trust model residuals versus the official market using only already-unseen predictions from earlier dates",
+  "stackingSchedule":{"30to90":"official market prior only; no prior OOS stack training exists","90to150":"train stacker on strict-OOS predictions from dates30to89","150to210":"train on dates30to149","210to244":"train on dates30to209"},
+  "winBases":["normalized JRA official win probability","strict-OOS speed/gate residual probability","strict-OOS Elo/decay residual probability"],
+  "pairBases":{"wide":["normalized JRA official wide market prior","strict-OOS 413-feature rich pair probability"],"quinella":["normalized JRA official quinella market prior","strict-OOS 413-feature rich pair probability"]},
+  "stacker":{"type":"L2 logistic regression","C":1.0,"features":"logit of each base probability plus model-minus-market logit residuals","classWeight":null,"sameDateLearning":false},
+  "postNormalization":{"winRaceMass":1,"wideRaceMass":3,"quinellaRaceMass":1},
+  "ticketScore":"stacked strict-OOS probability multiplied by JRA official odds; wide uses lower bound",
+  "diagnostic":{"topKPerRace":[1,2,3,5,10],"largestTicketRemoved":true,"noFullPeriodThresholdOptimization":true},
+  "nextStageOnlyIfUseful":"five-race selection and exact Light allocation must be separately locked before portfolio evaluation",
+  "completionGatesUnchanged":{"allCoursesFullHistoryRoiPctAtLeast":200,"allCoursesLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudgets":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
