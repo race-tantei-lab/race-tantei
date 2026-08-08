@@ -1,6 +1,7 @@
 {
   "createdAt": "2026-08-09",
-  "status": "finalized_saved",
+  "verifiedAtJst": "2026-08-09T02:46:00+09:00",
+  "status": "FINAL_MODEL_LOCKED_AND_VERIFIED",
   "modelVersion": "v16",
   "modelCompleted": true,
   "productionChanged": false,
@@ -8,6 +9,7 @@
   "doNotDeployToSite": true,
   "frozenModel": {
     "configPath": "config/v16-uniform-rule-model.json",
+    "configBlobSha": "b7dd167e922c751cff08e17d83aff60ac198392b",
     "configFreezeCommit": "42a1dd1305963a6a2c44ba47f2ab35a3a399ac7d",
     "policy": "uniform-rule-800-dedup-balanced-50-50",
     "ruleCount": 800,
@@ -16,7 +18,10 @@
     "selectorCommit": "feabb46c3128957bad874f9ee1f9f4460fff47eb",
     "completionPath": "analysis-results/v16-uniform-rule-completion-20260808.json",
     "completionBlobSha": "5593c8bb85f84884c9408d980130129222049a8a",
-    "completionCommit": "7a50d8a9d4fc4d2e00cb0f18ca6c2ecdfe4f2d85"
+    "completionCommit": "7a50d8a9d4fc4d2e00cb0f18ca6c2ecdfe4f2d85",
+    "constraintsPath": "config/race-tantei-fixed-constraints.json",
+    "constraintsBlobSha": "5a836cb030f0e42a35cfb733ae7204cc24d486e7",
+    "constraintsVersion": 12
   },
   "executionPolicy": {
     "selectedRacesPerVenueDay": 5,
@@ -48,5 +53,12 @@
     },
     "allCompletionGatesPassed": true
   },
-  "lockRule": "Do not modify, deploy, or replace this finalized v16 model without an explicit later user instruction. Site and production remain unchanged by this lock operation."
+  "verification": {
+    "modelConfigSelectorCompletionAndConstraintsConsistent": true,
+    "modelConfigRuleCountMatchesSelectorExpectedRuleCount": true,
+    "stakeSplitMatchesCompletionAudit": true,
+    "courseBudgetsMatchConstraints": true,
+    "siteAndProductionUnchanged": true
+  },
+  "lockRule": "Do not modify, deploy, retune, or replace this finalized v16 model without an explicit later user instruction. Read-only temporary evaluations must use these exact frozen artifacts and must not write to the production database."
 }
