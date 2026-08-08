@@ -1,0 +1,77 @@
+{
+  "status": "internal development diagnostic; not a model; no version assigned",
+  "generatedAt": "2026-08-08",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "finalHoldoutEvaluated": false,
+  "fixedArchive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "races": 7695,
+    "developmentDateIndexEndExclusive": 216,
+    "finalHoldoutStartDateIndex": 216
+  },
+  "canonicalConstraints": {
+    "minimumRacesPerVenueDay": 5,
+    "selectedRacesPerVenueDayInDevelopment": 5,
+    "ticketCountFixed": false,
+    "ticketCountMayVaryByCourseRaceAndPolicy": true,
+    "fullBudgetUsed": true,
+    "officialJraOddsOnly": true,
+    "actualJraPayoutsOnly": true,
+    "sameDateOutcomeLearning": false,
+    "postResultLeakageForbidden": true,
+    "requiredBetTypes": {
+      "ライト": ["単勝", "ワイド", "馬連"],
+      "スタンダード": ["単勝", "ワイド", "馬連", "馬単", "3連複"],
+      "プレミアム": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"]
+    },
+    "budgetsYen": {"ライト": 2000, "スタンダード": 5000, "プレミアム": 10000}
+  },
+  "directModels": {
+    "単勝": "corrected official-win-odds chronological OOS runner model",
+    "ワイド": "620874-row direct pair chronological OOS model",
+    "馬連": "620874-row direct pair chronological OOS model",
+    "馬単": "6735-race direct combination chronological OOS model",
+    "3連複": "6735-race direct combination chronological OOS model",
+    "3連単": "6735-race direct combination chronological OOS model with fixed pre-race candidate generator based only on official odds and OOS probabilities"
+  },
+  "bestVerifiedDevelopmentResults": {
+    "ライト": {
+      "roiPct": 85.197,
+      "roiWithoutLargestSingleTicketReturnPct": 78.991,
+      "selectedRaces": 2810,
+      "source": "direct Wide/Quinella pair models with flexible ticket counts and allocation"
+    },
+    "スタンダード": {
+      "roiPct": 87.65772241992883,
+      "roiWithoutLargestSingleTicketReturnPct": 79.00896797153025,
+      "selectedRaces": 2810,
+      "averageTicketCount": 11.0,
+      "developmentSegmentsPct": [58.02307692307692, 106.16291390728477, 115.47928143712575, 56.76024096385542],
+      "source": "direct models for Wide, Quinella, Exacta and Trio; flexible type allocation"
+    },
+    "プレミアム": {
+      "roiPct": 72.09551601423487,
+      "roiWithoutLargestSingleTicketReturnPct": 69.4226334519573,
+      "selectedRaces": 2810,
+      "averageTicketCount": 35.0,
+      "developmentSegmentsPct": [64.13358974358974, 78.87801324503312, 95.49005988023953, 46.13156626506024],
+      "source": "direct models for Wide, Quinella, Exacta, Trio and Trifecta; flexible type allocation"
+    }
+  },
+  "interpretation": {
+    "marketTakeoutLikeBaselineObserved": true,
+    "stableMarketBeatingEdgeDemonstrated": false,
+    "developmentRoi200GatePassed": false,
+    "developmentRoi150GatePassed": false,
+    "largeSinglePeriodJackpotResultsObserved": true,
+    "largeSinglePeriodResultsRejectedAsCompletionEvidence": true
+  },
+  "decision": {
+    "openFinalHoldout": false,
+    "promotion": "forbidden",
+    "assignV16": false,
+    "reason": "Even after all required bet types were given direct or dedicated chronological OOS models and ticket counts were made flexible, every course remained below 100 percent over the complete development period. Opening the untouched final holdout or claiming 200 percent would violate the fixed completion rules."
+  }
+}
