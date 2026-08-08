@@ -5,6 +5,7 @@ on:
     paths: [.github/workflows/aug8-settlement-readonly.yml]
 permissions:
   contents: read
+  statuses: write
 jobs:
   export:
     runs-on: ubuntu-latest
@@ -14,6 +15,11 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
     steps:
+      - name: Publish start
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/aug8-settlement-readonly' -f description='8/8精算用D1データを読取中' -f target_url="$TARGET" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
@@ -41,8 +47,7 @@ jobs:
             dc='race_date' if 'race_date' in cols else None
             try:
               if dc: rows=q(f'SELECT * FROM {t} WHERE {dc}=?',['2026-08-08'])
-              elif rc:
-                rows=q(f"SELECT x.* FROM {t} x JOIN rt_races r ON r.race_id=x.{rc} WHERE r.race_date=?",['2026-08-08'])
+              elif rc: rows=q(f"SELECT x.* FROM {t} x JOIN rt_races r ON r.race_id=x.{rc} WHERE r.race_date=?",['2026-08-08'])
               else: continue
               (out/f'{t}.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2,default=str)+'\n',encoding='utf-8')
               summary[t]=len(rows)
@@ -55,3 +60,15 @@ jobs:
           name: aug8-settlement-readonly
           path: artifacts/aug8-settlement/
           retention-days: 1
+      - name: Publish success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/aug8-settlement-readonly' -f description='8/8精算用D1データ読取完了' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/aug8-settlement-readonly' -f description='8/8精算用D1データ読取失敗' -f target_url="$TARGET" >/dev/null
