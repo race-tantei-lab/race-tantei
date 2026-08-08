@@ -1,0 +1,66 @@
+{
+  "status": "analysis exploration lock; not a model; no version assigned",
+  "explorationId": "canonical-six-ticket-light-action-selector-20260808",
+  "lockedBeforeReturnEvaluation": true,
+  "fixedArchive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "races": 7695,
+    "futureDataAllowed": false,
+    "sameDateOutcomeAllowedForDecision": false
+  },
+  "officialOdds": {
+    "source": "all7695-official-odds fixed JRA archive",
+    "synthetic": false,
+    "estimated": false,
+    "missing": "remain missing"
+  },
+  "probabilitySources": [
+    "normalized corrected JRA official win market with official pair-market priors",
+    "strict prior-date OOS corrected weighted win model with pair probabilities adjusted only by its pre-race horse edge",
+    "50/50 pre-race blend of the preceding market and strict-OOS model sources"
+  ],
+  "ticketScoreFamilies": [
+    "probability",
+    "probability_times_sqrt_official_odds"
+  ],
+  "ticketStructures": [
+    {"id":"w1-wide2-q3","win":1,"wide":2,"quinella":3},
+    {"id":"w1-wide1-q4","win":1,"wide":1,"quinella":4},
+    {"id":"w2-wide1-q3","win":2,"wide":1,"quinella":3},
+    {"id":"w1-wide3-q2","win":1,"wide":3,"quinella":2}
+  ],
+  "expertCount": 24,
+  "budget": {
+    "course": "ライト",
+    "yenPerSelectedRace": 2000,
+    "ticketCount": 6,
+    "requiredBetTypes": ["単勝", "ワイド", "馬連"],
+    "stakeProfileByDescendingPredictedEvYen": [400, 400, 300, 300, 300, 300],
+    "fullBudget": true,
+    "singleOnlyForbidden": true
+  },
+  "selector": {
+    "type": "LightGBM LambdaRank",
+    "trainingRows": "every prior race x every one of the 24 locked expert actions",
+    "targetAvailableOnlyAfterRaceDateEnds": true,
+    "labelBins": {
+      "0": "returnRate<0.5",
+      "1": "0.5<=returnRate<1",
+      "2": "1<=returnRate<2",
+      "3": "2<=returnRate<4",
+      "4": "returnRate>=4"
+    },
+    "oosDateBlocks": [[30,90],[90,150],[150,216],[216,244]],
+    "sameDateLearning": false,
+    "decision": "choose the highest selector score expert inside each race, then choose exactly five races with the highest chosen-action score inside each raceDate x venue",
+    "coldStartFirst30Dates": "fixed market probability + w1-wide2-q3 action, five lowest corrected official win-market entropy races per raceDate x venue"
+  },
+  "completionUse": {
+    "oracleForbiddenForPromotion": true,
+    "finalHoldoutStartsAtDateIndex": 216,
+    "finalHoldoutFirstDate": "2026-05-02",
+    "promotionOnlyAfterCanonicalThreeCourseGatesPass": true,
+    "nameIfAndOnlyIfCompleted": "v16"
+  }
+}
