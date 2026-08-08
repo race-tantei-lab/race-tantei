@@ -1,5 +1,5 @@
-name: JRA historical odds page probe
-run-name: JRA historical odds page probe · ${{ github.sha }}
+name: JRA historical odds type map
+run-name: JRA historical odds type map · ${{ github.sha }}
 
 on:
   push:
@@ -21,66 +21,54 @@ jobs:
       STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Start
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/jra-historical-odds' -f description='JRA過去オッズをlowercase cnameで検証中' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ全券種を構造解析中' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: python -m pip install --disable-pip-version-check beautifulsoup4
-      - name: Fetch historical odds page exactly like doAction
+      - name: Map all odds pages
         run: |
           python - <<'PY'
           import json, urllib.request, urllib.parse, re, http.cookiejar
           from pathlib import Path
           from bs4 import BeautifulSoup
-
           result_url='https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0108202403050220240504%2F2B'
-          odds_cname='pw151ou1008202403050220240504Z/4C'
-          cj=http.cookiejar.CookieJar()
-          opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
-          common={'User-Agent':'Mozilla/5.0','Accept-Language':'ja','Referer':'https://www.jra.go.jp/'}
-
-          with opener.open(urllib.request.Request(result_url,headers=common),timeout=60) as r0:
-              result_raw=r0.read()
-
-          data=urllib.parse.urlencode({'cname':odds_cname}).encode('ascii')
-          req=urllib.request.Request(
-              'https://www.jra.go.jp/JRADB/accessO.html', data=data,
-              headers={**common,'Referer':result_url,'Content-Type':'application/x-www-form-urlencoded'},
-              method='POST'
-          )
-          with opener.open(req,timeout=60) as r:
-              raw=r.read(); status=r.status; final=r.geturl(); ctype=r.headers.get('content-type')
-
-          html=raw.decode('cp932','replace')
-          soup=BeautifulSoup(html,'html.parser')
-          text=' '.join(soup.stripped_strings)
-          tables=[]
-          for table in soup.find_all('table'):
-              rows=[]
-              for tr in table.find_all('tr')[:180]:
-                  cells=[' '.join(c.stripped_strings) for c in tr.find_all(['th','td'])]
-                  if cells: rows.append(cells)
-              if rows: tables.append(rows)
-
+          first='pw151ou1008202403050220240504Z/4C'
+          cj=http.cookiejar.CookieJar(); op=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+          hdr={'User-Agent':'Mozilla/5.0','Accept-Language':'ja','Referer':'https://www.jra.go.jp/'}
+          with op.open(urllib.request.Request(result_url,headers=hdr),timeout=60) as r: r.read()
+          def post(cname, referer=result_url):
+              data=urllib.parse.urlencode({'cname':cname}).encode('ascii')
+              req=urllib.request.Request('https://www.jra.go.jp/JRADB/accessO.html',data=data,headers={**hdr,'Referer':referer,'Content-Type':'application/x-www-form-urlencoded'},method='POST')
+              with op.open(req,timeout=60) as r: raw=r.read(); final=r.geturl()
+              html=raw.decode('cp932','replace'); soup=BeautifulSoup(html,'html.parser')
+              return raw,final,html,soup
+          raw,final,html,soup=post(first)
           calls=[]
           for tag in soup.find_all(onclick=True):
               v=tag.get('onclick','')
-              if 'doAction' in v: calls.append(v)
-          cnames=sorted(set(re.findall(r"pw\d+[A-Za-z0-9_/.-]+",html)))
-          contains={x:(x in text) for x in ['単勝','複勝','枠連','ワイド','馬連','馬単','3連複','3連単']}
-          out={
-              'status':status,'contentType':ctype,'finalUrl':final,'bytes':len(raw),
-              'title':soup.title.get_text(' ',strip=True) if soup.title else '',
-              'contains':contains,'tableCount':len(tables),'tables':tables[:30],
-              'doActionCalls':calls[:100],'cnames':cnames[:200],'cookieCount':len(list(cj)),
-              'textPreview':text[:8000]
-          }
+              m=re.search(r"doAction\('/JRADB/accessO\.html'\s*,\s*'([^']+)'\)",v)
+              if m and re.match(r'pw15[1-8]o[up]',m.group(1)):
+                  calls.append(m.group(1))
+          # current-race type pages only
+          current=[x for x in dict.fromkeys(calls) if '10082024030502' in x and re.match(r'pw15[1-8]o',x)]
+          pages=[]
+          for cname in current:
+              raw2,final2,html2,soup2=post(cname,'https://www.jra.go.jp/JRADB/accessO.html')
+              tables=[]
+              for table in soup2.find_all('table'):
+                  rr=[]
+                  for tr in table.find_all('tr')[:30]:
+                      cells=[' '.join(c.stripped_strings) for c in tr.find_all(['th','td'])]
+                      if cells: rr.append(cells)
+                  if rr: tables.append(rr)
+              pages.append({'cname':cname,'title':soup2.title.get_text(' ',strip=True) if soup2.title else '', 'bytes':len(raw2),'finalUrl':final2,'tables':tables[:5]})
           Path('artifacts').mkdir(exist_ok=True)
+          out={'race':'2024-05-04-kyoto-02','pages':pages}
           Path('artifacts/jra-historical-odds-link-probe.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          print(json.dumps({'status':status,'finalUrl':final,'bytes':len(raw),'title':out['title'],'contains':contains,'tableCount':len(tables),'cookieCount':out['cookieCount'],'cnames':cnames[:50]},ensure_ascii=False))
-          if final.endswith('error013.html') or not any(contains.values()):
-              raise SystemExit('ODDS_PAGE_UNAVAILABLE')
+          print(json.dumps([{'cname':x['cname'],'title':x['title'],'tables':len(x['tables']),'sample':x['tables'][0][:3] if x['tables'] else []} for x in pages],ensure_ascii=False))
+          if len(pages) < 6: raise SystemExit('TYPE_MAP_INCOMPLETE')
           PY
       - uses: actions/upload-artifact@v4
         if: always()
@@ -90,7 +78,7 @@ jobs:
           retention-days: 7
       - name: Success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ画面取得成功' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ全券種構造確定' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ画面取得失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ券種構造解析失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
