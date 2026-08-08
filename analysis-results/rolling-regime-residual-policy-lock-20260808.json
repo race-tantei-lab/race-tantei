@@ -1,0 +1,24 @@
+{
+  "status": "analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeRollingRegimeReturnEvaluation": true,
+  "fixedArchive": {"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "officialOddsOnly": true,
+  "purpose": "test whether nonstationarity is hiding value that expanding-window global residual models dilute",
+  "betTypes": ["win","wide","quinella"],
+  "experts": [
+    "global_rolling_60_dates",
+    "global_rolling_90_dates",
+    "surface_rolling_90_dates"
+  ],
+  "trainingWindows": {"rolling60":"max(0,testBlockStart-60) through testBlockStart-1","rolling90":"max(0,testBlockStart-90) through testBlockStart-1"},
+  "surfaceExperts": {"surfaces":["芝","ダート","障害","不明"],"fallback":"global_rolling_90_dates when a surface training sample is insufficient"},
+  "oosDateBlocks": [[30,90],[90,150],[150,210],[210,244]],
+  "horseWinPrior": "normalized JRA official win market probability",
+  "pairPriors": {"quinella":"normalized inverse JRA official odds, race mass 1","wide":"normalized inverse JRA official lower-bound odds, race mass 3"},
+  "model": {"type":"LightGBM binary market-residual","learningRate":0.04,"numLeaves":31,"minDataInLeaf":300,"featureFraction":0.75,"rounds":120,"lambdaL2":8.0},
+  "features": {"win":"locked 164 runner features","wideAndQuinella":"locked 196 pair features"},
+  "diagnosticRule": "compare each expert with its official-market prior on strict OOS AUC and top-ticket realized ROI; no thresholds or expert weights may be changed after seeing these results",
+  "nextStageOnlyIfUseful": "if an expert shows transferable value, expert choice and five-race allocation must be locked separately before portfolio ROI evaluation",
+  "completionGatesUnchanged": {"allCoursesFullHistoryRoiPctAtLeast":200,"allCoursesLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudgets":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion": {"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
