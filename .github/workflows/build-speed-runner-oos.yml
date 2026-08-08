@@ -1,0 +1,87 @@
+name: Build speed-enriched runner OOS
+run-name: Build speed-enriched runner OOS · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/prepare-speed-enriched-analysis-input.py"
+      - "scripts/build-speed-enriched-runner-oos.py"
+      - ".github/workflows/build-speed-runner-oos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+concurrency:
+  group: build-speed-runner-oos
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/speed-runner-oos' -f description='固定7,695レース入力を再構築中' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Download immutable source artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p downloads/speed-analysis
+          gh run download 31230407200 -n completion-analysis-dataset -D downloads/speed-analysis/completion
+          gh run download 31242369738 -n fixed-race-context -D downloads/speed-analysis/context
+          for i in 0 1 2 3 4 5 6; do
+            gh run download 31239730632 -n "all-historical-official-odds-shard-${i}" -D "downloads/speed-analysis/full-${i}"
+            gh run download 31237880023 -n "selected-historical-official-odds-shard-${i}" -D "downloads/speed-analysis/selected-${i}"
+          done
+          gh run download 31241615354 -n all-mobile-full-official-odds-retry -D downloads/speed-analysis/mobile
+      - name: Rebuild exact fixed input
+        run: python scripts/prepare-speed-enriched-analysis-input.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speed-analysis-input
+          path: artifacts/speed-analysis-input/
+          compression-level: 0
+          retention-days: 14
+
+  runner-oos:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: speed-analysis-input
+          path: artifacts/speed-analysis-input
+      - name: Install model dependencies
+        run: python -m pip install --disable-pip-version-check numpy pandas lightgbm scikit-learn
+      - name: Verify immutable constraints
+        run: python scripts/verify-race-tantei-fixed-constraints.py
+      - name: Build strict chronological features and OOS probabilities
+        run: python scripts/build-speed-enriched-runner-oos.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: speed-runner-oos
+          path: artifacts/speed-runner-oos/
+          compression-level: 1
+          retention-days: 14
+      - name: Publish success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/speed-runner-oos' -f description='スピード特徴＋完全OOS予測生成成功' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+      - name: Publish failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/speed-runner-oos' -f description='スピード特徴OOS生成失敗' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
