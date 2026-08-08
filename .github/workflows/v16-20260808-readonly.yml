@@ -1,22 +1,17 @@
 name: v16 Aug 8 read-only export
 run-name: v16 Aug 8 read-only export · ${{ github.sha }}
-
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/v16-20260808-readonly.yml'
+    paths: ['.github/workflows/v16-20260808-readonly.yml']
   workflow_dispatch:
-
 permissions:
   contents: read
   statuses: write
-
 env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-
 jobs:
   export:
     runs-on: ubuntu-latest
@@ -26,104 +21,67 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/v16-20260808-readonly' -f description='8/8公式データを読取専用取得中' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/v16-20260808-readonly' -f description='8/8公式36Rを検証取得中' -f target_url="$TARGET" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+        with: {python-version: '3.12'}
       - run: python -m pip install --disable-pip-version-check beautifulsoup4 requests
-      - name: Export all 2026-08-08 JRA result pages and official odds
+      - name: Validate exact JRA URLs and export official odds
         run: |
           python - <<'PY'
-          import concurrent.futures, json, os, re, urllib.request
+          import concurrent.futures,json,re,requests
           from pathlib import Path
-          import requests
           ROOT=Path('.'); OUT=ROOT/'artifacts'/'v16-20260808-readonly'; OUT.mkdir(parents=True,exist_ok=True)
-          HTML=OUT/'result-html'; HTML.mkdir(exist_ok=True)
-
-          # D1 is queried SELECT-only, just to preserve any already-synced runner rows as a convenience.
-          token=os.environ['CLOUDFLARE_API_TOKEN']; account=os.environ['CLOUDFLARE_ACCOUNT_ID']; database=os.environ['CLOUDFLARE_D1_DATABASE_ID']
-          endpoint=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{database}/query'
-          def d1(sql, params=None):
-              body=json.dumps({'sql':sql,'params':params or []}).encode(); req=urllib.request.Request(endpoint,data=body,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},method='POST')
-              with urllib.request.urlopen(req,timeout=90) as r: p=json.loads(r.read().decode())
-              if not p.get('success'): raise RuntimeError(p.get('errors'))
-              return p.get('result',[{}])[0].get('results',[])
-          names=[x['name'] for x in d1("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
-          seed=d1("SELECT * FROM rt_races WHERE race_date=? ORDER BY venue,race_no",['2026-08-08'])
-          (OUT/'d1-races.json').write_text(json.dumps(seed,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          ids=[r['race_id'] for r in seed]
-          print(json.dumps({'d1SeedRaces':len(seed)},ensure_ascii=False),flush=True)
-          for table in names:
-              low=table.lower()
-              if not table.startswith('rt_') or not any(k in low for k in ('runner','predict','result','payout','ticket','odds')): continue
-              try:
-                  cols=[c['name'] for c in d1(f"PRAGMA table_info({table})")]
-                  if 'race_id' in cols and ids:
-                      marks=','.join('?' for _ in ids); rows=d1(f"SELECT * FROM {table} WHERE race_id IN ({marks})",ids)
-                  elif 'race_date' in cols: rows=d1(f"SELECT * FROM {table} WHERE race_date=?",['2026-08-08'])
-                  else: continue
-                  (OUT/f'{table}.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2,default=str)+'\n',encoding='utf-8')
-                  print(json.dumps({'table':table,'rows':len(rows)},ensure_ascii=False),flush=True)
-              except Exception as e: print(json.dumps({'table':table,'error':f'{type(e).__name__}:{e}'},ensure_ascii=False),flush=True)
-
-          # Official past-results index: month -> meeting-day -> exact race result CNAMEs.
-          sess=requests.Session(); sess.headers.update({'User-Agent':'Mozilla/5.0 (compatible; RaceTanteiAug8ReadOnly/1.0; +https://www.jra.go.jp/)','Accept-Language':'ja'})
-          def post_s(cname):
-              r=sess.post('https://www.jra.go.jp/JRADB/accessS.html',data={'cname':cname},timeout=60)
-              r.encoding='cp932'; r.raise_for_status(); return r.text
-          seed_html=post_s('pw01skl00999999/B3')
-          m=re.search(r'objParam\["2608"\]\s*=\s*"([0-9A-Fa-f]{2})"',seed_html)
-          if not m: raise RuntimeError('AUG2026_CHECKDIGIT_NOT_FOUND')
-          month_cname='pw01skl10202608/'+m.group(1)
-          month_html=post_s(month_cname)
-          srl=set(re.findall(r"(pw01srl[^'\"\s<>]+/[0-9A-Fa-f]{2})",month_html))
-          print(json.dumps({'monthCname':month_cname,'meetingLinks':len(srl)}),flush=True)
-          result_tokens=set()
-          for i,cname in enumerate(sorted(srl),1):
-              try:
-                  h=post_s(cname)
-                  result_tokens.update(re.findall(r"(pw01sde[^'\"\s<>]+20260808/[0-9A-Fa-f]{2})",h))
-              except Exception as e: print(json.dumps({'meetingError':cname,'error':str(e)}),flush=True)
-          # Keep only the three scheduled venues (01 Sapporo, 04 Niigata, 07 Chukyo) and 12 races each.
-          race_pat=re.compile(r'pw01sde01(01|04|07)2026(01|02)05(\d{2})20260808/[0-9A-Fa-f]{2}')
-          venue_map={'01':('札幌','sapporo'),'04':('新潟','niigata'),'07':('中京','chukyo')}
+          ENT=OUT/'entry-html'; RES=OUT/'result-html'; ENT.mkdir(exist_ok=True); RES.mkdir(exist_ok=True)
+          # Entry check digits: observed Sapporo values; R1-R8 and R10/R12 are independently present in D1.
+          sapp={1:0xC5,2:0x7A,3:0x2F,4:0xE4,5:0x99,6:0x4E,7:0x03,8:0xB8,9:0x6D,10:0x62,11:0x17,12:0xCC}
+          # Cross-venue offsets independently verified from JRA 2026-07-25: Niigata=Sapporo+0x0f; Chukyo=Niigata-0x22.
+          specs={'01':('札幌','sapporo','01',0x00),'04':('新潟','niigata','02',0x0F),'07':('中京','chukyo','02',0x0F-0x22)}
           rows=[]
-          for cname in sorted(result_tokens):
-              mm=race_pat.fullmatch(cname)
-              if not mm: continue
-              vc=mm.group(1); rno=int(mm.group(3))
-              if not 1<=rno<=12: continue
-              jp,en=venue_map[vc]
-              rows.append({'raceId':f'2026-08-08-{en}-{rno:02d}','raceDate':'2026-08-08','venue':jp,'raceNo':rno,'resultUrl':'https://www.jra.go.jp/JRADB/accessS.html?CNAME='+cname,'venueCode':vc})
-          dedup={(r['venueCode'],r['raceNo']):r for r in rows}; rows=[dedup[k] for k in sorted(dedup)]
-          (OUT/'discovered-races.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          print(json.dumps({'officialResultUrls':len(rows),'byVenue':{jp:sum(x['venue']==jp for x in rows) for jp,_ in venue_map.values()}},ensure_ascii=False),flush=True)
-          if len(rows)!=36: raise RuntimeError(f'OFFICIAL_RESULT_URLS_INCOMPLETE:{len(rows)}/36')
-
-          # Save result HTML for later runner/result/payout parsing.
-          def fetch_html(row):
-              r=sess.get(row['resultUrl'],timeout=60); r.encoding='cp932'; r.raise_for_status(); return row,r.text
-          with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
-              for row,html in pool.map(fetch_html,rows):
-                  (HTML/f"{row['raceId']}.html").write_text(html,encoding='utf-8')
-
-          # Reuse the audited six-bet-type JRA odds parser.
+          for vc,(jp,en,meeting,off) in specs.items():
+            for rno in range(1,13):
+              es=(sapp[rno]+off)%256; rs=(es-0x44)%256
+              body=f'{vc}2026{meeting}05{rno:02d}20260808'
+              rows.append({'raceId':f'2026-08-08-{en}-{rno:02d}','raceDate':'2026-08-08','venue':jp,'raceNo':rno,'venueCode':vc,'entrySuffix':f'{es:02X}','resultSuffix':f'{rs:02X}','entryUrl':f'https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde01{body}/{es:02X}','resultUrl':f'https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde01{body}/{rs:02X}'})
+          sess=requests.Session(); sess.headers.update({'User-Agent':'Mozilla/5.0 (compatible; RaceTanteiAug8ReadOnly/1.0; +https://www.jra.go.jp/)','Accept-Language':'ja'})
+          def grab(row):
+            e=sess.get(row['entryUrl'],timeout=60); e.encoding='cp932'; e.raise_for_status()
+            s=sess.get(row['resultUrl'],timeout=60); s.encoding='cp932'; s.raise_for_status()
+            # Accept only pages whose visible text identifies the exact date, venue and race number.
+            et=' '.join(re.sub('<[^>]+>',' ',e.text).split()); st=' '.join(re.sub('<[^>]+>',' ',s.text).split())
+            needles=['2026年8月8日',row['venue'],f"{row['raceNo']}レース"]
+            if not all(n in et for n in needles): raise RuntimeError('ENTRY_BODY_MISMATCH:'+row['raceId'])
+            if not all(n in st for n in needles): raise RuntimeError('RESULT_BODY_MISMATCH:'+row['raceId'])
+            return row,e.text,s.text
+          failures=[]; valid=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=6) as p:
+            fm={p.submit(grab,r):r for r in rows}
+            for i,f in enumerate(concurrent.futures.as_completed(fm),1):
+              r=fm[f]
+              try:
+                rr,eh,rh=f.result(); valid.append(rr); (ENT/f"{rr['raceId']}.html").write_text(eh,encoding='utf-8'); (RES/f"{rr['raceId']}.html").write_text(rh,encoding='utf-8')
+              except Exception as e: failures.append({'raceId':r['raceId'],'error':f'{type(e).__name__}:{e}','entryUrl':r['entryUrl'],'resultUrl':r['resultUrl']})
+              print(json.dumps({'urlDone':i,'valid':len(valid),'fail':len(failures)},ensure_ascii=False),flush=True)
+          valid.sort(key=lambda x:(x['venueCode'],x['raceNo']))
+          (OUT/'validated-races.json').write_text(json.dumps(valid,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          (OUT/'url-failures.json').write_text(json.dumps(failures,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          if failures or len(valid)!=36: raise RuntimeError(f'URL_VALIDATION_INCOMPLETE:{len(valid)}/36:{len(failures)}')
           parser=ROOT/'scripts'/'export-mobile-historical-official-odds-retry.py'; source=parser.read_text(encoding='utf-8'); marker='# Rebuild exactly the same deterministic 3,210-race selection used by the primary export.'
           ns={'__file__':str(parser)}; exec(compile(source.split(marker,1)[0],str(parser),'exec'),ns); fetch_race=ns['fetch_race']
-          odds=[]; failures=[]
-          with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
-              fm={pool.submit(fetch_race,row):row for row in rows}
-              for i,f in enumerate(concurrent.futures.as_completed(fm),1):
-                  row=fm[f]
-                  try: odds.append(f.result())
-                  except Exception as e: failures.append({'raceId':row['raceId'],'error':f'{type(e).__name__}:{e}'})
-                  print(json.dumps({'oddsDone':i,'ok':len(odds),'fail':len(failures)},ensure_ascii=False),flush=True)
+          jobs=[{'raceId':r['raceId'],'raceDate':r['raceDate'],'venue':r['venue'],'raceNo':r['raceNo'],'resultUrl':r['resultUrl']} for r in valid]
+          odds=[]; ofail=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=6) as p:
+            fm={p.submit(fetch_race,r):r for r in jobs}
+            for i,f in enumerate(concurrent.futures.as_completed(fm),1):
+              r=fm[f]
+              try: odds.append(f.result())
+              except Exception as e: ofail.append({'raceId':r['raceId'],'error':f'{type(e).__name__}:{e}'})
+              print(json.dumps({'oddsDone':i,'ok':len(odds),'fail':len(ofail)},ensure_ascii=False),flush=True)
           odds.sort(key=lambda x:(x['venue'],x['raceNo']))
           (OUT/'official-odds.json').write_text(json.dumps(odds,ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8')
-          (OUT/'official-odds-failures.json').write_text(json.dumps(failures,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          if failures: raise RuntimeError(f'OFFICIAL_ODDS_INCOMPLETE:{len(odds)}/36')
-          print(json.dumps({'officialOddsComplete':True,'races':len(odds)},ensure_ascii=False),flush=True)
+          (OUT/'official-odds-failures.json').write_text(json.dumps(ofail,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          if ofail or len(odds)!=36: raise RuntimeError(f'OFFICIAL_ODDS_INCOMPLETE:{len(odds)}/36:{len(ofail)}')
+          print(json.dumps({'complete':True,'validatedRaces':len(valid),'officialOddsRaces':len(odds)},ensure_ascii=False),flush=True)
           PY
       - uses: actions/upload-artifact@v4
         if: always()
@@ -137,10 +95,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/v16-20260808-readonly' -f description='8/8公式データ読取完了' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/v16-20260808-readonly' -f description='8/8公式36R取得完了' -f target_url="$TARGET" >/dev/null
       - name: Publish failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/v16-20260808-readonly' -f description='8/8公式データ読取失敗' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/v16-20260808-readonly' -f description='8/8公式36R取得失敗' -f target_url="$TARGET" >/dev/null
