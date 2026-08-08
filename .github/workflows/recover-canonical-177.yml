@@ -5,66 +5,44 @@ on:
     paths: ['.github/workflows/recover-canonical-177.yml']
   workflow_dispatch:
 permissions:
+  actions: read
   contents: read
   statuses: write
 jobs:
   recover:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Publish start
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/recover-canonical-177' -f description='searching all refs/history for canonical artifacts' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/recover-canonical-177' -f description='inventorying historical analysis artifacts' -f target_url="$TARGET" >/dev/null
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Fetch all remote refs
+      - name: Inventory Actions artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
-          git fetch origin '+refs/tags/*:refs/tags/*' --prune || true
-      - name: Search history and refs
-        run: |
-          mkdir -p artifacts/canonical-177-history
-          OUT=artifacts/canonical-177-history
-          {
-            echo '=== REFS ==='
-            git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin refs/tags
-          } > "$OUT/refs.txt"
-          : > "$OUT/string-history.txt"
-          for term in 'v16_uniform_rules_dedup' 'v16_summary_dedup' '323.70' '170.87' 'strictRuleCount' 'residBin' 'rankBin' 'marketProb' 'predProb' 'all7695' 'completion-analysis-dataset' 'official-odds.jsonl' 'selectedRules' 'Tier1' 'Tier2' '902/7,695'; do
-            echo "===== TERM: $term =====" >> "$OUT/string-history.txt"
-            git log --all --oneline -G"$term" -- . >> "$OUT/string-history.txt" 2>/dev/null || true
-          done
-          : > "$OUT/filenames.txt"
-          for ref in $(git for-each-ref --format='%(refname)' refs/remotes/origin refs/tags); do
-            git ls-tree -r --name-only "$ref" 2>/dev/null | grep -Ei 'dedup|rule|odds|candidate|completion|tier|resid|market' | sed "s#^#$ref\t#" >> "$OUT/filenames.txt" || true
-          done
-          sort -u "$OUT/filenames.txt" -o "$OUT/filenames.txt"
-          : > "$OUT/current-content-grep.txt"
-          git grep -n -I -E 'residRatio|marketProb|predProb|residBin|rankBin|v16_uniform_rules_dedup|v16_summary_dedup|323\.70|170\.87|strictRuleCount' $(git for-each-ref --format='%(refname)' refs/remotes/origin) >> "$OUT/current-content-grep.txt" 2>/dev/null || true
-          wc -l "$OUT"/*.txt
-          echo '--- STRING HISTORY ---'
-          sed -n '1,400p' "$OUT/string-history.txt"
-          echo '--- INTERESTING FILENAMES ---'
-          grep -Ei 'v16|dedup|official-odds|completion-analysis|candidate|resid' "$OUT/filenames.txt" | head -n 500 || true
-          echo '--- CONTENT GREP ---'
-          sed -n '1,500p' "$OUT/current-content-grep.txt"
+          mkdir -p artifacts/canonical-177-artifacts
+          OUT=artifacts/canonical-177-artifacts
+          gh api --paginate -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts[] | [.id,.name,.expired,.size_in_bytes,.created_at,.expires_at,.workflow_run.id,.workflow_run.head_branch,.workflow_run.head_sha] | @tsv' > "$OUT/all-artifacts.tsv"
+          grep -Ei '7695|official|odds|completion|speed|v16|rule|candidate|market|dataset|analysis' "$OUT/all-artifacts.tsv" > "$OUT/relevant-artifacts.tsv" || true
+          echo '=== RELEVANT ARTIFACTS ==='
+          cat "$OUT/relevant-artifacts.tsv"
       - uses: actions/upload-artifact@v4
         with:
-          name: canonical-177-history-search
-          path: artifacts/canonical-177-history/
+          name: canonical-177-artifact-inventory
+          path: artifacts/canonical-177-artifacts/
           retention-days: 7
       - name: Publish success
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/recover-canonical-177' -f description='history search complete' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/recover-canonical-177' -f description='artifact inventory complete' -f target_url="$TARGET" >/dev/null
       - name: Publish failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/recover-canonical-177' -f description='history search failed' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/recover-canonical-177' -f description='artifact inventory failed' -f target_url="$TARGET" >/dev/null
