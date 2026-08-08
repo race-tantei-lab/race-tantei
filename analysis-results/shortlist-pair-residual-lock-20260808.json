@@ -1,0 +1,15 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "betTypes":["quinella","wide"],
+  "shortlistPerRace":"union of the top 15 distinct official tickets from each of six pre-race source scores; no outcome-based filtering",
+  "sourceScores":["official pair market probability (favorite side)","official odds (longshot side)","top2/top3 marginal-corrected probability(alpha=1.0) x official odds","top2/top3 marginal-corrected probability(alpha=1.5) x officialOdds^1.25","strict-OOS marginal-pair-v2 probability x official odds","prior-OOS calibrated marginal-pair-v2 probability x official odds"],
+  "candidateFeatures":"locked 65 marginal-pair-v2 features plus the ticket's rank under each of the six shortlist source scores (16 if outside that source's top15), minimum source rank, mean source rank and number of sources selecting the ticket",
+  "model":{"type":"LightGBM binary market-residual classifier","officialPairMarketLogitInitScore":true,"learningRate":0.03,"numLeaves":15,"minDataInLeaf":200,"featureFraction":0.85,"rounds":150,"lambdaL2":10.0,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"coldStartDates":30,"sameDateLearning":false},
+  "noPayoutWeighting":true,
+  "ticketRanking":"predicted strict-OOS hit probability multiplied by corresponding JRA official odds; wide uses official lower bound",
+  "evaluation":"actual JRA top1/top3/top5/top9 return rates among the shortlist, plus winning-ticket shortlist coverage",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
