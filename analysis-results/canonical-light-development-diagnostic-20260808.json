@@ -1,0 +1,60 @@
+{
+  "status": "internal development diagnostic; not a model; no version assigned",
+  "generatedAt": "2026-08-08",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "finalHoldoutEvaluated": false,
+  "sourceDataFrozen": true,
+  "archive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "finishedRaces": 7695
+  },
+  "constraintsPreserved": {
+    "minimumRacesPerRaceDateVenue": 5,
+    "lightBudgetYen": 2000,
+    "lightTicketCount": 6,
+    "requiredLightBetTypes": ["単勝", "ワイド", "馬連"],
+    "officialOddsOnly": true,
+    "actualJraPayoutsOnly": true,
+    "syntheticOddsUsed": false,
+    "postResultLeakageUsed": false,
+    "candidateVersionAssigned": false
+  },
+  "officialOddsInput": {
+    "artifact": "all7695-official-odds.jsonl.gz",
+    "raceCoverage": 7695,
+    "winCoveragePct": 100.0,
+    "umarenCoveragePct": 100.0,
+    "wideCoveragePct": 100.0,
+    "usedAsCanonicalMarketInput": true
+  },
+  "correctedRunnerOos": {
+    "method": "remove legacy market columns, inject fixed official win-market probability, strict prior-date LightGBM OOS",
+    "developmentBlocks": [[30,90],[90,150],[150,216]],
+    "selectedVariantWithoutUsingFinalHoldout": "weighted binary",
+    "developmentAuc": 0.83504
+  },
+  "lockedSixTicketActionSelector": {
+    "lock": "analysis-results/canonical-light-action-selector-lock-20260808.json",
+    "experts": 24,
+    "selectedDevelopmentRaces": 2810,
+    "developmentRoiPct": 80.6135231316726,
+    "passedCompletionRoiGate": false
+  },
+  "directPairProbabilityDiagnostic": {
+    "rows": 620874,
+    "features": 91,
+    "developmentBlocks": [[30,90],[90,150],[150,216]],
+    "wideAuc": [0.8611870913500593,0.862680901389185,0.8770035622274135],
+    "wideMarketAuc": [0.8643150868932238,0.8634626954840531,0.8771377058560517],
+    "quinellaAuc": [0.882323182207977,0.8832409102302299,0.8923617207112846],
+    "quinellaMarketAuc": [0.8907345740461301,0.8869038252927361,0.8943214057849959],
+    "finalHoldoutUsed": false
+  },
+  "decision": {
+    "openFinalHoldout": false,
+    "reason": "development completion gate has not been reached; opening the final holdout now would contaminate later exploration",
+    "promotion": "forbidden"
+  }
+}
