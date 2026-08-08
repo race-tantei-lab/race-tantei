@@ -1,0 +1,23 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "archive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"sameDateOutcomeAllowed":false},
+  "course":"ライト",
+  "budgetYen":2000,
+  "raceCountPerDateVenue":5,
+  "tickets":{"win":{"count":1,"stakeYen":100},"wide":{"count":1,"stakeYen":100},"quinella":{"count":3,"stakesYen":[800,600,400]}},
+  "ticketCount":5,
+  "maxSingleTicketYen":800,
+  "winSelection":"highest strict-OOS move-residual win EV",
+  "wideSelection":"highest strict-OOS move-residual/official-market midpoint wide EV",
+  "quinellaCellKeys":["surface","minHorseMovementBin","maxHorseMovementBin","officialQuinellaOddsBin"],
+  "movementRatio":"final normalized JRA win market probability divided by earlier stored JRA win market probability",
+  "movementBins":[0,0.7,0.85,1.0,1.15,1.35,1.7,"inf"],
+  "quinellaOddsBins":[0,10,20,40,80,160,320,640,"inf"],
+  "onlineCalibration":{"usesPriorDatesOnly":true,"minimumCellTickets":100,"factor":"(observedHits + 1) / (sumOfficialMarketHitProbabilities + 1)","factorClip":[0.5,3.0],"fallbackFactor":1.0},
+  "quinellaScore":"official quinella market probability * online calibration factor * official quinella odds",
+  "raceScore":"fixed-stake predicted return of the five tickets divided by 2000",
+  "raceSelection":"exactly five highest raceScore per race-date and venue, tie by race number",
+  "settlement":"actual JRA payouts only",
+  "completionGatesUnchanged":true
+}
