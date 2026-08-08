@@ -4,14 +4,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "config" / "race-tantei-fixed-constraints.json"
 DOC = ROOT / "docs" / "RACE_TANTEI_NON_NEGOTIABLE_RULES.md"
+SPLIT = ROOT / "config" / "season-stratified-holdout-v1.json"
 PRODUCTION_POLICY = ROOT / "scripts" / "final-course-policy.py"
 PROMOTION_GATE = ROOT / "scripts" / "verify-production-candidate.py"
 PROMOTER = ROOT / "scripts" / "find-and-promote-production-candidate.py"
 
 ALL_BET_TYPES = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"]
+DATE_FEATURES = [
+    "calendarYear", "calendarMonth", "dayOfYearSin", "dayOfYearCos",
+    "daysSinceArchiveStart", "seasonQuarter", "venue",
+]
 
 EXPECTED = {
-    "version": 6,
+    "version": 7,
     "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
     "immutableProjectRules": {
         "minimumRacesPerVenueDay": 5,
@@ -30,6 +35,21 @@ EXPECTED = {
         "droppingEvaluationPeriodsForbidden": True,
         "ticketCountFixed": False,
         "ticketCountMayVaryByCourseRaceAndPolicy": True,
+        "calendarSeasonalityMustBeModeled": True,
+    },
+    "validationProtocol": {
+        "type": "season_stratified_date_holdout",
+        "splitConfig": "config/season-stratified-holdout-v1.json",
+        "splitUnit": "raceDate",
+        "stratification": "year-month",
+        "holdoutFractionApprox": 0.2,
+        "sameDateMustStayTogether": True,
+        "randomRaceLevelSplitForbidden": True,
+        "heldoutOutcomeUseForDiscoveryForbidden": True,
+        "heldoutDatesRemainExcludedFromTraining": True,
+        "predictionForHeldoutDateUsesOnlyEarlierNonHoldoutDates": True,
+        "singleTailPeriodAsSoleCompletionHoldoutForbidden": True,
+        "dateFeaturesRequired": DATE_FEATURES,
     },
     "promotionRules": {
         "completionRoiPct": 200.0,
@@ -37,7 +57,7 @@ EXPECTED = {
         "minimumFinalHoldoutRacesPerCourse": 100,
         "requireEveryCourseToPass": True,
         "requireFullHistoricalRoiPct": 200.0,
-        "requireFinalHoldoutRoiPct": 200.0,
+        "requireSeasonStratifiedHoldoutRoiPct": 200.0,
         "requireRoiWithoutTop1Pct": 100.0,
         "requireFullHistoricalPeriodCoverage": True,
         "candidateVersionNumbersForbidden": True,
@@ -81,6 +101,9 @@ REQUIRED_DOC_TEXT = (
     "買い目点数は固定しない。",
     "券種はレースごとに可変とする。",
     "各購入対象レースで最低2種類の異なる券種を含める。",
+    "最後の数か月だけを唯一の完成ホールドアウトとして使わない。",
+    "分割単位はレースではなく開催日 `raceDate` とし、同じ開催日の全レースを同じ側へ置く。",
+    "開催日・季節性をモデル入力に含める。",
     "回収率200%以上は目標ではなく完成条件とする。",
     "探索途中の候補にはバージョン番号を付けない。",
     "`v16` という名称は、全条件と全ゲートを通過した完成物にだけ付与する。",
@@ -98,10 +121,7 @@ FORBIDDEN_PRODUCTION_PATTERNS = (
 def main() -> None:
     actual = json.loads(CONFIG.read_text(encoding="utf-8"))
     if actual != EXPECTED:
-        raise SystemExit(
-            "FIXED_CONSTRAINTS_CHANGED: minimum five races, fixed budgets, flexible ticket counts, dynamic bet types with minimum two, "
-            "official odds only, full-period coverage, completion ROI 200, no candidate version numbers, and reporting rules are immutable."
-        )
+        raise SystemExit("FIXED_CONSTRAINTS_CHANGED")
 
     if not DOC.exists():
         raise SystemExit("CANONICAL_RULE_DOCUMENT_MISSING")
@@ -109,6 +129,22 @@ def main() -> None:
     for text in REQUIRED_DOC_TEXT:
         if text not in document:
             raise SystemExit(f"CANONICAL_RULE_DOCUMENT_INCOMPLETE:{text}")
+
+    if not SPLIT.exists():
+        raise SystemExit("SEASON_STRATIFIED_HOLDOUT_CONFIG_MISSING")
+    split = json.loads(SPLIT.read_text(encoding="utf-8"))
+    if split.get("splitUnit") != "raceDate":
+        raise SystemExit("HOLDOUT_MUST_BE_DATE_GROUPED")
+    if split.get("stratification") != "year-month":
+        raise SystemExit("HOLDOUT_MUST_BE_SEASON_STRATIFIED")
+    if split.get("outcomeFieldsUsedForSplit") is not False:
+        raise SystemExit("HOLDOUT_SPLIT_MUST_NOT_USE_OUTCOMES")
+    if len(split.get("holdoutDates", [])) < 1:
+        raise SystemExit("HOLDOUT_DATES_MISSING")
+    if split.get("counts", {}).get("minimumSelectedHoldoutRacesPerCourseAtFivePerVenueDay", 0) < 100:
+        raise SystemExit("HOLDOUT_SAMPLE_TOO_SMALL")
+    if split.get("dateFeaturesRequired") != DATE_FEATURES:
+        raise SystemExit("DATE_FEATURES_CHANGED")
 
     if not PROMOTION_GATE.exists():
         raise SystemExit("PRODUCTION_PROMOTION_GATE_MISSING")
@@ -136,6 +172,8 @@ def main() -> None:
         raise SystemExit("MINIMUM_TWO_BET_TYPES_REQUIRED")
     if actual["immutableProjectRules"].get("betTypeSelectionMayVaryByRace") is not True:
         raise SystemExit("BET_TYPE_SELECTION_MUST_BE_DYNAMIC")
+    if actual["immutableProjectRules"].get("calendarSeasonalityMustBeModeled") is not True:
+        raise SystemExit("CALENDAR_SEASONALITY_MUST_BE_MODELED")
 
     for course, spec in actual["courses"].items():
         if "ticketCount" in spec:
