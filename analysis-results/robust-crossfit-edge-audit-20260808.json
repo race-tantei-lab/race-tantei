@@ -1,0 +1,77 @@
+{
+  "status": "internal audit; not a model; no version assigned",
+  "generatedAt": "2026-08-08",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "database": {
+    "races": 7695,
+    "start": "2024-05-04",
+    "end": "2026-08-02"
+  },
+  "featureCorrection": {
+    "calendarFeaturesAreAuxiliary": true,
+    "dateFeaturesUsedInRunnerModel": ["monthSin", "monthCos"],
+    "dateFeaturesAreNotPrimaryRuleAxes": true,
+    "primarySignals": ["horse_history", "jockey_history", "trainer_history", "recent_form", "speed", "venue", "surface", "distance", "field_size", "official_JRA_odds", "model_vs_market_residual"]
+  },
+  "validation": {
+    "method": "season-stratified raceDate-grouped five-fold out-of-fold evaluation",
+    "sameRaceDateKeptTogether": true,
+    "eachRaceEvaluatedOnlyByLogicBuiltWithoutItsFold": true,
+    "selectedRacesPerVenueDay": 5,
+    "minimumDistinctBetTypesPerRace": 2
+  },
+  "results": {
+    "fullyCrossFittedRuleEngineFixedRiskPolicyRoiPct": {
+      "light": 62.32227414330218,
+      "standard": 61.56535825545171,
+      "premium": 61.392959501557634
+    },
+    "fullyCrossFittedDirectMarketResidualIntegratedRiskRoiPct": {
+      "light": 79.13785046728972,
+      "standard": 78.89302180685358,
+      "premium": 78.81563862928348
+    },
+    "leaveOneFoldOutFourWayRuleHybridRoiPct": {
+      "light": 58.17585669781931,
+      "standard": 58.20498442367601,
+      "premium": 58.039345794392524
+    },
+    "bestSingleBetTypeFiveRaceResidualDiagnosticsRoiPct": {
+      "quinella": 91.87,
+      "exacta": 91.75
+    }
+  },
+  "stablePocketAnalysis": {
+    "fiveFoldMin200RulesFoundAcrossFourAndFiveWayInteractions": 10,
+    "unionQualifyingRaces": 621,
+    "unionRaceCoveragePct": 8.071224330647258,
+    "qualifyingTicketMeanRoiPct": 279.7435897435898,
+    "venueDaysWithAtLeastFiveQualifyingRaces": 1,
+    "totalVenueDays": 642,
+    "maximumQualifyingRaceShareOfRequiredFivePerVenueDayPortfolioPct": 19.345794392523363,
+    "note": "These globally observed pockets are diagnostic only because their stability was inspected across all five folds. They are not admissible as an untouched promotion test."
+  },
+  "broaderPocketDiagnostic": {
+    "rulesWithMinimumFoldRoiAtLeast150PctAcrossFourAndFiveWayInteractions": 44,
+    "unionQualifyingRaces": 2639,
+    "unionRaceCoveragePct": 34.29945412009358,
+    "qualifyingTicketMeanRoiPct": 223.09979557703028,
+    "bestTicketPerQualifyingRaceRoiPct": 257.61273209549074,
+    "maximumQualifyingRaceShareOfRequiredFivePerVenueDayPortfolioPct": 82.21183800623053,
+    "leaveOneFoldOutReDiscoveryDidNotGeneralize": true,
+    "leaveOneFoldOutHybridRoiPctApprox": 58.2
+  },
+  "interpretation": {
+    "dateOverweightingWasARealDesignError": true,
+    "dateOverweightingIsNotTheReasonRobustRoiFallsBelow200": true,
+    "previousDevelopmentRoiAbove200WasDrivenByMetaSelectionOverfit": true,
+    "repeatableHighRoiPocketsExistButDoNotGeneralizeWithEnoughCoverageToMeetFiveRacesPerVenueDay": true,
+    "stableMarketBeating200PctModelDemonstrated": false
+  },
+  "decision": {
+    "assignV16": false,
+    "promoteToProduction": false,
+    "reason": "Under grouped five-fold out-of-fold and leave-one-fold-out rule discovery, all complete three-course portfolios remain far below the 200 percent completion gate. Promoting a 200+ development-only rule set would rely on folds used for rule selection and would violate the no-post-result/no-fabrication rules."
+  }
+}
