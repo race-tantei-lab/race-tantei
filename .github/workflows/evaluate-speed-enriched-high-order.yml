@@ -61,11 +61,12 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           p=Path('scripts/evaluate-speed-enriched-high-order-policy.py'); s=p.read_text(encoding='utf-8')
-          if 'npz = np.load(RUN / "runner-oos-probabilities.npz")' not in s:
-              old='''meta = pd.read_pickle(RUN / "runner-meta.pkl.gz").reset_index(drop=True)\nnormalP = np.asarray(npz["modelP"], dtype=np.float64)'''
-              new='''meta = pd.read_pickle(RUN / "runner-meta.pkl.gz").reset_index(drop=True)\nnpz = np.load(RUN / "runner-oos-probabilities.npz")\nnormalP = np.asarray(npz["modelP"], dtype=np.float64)'''
-              if old not in s: raise SystemExit('NPZ_LOAD_PATCH_TARGET_NOT_FOUND')
-              s=s.replace(old,new,1)
+          if 'npz = np.load(' not in s:
+              lines=s.splitlines()
+              pos=next((i for i,line in enumerate(lines) if line.lstrip().startswith('normalP =')),None)
+              if pos is None: raise SystemExit('NORMALP_LINE_NOT_FOUND')
+              lines.insert(pos, 'npz = np.load(RUN / "runner-oos-probabilities.npz")')
+              s='\n'.join(lines)+'\n'
           old='''for ri,rec in enumerate(odds_records):\n    rid=rec["raceId"]; horses=[int(x) for x in rec["horses"]]\n    pn=model_combo_probs(runner_prob(rid,horses,normalP)); pr=model_combo_probs(runner_prob(rid,horses,residP))\n    for bt in BET_TYPES:\n        vals=official_values(rec,bt); mass=3.0 if bt=="wide" else 1.0; pm=official_market(vals,mass)\n        combos=combo_tuples(horses,bt); actual_map=payout[rid][bt]'''
           new='''for ri,rec in enumerate(odds_records):\n    rid=rec["raceId"]\n    all_horses=[int(x) for x in rec["horses"]]\n    active=race_rows[rid]\n    horses=[h for h in all_horses if h in active]\n    pn=model_combo_probs(runner_prob(rid,horses,normalP)); pr=model_combo_probs(runner_prob(rid,horses,residP))\n    for bt in BET_TYPES:\n        all_combos=combo_tuples(all_horses,bt)\n        keep=[j for j,c in enumerate(all_combos) if all(int(h) in active for h in c)]\n        raw_vals=official_values(rec,bt)\n        vals=raw_vals[keep]\n        mass=3.0 if bt=="wide" else 1.0; pm=official_market(vals,mass)\n        combos=combo_tuples(horses,bt)\n        if len(vals)!=len(combos): raise RuntimeError(f"ACTIVE_ODDS_ALIGNMENT:{bt}:{rid}:{len(vals)}:{len(combos)}")\n        actual_map=payout[rid][bt]'''
           if old in s:
