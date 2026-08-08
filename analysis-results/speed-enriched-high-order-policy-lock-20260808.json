@@ -1,0 +1,29 @@
+{
+  "status": "analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeSpeedHighOrderReturnEvaluation": true,
+  "fixedArchive": {"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "officialOdds": {"source":"JRA official historical odds only","syntheticOdds":false,"estimatedOdds":false,"missingOdds":"remain missing"},
+  "runnerProbabilitySources": ["JRA normalized win market", "speed-enriched strict-OOS win model", "speed-enriched strict-OOS market-residual model"],
+  "fixedMarketModelBlends": [0.0,0.25,0.5,0.75,1.0],
+  "combinationProbabilities": {
+    "win":"runner probability",
+    "wide":"unordered inclusion of both horses in top3 under Plackett-Luce",
+    "quinella":"unordered top2 under Plackett-Luce",
+    "exacta":"ordered top2 under Plackett-Luce",
+    "trio":"unordered top3 under Plackett-Luce",
+    "trifecta":"ordered top3 under Plackett-Luce"
+  },
+  "marketProbability": "inverse JRA official ticket odds normalized to probability mass 3 for wide and 1 for every single-winning-ticket market",
+  "ticketScore": "blended combination probability * JRA official odds",
+  "topTicketsRetainedPerBlendBetType": 16,
+  "blendSelector": {"unit":"course x bet type","metric":"Bayesian-shrunk realized return of top 10 tickets on strictly prior dates only","priorEquivalentTickets":40,"priorReturnRate":0.8,"coldTieBreakBlend":0.5,"sameDateLearning":false},
+  "raceSelection": {"exactRacesPerRaceDateVenue":5,"selector":"one expanding LightGBM Huber virtual-return model per course using strictly prior dates only","retrainDateIndices":[30,90,150,210],"coldStart":"mean top-three fixed ticket scores across course-required bet types","sameDateLearning":false},
+  "courses": {
+    "standard":{"budgetYen":5000,"requiredBetTypes":["win","wide","quinella","exacta","trio"],"maximumSingleTicketYen":500},
+    "premium":{"budgetYen":10000,"requiredBetTypes":["win","wide","quinella","exacta","trio","trifecta"],"maximumSingleTicketYen":1000}
+  },
+  "allocation": "mandatory 100 yen on the top ticket of every required bet type, then allocate remaining 100-yen units by ticket score times prior-date shrunk blend return, respecting each course single-ticket cap and fully spending the exact course budget",
+  "settlement": "actual fixed-archive JRA payout rows only",
+  "completionGates": {"eachCourseRoiPctAtLeast":200,"eachCourseLargestTicketRemovedRoiPctAtLeast":100,"exactFiveRacesPerRaceDateVenue":true,"exactBudgets":true,"allRequiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion": {"allowedOnlyWhenLightStandardPremiumAllPass":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
