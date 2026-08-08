@@ -1,0 +1,57 @@
+name: Evaluate ticket market-error Light
+run-name: Evaluate ticket market-error Light · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "analysis-results/ticket-market-error-policy-lock-20260808.json"
+      - "scripts/evaluate-ticket-market-error-light.py"
+      - ".github/workflows/evaluate-ticket-market-error-light.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+concurrency:
+  group: evaluate-ticket-market-error-light
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/ticket-market-error-light' -f description='市場誤差チケットモデル完全OOS評価中' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+      - name: Download persisted fixed inputs
+        run: |
+          gh run download 31244347590 -n speed-analysis-input -D artifacts/speed-analysis-input
+          gh run download 31244347590 -n speed-runner-oos -D artifacts/speed-runner-oos
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check numpy pandas lightgbm
+      - name: Verify immutable constraints
+        run: python scripts/verify-race-tantei-fixed-constraints.py
+      - name: Run locked market-error Light evaluation
+        run: python scripts/evaluate-ticket-market-error-light.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ticket-market-error-light-evaluation
+          path: artifacts/ticket-market-error-light/
+          compression-level: 1
+          retention-days: 30
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/ticket-market-error-light' -f description='市場誤差チケットモデル完全OOS評価完了' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/ticket-market-error-light' -f description='市場誤差チケット評価処理失敗' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
