@@ -5,7 +5,6 @@ on:
     paths: ['.github/workflows/recover-canonical-177.yml']
   workflow_dispatch:
 permissions:
-  actions: read
   contents: read
   statuses: write
 jobs:
@@ -17,32 +16,34 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/recover-canonical-177' -f description='inventorying historical analysis artifacts' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/recover-canonical-177' -f description='bundling historical rule engine code' -f target_url="$TARGET" >/dev/null
       - uses: actions/checkout@v4
-      - name: Inventory Actions artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
+        with:
+          fetch-depth: 0
+      - name: Bundle recovery code
         run: |
-          mkdir -p artifacts/canonical-177-artifacts
-          OUT=artifacts/canonical-177-artifacts
-          gh api --paginate -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" --jq '.artifacts[] | [.id,.name,.expired,.size_in_bytes,.created_at,.expires_at,.workflow_run.id,.workflow_run.head_branch,.workflow_run.head_sha] | @tsv' > "$OUT/all-artifacts.tsv"
-          grep -Ei '7695|official|odds|completion|speed|v16|rule|candidate|market|dataset|analysis' "$OUT/all-artifacts.tsv" > "$OUT/relevant-artifacts.tsv" || true
-          echo '=== RELEVANT ARTIFACTS ==='
-          cat "$OUT/relevant-artifacts.tsv"
+          mkdir -p artifacts/canonical-177-code
+          cp -a scripts artifacts/canonical-177-code/scripts
+          cp -a config artifacts/canonical-177-code/config
+          cp -a analysis-results artifacts/canonical-177-code/analysis-results
+          mkdir -p artifacts/canonical-177-code/workflows
+          cp -a .github/workflows/*.yml artifacts/canonical-177-code/workflows/ || true
+          git log --all --oneline -- scripts/v16-uniform-rule-selector.py > artifacts/canonical-177-code/v16-selector-history.txt || true
+          git log --all --oneline -- scripts/train-market-residual-ranking-v3.py > artifacts/canonical-177-code/residual-history.txt || true
       - uses: actions/upload-artifact@v4
         with:
-          name: canonical-177-artifact-inventory
-          path: artifacts/canonical-177-artifacts/
+          name: canonical-177-code-bundle
+          path: artifacts/canonical-177-code/
           retention-days: 7
       - name: Publish success
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/recover-canonical-177' -f description='artifact inventory complete' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/recover-canonical-177' -f description='historical rule engine code bundled' -f target_url="$TARGET" >/dev/null
       - name: Publish failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/recover-canonical-177' -f description='artifact inventory failed' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/recover-canonical-177' -f description='code bundle failed' -f target_url="$TARGET" >/dev/null
