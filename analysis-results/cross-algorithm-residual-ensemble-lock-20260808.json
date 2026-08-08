@@ -1,0 +1,14 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "features":"locked 164 speed+draw runner features only",
+  "marketPrior":"corresponding JRA market probability supplied as logit base margin/baseline",
+  "targets":["win first; top2/top3 only if win ensemble improves the locked LightGBM global signal"],
+  "oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],
+  "existingExpert":"locked equal-weight three-LightGBM 164-feature OOS ensemble",
+  "newExperts":{"xgboost":{"objective":"binary:logistic","eta":0.03,"maxDepth":6,"minChildWeight":50,"subsample":0.85,"colsampleBytree":0.80,"lambda":10,"alpha":1,"rounds":220,"treeMethod":"hist"},"catboost":{"loss":"Logloss","iterations":220,"depth":6,"learningRate":0.03,"l2LeafReg":10,"randomStrength":0.5,"randomSeed":20260808,"marketBaseline":true}},
+  "ensemble":"equal-weight mean in logit space of existing LightGBM probability, XGBoost probability and CatBoost probability; no OOS-performance weights",
+  "acceptance":"new ensemble must beat the existing LightGBM global AUC consistently before any ticket-return testing",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
