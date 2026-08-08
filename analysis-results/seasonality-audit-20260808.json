@@ -1,0 +1,58 @@
+{
+  "status": "seasonality diagnostic; not a model",
+  "generatedAt": "2026-08-08",
+  "fixedArchive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "raceCount": 7695,
+    "dateCount": 244
+  },
+  "oldTailHoldout": {
+    "start": "2026-05-02",
+    "end": "2026-08-02",
+    "calendarMonths": [5, 6, 7, 8],
+    "problem": "spring/summer-only tail is not season-balanced"
+  },
+  "venueMonthVenueDays": {
+    "中京": {"1": 9, "3": 12, "7": 4, "8": 18, "9": 10, "11": 1, "12": 11},
+    "中山": {"1": 18, "2": 1, "3": 19, "4": 12, "9": 18, "11": 1, "12": 16},
+    "京都": {"1": 10, "2": 13, "4": 4, "5": 26, "6": 9, "10": 17, "11": 19, "12": 8},
+    "函館": {"6": 18, "7": 16},
+    "小倉": {"1": 4, "2": 16, "3": 3, "6": 6, "7": 18},
+    "新潟": {"5": 22, "7": 6, "8": 21, "9": 1, "10": 12},
+    "札幌": {"7": 8, "8": 21, "9": 3},
+    "東京": {"1": 1, "2": 15, "4": 4, "5": 27, "6": 20, "10": 16, "11": 18},
+    "福島": {"4": 12, "6": 6, "7": 18, "11": 12},
+    "阪神": {"2": 2, "3": 19, "4": 12, "6": 12, "9": 9, "12": 8}
+  },
+  "retrospectivePocketExample": {
+    "betType": "馬連",
+    "conditions": {"venue": "小倉", "fieldSize": [14, 17], "existingOosEvRank": [4, 5]},
+    "overall": {"tickets": 516, "roiPct": 226.27906976744185},
+    "byYearMonth": [
+      {"year": 2024, "month": 6, "tickets": 20, "roiPct": 2894.5},
+      {"year": 2024, "month": 7, "tickets": 64, "roiPct": 0.0},
+      {"year": 2025, "month": 1, "tickets": 10, "roiPct": 0.0},
+      {"year": 2025, "month": 2, "tickets": 100, "roiPct": 0.0},
+      {"year": 2025, "month": 3, "tickets": 26, "roiPct": 836.1538461538462},
+      {"year": 2025, "month": 6, "tickets": 30, "roiPct": 0.0},
+      {"year": 2025, "month": 7, "tickets": 54, "roiPct": 0.0},
+      {"year": 2026, "month": 1, "tickets": 32, "roiPct": 0.0},
+      {"year": 2026, "month": 2, "tickets": 92, "roiPct": 0.0},
+      {"year": 2026, "month": 3, "tickets": 14, "roiPct": 2652.1428571428573},
+      {"year": 2026, "month": 6, "tickets": 20, "roiPct": 0.0},
+      {"year": 2026, "month": 7, "tickets": 54, "roiPct": 0.0}
+    ],
+    "interpretation": "The apparent high aggregate ROI is concentrated in specific months/years and is zero in many other active months. Broad chronological blocks can therefore hide seasonality."
+  },
+  "newValidation": {
+    "config": "config/season-aware-validation.json",
+    "targetDates": 48,
+    "targetVenueDays": 131,
+    "minimumSelectedRacesPerCourse": 655,
+    "monthsBalanced": true,
+    "requiresPriorSameMonthHistory": true,
+    "ordinaryRandomRowsForbidden": true,
+    "causalTraining": "strictly earlier dates only"
+  }
+}
