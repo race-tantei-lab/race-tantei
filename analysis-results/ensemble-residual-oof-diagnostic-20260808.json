@@ -1,0 +1,44 @@
+{
+  "createdAt": "2026-08-08",
+  "status": "internal_diagnostic_not_model",
+  "modelVersion": null,
+  "productionChanged": false,
+  "promotionEligible": false,
+  "completionRoiGatePct": 200.0,
+  "design": {
+    "base": "JRA official market probability + residual ensemble",
+    "ensembleMembers": 3,
+    "dateFeatures": ["monthSin", "monthCos"],
+    "dateRole": "minor supporting feature only",
+    "parseMissAsSignal": false,
+    "ticketTypesAvailable": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"],
+    "minimumDistinctBetTypesPerRace": 2,
+    "minimumRacesPerVenueDay": 5,
+    "maxSingleTicketShare": 0.4,
+    "officialOddsOnly": true,
+    "actualJraPayoutsOnly": true
+  },
+  "basePredictionFinding": {
+    "aucVsMarket": "ensemble residual probability ranking improved on all five outer folds versus market in the latest run",
+    "loglossVsMarket": "improved on all five outer folds",
+    "economicInterpretation": "small probability-calibration improvement did not convert to a 200% betting edge"
+  },
+  "ticketMetaOOF": {
+    "selectedRaces": 3210,
+    "foldRoiPct": {
+      "0": 84.3,
+      "1": 85.8,
+      "2": 86.6,
+      "3": 84.4,
+      "4": 88.0
+    },
+    "overallRoiPct": 85.6791277258567,
+    "roiWithoutLargestSelectedActionPct": 85.50888127142412,
+    "developmentRoi200GatePassed": false
+  },
+  "otherRobustChecks": {
+    "fourTrainingFoldRuleRequirement": "requiring every training fold ROI >=200% and trimmed ROI >=100% produced zero ensemble-ticket rules",
+    "interpretation": "the earlier 250-300% development pockets were not stable under stricter fully out-of-fold generalization"
+  },
+  "conclusion": "No honest 200% model has been proven on the fixed archive under the current non-negotiable constraints. Do not assign v16 and do not change production from this diagnostic."
+}
