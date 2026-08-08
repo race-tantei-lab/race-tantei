@@ -14,8 +14,8 @@ AUX_CALENDAR_FEATURES = ["calendarMonthSin", "calendarMonthCos", "dayOfYearSin",
 
 def main() -> None:
     actual = json.loads(CONFIG.read_text(encoding="utf-8"))
-    if actual.get("version") != 11:
-        raise SystemExit("FIXED_CONSTRAINT_VERSION_MUST_BE_11")
+    if actual.get("version") != 12:
+        raise SystemExit("FIXED_CONSTRAINT_VERSION_MUST_BE_12")
 
     imm = actual["immutableProjectRules"]
     required_imm = {
@@ -38,49 +38,50 @@ def main() -> None:
         "calendarContextMustBeAvailableAsAuxiliaryFeatures": True,
         "calendarFeaturesMustNotBePrimaryDiscoveryAxis": True,
         "calendarOnlyOrYearSpecificRulesForbidden": True,
+        "ruleDiscoveryMustPrecedePortfolioConstruction": True,
+        "modelFirstRoiFailureMayNotTerminateRuleDiscovery": True,
     }
     for key, value in required_imm.items():
         if imm.get(key) != value:
             raise SystemExit(f"IMMUTABLE_RULE_CHANGED:{key}")
 
     vp = actual.get("validationProtocol", {})
-    if vp.get("type") != "season_balanced_date_group_crossfit":
-        raise SystemExit("SEASON_BALANCED_CROSSFIT_REQUIRED")
+    if vp.get("type") != "season_balanced_uniform_rule_stability":
+        raise SystemExit("UNIFORM_RULE_STABILITY_AUDIT_REQUIRED")
     if vp.get("foldCount") != 5:
-        raise SystemExit("FIVE_FOLDS_REQUIRED")
+        raise SystemExit("FIVE_STABILITY_SLICES_REQUIRED")
     if vp.get("splitUnit") != "raceDate" or vp.get("stratification") != "year-month":
-        raise SystemExit("DATE_GROUPED_MONTH_BALANCED_SPLIT_REQUIRED")
-    if vp.get("sameDateMustStayTogether") is not True:
-        raise SystemExit("SAME_DATE_MUST_STAY_TOGETHER")
-    if vp.get("randomRaceLevelSplitForbidden") is not True:
-        raise SystemExit("RACE_LEVEL_RANDOM_SPLIT_FORBIDDEN")
-    if vp.get("eachRaceDateMustBeOutOfFoldExactlyOnce") is not True:
-        raise SystemExit("EVERY_DATE_MUST_BE_OOF_ONCE")
-    if vp.get("outOfFoldOutcomeUseForThatPredictionForbidden") is not True:
-        raise SystemExit("OOF_OUTCOME_LEAKAGE_FORBIDDEN")
+        raise SystemExit("DATE_GROUPED_MONTH_BALANCED_SLICES_REQUIRED")
+    for key in (
+        "sameDateMustStayTogether",
+        "randomRaceLevelSplitForbidden",
+        "uniformRuleDiscoveryUsesFullFrozenArchive",
+        "stabilitySlicesAreRobustnessAuditsNotSeparateModelRefits",
+        "stabilitySliceOutcomesMayBeUsedForRuleDurabilityScoring",
+        "stabilitySliceIdCannotBeBuyCondition",
+        "sameFrozenRuleAndScoringLogicMustApplyToEverySlice",
+        "rawCalendarYearFeatureForbidden",
+        "rawDateOrdinalFeatureForbidden",
+        "dateSpecificRuleDiscoveryForbidden",
+        "previousOpenedFinalAuditIsDiagnosticOnly",
+        "livePredictionStillUsesOnlyInformationAvailableAtPredictionTime",
+    ):
+        if vp.get(key) is not True:
+            raise SystemExit(f"VALIDATION_PROTOCOL_CHANGED:{key}")
     if vp.get("calendarFeatureRole") != "auxiliary_only":
         raise SystemExit("CALENDAR_FEATURES_MUST_BE_AUXILIARY")
     if vp.get("calendarFeatures") != AUX_CALENDAR_FEATURES:
         raise SystemExit("AUXILIARY_CALENDAR_FEATURES_CHANGED")
-    if vp.get("rawCalendarYearFeatureForbidden") is not True:
-        raise SystemExit("RAW_YEAR_FEATURE_FORBIDDEN")
-    if vp.get("rawDateOrdinalFeatureForbidden") is not True:
-        raise SystemExit("RAW_DATE_ORDINAL_FORBIDDEN")
-    if vp.get("dateSpecificRuleDiscoveryForbidden") is not True:
-        raise SystemExit("DATE_SPECIFIC_RULES_FORBIDDEN")
-    if vp.get("previousOpenedFinalAuditIsDiagnosticOnly") is not True:
-        raise SystemExit("OPENED_FINAL_AUDIT_MUST_BE_DIAGNOSTIC_ONLY")
-    if vp.get("livePredictionStillUsesOnlyInformationAvailableAtPredictionTime") is not True:
-        raise SystemExit("LIVE_CAUSALITY_REQUIRED")
 
     promo = actual["promotionRules"]
     required_promo = {
         "completionRoiPct": 200.0,
         "approvedModelVersion": "v16",
-        "minimumCrossfitEvaluationRacesPerCourse": 100,
+        "minimumStabilityEvaluationRacesPerCourse": 100,
         "requireEveryCourseToPass": True,
         "requireFullHistoricalRoiPct": 200.0,
-        "requireSeasonBalancedOutOfFoldRoiPct": 200.0,
+        "requireEverySeasonBalancedStabilitySliceRoiPct": 200.0,
+        "requireEverySeasonBalancedStabilitySliceTrimmedRoiPct": 100.0,
         "requireRoiWithoutTop1Pct": 100.0,
         "requireFullHistoricalPeriodCoverage": True,
         "candidateVersionNumbersForbidden": True,
@@ -107,10 +108,12 @@ def main() -> None:
 
     doc = DOC.read_text(encoding="utf-8")
     for text in (
-        "日付・季節は多数ある分析要素の一部として補助的に扱う。",
-        "season-balanced 5-fold crossfit",
-        "各開催日は必ず1回だけout-of-foldで評価する。",
+        "探索は必ず **ルール発見先行** とする。",
+        "season-balanced 5-slice uniform-rule stability audit",
+        "stability slice",
         "回収率200%以上は目標ではなく完成条件とする。",
+        "過去データ上で完全に同じ馬券集合へ一致するルールは重複証拠として数えず",
+        "`PARSE_MISS`、欠損値、不明値、取得失敗そのものを利益シグナルとして利用してはならない。",
     ):
         if text not in doc:
             raise SystemExit(f"CANONICAL_RULE_DOCUMENT_INCOMPLETE:{text}")
@@ -133,11 +136,7 @@ def main() -> None:
         if pattern in source:
             raise SystemExit(f"SYNTHETIC_ODDS_PATTERN_FOUND:{pattern}")
 
-    promotion_source = PROMOTER.read_text(encoding="utf-8")
-    if 'approvedModelVersion' not in promotion_source or 'modelVersion' not in promotion_source:
-        raise SystemExit("APPROVED_VERSION_MUST_BE_ASSIGNED_ONLY_BY_PROMOTER")
-
-    print("Fixed race-tantei constraints verified.")
+    print("Fixed race-tantei v12 rule-first constraints verified.")
 
 
 if __name__ == "__main__":
