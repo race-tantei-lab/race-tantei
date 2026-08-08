@@ -1,0 +1,29 @@
+{
+  "status": "analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeDirectTicketReturnEvaluation": true,
+  "fixedArchive": {"start": "2024-05-04", "end": "2026-08-02", "races": 7695, "futureDataAllowed": false, "sameDateOutcomeAllowedForDecision": false},
+  "officialOdds": {"source": "JRA official historical odds only", "syntheticOdds": false, "derivedCombinationOdds": false, "missingOdds": "remain missing"},
+  "lightBetTypes": ["win", "wide", "quinella"],
+  "runnerFeatureSource": "95 strict prior-date pre-race runner features including surface, distance bucket, class, venue, horse/jockey/trainer same-condition history, recent form and market residuals",
+  "ticketFeatures": {
+    "win": "runner feature vector + official win odds + normalized market probability + strict-OOS normal/value probabilities",
+    "pair": "for each runner feature use pair mean and absolute difference; add official pair odds, normalized pair market probability, strict-OOS normal/value Harville pair probability and model-vs-market ratios",
+    "outcomeLeakage": false
+  },
+  "target": "actual JRA return rate per 100-yen ticket; zero if ticket loses; actual payout/100 if ticket wins",
+  "fixedObjectives": [
+    {"name":"huber","objective":"huber"},
+    {"name":"tweedie13","objective":"tweedie","tweedie_variance_power":1.3},
+    {"name":"tweedie15","objective":"tweedie","tweedie_variance_power":1.5},
+    {"name":"tweedie17","objective":"tweedie","tweedie_variance_power":1.7},
+    {"name":"logreturn","objective":"regression","targetTransform":"log1p(return_rate)","inverseForRanking":"expm1"}
+  ],
+  "walkForward": {"coldStartDateCount":30,"retrainDateIndices":[30,90,150,210],"sameDateLearning":false},
+  "objectiveSelector": "per bet type, choose the fixed objective with highest Bayesian-shrunk realized return on dates strictly before current race date; cold start uses tweedie15",
+  "raceSelection": {"requiredPerRaceDateVenue":5,"selector":"expanding LightGBM Huber regression of virtual course return using prior dates only","retrainDateIndices":[30,90,150,210],"sameDateLearning":false},
+  "budget": {"lightYen":2000,"unitYen":100,"minimumPerRequiredBetTypeYen":100,"maximumSingleTicketShare":0.10,"budgetMustBeFullyUsed":true},
+  "allocation": "mandatory 100 yen on the top predicted-return ticket in each required bet type, then allocate remaining 100-yen units across all three bet types by predicted ticket return multiplied by Bayesian-shrunk prior-date objective return, respecting the 10% per-ticket cap",
+  "settlement": "actual fixed-archive JRA payouts only",
+  "completionGates": {"lightFullHistoryRoiPctAtLeast":200,"lightLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudget":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion": {"notEligibleUntilAllThreeCoursesPass":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
