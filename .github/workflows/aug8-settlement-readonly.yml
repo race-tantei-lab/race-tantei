@@ -24,6 +24,19 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
       - run: python -m pip install --disable-pip-version-check numpy scikit-learn beautifulsoup4 requests
+      - name: Patch new-horse entry notation only
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/aug8-v16-readonly-settlement.py')
+          s=p.read_text(encoding='utf-8')
+          old="\\s+(\\d+)kg\\s*\\(([+\\-]?\\d+)\\)"
+          new="\\s+(\\d+)kg\\s*\\(([+\\-]?\\d+|初出走)\\)"
+          if old not in s: raise SystemExit('regex target missing')
+          s=s.replace(old,new,1)
+          s=s.replace("'weightChange':int(change)","'weightChange':(0 if change=='初出走' else int(change))",1)
+          p.write_text(s,encoding='utf-8')
+          PY
       - run: python scripts/aug8-v16-readonly-settlement.py
       - uses: actions/upload-artifact@v4
         if: always()
