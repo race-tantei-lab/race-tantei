@@ -1,0 +1,14 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeRichValueRankReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "betTypes":["wide","quinella"],
+  "features":"locked 413 symmetric pair features: all 193 Elo/decay runner features plus strict-OOS win/top2/top3 probabilities and JRA official ticket odds/context",
+  "model":{"type":"LightGBM LambdaRank","group":"race","label":"0 for losing ticket; winning ticket = min(15,1+floor(log2(actual JRA payout per 100 yen / 100)))","learningRate":0.04,"numLeaves":31,"minDataInLeaf":100,"featureFraction":0.60,"maxBin":31,"rounds":60,"lambdarankTruncationLevel":12,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"sameDateLearning":false},
+  "coldStartFirst30Dates":"rank by normalized official market probability times strict-OOS runner finish-distribution value signal; no outcome-derived threshold",
+  "diagnostic":{"topKPerRace":[1,2,3,5,10],"largestTicketRemoved":true,"noFullPeriodThresholdOptimization":true},
+  "nextStageOnlyIfUseful":"five-race selection and Light 2000-yen allocation must be separately locked before portfolio evaluation",
+  "officialOdds":{"source":"JRA historical official odds","synthetic":false,"estimated":false,"missing":"remain missing"},
+  "completionGatesUnchanged":{"allCoursesFullHistoryRoiPctAtLeast":200,"allCoursesLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudgets":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
