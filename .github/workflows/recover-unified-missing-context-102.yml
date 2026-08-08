@@ -1,0 +1,91 @@
+name: Recover unified missing race context 102
+run-name: Recover unified missing race context 102 · ${{ github.sha }}
+on:
+  push:
+    branches: [analysis/unified-dataset-20260808]
+    paths:
+      - '.github/workflows/recover-unified-missing-context-102.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/unified-context-102' -f description='不明102レースの芝ダート距離をJRA公式から復元中' -f target_url="$TARGET" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Recover exact official context
+        run: |
+          python - <<'PY'
+          import json, os, re, time, urllib.request
+          from pathlib import Path
+          from bs4 import BeautifulSoup
+          ids=set(json.loads(Path('analysis-results/unified-missing-context-102.json').read_text(encoding='utf-8'))['races'])
+          if len(ids)!=102: raise RuntimeError(f'EXPECTED_102_GOT_{len(ids)}')
+          acc=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']; tok=os.environ['CLOUDFLARE_API_TOKEN']
+          ep=f'https://api.cloudflare.com/client/v4/accounts/{acc}/d1/database/{db}/query'
+          body=json.dumps({'sql':"SELECT race_id raceId,race_date raceDate,venue,race_no raceNo,result_url resultUrl,weather,track_condition trackCondition FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished'",'params':['2024-05-04','2026-08-03']}).encode()
+          req=urllib.request.Request(ep,data=body,headers={'Authorization':f'Bearer {tok}','Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=90) as r:p=json.loads(r.read().decode())
+          allrows=p.get('result',[{}])[0].get('results',[]); rows=[x for x in allrows if x['raceId'] in ids]
+          if len(rows)!=102: raise RuntimeError(f'D1_MATCH_{len(rows)}')
+          out=[]; fail=[]
+          hdr={'User-Agent':'Mozilla/5.0 (compatible; RaceTanteiContextRecovery/1.0; +https://www.jra.go.jp/)','Accept-Language':'ja'}
+          for i,x in enumerate(rows,1):
+            try:
+              with urllib.request.urlopen(urllib.request.Request(x['resultUrl'],headers=hdr),timeout=45) as r: raw=r.read()
+              html=None
+              for enc in ('utf-8','cp932'):
+                try:
+                  t=raw.decode(enc)
+                  if 'コース：' in t or 'コース:' in t: html=t; break
+                except Exception: pass
+              if html is None: html=raw.decode('cp932','replace')
+              soup=BeautifulSoup(html,'html.parser'); text=' '.join(soup.stripped_strings)
+              m=re.search(r'コース[：:]\s*([0-9,]+)メートル\s*[（(]([^）)]+)[）)]',text)
+              if not m: raise RuntimeError('COURSE_PARSE_MISS')
+              dist=int(m.group(1).replace(',','')); detail=m.group(2).strip()
+              title=''
+              for tag in soup.find_all(['h1','h2','h3']):
+                s=' '.join(tag.stripped_strings)
+                if s and ('障害' in s or '未勝利' in s or '新馬' in s or 'オープン' in s or '勝クラス' in s or '歳' in s): title=s; break
+              if '障害' in title or '障害' in text[text.find(m.group(0))-150:text.find(m.group(0))+150]: surface='障害'
+              elif detail.startswith('芝'): surface='芝'
+              elif detail.startswith('ダート'): surface='ダート'
+              else: raise RuntimeError('SURFACE_PARSE_MISS:'+detail)
+              direction='直線' if '直線' in detail else ('右' if '右' in detail else ('左' if '左' in detail else None))
+              out.append({'raceId':x['raceId'],'raceDate':x['raceDate'],'venue':x['venue'],'raceNo':int(x['raceNo']),'surface':surface,'distanceM':dist,'direction':direction,'raceTitle':title or None,'courseDetail':detail,'weather':x.get('weather'),'trackCondition':x.get('trackCondition'),'sourceUrl':x['resultUrl'],'source':'JRA official result page'})
+            except Exception as e:
+              fail.append({'raceId':x['raceId'],'error':f'{type(e).__name__}:{e}'})
+            if i%20==0: print(json.dumps({'done':i,'success':len(out),'fail':len(fail)},ensure_ascii=False),flush=True)
+          Path('artifacts').mkdir(exist_ok=True)
+          meta={'requested':102,'success':len(out),'fail':len(fail),'failures':fail,'officialOnly':True}
+          Path('artifacts/unified-missing-context-102-recovered.json').write_text(json.dumps({'meta':meta,'rows':out},ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(meta,ensure_ascii=False),flush=True)
+          if fail or len(out)!=102: raise RuntimeError('RECOVERY_INCOMPLETE')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unified-missing-context-102-recovered
+          path: artifacts/unified-missing-context-102-recovered.json
+          retention-days: 7
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/unified-context-102' -f description='不明102レースの公式コース情報復元成功' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/unified-context-102' -f description='不明102レースの公式コース情報復元失敗' -f target_url="$TARGET" >/dev/null
