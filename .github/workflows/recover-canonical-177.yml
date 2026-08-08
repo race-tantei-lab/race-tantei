@@ -5,81 +5,42 @@ on:
     paths: ['.github/workflows/recover-canonical-177.yml']
   workflow_dispatch:
 permissions:
-  actions: read
   contents: read
   statuses: write
 jobs:
   recover:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Publish start
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/recover-canonical-177' -f description='scanning pre-final artifacts for frozen rulebooks' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/recover-canonical-177' -f description='recovering old walk-forward source' -f target_url="$TARGET" >/dev/null
       - uses: actions/checkout@v4
-      - name: Scan Actions artifact contents by SHA-256
-        env:
-          GH_TOKEN: ${{ github.token }}
+        with:
+          fetch-depth: 0
+      - name: Recover walk-forward source tree
         run: |
-          python - <<'PY'
-          import hashlib, io, json, os, subprocess, zipfile
-          from pathlib import Path
-          targets={
-            '85c443d90dc29493cf07defbab0a5df285c86488aebf835ee9fef061f8d5339d':'seasonal-rulebook-276',
-            '61d044331b7527875cb90f0627350bab42e37b710e2ff56c26339292b39f7f6a':'datelight-rulebook-128',
-            'f8e7233ddd393632387487874ebcd0fc99ace1e4ca5d4aa318356b39e4e702c7':'datelight-probabilities',
-          }
-          out=Path('artifacts/canonical-177-artifact-hash-scan');out.mkdir(parents=True,exist_ok=True)
-          raw=subprocess.check_output(['gh','api','--paginate','-H','Accept: application/vnd.github+json',f'repos/{os.environ["GITHUB_REPOSITORY"]}/actions/artifacts?per_page=100'],text=True)
-          # --paginate returns concatenated JSON objects; use jq via a separate command for robust TSV listing
-          tsv=subprocess.check_output("gh api --paginate -H 'Accept: application/vnd.github+json' \"repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100\" --jq '.artifacts[] | [.id,.name,.expired,.size_in_bytes,.created_at,.workflow_run.id] | @tsv'",shell=True,text=True)
-          arts=[]
-          for line in tsv.splitlines():
-            p=line.split('\t')
-            if len(p)<6: continue
-            aid,name,expired,size,created,run=p[:6]
-            if expired!='false': continue
-            if not ('2026-08-08T10:30:00Z' <= created <= '2026-08-08T12:35:00Z'): continue
-            arts.append({'id':int(aid),'name':name,'size':int(size),'created':created,'run':run})
-          matches=[]; scanned_files=0; errors=[]
-          for a in arts:
-            try:
-              zpath=out/f'artifact-{a["id"]}.zip'
-              with zpath.open('wb') as f:
-                subprocess.run(['gh','api',f'repos/{os.environ["GITHUB_REPOSITORY"]}/actions/artifacts/{a["id"]}/zip'],stdout=f,check=True)
-              with zipfile.ZipFile(zpath) as z:
-                for info in z.infolist():
-                  if info.is_dir(): continue
-                  data=z.read(info.filename); scanned_files+=1
-                  sha=hashlib.sha256(data).hexdigest()
-                  if sha in targets:
-                    label=targets[sha]
-                    save=out/f'{label}__artifact-{a["id"]}__{Path(info.filename).name}'
-                    save.write_bytes(data)
-                    matches.append({'label':label,'sha256':sha,'artifact':a,'member':info.filename,'size':len(data),'savedAs':save.name})
-              zpath.unlink(missing_ok=True)
-            except Exception as e:
-              errors.append({'artifact':a,'error':f'{type(e).__name__}:{e}'})
-          report={'artifactCount':len(arts),'scannedFiles':scanned_files,'matches':matches,'errors':errors}
-          (out/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
-          print(json.dumps({'artifactCount':len(arts),'scannedFiles':scanned_files,'matchCount':len(matches),'matches':matches,'errors':len(errors)},ensure_ascii=False,indent=2))
-          PY
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
+          mkdir -p artifacts/walk-forward-source
+          git archive --format=tar refs/remotes/origin/agent/walk-forward-12m-learning src scripts workflows | tar -xf - -C artifacts/walk-forward-source
+          rg -n -i 'RunnerHistoryStats|horseWins|jockeyWins|trainerWins|courseWins|walk-forward/data|walkForward|winProbability' artifacts/walk-forward-source > artifacts/walk-forward-source/recovery-grep.txt || true
+          sed -n '1,800p' artifacts/walk-forward-source/recovery-grep.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: canonical-177-artifact-hash-scan
-          path: artifacts/canonical-177-artifact-hash-scan/
+          name: canonical-177-walk-forward-source
+          path: artifacts/walk-forward-source/
           retention-days: 7
       - name: Publish success
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/recover-canonical-177' -f description='artifact hash scan complete' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/recover-canonical-177' -f description='walk-forward source recovered' -f target_url="$TARGET" >/dev/null
       - name: Publish failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/recover-canonical-177' -f description='artifact hash scan failed' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/recover-canonical-177' -f description='walk-forward source recovery failed' -f target_url="$TARGET" >/dev/null
