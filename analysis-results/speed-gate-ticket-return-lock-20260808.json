@@ -1,0 +1,15 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeTicketReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "horseSignal":"strict-OOS 164-feature speed+draw probability model; 258-feature expansion rejected before this lock because it was weaker in all four OOS blocks",
+  "betTypes":["wide","quinella"],
+  "trainingRows":"every official available ticket from dates strictly before each OOS block",
+  "features":"the locked 51 pair features plus official ticket market probability and log JRA official odds",
+  "target":"actual JRA payout per 100 yen divided by 100, zero for non-winning tickets",
+  "model":{"type":"LightGBM Tweedie expected-return regression","tweedieVariancePower":1.5,"learningRate":0.03,"numLeaves":31,"minDataInLeaf":500,"featureFraction":0.80,"rounds":180,"lambdaL2":10.0,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"coldStartDates":30,"sameDateLearning":false,"predictionFloor":0},
+  "ticketRanking":"descending predicted expected return per 100 yen; no result-based odds threshold",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "completionUse":"only if strict-OOS ticket returns improve materially; final Light still must select five races per raceDate x venue, spend exactly 2000 yen, include win/wide/quinella, and cap each ticket at 10%",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
