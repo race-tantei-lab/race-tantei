@@ -1,0 +1,12 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "features":{"source":"locked 164 speed+draw matrix","removedCurrentMarketColumns":["logOdds","marketP","popularity"],"remainingFeatures":161,"historicalMarketResidualFeaturesAllowed":true,"reason":"they are based only on prior completed race dates"},
+  "fundamentalModels":{"targets":["win","top2","top3"],"type":"equal-weight three-LightGBM ensemble without market init_score","configurations":[{"learningRate":0.03,"numLeaves":15,"minDataInLeaf":160,"featureFraction":0.70,"rounds":100,"lambdaL2":8},{"learningRate":0.035,"numLeaves":23,"minDataInLeaf":120,"featureFraction":0.75,"rounds":120,"lambdaL2":5},{"learningRate":0.04,"numLeaves":31,"minDataInLeaf":100,"featureFraction":0.80,"rounds":90,"lambdaL2":8}],"raceNormalization":{"winMass":1,"top2Mass":2,"top3Mass":3},"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"sameDateLearning":false},
+  "marketBlendLibrary":[0.0,0.25,0.5,0.75,1.0],
+  "blendFormula":"arithmetic blend of corresponding normalized JRA market probability/marginal and normalized fundamental probability, then renormalize to the target race mass",
+  "blendSelection":{"firstOosBlockBeta":0.25,"laterBlocks":"choose the beta with lowest Bernoulli log loss on all earlier completed OOS blocks only; ties choose the smaller beta","noCurrentBlockTuning":true},
+  "acceptance":"record market-blind AUC and sequential-blend AUC/logloss in every block; pair-return testing only after strict-OOS signals are produced",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
