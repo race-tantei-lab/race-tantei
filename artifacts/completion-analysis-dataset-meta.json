@@ -1,10 +1,12 @@
 {
   "races": 7695,
   "runners": 106122,
+  "resultRows": 106114,
+  "resultCoveredRaces": 7695,
   "payoutRows": 91856,
   "start": "2024-05-04",
   "end": "2026-08-02",
-  "bytes": 4687361,
+  "bytes": 5980750,
   "missingPayoutRaces": 0,
   "runnerColumns": [
     "race_id",
@@ -22,6 +24,16 @@
     "win_odds",
     "popularity",
     "runner_status",
+    "updated_at"
+  ],
+  "resultColumns": [
+    "race_id",
+    "horse_no",
+    "finish_position",
+    "result_status",
+    "time_text",
+    "margin_text",
+    "final3f",
     "updated_at"
   ],
   "raceColumns": [
