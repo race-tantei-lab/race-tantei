@@ -10,12 +10,21 @@ on:
 
 permissions:
   contents: write
+  statuses: write
 
 jobs:
   probe:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
+      - name: Publish probe start
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='analysis/jra-pdf-probe' \
+            -f description='JRA公式PDFの取得・12R抽出を確認中' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -31,20 +40,20 @@ jobs:
           req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Referer':'https://www.jra.go.jp/','Accept':'application/pdf,*/*;q=0.8'})
           with urllib.request.urlopen(req,timeout=60) as r:
               body=r.read(); status=r.status; ctype=r.headers.get('content-type')
-          text=unicodedata.normalize('NFKC','\n'.join((p.extract_text() or '') for p in PdfReader(io.BytesIO(body)).pages))
+          reader=PdfReader(io.BytesIO(body))
+          text=unicodedata.normalize('NFKC','\n'.join((p.extract_text() or '') for p in reader.pages))
           rows=[]
           for n in range(1,13):
               m=re.search(rf'第\s*{n}\s*競走',text)
               if not m: continue
               nxt=re.search(rf'第\s*{n+1}\s*競走',text[m.end():]) if n<12 else None
               end=m.end()+nxt.start() if nxt else min(len(text),m.start()+12000)
-              block=text[m.start():end]
-              h=block[:700]
+              h=text[m.start():end][:700]
               sm=re.search(r'[\(（]\s*(芝|ダート|障害)\s*[・･\s]*(右|左|直線)?[^\)）]{0,40}[\)）]',h)
               before=h.split('発走',1)[0]
               nums=[int(x) for x in re.findall(r'(?<!\d)(\d{3,5})(?!\d)',before.replace(',','')) if 800<=int(x)<=5000]
               rows.append({'raceNo':n,'surface':sm.group(1) if sm else None,'direction':sm.group(2) if sm else None,'distanceM':nums[-1] if nums else None})
-          out={'status':status,'contentType':ctype,'bytes':len(body),'pages':len(PdfReader(io.BytesIO(body)).pages),'raceRows':rows,'parsed':sum(bool(r['surface'] and r['distanceM']) for r in rows)}
+          out={'status':status,'contentType':ctype,'bytes':len(body),'pages':len(reader.pages),'raceRows':rows,'parsed':sum(bool(r['surface'] and r['distanceM']) for r in rows)}
           Path('artifacts').mkdir(exist_ok=True)
           Path('artifacts/jra-pdf-probe.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
           print(json.dumps(out,ensure_ascii=False))
@@ -58,3 +67,15 @@ jobs:
           git commit -m "Save JRA PDF extraction probe" || exit 0
           git pull --rebase origin main
           git push origin HEAD:main
+      - name: Publish probe success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='analysis/jra-pdf-probe' \
+            -f description='JRA公式PDFから12R抽出成功' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Publish probe failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='analysis/jra-pdf-probe' \
+            -f description='JRA公式PDFの取得または抽出に失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
