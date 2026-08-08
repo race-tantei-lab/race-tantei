@@ -4,8 +4,9 @@
   "productionChanged": false,
   "promotionEligible": false,
   "versionAssigned": false,
-  "finalHoldoutOpened": false,
-  "finalHoldoutStart": "2026-05-01",
+  "currentSearchOpened2026MayHoldout": false,
+  "previousProjectRunsAlreadyOpened2026MayHoldout": true,
+  "previousHoldoutEvidence": "src/final-v5-router-entry.ts records v8.1 final-holdout results for 400 races per course from the 2026-05 final holdout",
   "fixedData": {
     "start": "2024-05-04",
     "end": "2026-08-02",
@@ -21,6 +22,7 @@
     "requireEveryCourseToPass": true,
     "requireFullHistoricalRoiPct": 200.0,
     "requireFinalHoldoutRoiPct": 200.0,
+    "requireCompletelyUnusedFinalHoldout": true,
     "requireRoiWithoutTop1Pct": 100.0,
     "officialOddsOnly": true,
     "actualJraPayoutsOnly": true,
@@ -94,10 +96,16 @@
     "description": "For most of the frozen historical archive, race_name is a placeholder and conditions/surface/distance are missing, so race distance/surface/class cannot be reconstructed from the stored pre-race fields without inference or external repair.",
     "syntheticRepairUsed": false
   },
+  "holdoutIntegrity": {
+    "canonicalRequirement": "completion requires a completely unused final holdout of at least 100 races per course",
+    "currentFixedArchiveStatus": "the previously designated 2026-05 final holdout is already contaminated by older project validation runs",
+    "consequence": "it cannot be honestly reused as the completely unused v16 promotion holdout",
+    "newCleanHoldoutAvailableInsideCurrent7695Races": false
+  },
   "conclusion": {
     "completedModelExists": false,
-    "reason": "No leakage-safe development policy found in this search reaches the mandatory 200% ROI in every course. The apparent 200%+ static patterns fail forward transfer and are rejected rather than promoted.",
-    "holdoutAction": "untouched because the development completion gate did not pass",
+    "reason": "No leakage-safe development policy found in this search reaches the mandatory 200% ROI in every course. The apparent 200%+ static patterns fail forward transfer and are rejected rather than promoted. In addition, the old 2026-05 final holdout has already been used by prior project runs, so it cannot satisfy the canonical completely-unused holdout gate for a new completion claim.",
+    "currentSearchHoldoutAction": "did not open 2026-05+ outcomes",
     "productionAction": "none"
   }
 }
