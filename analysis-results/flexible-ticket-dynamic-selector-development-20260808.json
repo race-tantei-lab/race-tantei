@@ -1,0 +1,63 @@
+{
+  "status": "internal development diagnostic; not a model; no version assigned",
+  "generatedAt": "2026-08-08",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "finalHoldoutEvaluated": false,
+  "fixedArchive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "races": 7695
+  },
+  "canonicalConstraints": {
+    "ticketCountFixed": false,
+    "ticketCountMayVaryByCourseRaceAndPolicy": true,
+    "minimumRacesPerVenueDay": 5,
+    "lightBudgetYen": 2000,
+    "requiredLightBetTypes": ["単勝", "ワイド", "馬連"],
+    "officialOddsOnly": true,
+    "actualJraPayoutsOnly": true,
+    "sameDateOutcomeLearning": false
+  },
+  "correctedRunnerModel": {
+    "legacyMarketFeaturesRemoved": true,
+    "correctOfficialWinOddsInjected": true,
+    "remainingLegacyFeatures": 139,
+    "newCorrectMarketFeatures": 3,
+    "oosBlocks": [[30,90],[90,150],[150,216]]
+  },
+  "dynamicActionFamily": {
+    "actionsPerRace": 80,
+    "ticketCountsExplored": [3,5,8,12,20],
+    "probabilitySources": ["corrected model + OOS top3", "corrected payout-weighted model + OOS top3"],
+    "marketResidualPowers": [0.25,0.5,0.75,1.0],
+    "ticketScoreOddsPowers": [0.6,0.8],
+    "budgetFullyUsed": true,
+    "requiredBetTypesPresentInEveryAction": true
+  },
+  "selectorEvaluation": {
+    "regressionL1Capped4x": {
+      "folds": [
+        {"dateIndexRange":[30,90],"selectedRaces":755,"roiPct":81.23509933774834,"roiWithoutLargestTicketReturnPct":80.0907284768212},
+        {"dateIndexRange":[90,150],"selectedRaces":835,"roiPct":86.04371257485029,"roiWithoutLargestTicketReturnPct":84.74311377245509},
+        {"dateIndexRange":[150,216],"selectedRaces":830,"roiPct":80.62710843373495,"roiWithoutLargestTicketReturnPct":80.08734939759036}
+      ],
+      "minimumDevelopmentFoldRoiPct": 80.62710843373495,
+      "meanDevelopmentFoldRoiPct": 82.6353067821112
+    },
+    "lambdaRank": {
+      "folds": [
+        {"dateIndexRange":[30,90],"selectedRaces":755,"roiPct":76.08609271523179},
+        {"dateIndexRange":[90,150],"selectedRaces":835,"roiPct":77.81017964071856},
+        {"dateIndexRange":[150,216],"selectedRaces":830,"roiPct":81.11807228915663}
+      ],
+      "minimumDevelopmentFoldRoiPct": 76.08609271523179
+    }
+  },
+  "decision": {
+    "developmentRoi200GatePassed": false,
+    "openFinalHoldout": false,
+    "promotion": "forbidden",
+    "reason": "the corrected flexible-ticket Light course remains far below the 200 percent development completion gate; the untouched final holdout must remain sealed"
+  }
+}
