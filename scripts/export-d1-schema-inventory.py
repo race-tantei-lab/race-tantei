@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 import urllib.request
 from pathlib import Path
@@ -36,22 +37,20 @@ def sql(query, params=None):
             time.sleep(attempt)
 
 
-def safe_ident(name):
-    return '"' + str(name).replace('"', '""') + '"'
+def parse_columns(create_sql):
+    text = str(create_sql or "")
+    m = re.search(r"\((.*)\)", text, re.S)
+    if not m:
+        return []
+    cols = []
+    for part in m.group(1).split(","):
+        token = part.strip().split()[0].strip('`"[]') if part.strip() else ""
+        if token and token.upper() not in {"PRIMARY", "UNIQUE", "FOREIGN", "CONSTRAINT", "CHECK"}:
+            cols.append(token)
+    return cols
 
-
-tables = sql("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-out = []
-for row in tables:
-    name = row["name"]
-    columns = sql(f"PRAGMA table_info({safe_ident(name)})")
-    count = sql(f"SELECT COUNT(*) AS n FROM {safe_ident(name)}")
-    out.append({
-        "name": name,
-        "rowCount": int(count[0]["n"]) if count else 0,
-        "columns": [c["name"] for c in columns],
-    })
-
+rows = sql("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+out = [{"name": r.get("name"), "columns": parse_columns(r.get("sql")), "createSql": r.get("sql")} for r in rows]
 OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 OUTPUT.write_text(json.dumps({"tables": out}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-print(json.dumps({"tableCount": len(out), "tables": [x["name"] for x in out]}, ensure_ascii=False))
+print(json.dumps({"tableCount": len(out), "tables": [{"name": x["name"], "columns": x["columns"]} for x in out]}, ensure_ascii=False))
