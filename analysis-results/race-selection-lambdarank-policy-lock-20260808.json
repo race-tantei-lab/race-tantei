@@ -1,0 +1,15 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeRaceSelectionRankReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "course":"light diagnostic first",
+  "fixedRacePortfolio":{"budgetYen":2000,"singleTicketYen":200,"tickets":{"win":1,"wide":4,"quinella":5},"requiredTypesPresent":true,"maximumSingleTicketShare":0.10},
+  "ticketRanking":{"win":"strict-OOS Elo/decay horse probability times JRA official win odds","wide":"product of the two strict-OOS Elo/decay horse probabilities times JRA official wide lower-bound odds","quinella":"product of the two strict-OOS Elo/decay horse probabilities times JRA official quinella odds"},
+  "raceFeatures":"pre-race summaries of top ticket scores/official odds/model-market divergence plus surface,distance,class,field size,race number,track condition; no outcomes",
+  "selector":{"type":"LightGBM LambdaRank","group":"raceDate x venue","selectExactly":5,"labelBins":{"0":"returnRate<0.5","1":"0.5<=returnRate<1","2":"1<=returnRate<2","3":"2<=returnRate<4","4":"returnRate>=4"},"learningRate":0.04,"numLeaves":15,"minDataInLeaf":30,"featureFraction":0.8,"maxBin":31,"rounds":100,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"sameDateLearning":false},
+  "coldStartFirst30Dates":"rank by mean of top-three pre-race ticket scores across win/wide/quinella",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "diagnostic":"full-history ROI and largest-ticket-removed ROI; no post-result threshold changes",
+  "completionGatesUnchanged":{"allCoursesFullHistoryRoiPctAtLeast":200,"allCoursesLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudgets":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
