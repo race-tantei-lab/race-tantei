@@ -1,0 +1,46 @@
+{
+  "status": "frozen holdout evaluation failed; not a model; no version assigned",
+  "evaluatedAt": "2026-08-08",
+  "lockedSpecificationCommit": "34899fe875f823f0e05a7a34293ff78c9235e62a",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "v16Assigned": false,
+  "holdout": {
+    "startDate": "2026-05-02",
+    "endDate": "2026-08-02",
+    "dateIndexRange": [216, 244],
+    "venueDays": 80,
+    "selectedRacesPerCourse": 400,
+    "selectedRacesPerVenueDay": 5
+  },
+  "results": {
+    "ライト": {
+      "stakeYen": 800000,
+      "returnYen": 307180,
+      "roiPct": 38.3975,
+      "roiWithoutLargestSingleTicketReturnPct": 13.3375,
+      "largestSingleTicketReturnYen": 200480
+    },
+    "スタンダード": {
+      "stakeYen": 2000000,
+      "returnYen": 2578370,
+      "roiPct": 128.9185,
+      "roiWithoutLargestSingleTicketReturnPct": 28.3085,
+      "largestSingleTicketReturnYen": 2012200
+    },
+    "プレミアム": {
+      "stakeYen": 4000000,
+      "returnYen": 1782940,
+      "roiPct": 44.5735,
+      "roiWithoutLargestSingleTicketReturnPct": 1.81425,
+      "largestSingleTicketReturnYen": 1710370
+    }
+  },
+  "interpretation": "The development-period stable-pocket discovery was selected using performance across all three development subperiods. Despite each retained cell exceeding 200 percent in all three subperiods, the frozen rules collapsed on the untouched holdout. This demonstrates severe multiple-testing / selection overfit in the discovery procedure rather than a reproducible 200-percent market edge.",
+  "integrityDecision": {
+    "reuseThisHoldoutForRedesign": false,
+    "changeRulesAfterSeeingHoldout": false,
+    "promote": false,
+    "reason": "Changing the rules or allocations to fit this already-opened holdout would violate the no-post-result-leakage condition."
+  }
+}
