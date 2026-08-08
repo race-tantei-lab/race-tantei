@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
   "immutableProjectRules": {
     "minimumRacesPerVenueDay": 5,
@@ -13,7 +13,9 @@
     "postResultLeakageForbidden": true,
     "singleOnlyPortfolioForbidden": true,
     "fullAvailablePeriodRequired": true,
-    "droppingEvaluationPeriodsForbidden": true
+    "droppingEvaluationPeriodsForbidden": true,
+    "ticketCountFixed": false,
+    "ticketCountMayVaryByCourseRaceAndPolicy": true
   },
   "promotionRules": {
     "completionRoiPct": 200.0,
@@ -41,21 +43,18 @@
   "courses": {
     "ライト": {
       "budgetYen": 2000,
-      "ticketCount": 6,
       "allowedBetTypes": ["単勝", "ワイド", "馬連"],
       "requireEveryAllowedBetType": true,
       "minimumDistinctBetTypes": 3
     },
     "スタンダード": {
       "budgetYen": 5000,
-      "ticketCount": 15,
       "allowedBetTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複"],
       "requireEveryAllowedBetType": true,
       "minimumDistinctBetTypes": 5
     },
     "プレミアム": {
       "budgetYen": 10000,
-      "ticketCount": 16,
       "allowedBetTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"],
       "requireEveryAllowedBetType": true,
       "minimumDistinctBetTypes": 6
