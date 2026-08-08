@@ -72,7 +72,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f artifacts/fixed-race-context-meta.json
-          git commit -m "Save fixed race context repair result" || exit 0
+          if ! git diff --cached --quiet; then
+            git commit -m "Save fixed race context repair result"
+          fi
+          # The parser was patched only inside this runner. Restore it before rebasing;
+          # otherwise git pull --rebase rejects the dirty worktree even though repair succeeded.
+          git restore -- scripts/repair-fixed-race-context.py
           git pull --rebase origin main
           git push origin HEAD:main
       - name: Publish repair success
@@ -89,7 +94,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='analysis/fixed-race-context' \
-            -f description='芝ダート・距離の復元が98%未満' \
+            -f description='復元処理または結果保存に失敗' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
-
-# Final completion audit rerun: no rule or parser change.
