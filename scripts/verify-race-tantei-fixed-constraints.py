@@ -9,7 +9,7 @@ PROMOTION_GATE = ROOT / "scripts" / "verify-production-candidate.py"
 PROMOTER = ROOT / "scripts" / "find-and-promote-production-candidate.py"
 
 EXPECTED = {
-    "version": 4,
+    "version": 5,
     "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
     "immutableProjectRules": {
         "minimumRacesPerVenueDay": 5,
@@ -24,6 +24,8 @@ EXPECTED = {
         "singleOnlyPortfolioForbidden": True,
         "fullAvailablePeriodRequired": True,
         "droppingEvaluationPeriodsForbidden": True,
+        "ticketCountFixed": False,
+        "ticketCountMayVaryByCourseRaceAndPolicy": True,
     },
     "promotionRules": {
         "completionRoiPct": 200.0,
@@ -51,21 +53,18 @@ EXPECTED = {
     "courses": {
         "ライト": {
             "budgetYen": 2000,
-            "ticketCount": 6,
             "allowedBetTypes": ["単勝", "ワイド", "馬連"],
             "requireEveryAllowedBetType": True,
             "minimumDistinctBetTypes": 3,
         },
         "スタンダード": {
             "budgetYen": 5000,
-            "ticketCount": 15,
             "allowedBetTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複"],
             "requireEveryAllowedBetType": True,
             "minimumDistinctBetTypes": 5,
         },
         "プレミアム": {
             "budgetYen": 10000,
-            "ticketCount": 16,
             "allowedBetTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"],
             "requireEveryAllowedBetType": True,
             "minimumDistinctBetTypes": 6,
@@ -75,6 +74,8 @@ EXPECTED = {
 
 REQUIRED_DOC_TEXT = (
     "各開催日・各会場で、購入対象を5レース未満にしてはならない。",
+    "買い目点数は固定しない。",
+    "券種は固定条件だが、各券種の点数配分は固定条件ではない。",
     "単勝だけへ絞ることは禁止する。",
     "回収率200%以上は目標ではなく完成条件とする。",
     "探索途中の候補にはバージョン番号を付けない。",
@@ -94,7 +95,7 @@ def main() -> None:
     actual = json.loads(CONFIG.read_text(encoding="utf-8"))
     if actual != EXPECTED:
         raise SystemExit(
-            "FIXED_CONSTRAINTS_CHANGED: minimum five races, fixed budgets, diversified bets, "
+            "FIXED_CONSTRAINTS_CHANGED: minimum five races, fixed budgets, flexible ticket counts, diversified bets, "
             "official odds only, full-period coverage, completion ROI 200, no candidate version numbers, "
             "and reporting rules are immutable."
         )
@@ -124,7 +125,14 @@ def main() -> None:
     if 'approvedModelVersion' not in promotion_source or 'modelVersion' not in promotion_source:
         raise SystemExit("APPROVED_VERSION_MUST_BE_ASSIGNED_ONLY_BY_PROMOTER")
 
+    if actual["immutableProjectRules"].get("ticketCountFixed") is not False:
+        raise SystemExit("TICKET_COUNT_MUST_NOT_BE_FIXED")
+    if actual["immutableProjectRules"].get("ticketCountMayVaryByCourseRaceAndPolicy") is not True:
+        raise SystemExit("TICKET_COUNT_FLEXIBILITY_MISSING")
+
     for course, spec in actual["courses"].items():
+        if "ticketCount" in spec:
+            raise SystemExit(f"TICKET_COUNT_MUST_NOT_BE_CANONICAL:{course}")
         if spec["budgetYen"] <= 0:
             raise SystemExit(f"INVALID_COURSE_BUDGET:{course}")
         if spec["minimumDistinctBetTypes"] != len(spec["allowedBetTypes"]):
