@@ -56,15 +56,18 @@ jobs:
         run: python -m pip install --disable-pip-version-check numpy pandas lightgbm
       - name: Verify immutable constraints
         run: python scripts/verify-race-tantei-fixed-constraints.py
-      - name: Optimize race-row lookup without changing policy
+      - name: Align official odds to active runners and optimize lookup without changing policy
         run: |
           python - <<'PY'
           from pathlib import Path
           p=Path('scripts/evaluate-speed-enriched-high-order-policy.py'); s=p.read_text(encoding='utf-8')
+          old='''for ri,rec in enumerate(odds_records):\n    rid=rec["raceId"]; horses=[int(x) for x in rec["horses"]]\n    pn=model_combo_probs(runner_prob(rid,horses,normalP)); pr=model_combo_probs(runner_prob(rid,horses,residP))\n    for bt in BET_TYPES:\n        vals=official_values(rec,bt); mass=3.0 if bt=="wide" else 1.0; pm=official_market(vals,mass)\n        combos=combo_tuples(horses,bt); actual_map=payout[rid][bt]'''
+          new='''for ri,rec in enumerate(odds_records):\n    rid=rec["raceId"]\n    all_horses=[int(x) for x in rec["horses"]]\n    active=race_rows[rid]\n    horses=[h for h in all_horses if h in active]\n    pn=model_combo_probs(runner_prob(rid,horses,normalP)); pr=model_combo_probs(runner_prob(rid,horses,residP))\n    for bt in BET_TYPES:\n        all_combos=combo_tuples(all_horses,bt)\n        keep=[j for j,c in enumerate(all_combos) if all(int(h) in active for h in c)]\n        raw_vals=official_values(rec,bt)\n        vals=raw_vals[keep]\n        mass=3.0 if bt=="wide" else 1.0; pm=official_market(vals,mass)\n        combos=combo_tuples(horses,bt)\n        if len(vals)!=len(combos): raise RuntimeError(f"ACTIVE_ODDS_ALIGNMENT:{bt}:{rid}:{len(vals)}:{len(combos)}")\n        actual_map=payout[rid][bt]'''
+          if old not in s: raise SystemExit('HIGH_ORDER_ACTIVE_PATCH_TARGET_NOT_FOUND')
+          s=s.replace(old,new,1)
           old="""for ri,rid in enumerate(race_ids):\n    g=meta[meta['raceIndex']==ri]; ids=g.index.to_numpy(int); mp=g['marketP'].to_numpy(float); pn=normalP[ids]; pr=residP[ids]; row=g.iloc[0]"""
           new="""for ri,rid in enumerate(race_ids):\n    ids=np.fromiter(race_rows[rid].values(),dtype=int); g=meta.iloc[ids]; mp=g['marketP'].to_numpy(float); pn=normalP[ids]; pr=residP[ids]; row=g.iloc[0]"""
-          if old in s:
-              s=s.replace(old,new,1)
+          if old in s: s=s.replace(old,new,1)
           p.write_text(s,encoding='utf-8')
           PY
       - name: Evaluate locked Standard and Premium policy
