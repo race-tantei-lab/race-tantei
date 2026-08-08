@@ -31,14 +31,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install --disable-pip-version-check beautifulsoup4
-      - name: Crawl all 2026-08-08 JRA result pages and official odds
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4 requests
+      - name: Export all 2026-08-08 JRA result pages and official odds
         run: |
           python - <<'PY'
           import concurrent.futures, json, os, re, urllib.request
           from pathlib import Path
+          import requests
           ROOT=Path('.'); OUT=ROOT/'artifacts'/'v16-20260808-readonly'; OUT.mkdir(parents=True,exist_ok=True)
           HTML=OUT/'result-html'; HTML.mkdir(exist_ok=True)
+
+          # D1 is queried SELECT-only, just to preserve any already-synced runner rows as a convenience.
           token=os.environ['CLOUDFLARE_API_TOKEN']; account=os.environ['CLOUDFLARE_ACCOUNT_ID']; database=os.environ['CLOUDFLARE_D1_DATABASE_ID']
           endpoint=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{database}/query'
           def d1(sql, params=None):
@@ -47,63 +50,65 @@ jobs:
               if not p.get('success'): raise RuntimeError(p.get('errors'))
               return p.get('result',[{}])[0].get('results',[])
           names=[x['name'] for x in d1("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
-          (OUT/'table-names.json').write_text(json.dumps(names,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
           seed=d1("SELECT * FROM rt_races WHERE race_date=? ORDER BY venue,race_no",['2026-08-08'])
           (OUT/'d1-races.json').write_text(json.dumps(seed,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          print(json.dumps({'d1SeedRaces':len(seed),'venues':sorted(set(r.get('venue') for r in seed))},ensure_ascii=False),flush=True)
           ids=[r['race_id'] for r in seed]
+          print(json.dumps({'d1SeedRaces':len(seed)},ensure_ascii=False),flush=True)
           for table in names:
               low=table.lower()
               if not table.startswith('rt_') or not any(k in low for k in ('runner','predict','result','payout','ticket','odds')): continue
               try:
-                  colnames=[c['name'] for c in d1(f"PRAGMA table_info({table})")]
-                  race_col='race_id' if 'race_id' in colnames else ('raceId' if 'raceId' in colnames else None)
-                  date_col='race_date' if 'race_date' in colnames else ('raceDate' if 'raceDate' in colnames else None)
-                  if race_col and ids:
-                      marks=','.join('?' for _ in ids); rows=d1(f"SELECT * FROM {table} WHERE {race_col} IN ({marks})",ids)
-                  elif date_col: rows=d1(f"SELECT * FROM {table} WHERE {date_col}=?",['2026-08-08'])
+                  cols=[c['name'] for c in d1(f"PRAGMA table_info({table})")]
+                  if 'race_id' in cols and ids:
+                      marks=','.join('?' for _ in ids); rows=d1(f"SELECT * FROM {table} WHERE race_id IN ({marks})",ids)
+                  elif 'race_date' in cols: rows=d1(f"SELECT * FROM {table} WHERE race_date=?",['2026-08-08'])
                   else: continue
                   (OUT/f'{table}.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2,default=str)+'\n',encoding='utf-8')
                   print(json.dumps({'table':table,'rows':len(rows)},ensure_ascii=False),flush=True)
               except Exception as e: print(json.dumps({'table':table,'error':f'{type(e).__name__}:{e}'},ensure_ascii=False),flush=True)
 
-          hdr={'User-Agent':'Mozilla/5.0 (compatible; RaceTanteiAug8ReadOnly/1.0; +https://www.jra.go.jp/)','Accept-Language':'ja'}
-          venue_map={'01':'札幌','04':'新潟','07':'中京'}
-          pat=re.compile(r'(pw01sde01(01|04|07)2026(01|02)(\d{2})(\d{2})20260808/[0-9A-Za-z]+)')
-          def key_from_url(url):
-              m=pat.search(url)
-              if not m: return None
-              return (m.group(2),int(m.group(4)),int(m.group(5)))
-          known={}
-          queue=[]
-          for r in seed:
-              u=r.get('result_url')
-              if u:
-                  k=key_from_url(u)
-                  if k and k not in known: known[k]=u; queue.append(u)
-          seen=set()
-          while queue and len(known)<36:
-              u=queue.pop(0)
-              if u in seen: continue
-              seen.add(u)
+          # Official past-results index: month -> meeting-day -> exact race result CNAMEs.
+          sess=requests.Session(); sess.headers.update({'User-Agent':'Mozilla/5.0 (compatible; RaceTanteiAug8ReadOnly/1.0; +https://www.jra.go.jp/)','Accept-Language':'ja'})
+          def post_s(cname):
+              r=sess.post('https://www.jra.go.jp/JRADB/accessS.html',data={'cname':cname},timeout=60)
+              r.encoding='cp932'; r.raise_for_status(); return r.text
+          seed_html=post_s('pw01skl00999999/B3')
+          m=re.search(r'objParam\["2608"\]\s*=\s*"([0-9A-Fa-f]{2})"',seed_html)
+          if not m: raise RuntimeError('AUG2026_CHECKDIGIT_NOT_FOUND')
+          month_cname='pw01skl10202608/'+m.group(1)
+          month_html=post_s(month_cname)
+          srl=set(re.findall(r"(pw01srl[^'\"\s<>]+/[0-9A-Fa-f]{2})",month_html))
+          print(json.dumps({'monthCname':month_cname,'meetingLinks':len(srl)}),flush=True)
+          result_tokens=set()
+          for i,cname in enumerate(sorted(srl),1):
               try:
-                  with urllib.request.urlopen(urllib.request.Request(u,headers=hdr),timeout=45) as rr: raw=rr.read()
-                  html=raw.decode('cp932','replace')
-                  k=key_from_url(u)
-                  if k: (HTML/f'{k[0]}-{k[1]:02d}-{k[2]:02d}.html').write_text(html,encoding='utf-8')
-                  for full,vc,meeting,day,rno in pat.findall(html):
-                      kk=(vc,int(day),int(rno))
-                      nu='https://www.jra.go.jp/JRADB/accessS.html?CNAME='+full
-                      if kk not in known: known[kk]=nu; queue.append(nu)
-              except Exception as e: print(json.dumps({'crawlError':u,'error':f'{type(e).__name__}:{e}'},ensure_ascii=False),flush=True)
-              print(json.dumps({'crawled':len(seen),'discovered':len(known)},ensure_ascii=False),flush=True)
+                  h=post_s(cname)
+                  result_tokens.update(re.findall(r"(pw01sde[^'\"\s<>]+20260808/[0-9A-Fa-f]{2})",h))
+              except Exception as e: print(json.dumps({'meetingError':cname,'error':str(e)}),flush=True)
+          # Keep only the three scheduled venues (01 Sapporo, 04 Niigata, 07 Chukyo) and 12 races each.
+          race_pat=re.compile(r'pw01sde01(01|04|07)2026(01|02)05(\d{2})20260808/[0-9A-Fa-f]{2}')
+          venue_map={'01':('札幌','sapporo'),'04':('新潟','niigata'),'07':('中京','chukyo')}
           rows=[]
-          for (vc,day,rno),url in sorted(known.items()):
-              rows.append({'raceId':f"2026-08-08-{ {'01':'sapporo','04':'niigata','07':'chukyo'}[vc]}-{rno:02d}",'raceDate':'2026-08-08','venue':venue_map[vc],'raceNo':rno,'resultUrl':url,'venueCode':vc,'meetingDay':day})
+          for cname in sorted(result_tokens):
+              mm=race_pat.fullmatch(cname)
+              if not mm: continue
+              vc=mm.group(1); rno=int(mm.group(3))
+              if not 1<=rno<=12: continue
+              jp,en=venue_map[vc]
+              rows.append({'raceId':f'2026-08-08-{en}-{rno:02d}','raceDate':'2026-08-08','venue':jp,'raceNo':rno,'resultUrl':'https://www.jra.go.jp/JRADB/accessS.html?CNAME='+cname,'venueCode':vc})
+          dedup={(r['venueCode'],r['raceNo']):r for r in rows}; rows=[dedup[k] for k in sorted(dedup)]
           (OUT/'discovered-races.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          print(json.dumps({'discoveredFinal':len(rows),'byVenue':{v:sum(x['venue']==v for x in rows) for v in venue_map.values()}},ensure_ascii=False),flush=True)
-          if len(rows)!=36: raise RuntimeError(f'JRA_CRAWL_INCOMPLETE:{len(rows)}/36')
+          print(json.dumps({'officialResultUrls':len(rows),'byVenue':{jp:sum(x['venue']==jp for x in rows) for jp,_ in venue_map.values()}},ensure_ascii=False),flush=True)
+          if len(rows)!=36: raise RuntimeError(f'OFFICIAL_RESULT_URLS_INCOMPLETE:{len(rows)}/36')
 
+          # Save result HTML for later runner/result/payout parsing.
+          def fetch_html(row):
+              r=sess.get(row['resultUrl'],timeout=60); r.encoding='cp932'; r.raise_for_status(); return row,r.text
+          with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+              for row,html in pool.map(fetch_html,rows):
+                  (HTML/f"{row['raceId']}.html").write_text(html,encoding='utf-8')
+
+          # Reuse the audited six-bet-type JRA odds parser.
           parser=ROOT/'scripts'/'export-mobile-historical-official-odds-retry.py'; source=parser.read_text(encoding='utf-8'); marker='# Rebuild exactly the same deterministic 3,210-race selection used by the primary export.'
           ns={'__file__':str(parser)}; exec(compile(source.split(marker,1)[0],str(parser),'exec'),ns); fetch_race=ns['fetch_race']
           odds=[]; failures=[]
