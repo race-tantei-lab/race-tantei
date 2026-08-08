@@ -1,0 +1,48 @@
+{
+  "status": "internal policy lock before holdout evaluation; not yet v16",
+  "lockedAt": "2026-08-08",
+  "holdoutEvaluatedAtLock": false,
+  "sourceArchive": {
+    "races": 7695,
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "officialJraOddsOnly": true,
+    "actualJraPayoutsOnly": true
+  },
+  "runnerModel": {
+    "featureCount": 147,
+    "calendarFeatureCount": 4,
+    "calendarFeatures": ["calendarMonthSin", "calendarMonthCos", "dayOfYearSin", "dayOfYearCos"],
+    "rawYearUsed": false,
+    "rawDateOrdinalUsed": false,
+    "calendarRuleMiningUsed": false,
+    "marketResidualHistoryFeaturesRemoved": true,
+    "chronologicalSameDateFreeze": true
+  },
+  "discovery": {
+    "holdoutRaceDatesExcluded": 55,
+    "trainingRaceDates": 189,
+    "ruleCount": 121,
+    "ruleDiscoveryUsesCalendarFields": false,
+    "stableRuleGate": "each of three season-balanced inner folds ROI >= 200%, each inner fold n >= 8, combined ROI without largest ticket >= 100%",
+    "ruleCountByBetType": {"単勝":14,"ワイド":17,"馬連":30,"馬単":28,"3連複":19,"3連単":13}
+  },
+  "fixedPolicy": {
+    "raceSelection": "for each raceDate x venue choose exactly five races by highest primary stable-distortion score; fallback model score is used only when fewer than five races have a stable-distortion hit",
+    "minimumDistinctBetTypesPerRace": 2,
+    "ticketsPerSelectedRace": 4,
+    "mainBetTypeTickets": 2,
+    "secondaryBetTypeTickets": 2,
+    "stakeAllocation": [0.40,0.40,0.10,0.10],
+    "singleTicketBudgetCapPct": 40,
+    "ticketCountFixedProjectWide": false,
+    "note": "four tickets is this locked policy output, not a canonical project-wide constraint"
+  },
+  "trainingOnlyResults": {
+    "selectedRaces": 2485,
+    "roiPct": 300.53923541247485,
+    "roiWithoutLargestSingleTicketReturnPct": 270.1022132796781,
+    "roiByCalendarYearPct": {"2024":329.0936170212766,"2025":283.68108108108106,"2026":298.4223880597015}
+  },
+  "nextStep": "apply this exact frozen policy once to the fixed season-balanced 55-date holdout; do not alter rules, scoring, race selection, ticket selection or allocation after observing holdout outcomes"
+}
