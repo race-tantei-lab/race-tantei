@@ -1,0 +1,20 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeMarketTiltReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "signal":"strict-OOS speed-conditioned horse market-residual probability",
+  "principle":"preserve each JRA ticket market distribution and only tilt it by the horse-level model-vs-win-market log probability edge",
+  "horseEdge":"log(speedOosWinProbability / normalizedJraWinMarketProbability), clipped to [-1.5,1.5]",
+  "ticketMarketProbability":{"win":"normalized inverse JRA win odds, mass 1","quinella":"normalized inverse JRA quinella odds, mass 1","wide":"normalized inverse JRA wide lower-bound odds, mass 3"},
+  "tiltExperts":[0.0,0.25,0.5,0.75,1.0],
+  "tiltFormula":{"win":"marketP * exp(alpha * horseEdge)","quinella":"marketPairP * exp(alpha * (edgeHorseA + edgeHorseB))","wide":"marketPairP * exp(alpha * (edgeHorseA + edgeHorseB))"},
+  "renormalization":"renormalize each ticket pool back to its original race mass before scoring",
+  "ticketScore":"tilted ticket probability * corresponding JRA official odds; wide uses official lower bound",
+  "expertChoice":{"unit":"bet type","coldStartDates":30,"coldStartAlpha":0.5,"afterColdStart":"highest Bayesian-shrunk decayed top-ticket return using dates strictly before current race date","decayHalfLifeDays":120,"priorEquivalentTickets":40,"priorReturnRate":0.8,"sameDateLearning":false},
+  "raceSelection":{"countPerRaceDateVenue":5,"selector":"expanding LightGBM Huber regression of realized fixed-portfolio race return using prior dates only","retrainDateIndices":[30,90,150,210],"coldStart":"mean top-3 ticket score across required types","sameDateLearning":false},
+  "budget":{"light":2000,"unitYen":100,"requiredBetTypes":["win","wide","quinella"],"minimumRequiredBetTypeStakeYen":100,"maximumSingleTicketShare":0.10,"budgetMustBeFullyUsed":true},
+  "allocation":"mandatory 100 yen to the top ticket of each required type, then allocate remaining units by ticket score multiplied by prior-date Bayesian type/expert return, respecting 10% per-ticket cap",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "completionGates":{"fullHistoryRoiPctAtLeast":200,"largestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudget":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
