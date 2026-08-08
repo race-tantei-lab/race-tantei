@@ -1,0 +1,101 @@
+{
+  "generatedAtJst": "2026-08-08",
+  "status": "not a model; no version assigned; not promotion eligible",
+  "productionChangedByThisAnalysis": false,
+  "freshHoldoutOpened": false,
+  "developmentArchive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "races": 7695,
+    "runners": 106122
+  },
+  "recoveredRaceContext": {
+    "officialContextRecoveredRaces": 7593,
+    "coveragePct": 98.67446393762183,
+    "surfaceCounts": {
+      "turf": 3758,
+      "dirt": 3632,
+      "obstacle": 203,
+      "unknown": 102
+    },
+    "raceClassRecovered": true,
+    "syntheticContextUsed": false
+  },
+  "officialOdds": {
+    "historicalJraOddsAccessMethod": "official hidden race CNAME posted with lowercase cname to JRA historical odds endpoint; mobile sw CNAMEs used for mobile result URLs",
+    "selected3210": {
+      "races": 3210,
+      "raceDateVenueGroups": 642,
+      "racesPerGroup": 5,
+      "duplicates": 0,
+      "syntheticOddsUsed": false,
+      "estimatedOddsUsed": false,
+      "combinationCoveragePct": {
+        "win": 100.0,
+        "wide": 100.0,
+        "quinella": 100.0,
+        "exacta": 99.99931708609535,
+        "trio": 99.99984046238782,
+        "trifecta": 99.27685614580631
+      },
+      "missingCombinations": "left missing exactly as JRA published; no fabrication"
+    },
+    "allDevelopmentRacesLight": {
+      "races": 7695,
+      "duplicates": 0,
+      "raceCoveragePct": 100.0,
+      "winCombinationCoveragePct": 100.0,
+      "wideCombinationCoveragePct": 100.0,
+      "quinellaCombinationCoveragePct": 100.0,
+      "syntheticOddsUsed": false,
+      "estimatedOddsUsed": false
+    }
+  },
+  "strictTiming": {
+    "sameDateOutcomesAvailableForDecision": false,
+    "futureOutcomesAvailableForDecision": false,
+    "freshHoldoutStart": "2026-08-08",
+    "freshHoldoutTouched": false
+  },
+  "rejectedSearchSummary": {
+    "lockedOfficialOddsPolicy3210": {
+      "note": "pre-locked before bulk odds evaluation; rejected because completion ROI gate failed",
+      "lightRoiPct": 67.451,
+      "lightTrimmedRoiPct": 62.704,
+      "standardRoiPct": 73.927,
+      "standardTrimmedRoiPct": 65.200,
+      "premiumRoiPct": 83.677,
+      "premiumTrimmedRoiPct": 71.583
+    },
+    "all7695SimpleOfficialOddsValueSelection": {
+      "note": "strict pre-race model probability plus actual official odds; exactly five races per raceDate x venue; rejected",
+      "bestObservedRoiPctApprox": 82.173,
+      "trimmedRoiPctApprox": 81.610
+    },
+    "all7695TwoStageTicketAndRaceSelection": {
+      "note": "ticket-level LightGBM trained only on earlier blocks; predicted ticket return aggregated to race; exactly top five races selected before outcome; rejected",
+      "lightRoiPct": 53.17694704049844,
+      "lightTrimmedRoiPct": 24.412461059190033,
+      "selectedRaces": 3210,
+      "raceDateVenueGroups": 642,
+      "sameDateLeakage": false
+    },
+    "dynamicRequiredBetTypeAllocationTransfer": {
+      "note": "required Light bet types retained; residual budget dynamically allocated by pre-race score; train 2024-05-04..2025-04-30 then validation 2025-05-01..2026-04-30; rejected",
+      "representativeTrainingRoiPct": 78.73007246376811,
+      "representativeValidationRoiPct": 81.37132867132867
+    },
+    "staticHighRoiPatterns": {
+      "note": "older full-development post-hoc patterns exceeded 200 but failed frozen forward transfer and remain disqualified",
+      "disqualified": true
+    }
+  },
+  "completion": {
+    "completedModelExists": false,
+    "v16Assigned": false,
+    "developmentAllCourseRoiGatePassed": false,
+    "freshFinalHoldoutGatePassed": false,
+    "productionPromotionAllowed": false,
+    "reason": "No leakage-safe policy found in this search reaches the mandatory 200% development ROI gate for every course. Official historical odds materially expanded the legitimate data available but did not create a transferable 200% Light policy. The untouched final holdout beginning 2026-08-08 remains sealed."
+  }
+}
