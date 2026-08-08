@@ -1,0 +1,17 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforePairReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "horseSignal":"strict-OOS 164-feature speed+draw market-residual ensemble fixed in speed-gate-residual-policy-lock-20260808.json",
+  "betTypes":["wide","quinella"],
+  "marketPrior":{"quinella":"normalized inverse JRA official quinella odds, race probability mass 1","wide":"normalized inverse JRA official wide lower-bound odds, race probability mass 3"},
+  "pairFeatures":["official pair market probability and log official odds","two strict-OOS horse probabilities","two normalized JRA win-market probabilities","two log horse model/market edges and their sum/min/max/absolute difference","two win-odds/popularity values and gaps","two draw-position normalized values and gap","selected horse/horse-surface/horse-surface-distance speed-history summaries for both horses","race venue/surface/distance/class/track/field-size/race-number context"],
+  "model":{"type":"LightGBM binary market-residual classifier","marketPriorAsInitScore":true,"learningRate":0.035,"numLeaves":31,"minDataInLeaf":500,"featureFraction":0.80,"rounds":150,"lambdaL2":10.0,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"coldStartDates":30,"coldStart":"official pair market probability","sameDateLearning":false},
+  "postPredictionNormalization":{"quinellaRaceMass":1,"wideRaceMass":3},
+  "ticketScore":"strict-OOS pair hit probability multiplied by corresponding JRA official odds; wide uses official lower bound",
+  "lightPortfolio":{"budgetYen":2000,"requiredBetTypes":["win","wide","quinella"],"minimumStakePerRequiredTypeYen":100,"maximumSingleTicketShare":0.10,"budgetMustBeFullyUsed":true,"raceCountPerRaceDateVenue":5},
+  "raceSelection":"expanding prior-date-only LightGBM Huber selector using ticket-score summaries and race context, retrained only at fixed indices 30/90/150/210; cold start uses mean top-3 score",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "completionGates":{"fullHistoryRoiPctAtLeast":200,"largestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudget":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
