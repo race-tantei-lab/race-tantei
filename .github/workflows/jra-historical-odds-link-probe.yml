@@ -1,5 +1,5 @@
-name: JRA historical odds type map
-run-name: JRA historical odds type map · ${{ github.sha }}
+name: JRA historical odds structure probe
+run-name: JRA historical odds structure probe · ${{ github.sha }}
 
 on:
   push:
@@ -21,13 +21,13 @@ jobs:
       STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Start
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ全券種を構造解析中' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/jra-historical-odds' -f description='JRA3連系オッズ表の軸構造を解析中' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: python -m pip install --disable-pip-version-check beautifulsoup4
-      - name: Map all odds pages
+      - name: Capture table metadata
         run: |
           python - <<'PY'
           import json, urllib.request, urllib.parse, re, http.cookiejar
@@ -38,47 +38,47 @@ jobs:
           cj=http.cookiejar.CookieJar(); op=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
           hdr={'User-Agent':'Mozilla/5.0','Accept-Language':'ja','Referer':'https://www.jra.go.jp/'}
           with op.open(urllib.request.Request(result_url,headers=hdr),timeout=60) as r: r.read()
-          def post(cname, referer=result_url):
+          def post(cname):
               data=urllib.parse.urlencode({'cname':cname}).encode('ascii')
-              req=urllib.request.Request('https://www.jra.go.jp/JRADB/accessO.html',data=data,headers={**hdr,'Referer':referer,'Content-Type':'application/x-www-form-urlencoded'},method='POST')
-              with op.open(req,timeout=60) as r: raw=r.read(); final=r.geturl()
-              html=raw.decode('cp932','replace'); soup=BeautifulSoup(html,'html.parser')
-              return raw,final,html,soup
-          raw,final,html,soup=post(first)
+              req=urllib.request.Request('https://www.jra.go.jp/JRADB/accessO.html',data=data,headers={**hdr,'Referer':'https://www.jra.go.jp/JRADB/accessO.html','Content-Type':'application/x-www-form-urlencoded'},method='POST')
+              with op.open(req,timeout=60) as r: raw=r.read()
+              html=raw.decode('cp932','replace'); return html,BeautifulSoup(html,'html.parser')
+          html,soup=post(first)
           calls=[]
           for tag in soup.find_all(onclick=True):
-              v=tag.get('onclick','')
-              m=re.search(r"doAction\('/JRADB/accessO\.html'\s*,\s*'([^']+)'\)",v)
-              if m and re.match(r'pw15[1-8]o[up]',m.group(1)):
-                  calls.append(m.group(1))
-          # current-race type pages only
-          current=[x for x in dict.fromkeys(calls) if '10082024030502' in x and re.match(r'pw15[1-8]o',x)]
-          pages=[]
+              m=re.search(r"doAction\('/JRADB/accessO\.html'\s*,\s*'([^']+)'\)",tag.get('onclick',''))
+              if m and '10082024030502' in m.group(1) and re.match(r'pw15[1-8]o',m.group(1)): calls.append(m.group(1))
+          current=list(dict.fromkeys(calls))
+          out=[]; rawdir=Path('artifacts/odds-html'); rawdir.mkdir(parents=True,exist_ok=True)
           for cname in current:
-              raw2,final2,html2,soup2=post(cname,'https://www.jra.go.jp/JRADB/accessO.html')
-              tables=[]
-              for table in soup2.find_all('table'):
-                  rr=[]
-                  for tr in table.find_all('tr')[:30]:
-                      cells=[' '.join(c.stripped_strings) for c in tr.find_all(['th','td'])]
-                      if cells: rr.append(cells)
-                  if rr: tables.append(rr)
-              pages.append({'cname':cname,'title':soup2.title.get_text(' ',strip=True) if soup2.title else '', 'bytes':len(raw2),'finalUrl':final2,'tables':tables[:5]})
-          Path('artifacts').mkdir(exist_ok=True)
-          out={'race':'2024-05-04-kyoto-02','pages':pages}
-          Path('artifacts/jra-historical-odds-link-probe.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          print(json.dumps([{'cname':x['cname'],'title':x['title'],'tables':len(x['tables']),'sample':x['tables'][0][:3] if x['tables'] else []} for x in pages],ensure_ascii=False))
-          if len(pages) < 6: raise SystemExit('TYPE_MAP_INCOMPLETE')
+              html2,soup2=post(cname)
+              prefix=re.match(r'(pw15\d)',cname).group(1)
+              rawdir.joinpath(prefix+'.html').write_text(html2,encoding='utf-8')
+              metas=[]
+              for idx,t in enumerate(soup2.find_all('table')):
+                  rows=[]
+                  for tr in t.find_all('tr')[:12]:
+                      cells=[' '.join(x.stripped_strings) for x in tr.find_all(['th','td'])]
+                      if cells: rows.append(cells)
+                  prev=[]; node=t
+                  for _ in range(8):
+                      node=node.find_previous()
+                      if node is None: break
+                      txt=' '.join(node.stripped_strings)
+                      if txt and len(txt)<250: prev.append({'tag':node.name,'class':node.get('class'),'id':node.get('id'),'text':txt})
+                  parent=t.parent
+                  metas.append({'index':idx,'attrs':dict(t.attrs),'rows':rows,'previous':prev[:8], 'parentTag':parent.name if parent else None,'parentClass':parent.get('class') if parent else None,'parentId':parent.get('id') if parent else None})
+              out.append({'cname':cname,'title':soup2.title.get_text(' ',strip=True) if soup2.title else '', 'tables':metas})
+          Path('artifacts/jra-historical-odds-link-probe.json').write_text(json.dumps({'pages':out},ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps([{'cname':p['cname'],'title':p['title'],'tableCount':len(p['tables']),'tableAttrs':[x['attrs'] for x in p['tables'][:5]],'prev':[x['previous'][:2] for x in p['tables'][:5]]} for p in out],ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: jra-historical-odds-link-probe
-          path: artifacts/jra-historical-odds-link-probe.json
+          path: |
+            artifacts/jra-historical-odds-link-probe.json
+            artifacts/odds-html/*.html
           retention-days: 7
       - name: Success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ全券種構造確定' -f target_url="$STATUS_TARGET_URL" >/dev/null
-      - name: Failure
-        if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ券種構造解析失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/jra-historical-odds' -f description='JRA3連系オッズ表構造確定' -f target_url="$STATUS_TARGET_URL" >/dev/null
