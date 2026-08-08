@@ -55,11 +55,12 @@ def month_ranges(start, end):
 
 
 schema = {}
-for table in ("rt_races", "rt_runners", "rt_payouts"):
+for table in ("rt_races", "rt_runners", "rt_results", "rt_payouts"):
     schema[table] = sql(f"PRAGMA table_info({table})")
 
 races = []
 runners = []
+results = []
 payouts = []
 
 for start, end in month_ranges(START, END):
@@ -91,6 +92,19 @@ for start, end in month_ranges(START, END):
         """,
         [start, end],
     ))
+    results.extend(sql(
+        """
+        SELECT
+          r.race_id raceId, r.race_date raceDate, r.venue, r.race_no raceNo,
+          rs.horse_no horseNo, rs.finish_position finishPosition,
+          rs.time_text timeText, rs.margin_text marginText, rs.final3f
+        FROM rt_races r
+        JOIN rt_results rs ON rs.race_id = r.race_id
+        WHERE r.race_date >= ? AND r.race_date < ? AND r.status = 'finished'
+        ORDER BY r.race_date, r.venue, r.race_no, rs.horse_no
+        """,
+        [start, end],
+    ))
     payouts.extend(sql(
         """
         SELECT
@@ -106,6 +120,7 @@ for start, end in month_ranges(START, END):
 
 race_ids = sorted({row["raceId"] for row in races})
 runner_race_ids = {row["raceId"] for row in runners}
+result_race_ids = {row["raceId"] for row in results}
 payout_race_ids = {row["raceId"] for row in payouts}
 if len(race_ids) != EXPECTED_RACES:
     raise RuntimeError(f"COMPLETION_RACE_COUNT_MISMATCH:{len(race_ids)}")
@@ -116,16 +131,18 @@ if missing_payout:
     raise RuntimeError(f"PAYOUT_COVERAGE_MISMATCH:{len(missing_payout)}")
 
 payload = {
-    "schemaVersion": 1,
+    "schemaVersion": 2,
     "source": "fixed existing D1 finished races; no new ingestion",
     "rules": {
         "postResultLeakageForbidden": True,
         "syntheticOddsForbidden": True,
         "actualJraPayoutsOnly": True,
         "officialWinOddsOnly": True,
+        "historicalResultsUsableOnlyAfterTheirRaceDate": True,
     },
     "races": races,
     "runners": runners,
+    "results": results,
     "payouts": payouts,
     "tableSchema": schema,
 }
@@ -136,12 +153,15 @@ with gzip.open(OUTPUT, "wb", compresslevel=5) as handle:
 meta = {
     "races": len(race_ids),
     "runners": len(runners),
+    "resultRows": len(results),
+    "resultCoveredRaces": len(result_race_ids),
     "payoutRows": len(payouts),
     "start": min(row["raceDate"] for row in races),
     "end": max(row["raceDate"] for row in races),
     "bytes": OUTPUT.stat().st_size,
     "missingPayoutRaces": len(missing_payout),
     "runnerColumns": [row["name"] for row in schema["rt_runners"]],
+    "resultColumns": [row["name"] for row in schema["rt_results"]],
     "raceColumns": [row["name"] for row in schema["rt_races"]],
     "payoutColumns": [row["name"] for row in schema["rt_payouts"]],
 }
