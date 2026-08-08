@@ -4,20 +4,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = ROOT / "config" / "race-tantei-fixed-constraints.json"
 DOC = ROOT / "docs" / "RACE_TANTEI_NON_NEGOTIABLE_RULES.md"
-VISIBLE = ROOT / "config" / "season-stratified-holdout-v1.json"
-FINAL = ROOT / "config" / "season-stratified-final-audit-v1.json"
 PRODUCTION_POLICY = ROOT / "scripts" / "final-course-policy.py"
 PROMOTION_GATE = ROOT / "scripts" / "verify-production-candidate.py"
 PROMOTER = ROOT / "scripts" / "find-and-promote-production-candidate.py"
 
 ALL_BET_TYPES = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"]
-AUX_CALENDAR_FEATURES = ["calendarMonth", "dayOfYearSin", "dayOfYearCos"]
+AUX_CALENDAR_FEATURES = ["calendarMonthSin", "calendarMonthCos", "dayOfYearSin", "dayOfYearCos"]
 
 
 def main() -> None:
     actual = json.loads(CONFIG.read_text(encoding="utf-8"))
-    if actual.get("version") != 10:
-        raise SystemExit("FIXED_CONSTRAINT_VERSION_MUST_BE_10")
+    if actual.get("version") != 11:
+        raise SystemExit("FIXED_CONSTRAINT_VERSION_MUST_BE_11")
 
     imm = actual["immutableProjectRules"]
     required_imm = {
@@ -41,61 +39,48 @@ def main() -> None:
         "calendarFeaturesMustNotBePrimaryDiscoveryAxis": True,
         "calendarOnlyOrYearSpecificRulesForbidden": True,
     }
-    for k, v in required_imm.items():
-        if imm.get(k) != v:
-            raise SystemExit(f"IMMUTABLE_RULE_CHANGED:{k}")
+    for key, value in required_imm.items():
+        if imm.get(key) != value:
+            raise SystemExit(f"IMMUTABLE_RULE_CHANGED:{key}")
 
     vp = actual.get("validationProtocol", {})
-    if vp.get("type") != "nested_season_stratified_group_holdout":
-        raise SystemExit("NESTED_SEASON_GROUP_HOLDOUT_REQUIRED")
-    if vp.get("visibleDevelopmentValidationConfig") != "config/season-stratified-holdout-v1.json":
-        raise SystemExit("VISIBLE_VALIDATION_CONFIG_CHANGED")
-    if vp.get("untouchedFinalAuditConfig") != "config/season-stratified-final-audit-v1.json":
-        raise SystemExit("FINAL_AUDIT_CONFIG_CHANGED")
+    if vp.get("type") != "season_balanced_date_group_crossfit":
+        raise SystemExit("SEASON_BALANCED_CROSSFIT_REQUIRED")
+    if vp.get("foldCount") != 5:
+        raise SystemExit("FIVE_FOLDS_REQUIRED")
     if vp.get("splitUnit") != "raceDate" or vp.get("stratification") != "year-month":
-        raise SystemExit("INVALID_GROUP_HOLDOUT")
-    if vp.get("sameDateMustStayTogether") is not True or vp.get("randomRaceLevelSplitForbidden") is not True:
-        raise SystemExit("DATE_GROUPING_REQUIRED")
-    if vp.get("finalAuditOutcomeUseForDiscoveryForbidden") is not True:
-        raise SystemExit("FINAL_AUDIT_LEAKAGE_FORBIDDEN")
-    if vp.get("developmentMayUseAllNonFinalAuditDates") is not True:
-        raise SystemExit("DEVELOPMENT_SET_RULE_CHANGED")
-    if vp.get("historicalFinalAuditIsGeneralizationTestNotWalkForwardReplay") is not True:
-        raise SystemExit("FINAL_AUDIT_PURPOSE_CHANGED")
-    if vp.get("livePredictionStillUsesOnlyInformationAvailableAtPredictionTime") is not True:
-        raise SystemExit("LIVE_CAUSALITY_REQUIRED")
-    if vp.get("singleTailPeriodAsSoleCompletionHoldoutForbidden") is not True:
-        raise SystemExit("TAIL_ONLY_HOLDOUT_FORBIDDEN")
+        raise SystemExit("DATE_GROUPED_MONTH_BALANCED_SPLIT_REQUIRED")
+    if vp.get("sameDateMustStayTogether") is not True:
+        raise SystemExit("SAME_DATE_MUST_STAY_TOGETHER")
+    if vp.get("randomRaceLevelSplitForbidden") is not True:
+        raise SystemExit("RACE_LEVEL_RANDOM_SPLIT_FORBIDDEN")
+    if vp.get("eachRaceDateMustBeOutOfFoldExactlyOnce") is not True:
+        raise SystemExit("EVERY_DATE_MUST_BE_OOF_ONCE")
+    if vp.get("outOfFoldOutcomeUseForThatPredictionForbidden") is not True:
+        raise SystemExit("OOF_OUTCOME_LEAKAGE_FORBIDDEN")
     if vp.get("calendarFeatureRole") != "auxiliary_only":
         raise SystemExit("CALENDAR_FEATURES_MUST_BE_AUXILIARY")
     if vp.get("calendarFeatures") != AUX_CALENDAR_FEATURES:
         raise SystemExit("AUXILIARY_CALENDAR_FEATURES_CHANGED")
-
-    visible = json.loads(VISIBLE.read_text(encoding="utf-8"))
-    final = json.loads(FINAL.read_text(encoding="utf-8"))
-    visible_dates = set(visible.get("holdoutDates", []))
-    final_dates = set(final.get("finalAuditDates", []))
-    if not visible_dates or not final_dates:
-        raise SystemExit("VALIDATION_OR_FINAL_DATES_MISSING")
-    if visible_dates & final_dates:
-        raise SystemExit("FINAL_AUDIT_MUST_NOT_OVERLAP_VISIBLE_VALIDATION")
-    if final.get("outcomeFieldsUsedForSplit") is not False:
-        raise SystemExit("FINAL_AUDIT_SPLIT_MUST_NOT_USE_OUTCOMES")
-    if final.get("counts", {}).get("minimumSelectedFinalAuditRacesPerCourseAtFivePerVenueDay", 0) < 100:
-        raise SystemExit("FINAL_AUDIT_SAMPLE_TOO_SMALL")
-    if final.get("evaluationRules", {}).get("finalAuditOutcomeMustNotBeInspectedBeforeModelFreeze") is not True:
-        raise SystemExit("MODEL_MUST_FREEZE_BEFORE_FINAL_AUDIT")
-    if final.get("evaluationRules", {}).get("modelRuleAndThresholdChangesAfterOpeningFinalAuditForbidden") is not True:
-        raise SystemExit("FINAL_AUDIT_POST_TUNING_FORBIDDEN")
+    if vp.get("rawCalendarYearFeatureForbidden") is not True:
+        raise SystemExit("RAW_YEAR_FEATURE_FORBIDDEN")
+    if vp.get("rawDateOrdinalFeatureForbidden") is not True:
+        raise SystemExit("RAW_DATE_ORDINAL_FORBIDDEN")
+    if vp.get("dateSpecificRuleDiscoveryForbidden") is not True:
+        raise SystemExit("DATE_SPECIFIC_RULES_FORBIDDEN")
+    if vp.get("previousOpenedFinalAuditIsDiagnosticOnly") is not True:
+        raise SystemExit("OPENED_FINAL_AUDIT_MUST_BE_DIAGNOSTIC_ONLY")
+    if vp.get("livePredictionStillUsesOnlyInformationAvailableAtPredictionTime") is not True:
+        raise SystemExit("LIVE_CAUSALITY_REQUIRED")
 
     promo = actual["promotionRules"]
     required_promo = {
         "completionRoiPct": 200.0,
         "approvedModelVersion": "v16",
-        "minimumFinalHoldoutRacesPerCourse": 100,
+        "minimumCrossfitEvaluationRacesPerCourse": 100,
         "requireEveryCourseToPass": True,
         "requireFullHistoricalRoiPct": 200.0,
-        "requireSeasonStratifiedFinalAuditRoiPct": 200.0,
+        "requireSeasonBalancedOutOfFoldRoiPct": 200.0,
         "requireRoiWithoutTop1Pct": 100.0,
         "requireFullHistoricalPeriodCoverage": True,
         "candidateVersionNumbersForbidden": True,
@@ -104,9 +89,9 @@ def main() -> None:
         "failedCandidateMayBeRecordedInternally": True,
         "automaticProductionChangeFromFailedCandidateForbidden": True,
     }
-    for k, v in required_promo.items():
-        if promo.get(k) != v:
-            raise SystemExit(f"PROMOTION_RULE_CHANGED:{k}")
+    for key, value in required_promo.items():
+        if promo.get(key) != value:
+            raise SystemExit(f"PROMOTION_RULE_CHANGED:{key}")
 
     for course, spec in actual["courses"].items():
         if "ticketCount" in spec:
@@ -122,13 +107,9 @@ def main() -> None:
 
     doc = DOC.read_text(encoding="utf-8")
     for text in (
-        "各開催日・各会場で、購入対象を5レース未満にしてはならない。",
-        "各購入対象レースで最低2種類の異なる券種を含める。",
-        "完全未使用の最終監査は `config/season-stratified-final-audit-v1.json` の35開催日とする。",
-        "最終監査35開催日の着順・払戻などの結果を、モデル発見、ルール選択、閾値調整、資金配分調整に使ってはならない。",
         "日付・季節は多数ある分析要素の一部として補助的に扱う。",
-        "年そのもの、特定年月、年×会場などを主要な市場歪み発見軸として期間暗記することは禁止する。",
-        "実際の未来レースを予測するときは、その予測時点までに取得できる情報だけを使う。",
+        "season-balanced 5-fold crossfit",
+        "各開催日は必ず1回だけout-of-foldで評価する。",
         "回収率200%以上は目標ではなく完成条件とする。",
     ):
         if text not in doc:
