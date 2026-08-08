@@ -1,0 +1,112 @@
+name: v16 Aug 8 read-only export
+run-name: v16 Aug 8 read-only export · ${{ github.sha }}
+
+on:
+  push:
+    branches: [analysis-v16-20260808-readonly]
+    paths:
+      - '.github/workflows/v16-20260808-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Export 2026-08-08 D1 rows and JRA official odds (read-only)
+        run: |
+          python - <<'PY'
+          import concurrent.futures, json, os, urllib.request
+          from pathlib import Path
+
+          ROOT=Path('.')
+          OUT=ROOT/'artifacts'/'v16-20260808-readonly'
+          OUT.mkdir(parents=True,exist_ok=True)
+          token=os.environ['CLOUDFLARE_API_TOKEN']; account=os.environ['CLOUDFLARE_ACCOUNT_ID']; database=os.environ['CLOUDFLARE_D1_DATABASE_ID']
+          endpoint=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{database}/query'
+          def d1(sql, params=None):
+              body=json.dumps({'sql':sql,'params':params or []}).encode()
+              req=urllib.request.Request(endpoint,data=body,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},method='POST')
+              with urllib.request.urlopen(req,timeout=90) as r: p=json.loads(r.read().decode())
+              if not p.get('success'): raise RuntimeError(p.get('errors'))
+              return p.get('result',[{}])[0].get('results',[])
+
+          tables=d1("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+          names=[x['name'] for x in tables]
+          (OUT/'table-names.json').write_text(json.dumps(names,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+
+          races=d1("SELECT * FROM rt_races WHERE race_date=? ORDER BY venue,race_no",['2026-08-08'])
+          (OUT/'races.json').write_text(json.dumps(races,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps({'races':len(races),'venues':sorted(set(r.get('venue') for r in races))},ensure_ascii=False),flush=True)
+          if len(races)!=36: raise RuntimeError(f'AUG8_RACE_COUNT:{len(races)}')
+          ids=[r['race_id'] for r in races]
+
+          for table in names:
+              low=table.lower()
+              if not table.startswith('rt_') or not any(k in low for k in ('runner','predict','result','payout','ticket','odds')):
+                  continue
+              try:
+                  cols=d1(f"PRAGMA table_info({table})")
+                  colnames=[c['name'] for c in cols]
+                  race_col='race_id' if 'race_id' in colnames else ('raceId' if 'raceId' in colnames else None)
+                  date_col='race_date' if 'race_date' in colnames else ('raceDate' if 'raceDate' in colnames else None)
+                  if race_col:
+                      marks=','.join('?' for _ in ids)
+                      rows=d1(f"SELECT * FROM {table} WHERE {race_col} IN ({marks})",ids)
+                  elif date_col:
+                      rows=d1(f"SELECT * FROM {table} WHERE {date_col}=?",['2026-08-08'])
+                  else:
+                      continue
+                  (OUT/f'{table}.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2,default=str)+'\n',encoding='utf-8')
+                  print(json.dumps({'table':table,'rows':len(rows)},ensure_ascii=False),flush=True)
+              except Exception as e:
+                  print(json.dumps({'table':table,'error':f'{type(e).__name__}:{e}'},ensure_ascii=False),flush=True)
+
+          # Load only function definitions from the audited JRA mobile historical-odds exporter.
+          parser=ROOT/'scripts'/'export-mobile-historical-official-odds-retry.py'
+          source=parser.read_text(encoding='utf-8')
+          marker='# Rebuild exactly the same deterministic 3,210-race selection used by the primary export.'
+          if marker not in source: raise RuntimeError('ODDS_EXPORTER_MARKER_MISSING')
+          ns={'__file__':str(parser)}
+          exec(compile(source.split(marker,1)[0],str(parser),'exec'),ns)
+          fetch_race=ns['fetch_race']
+          jobs=[]
+          for r in races:
+              result_url=r.get('result_url')
+              if not result_url: raise RuntimeError(f"RESULT_URL_MISSING:{r['race_id']}")
+              jobs.append({'raceId':r['race_id'],'raceDate':r['race_date'],'venue':r['venue'],'raceNo':int(r['race_no']),'resultUrl':result_url})
+          odds=[]; failures=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+              fm={pool.submit(fetch_race,row):row for row in jobs}
+              for i,f in enumerate(concurrent.futures.as_completed(fm),1):
+                  row=fm[f]
+                  try: odds.append(f.result())
+                  except Exception as e: failures.append({'raceId':row['raceId'],'error':f'{type(e).__name__}:{e}'})
+                  print(json.dumps({'oddsDone':i,'ok':len(odds),'fail':len(failures)},ensure_ascii=False),flush=True)
+          odds.sort(key=lambda x:(x['venue'],x['raceNo']))
+          (OUT/'official-odds.json').write_text(json.dumps(odds,ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8')
+          (OUT/'official-odds-failures.json').write_text(json.dumps(failures,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          if failures: raise RuntimeError(f'OFFICIAL_ODDS_INCOMPLETE:{len(odds)}/36')
+          print(json.dumps({'officialOddsComplete':True,'races':len(odds)},ensure_ascii=False),flush=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v16-20260808-readonly
+          path: artifacts/v16-20260808-readonly/
+          compression-level: 1
+          retention-days: 3
