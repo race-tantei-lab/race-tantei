@@ -20,12 +20,12 @@ jobs:
       TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Publish start
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/result-url-format-probe' -f description='JRA結果URL形式を監査中' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/result-url-format-probe' -f description='JRAモバイル結果のオッズ導線を監査中' -f target_url="$TARGET" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Probe exact D1 URLs and JRA odds CNAMEs
+      - name: Probe exact D1 URLs and mobile odds CNAMEs
         run: |
           python - <<'PY'
           import json, os, re, urllib.parse, urllib.request
@@ -42,13 +42,18 @@ jobs:
             rq=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'ja'})
             with urllib.request.urlopen(rq,timeout=60) as rr: raw=rr.read(); final=rr.geturl()
             html=raw.decode('cp932','replace')
-            calls=re.findall(r"doAction\('/JRADB/accessO\.html'\s*,\s*'([^']+)'\)",html)
-            out.append({'raceId':row['raceId'],'resultUrl':url,'decodedResultUrl':urllib.parse.unquote(url),'finalUrl':final,'oddsCnames':[x for x in calls if x.startswith('pw151ou')][:5]})
+            # Capture all likely CNAME-like tokens, not only desktop doAction calls.
+            tokens=sorted(set(re.findall(r'[ps]w\d+[A-Za-z0-9_/.-]+',html)))
+            access_o=[]
+            for pat in [r"doAction\([^,]+,\s*'([^']+)'\)", r'CNAME=([^&"\']+)']:
+              try: access_o += re.findall(pat,html)
+              except Exception: pass
+            out.append({'raceId':row['raceId'],'resultUrl':url,'decodedResultUrl':urllib.parse.unquote(url),'finalUrl':final,'sw151Tokens':[x for x in tokens if x.startswith('sw151')][:10],'pw151Tokens':[x for x in tokens if x.startswith('pw151')][:10],'all15Tokens':[x for x in tokens if re.match(r'[ps]w15[1-8]',x)][:40],'navCnames':access_o[:40]})
           print(json.dumps(out,ensure_ascii=False,indent=2))
           PY
       - name: Publish success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/result-url-format-probe' -f description='JRA結果URL形式監査完了' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/result-url-format-probe' -f description='JRAモバイルオッズ導線監査完了' -f target_url="$TARGET" >/dev/null
       - name: Publish failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/result-url-format-probe' -f description='JRA結果URL形式監査失敗' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/result-url-format-probe' -f description='JRAモバイルオッズ導線監査失敗' -f target_url="$TARGET" >/dev/null
