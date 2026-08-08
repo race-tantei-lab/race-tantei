@@ -1,0 +1,20 @@
+name: Recover v16 177 probe
+on:
+  push:
+    branches: [analysis/aug8-settlement-readonly]
+    paths: [.github/workflows/recover-v16-177-probe.yml]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python scripts/recover-v16-177-from-frozen-pool.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v16-177-recovery-probe
+          path: artifacts/v16-177-recovery-probe.json
+          retention-days: 1
