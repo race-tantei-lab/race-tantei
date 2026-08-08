@@ -1,0 +1,76 @@
+{
+  "status": "analysis policy lock; not a model; no version assigned",
+  "lockedBeforeBulkHistoricalOddsEvaluation": true,
+  "fixedArchive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "futureDataAllowed": false,
+    "sameDateOutcomeAllowedForDecision": false
+  },
+  "raceSelection": {
+    "rule": "retain every serialized OOS-selected race ID that exists in fixed D1; if any raceDate x venue has fewer than 5, fill by ascending raceNo until 5",
+    "minimumPerRaceDateVenue": 5,
+    "usesOutcome": false,
+    "usesPayout": false,
+    "usesHistoricalCombinationOddsToSelectRace": false
+  },
+  "probabilityModel": {
+    "winnerBase": "strict walk-forward OOS modelP",
+    "top3Base": "strict walk-forward OOS ptop3",
+    "orderedCombinationMethod": "Plackett-Luce using positive race-normalized modelP weights",
+    "quinella": "sum both exacta orders",
+    "trio": "sum all six trifecta orders",
+    "wide": "sum all top-three ordered permutations containing the pair; model wide probabilities sum to three per race",
+    "marketProbability": "inverse JRA official odds normalized within bet type; wide normalized to total probability mass three; no estimated odds",
+    "wideOddsForValue": "JRA-published lower bound of the official wide odds range",
+    "oldModelProjectedRoiUsed": false
+  },
+  "onlineExperts": {
+    "modelMarketBlendWeights": [0.0, 0.25, 0.5, 0.75, 1.0],
+    "score": "blended_probability * JRA_official_odds",
+    "expertChoice": "for each course x bet type x raceDate, choose the expert with highest Bayesian-shrunk exponentially-decayed return using dates strictly before the current raceDate",
+    "decayHalfLifeDays": 120,
+    "priorEquivalentTickets": 40,
+    "priorReturnRate": 0.8,
+    "coldStartDates": 30,
+    "coldStartBlendWeight": 0.5,
+    "sameDateLearning": false
+  },
+  "budgetsYenPerRace": {
+    "light": {"win": 400, "wide": 800, "quinella": 800},
+    "standard": {"win": 500, "wide": 900, "quinella": 900, "exacta": 900, "trio": 1800},
+    "premium": {"win": 600, "wide": 900, "quinella": 1000, "exacta": 1200, "trio": 2300, "trifecta": 4000}
+  },
+  "ticketDiversification": {
+    "unitYen": 100,
+    "maximumTicketStakeYen": 300,
+    "minimumDistinctTicketsPerBetTypeWhenCombinationsExist": 2,
+    "allocation": "rank tickets by the chosen expert score, then allocate 100-yen units round-robin across highest-ranked distinct tickets while respecting the 300-yen per-ticket cap until the exact bet-type budget is exhausted",
+    "singleOnlyPortfolioAllowed": false,
+    "onePointHighPayoutConcentrationAllowed": false
+  },
+  "officialOdds": {
+    "required": true,
+    "source": "JRA historical official odds pages",
+    "syntheticOdds": false,
+    "derivedCombinationOdds": false,
+    "missingOdds": "remain missing and cannot be fabricated; skip missing combination and use the next ranked official-odds ticket"
+  },
+  "settlement": {
+    "source": "actual JRA payout rows already fixed in archive",
+    "budgetMustBeFullyUsed": true
+  },
+  "completionGates": {
+    "allCoursesFullHistoryRoiPctAtLeast": 200,
+    "allCoursesRoiWithoutSingleLargestTicketReturnPctAtLeast": 100,
+    "minimumRacesPerRaceDateVenue": 5,
+    "exactCourseBudgets": true,
+    "requiredBetTypesEverySelectedRace": true,
+    "officialOddsOnly": true,
+    "noFutureLeakage": true
+  },
+  "promotion": {
+    "allowedOnlyIfEveryGatePasses": true,
+    "nameIfAndOnlyIfCompleted": "v16"
+  }
+}
