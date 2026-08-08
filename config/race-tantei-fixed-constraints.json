@@ -1,5 +1,5 @@
 {
-  "version": 7,
+  "version": 8,
   "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
   "immutableProjectRules": {
     "minimumRacesPerVenueDay": 5,
@@ -21,25 +21,28 @@
     "calendarSeasonalityMustBeModeled": true
   },
   "validationProtocol": {
-    "type": "season_stratified_date_holdout",
+    "type": "season_stratified_prequential_holdout",
     "splitConfig": "config/season-stratified-holdout-v1.json",
     "splitUnit": "raceDate",
     "stratification": "year-month",
     "holdoutFractionApprox": 0.2,
     "sameDateMustStayTogether": true,
     "randomRaceLevelSplitForbidden": true,
-    "heldoutOutcomeUseForDiscoveryForbidden": true,
-    "heldoutDatesRemainExcludedFromTraining": true,
-    "predictionForHeldoutDateUsesOnlyEarlierNonHoldoutDates": true,
+    "heldoutOutcomeUseBeforeItsRaceDateForbidden": true,
+    "pastHeldoutOutcomeMayEnterFutureTrainingAfterDate": true,
+    "predictionUsesOnlyInformationStrictlyAvailableBeforeRaceDate": true,
     "singleTailPeriodAsSoleCompletionHoldoutForbidden": true,
     "dateFeaturesRequired": [
       "calendarYear",
       "calendarMonth",
       "dayOfYearSin",
       "dayOfYearCos",
+      "weekOfYearSin",
+      "weekOfYearCos",
       "daysSinceArchiveStart",
       "seasonQuarter",
-      "venue"
+      "venue",
+      "venueXMonth"
     ]
   },
   "promotionRules": {
