@@ -25,16 +25,47 @@
     "wideOddsForValue": "JRA-published lower bound of the official wide odds range",
     "oldModelProjectedRoiUsed": false
   },
-  "onlineExperts": {
+  "rawOnlineExperts": {
     "modelMarketBlendWeights": [0.0, 0.25, 0.5, 0.75, 1.0],
     "blendWeightMeaning": "weight on strict OOS model probability; 1-weight is weight on normalized JRA market probability",
     "score": "blended_probability * JRA_official_odds",
-    "expertChoice": "for each course x bet type x raceDate, choose the expert with highest Bayesian-shrunk exponentially-decayed return using dates strictly before the current raceDate",
+    "sameDateLearning": false
+  },
+  "ticketValueMetaModel": {
+    "enabledAsPrelockedAlternativeExpert": true,
+    "candidatePoolPerRaceAndBetType": "top 60 available official-odds combinations by raw score using 0.75 model probability + 0.25 normalized market probability; use all if fewer than 60",
+    "target": "binary indicator that the combination wins that bet type",
+    "features": [
+      "log official odds",
+      "strict OOS model combination probability",
+      "normalized JRA market probability",
+      "log model-to-market probability ratio",
+      "field size",
+      "race number",
+      "surface",
+      "distance bucket",
+      "race class",
+      "venue",
+      "constituent horses strict OOS modelP statistics and order positions",
+      "constituent horses strict OOS ptop3 statistics and order positions",
+      "constituent horses popularity and actual pre-race win-odds statistics"
+    ],
+    "learner": "LightGBM binary classifier per bet type",
+    "minimumTrainingRaceDates": 60,
+    "retrainIntervalDays": 120,
+    "trainingRows": "only candidate combinations from race dates strictly earlier than the prediction date; no same-date outcomes",
+    "scoreAfterTraining": "predicted hit probability * JRA official odds",
+    "coldStartScore": "raw 0.5 model / 0.5 market probability * JRA official odds",
+    "futureLeakage": false
+  },
+  "expertSelection": {
+    "experts": "five raw blend experts plus the ticket-value meta-model expert when trained",
+    "rule": "for each course x bet type x raceDate choose the available expert with highest Bayesian-shrunk exponentially-decayed return using dates strictly before the current raceDate",
     "decayHalfLifeDays": 120,
     "priorEquivalentTickets": 40,
     "priorReturnRate": 0.8,
     "coldStartDates": 30,
-    "coldStartBlendWeight": 0.5,
+    "coldStartExpert": "raw blend weight 0.5",
     "sameDateLearning": false
   },
   "budgetsYenPerRace": {
@@ -47,7 +78,7 @@
     "maximumTicketStakeYen": 300,
     "minimumDistinctTicketsPerBetTypeWhenCombinationsExist": 2,
     "distinctTicketTarget": "min(available_official_odds_tickets, max(2, ceil(bet_type_budget_yen / 300)))",
-    "allocation": "rank tickets by the chosen expert score, keep distinctTicketTarget tickets, then allocate 100-yen units round-robin from best to worst repeatedly while respecting the 300-yen per-ticket cap until the exact bet-type budget is exhausted; if the target tickets all reach cap, extend to the next-ranked distinct tickets and continue",
+    "allocation": "rank tickets by the selected expert score, keep distinctTicketTarget tickets, then allocate 100-yen units round-robin from best to worst repeatedly while respecting the 300-yen per-ticket cap until the exact bet-type budget is exhausted; if the target tickets all reach cap, extend to the next-ranked distinct tickets and continue",
     "singleOnlyPortfolioAllowed": false,
     "onePointHighPayoutConcentrationAllowed": false
   },
