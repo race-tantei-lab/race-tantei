@@ -1,0 +1,63 @@
+{
+  "status": "development-passed frozen model specification; final holdout not yet evaluated; no version assigned",
+  "lockedAt": "2026-08-08",
+  "productionChanged": false,
+  "finalHoldoutEvaluatedAtLock": false,
+  "fixedArchive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "developmentDateIndexEndExclusive": 216,
+    "finalHoldoutStartDateIndex": 216,
+    "finalHoldoutFirstDate": "2026-05-02"
+  },
+  "discoveryMethod": "Mine repeated JRA market mispricing structures from the development period first, require each retained distortion rule to exceed 200% ROI in all three development subperiods with minimum support, then generalize the frozen rules to pre-race ticket and race selection.",
+  "stableRuleFiles": {
+    "quinella": {"count":59,"sha256":"9e918f4864f93ce21dd72f4a1eb295055ae9dce03db924ea45e8d5c0ed7424f5"},
+    "wide": {"count":61,"sha256":"29250ef7ffd9e307cceec66bf22f030a98e217df3755bfff754fcd122359d2fd"},
+    "win": {"count":45,"sha256":"7ade354725bd604a3fbcd9cf43be13ea6ad6317640c0d82dcde765c531910b1d"},
+    "exacta": {"count":135,"sha256":"69ac969c6ac14bdd62b52e85a8a3762ffdec261dbf0c7c24a991d8ed72d879cd"},
+    "trio": {"count":61,"sha256":"ea61c1ab2bbe15b304c97d0657c0559c9b2a23f8a52c47ffb84ef083f7b4cb0e"},
+    "trifecta": {"count":108,"sha256":"d4ab3797259f641261ab84eac353b203dc572fdaf83fdcb4d734150b398dcc3c"}
+  },
+  "commonTicketRanking": "stable-rule matches first; among matches sort by conservative rule score (minimum ROI across the three development subperiods), then rule match count, then pre-race direct-model score/EV; if no stable match exists use the fixed pre-race direct score/EV fallback",
+  "courses": {
+    "ライト": {
+      "budgetYen": 2000,
+      "raceSelection": "exactly five per raceDate x venue; rank races by third-best stable quinella rule score, then best stable quinella score, then fixed pre-race quinella EV",
+      "tickets": [
+        {"type":"馬連","rank":1,"stakeYen":1000},
+        {"type":"馬連","rank":2,"stakeYen":800},
+        {"type":"ワイド","rank":1,"stakeYen":100},
+        {"type":"単勝","rank":1,"stakeYen":100}
+      ],
+      "development": {"races":2810,"roiPct":200.02188612099644,"roiWithoutLargestSingleTicketReturnPct":185.11797153024912,"maxTicketStakePct":50.0}
+    },
+    "スタンダード": {
+      "budgetYen": 5000,
+      "raceSelection": "exactly five per raceDate x venue; rank races by max(best stable quinella rule score, best stable exacta rule score, best stable trio rule score)",
+      "tickets": [
+        {"type":"単勝","rank":1,"stakeYen":100},
+        {"type":"ワイド","rank":1,"stakeYen":100},
+        {"type":"馬連","rank":1,"stakeYen":800},
+        {"type":"馬単","rank":1,"stakeYen":2000},
+        {"type":"3連複","rank":1,"stakeYen":2000}
+      ],
+      "development": {"races":2810,"roiPct":278.17487544483987,"roiWithoutLargestSingleTicketReturnPct":249.67807829181496,"maxTicketStakePct":40.0}
+    },
+    "プレミアム": {
+      "budgetYen": 10000,
+      "raceSelection": "exactly five per raceDate x venue; rank races by max(best stable quinella rule score, best stable exacta rule score, best stable trio rule score, best stable trifecta rule score)",
+      "tickets": [
+        {"type":"単勝","rank":1,"stakeYen":100},
+        {"type":"ワイド","rank":1,"stakeYen":100},
+        {"type":"馬連","rank":1,"stakeYen":100},
+        {"type":"馬単","rank":1,"stakeYen":4000},
+        {"type":"3連複","rank":1,"stakeYen":1700},
+        {"type":"3連単","rank":1,"stakeYen":4000}
+      ],
+      "development": {"races":2810,"roiPct":331.65661921708187,"roiWithoutLargestSingleTicketReturnPct":288.8537722419929,"maxTicketStakePct":40.0}
+    }
+  },
+  "holdoutRule": "No model, rule, race-selection formula, stake allocation, threshold, or tie-breaking logic may be changed after final holdout outcomes are inspected. Only this frozen specification may be evaluated on dateIndex >= 216.",
+  "nameIfAndOnlyIfAllCompletionGatesPass": "v16"
+}
