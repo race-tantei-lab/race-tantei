@@ -1,0 +1,74 @@
+name: Audit current D1 fixed archive completeness
+on:
+  push:
+    branches: [analysis/current-d1-completeness-audit-20260808]
+    paths: ['.github/workflows/audit-current-d1-completeness.yml']
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/current-d1-completeness' -f description='Current D1 fixed archive audit running' -f target_url="$TARGET" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Audit D1 directly
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          token=os.environ['CLOUDFLARE_API_TOKEN']; account=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']
+          ep=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
+          START='2024-05-04'; END='2026-08-03'
+          def q(sql, params=None):
+              body=json.dumps({'sql':sql,'params':params or []}).encode()
+              req=urllib.request.Request(ep,data=body,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},method='POST')
+              with urllib.request.urlopen(req,timeout=90) as r: p=json.loads(r.read().decode())
+              if not p.get('success'): raise RuntimeError(p.get('errors'))
+              return p.get('result',[{}])[0].get('results',[])
+          p=[START,END]
+          out={}
+          out['fixedRaces']=q("SELECT COUNT(*) n FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished'",p)[0]['n']
+          out['raceDateVenueGroups']=q("SELECT COUNT(*) n FROM (SELECT race_date,venue FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished' GROUP BY race_date,venue)",p)[0]['n']
+          out['runners']=q("SELECT COUNT(*) n FROM rt_runners rr JOIN rt_races r ON r.race_id=rr.race_id WHERE r.race_date>=? AND r.race_date<? AND r.status='finished'",p)[0]['n']
+          out['runnerStatusCounts']=q("SELECT rr.runner_status status, COUNT(*) n FROM rt_runners rr JOIN rt_races r ON r.race_id=rr.race_id WHERE r.race_date>=? AND r.race_date<? AND r.status='finished' GROUP BY rr.runner_status ORDER BY n DESC",p)
+          out['results']=q("SELECT COUNT(*) n FROM rt_results x JOIN rt_races r ON r.race_id=x.race_id WHERE r.race_date>=? AND r.race_date<? AND r.status='finished'",p)[0]['n']
+          out['resultCoveredRaces']=q("SELECT COUNT(DISTINCT x.race_id) n FROM rt_results x JOIN rt_races r ON r.race_id=x.race_id WHERE r.race_date>=? AND r.race_date<? AND r.status='finished'",p)[0]['n']
+          out['missingActiveRunnerResults']=q("SELECT COUNT(*) n FROM rt_runners rr JOIN rt_races r ON r.race_id=rr.race_id LEFT JOIN rt_results x ON x.race_id=rr.race_id AND x.horse_no=rr.horse_no WHERE r.race_date>=? AND r.race_date<? AND r.status='finished' AND rr.runner_status='active' AND x.race_id IS NULL",p)[0]['n']
+          out['missingActiveRunnerResultExamples']=q("SELECT rr.race_id raceId,rr.horse_no horseNo,rr.horse_name horseName,rr.runner_status runnerStatus FROM rt_runners rr JOIN rt_races r ON r.race_id=rr.race_id LEFT JOIN rt_results x ON x.race_id=rr.race_id AND x.horse_no=rr.horse_no WHERE r.race_date>=? AND r.race_date<? AND r.status='finished' AND rr.runner_status='active' AND x.race_id IS NULL ORDER BY rr.race_id,rr.horse_no LIMIT 30",p)
+          out['orphanResultsWithoutRunner']=q("SELECT COUNT(*) n FROM rt_results x JOIN rt_races r ON r.race_id=x.race_id LEFT JOIN rt_runners rr ON rr.race_id=x.race_id AND rr.horse_no=x.horse_no WHERE r.race_date>=? AND r.race_date<? AND r.status='finished' AND rr.race_id IS NULL",p)[0]['n']
+          out['payoutRows']=q("SELECT COUNT(*) n FROM rt_payouts x JOIN rt_races r ON r.race_id=x.race_id WHERE r.race_date>=? AND r.race_date<? AND r.status='finished'",p)[0]['n']
+          out['missingPayoutRaces']=q("SELECT COUNT(*) n FROM rt_races r WHERE r.race_date>=? AND r.race_date<? AND r.status='finished' AND NOT EXISTS (SELECT 1 FROM rt_payouts x WHERE x.race_id=r.race_id)",p)[0]['n']
+          out['context']=q("SELECT COUNT(*) total, SUM(CASE WHEN surface IS NOT NULL AND TRIM(surface)<>'' THEN 1 ELSE 0 END) surfaceKnown, SUM(CASE WHEN distance_m IS NOT NULL AND distance_m>0 THEN 1 ELSE 0 END) distanceKnown, SUM(CASE WHEN surface IS NOT NULL AND TRIM(surface)<>'' AND distance_m IS NOT NULL AND distance_m>0 THEN 1 ELSE 0 END) surfaceDistanceKnown, SUM(CASE WHEN direction IS NOT NULL AND TRIM(direction)<>'' THEN 1 ELSE 0 END) directionKnown, SUM(CASE WHEN weather IS NOT NULL AND TRIM(weather)<>'' THEN 1 ELSE 0 END) weatherKnown, SUM(CASE WHEN track_condition IS NOT NULL AND TRIM(track_condition)<>'' THEN 1 ELSE 0 END) trackConditionKnown FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished'",p)[0]
+          out['surfaceCounts']=q("SELECT COALESCE(NULLIF(TRIM(surface),''),'UNKNOWN') surface,COUNT(*) n FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished' GROUP BY COALESCE(NULLIF(TRIM(surface),''),'UNKNOWN') ORDER BY n DESC",p)
+          out['searchWindowRaceNames']=q("SELECT COUNT(*) n FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished' AND race_name='検索ウィンドウ'",p)[0]['n']
+          out['officialOddsLatestRows']=q("SELECT COUNT(*) n FROM rt_official_odds_latest o JOIN rt_races r ON r.race_id=o.race_id WHERE r.race_date>=? AND r.race_date<? AND r.status='finished'",p)[0]['n']
+          out['officialOddsLatestRaces']=q("SELECT COUNT(DISTINCT o.race_id) n FROM rt_official_odds_latest o JOIN rt_races r ON r.race_id=o.race_id WHERE r.race_date>=? AND r.race_date<? AND r.status='finished'",p)[0]['n']
+          out['officialOddsSnapshotRows']=q("SELECT COUNT(*) n FROM rt_official_odds_snapshots o JOIN rt_races r ON r.race_id=o.race_id WHERE r.race_date>=? AND r.race_date<? AND r.status='finished'",p)[0]['n']
+          out['aug1FirstRaceCounts']=q("SELECT r.race_id raceId,(SELECT COUNT(*) FROM rt_runners rr WHERE rr.race_id=r.race_id) runners,(SELECT COUNT(*) FROM rt_results x WHERE x.race_id=r.race_id) results FROM rt_races r WHERE r.race_date='2026-08-01' AND r.race_no=1 ORDER BY r.venue")
+          Path('artifacts').mkdir(exist_ok=True)
+          Path('artifacts/current-d1-completeness.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(out,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: current-d1-completeness
+          path: artifacts/current-d1-completeness.json
+          retention-days: 7
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/current-d1-completeness' -f description='Current D1 fixed archive audit complete' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/current-d1-completeness' -f description='Current D1 fixed archive audit failed' -f target_url="$TARGET" >/dev/null
