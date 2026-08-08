@@ -1,0 +1,18 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforePortfolioReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "horseSignals":{"win":"strict-OOS 164-feature win probability","quinella":"strict-OOS top2 horse marginal probability","wide":"strict-OOS top3 horse marginal probability"},
+  "expertLibraries":{"win":["oosWinP * officialWinOdds^gamma for gamma in {0,0.5,0.75,1.0,1.25}"],"quinella":["officialPairMarketP * officialOdds^gamma for gamma in {0,0.5,1.25,1.5}","top2MarginalCorrectedPairP(alpha) * officialOdds^gamma for alpha in {0.5,1.0,1.5} and gamma in {0.75,1.0,1.25}","strict-OOS marginal-pair-v2 probability * officialOdds^gamma for gamma in {0.75,1.0,1.25}","prior-OOS calibrated marginal-pair-v2 probability * officialOdds","hierarchical-online calibrated expected-return score"],"wide":["same fixed expert families as quinella, using top3 marginal signal and JRA wide lower-bound odds"]},
+  "expertOutcomeTargets":{"top1":"actual JRA return multiplier of the expert's top ticket","top9":"mean actual JRA return multiplier of the expert's top nine distinct tickets"},
+  "metaFeatures":["race field size/race number/venue/surface/distance/class/track","win-model vs win-market entropy/concentration/KL and edge summaries","top2/top3 model-vs-market edge summaries","expert id/family/alpha/gamma","expert top1/top3/top9 score summaries","expert selected-ticket official-odds and official-market-rank summaries"],
+  "metaModels":{"unit":"bet type x target(top1 or top9)","model":"LightGBM Huber regression on log1p(actual expert return)","learningRate":0.03,"numLeaves":15,"minDataInLeaf":120,"featureFraction":0.85,"rounds":120,"lambdaL2":8.0,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"sameDateLearning":false},
+  "coldStartDates":30,
+  "coldStartExpert":{"win":"gamma=1.0","quinella":"top2 marginal alpha=1.0 gamma=1.0","wide":"top3 marginal alpha=1.0 gamma=1.0"},
+  "coldStartDominantType":"required type whose chosen expert has the highest mean top-nine pre-race expected-return score in that race",
+  "portfolioConstruction":{"budgetYen":2000,"mandatory":"100 yen on top1 chosen expert ticket in each of win/wide/quinella","remaining1700":"choose the required bet type with highest predicted top9 expert return; increase its top1 ticket from 100 to 200 and put 200 yen on its next eight distinct expert-ranked tickets","finalDominantTypeStakeYen":1800,"otherTypeStakeYen":100,"singleTicketCapYen":200,"budgetMustBeFullyUsed":true},
+  "raceSelection":"compute predicted portfolio return from predicted chosen-expert top1/top9 returns, then select exactly the five highest predicted races per raceDate x venue; never fewer",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "completionGates":{"fullHistoryRoiPctAtLeast":200,"largestSingleTicketReturnRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudget":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
