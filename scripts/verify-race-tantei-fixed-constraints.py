@@ -11,17 +11,13 @@ PROMOTION_GATE = ROOT / "scripts" / "verify-production-candidate.py"
 PROMOTER = ROOT / "scripts" / "find-and-promote-production-candidate.py"
 
 ALL_BET_TYPES = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"]
-DATE_FEATURES = [
-    "calendarYear", "calendarMonth", "dayOfYearSin", "dayOfYearCos",
-    "weekOfYearSin", "weekOfYearCos", "daysSinceArchiveStart",
-    "seasonQuarter", "venue", "venueXMonth",
-]
+AUX_CALENDAR_FEATURES = ["calendarMonth", "dayOfYearSin", "dayOfYearCos"]
 
 
 def main() -> None:
     actual = json.loads(CONFIG.read_text(encoding="utf-8"))
-    if actual.get("version") != 9:
-        raise SystemExit("FIXED_CONSTRAINT_VERSION_MUST_BE_9")
+    if actual.get("version") != 10:
+        raise SystemExit("FIXED_CONSTRAINT_VERSION_MUST_BE_10")
 
     imm = actual["immutableProjectRules"]
     required_imm = {
@@ -41,7 +37,9 @@ def main() -> None:
         "droppingEvaluationPeriodsForbidden": True,
         "ticketCountFixed": False,
         "ticketCountMayVaryByCourseRaceAndPolicy": True,
-        "calendarSeasonalityMustBeModeled": True,
+        "calendarContextMustBeAvailableAsAuxiliaryFeatures": True,
+        "calendarFeaturesMustNotBePrimaryDiscoveryAxis": True,
+        "calendarOnlyOrYearSpecificRulesForbidden": True,
     }
     for k, v in required_imm.items():
         if imm.get(k) != v:
@@ -68,8 +66,10 @@ def main() -> None:
         raise SystemExit("LIVE_CAUSALITY_REQUIRED")
     if vp.get("singleTailPeriodAsSoleCompletionHoldoutForbidden") is not True:
         raise SystemExit("TAIL_ONLY_HOLDOUT_FORBIDDEN")
-    if vp.get("dateFeaturesRequired") != DATE_FEATURES:
-        raise SystemExit("DATE_FEATURES_CHANGED")
+    if vp.get("calendarFeatureRole") != "auxiliary_only":
+        raise SystemExit("CALENDAR_FEATURES_MUST_BE_AUXILIARY")
+    if vp.get("calendarFeatures") != AUX_CALENDAR_FEATURES:
+        raise SystemExit("AUXILIARY_CALENDAR_FEATURES_CHANGED")
 
     visible = json.loads(VISIBLE.read_text(encoding="utf-8"))
     final = json.loads(FINAL.read_text(encoding="utf-8"))
@@ -126,6 +126,8 @@ def main() -> None:
         "各購入対象レースで最低2種類の異なる券種を含める。",
         "完全未使用の最終監査は `config/season-stratified-final-audit-v1.json` の35開催日とする。",
         "最終監査35開催日の着順・払戻などの結果を、モデル発見、ルール選択、閾値調整、資金配分調整に使ってはならない。",
+        "日付・季節は多数ある分析要素の一部として補助的に扱う。",
+        "年そのもの、特定年月、年×会場などを主要な市場歪み発見軸として期間暗記することは禁止する。",
         "実際の未来レースを予測するときは、その予測時点までに取得できる情報だけを使う。",
         "回収率200%以上は目標ではなく完成条件とする。",
     ):
