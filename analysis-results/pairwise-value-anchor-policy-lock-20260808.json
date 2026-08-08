@@ -1,0 +1,24 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeValueAnchorReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "densePairwiseSource":"strict-OOS pairwise-order model; first30 dates use official market pairwise probabilities",
+  "horseSignals":{"pairwiseStrength":"mean OOS probability horse beats each active opponent","marketStrength":"same mean using official win-market pairwise probability","valueResidual":"pairwiseStrength-marketStrength"},
+  "ticketConstructionFamilies":[
+    {"id":"favorite_value","anchors":"top2 official win-market horses","valueHorses":"descending valueResidual, tie by pairwiseStrength","pairPool":"anchor x value horses plus pairs among top3 value horses"},
+    {"id":"strength_value","anchors":"top2 pairwiseStrength horses","valueHorses":"descending valueResidual, tie by official market probability","pairPool":"anchor x value horses plus pair of top2 value horses"},
+    {"id":"value_box","anchors":"none","valueHorses":"top5 valueResidual, tie by pairwiseStrength","pairPool":"all pairs among top5 value horses"}
+  ],
+  "ticketRankingAlphas":[0.0,0.5,1.0],
+  "ticketRanking":"basePairValue * (JRA official ticket odds ^ alpha); basePairValue=max(0,valueResidualA)+max(0,valueResidualB)+0.25*(pairwiseStrengthA+pairwiseStrengthB)+1e-6; win uses max(0,valueResidual)+0.25*pairwiseStrength+1e-6",
+  "legalLightAllocations":[
+    {"id":"balanced","winTickets":1,"wideTickets":4,"quinellaTickets":5,"stakeEachYen":200},
+    {"id":"quinella_heavy","winTickets":1,"wideTickets":1,"quinellaTickets":8,"stakeEachYen":200}
+  ],
+  "expertCount":18,
+  "diagnostic":"for every fixed expert report all-race ROI, largest-ticket-removed ROI and outcome-aware best-five-races-per-raceDate-venue oracle ceiling; oracle is diagnostic only and cannot be a production selector",
+  "nextStageOnlyIfUseful":"only experts with oracle ceiling >=200 may enter a separately pre-locked prior-date-only expert/race selector",
+  "officialOdds":{"source":"JRA historical official odds only","synthetic":false,"estimated":false,"missing":"remain missing"},
+  "completionGatesUnchanged":{"allCoursesFullHistoryRoiPctAtLeast":200,"allCoursesLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudgets":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
