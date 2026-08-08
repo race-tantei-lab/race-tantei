@@ -1,15 +1,15 @@
 import gzip
 import json
+import pickle
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "artifacts" / "speed-analysis-input"
 SALVAGE = OUT / "salvaged-official-odds.jsonl.gz"
-REPAIR = ROOT / "artifacts" / "selected-historical-official-odds.jsonl.gz"
 DATA = OUT / "completion-analysis-dataset.pkl.gz"
 FINAL = OUT / "all7695-official-odds.jsonl.gz"
+REPAIR_ROOT = ROOT / "artifacts" / "repair-shards"
 
-import pickle
 with gzip.open(DATA, "rb") as f:
     dataset = pickle.load(f)
 race_order = [x["raceId"] for x in dataset["races"]]
@@ -18,16 +18,18 @@ if len(race_order) != 7695 or len(set(race_order)) != 7695:
 
 records = {}
 def read(path):
-    if not path.exists():
-        return
     with gzip.open(path, "rt", encoding="utf-8") as f:
         for line in f:
             if not line.strip():
                 continue
             rec = json.loads(line)
             records[rec["raceId"]] = rec
+
 read(SALVAGE)
-read(REPAIR)
+salvaged_count = len(records)
+repair_paths = sorted(REPAIR_ROOT.glob("**/selected-historical-official-odds.jsonl.gz"))
+for path in repair_paths:
+    read(path)
 missing = [rid for rid in race_order if rid not in records]
 extra = sorted(set(records) - set(race_order))
 if missing or extra:
@@ -50,10 +52,10 @@ with gzip.open(FINAL, "wt", encoding="utf-8", compresslevel=3) as f:
             present[k] += sum(valid(x) for x in vals)
         f.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
 meta = {
-    "races": len(race_order), "uniqueOddsRaces": len(records),
+    "races": len(race_order), "uniqueOddsRaces": len(records), "salvagedOddsRaces": salvaged_count,
+    "repairRows": len(records) - salvaged_count, "repairArtifacts": len(repair_paths),
     "coveragePct": {k: (100.0 * present[k] / expected[k] if expected[k] else 0.0) for k in markets},
-    "syntheticOddsUsed": False, "estimatedOddsUsed": False, "outcomeBasedRaceFiltering": False,
-    "repairRows": max(0, len(records) - sum(1 for _ in gzip.open(SALVAGE, "rt", encoding="utf-8")))
+    "syntheticOddsUsed": False, "estimatedOddsUsed": False, "outcomeBasedRaceFiltering": False
 }
 (OUT / "input-meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 print(json.dumps(meta, ensure_ascii=False), flush=True)
