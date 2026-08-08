@@ -1,0 +1,20 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "input":"persisted speed-enriched strict-OOS runner probabilities from run 31244347590",
+  "officialOdds":"JRA official historical odds only; no synthetic or estimated odds",
+  "betTypes":["win","wide","quinella"],
+  "experts":["market","normal25","normal50","normal75","normal100","residual25","residual50","residual75","residual100"],
+  "combinationProbabilities":{"win":"runner probability","wide":"unordered both horses in top3 under Plackett-Luce","quinella":"unordered top2 under Plackett-Luce"},
+  "ticketMarketProbability":"inverse JRA official ticket odds normalized to mass 1 for win/quinella and mass 3 for wide",
+  "ticketUtility":"blended_probability * JRA_official_odds - 1",
+  "topTicketsPerExpertBetTypeRace":16,
+  "expertChoice":{"unit":"bet type","strictlyPriorDatesOnly":true,"metric":"Bayesian-shrunk realized return of top10 tickets","priorEquivalentTickets":50,"priorReturnRate":0.8,"coldExpert":"normal50","allCounterfactualUpdatesAfterDateEnds":true},
+  "raceSelection":{"exactRacesPerRaceDateVenue":5,"score":"mean required-bet-type mean top3 ticket utilities multiplied by prior-date shrunk expert return","resultRegression":false},
+  "budget":{"perRaceYen":2000,"unitYen":100,"minimumPerRequiredBetTypeYen":100,"maximumSingleTicketYen":200,"fullSpendRequired":true},
+  "allocation":"mandatory top ticket 100 yen in each required type; remaining units descending ticket utility times prior-date shrunk expert return; exact budget; max 200 yen per ticket",
+  "settlement":"actual JRA payouts only",
+  "completionGates":{"roiPctAtLeast":200,"largestTicketRemovedRoiPctAtLeast":100,"exactFiveRacesPerRaceDateVenue":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"notEligibleUntilAllThreeCoursesPass":true,"nameIfAndOnlyIfAllGatesPass":"v16"}
+}
