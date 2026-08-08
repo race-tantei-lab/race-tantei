@@ -8,8 +8,10 @@ PRODUCTION_POLICY = ROOT / "scripts" / "final-course-policy.py"
 PROMOTION_GATE = ROOT / "scripts" / "verify-production-candidate.py"
 PROMOTER = ROOT / "scripts" / "find-and-promote-production-candidate.py"
 
+ALL_BET_TYPES = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"]
+
 EXPECTED = {
-    "version": 5,
+    "version": 6,
     "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
     "immutableProjectRules": {
         "minimumRacesPerVenueDay": 5,
@@ -22,6 +24,8 @@ EXPECTED = {
         "actualJraPayoutsOnly": True,
         "postResultLeakageForbidden": True,
         "singleOnlyPortfolioForbidden": True,
+        "minimumDistinctBetTypesPerRace": 2,
+        "betTypeSelectionMayVaryByRace": True,
         "fullAvailablePeriodRequired": True,
         "droppingEvaluationPeriodsForbidden": True,
         "ticketCountFixed": False,
@@ -53,21 +57,21 @@ EXPECTED = {
     "courses": {
         "ライト": {
             "budgetYen": 2000,
-            "allowedBetTypes": ["単勝", "ワイド", "馬連"],
-            "requireEveryAllowedBetType": True,
-            "minimumDistinctBetTypes": 3,
+            "allowedBetTypes": ALL_BET_TYPES,
+            "requireEveryAllowedBetType": False,
+            "minimumDistinctBetTypes": 2,
         },
         "スタンダード": {
             "budgetYen": 5000,
-            "allowedBetTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複"],
-            "requireEveryAllowedBetType": True,
-            "minimumDistinctBetTypes": 5,
+            "allowedBetTypes": ALL_BET_TYPES,
+            "requireEveryAllowedBetType": False,
+            "minimumDistinctBetTypes": 2,
         },
         "プレミアム": {
             "budgetYen": 10000,
-            "allowedBetTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"],
-            "requireEveryAllowedBetType": True,
-            "minimumDistinctBetTypes": 6,
+            "allowedBetTypes": ALL_BET_TYPES,
+            "requireEveryAllowedBetType": False,
+            "minimumDistinctBetTypes": 2,
         },
     },
 }
@@ -75,8 +79,8 @@ EXPECTED = {
 REQUIRED_DOC_TEXT = (
     "各開催日・各会場で、購入対象を5レース未満にしてはならない。",
     "買い目点数は固定しない。",
-    "券種は固定条件だが、各券種の点数配分は固定条件ではない。",
-    "単勝だけへ絞ることは禁止する。",
+    "券種はレースごとに可変とする。",
+    "各購入対象レースで最低2種類の異なる券種を含める。",
     "回収率200%以上は目標ではなく完成条件とする。",
     "探索途中の候補にはバージョン番号を付けない。",
     "`v16` という名称は、全条件と全ゲートを通過した完成物にだけ付与する。",
@@ -95,9 +99,8 @@ def main() -> None:
     actual = json.loads(CONFIG.read_text(encoding="utf-8"))
     if actual != EXPECTED:
         raise SystemExit(
-            "FIXED_CONSTRAINTS_CHANGED: minimum five races, fixed budgets, flexible ticket counts, diversified bets, "
-            "official odds only, full-period coverage, completion ROI 200, no candidate version numbers, "
-            "and reporting rules are immutable."
+            "FIXED_CONSTRAINTS_CHANGED: minimum five races, fixed budgets, flexible ticket counts, dynamic bet types with minimum two, "
+            "official odds only, full-period coverage, completion ROI 200, no candidate version numbers, and reporting rules are immutable."
         )
 
     if not DOC.exists():
@@ -129,16 +132,22 @@ def main() -> None:
         raise SystemExit("TICKET_COUNT_MUST_NOT_BE_FIXED")
     if actual["immutableProjectRules"].get("ticketCountMayVaryByCourseRaceAndPolicy") is not True:
         raise SystemExit("TICKET_COUNT_FLEXIBILITY_MISSING")
+    if actual["immutableProjectRules"].get("minimumDistinctBetTypesPerRace") != 2:
+        raise SystemExit("MINIMUM_TWO_BET_TYPES_REQUIRED")
+    if actual["immutableProjectRules"].get("betTypeSelectionMayVaryByRace") is not True:
+        raise SystemExit("BET_TYPE_SELECTION_MUST_BE_DYNAMIC")
 
     for course, spec in actual["courses"].items():
         if "ticketCount" in spec:
             raise SystemExit(f"TICKET_COUNT_MUST_NOT_BE_CANONICAL:{course}")
         if spec["budgetYen"] <= 0:
             raise SystemExit(f"INVALID_COURSE_BUDGET:{course}")
-        if spec["minimumDistinctBetTypes"] != len(spec["allowedBetTypes"]):
-            raise SystemExit(f"COURSE_DIVERSIFICATION_WEAKENED:{course}")
-        if spec["allowedBetTypes"] == ["単勝"]:
-            raise SystemExit(f"SINGLE_ONLY_COURSE_FORBIDDEN:{course}")
+        if spec["allowedBetTypes"] != ALL_BET_TYPES:
+            raise SystemExit(f"ALL_BET_TYPES_MUST_BE_AVAILABLE:{course}")
+        if spec["requireEveryAllowedBetType"] is not False:
+            raise SystemExit(f"EVERY_BET_TYPE_MUST_NOT_BE_REQUIRED:{course}")
+        if spec["minimumDistinctBetTypes"] != 2:
+            raise SystemExit(f"MINIMUM_TWO_BET_TYPES_REQUIRED:{course}")
 
     print("Fixed race-tantei constraints verified.")
 
