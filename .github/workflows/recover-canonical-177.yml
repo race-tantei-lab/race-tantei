@@ -10,51 +10,61 @@ permissions:
 jobs:
   recover:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Publish start
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/recover-canonical-177' -f description='inspect decoded rule payload structure' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/recover-canonical-177' -f description='searching all refs/history for canonical artifacts' -f target_url="$TARGET" >/dev/null
       - uses: actions/checkout@v4
-      - name: Inspect archived rule payload
+        with:
+          fetch-depth: 0
+      - name: Fetch all remote refs
         run: |
-          python - <<'PY'
-          import base64, json, zlib
-          from pathlib import Path
-          cfg=json.loads(Path('config/v16-uniform-rule-model.json').read_text())
-          root=json.loads(zlib.decompress(base64.b64decode(cfg['rulePayload'])))
-          out=Path('artifacts/canonical-177-recovery'); out.mkdir(parents=True,exist_ok=True)
-          (out/'decoded-root.json').write_text(json.dumps(root,ensure_ascii=False,indent=2)+'\n')
-          def describe(x):
-              d={'type':type(x).__name__}
-              if isinstance(x,dict):
-                  d['keys']=list(x.keys()); d['keyTypes']={k:type(v).__name__ for k,v in x.items()}; d['lengths']={k:len(v) for k,v in x.items() if hasattr(v,'__len__')}
-              elif isinstance(x,list):
-                  d['length']=len(x); d['sampleTypes']=[type(v).__name__ for v in x[:5]]; d['sample']=x[:3]
-              return d
-          summary={'root':describe(root)}
-          if isinstance(root,dict):
-              for k,v in root.items():
-                  if isinstance(v,(list,dict)):
-                      summary[k]=describe(v)
-          (out/'structure.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
-          print(json.dumps(summary,ensure_ascii=False))
-          PY
+          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
+          git fetch origin '+refs/tags/*:refs/tags/*' --prune || true
+      - name: Search history and refs
+        run: |
+          mkdir -p artifacts/canonical-177-history
+          OUT=artifacts/canonical-177-history
+          {
+            echo '=== REFS ==='
+            git for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin refs/tags
+          } > "$OUT/refs.txt"
+          : > "$OUT/string-history.txt"
+          for term in 'v16_uniform_rules_dedup' 'v16_summary_dedup' '323.70' '170.87' 'strictRuleCount' 'residBin' 'rankBin' 'marketProb' 'predProb' 'all7695' 'completion-analysis-dataset' 'official-odds.jsonl' 'selectedRules' 'Tier1' 'Tier2' '902/7,695'; do
+            echo "===== TERM: $term =====" >> "$OUT/string-history.txt"
+            git log --all --oneline -G"$term" -- . >> "$OUT/string-history.txt" 2>/dev/null || true
+          done
+          : > "$OUT/filenames.txt"
+          for ref in $(git for-each-ref --format='%(refname)' refs/remotes/origin refs/tags); do
+            git ls-tree -r --name-only "$ref" 2>/dev/null | grep -Ei 'dedup|rule|odds|candidate|completion|tier|resid|market' | sed "s#^#$ref\t#" >> "$OUT/filenames.txt" || true
+          done
+          sort -u "$OUT/filenames.txt" -o "$OUT/filenames.txt"
+          : > "$OUT/current-content-grep.txt"
+          git grep -n -I -E 'residRatio|marketProb|predProb|residBin|rankBin|v16_uniform_rules_dedup|v16_summary_dedup|323\.70|170\.87|strictRuleCount' $(git for-each-ref --format='%(refname)' refs/remotes/origin) >> "$OUT/current-content-grep.txt" 2>/dev/null || true
+          wc -l "$OUT"/*.txt
+          echo '--- STRING HISTORY ---'
+          sed -n '1,400p' "$OUT/string-history.txt"
+          echo '--- INTERESTING FILENAMES ---'
+          grep -Ei 'v16|dedup|official-odds|completion-analysis|candidate|resid' "$OUT/filenames.txt" | head -n 500 || true
+          echo '--- CONTENT GREP ---'
+          sed -n '1,500p' "$OUT/current-content-grep.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: canonical-177-recovery
-          path: artifacts/canonical-177-recovery/
+          name: canonical-177-history-search
+          path: artifacts/canonical-177-history/
           retention-days: 7
       - name: Publish success
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/recover-canonical-177' -f description='rule payload structure inspected' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/recover-canonical-177' -f description='history search complete' -f target_url="$TARGET" >/dev/null
       - name: Publish failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/recover-canonical-177' -f description='rule payload inspection failed' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/recover-canonical-177' -f description='history search failed' -f target_url="$TARGET" >/dev/null
