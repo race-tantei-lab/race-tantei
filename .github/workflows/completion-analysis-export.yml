@@ -1,0 +1,60 @@
+name: Completion analysis dataset export
+run-name: Completion analysis dataset export · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/export-completion-analysis-dataset.py"
+      - ".github/workflows/completion-analysis-export.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: completion-analysis-dataset-export
+  cancel-in-progress: true
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify immutable constraints
+        run: python scripts/verify-race-tantei-fixed-constraints.py
+      - name: Export fixed analysis dataset
+        run: python scripts/export-completion-analysis-dataset.py
+      - name: Save run pointer
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          p = Path('artifacts/completion-analysis-run.json')
+          p.parent.mkdir(parents=True, exist_ok=True)
+          p.write_text(json.dumps({'runId': int(os.environ['GITHUB_RUN_ID'])}) + '\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: completion-analysis-dataset
+          path: |
+            artifacts/completion-analysis-dataset.pkl.gz
+            artifacts/completion-analysis-dataset-meta.json
+          compression-level: 0
+          retention-days: 1
+      - name: Save compact export metadata
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f artifacts/completion-analysis-dataset-meta.json artifacts/completion-analysis-run.json
+          git commit -m "Save completion analysis dataset pointer" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
