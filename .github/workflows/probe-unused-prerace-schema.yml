@@ -1,0 +1,70 @@
+name: Audit unused pre-race D1 sources
+run-name: Audit unused pre-race D1 sources · ${{ github.sha }}
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/probe-unused-prerace-schema.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/unused-prerace-schema' -f description='D1未使用事前情報を監査中' -f target_url="$TARGET" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Export schema, counts and representative rows
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          ep=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
+          def q(sql,params=None):
+            body=json.dumps({'sql':sql,'params':params or []}).encode()
+            req=urllib.request.Request(ep,data=body,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},method='POST')
+            with urllib.request.urlopen(req,timeout=90) as r:p=json.loads(r.read().decode())
+            if not p.get('success'):raise RuntimeError(p.get('errors'))
+            return p.get('result',[{}])[0].get('results',[])
+          schema=q("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+          out=[]
+          for rec in schema:
+            name=rec['name']; sql=rec.get('sql') or ''
+            try: count=q(f'SELECT COUNT(*) n FROM "{name}"')[0]['n']
+            except Exception as e: count=f'ERROR:{e}'
+            sample=[]
+            # Only sample potentially pre-race/data-bearing tables; avoid huge logs for pure audit/history tables.
+            lower=(name+' '+sql).lower()
+            if any(k in lower for k in ['runner','horse','entry','race','odds','jockey','trainer','pedigree','blood','owner','breeder','card','source','raw','snapshot']):
+              try: sample=q(f'SELECT * FROM "{name}" LIMIT 2')
+              except Exception as e: sample=[{'error':str(e)}]
+            out.append({'name':name,'rowCount':count,'createSql':sql,'sample':sample})
+          Path('artifacts').mkdir(exist_ok=True)
+          Path('artifacts/unused-prerace-schema.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          summary=[{'name':x['name'],'rows':x['rowCount'],'columns':x['createSql']} for x in out]
+          print(json.dumps(summary,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unused-prerace-schema
+          path: artifacts/unused-prerace-schema.json
+          retention-days: 7
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/unused-prerace-schema' -f description='D1未使用事前情報監査完了' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/unused-prerace-schema' -f description='D1未使用事前情報監査失敗' -f target_url="$TARGET" >/dev/null
