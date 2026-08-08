@@ -33,18 +33,16 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='analysis/fixed-race-context' \
-            -f description='JRA公式結果から芝ダート・距離を復元中' \
+            -f description='JRA公式PDFから芝ダート・距離を復元中' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install parser
-        run: python -m pip install --disable-pip-version-check beautifulsoup4
+        run: python -m pip install --disable-pip-version-check beautifulsoup4 pypdf
       - name: Verify immutable constraints
         run: python scripts/verify-race-tantei-fixed-constraints.py
-      - name: Increase repair concurrency
-        run: sed -i 's/^WORKERS = 6$/WORKERS = 18/' scripts/repair-fixed-race-context.py
       - name: Repair fixed race context
         run: python scripts/repair-fixed-race-context.py
       - name: Upload repaired context
