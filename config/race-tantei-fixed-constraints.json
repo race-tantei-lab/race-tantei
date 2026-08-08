@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
   "immutableProjectRules": {
     "minimumRacesPerVenueDay": 5,
@@ -17,7 +17,30 @@
     "fullAvailablePeriodRequired": true,
     "droppingEvaluationPeriodsForbidden": true,
     "ticketCountFixed": false,
-    "ticketCountMayVaryByCourseRaceAndPolicy": true
+    "ticketCountMayVaryByCourseRaceAndPolicy": true,
+    "calendarSeasonalityMustBeModeled": true
+  },
+  "validationProtocol": {
+    "type": "season_stratified_date_holdout",
+    "splitConfig": "config/season-stratified-holdout-v1.json",
+    "splitUnit": "raceDate",
+    "stratification": "year-month",
+    "holdoutFractionApprox": 0.2,
+    "sameDateMustStayTogether": true,
+    "randomRaceLevelSplitForbidden": true,
+    "heldoutOutcomeUseForDiscoveryForbidden": true,
+    "heldoutDatesRemainExcludedFromTraining": true,
+    "predictionForHeldoutDateUsesOnlyEarlierNonHoldoutDates": true,
+    "singleTailPeriodAsSoleCompletionHoldoutForbidden": true,
+    "dateFeaturesRequired": [
+      "calendarYear",
+      "calendarMonth",
+      "dayOfYearSin",
+      "dayOfYearCos",
+      "daysSinceArchiveStart",
+      "seasonQuarter",
+      "venue"
+    ]
   },
   "promotionRules": {
     "completionRoiPct": 200.0,
@@ -25,7 +48,7 @@
     "minimumFinalHoldoutRacesPerCourse": 100,
     "requireEveryCourseToPass": true,
     "requireFullHistoricalRoiPct": 200.0,
-    "requireFinalHoldoutRoiPct": 200.0,
+    "requireSeasonStratifiedHoldoutRoiPct": 200.0,
     "requireRoiWithoutTop1Pct": 100.0,
     "requireFullHistoricalPeriodCoverage": true,
     "candidateVersionNumbersForbidden": true,
