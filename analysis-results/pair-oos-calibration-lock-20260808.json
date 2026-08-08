@@ -1,0 +1,14 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeCalibratedReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "rawSignal":"strict-OOS marginal-pair residual v2 probabilities for quinella and wide",
+  "calibrationTraining":"only earlier OOS pair predictions whose race dates are strictly before the current evaluation block; never in-sample pair predictions",
+  "coldStart":"first OOS block uses raw pair probability without calibration",
+  "calibrator":{"type":"L2 logistic Platt-style calibration","C":0.1,"features":["logit raw pair probability","logit official pair market probability","log official odds","raw-minus-market logit residual","residual x log official odds"],"classWeight":null},
+  "oosBlocks":[[30,90],[90,150],[150,210],[210,244]],
+  "postCalibrationNormalization":{"quinellaRaceMass":1,"wideRaceMass":3},
+  "ticketScore":"calibrated hit probability multiplied by JRA official odds; wide uses official lower bound for ranking",
+  "settlement":"actual JRA payouts only",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
