@@ -1,0 +1,18 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "fixedQuinellaPortfolio":"top nine distinct quinella tickets ranked by JRA official pair market corrected with alpha=1.0 mean strict-OOS top2 horse marginal log edge, each 200 yen",
+  "mandatoryOtherTickets":{"win":"100 yen top strict-OOS 164 win EV ticket","wide":"100 yen top alpha=1.0 top3-marginal corrected wide EV ticket"},
+  "decomposition":{"coverageTarget":"1 if at least one actual winning quinella combination is inside the fixed top-nine set","payoutTarget":"log1p(max actual JRA quinella payout multiplier in the race); all races included"},
+  "features":"locked 20 race features plus fixed win/wide/quinella expert top1/top3/top9 score dispersion, selected official odds and market-rank summaries",
+  "models":{"coverage":{"type":"LightGBM binary","learningRate":0.03,"numLeaves":15,"minDataInLeaf":80,"featureFraction":0.85,"rounds":120,"lambdaL2":8},"payout":{"type":"LightGBM Huber regression","learningRate":0.03,"numLeaves":15,"minDataInLeaf":80,"featureFraction":0.85,"rounds":120,"lambdaL2":8,"target":"log1p(payout multiplier)"},"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"sameDateLearning":false},
+  "predictedQuinellaTop9Return":"coverageProbability * min(expm1(predictedLogPayout),50) / 9",
+  "coldStartDates":30,
+  "coldStartScore":"fixed top-nine quinella pre-race EV score summary",
+  "predictedLightRaceReturn":"0.90*predictedQuinellaTop9Return + 0.05*mandatoryWinPreRaceEV + 0.05*mandatoryWidePreRaceEV",
+  "raceSelection":"exactly five highest predictedLightRaceReturn races per raceDate x venue; never fewer",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "completionGates":{"fullHistoryRoiPctAtLeast":200,"largestSingleTicketReturnRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudget":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
