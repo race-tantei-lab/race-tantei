@@ -1,0 +1,20 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforePairwiseOrderReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "purpose":"use dense within-race relative-order labels to learn matchup-specific ability instead of sparse winning-ticket labels",
+  "runnerFeatures":"locked 193 strict prior-date Elo/decay features",
+  "trainingRows":"every unordered pair of active finishers in each training race; orientation fixed by ascending horse number",
+  "target":"1 iff lower-horse-number member finishes ahead of the other; dead heat=0.5 and omitted from binary fit if exact tie cannot be represented",
+  "pairFeatures":"signed difference of all 193 runner features plus absolute difference of market log probability, market log-probability signed difference, surface/distance/class/field-size context already present in runner features",
+  "model":{"type":"LightGBM binary pairwise-order classifier","learningRate":0.04,"numLeaves":31,"minDataInLeaf":300,"featureFraction":0.75,"maxBin":63,"rounds":100,"lambdaL2":8.0,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"sameDateLearning":false},
+  "raceAbility":"for each horse, average logit of predicted probability that it beats every other active runner; center within race; combine with normalized official win-market log probability by an equal fixed 0.5/0.5 log-score blend",
+  "jointDistribution":"Plackett-Luce using exp(blended race ability score)",
+  "ticketProbabilities":{"win":"first marginal","quinella":"sum of both ordered top-two probabilities","wide":"sum of ordered top-three outcomes containing both horses"},
+  "ticketScore":"strict-OOS joint probability multiplied by JRA official odds; wide uses lower bound",
+  "diagnostic":{"pairwiseAucVsMarketPairwiseBaseline":true,"topKPerRace":[1,2,3,5,10],"largestTicketRemoved":true,"noFullPeriodThresholdOptimization":true},
+  "nextStageOnlyIfUseful":"five-race selection and exact Light allocation must be locked separately before portfolio ROI evaluation",
+  "officialOdds":{"source":"JRA historical official odds","synthetic":false,"estimated":false,"missing":"remain missing"},
+  "completionGatesUnchanged":{"allCoursesFullHistoryRoiPctAtLeast":200,"allCoursesLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudgets":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
