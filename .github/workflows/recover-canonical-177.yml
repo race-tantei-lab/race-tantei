@@ -24,7 +24,7 @@ jobs:
         run: |
           git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
           mkdir -p artifacts/walk-forward-source
-          git archive --format=tar refs/remotes/origin/agent/walk-forward-12m-learning src scripts workflows | tar -xf - -C artifacts/walk-forward-source
+          git archive --format=tar refs/remotes/origin/agent/walk-forward-12m-learning src scripts .github/workflows | tar -xf - -C artifacts/walk-forward-source
           rg -n -i 'RunnerHistoryStats|horseWins|jockeyWins|trainerWins|courseWins|walk-forward/data|walkForward|winProbability' artifacts/walk-forward-source > artifacts/walk-forward-source/recovery-grep.txt || true
           sed -n '1,800p' artifacts/walk-forward-source/recovery-grep.txt
       - uses: actions/upload-artifact@v4
