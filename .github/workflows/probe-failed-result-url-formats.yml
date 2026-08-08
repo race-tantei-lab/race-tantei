@@ -20,71 +20,54 @@ jobs:
       TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Publish start
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/result-url-format-probe' -f description='3連系モバイルフォームを監査中' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/result-url-format-probe' -f description='3連系返却表を監査中' -f target_url="$TARGET" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python -m pip install --disable-pip-version-check beautifulsoup4
-      - name: Inspect mobile forms and desktop translation
+      - name: Probe one trio axis and one trifecta axis-position
         run: |
           python - <<'PY'
           import json, os, re, urllib.parse, urllib.request, http.cookiejar
           from bs4 import BeautifulSoup
           account=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
           ep=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
-          rid='2026-05-30-tokyo-05'
-          body=json.dumps({'sql':'SELECT result_url resultUrl FROM rt_races WHERE race_id=?','params':[rid]}).encode()
+          body=json.dumps({'sql':'SELECT result_url resultUrl FROM rt_races WHERE race_id=?','params':['2026-05-30-tokyo-05']}).encode()
           req=urllib.request.Request(ep,data=body,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},method='POST')
           with urllib.request.urlopen(req,timeout=90) as r: result_url=json.loads(r.read().decode()).get('result',[{}])[0].get('results',[])[0]['resultUrl']
-          cj=http.cookiejar.CookieJar(); op=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
-          hdr={'User-Agent':'Mozilla/5.0','Accept-Language':'ja'}
+          cj=http.cookiejar.CookieJar(); op=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj)); hdr={'User-Agent':'Mozilla/5.0','Accept-Language':'ja'}
           with op.open(urllib.request.Request(result_url,headers=hdr),timeout=60) as r: result_html=r.read().decode('cp932','replace')
           first=re.search(r'(sw151ou[0-9A-Za-z_/.-]+)',result_html).group(1)
-          def post(host,cname,referer):
-            data=urllib.parse.urlencode({'cname':cname}).encode('ascii')
-            req=urllib.request.Request(host+'/JRADB/accessO.html',data=data,headers={**hdr,'Referer':referer,'Content-Type':'application/x-www-form-urlencoded'},method='POST')
+          def post(data,referer):
+            enc=urllib.parse.urlencode(data).encode('ascii')
+            req=urllib.request.Request('https://sp.jra.jp/JRADB/accessO.html',data=enc,headers={**hdr,'Referer':referer,'Content-Type':'application/x-www-form-urlencoded'},method='POST')
             with op.open(req,timeout=60) as r: raw=r.read(); final=r.geturl()
             return raw.decode('cp932','replace'),final
-          h151,u151=post('https://sp.jra.jp',first,result_url)
+          h151,u151=post({'cname':first},result_url)
           toks=sorted(set(re.findall(r'sw15[1-8][A-Za-z0-9_/.-]+',h151)))
-          targets=[x for x in toks if x.startswith(('sw157ou','sw158ou')) and '10052026021105' in x]
-          out=[]
-          for cname in targets:
-            h,u=post('https://sp.jra.jp',cname,u151); s=BeautifulSoup(h,'html.parser')
-            forms=[]
-            for f in s.find_all('form'):
-              fields=[]
-              for el in f.find_all(['input','select','button']):
-                rec={'tag':el.name,'type':el.get('type'),'name':el.get('name'),'id':el.get('id'),'value':el.get('value'),'onclick':el.get('onclick'),'onchange':el.get('onchange')}
-                if el.name=='select': rec['options']=[{'value':o.get('value'),'text':' '.join(o.stripped_strings)} for o in el.find_all('option')[:25]]
-                fields.append(rec)
-              forms.append({'id':f.get('id'),'name':f.get('name'),'method':f.get('method'),'action':f.get('action'),'onsubmit':f.get('onsubmit'),'fields':fields})
-            js=[]
-            for sc in s.find_all('script'):
-              src=sc.get('src'); txt=sc.get_text('\n')
-              if src: js.append({'src':urllib.parse.urljoin(u,src)})
-              elif any(k in txt for k in ['157','158','axis','jiku','select','cname','CNAME','doAction']): js.append({'inline':txt[:10000]})
-            # Test desktop endpoint using identical race token/checksum but pw prefix.
-            desktop_cname='pw'+cname[2:]
-            try:
-              dh,du=post('https://www.jra.go.jp',desktop_cname,'https://www.jra.go.jp/')
-              ds=BeautifulSoup(dh,'html.parser')
-              dtext=' '.join(ds.stripped_strings)
-              desktop={'cname':desktop_cname,'finalUrl':du,'title':ds.title.get_text(' ',strip=True) if ds.title else '', 'tableCount':len(ds.find_all('table')), 'containsError':'パラメータエラー' in dtext, 'preview':dtext[:800]}
-            except Exception as e:
-              desktop={'cname':desktop_cname,'error':type(e).__name__+':'+str(e)}
-            html_snips=[]
-            for needle in ['軸馬を選択してください','着順を選択してください','表示']:
-              pos=h.find(needle)
-              if pos>=0: html_snips.append(h[max(0,pos-2500):pos+4000])
-            out.append({'mobileCname':cname,'title':s.title.get_text(' ',strip=True) if s.title else '', 'forms':forms,'scripts':js,'desktopTest':desktop,'htmlSnippets':html_snips[:3]})
-          print(json.dumps(out,ensure_ascii=False,indent=2))
-          if len(out)!=2: raise SystemExit('TARGET_PAGES_MISSING')
+          c157=[x for x in toks if x.startswith('sw157ou') and '10052026021105' in x][0]
+          c158=[x for x in toks if x.startswith('sw158ou') and '10052026021105' in x][0]
+          h157,u157=post({'cname':c157},u151); s157=BeautifulSoup(h157,'html.parser')
+          axis157=[o.get('value') for o in s157.select('select#jikuuma option') if (o.get('value') or '')!='#'][0]
+          h157a,u157a=post({'cname':axis157},u157); s157a=BeautifulSoup(h157a,'html.parser')
+          s158=BeautifulSoup(post({'cname':c158},u151)[0],'html.parser')
+          jubn=s158.select_one('select#jubn option').get('value'); chaku=s158.select_one('select#chaku option').get('value')
+          h158a,u158a=post({'cname':c158,'jubn':jubn,'chaku':chaku},u151); s158a=BeautifulSoup(h158a,'html.parser')
+          def summarize(s):
+            out=[]
+            for i,t in enumerate(s.find_all('table')):
+              rows=[]
+              for tr in t.find_all('tr')[:25]:
+                cells=[' '.join(c.stripped_strings) for c in tr.find_all(['th','td'])]
+                if cells: rows.append(cells)
+              if rows: out.append({'index':i,'class':t.get('class'),'parentClass':t.parent.get('class') if t.parent else None,'rows':rows})
+            return out
+          print(json.dumps({'trioAxis':axis157,'trioTitle':s157a.title.get_text(' ',strip=True) if s157a.title else '', 'trioTables':summarize(s157a),'trioText':' '.join(s157a.stripped_strings)[:5000], 'trifectaBase':c158,'jubn':jubn,'chaku':chaku,'trifectaTitle':s158a.title.get_text(' ',strip=True) if s158a.title else '', 'trifectaTables':summarize(s158a),'trifectaText':' '.join(s158a.stripped_strings)[:7000]},ensure_ascii=False,indent=2))
           PY
       - name: Publish success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/result-url-format-probe' -f description='3連系モバイルフォーム監査完了' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/result-url-format-probe' -f description='3連系返却表監査完了' -f target_url="$TARGET" >/dev/null
       - name: Publish failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/result-url-format-probe' -f description='3連系モバイルフォーム監査失敗' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/result-url-format-probe' -f description='3連系返却表監査失敗' -f target_url="$TARGET" >/dev/null
