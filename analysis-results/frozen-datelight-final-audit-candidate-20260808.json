@@ -1,0 +1,67 @@
+{
+  "status": "frozen internal final-audit candidate; not a model; no version assigned",
+  "generatedAt": "2026-08-08",
+  "productionChanged": false,
+  "promotionEligibleBeforeAudit": false,
+  "finalAuditEvaluated": false,
+  "dataPolicy": {
+    "officialJraOddsOnly": true,
+    "actualJraPayoutsOnly": true,
+    "postResultLeakageForbidden": true,
+    "finalAuditDates": 35,
+    "finalAuditVenueDays": 96,
+    "finalAuditMinimumSelectedRaces": 480
+  },
+  "runnerModel": {
+    "featureCount": 145,
+    "calendarFeatures": ["monthSin", "monthCos"],
+    "calendarFeatureCount": 2,
+    "calendarRole": "auxiliary only; no year identity, elapsed-day identity, year-month or venue-month dominance",
+    "probabilityArtifactSha256": "f8e7233ddd393632387487874ebcd0fc99ace1e4ca5d4aa318356b39e4e702c7"
+  },
+  "marketDistortionRules": {
+    "count": 128,
+    "calendarDependentRuleCount": 15,
+    "calendarDependentRuleSharePct": 11.71875,
+    "rulesArtifactSha256": "61d044331b7527875cb90f0627350bab42e37b710e2ff56c26339292b39f7f6a",
+    "discoveryData": "all race dates except the 35 untouched final-audit dates",
+    "innerValidation": "three year-month-stratified race-date groups",
+    "ruleMinimum": "each inner group ROI >= 200% with >=8 tickets; overall ROI without largest one ticket >=100%"
+  },
+  "frozenPolicy": {
+    "minimumRacesPerVenueDay": 5,
+    "raceSelection": "top five races by second-highest bet-type distortion score within each raceDate x venue",
+    "minimumDistinctBetTypesPerRace": 2,
+    "selectedBetTypesPerRace": 2,
+    "ticketStructure": "top bet type: top 2 tickets; second bet type: top 1 ticket",
+    "ticketAllocationShares": [0.4, 0.3, 0.3],
+    "maximumSingleTicketShare": 0.4,
+    "budgetsYen": {
+      "ライト": 2000,
+      "スタンダード": 5000,
+      "プレミアム": 10000
+    },
+    "stakesYen": {
+      "ライト": [800, 600, 600],
+      "スタンダード": [2000, 1500, 1500],
+      "プレミアム": [4000, 3000, 3000]
+    }
+  },
+  "developmentEvidence": {
+    "venueDays": 547,
+    "selectedRaces": 2735,
+    "roiPct": 268.472029250457,
+    "roiWithoutLargestSingleTicketReturnPct": 240.3199268738574,
+    "visibleSeasonStratifiedDevelopmentValidation": {
+      "selectedRaces": 725,
+      "roiPct": 262.3572413793103,
+      "roiWithoutLargestSingleTicketReturnPct": 231.06620689655173
+    },
+    "otherNonFinalAuditDates": {
+      "selectedRaces": 2010,
+      "roiPct": 270.6776119402985,
+      "roiWithoutLargestSingleTicketReturnPct": 232.37114427860698
+    }
+  },
+  "freezeRule": "No rule, threshold, race-selection formula, ticket structure, stake split or feature weighting may be changed after final-audit outcomes are opened."
+}
