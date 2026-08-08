@@ -1,0 +1,26 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeCoveragePortfolioReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "probabilitySources":[
+    {"id":"market","win":"normalized JRA official win probability","wide":"normalized JRA official wide market prior","quinella":"normalized JRA official quinella market prior"},
+    {"id":"stack_rich","win":"strict prior-OOS stacked win probability","wide":"strict-OOS stacked rich pair probability","quinella":"strict-OOS stacked rich pair probability"},
+    {"id":"pairwise_derived","win":"strict prior-OOS stacked win probability","wide":"strict-OOS 429-feature pairwise-derived probability","quinella":"strict-OOS 429-feature pairwise-derived probability"}
+  ],
+  "ticketScoreFamilies":["probability","probability_times_sqrt_official_odds"],
+  "allocations":[
+    {"id":"balanced10","win":1,"wide":4,"quinella":5,"stakeYen":200},
+    {"id":"quinellaHeavy10","win":1,"wide":1,"quinella":8,"stakeYen":200},
+    {"id":"diversified20","win":1,"wide":7,"quinella":12,"stakeYen":100},
+    {"id":"quinellaDiversified20","win":1,"wide":1,"quinella":18,"stakeYen":100}
+  ],
+  "expertCount":24,
+  "budgetYen":2000,
+  "requiredBetTypes":["win","wide","quinella"],
+  "maximumSingleTicketYen":200,
+  "budgetMustBeFullyUsed":true,
+  "diagnostic":"all-race ROI, largest-ticket-removed ROI, and outcome-aware oracle best-five-races-per-raceDate-venue ceiling for each fixed expert; oracle never becomes a model",
+  "nextStageOnlyIfUseful":"only fixed experts with oracle ceiling >=200 may enter a separately locked strict prior-date race/expert selector",
+  "officialOdds":{"source":"JRA historical official odds only","synthetic":false,"estimated":false,"missing":"remain missing"},
+  "promotion":{"oracleCannotPromote":true,"nameIfAndOnlyIfAllCanonicalGatesPass":"v16"}
+}
