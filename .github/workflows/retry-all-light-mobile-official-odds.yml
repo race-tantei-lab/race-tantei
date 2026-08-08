@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "analysis-results/all-light-primary-failure-ids.json"
+      - "scripts/retry-all-light-mobile-official-odds.py"
       - ".github/workflows/retry-all-light-mobile-official-odds.yml"
   workflow_dispatch:
 
@@ -16,7 +17,7 @@ permissions:
 jobs:
   retry:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -33,74 +34,15 @@ jobs:
       - run: python -m pip install --disable-pip-version-check beautifulsoup4
       - name: Verify fixed constraints
         run: python scripts/verify-race-tantei-fixed-constraints.py
-      - name: Patch mobile exporter to exact locked 76 retry IDs
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('scripts/export-mobile-historical-official-odds-retry.py')
-          s=p.read_text(encoding='utf-8')
-          s=s.replace('WORKERS = 6','WORKERS = 10',1)
-          marker='# Rebuild exactly the same deterministic 3,210-race selection used by the primary export.'
-          if marker not in s:
-              raise SystemExit('MOBILE_EXPORTER_TAIL_MARKER_NOT_FOUND')
-          head=s.split(marker,1)[0]
-          tail=r'''# Exact locked retry list from primary 7,695-race light-odds fetch failures. No outcome filtering.
-retry_cfg = json.loads((ROOT / 'analysis-results' / 'all-light-primary-failure-ids.json').read_text(encoding='utf-8'))
-retry_ids = list(retry_cfg['raceIds'])
-if len(retry_ids) != 76 or len(set(retry_ids)) != 76:
-    raise RuntimeError(f'RETRY_ID_LOCK_INVALID:{len(retry_ids)}:{len(set(retry_ids))}')
-all_rows = d1(
-    "SELECT race_id raceId,race_date raceDate,venue,race_no raceNo,result_url resultUrl FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished' ORDER BY race_date,venue,race_no",
-    [START, END_EXCLUSIVE]
-)
-by_id = {r['raceId']: r for r in all_rows}
-missing = [rid for rid in retry_ids if rid not in by_id]
-if missing:
-    raise RuntimeError(f'RETRY_IDS_NOT_IN_FIXED_ARCHIVE:{missing}')
-mobile_rows = [by_id[rid] for rid in retry_ids]
-
-OUT.parent.mkdir(parents=True, exist_ok=True)
-success = 0; failures = []
-present_totals = {k: 0 for k in ['win','umaren','wide','umatan','trio','trifecta']}
-expected_totals = {k: 0 for k in present_totals}
-started = time.time()
-with gzip.open(OUT, 'wt', encoding='utf-8', compresslevel=6) as fh, concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
-    future_map = {pool.submit(fetch_race, row): row for row in mobile_rows}
-    for idx, fut in enumerate(concurrent.futures.as_completed(future_map), 1):
-        row = future_map[fut]
-        try:
-            result = fut.result()
-            fh.write(json.dumps(result, ensure_ascii=False, separators=(',', ':')) + '\n')
-            success += 1
-            for k in present_totals:
-                present_totals[k] += result['present'][k]
-                expected_totals[k] += result['expected'][k]
-        except Exception as e:
-            failures.append({'raceId': row['raceId'], 'error': f'{type(e).__name__}:{e}'})
-        print(json.dumps({'done': idx, 'success': success, 'failures': len(failures), 'elapsedSec': round(time.time()-started,1)}, ensure_ascii=False), flush=True)
-meta = {
-    'lockedRetryRaces': len(mobile_rows), 'successRaces': success, 'failedRaces': len(failures),
-    'expectedTotals': expected_totals, 'presentTotals': present_totals,
-    'combinationCoveragePct': {k: (100.0 * present_totals[k] / expected_totals[k] if expected_totals[k] else 0.0) for k in present_totals},
-    'failures': failures, 'source': 'JRA official mobile historical odds pages',
-    'outcomesUsedToChooseRetryIds': False, 'syntheticOddsUsed': False, 'estimatedOddsUsed': False
-}
-META.write_text(json.dumps(meta, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
-print(json.dumps(meta, ensure_ascii=False), flush=True)
-if success != len(mobile_rows):
-    raise RuntimeError(f'MOBILE_RETRY_INCOMPLETE:{success}/{len(mobile_rows)}')
-'''
-          p.write_text(head+tail,encoding='utf-8')
-          PY
-      - name: Run official mobile retry
-        run: python scripts/export-mobile-historical-official-odds-retry.py
+      - name: Run exact locked official mobile retry
+        run: python scripts/retry-all-light-mobile-official-odds.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: all-light-mobile-official-odds-retry
           path: |
-            artifacts/mobile-historical-official-odds-retry.jsonl.gz
-            artifacts/mobile-historical-official-odds-retry-meta.json
+            artifacts/all-light-mobile-retry.jsonl.gz
+            artifacts/all-light-mobile-retry-meta.json
           compression-level: 0
           retention-days: 14
       - name: Publish success
