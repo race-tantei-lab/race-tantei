@@ -1,0 +1,68 @@
+name: Evaluate speed-enriched Light
+run-name: Evaluate speed-enriched Light · ${{ github.sha }}
+
+on:
+  workflow_run:
+    workflows: ["Build speed-enriched runner OOS"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+concurrency:
+  group: evaluate-speed-enriched-light
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Resolve successful runner artifact run
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RID="${{ github.event.workflow_run.id }}"
+            SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            RID=$(gh run list --workflow build-speed-runner-oos.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')
+            SHA="$GITHUB_SHA"
+          fi
+          test -n "$RID"
+          echo "RUNNER_RID=$RID" >> "$GITHUB_ENV"
+          echo "STATUS_SHA=$SHA" >> "$GITHUB_ENV"
+      - name: Publish evaluation start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${STATUS_SHA}" -f state=pending -f context='analysis/speed-light-evaluation' -f description='スピード特徴ライト完全OOS精算中' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+      - name: Download persisted analysis inputs and runner OOS
+        run: |
+          gh run download "$RUNNER_RID" -n speed-analysis-input -D artifacts/speed-analysis-input
+          gh run download "$RUNNER_RID" -n speed-runner-oos -D artifacts/speed-runner-oos
+      - name: Install evaluator dependencies
+        run: python -m pip install --disable-pip-version-check numpy pandas lightgbm scikit-learn
+      - name: Verify immutable constraints
+        run: python scripts/verify-race-tantei-fixed-constraints.py
+      - name: Evaluate exact locked Light policy
+        run: python scripts/evaluate-speed-enriched-light-policy.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: speed-light-evaluation
+          path: artifacts/speed-light-evaluation/
+          compression-level: 1
+          retention-days: 30
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${STATUS_SHA}" -f state=success -f context='analysis/speed-light-evaluation' -f description='ライト完全OOS精算完了' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${STATUS_SHA}" -f state=failure -f context='analysis/speed-light-evaluation' -f description='ライト完全OOS精算処理失敗' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
