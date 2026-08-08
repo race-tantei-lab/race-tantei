@@ -1,0 +1,15 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "rawSignals":{"model":["strict-OOS 164-feature win probability","strict-OOS 164-feature top2 marginal probability","strict-OOS 164-feature top3 marginal probability"],"market":["normalized JRA win market probability","JRA quinella-derived top2 horse marginal","JRA wide-derived top3 horse marginal"]},
+  "coherentProjection":{"constraints":["for every horse: 0 <= P1 <= PTop2 <= PTop3 <= 1","within every race: sum(P1)=1, sum(PTop2)=2, sum(PTop3)=3"],"algorithm":"deterministic alternating Euclidean projections: project every horse 3-vector onto the nondecreasing isotonic cone, then project each of the three race columns onto a bounded [0,1] simplex with its required sum; repeat 50 times or until maximum constraint error <1e-10","appliedSeparatelyTo":"model marginals and market marginals","noOutcomeFitting":true},
+  "positionComponents":{"first":"P1","secondOnly":"PTop2-P1","thirdOnly":"PTop3-PTop2"},
+  "quinellaProxy":"for unordered pair A,B: firstA*secondOnlyB + secondOnlyA*firstB; normalize all pair proxies in a race to mass 1",
+  "wideProxy":"for unordered pair A,B: sum of position-component products over distinct positions among first/secondOnly/thirdOnly; normalize all pair proxies in a race to mass 3",
+  "officialPairCorrection":"multiply the JRA official pair-market probability by modelProxy/marketProxy, clip the ratio to [0.25,4.0] to prevent numerical domination, then renormalize to the original race mass (1 quinella, 3 wide)",
+  "ticketScore":"corrected pair probability multiplied by corresponding JRA official odds; wide uses official lower bound for ranking",
+  "rankingEvaluation":"actual JRA top1/top3/top5/top9 return rates over the full chronological fixed archive and the four OOS blocks",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
