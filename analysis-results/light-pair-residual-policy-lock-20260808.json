@@ -1,0 +1,40 @@
+{
+  "status": "analysis exploration lock; not a model; no version assigned",
+  "lockedBeforePairResidualReturnEvaluation": true,
+  "fixedArchive": {"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "purpose": "replace Harville-derived quinella/wide probabilities with ticket-specific strict-OOS market-residual classifiers",
+  "betTypes": ["wide","quinella"],
+  "trainingRows": "every official ticket with available official odds; no synthetic or derived odds",
+  "target": "whether the ticket is a winning payout combination",
+  "features": "pre-race pair features already frozen before the race, including paired horse history/context features, official ticket odds, normalized official ticket market probability, and strict-OOS horse probability features",
+  "marketPrior": {
+    "quinella": "normalized inverse official odds, race mass 1",
+    "wide": "normalized inverse official lower-bound odds, race mass 3"
+  },
+  "model": {
+    "type": "LightGBM binary residual model with official ticket market probability logit as init_score",
+    "learningRate": 0.04,
+    "numLeaves": 31,
+    "minDataInLeaf": 300,
+    "featureFraction": 0.75,
+    "rounds": 120,
+    "lambdaL2": 8.0,
+    "oosDateBlocks": [[30,90],[90,150],[150,210],[210,244]],
+    "coldStartDates": 30,
+    "coldStart": "official ticket market probability",
+    "sameDateLearning": false
+  },
+  "postPredictionNormalization": {"quinellaRaceMass":1,"wideRaceMass":3},
+  "ticketScore": "strict-OOS ticket hit probability multiplied by JRA official odds (wide uses official lower bound)",
+  "lightPortfolio": {
+    "budgetYen":2000,
+    "requiredBetTypes":["win","wide","quinella"],
+    "minimumStakePerRequiredTypeYen":100,
+    "maximumSingleTicketShare":0.10,
+    "budgetMustBeFullyUsed":true,
+    "raceCountPerRaceDateVenue":5
+  },
+  "settlement": "actual fixed-archive JRA payouts only",
+  "completionGates": {"fullHistoryRoiPctAtLeast":200,"largestTicketRemovedRoiPctAtLeast":100,"officialOddsOnly":true,"noLeakage":true},
+  "promotion": {"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
