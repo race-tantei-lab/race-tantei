@@ -1,0 +1,10 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeSpeedGateResidualReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "features":{"baseRich":95,"speedHistory":41,"gateContext":28,"total":164,"gateFamilies":["horse number and normalized draw position","frame number and normalized frame","inner/middle/outer draw","venue x surface x distance-bucket x draw prior statistics","venue x surface x distance-bucket x track-condition x draw prior statistics","venue x surface x race-number-bucket x draw prior statistics","venue x surface x distance-bucket x frame prior statistics"],"meetingFieldsInferred":false,"sameDateUpdates":false},
+  "horseProbabilityModel":{"type":"LightGBM binary market-residual ensemble","marketPrior":"normalized official win market probability via logit init_score","oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"coldStartDates":30,"coldStartProbability":"official normalized win market probability","ensemble":"equal-weight mean of the same three fixed residual configurations used by the speed-only lock","configurations":[{"learningRate":0.03,"numLeaves":15,"minDataInLeaf":160,"featureFraction":0.70,"rounds":100,"lambdaL2":8.0},{"learningRate":0.035,"numLeaves":23,"minDataInLeaf":120,"featureFraction":0.75,"rounds":120,"lambdaL2":5.0},{"learningRate":0.04,"numLeaves":31,"minDataInLeaf":100,"featureFraction":0.80,"rounds":90,"lambdaL2":8.0}]},
+  "returnEvaluation":"if predictive improvement is confirmed, reuse the already locked official-odds-only five-race/full-budget Light evaluation without changing thresholds or weights based on observed ROI",
+  "completionGates":{"fullHistoryRoiPctAtLeast":200,"largestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudget":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
