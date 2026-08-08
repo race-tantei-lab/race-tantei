@@ -1,0 +1,109 @@
+{
+  "status": "frozen before untouched final audit; not yet a model; no version assigned",
+  "frozenAt": "2026-08-08",
+  "productionChanged": false,
+  "finalAuditOpened": false,
+  "fixedArchive": {"start":"2024-05-04","end":"2026-08-02","races":7695,"alignedOddsRaces":7690},
+  "developmentSet": {
+    "definition": "all fixed-archive race dates except config/season-stratified-final-audit-v1.json",
+    "selectedRaces": 2730,
+    "selection": "exactly five races per raceDate x venue"
+  },
+  "finalAudit": {
+    "config": "config/season-stratified-final-audit-v1.json",
+    "raceDates": 35,
+    "venueDays": 96,
+    "minimumSelectedRacesPerCourse": 480,
+    "outcomesUsedForDiscovery": false
+  },
+  "candidateGeneration": {
+    "officialOddsOnly": true,
+    "actualJraPayoutsOnlyForLearningSettlement": true,
+    "horseStrength": "geometric blend of corrected official JRA win-market probability and strict chronological runner OOS probability",
+    "combinationProbability": "Plackett-Luce derived pre-race probability",
+    "candidateCountsPerRace": {"単勝":5,"ワイド":15,"馬連":15,"馬単":20,"3連複":20,"3連単":20},
+    "wideHistoricalOdds": "midpoint of official JRA historical low/high range",
+    "syntheticOdds": false
+  },
+  "ruleDiscovery": {
+    "contextFields": ["venue","surface","distBand","fieldBand","raceBand","track","calendarMonth","seasonQuarter"],
+    "priceFields": ["oddsBand","evBand","rankBand"],
+    "templateGeneration": "for each context field: context+oddsBand+rankBand, context+evBand+rankBand, context+oddsBand+evBand+rankBand; for every pair of context fields: pair+oddsBand+rankBand and pair+evBand+rankBand",
+    "templateCount": 80,
+    "minimumTotalTicketsPerRule": 30,
+    "minimumTotalHitsPerRule": 4,
+    "minimumTicketsPerSupportedCalendarYear": 8,
+    "minimumSupportedCalendarYears": 2,
+    "minimumTotalRoi": 2.0,
+    "minimumRoiWithoutLargestReturn": 1.0,
+    "minimumSupportedYearRoi": 2.0,
+    "ruleScore": "min(totalROI, minimumSupportedYearROI)",
+    "ruleCounts": {"単勝":54,"ワイド":38,"馬連":72,"馬単":46,"3連複":55,"3連単":11},
+    "totalRules": 276,
+    "canonicalRulebookSha256": "85c443d90dc29493cf07defbab0a5df285c86488aebf835ee9fef061f8d5339d"
+  },
+  "predictionPolicy": {
+    "ticketScore": "maximum ruleScore among every frozen stable rule matched by the ticket; ties broken by pre-race predicted EV",
+    "ticketRuleSupport": "number of frozen stable rules matched by the ticket",
+    "typeScore": "top-ticket ticketScore * log1p(top-ticket ticketRuleSupport)",
+    "typeSelection": "rank all six bet types by typeScore and use the top two",
+    "raceScore": "highest typeScore in the race",
+    "raceSelection": "rank races by raceScore within raceDate x venue and buy exactly the top five",
+    "minimumDistinctBetTypesPerSelectedRace": 2,
+    "singleTicketConcentration": "course-specific maximum below"
+  },
+  "courses": {
+    "ライト": {
+      "budgetYen": 2000,
+      "tickets": [
+        {"typeRank":1,"ticketRankWithinType":1,"stakeYen":800},
+        {"typeRank":1,"ticketRankWithinType":2,"stakeYen":400},
+        {"typeRank":2,"ticketRankWithinType":1,"stakeYen":800}
+      ],
+      "ticketCount": 3,
+      "maxSingleTicketShare": 0.40,
+      "developmentRoiPct": 258.6542124542125,
+      "developmentRoiWithoutLargestTicketReturnPct": 242.58681318681317,
+      "developmentYearRoiPct": {"2024":214.81032258064522,"2025":276.8897959183674,"2026":274.6}
+    },
+    "スタンダード": {
+      "budgetYen": 5000,
+      "tickets": [
+        {"typeRank":1,"ticketRankWithinType":1,"stakeYen":1500},
+        {"typeRank":1,"ticketRankWithinType":2,"stakeYen":1000},
+        {"typeRank":2,"ticketRankWithinType":1,"stakeYen":1500},
+        {"typeRank":2,"ticketRankWithinType":2,"stakeYen":1000}
+      ],
+      "ticketCount": 4,
+      "maxSingleTicketShare": 0.30,
+      "developmentRoiPct": 237.47216117216118,
+      "developmentRoiWithoutLargestTicketReturnPct": 225.42161172161173,
+      "developmentYearRoiPct": {"2024":219.82,"2025":232.53,"2026":264.5}
+    },
+    "プレミアム": {
+      "budgetYen": 10000,
+      "tickets": [
+        {"typeRank":1,"ticketRankWithinType":1,"stakeYen":2500},
+        {"typeRank":1,"ticketRankWithinType":2,"stakeYen":1500},
+        {"typeRank":1,"ticketRankWithinType":3,"stakeYen":1000},
+        {"typeRank":2,"ticketRankWithinType":1,"stakeYen":2500},
+        {"typeRank":2,"ticketRankWithinType":2,"stakeYen":1500},
+        {"typeRank":2,"ticketRankWithinType":3,"stakeYen":1000}
+      ],
+      "ticketCount": 6,
+      "maxSingleTicketShare": 0.25,
+      "developmentRoiPct": 212.7131868131868,
+      "developmentRoiWithoutLargestTicketReturnPct": 202.67106227106225,
+      "developmentYearRoiPct": {"2024":180.51,"2025":212.36,"2026":247.49}
+    }
+  },
+  "promotion": {
+    "completionRoiPct": 200.0,
+    "requireEveryCourse": true,
+    "requireFullHistoricalRoiPct": 200.0,
+    "requireSeasonStratifiedFinalAuditRoiPct": 200.0,
+    "requireRoiWithoutLargestTicketReturnPct": 100.0,
+    "nameOnlyIfAllPass": "v16",
+    "changesAfterFinalAuditOpenForbidden": true
+  }
+}
