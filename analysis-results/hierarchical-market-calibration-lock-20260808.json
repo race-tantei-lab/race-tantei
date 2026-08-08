@@ -1,0 +1,16 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "betTypes":["quinella","wide"],
+  "signal":{"quinella":"strict-OOS top2 horse marginal log edge versus JRA quinella-derived horse marginal","wide":"strict-OOS top3 horse marginal log edge versus JRA wide-derived horse marginal","pairEdge":"mean of the two constituent horse log edges, clipped to [-1,1]"},
+  "fixedBuckets":{"pairEdge":["<-0.25","-0.25..-0.10","-0.10..0","0..0.10","0.10..0.25",">=0.25"],"officialOdds":["<5","5..10","10..20","20..50","50..100","100..300",">=300"],"officialMarketRank":["1..3","4..10","11..30","31+"],"surface":["turf","dirt","other"],"distanceM":["<=1400","1401..1800","1801..2200",">2200-or-unknown"]},
+  "hierarchy":["edge","edge x odds","edge x odds x marketRank","edge x odds x marketRank x surface","edge x odds x marketRank x surface x distanceBucket"],
+  "onlineCalibration":{"observed":"number of actually winning tickets in the cell from strictly prior dates","expected":"sum of JRA official pair market probabilities in the cell from strictly prior dates","priorMean":1.0,"priorStrengthExpectedHits":20,"recursiveShrinkage":"each deeper cell uses its parent posterior multiplier as its prior mean; posteriorMultiplier=(observedHits + 20*parentMultiplier)/(expectedHits + 20)","sameDateLearning":false},
+  "ticketScore":"JRA official pair market probability multiplied by the deepest hierarchical posterior multiplier; for ranking within a race this is equivalent to its calibrated expected-value multiplier because official market probability x official odds is race-constant apart from rounding; no result-derived odds threshold",
+  "coldStart":"multiplier 1 until prior observations accumulate",
+  "rankingEvaluation":"actual JRA top1/top3/top5/top9 return rates, including the full fixed archive with chronological cold start",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "completionUse":"only if stable strict-online value appears; all final race-count/budget/ticket-type gates remain unchanged",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
