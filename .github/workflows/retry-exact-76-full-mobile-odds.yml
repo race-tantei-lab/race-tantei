@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/retry-exact-76-full-mobile-odds.yml"
+      - "scripts/retry-exact-76-full-mobile-official-odds.py"
   workflow_dispatch:
 
 permissions:
@@ -36,58 +37,8 @@ jobs:
       - run: python -m pip install --disable-pip-version-check beautifulsoup4
       - name: Verify fixed constraints
         run: python scripts/verify-race-tantei-fixed-constraints.py
-      - name: Build exact-76 full mobile exporter from audited parser
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('scripts/export-mobile-historical-official-odds-retry.py')
-          s=p.read_text(encoding='utf-8')
-          marker='# Rebuild exactly the same deterministic 3,210-race selection used by the primary export.'
-          if marker not in s:
-              raise SystemExit('AUDITED_MOBILE_PARSER_MARKER_MISSING')
-          head=s.split(marker,1)[0]
-          tail=r'''
-# Exact fixed retry set: primary all-7,695 fetch failures only; no outcome/payout filtering.
-LOCK = ROOT / 'analysis-results' / 'all-light-primary-failure-ids.json'
-OUT = ROOT / 'artifacts' / 'exact-76-full-mobile-odds.jsonl.gz'
-META = ROOT / 'artifacts' / 'exact-76-full-mobile-odds-meta.json'
-WORKERS = 6
-cfg=json.loads(LOCK.read_text(encoding='utf-8'))
-retry_ids=list(cfg.get('raceIds',[]))
-if len(retry_ids)!=76 or len(set(retry_ids))!=76:
-    raise RuntimeError(f'EXACT_76_LOCK_INVALID:{len(retry_ids)}:{len(set(retry_ids))}')
-all_rows=d1("SELECT race_id raceId,race_date raceDate,venue,race_no raceNo,result_url resultUrl FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished' ORDER BY race_date,venue,race_no", [START, END_EXCLUSIVE])
-by_id={r['raceId']:r for r in all_rows}
-missing=[rid for rid in retry_ids if rid not in by_id]
-if missing:
-    raise RuntimeError(f'EXACT_76_NOT_IN_FIXED_ARCHIVE:{missing}')
-mobile_rows=[by_id[rid] for rid in retry_ids]
-OUT.parent.mkdir(parents=True,exist_ok=True)
-success=0; failures=[]
-present_totals={k:0 for k in ['win','umaren','wide','umatan','trio','trifecta']}
-expected_totals={k:0 for k in present_totals}
-started=time.time()
-with gzip.open(OUT,'wt',encoding='utf-8',compresslevel=5) as fh, concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
-    future_map={pool.submit(fetch_race,row):row for row in mobile_rows}
-    for idx,fut in enumerate(concurrent.futures.as_completed(future_map),1):
-        row=future_map[fut]
-        try:
-            result=fut.result(); fh.write(json.dumps(result,ensure_ascii=False,separators=(',',':'))+'\n'); success+=1
-            for k in present_totals:
-                present_totals[k]+=result['present'][k]; expected_totals[k]+=result['expected'][k]
-        except Exception as e:
-            failures.append({'raceId':row['raceId'],'error':f'{type(e).__name__}:{e}'})
-        print(json.dumps({'done':idx,'success':success,'failures':len(failures),'elapsedSec':round(time.time()-started,1)},ensure_ascii=False),flush=True)
-meta={'lockedRetryRaces':len(mobile_rows),'successRaces':success,'failedRaces':len(failures),'raceCoveragePct':100*success/len(mobile_rows),'expectedTotals':expected_totals,'presentTotals':present_totals,'combinationCoveragePct':{k:(100*present_totals[k]/expected_totals[k] if expected_totals[k] else 0) for k in present_totals},'failures':failures,'source':'JRA official mobile historical odds pages','outcomesUsedToChooseRetryIds':False,'payoutsUsedToChooseRetryIds':False,'syntheticOddsUsed':False,'estimatedOddsUsed':False}
-META.write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-print(json.dumps(meta,ensure_ascii=False),flush=True)
-if success!=len(mobile_rows):
-    raise RuntimeError(f'EXACT_76_FULL_MOBILE_INCOMPLETE:{success}/{len(mobile_rows)}')
-'''
-          Path('/tmp/exact76.py').write_text(head+tail,encoding='utf-8')
-          PY
       - name: Export exact 76 full official odds
-        run: python /tmp/exact76.py
+        run: python scripts/retry-exact-76-full-mobile-official-odds.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
