@@ -1,0 +1,22 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "quinellaRanking":"JRA official quinella pair market corrected with alpha=1.0 mean strict-OOS top2 horse-marginal log edge, ranked by corrected probability multiplied by JRA official quinella odds",
+  "fixedStructures":{"C9":{"stakes":"ranks1-9 x 200 yen","quinellaStakeYen":1800},"C12":{"stakes":"ranks1-6 x 200 yen; ranks7-12 x 100 yen","quinellaStakeYen":1800},"C15":{"stakes":"ranks1-3 x 200 yen; ranks4-15 x 100 yen","quinellaStakeYen":1800},"C18":{"stakes":"ranks1-18 x 100 yen","quinellaStakeYen":1800}},
+  "mandatoryOtherTickets":{"win":"100 yen on top strict-OOS 164-feature win EV ticket","wide":"100 yen on top alpha=1.0 top3-marginal corrected wide EV ticket"},
+  "structureFeatures":"locked pre-race race/model features plus, for each structure, selected-ticket official-odds quantiles, market-rank summaries, corrected-score concentration, cumulative official-market mass, top2-edge summaries and overlap with top market tickets",
+  "twoPartModels":{"coverage":{"target":"whether the actual winning quinella is included in the structure","type":"LightGBM binary","learningRate":0.03,"numLeaves":15,"minDataInLeaf":80,"featureFraction":0.85,"rounds":120,"lambdaL2":8},"conditionalReturn":{"target":"min(actual quinella return multiplier on the 1800-yen structure,5.0), trained only on prior races where the structure covered the winning quinella","type":"LightGBM Huber regression","learningRate":0.03,"numLeaves":7,"minDataInLeaf":20,"featureFraction":0.85,"rounds":100,"lambdaL2":8,"predictionClippedTo":[0,5]}},
+  "oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],
+  "sameDateLearning":false,
+  "predictedStructureReturn":"coverageProbability multiplied by predicted conditional clipped return",
+  "structureChoice":"choose the one of C9/C12/C15/C18 with highest predictedStructureReturn; ties prefer the narrower structure",
+  "coldStartDates":30,
+  "coldStartStructure":"C9",
+  "predictedLightRaceReturn":"0.90*predicted chosen quinella structure return + 0.05*mandatory win pre-race EV + 0.05*mandatory wide pre-race EV",
+  "raceSelection":"exactly five highest predictedLightRaceReturn races per raceDate x venue; never fewer",
+  "budget":{"light":2000,"win":100,"wide":100,"quinella":1800,"singleTicketCapYen":200,"budgetMustBeFullyUsed":true,"requiredBetTypes":true},
+  "settlement":"actual fixed-archive JRA payouts only; clipping is used only in structure-selection training targets, never in settlement",
+  "completionGates":{"fullHistoryRoiPctAtLeast":200,"largestSingleTicketReturnRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudget":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
