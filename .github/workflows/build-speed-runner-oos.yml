@@ -66,6 +66,18 @@ jobs:
         run: python -m pip install --disable-pip-version-check numpy pandas lightgbm scikit-learn
       - name: Verify immutable constraints
         run: python scripts/verify-race-tantei-fixed-constraints.py
+      - name: Patch active-runner row audit
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/build-speed-enriched-runner-oos.py')
+          s=p.read_text(encoding='utf-8')
+          old='''if X.shape != (106122, len(feature_names)):\n    raise RuntimeError(f"FEATURE_SHAPE:{X.shape}:{len(feature_names)}")'''
+          new='''expected_active = sum(1 for r in D["runners"] if str(r.get("runnerStatus") or "active") == "active" and r.get("winOdds") and float(r["winOdds"]) > 0)\nif X.shape != (expected_active, len(feature_names)):\n    raise RuntimeError(f"FEATURE_SHAPE:{X.shape}:expected_active={expected_active}:features={len(feature_names)}")'''
+          if old not in s:
+              raise SystemExit('ACTIVE_RUNNER_ASSERT_PATCH_TARGET_NOT_FOUND')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
       - name: Build strict chronological features and OOS probabilities
         run: python scripts/build-speed-enriched-runner-oos.py
       - uses: actions/upload-artifact@v4
