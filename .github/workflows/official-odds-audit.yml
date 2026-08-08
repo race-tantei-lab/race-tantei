@@ -1,0 +1,58 @@
+name: Official odds coverage audit
+run-name: Official odds coverage audit · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/export-official-odds-audit.py"
+      - ".github/workflows/official-odds-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: official-odds-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish audit start
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='analysis/official-odds-audit' \
+            -f description='固定期間の発走前JRA公式オッズを監査中' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Audit official odds
+        run: python scripts/export-official-odds-audit.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: official-odds-audit
+          path: artifacts/official-odds-audit.json
+          retention-days: 7
+      - name: Publish success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='analysis/official-odds-audit' \
+            -f description='発走前JRA公式オッズ監査完了' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='analysis/official-odds-audit' \
+            -f description='発走前JRA公式オッズ監査失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
