@@ -1,0 +1,96 @@
+{
+  "status": "internal development diagnostic; not a model; no version assigned",
+  "generatedAt": "2026-08-08",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "finalHoldoutRoiEvaluated": false,
+  "fixedArchive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "races": 7695,
+    "developmentDateIndexRange": [0, 216],
+    "finalHoldoutStartsAtDateIndex": 216,
+    "finalHoldoutFirstDate": "2026-05-02"
+  },
+  "canonicalConstraints": {
+    "minimumRacesPerVenueDay": 5,
+    "ticketCountFixed": false,
+    "ticketCountMayVaryByCourseRaceAndPolicy": true,
+    "budgetsYen": {"ライト": 2000, "スタンダード": 5000, "プレミアム": 10000},
+    "requiredBetTypes": {
+      "ライト": ["単勝", "ワイド", "馬連"],
+      "スタンダード": ["単勝", "ワイド", "馬連", "馬単", "3連複"],
+      "プレミアム": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"]
+    },
+    "officialOddsOnly": true,
+    "actualJraPayoutsOnly": true,
+    "postResultLeakageForbidden": true,
+    "completionRoiPct": 200.0
+  },
+  "allCourseDevelopment": {
+    "temporaryFixedMarketEdgeFold90To150RoiPct": {
+      "ライト": 140.2556886227545,
+      "スタンダード": 141.2948502994012,
+      "プレミアム": 126.48670658682634
+    },
+    "raceLevelOnlineSelectorBestFullDevelopmentRoiPct": {
+      "ライト": 81.99733096085409,
+      "スタンダード": 83.992384341637,
+      "プレミアム": 80.49245551601423
+    },
+    "groupLevelOnlineSelectorBestFullDevelopmentRoiPct": {
+      "ライト": 76.83,
+      "スタンダード": 110.55921708185053,
+      "プレミアム": 80.26
+    },
+    "groupLevelStandardBestRoiWithoutLargestTicketReturnPct": 85.66,
+    "fixedLongshotDiagnostic": {
+      "note": "Some fixed Standard/Premium strategies exceeded 200 percent aggregate development ROI, but the result was dominated by rare jackpot periods, had near-zero or very low returns in multiple development blocks, and was rejected as non-robust and unsuitable for promotion.",
+      "exampleStandardAggregateRoiPct": 241.9,
+      "exampleStandardWithoutLargestTicketReturnPct": 117.4,
+      "examplePremiumAggregateRoiPct": 241.4,
+      "examplePremiumWithoutLargestTicketReturnPct": 116.9,
+      "promotionEligible": false
+    }
+  },
+  "marketComparison": {
+    "fundamentalsOnlyWinAuc": [0.74069, 0.76899, 0.77399],
+    "jraMarketWinAuc": [0.84112, 0.84066, 0.83422],
+    "correctedWeightedWinAuc": [0.83420, 0.83747, 0.83323],
+    "sameDayEnhancedWinAuc": [0.83199, 0.83702, 0.83251],
+    "sameDayEnhancedTop3Auc": [0.81133, 0.81407, 0.82859],
+    "jraMarketTop3Auc": [0.81474, 0.81416, 0.82856],
+    "interpretation": "The current fixed database features do not consistently rank outcomes better than the contemporaneous JRA market. This explains why robust portfolio ROI repeatedly converges near the post-takeout baseline despite extensive modeling."
+  },
+  "directTicketTypeModels": {
+    "単勝": {"modelAuc": [0.83380,0.83716,0.83256], "marketAuc": [0.84114,0.84064,0.83423]},
+    "ワイド": {"modelAuc": [0.83931,0.84371,0.85562], "marketAuc": [0.84529,0.84403,0.85536]},
+    "馬連": {"modelAuc": [0.85964,0.86788,0.87354], "marketAuc": [0.87084,0.86841,0.87415]},
+    "馬単": {"modelAuc": [0.82535,0.84121,0.83853], "marketAuc": [0.83672,0.84269,0.84122]},
+    "3連複": {"modelAuc": [0.85135,0.87233,0.88330], "marketAuc": [0.86421,0.87244,0.88494]},
+    "3連単": {"modelAuc": [0.82743,0.84875,0.83790], "marketAuc": [0.84326,0.85681,0.84274]},
+    "portfolioRoiPct": {"ライト": 72.29, "スタンダード": 38.39, "プレミアム": 15.36},
+    "decision": "rejected; direct sparse-ticket classification degraded portfolio ROI"
+  },
+  "sameDayLegitimateInformation": {
+    "usedOnlyEarlierRacesAtSameDateVenue": true,
+    "features": [
+      "favorite expected versus actual wins",
+      "upset strength",
+      "winner market probability",
+      "speed/time residual against prior baseline",
+      "frame bias residual",
+      "same-surface bias",
+      "jockey same-day wins/top3 versus expectation"
+    ],
+    "result": "small late-period top3 discrimination improvement only; no robust 200 percent ROI breakthrough"
+  },
+  "decision": {
+    "developmentRoi200GatePassedForEveryCourse": false,
+    "openFinalHoldoutRoi": false,
+    "promotion": "forbidden",
+    "modelVersion": null,
+    "v16Assigned": false,
+    "reason": "No non-leaking, full-development, all-course strategy reached the 200 percent completion gate robustly. Jackpot-dominated >200 aggregate diagnostics were explicitly rejected."
+  }
+}
