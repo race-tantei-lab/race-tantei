@@ -1,0 +1,53 @@
+{
+  "status": "analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeContextualStrategyReturnEvaluation": true,
+  "fixedArchive": {"start": "2024-05-04", "end": "2026-08-02", "races": 7695, "futureDataAllowed": false, "sameDateOutcomeAllowedForDecision": false},
+  "officialOdds": {"source": "JRA official historical odds only", "syntheticOdds": false, "derivedCombinationOdds": false, "missingOdds": "remain missing"},
+  "probabilitySources": ["strict-OOS-normal", "strict-OOS-value"],
+  "fixedTicketStrategyFamilies": [
+    "p",
+    "p_times_odds_pow_0_5",
+    "p_times_odds",
+    "p_times_odds_pow_1_5",
+    "p_div_market_probability",
+    "p_div_market_probability_times_odds_pow_0_5"
+  ],
+  "additionalFixedStrategies": ["JRA_market_probability", "JRA_official_odds_longshot"],
+  "wideOddsForScoring": "official lower bound",
+  "topTicketsRetainedPerStrategyBetType": 12,
+  "contextualStrategySelector": {
+    "unit": "bet type",
+    "model": "one LightGBM Huber regression per bet type with strategy id as an input",
+    "trainingRows": "every prior race x every fixed strategy; full-information counterfactual target becomes available only after the race date ends",
+    "target": "equal-weight realized return rate of the strategy's top 10 distinct 100-yen tickets",
+    "retrainDateIndices": [30, 90, 150, 210],
+    "coldStartDates": 30,
+    "coldStartStrategy": "strict-OOS-normal p_times_odds",
+    "sameDateLearning": false
+  },
+  "raceSelection": {
+    "countPerRaceDateVenuePerCourse": 5,
+    "selector": "expanding LightGBM Huber course-return regression using prior dates only",
+    "retrainDateIndices": [30, 90, 150, 210],
+    "coldStart": "average contextual-strategy predicted return and top-ticket score across required bet types",
+    "sameDateLearning": false
+  },
+  "budget": {
+    "light": 2000,
+    "standard": 5000,
+    "premium": 10000,
+    "unitYen": 100,
+    "minimumRequiredBetTypeStakeYen": 100,
+    "maximumSingleTicketShare": 0.10,
+    "budgetMustBeFullyUsed": true
+  },
+  "requiredBetTypes": {
+    "light": ["win", "wide", "quinella"],
+    "standard": ["win", "wide", "quinella", "exacta", "trio"],
+    "premium": ["win", "wide", "quinella", "exacta", "trio", "trifecta"]
+  },
+  "allocation": "after mandatory 100 yen per required bet type, allocate remaining 100-yen units by chosen-strategy ticket score multiplied by max(0.1, contextual predicted return), respecting the 10% per-ticket cap",
+  "settlement": "actual fixed-archive JRA payouts only",
+  "completionGates": {"allCoursesFullHistoryRoiPctAtLeast": 200, "allCoursesLargestTicketRemovedRoiPctAtLeast": 100, "fiveRacesPerRaceDateVenue": true, "exactBudgets": true, "requiredBetTypes": true, "officialOddsOnly": true, "noLeakage": true},
+  "promotion": {"allowedOnlyIfEveryGatePasses": true, "nameIfAndOnlyIfCompleted": "v16"}
+}
