@@ -21,45 +21,36 @@ jobs:
       STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Start
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/jra-historical-odds' -f description='JRA過去オッズリンクをCP932で確認中' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/jra-historical-odds' -f description='JRA過去オッズの非表示ルートを確認中' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install --disable-pip-version-check beautifulsoup4
-      - name: Extract odds links
+      - name: Inspect hidden routes
         run: |
           python - <<'PY'
           import json, urllib.request, urllib.parse, re
           from pathlib import Path
-          from bs4 import BeautifulSoup
           url='https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0108202403050220240504%2F2B'
           req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'ja','Referer':'https://www.jra.go.jp/'})
           with urllib.request.urlopen(req,timeout=60) as r:
-              raw=r.read(); final=r.geturl(); status=r.status; ctype=r.headers.get('content-type')
+              raw=r.read(); final=r.geturl(); status=r.status
           html=raw.decode('cp932','replace')
-          soup=BeautifulSoup(html,'html.parser')
-          links=[]
-          for a in soup.find_all('a',href=True):
-              text=' '.join(a.stripped_strings)
-              href=urllib.parse.urljoin(final,a.get('href'))
-              hay=(text+' '+href).lower()
-              if 'オッズ' in text or 'odds' in hay or 'accesso' in hay or 'pw01o' in hay:
-                  links.append({'text':text,'href':href})
-          # Include form/action diagnostics because some JRA menus are form submissions.
-          forms=[]
-          for f in soup.find_all('form'):
-              blob=' '.join(f.stripped_strings)
-              action=urllib.parse.urljoin(final,f.get('action') or '')
-              vals={i.get('name'):i.get('value') for i in f.find_all('input') if i.get('name')}
-              if 'オッズ' in blob or any('odd' in str(x).lower() for x in [action,*vals.values()]):
-                  forms.append({'text':blob[:500],'action':action,'inputs':vals})
-          out={'status':status,'contentType':ctype,'finalUrl':final,'bytes':len(raw),'title':soup.title.get_text(' ',strip=True) if soup.title else '', 'links':links, 'forms':forms, 'containsOddsText':('オッズ' in html)}
+          tokens=sorted(set(re.findall(r'pw01[a-zA-Z0-9_/%.?=&;-]{5,120}',html)))
+          access_tokens=sorted(set(re.findall(r'access[A-Za-z]+\.html[^\"\'<> ]{0,180}',html)))
+          snippets=[]
+          for needle in ['オッズ','odds','CNAME','pw01o','accessO']:
+              for m in list(re.finditer(re.escape(needle),html,re.I))[:30]:
+                  snippets.append({'needle':needle,'text':re.sub(r'\s+',' ',html[max(0,m.start()-450):m.end()+700])[:1400]})
+          scripts=[]
+          for m in re.finditer(r'<script[^>]*>(.*?)</script>',html,re.S|re.I):
+              body=m.group(1)
+              if any(x.lower() in body.lower() for x in ['odds','オッズ','pw01o','cname']):
+                  scripts.append(re.sub(r'\s+',' ',body)[:5000])
+          out={'status':status,'finalUrl':final,'bytes':len(raw),'pw01Tokens':tokens,'accessTokens':access_tokens,'snippets':snippets[:80],'scripts':scripts[:20]}
           Path('artifacts').mkdir(exist_ok=True)
           Path('artifacts/jra-historical-odds-link-probe.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          print(json.dumps(out,ensure_ascii=False))
-          if not links and not forms:
-              raise SystemExit('NO_ODDS_NAV_FOUND')
+          print(json.dumps({'status':status,'tokenCount':len(tokens),'accessCount':len(access_tokens),'snippetCount':len(snippets),'scriptCount':len(scripts),'pw01Tokens':tokens[:40]},ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -68,7 +59,7 @@ jobs:
           retention-days: 7
       - name: Success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ遷移を確認' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/jra-historical-odds' -f description='JRA過去オッズの内部ルート監査完了' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ遷移取得失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ内部ルート監査失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
