@@ -40,7 +40,20 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install parser
-        run: python -m pip install --disable-pip-version-check beautifulsoup4 pypdf
+        run: python -m pip install --disable-pip-version-check beautifulsoup4 pymupdf
+      - name: Patch PDF extractor to MuPDF raw order
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/repair-fixed-race-context.py')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('from pypdf import PdfReader', 'import pymupdf')
+          start=s.index('def normalized_pdf_text(pdf_bytes):')
+          end=s.index('\ndef parse_pdf_races', start)
+          repl='''def normalized_pdf_text(pdf_bytes):\n    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")\n    return unicodedata.normalize("NFKC", "\\n".join(page.get_text("text", sort=False) for page in doc))\n\n'''
+          s=s[:start]+repl+s[end+1:]
+          p.write_text(s,encoding='utf-8')
+          PY
       - name: Verify immutable constraints
         run: python scripts/verify-race-tantei-fixed-constraints.py
       - name: Repair fixed race context
