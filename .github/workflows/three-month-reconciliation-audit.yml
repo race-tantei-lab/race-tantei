@@ -1,0 +1,148 @@
+name: Complete audited three month repair
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair-and-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Wait for audited repair endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          for attempt in $(seq 1 60); do
+            code="$(curl --silent --show-error --max-time 60 \
+              -H 'x-race-audit: stake-reconciliation-v1' \
+              -o audit.json -w '%{http_code}' \
+              "${base}/api/audit/three-months" || true)"
+            if [ "$code" = '200' ] && grep -q 'three-month-stake-reconciliation-v2' audit.json; then
+              exit 0
+            fi
+            echo "wait ${attempt}/60: audit HTTP ${code}"
+            sleep 5
+          done
+          cat audit.json || true
+          exit 1
+
+      - name: Rebuild every venue-day and require a valid audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          valid=false
+          for attempt in $(seq 1 30); do
+            repair_code="$(curl --silent --show-error --max-time 150 \
+              -X POST \
+              -H 'x-race-audit-repair: fixed-stake-v1' \
+              -o repair.json -w '%{http_code}' \
+              "${base}/api/audit/three-months/repair?venues=12" || true)"
+            echo "repair ${attempt}/30: HTTP ${repair_code}"
+            cat repair.json || true
+            echo
+
+            audit_code="$(curl --silent --show-error --max-time 120 \
+              -H 'x-race-audit: stake-reconciliation-v1' \
+              -o audit.json -w '%{http_code}' \
+              "${base}/api/audit/three-months?full=1" || true)"
+            if [ "$audit_code" != '200' ]; then
+              echo "audit HTTP ${audit_code}"
+              sleep 4
+              continue
+            fi
+
+            valid="$(python - <<'PY'
+          import json
+          data=json.load(open('audit.json',encoding='utf-8'))
+          print('true' if data.get('valid') is True else 'false')
+          print(json.dumps({
+            'valid': data.get('valid'),
+            'scope': data.get('scope'),
+            'findings': data.get('findings'),
+            'courses': data.get('courses'),
+            'evaluationPeriod': data.get('evaluationPeriod'),
+            'tuningPeriod': data.get('tuningPeriod')
+          },ensure_ascii=False,indent=2),file=__import__('sys').stderr)
+          PY
+            )"
+            if [ "$valid" = 'true' ]; then
+              break
+            fi
+            sleep 4
+          done
+
+          if [ "$valid" != 'true' ]; then
+            echo 'The repaired dataset still fails audit v2.' >&2
+            exit 1
+          fi
+
+      - name: Verify exact fixed stakes and display identity
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          data=json.load(open('audit.json',encoding='utf-8'))
+          expected={'ライト':1600,'スタンダード':4200,'プレミアム':8800}
+          scope=data.get('scope',{})
+          required=int(scope.get('requiredSelections',0))
+          findings=data.get('findings',{})
+          assert data.get('valid') is True, data
+          for key in [
+            'missingModelRaces',
+            'stakeViolationRaceCourses',
+            'pendingRaceCourses',
+            'individualDetailMismatchRaces',
+            'archiveMismatchRaces',
+            'courseSelectionMismatchRaces',
+            'venueQuotaViolations'
+          ]:
+            assert int(findings.get(key,-1)) == 0, (key,findings)
+          for row in data.get('courses',[]):
+            course=row['course']
+            target=expected[course]
+            assert int(row['selectedRaces']) == required, row
+            assert int(row['fixedStakeRaces']) == required, row
+            assert int(row['underStakeRaces']) == 0, row
+            assert int(row['overStakeRaces']) == 0, row
+            assert abs(float(row['averageStakeYen'])-target) < 0.001, row
+            assert abs(float(row['averageHitStakeYen'])-target) < 0.001, row
+            assert abs(float(row['averageMissStakeYen'])-target) < 0.001, row
+          summary={
+            'valid':True,
+            'scope':scope,
+            'findings':findings,
+            'courses':data.get('courses'),
+            'monthly':data.get('monthly'),
+            'evaluationPeriod':data.get('evaluationPeriod'),
+            'tuningPeriod':data.get('tuningPeriod')
+          }
+          print(json.dumps(summary,ensure_ascii=False,indent=2))
+          open('audit-summary.json','w',encoding='utf-8').write(json.dumps(summary,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Verify disputed figures remain hidden during repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          curl --silent --show-error --fail --max-time 60 "$base/" -o home.html
+          curl --silent --show-error --fail --max-time 60 "$base/performance" -o performance.html
+          grep -q '過去3ヶ月成績を監査中' home.html
+          grep -q '過去3ヶ月成績を監査中' performance.html
+
+      - name: Upload repaired audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: repaired-three-month-audit-v2
+          path: |
+            repair.json
+            audit.json
+            audit-summary.json
+          retention-days: 30
