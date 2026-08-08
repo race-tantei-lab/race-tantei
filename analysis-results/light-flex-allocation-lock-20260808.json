@@ -1,0 +1,42 @@
+{
+  "status": "analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation": true,
+  "fixedArchive": {"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "course": "ライト",
+  "budgetYenPerSelectedRace": 2000,
+  "allowedBetTypes": ["単勝","ワイド","馬連"],
+  "requireEveryAllowedBetType": true,
+  "minimumDistinctTickets": 5,
+  "maximumStakePerSingleTicketYen": 800,
+  "stakeUnitYen": 100,
+  "budgetMustBeFullyUsed": true,
+  "raceCountPerRaceDateVenue": 5,
+  "ticketInputs": {
+    "win": "strict-OOS market-residual runner probability + JRA official win odds",
+    "wide": "strict-OOS corrected wide probability + JRA official wide lower-bound odds",
+    "quinella": "strict-OOS corrected quinella probability + JRA official quinella odds"
+  },
+  "onlineCalibration": {
+    "lookbackDates": 90,
+    "usesOnlyPriorDates": true,
+    "returnCapForLearningMultiple": 30,
+    "groupKeys": ["betType","surface","distanceBand","oddsBin","predictedEvBin"],
+    "fallbackLevels": [
+      ["betType","oddsBin","predictedEvBin"],
+      ["betType","oddsBin"],
+      ["betType"],
+      []
+    ],
+    "minimumSamples": 30,
+    "shrinkagePriorSamples": 100
+  },
+  "allocation": {
+    "seedRequiredBetTypeYen": 100,
+    "forceMinimumDistinctTickets": 5,
+    "remainingBudget": "allocate in 100-yen units to tickets with highest online-calibrated expected return, respecting the 800-yen single-ticket cap; if no ticket has calibrated return above 1.0, rank by the same calibrated return without changing rules"
+  },
+  "raceSelection": "for each race-date and venue choose exactly five races by the pre-race portfolio calibrated expected return; ties by race number",
+  "settlement": "actual JRA payouts only",
+  "completionGatesUnchanged": {"fullHistoryRoiPctAtLeast":200,"largestTicketRemovedRoiPctAtLeast":100,"officialOddsOnly":true,"noLeakage":true},
+  "promotion": {"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
