@@ -1,0 +1,19 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeJointFinishTicketReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "purpose":"model the event required by each ticket directly: win, top2 and top3 finish distributions plus full opponent-adjusted runner context",
+  "runnerFeatures":"locked 193 strict prior-date Elo/decay runner features",
+  "runnerProbabilityModels":{"win":"existing strict-OOS Elo/decay market-residual probability","top2":"LightGBM binary on finishPosition<=2","top3":"LightGBM binary on finishPosition<=3","top2Top3WalkForwardBlocks":[[30,90],[90,150],[150,210],[210,244]],"sameDateLearning":false},
+  "pairFeatures":{"symmetry":"for each of all 193 runner features use pair mean and absolute difference","additional":"JRA official ticket odds/log odds/inverse odds/normalized ticket market prior, both runners' strict-OOS win/top2/top3 probabilities and interactions","expectedFeatureCountApproximately":405},
+  "betTypes":["wide","quinella"],
+  "marketPrior":{"quinella":"normalized inverse official odds, race mass 1","wide":"normalized inverse official lower-bound odds, race mass 3"},
+  "pairModel":{"type":"LightGBM binary market-residual with official ticket prior logit as init_score","learningRate":0.04,"numLeaves":31,"minDataInLeaf":300,"featureFraction":0.60,"maxBin":31,"rounds":60,"lambdaL2":8.0,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]]},
+  "postPredictionNormalization":{"quinellaRaceMass":1,"wideRaceMass":3},
+  "ticketScore":"strict-OOS pair hit probability multiplied by JRA official odds; wide uses lower bound",
+  "diagnostic":{"topKPerRace":[1,2,3,5,10],"largestTicketRemoved":true,"noFullPeriodThresholdOptimization":true},
+  "nextStageOnlyIfUseful":"five-race selection and exact Light allocation must be locked separately before portfolio ROI evaluation",
+  "officialOdds":{"synthetic":false,"estimated":false,"missing":"remain missing"},
+  "completionGatesUnchanged":{"allCoursesFullHistoryRoiPctAtLeast":200,"allCoursesLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudgets":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
