@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
   "immutableProjectRules": {
     "minimumRacesPerVenueDay": 5,
@@ -12,6 +12,8 @@
     "actualJraPayoutsOnly": true,
     "postResultLeakageForbidden": true,
     "singleOnlyPortfolioForbidden": true,
+    "minimumDistinctBetTypesPerRace": 2,
+    "betTypeSelectionMayVaryByRace": true,
     "fullAvailablePeriodRequired": true,
     "droppingEvaluationPeriodsForbidden": true,
     "ticketCountFixed": false,
@@ -43,21 +45,21 @@
   "courses": {
     "ライト": {
       "budgetYen": 2000,
-      "allowedBetTypes": ["単勝", "ワイド", "馬連"],
-      "requireEveryAllowedBetType": true,
-      "minimumDistinctBetTypes": 3
+      "allowedBetTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"],
+      "requireEveryAllowedBetType": false,
+      "minimumDistinctBetTypes": 2
     },
     "スタンダード": {
       "budgetYen": 5000,
-      "allowedBetTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複"],
-      "requireEveryAllowedBetType": true,
-      "minimumDistinctBetTypes": 5
+      "allowedBetTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"],
+      "requireEveryAllowedBetType": false,
+      "minimumDistinctBetTypes": 2
     },
     "プレミアム": {
       "budgetYen": 10000,
       "allowedBetTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"],
-      "requireEveryAllowedBetType": true,
-      "minimumDistinctBetTypes": 6
+      "requireEveryAllowedBetType": false,
+      "minimumDistinctBetTypes": 2
     }
   }
 }
