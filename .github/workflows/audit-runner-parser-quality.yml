@@ -1,0 +1,71 @@
+name: Audit runner parser quality
+run-name: Audit runner parser quality · ${{ github.sha }}
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-runner-parser-quality.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/runner-parser-quality' -f description='騎手・斤量パーサ品質を全期間監査中' -f target_url="$TARGET" >/dev/null
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Audit D1 runner parsing
+        run: |
+          python - <<'PY'
+          import json, os, re, urllib.request
+          from collections import Counter,defaultdict
+          from pathlib import Path
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID'];db=os.environ['CLOUDFLARE_D1_DATABASE_ID'];token=os.environ['CLOUDFLARE_API_TOKEN'];ep=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
+          def q(sql,params=None):
+            b=json.dumps({'sql':sql,'params':params or []}).encode();rq=urllib.request.Request(ep,data=b,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},method='POST')
+            with urllib.request.urlopen(rq,timeout=90) as r:p=json.loads(r.read().decode())
+            if not p.get('success'):raise RuntimeError(p.get('errors'))
+            return p.get('result',[{}])[0].get('results',[])
+          rows=q("SELECT r.race_date raceDate,rr.race_id raceId,rr.horse_no horseNo,rr.jockey,rr.assigned_weight assignedWeight,rr.trainer,rr.stable FROM rt_runners rr JOIN rt_races r ON r.race_id=rr.race_id WHERE r.race_date>=? AND r.race_date<? ORDER BY r.race_date,rr.race_id,rr.horse_no",['2024-05-04','2026-08-03'])
+          stats=Counter();months=defaultdict(Counter);samples=[];recovered=[]
+          # Actual weight is the final parenthesized 4x.x-6x.x decimal immediately before trainer/stable in contaminated string.
+          weight_pat=re.compile(r'\((4\d(?:\.\d)?|5\d(?:\.\d)?|6[0-5](?:\.\d)?)\)')
+          for x in rows:
+            j=str(x.get('jockey') or '');aw=x.get('assignedWeight');mon=str(x['raceDate'])[:7]
+            stats['total']+=1;months[mon]['total']+=1
+            contaminated=('前4走' in j or '前5走' in j or '前3走' in j or re.search(r'^\([+-]?\d+\)',j) is not None)
+            if contaminated:stats['jockeyContaminated']+=1;months[mon]['jockeyContaminated']+=1
+            if aw is not None and (float(aw)>65 or float(aw)<40):stats['assignedWeightImplausible']+=1;months[mon]['assignedWeightImplausible']+=1
+            ms=weight_pat.findall(j)
+            rec=float(ms[-1]) if ms else None
+            if rec is not None:
+              stats['embeddedWeightRecoverable']+=1;months[mon]['embeddedWeightRecoverable']+=1
+              if aw is None or abs(float(aw)-rec)>0.01:
+                stats['embeddedWeightDisagrees']+=1;months[mon]['embeddedWeightDisagrees']+=1
+                if len(samples)<50:samples.append({**x,'recoveredWeight':rec})
+              recovered.append(rec)
+          out={'stats':dict(stats),'monthly':{k:dict(v) for k,v in sorted(months.items())},'disagreementSamples':samples,'recoveredWeightRange':[min(recovered),max(recovered)] if recovered else None,'auditPeriod':['2024-05-04','2026-08-02']}
+          Path('artifacts').mkdir(exist_ok=True);Path('artifacts/runner-parser-quality.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps(out,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runner-parser-quality
+          path: artifacts/runner-parser-quality.json
+          retention-days: 7
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/runner-parser-quality' -f description='騎手・斤量パーサ全期間監査完了' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/runner-parser-quality' -f description='騎手・斤量パーサ監査失敗' -f target_url="$TARGET" >/dev/null
