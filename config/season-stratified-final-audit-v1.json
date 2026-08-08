@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "createdAt": "2026-08-08",
+  "seed": "race-tantei-seasonal-final-audit-v1",
+  "purpose": "untouched final promotion audit after the earlier season-stratified validation dates became visible during model discovery",
+  "splitUnit": "raceDate",
+  "stratification": "year-month",
+  "selectionPool": "race dates not contained in config/season-stratified-holdout-v1.json",
+  "selectionRule": "Within each YYYY-MM stratum of the remaining dates, select max(1, round(20% of remaining race dates)) with smallest SHA256(seed|YYYY-MM-DD).",
+  "outcomeFieldsUsedForSplit": false,
+  "finalAuditDates": ["2024-05-19","2024-06-09","2024-06-16","2024-07-07","2024-08-10","2024-09-07","2024-09-16","2024-10-26","2024-11-10","2024-12-07","2025-01-05","2025-02-22","2025-03-08","2025-03-16","2025-04-13","2025-05-03","2025-06-07","2025-06-21","2025-07-13","2025-08-17","2025-09-21","2025-10-05","2025-11-15","2025-11-16","2025-12-21","2026-01-17","2026-01-31","2026-02-08","2026-03-15","2026-04-26","2026-05-03","2026-05-09","2026-06-13","2026-07-18","2026-08-01"],
+  "counts": {
+    "finalAuditRaceDates": 35,
+    "finalAuditRawRaces": 1151,
+    "finalAuditVenueDays": 96,
+    "minimumSelectedFinalAuditRacesPerCourseAtFivePerVenueDay": 480
+  },
+  "evaluationRules": {
+    "sameDateMustStayTogether": true,
+    "finalAuditOutcomeMustNotBeInspectedBeforeModelFreeze": true,
+    "predictionForFinalAuditDateUsesOnlyInformationAvailableBeforeThatRaceDate": true,
+    "futureDateInformationForbidden": true,
+    "sameDateOutcomeForbidden": true,
+    "pastFinalAuditOutcomeMayBeUsedForLaterLiveLikePrequentialPrediction": true,
+    "modelRuleAndThresholdChangesAfterOpeningFinalAuditForbidden": true
+  }
+}
