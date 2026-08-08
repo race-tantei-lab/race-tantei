@@ -84,6 +84,18 @@ jobs:
           Path('artifacts/selection-repair-meta.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
           print(json.dumps(meta,ensure_ascii=False))
           PY
+      - name: Apply audited odds-tab key fix
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/export-selected-historical-official-odds.py')
+          s=p.read_text(encoding='utf-8')
+          old="            tab[m.group(2)] = m.group(1)"
+          new="            tab['15' + m.group(2)] = m.group(1)"
+          if old not in s:
+              raise SystemExit('EXPECTED_TAB_KEY_LINE_NOT_FOUND')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
       - name: Export official odds
         run: python scripts/export-selected-historical-official-odds.py
       - uses: actions/upload-artifact@v4
