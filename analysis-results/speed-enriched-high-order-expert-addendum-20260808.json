@@ -1,0 +1,22 @@
+{
+  "status":"analysis exploration lock addendum; not a model; no version assigned",
+  "lockedBeforeHighOrderEvaluation":true,
+  "parentPolicy":"analysis-results/speed-enriched-high-order-policy-lock-20260808.json",
+  "experts":[
+    {"id":"market","modelFamily":"none","modelWeight":0.0},
+    {"id":"normal25","modelFamily":"speed-normal","modelWeight":0.25},
+    {"id":"normal50","modelFamily":"speed-normal","modelWeight":0.5},
+    {"id":"normal75","modelFamily":"speed-normal","modelWeight":0.75},
+    {"id":"normal100","modelFamily":"speed-normal","modelWeight":1.0},
+    {"id":"residual25","modelFamily":"speed-market-residual","modelWeight":0.25},
+    {"id":"residual50","modelFamily":"speed-market-residual","modelWeight":0.5},
+    {"id":"residual75","modelFamily":"speed-market-residual","modelWeight":0.75},
+    {"id":"residual100","modelFamily":"speed-market-residual","modelWeight":1.0}
+  ],
+  "blendFormula":"(1-modelWeight)*normalized_JRA_ticket_market_probability + modelWeight*PlackettLuce_probability_from_selected_speed_OOS_runner_model",
+  "wideOfficialOddsForScoring":"official lower bound of the JRA published range",
+  "coldStartExpert":"normal50",
+  "expertChoice":"independent per course x bet type using Bayesian-shrunk top-10-ticket realized return from strictly prior race dates only",
+  "candidateGeneration":"evaluate every JRA official non-missing combination; retain top 16 per expert x bet type x race",
+  "noResultBasedCandidateFiltering":true
+}
