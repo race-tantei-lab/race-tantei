@@ -1,0 +1,14 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeTicketRankEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "betTypes":["win","wide","quinella"],
+  "features":"same direct-ticket features already locked: 95 runner features for win; pair mean and absolute difference of all 95 runner features plus JRA official odds, normalized market probability, strict-OOS normal/value combination probabilities and market ratios for wide/quinella",
+  "rankingModel":{"engine":"LightGBM","objective":"lambdarank","group":"race","label":"0 for losing tickets; for winning tickets min(15, 1 + floor(log2(actual_return_rate)))","labelGain":"[0,1,3,7,15,...,32767] so gain is approximately proportional to payout magnitude","numBoostRound":40,"maxBin":31,"featureFraction":0.60},
+  "walkForward":{"coldStartDateCount":30,"retrainDateIndices":[30,90,150,210],"sameDateLearning":false,"coldStartRanking":"JRA normalized market probability descending"},
+  "portfolio":{"lightBudgetYen":2000,"requiredBetTypes":["win","wide","quinella"],"minimumPerTypeYen":100,"unitYen":100,"maximumSingleTicketShare":0.10,"remainingAllocation":"rank utility 1/(rank+1) multiplied by Bayesian-shrunk prior-date realized bet-type return; no raw-score comparison across bet types","budgetMustBeFullyUsed":true},
+  "raceSelection":{"countPerRaceDateVenue":5,"selector":"expanding LightGBM Huber regression of virtual light return using prior dates only","retrainDateIndices":[30,90,150,210],"sameDateLearning":false},
+  "settlement":"actual fixed-archive JRA payouts only",
+  "completionGates":{"lightFullHistoryRoiPctAtLeast":200,"lightLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudget":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"notEligibleUntilAllThreeCoursesPass":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
