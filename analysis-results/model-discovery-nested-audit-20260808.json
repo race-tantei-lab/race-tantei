@@ -1,0 +1,91 @@
+{
+  "status": "internal audit; not a model; no version assigned",
+  "generatedAt": "2026-08-08",
+  "productionChanged": false,
+  "promotionEligible": false,
+  "fixedArchive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "races": 7695,
+    "dateCount": 244
+  },
+  "canonicalRulesPreserved": {
+    "minimumRacesPerVenueDay": 5,
+    "ticketCountFixed": false,
+    "officialOddsOnly": true,
+    "actualJraPayoutsOnly": true,
+    "futureOutcomeLeakageForbidden": true,
+    "completionRoiPct": 200.0,
+    "allCoursesMustPass": true
+  },
+  "apparentFullDevelopmentDiscovery": {
+    "description": "Rules were selected after inspecting all three development subperiods. This is now classified as selection-biased discovery evidence, not validation evidence.",
+    "selectedRacesPerCourse": 2810,
+    "portfolio": {
+      "raceSelection": "sum of maximum stable distortion scores across allowed bet types; exactly five races per venue-day",
+      "maxSingleTicketStakePct": 40.0,
+      "minimumRequiredBetTypeStakeYen": 100,
+      "ticketCountFlexible": true
+    },
+    "roiPct": {
+      "ライト": 207.89715302491106,
+      "スタンダード": 239.8823487544484,
+      "プレミアム": 260.179359430605
+    },
+    "roiWithoutLargestSingleTicketReturnPct": {
+      "ライト": 196.90213523131672,
+      "スタンダード": 227.84604982206406,
+      "プレミアム": 249.14608540925263
+    },
+    "classification": "not valid completion evidence because the same development subperiods participated in rule selection"
+  },
+  "nestedValidation": {
+    "discoveryOnlyDateIndex": [0, 150],
+    "untouchedInternalValidationDateIndex": [150, 216],
+    "ruleDiscovery": "market distortion cells required >=200% in both 0-90 and 90-150 subperiods before validation was viewed",
+    "roiPct": {
+      "ライト": 84.36566265060242,
+      "スタンダード": 78.13301204819277,
+      "プレミアム": 54.711927710843376
+    },
+    "roiWithoutLargestSingleTicketReturnPct": {
+      "ライト": 69.22831325301205,
+      "スタンダード": 63.66144578313253,
+      "プレミアム": 45.06421686746988
+    },
+    "passed200": false
+  },
+  "persistenceModel": {
+    "method": "distortion candidates discovered before dateIndex 150; persistence screened on 150-180; evaluated on 180-216 without using 180-216 outcomes for rule selection",
+    "roiPct": {
+      "ライト": 63.019354838709674,
+      "スタンダード": 60.86322580645162,
+      "プレミアム": 38.87827956989247
+    },
+    "passed200": false
+  },
+  "finalHoldoutCandidateEvaluation": {
+    "dateIndex": [216, 244],
+    "dateRange": ["2026-05-02", "2026-08-02"],
+    "racesPerCourse": 400,
+    "candidateWasFrozenBeforeEvaluation": true,
+    "roiPct": {
+      "ライト": 22.0625,
+      "スタンダード": 107.4745,
+      "プレミアム": 75.23925
+    },
+    "roiWithoutLargestSingleTicketReturnPct": {
+      "ライト": 15.9025,
+      "スタンダード": 66.241,
+      "プレミアム": 49.08725
+    },
+    "passed200": false,
+    "note": "This holdout has now been used for a candidate evaluation and must not be repeatedly tuned against while still being described as completely unused."
+  },
+  "conclusion": {
+    "stable200PredictiveEdgeDemonstrated": false,
+    "assignV16": false,
+    "productionPromotion": "forbidden",
+    "reason": "The fixed archive contains many retrospective >200% distortion pockets, but nested chronological validation shows that the currently available pre-race features do not identify those pockets with stable future performance. The prior >200% development portfolio was selection-biased and the frozen final candidate failed its one-time holdout evaluation."
+  }
+}
