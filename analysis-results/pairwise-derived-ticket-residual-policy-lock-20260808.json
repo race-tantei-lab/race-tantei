@@ -1,0 +1,29 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforePairwiseDerivedTicketReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "baseTicketFeatures":"locked 413 symmetric rich pair features",
+  "densePairwiseSource":"strict-OOS Bradley-Terry-style pairwise-order predictions from locked 193 runner features; cold-start dates0-29 use official-market pairwise probability only",
+  "addedPairwiseDerivedFeatures":[
+    "each horse expected finish rank = 1 + sum(opponent beats horse probabilities)",
+    "each horse mean probability of beating an opponent",
+    "each horse mean pairwise logit strength",
+    "each horse mean residual versus official-market pairwise probability",
+    "pair mean/min/max/absolute-difference of expected ranks",
+    "pair mean/min/max of mean-beat probabilities",
+    "pair mean/min/max of pairwise residual strength",
+    "mean over third horses of P(horseA beats k)*P(horseB beats k)",
+    "minimum over third horses of P(horseA beats k)*P(horseB beats k)",
+    "mean over third horses of min(P(horseA beats k),P(horseB beats k))"
+  ],
+  "betTypes":["wide","quinella"],
+  "marketPrior":{"quinella":"normalized inverse JRA official odds race mass1","wide":"normalized inverse JRA official lower-bound odds race mass3"},
+  "model":{"type":"LightGBM binary market-residual","learningRate":0.04,"numLeaves":31,"minDataInLeaf":300,"featureFraction":0.65,"maxBin":31,"rounds":80,"lambdaL2":8.0,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"sameDateLearning":false},
+  "postPredictionNormalization":{"quinellaRaceMass":1,"wideRaceMass":3},
+  "ticketScore":"strict-OOS ticket probability multiplied by JRA official odds; wide uses lower bound",
+  "diagnostic":{"topKPerRace":[1,2,3,5,10],"largestTicketRemoved":true,"noFullPeriodThresholdOptimization":true},
+  "nextStageOnlyIfUseful":"five-race selection and exact Light allocation must be separately locked before portfolio ROI evaluation",
+  "officialOdds":{"source":"JRA historical official odds only","synthetic":false,"estimated":false,"missing":"remain missing"},
+  "completionGatesUnchanged":{"allCoursesFullHistoryRoiPctAtLeast":200,"allCoursesLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudgets":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
