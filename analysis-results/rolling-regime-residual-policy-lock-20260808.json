@@ -5,13 +5,9 @@
   "officialOddsOnly": true,
   "purpose": "test whether nonstationarity is hiding value that expanding-window global residual models dilute",
   "betTypes": ["win","wide","quinella"],
-  "experts": [
-    "global_rolling_60_dates",
-    "global_rolling_90_dates",
-    "surface_rolling_90_dates"
-  ],
+  "experts": ["global_rolling_60_dates","global_rolling_90_dates","surface_rolling_90_dates"],
   "trainingWindows": {"rolling60":"max(0,testBlockStart-60) through testBlockStart-1","rolling90":"max(0,testBlockStart-90) through testBlockStart-1"},
-  "surfaceExperts": {"surfaces":["芝","ダート","障害","不明"],"fallback":"global_rolling_90_dates when a surface training sample is insufficient"},
+  "surfaceExperts": {"surfaces":["芝","ダート","障害","不明"],"minimumTrainingRows":500,"minimumPositiveTickets":10,"fallback":"global_rolling_90_dates when either minimum is not met"},
   "oosDateBlocks": [[30,90],[90,150],[150,210],[210,244]],
   "horseWinPrior": "normalized JRA official win market probability",
   "pairPriors": {"quinella":"normalized inverse JRA official odds, race mass 1","wide":"normalized inverse JRA official lower-bound odds, race mass 3"},
