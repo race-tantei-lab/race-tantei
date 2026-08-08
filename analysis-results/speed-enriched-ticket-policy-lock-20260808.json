@@ -1,0 +1,40 @@
+{
+  "status": "analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeSpeedEnrichedEvaluation": true,
+  "fixedArchive": {"start":"2024-05-04","end":"2026-08-02","races":7695,"runners":106122,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "officialSources": {"raceContext":"JRA official daily PDFs","odds":"JRA official historical odds only","settlement":"actual JRA payout rows","syntheticOdds":false,"estimatedOdds":false},
+  "runnerFeatureFamilies": [
+    "pre-race win odds and normalized market probability, popularity, frame, assigned weight, horse weight/change, sex/age, field size and race number",
+    "horse/jockey/trainer prior-date win rate, top3 rate, finish percentile, final3f percentile and market residual",
+    "same-surface, same-surface-distance-bucket, same-venue and same-class histories for horse/jockey/trainer",
+    "horse-jockey prior-date interaction history",
+    "recent 1/3/5-run finish percentile, final3f percentile, time-behind-winner and speed residual",
+    "surface switch, distance change, class switch and days since previous run",
+    "prior-date condition winner-time baseline using venue/surface/exact-distance/track/class with hierarchical fallback; runner speed residual is baseline winner time minus actual time from historical races only",
+    "surface, distance bucket, class, direction, track condition, weather and sex categorical codes"
+  ],
+  "sameDateFreeze": "all features and predictions for every race on a race date are frozen before any result from that date updates history",
+  "runnerModels": {
+    "walkForwardDateBoundaries":[30,90,150,210],
+    "models":["LightGBM binary win","LightGBM binary top3","LightGBM Huber market-residual win adjustment"],
+    "marketResidual":"win_indicator - normalized_pre-race_market_probability",
+    "noSameDateTraining":true
+  },
+  "lightTicketModels": {
+    "betTypes":["win","wide","quinella"],
+    "ticketFeatures":"runner features and OOS runner probabilities; for pairs use per-feature mean and absolute difference; add JRA official ticket odds, normalized JRA ticket market probability, OOS Harville/Plackett-Luce combination probabilities and model-vs-market ratios",
+    "model":"LightGBM binary ticket-hit probability",
+    "walkForwardDateBoundaries":[30,90,150,210],
+    "fixedMarketModelBlends":[0.0,0.25,0.5,0.75,1.0],
+    "ticketScore":"blended_hit_probability * JRA_official_odds",
+    "topTicketsRetainedPerBlendBetType":12,
+    "blendChoice":"Bayesian-shrunk realized top-10-ticket return using strictly prior race dates only",
+    "priorEquivalentTickets":40,
+    "priorReturnRate":0.8
+  },
+  "coldStart": {"firstDateCount":30,"ticketRule":"strict pre-race model/market probability times JRA official odds with no result-derived tuning","includedInFullHistory":true},
+  "raceSelection": {"exactRacesPerRaceDateVenue":5,"selector":"expanding LightGBM Huber virtual-return regression trained only on strictly prior dates","retrainDateIndices":[30,90,150,210],"sameDateLearning":false},
+  "lightBudget": {"perRaceYen":2000,"unitYen":100,"requiredBetTypes":["win","wide","quinella"],"minimumPerRequiredBetTypeYen":100,"maximumSingleTicketYen":200,"budgetMustBeFullyUsed":true},
+  "completionGates": {"lightRoiPctAtLeast":200,"lightLargestTicketRemovedRoiPctAtLeast":100,"exactFiveRacesPerRaceDateVenue":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion": {"notEligibleUntilStandardAndPremiumAlsoPass":true,"nameIfAndOnlyIfAllGatesPass":"v16"}
+}
