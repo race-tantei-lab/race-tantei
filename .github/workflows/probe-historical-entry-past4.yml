@@ -1,0 +1,60 @@
+name: Probe historical JRA entry past-four form
+run-name: Probe historical entry past-four · ${{ github.sha }}
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/probe-historical-entry-past4.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/historical-entry-past4' -f description='JRA過去出馬表の前4走を監査中' -f target_url="$TARGET" >/dev/null
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Inspect old and recent entry pages
+        run: |
+          python - <<'PY'
+          import json,os,re,urllib.request
+          from bs4 import BeautifulSoup
+          acc=os.environ['CLOUDFLARE_ACCOUNT_ID'];db=os.environ['CLOUDFLARE_D1_DATABASE_ID'];tok=os.environ['CLOUDFLARE_API_TOKEN'];ep=f'https://api.cloudflare.com/client/v4/accounts/{acc}/d1/database/{db}/query'
+          ids=['2024-05-04-kyoto-01','2024-10-05-tokyo-01','2025-05-03-tokyo-01','2026-07-26-chukyo-01','2026-08-01-chukyo-01']
+          qs=','.join('?' for _ in ids);body=json.dumps({'sql':f'SELECT race_id raceId,entry_url entryUrl FROM rt_races WHERE race_id IN ({qs}) ORDER BY race_id','params':ids}).encode();rq=urllib.request.Request(ep,data=body,headers={'Authorization':f'Bearer {tok}','Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(rq,timeout=90) as r:rows=json.loads(r.read().decode()).get('result',[{}])[0].get('results',[])
+          out=[]
+          for row in rows:
+            url=row['entryUrl'];req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'ja','Referer':'https://www.jra.go.jp/'})
+            with urllib.request.urlopen(req,timeout=60) as rr:raw=rr.read();final=rr.geturl()
+            html=raw.decode('cp932','replace');s=BeautifulSoup(html,'html.parser');text=' '.join(s.stripped_strings)
+            horse_rows=[]
+            for tr in s.find_all('tr'):
+              cells=[' '.join(c.stripped_strings) for c in tr.find_all(['th','td'])]
+              joined=' | '.join(cells)
+              if '前4走' in joined or ('kg' in joined and len(cells)>=3):
+                horse_rows.append(cells)
+              if len(horse_rows)>=4:break
+            # capture a bounded raw neighborhood around the first 前4走 occurrence for markup analysis
+            pos=html.find('前4走');snippet=html[max(0,pos-4000):pos+12000] if pos>=0 else ''
+            out.append({'raceId':row['raceId'],'entryUrl':url,'finalUrl':final,'bytes':len(raw),'containsPast4':'前4走' in text,'past4CountText':text.count('前4走'),'sampleRows':horse_rows,'rawSnippet':snippet})
+          print(json.dumps(out,ensure_ascii=False))
+          if not out:raise SystemExit('NO_ENTRY_ROWS')
+          PY
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/historical-entry-past4' -f description='JRA過去出馬表の前4走監査完了' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/historical-entry-past4' -f description='JRA過去出馬表の前4走監査失敗' -f target_url="$TARGET" >/dev/null
