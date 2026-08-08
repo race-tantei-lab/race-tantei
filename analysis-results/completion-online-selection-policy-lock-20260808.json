@@ -1,0 +1,91 @@
+{
+  "status": "analysis policy lock; not a model; no version assigned",
+  "lockedBeforeAll7695OddsArtifactsWereOpened": true,
+  "fixedArchive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "races": 7695,
+    "futureDataAllowed": false,
+    "sameDateOutcomeAllowedForDecision": false
+  },
+  "inputsAllowedAtDecisionTime": [
+    "strict walk-forward OOS horse probabilities generated from dates strictly before current race date",
+    "JRA official historical odds for the race and bet type",
+    "pre-race race/runner fields including repaired official surface, distance and class",
+    "online statistics calculated only from dates strictly before current race date"
+  ],
+  "ticketProbabilityExperts": {
+    "horseProbabilitySources": ["market-normalized", "strict-OOS-model", "strict-OOS-value"],
+    "fixedBlendsModelVsMarket": [0.0, 0.25, 0.5, 0.75, 1.0],
+    "combinationProbability": "Plackett-Luce/Harville-style combination probability from the selected horse probability source; this is a probability model only and never a synthetic odds replacement",
+    "ticketScoreFamilies": [
+      "combination_probability * JRA_official_odds",
+      "combination_probability / normalized_JRA_market_probability",
+      "Bayesian-shrunk online realized return for the same expert using prior dates only"
+    ],
+    "expertChoice": "chosen independently by course and bet type from performance on dates strictly before current race date",
+    "coldStartDates": 30,
+    "coldStartExpert": "0.5 model/market blend"
+  },
+  "raceSelection": {
+    "requiredPerRaceDateVenue": 5,
+    "selectionUnit": "raceDate x venue",
+    "raceFeatureFamilies": [
+      "top-1/top-3/top-5 ticket EV score summaries for every required bet type",
+      "count and mass of official-odds tickets with model edge above market",
+      "model-vs-market divergence and entropy",
+      "field size, race number, surface, distance bucket and race class",
+      "cross-bet consistency between win/wide/quinella/exacta/trio/trifecta where the course permits them"
+    ],
+    "selector": "expanding-window LightGBM regression of realized course return trained only on dates strictly before the current race date",
+    "selectorRetrain": "fixed expanding date blocks; no same-date learning",
+    "coldStartRule": "rank races by the average of the top-three fixed ticket EV scores across the course required bet types",
+    "selectionCount": "exactly 5 races per raceDate x venue; never fewer"
+  },
+  "budgetAllocation": {
+    "unitYen": 100,
+    "courseBudgetYen": {"light": 2000, "standard": 5000, "premium": 10000},
+    "requiredBetTypes": {
+      "light": ["win", "wide", "quinella"],
+      "standard": ["win", "wide", "quinella", "exacta", "trio"],
+      "premium": ["win", "wide", "quinella", "exacta", "trio", "trifecta"]
+    },
+    "minimumStakePerRequiredBetTypeYen": 100,
+    "maximumSingleTicketShareOfCourseBudget": 0.10,
+    "allocationRule": "after placing the required 100 yen minimum in every required bet type, allocate remaining 100-yen units to the currently highest utility ticket across required bet types; utility is fixed ticket score multiplied by Bayesian-shrunk prior-date bet-type/expert return; repeatedly enforce the 10% per-ticket course-budget cap and use the next ranked ticket when capped",
+    "budgetMustBeFullyUsed": true,
+    "singleOnlyPortfolioAllowed": false,
+    "onePointHighPayoutConcentrationAllowed": false
+  },
+  "onlineLearning": {
+    "sameDateLearning": false,
+    "decayHalfLifeDays": 120,
+    "priorEquivalentTickets": 40,
+    "priorReturnRate": 0.8,
+    "allUpdatesAppliedOnlyAfterAllDecisionsForTheRaceDateAreFrozen": true
+  },
+  "officialOdds": {
+    "required": true,
+    "source": "JRA historical official odds pages",
+    "syntheticOdds": false,
+    "derivedCombinationOdds": false,
+    "missingOdds": "remain missing; never estimate or backfill"
+  },
+  "settlement": {
+    "source": "actual JRA payout rows from fixed archive",
+    "noResultLeakage": true
+  },
+  "completionGates": {
+    "allCoursesFullHistoryRoiPctAtLeast": 200,
+    "allCoursesRoiWithoutSingleLargestTicketReturnPctAtLeast": 100,
+    "minimumRacesPerRaceDateVenue": 5,
+    "exactCourseBudgets": true,
+    "requiredBetTypesEverySelectedRace": true,
+    "officialOddsOnly": true,
+    "noFutureLeakage": true
+  },
+  "promotion": {
+    "allowedOnlyIfEveryGatePasses": true,
+    "nameIfAndOnlyIfCompleted": "v16"
+  }
+}
