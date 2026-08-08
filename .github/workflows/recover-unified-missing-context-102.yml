@@ -30,7 +30,7 @@ jobs:
       - name: Recover exact official context
         run: |
           python - <<'PY'
-          import json, os, re, time, urllib.request
+          import http.cookiejar, json, os, re, urllib.request
           from pathlib import Path
           from bs4 import BeautifulSoup
           ids=set(json.loads(Path('analysis-results/unified-missing-context-102.json').read_text(encoding='utf-8'))['races'])
@@ -43,36 +43,46 @@ jobs:
           allrows=p.get('result',[{}])[0].get('results',[]); rows=[x for x in allrows if x['raceId'] in ids]
           if len(rows)!=102: raise RuntimeError(f'D1_MATCH_{len(rows)}')
           out=[]; fail=[]
-          hdr={'User-Agent':'Mozilla/5.0 (compatible; RaceTanteiContextRecovery/1.0; +https://www.jra.go.jp/)','Accept-Language':'ja'}
+          cj=http.cookiejar.CookieJar(); opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+          hdr={'User-Agent':'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1','Accept-Language':'ja-JP,ja;q=0.9','Referer':'https://www.jra.go.jp/'}
+          def soup_text(raw):
+            candidates=[]
+            for enc in ('utf-8','cp932'):
+              try:
+                page=raw.decode(enc,errors='replace'); soup=BeautifulSoup(page,'html.parser'); text=' '.join(soup.stripped_strings)
+                score=sum(text.count(k) for k in ('コース','レース結果','天候','発走時刻','競走'))
+                candidates.append((score,soup,text,enc))
+              except Exception:
+                pass
+            if not candidates: raise RuntimeError('DECODE_MISS')
+            return max(candidates,key=lambda x:x[0])
           for i,x in enumerate(rows,1):
             try:
-              with urllib.request.urlopen(urllib.request.Request(x['resultUrl'],headers=hdr),timeout=45) as r: raw=r.read()
-              html=None
-              for enc in ('utf-8','cp932'):
-                try:
-                  t=raw.decode(enc)
-                  if 'コース：' in t or 'コース:' in t: html=t; break
-                except Exception: pass
-              if html is None: html=raw.decode('cp932','replace')
-              soup=BeautifulSoup(html,'html.parser'); text=' '.join(soup.stripped_strings)
-              m=re.search(r'コース[：:]\s*([0-9,]+)メートル\s*[（(]([^）)]+)[）)]',text)
-              if not m: raise RuntimeError('COURSE_PARSE_MISS')
+              with opener.open(urllib.request.Request(x['resultUrl'],headers=hdr),timeout=45) as r: raw=r.read()
+              score,soup,text,enc=soup_text(raw)
+              m=re.search(r'コース\s*[：:]\s*([0-9,]+)\s*メートル\s*[（(]\s*([^）)]{1,100}?)\s*[）)]',text)
+              if not m:
+                # Some JRA pages put extra labels between the course label and distance.
+                m=re.search(r'コース.{0,40}?([0-9,]{3,5})\s*メートル\s*[（(]\s*([^）)]{1,100}?)\s*[）)]',text)
+              if not m: raise RuntimeError('COURSE_PARSE_MISS:'+text[:180])
               dist=int(m.group(1).replace(',','')); detail=m.group(2).strip()
               title=''
               for tag in soup.find_all(['h1','h2','h3']):
                 s=' '.join(tag.stripped_strings)
-                if s and ('障害' in s or '未勝利' in s or '新馬' in s or 'オープン' in s or '勝クラス' in s or '歳' in s): title=s; break
-              if '障害' in title or '障害' in text[text.find(m.group(0))-150:text.find(m.group(0))+150]: surface='障害'
-              elif detail.startswith('芝'): surface='芝'
-              elif detail.startswith('ダート'): surface='ダート'
+                if s and any(k in s for k in ('障害','未勝利','新馬','オープン','勝クラス','歳')):
+                  title=s; break
+              course_pos=text.find(m.group(0)); near=text[max(0,course_pos-250):course_pos+250] if course_pos>=0 else text
+              if '障害' in title or '障害' in near: surface='障害'
+              elif 'ダート' in detail: surface='ダート'
+              elif '芝' in detail: surface='芝'
               else: raise RuntimeError('SURFACE_PARSE_MISS:'+detail)
               direction='直線' if '直線' in detail else ('右' if '右' in detail else ('左' if '左' in detail else None))
-              out.append({'raceId':x['raceId'],'raceDate':x['raceDate'],'venue':x['venue'],'raceNo':int(x['raceNo']),'surface':surface,'distanceM':dist,'direction':direction,'raceTitle':title or None,'courseDetail':detail,'weather':x.get('weather'),'trackCondition':x.get('trackCondition'),'sourceUrl':x['resultUrl'],'source':'JRA official result page'})
+              out.append({'raceId':x['raceId'],'raceDate':x['raceDate'],'venue':x['venue'],'raceNo':int(x['raceNo']),'surface':surface,'distanceM':dist,'direction':direction,'raceTitle':title or None,'courseDetail':detail,'weather':x.get('weather'),'trackCondition':x.get('trackCondition'),'sourceUrl':x['resultUrl'],'source':'JRA official result page','decodedAs':enc})
             except Exception as e:
               fail.append({'raceId':x['raceId'],'error':f'{type(e).__name__}:{e}'})
             if i%20==0: print(json.dumps({'done':i,'success':len(out),'fail':len(fail)},ensure_ascii=False),flush=True)
           Path('artifacts').mkdir(exist_ok=True)
-          meta={'requested':102,'success':len(out),'fail':len(fail),'failures':fail,'officialOnly':True}
+          meta={'requested':102,'success':len(out),'fail':len(fail),'failures':fail[:102],'officialOnly':True}
           Path('artifacts/unified-missing-context-102-recovered.json').write_text(json.dumps({'meta':meta,'rows':out},ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
           print(json.dumps(meta,ensure_ascii=False),flush=True)
           if fail or len(out)!=102: raise RuntimeError('RECOVERY_INCOMPLETE')
