@@ -1,0 +1,63 @@
+name: Historical official odds smoke test
+run-name: Historical official odds smoke test · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/export-historical-official-odds-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/historical-odds-smoke' -f description='JRA公式オッズ30レース構造確認中' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Replace selection with first 30 real fixed races for parser smoke only
+        run: |
+          python - <<'PY'
+          import json,os,urllib.request
+          from pathlib import Path
+          ep=f"https://api.cloudflare.com/client/v4/accounts/{os.environ['CLOUDFLARE_ACCOUNT_ID']}/d1/database/{os.environ['CLOUDFLARE_D1_DATABASE_ID']}/query"
+          body=json.dumps({'sql':"SELECT race_id raceId FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished' ORDER BY race_date,venue,race_no LIMIT 30",'params':['2024-05-04','2026-08-03']}).encode()
+          req=urllib.request.Request(ep,data=body,headers={'Authorization':f"Bearer {os.environ['CLOUDFLARE_API_TOKEN']}",'Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=90) as r: p=json.loads(r.read().decode())
+          rows=p.get('result',[{}])[0].get('results',[])
+          ids=[x['raceId'] for x in rows]
+          Path('analysis-results/fixed-oos-five-races-per-venue-day.json').write_text(json.dumps({'races':ids},ensure_ascii=False)+'\n',encoding='utf-8')
+          print(json.dumps({'smokeRaceIds':ids},ensure_ascii=False))
+          PY
+      - name: Export smoke odds
+        run: python scripts/export-selected-historical-official-odds.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: historical-official-odds-smoke
+          path: |
+            artifacts/selected-historical-official-odds.jsonl.gz
+            artifacts/selected-historical-official-odds-meta.json
+          compression-level: 0
+          retention-days: 3
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/historical-odds-smoke' -f description='JRA公式オッズ30レース構造確認成功' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/historical-odds-smoke' -f description='JRA公式オッズ30レース構造確認失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
