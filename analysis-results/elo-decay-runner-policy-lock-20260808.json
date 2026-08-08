@@ -1,0 +1,24 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeEloDecayEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "purpose":"represent opponent-adjusted ability and current form rather than only cumulative historical averages",
+  "baseFeatures":"locked 164 strict prior-date runner features",
+  "addedFeatureFamilies":[
+    "horse pairwise Elo overall",
+    "horse pairwise Elo by surface",
+    "horse pairwise Elo by surface x distance bucket",
+    "jockey pairwise Elo by surface",
+    "trainer pairwise Elo by surface",
+    "current-field percentile and gap-to-best for each Elo family",
+    "exponentially decayed market residual for horse/jockey/trainer at 30-day and 90-day half-lives",
+    "exponentially decayed relative speed for horse/jockey/trainer at 30-day and 90-day half-lives",
+    "exponentially decayed top3 residual for horse at 30-day and 90-day half-lives"
+  ],
+  "elo":{"initial":1500,"scale":400,"kFactor":16,"raceUpdate":"each runner receives K times mean(actual pairwise win minus logistic expected pairwise win) against all other finishers","ties":0.5,"sameDateUpdates":false},
+  "decay":{"halfLifeDays":[30,90],"sameDateUpdates":false},
+  "probabilityModel":{"type":"same locked three-config LightGBM binary market-residual ensemble","marketPrior":"normalized JRA official win probability","oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]]},
+  "evaluation":"compare strict-OOS AUC against official market and then official-odds Light return only if predictive improvement is transferable; no ROI-based feature edits",
+  "completionGatesUnchanged":{"allCoursesFullHistoryRoiPctAtLeast":200,"allCoursesLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudgets":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
