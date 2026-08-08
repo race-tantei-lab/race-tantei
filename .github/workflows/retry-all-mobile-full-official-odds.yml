@@ -1,0 +1,56 @@
+name: Retry all mobile full official odds
+run-name: Retry all mobile full official odds · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/retry-all-mobile-full-official-odds.py"
+      - ".github/workflows/retry-all-mobile-full-official-odds.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: retry-all-mobile-full-official-odds
+  cancel-in-progress: true
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/all-mobile-full-retry' -f description='残り76レースのJRA公式全券種オッズを回収中' -f target_url="$TARGET" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Verify fixed constraints
+        run: python scripts/verify-race-tantei-fixed-constraints.py
+      - name: Run exact locked full mobile retry
+        run: python scripts/retry-all-mobile-full-official-odds.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: all-mobile-full-official-odds-retry
+          path: |
+            artifacts/all-mobile-full-retry.jsonl.gz
+            artifacts/all-mobile-full-retry-meta.json
+          compression-level: 0
+          retention-days: 14
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/all-mobile-full-retry' -f description='残り76レースのJRA公式全券種オッズ回収成功' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/all-mobile-full-retry' -f description='残り76レースのJRA公式全券種オッズ回収失敗' -f target_url="$TARGET" >/dev/null
