@@ -1,0 +1,63 @@
+name: Verify aggregated full history home
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check status, totals and full archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          for attempt in $(seq 1 30); do
+            status_code=$(curl --silent --show-error --max-time 20 -o status.json -w '%{http_code}' "$base/api/history/three-months/status" || true)
+            home_code=$(curl --silent --show-error --max-time 30 -o home.html -w '%{http_code}' "$base/" || true)
+            if [ "$status_code" = "200" ] && [ "$home_code" = "200" ] && grep -q 'three-month-validation-v2-sql-aggregate' status.json && grep -q '全レース' home.html; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "status=$status_code home=$home_code" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          python - <<'PY'
+          from pathlib import Path
+          import json,re
+          status=json.loads(Path('status.json').read_text(encoding='utf-8'))
+          validation=status['validation']
+          html=Path('home.html').read_text(encoding='utf-8')
+          race_counts=[int(v) for v in re.findall(r'/([0-9]+)R的中',html)]
+          if len(race_counts)<3 or min(race_counts[:3])<=36:
+              raise SystemExit(f'cumulative totals still use 36R fallback: {race_counts[:3]}')
+          links=list(dict.fromkeys(re.findall(r'href="(/history/\d{4}-\d{2}-\d{2})"',html)))
+          if len(links)<28:
+              raise SystemExit(f'too few archive date links: {len(links)}')
+          Path('sample_path.txt').write_text(links[-1],encoding='utf-8')
+          print(json.dumps({
+            'phase':validation.get('phase'),
+            'processedRaces':validation.get('processedRaces'),
+            'totalRaces':validation.get('totalRaces'),
+            'cumulativeRaceCounts':race_counts[:3],
+            'archiveDates':len(links),
+            'sample':links[-1],
+            'homeBytes':len(html.encode())
+          },ensure_ascii=False,indent=2))
+          PY
+          sample_path=$(cat sample_path.txt)
+          curl --silent --show-error --fail --max-time 30 "$base$sample_path" -o date.html
+          python - <<'PY'
+          from pathlib import Path
+          html=Path('date.html').read_text(encoding='utf-8')
+          cards=html.count('class="archive-race"')
+          if cards<24:
+              raise SystemExit(f'archive date did not render all races: {cards}')
+          for value in ['全レース','data-filter="selected"','data-filter="hit"','archive-venue-nav']:
+              if value not in html:
+                  raise SystemExit(f'missing archive page control: {value}')
+          print({'archiveRaceCards':cards,'archiveBytes':len(html.encode()),'ok':True})
+          PY
