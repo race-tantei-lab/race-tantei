@@ -1,0 +1,13 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "signals":{"win":"strict-OOS 164-feature win probabilities","top2":"strict-OOS top2 marginal residual probabilities","top3":"strict-OOS top3 marginal residual probabilities"},
+  "quinellaProxy":{"secondProbability":"max(top2Probability - winProbability, epsilon)","pairFormula":"winA*secondB + winB*secondA","marketProxy":"same formula using normalized JRA win market and JRA quinella horse marginals","correction":"model pair proxy / market pair proxy"},
+  "wideProxy":{"pairFormula":"top3A * top3B","marketProxy":"JRA wide horse marginal A * JRA wide horse marginal B","correction":"model pair proxy / market pair proxy"},
+  "officialPairPreservation":"multiply the corresponding JRA official pair-market probability by the structural correction, then renormalize to race mass 1 for quinella and 3 for wide",
+  "ticketScore":"corrected probability * JRA official odds; wide uses official lower bound for ranking",
+  "noFittedPairModel":true,
+  "settlement":"actual fixed-archive JRA payouts only",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
