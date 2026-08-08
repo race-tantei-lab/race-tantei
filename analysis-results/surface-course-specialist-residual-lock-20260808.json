@@ -1,0 +1,17 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "baseFeatures":"locked 164 speed+draw runner features",
+  "targets":["win","top2","top3"],
+  "marketPriors":{"win":"normalized JRA win probability","top2":"JRA quinella-derived horse marginal","top3":"JRA wide-derived horse marginal"},
+  "expertLevels":["existing global 164-feature three-model OOS ensemble","surface specialist: separate turf and dirt LightGBM residual models","course specialist: separate venue x surface x distanceBucket LightGBM residual models"],
+  "distanceBuckets":["<=1400","1401..1800","1801..2200",">2200"],
+  "specialistModel":{"configuration":"the middle fixed 164-feature residual configuration only","learningRate":0.035,"numLeaves":23,"minDataInLeaf":120,"featureFraction":0.75,"rounds":120,"lambdaL2":5.0,"marketPriorAsInitScore":true,"sameDateLearning":false},
+  "courseSpecialistMinimumTrainingRows":1500,
+  "courseSpecialistMinimumPositiveLabels":50,
+  "ensemble":"average logits of every available level for the runner: global + surface + course; if course support is insufficient use global + surface; unknown surface uses global only. No return-based weights.",
+  "oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],
+  "acceptance":"compare AUC against the corresponding already-locked global 164-feature OOS signal in every block before any ticket-return evaluation",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
