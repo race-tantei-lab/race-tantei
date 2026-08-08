@@ -1,0 +1,74 @@
+name: Recover canonical 177 rule evidence
+on:
+  push:
+    branches: [analysis/aug8-settlement-readonly]
+    paths: ['.github/workflows/recover-canonical-177.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish start
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/recover-canonical-177' -f description='archived rule payload decoding' -f target_url="$TARGET" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Decode archived rule payload
+        run: |
+          python - <<'PY'
+          import base64, csv, json, math, statistics, zlib
+          from collections import Counter
+          from pathlib import Path
+          cfg=json.loads(Path('config/v16-uniform-rule-model.json').read_text())
+          raw=zlib.decompress(base64.b64decode(cfg['rulePayload']))
+          rules=json.loads(raw)
+          out=Path('artifacts/canonical-177-recovery'); out.mkdir(parents=True,exist_ok=True)
+          (out/'decoded-800-rules.json').write_text(json.dumps(rules,ensure_ascii=False,indent=2)+'\n')
+          rows=[]
+          for i,r in enumerate(rules,1):
+              if isinstance(r,dict):
+                  cols=r.get('cols'); vals=r.get('vals'); q=r.get('quality')
+              else:
+                  cols,vals,q=r
+              rows.append({'index':i,'quality':float(q),'cols':json.dumps(cols,ensure_ascii=False,separators=(',',':')),'vals':json.dumps(vals,ensure_ascii=False,separators=(',',':'))})
+          with (out/'decoded-800-rules.csv').open('w',newline='',encoding='utf-8') as f:
+              w=csv.DictWriter(f,fieldnames=['index','quality','cols','vals']); w.writeheader(); w.writerows(rows)
+          qualities=[r['quality'] for r in rows]
+          colsets=Counter(r['cols'] for r in rows)
+          summary={
+            'count':len(rows),
+            'qualitiesAlreadyDescending':all(qualities[i]>=qualities[i+1] for i in range(len(qualities)-1)),
+            'qualityMax':max(qualities),'qualityMin':min(qualities),'qualityMedian':statistics.median(qualities),
+            'qAt1':qualities[0],'qAt5':qualities[4],'qAt16':qualities[15],'qAt128':qualities[127],
+            'qAt176':qualities[175],'qAt177':qualities[176],'qAt178':qualities[177],'qAt200':qualities[199],
+            'qAt800':qualities[-1],
+            'topColumnSets':colsets.most_common(30),
+            'first20':rows[:20],
+            'around177':rows[165:190],
+            'top177QualityMin':min(qualities[:177]),
+            'restQualityMax':max(qualities[177:])
+          }
+          (out/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(summary,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canonical-177-recovery
+          path: artifacts/canonical-177-recovery/
+          retention-days: 7
+      - name: Publish success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/recover-canonical-177' -f description='archived rule payload decoded' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/recover-canonical-177' -f description='rule payload decode failed' -f target_url="$TARGET" >/dev/null
