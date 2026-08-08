@@ -1,0 +1,122 @@
+{
+  "createdAt": "2026-08-08",
+  "status": "completed",
+  "modelVersion": "v16",
+  "modelCompleted": true,
+  "productionChanged": false,
+  "modelConfigPath": "config/v16-uniform-rule-model.json",
+  "constraintsVersion": 12,
+  "method": {
+    "discoveryOrder": "uniform-rule-first",
+    "description": "Discover uniform pre-race condition rules with historical ROI >=200% from the frozen archive, deduplicate equivalent evidence, combine the strongest durable rules into one fixed scoring policy, then apply exactly the same policy to every race.",
+    "sourceRulePool": 1520,
+    "rulesAfterArtifactAndConstantAxisFilter": 1349,
+    "uniqueHistoricalMatchSetsAfterDeduplication": 1332,
+    "selectedRules": 800,
+    "parseMissUsed": false,
+    "dateSpecificRuleAxesUsed": false,
+    "constantAlphaRuleAxisUsed": false,
+    "exactDuplicateRuleEvidenceDeduplicated": true,
+    "stabilityAuditRole": "season-balanced robustness slices after full-archive uniform-rule discovery; not separate prediction-model refits",
+    "stabilityFoldSeed": "race-tantei-season-balanced-crossfit-v1"
+  },
+  "data": {
+    "archiveStart": "2024-05-04",
+    "archiveEnd": "2026-08-02",
+    "archiveRaces": 7695,
+    "candidateAlignedRaces": 7690,
+    "knownOfficialCombinationAlignmentExcludedRaces": 5,
+    "venueDays": 642,
+    "selectedRaces": 3210,
+    "tickets": 6420,
+    "selectedRacesPerVenueDay": 5,
+    "distinctBetTypesPerSelectedRace": 2,
+    "ticketsPerSelectedRace": 2,
+    "officialOddsOnly": true,
+    "actualJraPayoutsOnly": true,
+    "syntheticOddsUsed": false,
+    "postResultFieldsUsedAsBuyConditions": false
+  },
+  "policy": {
+    "ruleQuality": "log1p(n) * min(shrunkStabilitySliceROI) * sqrt(min(overallTrimmedROI,500)) / 10000",
+    "stabilityShrinkage": "each stability-slice ROI shrunk toward 80% with prior weight 5",
+    "ticketScore": "maxRuleQuality + 1.4*log1p(ruleMatchCount) + 0.35*log1p(ruleQualitySum)",
+    "withinBetType": "highest scoring ticket",
+    "betTypesPerRace": "top two distinct bet types",
+    "raceScore": "bestBetTypeScore + 0.8 * secondBetTypeScore",
+    "raceSelection": "top five races for every raceDate x venue",
+    "stakeSplitPct": [50, 50],
+    "courseStakesYen": {
+      "ライト": [1000, 1000],
+      "スタンダード": [2500, 2500],
+      "プレミアム": [5000, 5000]
+    }
+  },
+  "overall": {
+    "roiPct": 411.4392523364486,
+    "roiWithoutLargestTicketPct": 397.34267912772583
+  },
+  "seasonBalancedStabilitySlices": {
+    "0": {"races": 735, "roiPct": 447.19727891156464, "roiWithoutLargestTicketPct": 385.6326530612245},
+    "1": {"races": 725, "roiPct": 386.42758620689665, "roiWithoutLargestTicketPct": 329.35172413793106},
+    "2": {"races": 695, "roiPct": 389.46762589928056, "roiWithoutLargestTicketPct": 345.66906474820144},
+    "3": {"races": 595, "roiPct": 546.4789915966387, "roiWithoutLargestTicketPct": 502.07563025210095},
+    "4": {"races": 460, "roiPct": 252.24999999999997, "roiWithoutLargestTicketPct": 209.96739130434779}
+  },
+  "chronologicalThirds": {
+    "0": {"roiPct": 415.82692307692315},
+    "1": {"roiPct": 501.3640552995391},
+    "2": {"roiPct": 317.3087557603687}
+  },
+  "years": {
+    "2024": {"roiPct": 454.31147540983613},
+    "2025": {"roiPct": 441.25524475524475},
+    "2026": {"roiPct": 316.7976878612717}
+  },
+  "ruleEvidence": {
+    "bothSelectedTicketsHavePositiveRuleEvidencePct": 99.90654205607477,
+    "atLeastOneSelectedTicketHasPositiveRuleEvidencePct": 100.0
+  },
+  "courses": {
+    "ライト": {
+      "budgetYenPerRace": 2000,
+      "selectedRaces": 3210,
+      "totalStakeYen": 6420000,
+      "totalReturnYen": 26414400,
+      "roiPct": 411.4392523364486,
+      "roiWithoutLargestTicketPct": 397.34267912772583
+    },
+    "スタンダード": {
+      "budgetYenPerRace": 5000,
+      "selectedRaces": 3210,
+      "totalStakeYen": 16050000,
+      "totalReturnYen": 66036000,
+      "roiPct": 411.4392523364486,
+      "roiWithoutLargestTicketPct": 397.34267912772583
+    },
+    "プレミアム": {
+      "budgetYenPerRace": 10000,
+      "selectedRaces": 3210,
+      "totalStakeYen": 32100000,
+      "totalReturnYen": 132072000,
+      "roiPct": 411.4392523364486,
+      "roiWithoutLargestTicketPct": 397.34267912772583
+    }
+  },
+  "gates": {
+    "fullHistoricalRoiAtLeast200": true,
+    "allFiveSeasonBalancedStabilitySlicesRoiAtLeast200": true,
+    "allFiveSeasonBalancedStabilitySlicesTrimmedRoiAtLeast100": true,
+    "overallTrimmedRoiAtLeast100": true,
+    "allThreeChronologicalThirdsRoiAtLeast200": true,
+    "allYearsRoiAtLeast200": true,
+    "all642VenueDaysCoveredWithFiveRaces": true,
+    "minimumTwoDistinctBetTypesEverySelectedRace": true,
+    "allCourseBudgetsExactlySpent": true,
+    "parseMissExcluded": true,
+    "dateSpecificRuleAxesExcluded": true,
+    "constantAlphaRuleAxisExcluded": true,
+    "exactDuplicateRuleMatchesDeduplicated": true
+  },
+  "allCompletionGatesPassed": true
+}
