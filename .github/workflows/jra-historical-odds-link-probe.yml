@@ -1,5 +1,5 @@
-name: JRA historical odds link probe
-run-name: JRA historical odds link probe · ${{ github.sha }}
+name: JRA historical odds page probe
+run-name: JRA historical odds page probe · ${{ github.sha }}
 
 on:
   push:
@@ -21,36 +21,45 @@ jobs:
       STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Start
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/jra-historical-odds' -f description='JRA過去オッズの非表示ルートを確認中' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ画面を直接検証中' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Inspect hidden routes
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Fetch historical odds page
         run: |
           python - <<'PY'
           import json, urllib.request, urllib.parse, re
           from pathlib import Path
-          url='https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0108202403050220240504%2F2B'
-          req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'ja','Referer':'https://www.jra.go.jp/'})
+          from bs4 import BeautifulSoup
+          result_url='https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0108202403050220240504%2F2B'
+          odds_cname='pw151ou1008202403050220240504Z/4C'
+          odds_url='https://www.jra.go.jp/JRADB/accessO.html?CNAME='+urllib.parse.quote(odds_cname,safe='')
+          req=urllib.request.Request(odds_url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'ja','Referer':result_url})
           with urllib.request.urlopen(req,timeout=60) as r:
-              raw=r.read(); final=r.geturl(); status=r.status
+              raw=r.read(); status=r.status; final=r.geturl(); ctype=r.headers.get('content-type')
           html=raw.decode('cp932','replace')
-          tokens=sorted(set(re.findall(r'pw01[a-zA-Z0-9_/%.?=&;-]{5,120}',html)))
-          access_tokens=sorted(set(re.findall(r'access[A-Za-z]+\.html[^\"\'<> ]{0,180}',html)))
+          soup=BeautifulSoup(html,'html.parser')
+          text=' '.join(soup.stripped_strings)
+          tables=[]
+          for table in soup.find_all('table'):
+              rows=[]
+              for tr in table.find_all('tr')[:80]:
+                  cells=[' '.join(c.stripped_strings) for c in tr.find_all(['th','td'])]
+                  if cells: rows.append(cells)
+              if rows: tables.append(rows)
           snippets=[]
-          for needle in ['オッズ','odds','CNAME','pw01o','accessO']:
-              for m in list(re.finditer(re.escape(needle),html,re.I))[:30]:
-                  snippets.append({'needle':needle,'text':re.sub(r'\s+',' ',html[max(0,m.start()-450):m.end()+700])[:1400]})
-          scripts=[]
-          for m in re.finditer(r'<script[^>]*>(.*?)</script>',html,re.S|re.I):
-              body=m.group(1)
-              if any(x.lower() in body.lower() for x in ['odds','オッズ','pw01o','cname']):
-                  scripts.append(re.sub(r'\s+',' ',body)[:5000])
-          out={'status':status,'finalUrl':final,'bytes':len(raw),'pw01Tokens':tokens,'accessTokens':access_tokens,'snippets':snippets[:80],'scripts':scripts[:20]}
+          for needle in ['馬連','馬単','ワイド','3連複','3連単','単勝']:
+              for m in list(re.finditer(re.escape(needle),text))[:10]:
+                  snippets.append({'needle':needle,'text':text[max(0,m.start()-250):m.end()+1200]})
+          cnames=sorted(set(re.findall(r'pw\d+[a-zA-Z0-9_/.-]+',html)))
+          out={'status':status,'contentType':ctype,'finalUrl':final,'bytes':len(raw),'title':soup.title.get_text(' ',strip=True) if soup.title else '', 'contains':{x:(x in text) for x in ['単勝','ワイド','馬連','馬単','3連複','3連単']}, 'tableCount':len(tables),'tables':tables[:12],'snippets':snippets[:40],'cnames':cnames[:100]}
           Path('artifacts').mkdir(exist_ok=True)
           Path('artifacts/jra-historical-odds-link-probe.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          print(json.dumps({'status':status,'tokenCount':len(tokens),'accessCount':len(access_tokens),'snippetCount':len(snippets),'scriptCount':len(scripts),'pw01Tokens':tokens[:40]},ensure_ascii=False))
+          print(json.dumps({'status':status,'finalUrl':final,'bytes':len(raw),'title':out['title'],'contains':out['contains'],'tableCount':len(tables),'cnames':cnames[:40]},ensure_ascii=False))
+          if not any(out['contains'].values()):
+              raise SystemExit('ODDS_PAGE_HAS_NO_ODDS_CONTENT')
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -59,7 +68,7 @@ jobs:
           retention-days: 7
       - name: Success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/jra-historical-odds' -f description='JRA過去オッズの内部ルート監査完了' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ画面を直接取得' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ内部ルート監査失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ画面の直接取得失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
