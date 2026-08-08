@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: {python-version: '3.12'}
       - run: python -m pip install --disable-pip-version-check numpy scikit-learn beautifulsoup4 requests
-      - name: Patch new-horse entry notation only
+      - name: Patch JRA input parsing only
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -32,9 +32,13 @@ jobs:
           s=p.read_text(encoding='utf-8')
           old="\\s+(\\d+)kg\\s*\\(([+\\-]?\\d+)\\)"
           new="\\s+(\\d+)kg\\s*\\(([+\\-]?\\d+|初出走)\\)"
-          if old not in s: raise SystemExit('regex target missing')
-          s=s.replace(old,new,1)
+          if old in s:
+              s=s.replace(old,new,1)
           s=s.replace("'weightChange':int(change)","'weightChange':(0 if change=='初出走' else int(change))",1)
+          old_loop="eh=get(s['entryUrl']); rows,m=parse_entry(s,eh); allrows.extend(rows); meta[s['raceId']]=m; odds_by[s['raceId']]=parse_odds(s); results[s['raceId']]=payout_map(get(s['resultUrl'])); print(json.dumps({'fetched':i,'raceId':s['raceId']},ensure_ascii=False),flush=True)"
+          new_loop="eh=get(s['entryUrl']); rows,m=parse_entry(s,eh); rh=get(s['resultUrl']); rt=' '.join(BeautifulSoup(rh,'html.parser').stripped_strings); mh=re.search(r'天候\\s+([^\\s]+)\\s+(芝|ダート)\\s+(良|稍重|重|不良)',rt); m['weather']=mh.group(1) if mh else m.get('weather',''); m['trackCondition']=mh.group(3) if mh else m.get('trackCondition',''); allrows.extend(rows); meta[s['raceId']]=m; odds_by[s['raceId']]=parse_odds(s); results[s['raceId']]=payout_map(rh); print(json.dumps({'fetched':i,'raceId':s['raceId'],'weather':m['weather'],'condition':m['trackCondition']},ensure_ascii=False),flush=True)"
+          if old_loop not in s: raise SystemExit('main loop target missing')
+          s=s.replace(old_loop,new_loop,1)
           p.write_text(s,encoding='utf-8')
           PY
       - run: python scripts/aug8-v16-readonly-settlement.py
