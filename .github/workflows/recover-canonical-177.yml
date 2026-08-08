@@ -5,6 +5,7 @@ on:
     paths: ['.github/workflows/recover-canonical-177.yml']
   workflow_dispatch:
 permissions:
+  actions: read
   contents: read
   statuses: write
 jobs:
@@ -16,88 +17,69 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/recover-canonical-177' -f description='scanning all Git blobs for stable-rule originals' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/recover-canonical-177' -f description='scanning pre-final artifacts for frozen rulebooks' -f target_url="$TARGET" >/dev/null
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Fetch all refs
-        run: |
-          git fetch origin '+refs/heads/*:refs/remotes/origin/*' --prune
-          git fetch origin '+refs/tags/*:refs/tags/*' --prune || true
-      - name: Scan blob contents by frozen SHA-256
+      - name: Scan Actions artifact contents by SHA-256
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           python - <<'PY'
-          import hashlib, json, subprocess
-          from collections import defaultdict
+          import hashlib, io, json, os, subprocess, zipfile
           from pathlib import Path
-
-          targets = {
-            '9e918f4864f93ce21dd72f4a1eb295055ae9dce03db924ea45e8d5c0ed7424f5': 'quinella-59',
-            '29250ef7ffd9e307cceec66bf22f030a98e217df3755bfff754fcd122359d2fd': 'wide-61',
-            '7ade354725bd604a3fbcd9cf43be13ea6ad6317640c0d82dcde765c531910b1d': 'win-45',
-            '69ac969c6ac14bdd62b52e85a8a3762ffdec261dbf0c7c24a991d8ed72d879cd': 'exacta-135',
-            'ea61c1ab2bbe15b304c97d0657c0559c9b2a23f8a52c47ffb84ef083f7b4cb0e': 'trio-61',
-            'd4ab3797259f641261ab84eac353b203dc572fdaf83fdcb4d734150b398dcc3c': 'trifecta-108',
+          targets={
+            '85c443d90dc29493cf07defbab0a5df285c86488aebf835ee9fef061f8d5339d':'seasonal-rulebook-276',
+            '61d044331b7527875cb90f0627350bab42e37b710e2ff56c26339292b39f7f6a':'datelight-rulebook-128',
+            'f8e7233ddd393632387487874ebcd0fc99ace1e4ca5d4aa318356b39e4e702c7':'datelight-probabilities',
           }
-          out = Path('artifacts/canonical-177-git-hash-scan'); out.mkdir(parents=True, exist_ok=True)
-
-          rev = subprocess.check_output(['git','rev-list','--objects','--all'], text=True, errors='replace')
-          paths = defaultdict(set)
-          object_ids = set()
-          for line in rev.splitlines():
-              if not line.strip(): continue
-              parts = line.split(' ',1)
-              oid = parts[0]; object_ids.add(oid)
-              if len(parts)>1 and parts[1]: paths[oid].add(parts[1])
-
-          proc = subprocess.Popen(['git','cat-file','--batch-check=%(objectname) %(objecttype) %(objectsize)'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-          check_out,_ = proc.communicate('\n'.join(object_ids)+'\n')
-          blobs=[]
-          for line in check_out.splitlines():
-              p=line.split()
-              if len(p)>=3 and p[1]=='blob':
-                  oid,size=p[0],int(p[2])
-                  # rule files should be small; avoid hashing huge DB/binary blobs
-                  if size <= 20_000_000:
-                      blobs.append((oid,size))
-
-          matches=[]
-          scanned=0
-          for oid,size in blobs:
-              data=subprocess.check_output(['git','cat-file','blob',oid])
-              scanned += 1
-              sha=hashlib.sha256(data).hexdigest()
-              if sha in targets:
-                  label=targets[sha]
-                  fn=out/f'{label}__{oid}.bin'
-                  fn.write_bytes(data)
-                  matches.append({'label':label,'sha256':sha,'gitBlob':oid,'size':size,'paths':sorted(paths.get(oid,[])),'savedAs':fn.name})
-
-          # Also collect historical filenames likely related to stable rules for diagnostics.
-          likely=[]
-          for oid, ps in paths.items():
-              for p in ps:
-                  lp=p.lower()
-                  if ('stable' in lp or 'rule' in lp or 'tier' in lp or 'market-distortion' in lp) and (lp.endswith('.csv') or lp.endswith('.json') or lp.endswith('.jsonl') or lp.endswith('.pkl') or lp.endswith('.gz')):
-                      likely.append({'gitBlob':oid,'path':p})
-          report={'targetCount':len(targets),'scannedBlobCount':scanned,'matches':matches,'likelyHistoricalPaths':sorted(likely,key=lambda x:x['path'])}
+          out=Path('artifacts/canonical-177-artifact-hash-scan');out.mkdir(parents=True,exist_ok=True)
+          raw=subprocess.check_output(['gh','api','--paginate','-H','Accept: application/vnd.github+json',f'repos/{os.environ["GITHUB_REPOSITORY"]}/actions/artifacts?per_page=100'],text=True)
+          # --paginate returns concatenated JSON objects; use jq via a separate command for robust TSV listing
+          tsv=subprocess.check_output("gh api --paginate -H 'Accept: application/vnd.github+json' \"repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100\" --jq '.artifacts[] | [.id,.name,.expired,.size_in_bytes,.created_at,.workflow_run.id] | @tsv'",shell=True,text=True)
+          arts=[]
+          for line in tsv.splitlines():
+            p=line.split('\t')
+            if len(p)<6: continue
+            aid,name,expired,size,created,run=p[:6]
+            if expired!='false': continue
+            if not ('2026-08-08T10:30:00Z' <= created <= '2026-08-08T12:35:00Z'): continue
+            arts.append({'id':int(aid),'name':name,'size':int(size),'created':created,'run':run})
+          matches=[]; scanned_files=0; errors=[]
+          for a in arts:
+            try:
+              zpath=out/f'artifact-{a["id"]}.zip'
+              with zpath.open('wb') as f:
+                subprocess.run(['gh','api',f'repos/{os.environ["GITHUB_REPOSITORY"]}/actions/artifacts/{a["id"]}/zip'],stdout=f,check=True)
+              with zipfile.ZipFile(zpath) as z:
+                for info in z.infolist():
+                  if info.is_dir(): continue
+                  data=z.read(info.filename); scanned_files+=1
+                  sha=hashlib.sha256(data).hexdigest()
+                  if sha in targets:
+                    label=targets[sha]
+                    save=out/f'{label}__artifact-{a["id"]}__{Path(info.filename).name}'
+                    save.write_bytes(data)
+                    matches.append({'label':label,'sha256':sha,'artifact':a,'member':info.filename,'size':len(data),'savedAs':save.name})
+              zpath.unlink(missing_ok=True)
+            except Exception as e:
+              errors.append({'artifact':a,'error':f'{type(e).__name__}:{e}'})
+          report={'artifactCount':len(arts),'scannedFiles':scanned_files,'matches':matches,'errors':errors}
           (out/'report.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
-          print(json.dumps({'targetCount':len(targets),'scannedBlobCount':scanned,'matchCount':len(matches),'matches':matches},ensure_ascii=False,indent=2))
+          print(json.dumps({'artifactCount':len(arts),'scannedFiles':scanned_files,'matchCount':len(matches),'matches':matches,'errors':len(errors)},ensure_ascii=False,indent=2))
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: canonical-177-git-hash-scan
-          path: artifacts/canonical-177-git-hash-scan/
+          name: canonical-177-artifact-hash-scan
+          path: artifacts/canonical-177-artifact-hash-scan/
           retention-days: 7
       - name: Publish success
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/recover-canonical-177' -f description='Git blob hash scan complete' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/recover-canonical-177' -f description='artifact hash scan complete' -f target_url="$TARGET" >/dev/null
       - name: Publish failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/recover-canonical-177' -f description='Git blob hash scan failed' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/recover-canonical-177' -f description='artifact hash scan failed' -f target_url="$TARGET" >/dev/null
