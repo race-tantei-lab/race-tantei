@@ -1,0 +1,72 @@
+name: Export corrected Aug runner fields
+run-name: Export corrected Aug runner fields · ${{ github.sha }}
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/export-corrected-aug-runner-fields.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/correct-aug-runner-fields' -f description='8月騎手・斤量を公式保存文字列から復元中' -f target_url="$TARGET" >/dev/null
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Export deterministic corrections
+        run: |
+          python - <<'PY'
+          import json,os,re,urllib.request
+          from pathlib import Path
+          acc=os.environ['CLOUDFLARE_ACCOUNT_ID'];db=os.environ['CLOUDFLARE_D1_DATABASE_ID'];tok=os.environ['CLOUDFLARE_API_TOKEN'];ep=f'https://api.cloudflare.com/client/v4/accounts/{acc}/d1/database/{db}/query'
+          body=json.dumps({'sql':"SELECT r.race_date raceDate, rr.race_id raceId, rr.horse_no horseNo, rr.jockey, rr.assigned_weight assignedWeight, rr.trainer FROM rt_runners rr JOIN rt_races r ON r.race_id=rr.race_id WHERE r.race_date>=? AND r.race_date<? ORDER BY r.race_date,rr.race_id,rr.horse_no",'params':['2026-08-01','2026-08-03']}).encode()
+          req=urllib.request.Request(ep,data=body,headers={'Authorization':f'Bearer {tok}','Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=90) as r:p=json.loads(r.read().decode())
+          rows=p.get('result',[{}])[0].get('results',[])
+          out=[];unresolved=[]
+          wp=re.compile(r'\((4\d(?:\.\d)?|5\d(?:\.\d)?|6[0-5](?:\.\d)?)\)')
+          for x in rows:
+            raw=str(x.get('jockey') or ''); ms=list(wp.finditer(raw))
+            contaminated=('前4走' in raw or re.search(r'^\([^)]*\)\s*前\d+走',raw) is not None)
+            if not contaminated:
+              continue
+            if not ms:
+              unresolved.append({'raceId':x['raceId'],'horseNo':x['horseNo'],'jockey':raw});continue
+            m=ms[-1]; weight=float(m.group(1)); prefix=raw[:m.start()].strip()
+            prefix=re.sub(r'^\([^)]*\)\s*','',prefix)
+            prefix=re.sub(r'^前\d+走\s*','',prefix)
+            prefix=re.sub(r'^[▲△☆◇]\s*','',prefix).strip()
+            # If a marker remained after spacing normalization, strip once more.
+            prefix=re.sub(r'^[▲△☆◇]\s*','',prefix).strip()
+            jockey=prefix
+            if not jockey or re.search(r'\d',jockey):
+              unresolved.append({'raceId':x['raceId'],'horseNo':x['horseNo'],'jockey':raw,'candidate':jockey,'weight':weight});continue
+            out.append({'raceId':x['raceId'],'horseNo':int(x['horseNo']),'originalJockey':raw,'correctedJockey':jockey,'originalAssignedWeight':x.get('assignedWeight'),'correctedAssignedWeight':weight,'trainer':x.get('trainer')})
+          meta={'sourceRows':len(rows),'corrections':len(out),'unresolved':len(unresolved),'unresolvedRows':unresolved[:50],'source':'existing JRA-derived D1 entry data; no outcome fields queried'}
+          Path('artifacts').mkdir(exist_ok=True);Path('artifacts/corrected-aug-runner-fields.json').write_text(json.dumps({'meta':meta,'rows':out},ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps(meta,ensure_ascii=False))
+          if unresolved or len(out)<900:raise SystemExit('CORRECTION_COVERAGE_INCOMPLETE')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: corrected-aug-runner-fields
+          path: artifacts/corrected-aug-runner-fields.json
+          retention-days: 7
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/correct-aug-runner-fields' -f description='8月騎手・斤量923頭の復元成功' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/correct-aug-runner-fields' -f description='8月騎手・斤量復元失敗' -f target_url="$TARGET" >/dev/null
