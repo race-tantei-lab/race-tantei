@@ -1,0 +1,71 @@
+name: Recover two runner anomalies
+run-name: Recover two runner anomalies · ${{ github.sha }}
+on:
+  push:
+    branches: [analysis/unified-dataset-20260808]
+    paths:
+      - '.github/workflows/recover-two-runner-anomalies.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/two-runner-anomalies' -f description='残り2レースをJRA公式結果で確認中' -f target_url="$TARGET" >/dev/null
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Fetch official rows
+        run: |
+          python - <<'PY'
+          import json,os,urllib.request
+          from pathlib import Path
+          from bs4 import BeautifulSoup
+          targets={'2026-08-01-niigata-10','2026-08-02-sapporo-06'}
+          acc=os.environ['CLOUDFLARE_ACCOUNT_ID'];db=os.environ['CLOUDFLARE_D1_DATABASE_ID'];tok=os.environ['CLOUDFLARE_API_TOKEN'];ep=f'https://api.cloudflare.com/client/v4/accounts/{acc}/d1/database/{db}/query'
+          body=json.dumps({'sql':"SELECT race_id raceId,result_url resultUrl FROM rt_races WHERE race_id IN (?,?)",'params':sorted(targets)}).encode()
+          req=urllib.request.Request(ep,data=body,headers={'Authorization':f'Bearer {tok}','Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=90) as r:p=json.loads(r.read().decode())
+          rows=p.get('result',[{}])[0].get('results',[])
+          out=[]
+          hdr={'User-Agent':'Mozilla/5.0 (compatible; RaceTanteiAudit/1.0; +https://www.jra.go.jp/)','Accept-Language':'ja'}
+          for x in rows:
+            with urllib.request.urlopen(urllib.request.Request(x['resultUrl'],headers=hdr),timeout=45) as r: raw=r.read()
+            html=raw.decode('utf-8','replace')
+            if '着順' not in html: html=raw.decode('cp932','replace')
+            soup=BeautifulSoup(html,'html.parser')
+            tables=[]
+            for t in soup.find_all('table'):
+              text=' '.join(t.stripped_strings)
+              if '着順' in text and '馬名' in text:
+                trs=[]
+                for tr in t.find_all('tr'):
+                  cells=[' '.join(c.stripped_strings) for c in tr.find_all(['th','td'])]
+                  if cells: trs.append(cells)
+                tables.append(trs)
+            out.append({'raceId':x['raceId'],'resultUrl':x['resultUrl'],'tables':tables})
+          Path('artifacts').mkdir(exist_ok=True)
+          Path('artifacts/two-runner-official-rows.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps({'races':len(out),'tableCounts':[len(x['tables']) for x in out]},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: two-runner-official-rows
+          path: artifacts/two-runner-official-rows.json
+          retention-days: 7
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/two-runner-anomalies' -f description='残り2レースJRA公式確認完了' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/two-runner-anomalies' -f description='残り2レースJRA公式確認失敗' -f target_url="$TARGET" >/dev/null
