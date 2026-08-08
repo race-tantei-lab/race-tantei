@@ -29,7 +29,7 @@ jobs:
       STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Publish start
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/historical-official-odds-export' -f description='固定3,210レースのJRA公式オッズを復元中' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/historical-official-odds-export' -f description='固定OOSレースのJRA公式オッズを復元中' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -37,6 +37,53 @@ jobs:
       - run: python -m pip install --disable-pip-version-check beautifulsoup4
       - name: Verify constraints
         run: python scripts/verify-race-tantei-fixed-constraints.py
+      - name: Repair serialized race selection without outcomes
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from collections import defaultdict
+          from pathlib import Path
+
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']
+          database=os.environ['CLOUDFLARE_D1_DATABASE_ID']
+          token=os.environ['CLOUDFLARE_API_TOKEN']
+          endpoint=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{database}/query'
+          def q(sql, params=None):
+              body=json.dumps({'sql':sql,'params':params or []}).encode()
+              req=urllib.request.Request(endpoint,data=body,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},method='POST')
+              with urllib.request.urlopen(req,timeout=90) as r: payload=json.loads(r.read().decode())
+              if not payload.get('success'): raise RuntimeError(payload.get('errors'))
+              return payload.get('result',[{}])[0].get('results',[])
+
+          path=Path('analysis-results/fixed-oos-five-races-per-venue-day.json')
+          raw=json.loads(path.read_text(encoding='utf-8'))
+          requested=set(raw.get('races',[]))
+          rows=q("SELECT race_id raceId,race_date raceDate,venue,race_no raceNo FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished' ORDER BY race_date,venue,race_no",['2024-05-04','2026-08-03'])
+          by_id={r['raceId']:r for r in rows}
+          chosen={x for x in requested if x in by_id}
+          invalid=sorted(requested-set(by_id))
+          groups=defaultdict(list)
+          for r in rows: groups[(r['raceDate'],r['venue'])].append(r)
+          fills=[]
+          for key,gr in groups.items():
+              gr=sorted(gr,key=lambda x:int(x['raceNo']))
+              have=[r for r in gr if r['raceId'] in chosen]
+              if len(have)<5:
+                  for r in gr:
+                      if r['raceId'] not in chosen:
+                          chosen.add(r['raceId']); have.append(r); fills.append(r['raceId'])
+                      if len(have)>=5: break
+              if len(have)<5:
+                  raise RuntimeError(f'GROUP_HAS_FEWER_THAN_5_TOTAL_RACES:{key}:{len(have)}')
+          counts={f'{d}|{v}':sum(1 for r in gr if r['raceId'] in chosen) for (d,v),gr in groups.items()}
+          if min(counts.values())<5: raise RuntimeError(f'MIN_SELECTION_GATE_FAILED:{min(counts.values())}')
+          repaired=sorted(chosen,key=lambda rid:(by_id[rid]['raceDate'],by_id[rid]['venue'],int(by_id[rid]['raceNo'])))
+          path.write_text(json.dumps({'generatedFrom':raw.get('generatedFrom'),'selectionRule':raw.get('selectionRule'),'repairRule':'keep every requested ID that exists in fixed D1; for any raceDate x venue with fewer than 5, fill by ascending raceNo; no outcomes, payouts or historical combo odds inspected','races':repaired},ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8')
+          Path('artifacts').mkdir(exist_ok=True)
+          meta={'fixedArchiveRaces':len(rows),'dateVenueGroups':len(groups),'requestedIds':len(requested),'validRequestedIds':len(requested)-len(invalid),'invalidSerializedIds':len(invalid),'deterministicFills':len(fills),'selectedRacesAfterRepair':len(repaired),'minRacesPerDateVenue':min(counts.values()),'maxRacesPerDateVenue':max(counts.values()),'invalidExamples':invalid[:30],'fillExamples':fills[:30],'outcomesUsedForRepair':False,'oddsUsedForRepair':False}
+          Path('artifacts/selection-repair-meta.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(meta,ensure_ascii=False))
+          PY
       - name: Export official odds
         run: python scripts/export-selected-historical-official-odds.py
       - uses: actions/upload-artifact@v4
@@ -46,11 +93,12 @@ jobs:
           path: |
             artifacts/selected-historical-official-odds.jsonl.gz
             artifacts/selected-historical-official-odds-meta.json
+            artifacts/selection-repair-meta.json
           compression-level: 0
           retention-days: 14
       - name: Publish success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/historical-official-odds-export' -f description='固定レースJRA公式オッズ復元成功' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/historical-official-odds-export' -f description='固定OOSレースJRA公式オッズ復元成功' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Publish failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/historical-official-odds-export' -f description='固定レースJRA公式オッズ復元失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/historical-official-odds-export' -f description='固定OOSレースJRA公式オッズ復元失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
