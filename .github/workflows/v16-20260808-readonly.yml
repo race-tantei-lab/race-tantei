@@ -22,6 +22,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Publish start
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/v16-20260808-readonly' -f description='8/8公式データを読取専用取得中' -f target_url="$TARGET" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -32,10 +37,8 @@ jobs:
           python - <<'PY'
           import concurrent.futures, json, os, urllib.request
           from pathlib import Path
-
           ROOT=Path('.')
-          OUT=ROOT/'artifacts'/'v16-20260808-readonly'
-          OUT.mkdir(parents=True,exist_ok=True)
+          OUT=ROOT/'artifacts'/'v16-20260808-readonly'; OUT.mkdir(parents=True,exist_ok=True)
           token=os.environ['CLOUDFLARE_API_TOKEN']; account=os.environ['CLOUDFLARE_ACCOUNT_ID']; database=os.environ['CLOUDFLARE_D1_DATABASE_ID']
           endpoint=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{database}/query'
           def d1(sql, params=None):
@@ -44,46 +47,31 @@ jobs:
               with urllib.request.urlopen(req,timeout=90) as r: p=json.loads(r.read().decode())
               if not p.get('success'): raise RuntimeError(p.get('errors'))
               return p.get('result',[{}])[0].get('results',[])
-
-          tables=d1("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-          names=[x['name'] for x in tables]
+          names=[x['name'] for x in d1("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
           (OUT/'table-names.json').write_text(json.dumps(names,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-
           races=d1("SELECT * FROM rt_races WHERE race_date=? ORDER BY venue,race_no",['2026-08-08'])
           (OUT/'races.json').write_text(json.dumps(races,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
           print(json.dumps({'races':len(races),'venues':sorted(set(r.get('venue') for r in races))},ensure_ascii=False),flush=True)
           if len(races)!=36: raise RuntimeError(f'AUG8_RACE_COUNT:{len(races)}')
           ids=[r['race_id'] for r in races]
-
           for table in names:
               low=table.lower()
-              if not table.startswith('rt_') or not any(k in low for k in ('runner','predict','result','payout','ticket','odds')):
-                  continue
+              if not table.startswith('rt_') or not any(k in low for k in ('runner','predict','result','payout','ticket','odds')): continue
               try:
-                  cols=d1(f"PRAGMA table_info({table})")
-                  colnames=[c['name'] for c in cols]
+                  colnames=[c['name'] for c in d1(f"PRAGMA table_info({table})")]
                   race_col='race_id' if 'race_id' in colnames else ('raceId' if 'raceId' in colnames else None)
                   date_col='race_date' if 'race_date' in colnames else ('raceDate' if 'raceDate' in colnames else None)
                   if race_col:
-                      marks=','.join('?' for _ in ids)
-                      rows=d1(f"SELECT * FROM {table} WHERE {race_col} IN ({marks})",ids)
-                  elif date_col:
-                      rows=d1(f"SELECT * FROM {table} WHERE {date_col}=?",['2026-08-08'])
-                  else:
-                      continue
+                      marks=','.join('?' for _ in ids); rows=d1(f"SELECT * FROM {table} WHERE {race_col} IN ({marks})",ids)
+                  elif date_col: rows=d1(f"SELECT * FROM {table} WHERE {date_col}=?",['2026-08-08'])
+                  else: continue
                   (OUT/f'{table}.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2,default=str)+'\n',encoding='utf-8')
                   print(json.dumps({'table':table,'rows':len(rows)},ensure_ascii=False),flush=True)
-              except Exception as e:
-                  print(json.dumps({'table':table,'error':f'{type(e).__name__}:{e}'},ensure_ascii=False),flush=True)
-
-          # Load only function definitions from the audited JRA mobile historical-odds exporter.
-          parser=ROOT/'scripts'/'export-mobile-historical-official-odds-retry.py'
-          source=parser.read_text(encoding='utf-8')
+              except Exception as e: print(json.dumps({'table':table,'error':f'{type(e).__name__}:{e}'},ensure_ascii=False),flush=True)
+          parser=ROOT/'scripts'/'export-mobile-historical-official-odds-retry.py'; source=parser.read_text(encoding='utf-8')
           marker='# Rebuild exactly the same deterministic 3,210-race selection used by the primary export.'
           if marker not in source: raise RuntimeError('ODDS_EXPORTER_MARKER_MISSING')
-          ns={'__file__':str(parser)}
-          exec(compile(source.split(marker,1)[0],str(parser),'exec'),ns)
-          fetch_race=ns['fetch_race']
+          ns={'__file__':str(parser)}; exec(compile(source.split(marker,1)[0],str(parser),'exec'),ns); fetch_race=ns['fetch_race']
           jobs=[]
           for r in races:
               result_url=r.get('result_url')
@@ -110,3 +98,15 @@ jobs:
           path: artifacts/v16-20260808-readonly/
           compression-level: 1
           retention-days: 3
+      - name: Publish success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/v16-20260808-readonly' -f description='8/8公式データ読取完了' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/v16-20260808-readonly' -f description='8/8公式データ読取失敗' -f target_url="$TARGET" >/dev/null
