@@ -23,15 +23,12 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     env:
       GH_TOKEN: ${{ github.token }}
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
-      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
     steps:
       - name: Publish start
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/speed-runner-oos' -f description='固定7,695レース入力を自己修復中' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/speed-runner-oos' -f description='固定7,695レース入力を7分割自己修復中' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -49,43 +46,88 @@ jobs:
           gh run download 31241615354 -n all-mobile-full-official-odds-retry -D downloads/speed-analysis/mobile
       - name: Recover every complete archived odds record
         run: python scripts/prepare-speed-enriched-analysis-input.py
-      - name: Repair only truly missing official odds races
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speed-analysis-salvage
+          path: artifacts/speed-analysis-input/
+          compression-level: 0
+          retention-days: 14
+
+  repair:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 7
+      matrix:
+        shard: [0,1,2,3,4,5,6]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      REPAIR_SHARD: ${{ matrix.shard }}
+      REPAIR_SHARDS: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: speed-analysis-salvage
+          path: artifacts/speed-analysis-input
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Build deterministic missing-ID shard and patch official exporter
         run: |
-          set -euo pipefail
-          COUNT=$(python - <<'PY'
-          import json
+          python - <<'PY'
+          import gzip, json, os
           from pathlib import Path
-          x=json.loads(Path('artifacts/speed-analysis-input/missing-race-ids.json').read_text())
-          print(int(x['count']))
-          PY
-          )
-          echo "missing official odds races: ${COUNT}"
-          if [ "$COUNT" -gt 0 ]; then
-            python -m pip install --disable-pip-version-check beautifulsoup4
-            python - <<'PY'
-          import json
-          from pathlib import Path
-          x=json.loads(Path('artifacts/speed-analysis-input/missing-race-ids.json').read_text())
+          src=json.loads(Path('artifacts/speed-analysis-input/missing-race-ids.json').read_text())['raceIds']
+          si=int(os.environ['REPAIR_SHARD']); sn=int(os.environ['REPAIR_SHARDS'])
+          ids=[rid for i,rid in enumerate(src) if i % sn == si]
           Path('analysis-results/fixed-oos-five-races-per-venue-day.json').write_text(
-              json.dumps({'generatedFrom':'artifact reconstruction gaps only; no outcomes used','races':x['raceIds']}, ensure_ascii=False)+'\n',
-              encoding='utf-8')
-          p=Path('scripts/export-selected-historical-official-odds.py')
-          s=p.read_text(encoding='utf-8')
-          s=s.replace("            tab[m.group(2)] = m.group(1)", "            tab['15' + m.group(2)] = m.group(1)", 1)
-          s=s.replace('WORKERS = 20', 'WORKERS = 12', 1)
-          p.write_text(s, encoding='utf-8')
-          PY
-            python scripts/export-selected-historical-official-odds.py
-          else
-            python - <<'PY'
-          import gzip
-          from pathlib import Path
+              json.dumps({'generatedFrom':'artifact reconstruction gaps only; no outcomes used','repairShard':si,'repairShards':sn,'races':ids},ensure_ascii=False)+'\n',encoding='utf-8')
+          p=Path('scripts/export-selected-historical-official-odds.py'); s=p.read_text(encoding='utf-8')
+          s=s.replace("            tab[m.group(2)] = m.group(1)","            tab['15' + m.group(2)] = m.group(1)",1)
+          s=s.replace('WORKERS = 20','WORKERS = 12',1); p.write_text(s,encoding='utf-8')
           Path('artifacts').mkdir(exist_ok=True)
-          with gzip.open('artifacts/selected-historical-official-odds.jsonl.gz','wt',encoding='utf-8') as f:
-              pass
+          if not ids:
+              with gzip.open('artifacts/selected-historical-official-odds.jsonl.gz','wt',encoding='utf-8') as f: pass
+          Path('artifacts/repair-shard-count.json').write_text(json.dumps({'shard':si,'races':len(ids)})+'\n')
+          print(json.dumps({'repairShard':si,'races':len(ids)}))
           PY
-          fi
-      - name: Finalize exact 7,695-race input
+      - name: Fetch only official missing odds for shard
+        run: |
+          COUNT=$(python -c "import json;print(json.load(open('artifacts/repair-shard-count.json'))['races'])")
+          if [ "$COUNT" -gt 0 ]; then python scripts/export-selected-historical-official-odds.py; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: speed-odds-repair-${{ matrix.shard }}
+          path: |
+            artifacts/selected-historical-official-odds.jsonl.gz
+            artifacts/selected-historical-official-odds-meta.json
+            artifacts/repair-shard-count.json
+          compression-level: 0
+          retention-days: 14
+
+  finalize:
+    needs: [prepare, repair]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: speed-analysis-salvage
+          path: artifacts/speed-analysis-input
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: speed-odds-repair-*
+          path: artifacts/repair-shards
+          merge-multiple: false
+      - name: Finalize and audit exact 7,695-race input
         run: python scripts/finalize-speed-enriched-analysis-input.py
       - uses: actions/upload-artifact@v4
         with:
@@ -95,7 +137,7 @@ jobs:
           retention-days: 14
 
   runner-oos:
-    needs: prepare
+    needs: finalize
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -115,12 +157,10 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          p=Path('scripts/build-speed-enriched-runner-oos.py')
-          s=p.read_text(encoding='utf-8')
+          p=Path('scripts/build-speed-enriched-runner-oos.py'); s=p.read_text(encoding='utf-8')
           old='''if X.shape != (106122, len(feature_names)):\n    raise RuntimeError(f"FEATURE_SHAPE:{X.shape}:{len(feature_names)}")'''
           new='''expected_active = sum(1 for r in D["runners"] if str(r.get("runnerStatus") or "active") == "active" and r.get("winOdds") and float(r["winOdds"]) > 0)\nif X.shape != (expected_active, len(feature_names)):\n    raise RuntimeError(f"FEATURE_SHAPE:{X.shape}:expected_active={expected_active}:features={len(feature_names)}")'''
-          if old not in s:
-              raise SystemExit('ACTIVE_RUNNER_ASSERT_PATCH_TARGET_NOT_FOUND')
+          if old not in s: raise SystemExit('ACTIVE_RUNNER_ASSERT_PATCH_TARGET_NOT_FOUND')
           p.write_text(s.replace(old,new,1),encoding='utf-8')
           PY
       - name: Build strict chronological features and OOS probabilities
@@ -132,13 +172,20 @@ jobs:
           path: artifacts/speed-runner-oos/
           compression-level: 1
           retention-days: 14
-      - name: Publish success
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/speed-runner-oos' -f description='スピード特徴＋完全OOS予測生成成功' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
-      - name: Publish failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/speed-runner-oos' -f description='スピード特徴OOS生成失敗' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+
+  status:
+    if: always()
+    needs: [prepare, repair, finalize, runner-oos]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RESULT: ${{ needs.runner-oos.result }}
+    steps:
+      - name: Publish final analysis status
+        run: |
+          if [ "$RESULT" = "success" ]; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/speed-runner-oos' -f description='7,695公式オッズ＋スピード完全OOS生成成功' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/speed-runner-oos' -f description="スピードOOS生成失敗:${RESULT}" -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+            exit 1
+          fi
