@@ -1,0 +1,20 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeRaceSelectionDiagnostic":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "course":"light",
+  "budgetYen":2000,
+  "unitYen":100,
+  "requiredBetTypes":["win","wide","quinella"],
+  "ticketProbabilities":{"win":"locked prior-OOS stack win probability","wide":"locked 429-feature pairwise-derived strict-OOS probability","quinella":"locked 429-feature pairwise-derived strict-OOS probability"},
+  "ticketScore":"strict-OOS probability multiplied by JRA official odds; wide uses official lower bound",
+  "candidateTicketsPerBetType":10,
+  "allocation":"first allocate 100 yen to the highest-score ticket in each required bet type; then allocate the remaining seventeen 100-yen units to the currently highest ticketScore among all top-10 candidates, skipping any ticket already at the 200-yen cap; continue until exactly 2000 yen is spent",
+  "maximumSingleTicketYen":200,
+  "budgetMustBeFullyUsed":true,
+  "diagnostic":"compute all-race return and an outcome-aware oracle best-five-races-per-raceDate-venue ceiling only to decide whether a future-blind race selector can possibly be worthwhile; oracle is never a model or a selectable production rule",
+  "ifOracleCeilingAtLeast200":"lock a strict prior-date race-selection model before evaluating its ROI",
+  "ifOracleCeilingBelow200":"discard this portfolio without training a race selector",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "promotion":{"notEligibleFromOracle":true,"nameIfAndOnlyIfAllCanonicalGatesPass":"v16"}
+}
