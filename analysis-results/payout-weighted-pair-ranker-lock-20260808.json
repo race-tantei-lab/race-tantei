@@ -1,0 +1,13 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "inputs":"locked marginal-pair v2 feature set with JRA official odds and market probability",
+  "target":"pair hit/non-hit",
+  "sampleWeight":{"nonHit":1,"hit":"min(actual prior JRA payout per 100 yen / 100, 50)","cap":50,"reason":"align training loss with monetary importance while preventing a single extreme payout from dominating"},
+  "model":{"type":"LightGBM binary market-residual classifier","officialPairMarketLogitInitScore":true,"learningRate":0.03,"numLeaves":31,"minDataInLeaf":500,"featureFraction":0.80,"rounds":180,"lambdaL2":12.0,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"coldStartDates":30,"sameDateLearning":false},
+  "ranking":"descending weighted-classifier raw predicted score; do not multiply by odds again because payout magnitude is already represented in the training weight",
+  "betTypes":["quinella","wide"],
+  "settlement":"actual fixed-archive JRA payouts only",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
