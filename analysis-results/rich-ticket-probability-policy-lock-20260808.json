@@ -1,0 +1,25 @@
+{
+  "status": "analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeRichTicketProbabilityEvaluation": true,
+  "fixedArchive": {"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "officialOdds": {"source":"JRA official historical odds only","syntheticOdds":false,"estimatedOdds":false,"missingOdds":"remain missing"},
+  "lightBetTypes": ["win","wide","quinella"],
+  "ticketFeatureSource": {
+    "win": "95 strict prior-date runner features plus JRA official odds, normalized market probability, strict-OOS normal/value probabilities",
+    "wideAndQuinella": "for each of the 95 runner features: pair mean and absolute difference; plus JRA official pair odds, normalized official market probability, strict-OOS normal/value Harville probability and model/market ratios",
+    "outcomeLeakage": false
+  },
+  "model": {"type":"LightGBM binary probability","learningRate":0.04,"numLeaves":21,"minDataInLeafWin":50,"minDataInLeafPair":100,"featureFraction":0.8,"maxBin":63,"boostRounds":120,"seed":20260810},
+  "walkForward": {"coldStartDateCount":30,"retrainDateIndices":[30,90,150,210],"sameDateLearning":false},
+  "fixedMarketModelBlends": [0.0,0.25,0.5,0.75,1.0],
+  "ticketScore": "((1-blend)*normalized_JRA_market_probability + blend*binary_model_probability) * JRA_official_odds",
+  "topTicketsRetainedPerBlendBetType": 12,
+  "blendSelector": {"unit":"bet type","metric":"Bayesian-shrunk realized return of top 10 tickets on strictly prior dates","priorEquivalentTickets":40,"priorReturnRate":0.8,"coldTieBreakBlend":0.5,"allCounterfactualBlendUpdatesAfterRaceDateEnds":true},
+  "coldStartFirst30Dates": "pre-locked strict-OOS-normal probability times JRA official odds strategy",
+  "raceSelection": {"countPerRaceDateVenue":5,"selector":"expanding LightGBM Huber virtual-return regression using prior dates only","retrainDateIndices":[30,90,150,210],"sameDateLearning":false},
+  "budget": {"lightYen":2000,"unitYen":100,"minimumPerRequiredBetTypeYen":100,"maximumSingleTicketShare":0.10,"budgetMustBeFullyUsed":true},
+  "allocation": "mandatory top ticket 100 yen for win/wide/quinella, then remaining units by chosen-blend ticket score multiplied by prior-date shrunk blend return; maximum 200 yen per ticket",
+  "settlement": "actual fixed-archive JRA payouts only",
+  "completionGates": {"lightFullHistoryRoiPctAtLeast":200,"lightLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudget":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion": {"notEligibleUntilAllThreeCoursesPass":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
