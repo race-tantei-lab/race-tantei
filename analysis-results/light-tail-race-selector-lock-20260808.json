@@ -1,0 +1,17 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "fixedPerRacePortfolio":{"budgetYen":2000,"win":"100 yen on top ticket by strict-OOS 164 win probability x JRA official win odds","wide":"100 yen on top ticket by JRA official wide pair market corrected with alpha=1.0 mean strict-OOS top3 horse marginal log edge, ranked by corrected probability x official wide lower-bound odds","quinella":"200 yen each on the top nine distinct tickets by JRA official quinella pair market corrected with alpha=1.0 mean strict-OOS top2 horse marginal log edge, ranked by corrected probability x official quinella odds","stakes":{"win":100,"wide":100,"quinella":1800},"singleTicketCapYen":200,"requiredBetTypes":true,"budgetMustBeFullyUsed":true},
+  "raceFeatures":"locked 20 race-context/model-divergence features plus the fixed win/wide/quinella expert's top1/top3/top9 score, score dispersion, selected official-odds and selected official-market-rank summaries",
+  "raceReturnTarget":"actual JRA total return divided by 2000 yen for the fixed portfolio, available only after the race date ends",
+  "tailLabels":["return>=1.0","return>=2.0","return>=3.0"],
+  "tailModels":{"type":"three LightGBM binary classifiers","learningRate":0.03,"numLeaves":15,"minDataInLeaf":80,"featureFraction":0.85,"rounds":120,"lambdaL2":8.0,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"sameDateLearning":false},
+  "raceScore":"P(return>=1)+P(return>=2)+P(return>=3), an approximation to expected return clipped at 3x; extreme payouts above 3x do not receive extra selection weight",
+  "coldStartDates":30,
+  "coldStartRaceScore":"pre-race fixed-portfolio expected-return score summaries only",
+  "raceSelection":"exactly five highest raceScore races per raceDate x venue; never fewer",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "completionGates":{"fullHistoryRoiPctAtLeast":200,"largestSingleTicketReturnRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudget":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
