@@ -1,0 +1,421 @@
+{
+  "races": 7695,
+  "parsed": 7593,
+  "failed": 102,
+  "coveragePct": 98.67446393762184,
+  "surfaceCounts": {
+    "ダート": 3632,
+    "芝": 3961
+  },
+  "sourceCounts": {
+    "jra_official_daily_pdf": 7517,
+    "existing_d1": 76
+  },
+  "meetingDayPdfs": 636,
+  "pdfErrors": 0,
+  "pdfErrorExamples": [],
+  "start": "2024-05-04",
+  "end": "2026-08-02",
+  "failedExamples": [
+    {
+      "raceId": "2024-05-04-niigata-01",
+      "date": "2024-05-04",
+      "venue": "新潟",
+      "raceNo": 1,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004202401030120240504%2FE5",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-05-05-niigata-06",
+      "date": "2024-05-05",
+      "venue": "新潟",
+      "raceNo": 6,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004202401040620240505%2F9E",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-05-12-kyoto-06",
+      "date": "2024-05-12",
+      "venue": "京都",
+      "raceNo": 6,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202403080620240512%2F17",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-05-18-niigata-01",
+      "date": "2024-05-18",
+      "venue": "新潟",
+      "raceNo": 1,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004202401070120240518%2FFF",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-05-18-niigata-04",
+      "date": "2024-05-18",
+      "venue": "新潟",
+      "raceNo": 4,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004202401070420240518%2F1E",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-06-01-kyoto-08",
+      "date": "2024-06-01",
+      "venue": "京都",
+      "raceNo": 8,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202404010820240601%2FF1",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-06-16-hakodate-06",
+      "date": "2024-06-16",
+      "venue": "函館",
+      "raceNo": 6,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1002202401040620240616%2F9C",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-06-16-hakodate-08",
+      "date": "2024-06-16",
+      "venue": "函館",
+      "raceNo": 8,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1002202401040820240616%2F06",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-06-22-hakodate-07",
+      "date": "2024-06-22",
+      "venue": "函館",
+      "raceNo": 7,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1002202401050720240622%2F2A",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-06-23-hakodate-08",
+      "date": "2024-06-23",
+      "venue": "函館",
+      "raceNo": 8,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1002202401060820240623%2F0F",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-06-29-fukushima-01",
+      "date": "2024-06-29",
+      "venue": "福島",
+      "raceNo": 1,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1003202402010120240629%2FC6",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-07-06-hakodate-06",
+      "date": "2024-07-06",
+      "venue": "函館",
+      "raceNo": 6,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1002202401090620240706%2FFC",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-07-06-kokura-08",
+      "date": "2024-07-06",
+      "venue": "小倉",
+      "raceNo": 8,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1010202403030820240706%2FAB",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-07-13-kokura-09",
+      "date": "2024-07-13",
+      "venue": "小倉",
+      "raceNo": 9,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1010202403050920240713%2F69",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-07-20-kokura-01",
+      "date": "2024-07-20",
+      "venue": "小倉",
+      "raceNo": 1,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1010202403070120240720%2FCA",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-07-20-sapporo-05",
+      "date": "2024-07-20",
+      "venue": "札幌",
+      "raceNo": 5,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1001202401010520240720%2FAB",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-07-27-niigata-11",
+      "date": "2024-07-27",
+      "venue": "新潟",
+      "raceNo": 11,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004202402011120240727%2F63",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-08-10-sapporo-07",
+      "date": "2024-08-10",
+      "venue": "札幌",
+      "raceNo": 7,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1001202402010720240810%2F67",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-08-24-sapporo-05",
+      "date": "2024-08-24",
+      "venue": "札幌",
+      "raceNo": 5,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1001202402050520240824%2F17",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-08-31-chukyo-07",
+      "date": "2024-08-31",
+      "venue": "中京",
+      "raceNo": 7,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202402070720240831%2F46",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-09-07-nakayama-07",
+      "date": "2024-09-07",
+      "venue": "中山",
+      "raceNo": 7,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1006202404010720240907%2F87",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-09-15-chukyo-08",
+      "date": "2024-09-15",
+      "venue": "中京",
+      "raceNo": 8,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202403040820240915%2F8E",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-09-15-chukyo-10",
+      "date": "2024-09-15",
+      "venue": "中京",
+      "raceNo": 10,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202403041020240915%2F38",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-09-16-chukyo-10",
+      "date": "2024-09-16",
+      "venue": "中京",
+      "raceNo": 10,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202403051020240916%2F68",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-09-21-chukyo-08",
+      "date": "2024-09-21",
+      "venue": "中京",
+      "raceNo": 8,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202403060820240921%2FDA",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-05-niigata-01",
+      "date": "2024-10-05",
+      "venue": "新潟",
+      "raceNo": 1,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004202404010120241005%2F00",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-05-niigata-04",
+      "date": "2024-10-05",
+      "venue": "新潟",
+      "raceNo": 4,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004202404010420241005%2F1F",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-06-kyoto-09",
+      "date": "2024-10-06",
+      "venue": "京都",
+      "raceNo": 9,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202405020920241006%2F31",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-06-niigata-12",
+      "date": "2024-10-06",
+      "venue": "新潟",
+      "raceNo": 12,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004202404021220241006%2F37",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-12-kyoto-08",
+      "date": "2024-10-12",
+      "venue": "京都",
+      "raceNo": 8,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202405030820241012%2F55",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-12-niigata-01",
+      "date": "2024-10-12",
+      "venue": "新潟",
+      "raceNo": 1,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004202404030120241012%2F09",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-13-kyoto-07",
+      "date": "2024-10-13",
+      "venue": "京都",
+      "raceNo": 7,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202405040720241013%2FD0",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-14-niigata-08",
+      "date": "2024-10-14",
+      "venue": "新潟",
+      "raceNo": 8,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004202404040820241014%2FE9",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-14-niigata-12",
+      "date": "2024-10-14",
+      "venue": "新潟",
+      "raceNo": 12,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004202404041220241014%2FFD",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-14-tokyo-07",
+      "date": "2024-10-14",
+      "venue": "東京",
+      "raceNo": 7,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1005202404040720241014%2F7E",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-19-kyoto-06",
+      "date": "2024-10-19",
+      "venue": "京都",
+      "raceNo": 6,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202405050620241019%2FFC",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-20-kyoto-03",
+      "date": "2024-10-20",
+      "venue": "京都",
+      "raceNo": 3,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202405060320241020%2F05",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-26-kyoto-08",
+      "date": "2024-10-26",
+      "venue": "京都",
+      "raceNo": 8,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202405070820241026%2F6F",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-10-26-niigata-01",
+      "date": "2024-10-26",
+      "venue": "新潟",
+      "raceNo": 1,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004202404070120241026%2F23",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-11-10-fukushima-04",
+      "date": "2024-11-10",
+      "venue": "福島",
+      "raceNo": 4,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1003202403040420241110%2F21",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-11-17-tokyo-08",
+      "date": "2024-11-17",
+      "venue": "東京",
+      "raceNo": 8,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1005202405060820241117%2FFC",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-12-08-kyoto-05",
+      "date": "2024-12-08",
+      "venue": "京都",
+      "raceNo": 5,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202407040520241208%2F15",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-12-14-nakayama-05",
+      "date": "2024-12-14",
+      "venue": "中山",
+      "raceNo": 5,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1006202405050520241214%2FF8",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-12-14-kyoto-12",
+      "date": "2024-12-14",
+      "venue": "京都",
+      "raceNo": 12,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202407051220241214%2F21",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-12-21-nakayama-05",
+      "date": "2024-12-21",
+      "venue": "中山",
+      "raceNo": 5,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1006202405070520241221%2F01",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-12-22-kyoto-04",
+      "date": "2024-12-22",
+      "venue": "京都",
+      "raceNo": 4,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202407080420241222%2F72",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2024-12-22-kyoto-10",
+      "date": "2024-12-22",
+      "venue": "京都",
+      "raceNo": 10,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202407081020241222%2FF0",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2025-01-13-chukyo-05",
+      "date": "2025-01-13",
+      "venue": "中京",
+      "raceNo": 5,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202501050520250113%2F35",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2025-01-13-chukyo-10",
+      "date": "2025-01-13",
+      "venue": "中京",
+      "raceNo": 10,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202501051020250113%2FFE",
+      "error": "PARSE_MISS"
+    },
+    {
+      "raceId": "2025-01-18-chukyo-04",
+      "date": "2025-01-18",
+      "venue": "中京",
+      "raceNo": 4,
+      "url": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202501060420250118%2FA4",
+      "error": "PARSE_MISS"
+    }
+  ]
+}
