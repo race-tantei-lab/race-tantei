@@ -91,3 +91,5 @@ jobs:
             -f context='analysis/fixed-race-context' \
             -f description='芝ダート・距離の復元が98%未満' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+# Final completion audit rerun: no rule or parser change.
