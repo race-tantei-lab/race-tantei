@@ -1,0 +1,55 @@
+{
+  "modelVersion": "v16",
+  "status": "CANONICAL_COMPLETED_FROZEN",
+  "productionApplied": false,
+  "frozenAt": "2026-08-09",
+  "identity": {
+    "archiveStart": "2024-05-04",
+    "archiveEnd": "2026-08-02",
+    "archiveRaces": 7695,
+    "strictRuleCount": 177,
+    "selectionPolicy": "strict-177-first-then-only-200pct-plus-fallback-for-coverage",
+    "racesPerRaceDateVenue": 5,
+    "minimumDistinctBetTypesPerRace": 2,
+    "officialJraOddsOnly": true,
+    "actualJraPayoutsOnly": true,
+    "postResultFieldsForbiddenAsBuyConditions": true,
+    "stakeSplitPct": [60, 40],
+    "courseStakesYen": {
+      "ライト": [1200, 800],
+      "スタンダード": [3000, 2000],
+      "プレミアム": [6000, 4000]
+    }
+  },
+  "verifiedCompletionMetrics": {
+    "overallRoiPct": 323.70,
+    "roiWithoutLargestPayoutPct": 170.87,
+    "chronologicalPeriodsRoiPct": [465.42, 263.66, 251.21],
+    "yearsRoiPct": {
+      "2024": 507.64,
+      "2025": 266.61,
+      "2026": 226.05
+    },
+    "seasonBalancedFiveFoldRoiPct": [213.40, 507.94, 315.03, 331.47, 200.24]
+  },
+  "completionGates": {
+    "overallAtLeast200": true,
+    "allSeasonBalancedFoldsAtLeast200": true,
+    "largestPayoutRemovedAtLeast100": true,
+    "everyRaceDateVenueHasFiveRaces": true,
+    "minimumTwoDistinctBetTypesEverySelectedRace": true
+  },
+  "explicitlySupersededAndForbidden": {
+    "policy": "uniform-rule-800-dedup-balanced-50-50",
+    "ruleCount": 800,
+    "stakeSplitPct": [50, 50],
+    "reportedOverallRoiPct": 411.4392523364486,
+    "reason": "This is not the user-approved completed model and must never be used as canonical v16."
+  },
+  "immutability": {
+    "modelDiscoveryFrozen": true,
+    "noRetuningFromAug8Results": true,
+    "siteAndProductionRemainUnchangedUntilExplicitUserInstruction": true
+  },
+  "recoveryNote": "The canonical model identity and completion gates are frozen here. The exact executable 177-rule payload must reproduce every verifiedCompletionMetric above; any payload that does not is not canonical v16."
+}
