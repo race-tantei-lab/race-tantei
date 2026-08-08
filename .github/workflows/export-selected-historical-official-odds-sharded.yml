@@ -17,7 +17,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish run id
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/historical-odds-sharded' -f description='JRA公式過去オッズを12分割取得中' -f target_url="$TARGET" >/dev/null
+
   export:
+    needs: register
     strategy:
       fail-fast: false
       max-parallel: 12
@@ -112,3 +122,21 @@ jobs:
             artifacts/selection-repair-meta-shard-${{ matrix.shard }}.json
           compression-level: 0
           retention-days: 14
+
+  finalize:
+    if: always()
+    needs: [register, export]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish final status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EXPORT_RESULT: ${{ needs.export.result }}
+        run: |
+          if [ "$EXPORT_RESULT" = "success" ]; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/historical-odds-sharded' -f description='JRA公式過去オッズ12分割取得成功' -f target_url="$TARGET" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/historical-odds-sharded' -f description="JRA公式過去オッズ12分割取得失敗:${EXPORT_RESULT}" -f target_url="$TARGET" >/dev/null
+            exit 1
+          fi
