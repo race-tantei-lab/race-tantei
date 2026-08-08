@@ -1,0 +1,70 @@
+{
+  "status": "analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeSpeedResidualReturnEvaluation": true,
+  "fixedArchive": {
+    "start": "2024-05-04",
+    "end": "2026-08-02",
+    "races": 7695,
+    "futureDataAllowed": false,
+    "sameDateOutcomeAllowedForDecision": false
+  },
+  "features": {
+    "base": "existing strict walk-forward rich pre-race features",
+    "addedSpeedFeatures": 41,
+    "addedFamilies": [
+      "horse prior relative race time and winner-gap",
+      "horse x surface prior speed history",
+      "horse x surface x distance-bucket prior speed history",
+      "jockey x surface x distance-bucket prior speed history",
+      "trainer x surface x distance-bucket prior speed history",
+      "horse recent prior relative time, winner-gap and final-3F",
+      "same-surface and same-distance-bucket previous-run flags"
+    ],
+    "sameDateUpdates": false,
+    "source": "actual historical JRA result times/final-3F combined with repaired official surface/distance context"
+  },
+  "horseProbabilityModel": {
+    "type": "LightGBM binary market-residual ensemble",
+    "marketPrior": "normalized official win market probability via logit init_score",
+    "oosDateBlocks": [[30,90],[90,150],[150,210],[210,244]],
+    "coldStartDates": 30,
+    "coldStartProbability": "normalized official win market probability",
+    "ensemble": "equal-weight mean of three fixed residual configurations; no ROI-based reweighting",
+    "configurations": [
+      {"learningRate":0.03,"numLeaves":15,"minDataInLeaf":160,"featureFraction":0.70,"rounds":100,"lambdaL2":8.0},
+      {"learningRate":0.035,"numLeaves":23,"minDataInLeaf":120,"featureFraction":0.75,"rounds":120,"lambdaL2":5.0},
+      {"learningRate":0.04,"numLeaves":31,"minDataInLeaf":100,"featureFraction":0.80,"rounds":90,"lambdaL2":8.0}
+    ]
+  },
+  "ticketScoring": {
+    "combinationProbability": "Plackett-Luce/Harville-style from OOS horse probabilities",
+    "officialOddsOnly": true,
+    "wideOddsForScoring": "official lower bound",
+    "score": "OOS ticket probability multiplied by JRA official odds",
+    "syntheticOdds": false,
+    "derivedCombinationOdds": false
+  },
+  "evaluation": {
+    "raceSelectionAndBudgetPolicy": "reuse the already locked full-race online selection and allocation constraints",
+    "racesPerRaceDateVenue": 5,
+    "courseBudgetYen": {"light":2000,"standard":5000,"premium":10000},
+    "requiredBetTypes": {
+      "light":["win","wide","quinella"],
+      "standard":["win","wide","quinella","exacta","trio"],
+      "premium":["win","wide","quinella","exacta","trio","trifecta"]
+    },
+    "maxSingleTicketShare": 0.10,
+    "budgetMustBeFullyUsed": true,
+    "settlement": "actual fixed-archive JRA payouts only"
+  },
+  "completionGates": {
+    "allCoursesFullHistoryRoiPctAtLeast": 200,
+    "allCoursesLargestTicketRemovedRoiPctAtLeast": 100,
+    "fiveRacesPerRaceDateVenue": true,
+    "exactBudgets": true,
+    "requiredBetTypes": true,
+    "officialOddsOnly": true,
+    "noLeakage": true
+  },
+  "promotion": {"allowedOnlyIfEveryGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
