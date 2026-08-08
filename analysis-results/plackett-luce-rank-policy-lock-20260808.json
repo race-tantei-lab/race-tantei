@@ -1,0 +1,16 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforePlackettLuceReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "runnerFeatures":"locked 193 strict prior-date Elo/decay features",
+  "rankModel":{"type":"LightGBM LambdaRank market residual","group":"race","marketInitScore":"log(normalized JRA official win probability)","relevance":{"finish1":5,"finish2":4,"finish3":3,"finish4to5":2,"finish6to8":1,"finish9plus":0},"learningRate":0.04,"numLeaves":31,"minDataInLeaf":100,"featureFraction":0.75,"maxBin":63,"rounds":100,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"sameDateLearning":false},
+  "finalHorseScore":"market log probability plus strict-OOS LambdaRank residual raw score",
+  "jointDistribution":"Plackett-Luce over all active runners in the race using exp(finalHorseScore)",
+  "ticketProbabilities":{"win":"first-place Plackett-Luce marginal","quinella":"sum of both ordered top-two Plackett-Luce probabilities","wide":"sum of all ordered top-three Plackett-Luce outcomes containing both horses"},
+  "ticketScore":"joint probability multiplied by JRA official odds; wide uses official lower bound",
+  "diagnostic":{"topKPerRace":[1,2,3,5,10],"largestTicketRemoved":true,"noFullPeriodThresholdOptimization":true},
+  "nextStageOnlyIfUseful":"five-race selection and exact Light allocation must be locked separately before portfolio ROI evaluation",
+  "officialOdds":{"synthetic":false,"estimated":false,"missing":"remain missing"},
+  "completionGatesUnchanged":{"allCoursesFullHistoryRoiPctAtLeast":200,"allCoursesLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudgets":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
