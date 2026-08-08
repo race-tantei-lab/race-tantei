@@ -27,6 +27,7 @@
   },
   "onlineExperts": {
     "modelMarketBlendWeights": [0.0, 0.25, 0.5, 0.75, 1.0],
+    "blendWeightMeaning": "weight on strict OOS model probability; 1-weight is weight on normalized JRA market probability",
     "score": "blended_probability * JRA_official_odds",
     "expertChoice": "for each course x bet type x raceDate, choose the expert with highest Bayesian-shrunk exponentially-decayed return using dates strictly before the current raceDate",
     "decayHalfLifeDays": 120,
@@ -45,7 +46,8 @@
     "unitYen": 100,
     "maximumTicketStakeYen": 300,
     "minimumDistinctTicketsPerBetTypeWhenCombinationsExist": 2,
-    "allocation": "rank tickets by the chosen expert score, then allocate 100-yen units round-robin across highest-ranked distinct tickets while respecting the 300-yen per-ticket cap until the exact bet-type budget is exhausted",
+    "distinctTicketTarget": "min(available_official_odds_tickets, max(2, ceil(bet_type_budget_yen / 300)))",
+    "allocation": "rank tickets by the chosen expert score, keep distinctTicketTarget tickets, then allocate 100-yen units round-robin from best to worst repeatedly while respecting the 300-yen per-ticket cap until the exact bet-type budget is exhausted; if the target tickets all reach cap, extend to the next-ranked distinct tickets and continue",
     "singleOnlyPortfolioAllowed": false,
     "onePointHighPayoutConcentrationAllowed": false
   },
