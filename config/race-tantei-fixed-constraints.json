@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "canonicalDocument": "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md",
   "immutableProjectRules": {
     "minimumRacesPerVenueDay": 5,
@@ -18,7 +18,9 @@
     "droppingEvaluationPeriodsForbidden": true,
     "ticketCountFixed": false,
     "ticketCountMayVaryByCourseRaceAndPolicy": true,
-    "calendarSeasonalityMustBeModeled": true
+    "calendarContextMustBeAvailableAsAuxiliaryFeatures": true,
+    "calendarFeaturesMustNotBePrimaryDiscoveryAxis": true,
+    "calendarOnlyOrYearSpecificRulesForbidden": true
   },
   "validationProtocol": {
     "type": "nested_season_stratified_group_holdout",
@@ -34,17 +36,11 @@
     "nonFinalDatesBeforeOrAfterAHistoricalAuditDateMayBeUsedForModelFitting": true,
     "livePredictionStillUsesOnlyInformationAvailableAtPredictionTime": true,
     "singleTailPeriodAsSoleCompletionHoldoutForbidden": true,
-    "dateFeaturesRequired": [
-      "calendarYear",
+    "calendarFeatureRole": "auxiliary_only",
+    "calendarFeatures": [
       "calendarMonth",
       "dayOfYearSin",
-      "dayOfYearCos",
-      "weekOfYearSin",
-      "weekOfYearCos",
-      "daysSinceArchiveStart",
-      "seasonQuarter",
-      "venue",
-      "venueXMonth"
+      "dayOfYearCos"
     ]
   },
   "promotionRules": {
