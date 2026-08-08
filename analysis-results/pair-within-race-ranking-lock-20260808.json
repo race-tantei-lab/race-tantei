@@ -1,0 +1,16 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "inputs":"locked marginal-pair v2 feature set: 51 pair features + 12 top2/top3 marginal features + official pair market probability + log JRA official odds",
+  "rankingUnit":"one race = one ranking group",
+  "relevance":{"nonWinningTicket":0,"winningTicketPayoutBins":{"under10x":1,"10to30x":2,"30to100x":3,"100to300x":4,"300xOrMore":5}},
+  "labelGain":[0,1,3,7,15,31],
+  "model":{"type":"LightGBM LambdaRank","learningRate":0.03,"numLeaves":31,"minDataInLeaf":300,"featureFraction":0.80,"rounds":180,"lambdaL2":10.0,"lambdarankTruncationLevel":10,"oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"coldStartDates":30,"sameDateLearning":false},
+  "betTypes":["quinella","wide"],
+  "rankingEvaluation":"actual JRA return rate of top1/top3/top5/top9 ranked tickets in each strict-OOS race",
+  "noResultBasedOddsThreshold":true,
+  "settlement":"actual fixed-archive JRA payouts only",
+  "completionUse":"only if stable OOS ranking improvement appears; final Light constraints remain exactly five races per raceDate x venue, exactly 2000 yen, required win/wide/quinella and 10% max single-ticket share",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
