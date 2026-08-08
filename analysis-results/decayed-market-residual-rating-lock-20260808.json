@@ -1,0 +1,16 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "baseFeatures":"locked 164-feature speed+draw runner matrix",
+  "residualTargets":{"win":"1{finish=1} - normalized JRA win market probability","top2":"1{finish<=2} - JRA quinella-derived horse top2 market marginal","top3":"1{finish<=3} - JRA wide-derived horse top3 market marginal"},
+  "entities":["horse","jockey","trainer","horse x surface","horse x surface x distanceBucket","jockey x venue x surface","trainer x venue x surface","horse x jockey"],
+  "halfLivesDays":[30,120],
+  "featuresPerEntityHalfLife":["decayed mean market residual for win","decayed mean market residual for top2","decayed mean market residual for top3","decayed effective observation count"],
+  "totalAddedFeatures":64,
+  "shrinkage":"feature residual mean = decayed residual sum / (decayed count + 8); zero prior mean",
+  "sameDateHandling":"for every entity and half-life, decay state to current race date, attach features to all current-date runners first, and update states only after every race on that date is frozen",
+  "models":{"win":"same fixed three-model equal-weight 164-feature market-residual LightGBM ensemble with 64 features appended","top2":"same fixed three-model equal-weight top2 market-residual ensemble with 64 features appended","top3":"same fixed three-model equal-weight top3 market-residual ensemble with 64 features appended","oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"noROIBasedRetuning":true},
+  "acceptanceForFurtherTicketTesting":"new runner signals must improve the corresponding 164-feature OOS market delta consistently; return testing occurs only after this predictive check",
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
