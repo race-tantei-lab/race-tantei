@@ -1,0 +1,28 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeReturnEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "baseSignal":"the already locked 164-feature speed+draw market-residual ensemble",
+  "additionalFeatureFamilies":[
+    "horse prior-run recency: days since previous and second-previous observed race date",
+    "prior-run context changes: distance change, same surface, same venue, same class, same track condition, same jockey",
+    "prior-run load/market changes: assigned-weight change, horse-weight change, previous win odds, popularity and market probability",
+    "form trend: previous finish/final-3F/relative-time versus prior-three-race mean",
+    "horse x jockey prior outcome history",
+    "jockey x trainer prior outcome history",
+    "jockey x venue x surface prior outcome history",
+    "trainer x venue x surface prior outcome history",
+    "horse x track-condition prior outcome history",
+    "horse x direction prior outcome history",
+    "jockey x race-class prior outcome history",
+    "trainer x track-condition prior outcome history",
+    "jockey x venue x surface x draw-bucket prior outcome history",
+    "trainer x venue x surface x draw-bucket prior outcome history",
+    "recent-form statistics for jockey, trainer, jockey x surface and trainer x surface using fixed prior-date rolling windows of 5 and 20 active dates"
+  ],
+  "sameDateHandling":"all entity statistics are aggregated by date first; the current date is excluded in full before rolling/cumulative values are attached",
+  "horseProbabilityModel":{"type":"LightGBM binary market-residual ensemble","marketPrior":"normalized official JRA win probability via logit init_score","oosDateBlocks":[[30,90],[90,150],[150,210],[210,244]],"coldStartDates":30,"ensemble":"same equal-weight three fixed residual configurations as the speed+draw lock; no ROI-based retuning"},
+  "returnEvaluation":"only if predictive OOS improvement is confirmed, evaluate with official-odds-only fixed-budget/five-race constraints; no threshold changes from observed returns",
+  "completionGates":{"allCoursesFullHistoryRoiPctAtLeast":200,"allCoursesLargestTicketRemovedRoiPctAtLeast":100,"fiveRacesPerRaceDateVenue":true,"exactBudgets":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"allowedOnlyIfEveryGlobalGatePasses":true,"nameIfAndOnlyIfCompleted":"v16"}
+}
