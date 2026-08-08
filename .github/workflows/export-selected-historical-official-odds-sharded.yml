@@ -24,15 +24,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/historical-odds-sharded' -f description='JRA公式過去オッズを12分割取得中' -f target_url="$TARGET" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/historical-odds-sharded' -f description='JRA公式過去オッズを7分割取得中' -f target_url="$TARGET" >/dev/null
 
   export:
     needs: register
     strategy:
       fail-fast: false
-      max-parallel: 12
+      max-parallel: 7
       matrix:
-        shard: [0,1,2,3,4,5,6,7,8,9,10,11]
+        shard: [0,1,2,3,4,5,6]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -40,7 +40,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-      SHARD_COUNT: 12
+      SHARD_COUNT: 7
       SHARD_INDEX: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@v4
@@ -107,7 +107,7 @@ jobs:
           p=Path('scripts/export-selected-historical-official-odds.py')
           s=p.read_text(encoding='utf-8')
           s=s.replace("            tab[m.group(2)] = m.group(1)","            tab['15' + m.group(2)] = m.group(1)",1)
-          s=s.replace("WORKERS = 20","WORKERS = 8",1)
+          s=s.replace("WORKERS = 20","WORKERS = 12",1)
           p.write_text(s,encoding='utf-8')
           PY
       - name: Export official odds shard
@@ -135,8 +135,8 @@ jobs:
           EXPORT_RESULT: ${{ needs.export.result }}
         run: |
           if [ "$EXPORT_RESULT" = "success" ]; then
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/historical-odds-sharded' -f description='JRA公式過去オッズ12分割取得成功' -f target_url="$TARGET" >/dev/null
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/historical-odds-sharded' -f description='JRA公式過去オッズ7分割取得成功' -f target_url="$TARGET" >/dev/null
           else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/historical-odds-sharded' -f description="JRA公式過去オッズ12分割取得失敗:${EXPORT_RESULT}" -f target_url="$TARGET" >/dev/null
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/historical-odds-sharded' -f description="JRA公式過去オッズ7分割取得失敗:${EXPORT_RESULT}" -f target_url="$TARGET" >/dev/null
             exit 1
           fi
