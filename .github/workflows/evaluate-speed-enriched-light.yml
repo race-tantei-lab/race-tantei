@@ -6,6 +6,11 @@ on:
     workflows: ["Build speed-enriched runner OOS"]
     types: [completed]
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/evaluate-speed-enriched-light-policy.py"
+      - ".github/workflows/evaluate-speed-enriched-light.yml"
 
 permissions:
   contents: read
@@ -18,7 +23,7 @@ concurrency:
 
 jobs:
   evaluate:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -51,15 +56,27 @@ jobs:
         run: python -m pip install --disable-pip-version-check numpy pandas lightgbm scikit-learn
       - name: Verify immutable constraints
         run: python scripts/verify-race-tantei-fixed-constraints.py
-      - name: Optimize race-row lookup without changing model or policy
+      - name: Align official odds to active runners and optimize lookup without changing policy
         run: |
           python - <<'PY'
           from pathlib import Path
           p=Path('scripts/evaluate-speed-enriched-light-policy.py'); s=p.read_text(encoding='utf-8')
+          old='''def norm_prob(values, mass=1.0):\n    inv = np.array([0.0 if v is None or float(v) <= 0 else 1.0 / float(v[0] if isinstance(v, list) else v) for v in values], dtype=float)\n    s = inv.sum()\n    return inv / s * mass if s > 0 else inv'''
+          new='''def norm_prob(values, mass=1.0):\n    clean = []\n    for v in values:\n        if v is None:\n            clean.append(0.0); continue\n        base = v[0] if isinstance(v, list) else v\n        try: base = float(base)\n        except Exception: base = 0.0\n        clean.append(0.0 if base <= 0 else 1.0 / base)\n    inv = np.asarray(clean, dtype=float)\n    s = inv.sum()\n    return inv / s * mass if s > 0 else inv'''
+          if old not in s: raise SystemExit('NORM_PROB_PATCH_TARGET_NOT_FOUND')
+          s=s.replace(old,new,1)
+          old='''    if bt == "win":\n        total = sum(len(rec["horses"]) for rec in odds_records)\n        dim = F + 7\n    else:\n        total = sum(len(rec["umaren"] if bt == "umaren" else rec["wide"]) for rec in odds_records)\n        dim = 2 * F + 8'''
+          new='''    if bt == "win":\n        total = sum(sum(1 for h in rec["horses"] if int(h) in race_rows[rec["raceId"]]) for rec in odds_records)\n        dim = F + 7\n    else:\n        total = sum(math.comb(sum(1 for h in rec["horses"] if int(h) in race_rows[rec["raceId"]]), 2) for rec in odds_records)\n        dim = 2 * F + 8'''
+          if old not in s: raise SystemExit('ACTIVE_TOTAL_PATCH_TARGET_NOT_FOUND')
+          s=s.replace(old,new,1)
+          old='''        rid = rec["raceId"]; horses = [int(x) for x in rec["horses"]]\n        mkt = norm_prob(rec[bt], 3.0 if bt == "wide" else 1.0)\n        pm = race_runner_prob(ri, horses, modelP); pr = race_runner_prob(ri, horses, residP)\n        pt3 = np.array([float(top3P[race_rows[rid][h]]) for h in horses], dtype=float)\n        if bt == "win":\n            combos = [(h,) for h in horses]; oddsvals = rec["win"]\n        else:\n            combos = structs(horses); oddsvals = rec[bt]\n        cold_scores = []'''
+          new='''        rid = rec["raceId"]\n        all_horses = [int(x) for x in rec["horses"]]\n        active = race_rows[rid]\n        horses = [h for h in all_horses if h in active]\n        if bt == "win":\n            all_combos = [(h,) for h in all_horses]\n            keep = [j for j,c in enumerate(all_combos) if c[0] in active]\n            combos = [(h,) for h in horses]\n            oddsvals = [rec["win"][j] for j in keep]\n        else:\n            all_combos = structs(all_horses)\n            keep = [j for j,c in enumerate(all_combos) if c[0] in active and c[1] in active]\n            combos = structs(horses)\n            oddsvals = [rec[bt][j] for j in keep]\n        if len(combos) != len(oddsvals):\n            raise RuntimeError(f"ACTIVE_ODDS_ALIGNMENT:{bt}:{rid}:{len(combos)}:{len(oddsvals)}")\n        mkt = norm_prob(oddsvals, 3.0 if bt == "wide" else 1.0)\n        pm = race_runner_prob(ri, horses, modelP); pr = race_runner_prob(ri, horses, residP)\n        pt3 = np.array([float(top3P[race_rows[rid][h]]) for h in horses], dtype=float)\n        cold_scores = []'''
+          if old not in s: raise SystemExit('ACTIVE_LOOP_PATCH_TARGET_NOT_FOUND')
+          s=s.replace(old,new,1)
           old='''for ri, rid in enumerate(race_ids):\n    g = meta[meta["raceIndex"] == ri]\n    mi = g.index.to_numpy(int)'''
           new='''for ri, rid in enumerate(race_ids):\n    mi = np.fromiter(race_rows[rid].values(), dtype=int)\n    g = meta.iloc[mi]'''
-          if old not in s: raise SystemExit('LIGHT_RACE_LOOKUP_PATCH_TARGET_NOT_FOUND')
-          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          if old in s: s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
           PY
       - name: Evaluate exact locked Light policy
         run: python scripts/evaluate-speed-enriched-light-policy.py
