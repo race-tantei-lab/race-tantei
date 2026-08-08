@@ -1,5 +1,5 @@
-name: JRA doAction form probe
-run-name: JRA doAction form probe · ${{ github.sha }}
+name: JRA historical odds page probe
+run-name: JRA historical odds page probe · ${{ github.sha }}
 
 on:
   push:
@@ -21,47 +21,76 @@ jobs:
       STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Start
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/jra-historical-odds' -f description='JRA doActionのhidden値を監査中' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/jra-historical-odds' -f description='JRA過去オッズをlowercase cnameで検証中' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: python -m pip install --disable-pip-version-check beautifulsoup4
-      - name: Inspect result page forms and doAction
+      - name: Fetch historical odds page exactly like doAction
         run: |
           python - <<'PY'
-          import json, urllib.request, urllib.parse, re
+          import json, urllib.request, urllib.parse, re, http.cookiejar
           from pathlib import Path
           from bs4 import BeautifulSoup
-          url='https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0108202403050220240504%2F2B'
-          req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'ja','Referer':'https://www.jra.go.jp/'})
-          with urllib.request.urlopen(req,timeout=60) as r: raw=r.read(); status=r.status
+
+          result_url='https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0108202403050220240504%2F2B'
+          odds_cname='pw151ou1008202403050220240504Z/4C'
+          cj=http.cookiejar.CookieJar()
+          opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
+          common={'User-Agent':'Mozilla/5.0','Accept-Language':'ja','Referer':'https://www.jra.go.jp/'}
+
+          with opener.open(urllib.request.Request(result_url,headers=common),timeout=60) as r0:
+              result_raw=r0.read()
+
+          data=urllib.parse.urlencode({'cname':odds_cname}).encode('ascii')
+          req=urllib.request.Request(
+              'https://www.jra.go.jp/JRADB/accessO.html', data=data,
+              headers={**common,'Referer':result_url,'Content-Type':'application/x-www-form-urlencoded'},
+              method='POST'
+          )
+          with opener.open(req,timeout=60) as r:
+              raw=r.read(); status=r.status; final=r.geturl(); ctype=r.headers.get('content-type')
+
           html=raw.decode('cp932','replace')
           soup=BeautifulSoup(html,'html.parser')
-          forms=[]
-          for f in soup.find_all('form'):
-              inputs=[]
-              for i in f.find_all(['input','select','textarea']):
-                  inputs.append({'tag':i.name,'type':i.get('type'),'name':i.get('name'),'value':i.get('value'),'id':i.get('id')})
-              forms.append({'id':f.get('id'),'name':f.get('name'),'method':f.get('method'),'action':f.get('action'),'inputs':inputs})
-          js_src=[urllib.parse.urljoin(url,s.get('src')) for s in soup.find_all('script',src=True)]
-          inline=[]
-          for s in soup.find_all('script'):
-              txt=s.get_text('\n')
-              if 'doAction' in txt or 'CNAME' in txt: inline.append(txt[:12000])
-          onclick=[]
+          text=' '.join(soup.stripped_strings)
+          tables=[]
+          for table in soup.find_all('table'):
+              rows=[]
+              for tr in table.find_all('tr')[:180]:
+                  cells=[' '.join(c.stripped_strings) for c in tr.find_all(['th','td'])]
+                  if cells: rows.append(cells)
+              if rows: tables.append(rows)
+
+          calls=[]
           for tag in soup.find_all(onclick=True):
-              if 'doAction' in tag.get('onclick',''): onclick.append(tag.get('onclick'))
-          out={'status':status,'forms':forms,'jsSrc':js_src,'inline':inline,'doActionCalls':onclick[:100]}
+              v=tag.get('onclick','')
+              if 'doAction' in v: calls.append(v)
+          cnames=sorted(set(re.findall(r"pw\d+[A-Za-z0-9_/.-]+",html)))
+          contains={x:(x in text) for x in ['単勝','複勝','枠連','ワイド','馬連','馬単','3連複','3連単']}
+          out={
+              'status':status,'contentType':ctype,'finalUrl':final,'bytes':len(raw),
+              'title':soup.title.get_text(' ',strip=True) if soup.title else '',
+              'contains':contains,'tableCount':len(tables),'tables':tables[:30],
+              'doActionCalls':calls[:100],'cnames':cnames[:200],'cookieCount':len(list(cj)),
+              'textPreview':text[:8000]
+          }
           Path('artifacts').mkdir(exist_ok=True)
           Path('artifacts/jra-historical-odds-link-probe.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          print(json.dumps({'status':status,'formCount':len(forms),'forms':forms,'jsSrc':js_src,'inlineCount':len(inline),'oddsCalls':[x for x in onclick if 'accessO' in x][:10]},ensure_ascii=False))
+          print(json.dumps({'status':status,'finalUrl':final,'bytes':len(raw),'title':out['title'],'contains':contains,'tableCount':len(tables),'cookieCount':out['cookieCount'],'cnames':cnames[:50]},ensure_ascii=False))
+          if final.endswith('error013.html') or not any(contains.values()):
+              raise SystemExit('ODDS_PAGE_UNAVAILABLE')
           PY
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: jra-historical-odds-link-probe
           path: artifacts/jra-historical-odds-link-probe.json
           retention-days: 7
       - name: Success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/jra-historical-odds' -f description='JRA doAction hidden値監査完了' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ画面取得成功' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/jra-historical-odds' -f description='JRA過去オッズ画面取得失敗' -f target_url="$STATUS_TARGET_URL" >/dev/null
