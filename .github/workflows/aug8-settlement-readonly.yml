@@ -1,0 +1,57 @@
+name: Aug 8 settlement readonly
+on:
+  push:
+    branches: [analysis/aug8-settlement-readonly]
+    paths: [.github/workflows/aug8-settlement-readonly.yml]
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Export D1 rows
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          out=Path('artifacts/aug8-settlement'); out.mkdir(parents=True,exist_ok=True)
+          ep=f"https://api.cloudflare.com/client/v4/accounts/{os.environ['CLOUDFLARE_ACCOUNT_ID']}/d1/database/{os.environ['CLOUDFLARE_D1_DATABASE_ID']}/query"
+          def q(sql,params=[]):
+            req=urllib.request.Request(ep,data=json.dumps({'sql':sql,'params':params}).encode(),headers={'Authorization':f"Bearer {os.environ['CLOUDFLARE_API_TOKEN']}",'Content-Type':'application/json'},method='POST')
+            with urllib.request.urlopen(req,timeout=90) as r: p=json.loads(r.read().decode())
+            if not p.get('success'): raise RuntimeError(p.get('errors'))
+            return p.get('result',[{}])[0].get('results',[])
+          names=[x['name'] for x in q("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
+          wanted=[]
+          for t in names:
+            if t.startswith('rt_') and any(k in t.lower() for k in ('race','runner','predict','candidate','bet','result','payout','odds','ticket')):
+              wanted.append(t)
+          summary={}
+          for t in wanted:
+            cols=[c['name'] for c in q(f'PRAGMA table_info({t})')]
+            rc='race_id' if 'race_id' in cols else None
+            dc='race_date' if 'race_date' in cols else None
+            try:
+              if dc: rows=q(f'SELECT * FROM {t} WHERE {dc}=?',['2026-08-08'])
+              elif rc:
+                rows=q(f"SELECT x.* FROM {t} x JOIN rt_races r ON r.race_id=x.{rc} WHERE r.race_date=?",['2026-08-08'])
+              else: continue
+              (out/f'{t}.json').write_text(json.dumps(rows,ensure_ascii=False,indent=2,default=str)+'\n',encoding='utf-8')
+              summary[t]=len(rows)
+            except Exception as e: summary[t]={'error':f'{type(e).__name__}:{e}'}
+          (out/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(summary,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aug8-settlement-readonly
+          path: artifacts/aug8-settlement/
+          retention-days: 1
