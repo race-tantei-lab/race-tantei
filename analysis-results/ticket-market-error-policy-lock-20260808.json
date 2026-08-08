@@ -1,0 +1,27 @@
+{
+  "status":"analysis exploration lock; not a model; no version assigned",
+  "lockedBeforeEvaluation":true,
+  "fixedArchive":{"start":"2024-05-04","end":"2026-08-02","races":7695,"futureDataAllowed":false,"sameDateOutcomeAllowedForDecision":false},
+  "officialOdds":{"source":"JRA official historical odds only","syntheticOdds":false,"estimatedOdds":false,"missingOdds":"remain missing"},
+  "runnerInput":"persisted speed-enriched strict-OOS runner features/probabilities from run 31244347590",
+  "lightBetTypes":["win","wide","quinella"],
+  "ticketFeatures":"active-runner speed-enriched feature vector for win; for pairs per-feature mean and absolute difference; JRA official ticket odds; normalized JRA ticket market probability; strict-OOS normal/residual Plackett-Luce combination probabilities and model/market ratios; race context inherited from runner features",
+  "walkForwardDateBoundaries":[30,90,150,210],
+  "families":[
+    {"id":"rawResidual","target":"hit_indicator - JRA_ticket_market_probability","objective":"huber","sampleWeight":"1"},
+    {"id":"underdogResidual","target":"hit_indicator - JRA_ticket_market_probability","objective":"huber","sampleWeight":"min(8,1/sqrt(max(market_probability,0.002)))"},
+    {"id":"realizedValue","target":"clip(hit_indicator * JRA_official_odds - 1,-1,20)","objective":"huber","sampleWeight":"1"}
+  ],
+  "residualShrinkages":[0.25,0.5,0.75,1.0],
+  "experts":"market-only plus each family x fixed shrinkage; no experts added after evaluation",
+  "correctedProbability":"for residual families clip(marketP + shrinkage*predictedResidual,1e-8,1) then renormalize to probability mass 1 for win/quinella and 3 for wide; realizedValue expert uses ticket utility shrinkage*predictedValue directly combined with market expected value",
+  "ticketUtility":"corrected_probability * official_odds - 1 for residual families; (1-shrinkage)*(marketP*odds-1)+shrinkage*predictedValue for realizedValue family",
+  "topTicketsRetainedPerExpertBetTypeRace":12,
+  "expertChoice":{"unit":"betType","metric":"Bayesian-shrunk realized return of top 10 tickets on strictly prior race dates only","priorEquivalentTickets":50,"priorReturnRate":0.8,"coldExpert":"rawResidual-0.5","allCounterfactualExpertUpdatesOnlyAfterRaceDateEnds":true},
+  "raceSelection":{"exactRacesPerRaceDateVenue":5,"score":"mean across required bet types of mean top3 positive ticket utilities multiplied by prior-date shrunk expert return; if utilities are nonpositive use their raw ordered values","resultModelUsed":false,"sameDateLearning":false},
+  "budget":{"lightYen":2000,"unitYen":100,"requiredBetTypes":["win","wide","quinella"],"minimumPerRequiredBetTypeYen":100,"maximumSingleTicketYen":200,"budgetMustBeFullyUsed":true},
+  "allocation":"mandatory 100 yen on top utility ticket of each required bet type; allocate remaining 100-yen units by ticket utility times prior-date shrunk expert return; maximum 200 yen per ticket; if all utility nonpositive continue in descending utility until exact budget spent",
+  "settlement":"actual fixed-archive JRA payouts only",
+  "completionGates":{"fullHistoryRoiPctAtLeast":200,"largestTicketRemovedRoiPctAtLeast":100,"exactFiveRacesPerRaceDateVenue":true,"exactBudget":true,"requiredBetTypes":true,"officialOddsOnly":true,"noLeakage":true},
+  "promotion":{"notEligibleUntilStandardAndPremiumAlsoPass":true,"nameIfAndOnlyIfAllGatesPass":"v16"}
+}
