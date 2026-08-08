@@ -1,0 +1,54 @@
+name: Recover malformed runner from JRA official page
+run-name: Recover malformed runner · ${{ github.sha }}
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/probe-single-runner-official.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/single-runner-recovery' -f description='JRA公式ページから1頭を再確認中' -f target_url="$TARGET" >/dev/null
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Fetch official win-odds page and row 5
+        run: |
+          python - <<'PY'
+          import json,os,re,urllib.request,urllib.parse,http.cookiejar
+          from bs4 import BeautifulSoup
+          acc=os.environ['CLOUDFLARE_ACCOUNT_ID'];db=os.environ['CLOUDFLARE_D1_DATABASE_ID'];tok=os.environ['CLOUDFLARE_API_TOKEN'];ep=f'https://api.cloudflare.com/client/v4/accounts/{acc}/d1/database/{db}/query'
+          b=json.dumps({'sql':'SELECT result_url resultUrl FROM rt_races WHERE race_id=?','params':['2026-08-01-niigata-10']}).encode();rq=urllib.request.Request(ep,data=b,headers={'Authorization':f'Bearer {tok}','Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(rq,timeout=90) as r:url=json.loads(r.read().decode()).get('result',[{}])[0].get('results',[])[0]['resultUrl']
+          cj=http.cookiejar.CookieJar();op=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj));hdr={'User-Agent':'Mozilla/5.0','Accept-Language':'ja'}
+          with op.open(urllib.request.Request(url,headers=hdr),timeout=60) as r:html=r.read().decode('cp932','replace')
+          prefix='sw' if 'sp.jra.jp' in url else 'pw';host='https://sp.jra.jp' if prefix=='sw' else 'https://www.jra.go.jp';m=re.search(r'('+prefix+r'151ou[0-9A-Za-z_/.-]+)',html)
+          if not m:raise SystemExit('WIN_ODDS_CNAME_MISSING')
+          data=urllib.parse.urlencode({'cname':m.group(1)}).encode('ascii');req=urllib.request.Request(host+'/JRADB/accessO.html',data=data,headers={**hdr,'Referer':url,'Content-Type':'application/x-www-form-urlencoded'},method='POST')
+          with op.open(req,timeout=60) as r:h=r.read().decode('cp932','replace')
+          soup=BeautifulSoup(h,'html.parser');found=[]
+          for tr in soup.find_all('tr'):
+            cells=[' '.join(c.stripped_strings) for c in tr.find_all(['th','td'])]
+            if '5' in cells[:3]: found.append(cells)
+          print(json.dumps({'raceId':'2026-08-01-niigata-10','horseNo':5,'rows':found[:5]},ensure_ascii=False))
+          if not found:raise SystemExit('HORSE_5_ROW_MISSING')
+          PY
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/single-runner-recovery' -f description='JRA公式1頭再確認完了' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/single-runner-recovery' -f description='JRA公式1頭再確認失敗' -f target_url="$TARGET" >/dev/null
