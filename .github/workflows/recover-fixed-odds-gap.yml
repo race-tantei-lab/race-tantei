@@ -1,0 +1,94 @@
+name: Recover fixed archive official odds gap
+run-name: Recover fixed archive official odds gap · ${{ github.sha }}
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/recover-fixed-odds-gap.yml'
+  workflow_dispatch:
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      TARGET: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Publish start
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='analysis/fixed-odds-gap' -f description='ロック済み7,695レースの公式オッズ欠損だけ復元中' -f target_url="$TARGET" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Verify fixed constraints
+        run: python scripts/verify-race-tantei-fixed-constraints.py
+      - name: Download already acquired official odds artifacts
+        run: |
+          mkdir -p recovered/all recovered/selected recovered/mobile
+          gh run download 31239730632 -p 'all-historical-official-odds-shard-*' -D recovered/all
+          gh run download 31237880023 -p 'selected-historical-official-odds-shard-*' -D recovered/selected
+          gh run download 31241615354 -n 'all-mobile-full-official-odds-retry' -D recovered/mobile
+      - name: Build outcome-blind missing race list
+        run: |
+          python - <<'PY'
+          import gzip,json,os,urllib.request
+          from pathlib import Path
+          have=set()
+          for p in Path('recovered').rglob('*.jsonl.gz'):
+            try:
+              with gzip.open(p,'rt',encoding='utf-8') as f:
+                for line in f:
+                  try: have.add(json.loads(line)['raceId'])
+                  except Exception: pass
+            except Exception: pass
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          ep=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
+          body=json.dumps({'sql':"SELECT race_id raceId FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished' ORDER BY race_date,venue,race_no",'params':['2024-05-04','2026-08-03']}).encode()
+          req=urllib.request.Request(ep,data=body,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},method='POST')
+          with urllib.request.urlopen(req,timeout=90) as r: payload=json.loads(r.read().decode())
+          if not payload.get('success'): raise RuntimeError(payload.get('errors'))
+          ids=[x['raceId'] for x in payload.get('result',[{}])[0].get('results',[])]
+          if len(ids)!=7695: raise RuntimeError(f'FIXED_ARCHIVE_COUNT_MISMATCH:{len(ids)}')
+          missing=[rid for rid in ids if rid not in have]
+          Path('analysis-results/fixed-oos-five-races-per-venue-day.json').write_text(json.dumps({'generatedFrom':'locked fixed archive official-odds recovery; no outcome/payout filtering','races':missing,'outcomesUsedForSelection':False,'payoutsUsedForSelection':False},ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8')
+          Path('artifacts').mkdir(exist_ok=True)
+          Path('artifacts/fixed-odds-gap-input-meta.json').write_text(json.dumps({'fixedArchiveRaces':len(ids),'alreadyRecoveredOfficialOddsRaces':len(have),'missingOfficialOddsRaces':len(missing),'outcomesUsedToChooseMissing':False,'payoutsUsedToChooseMissing':False},ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps({'fixed':len(ids),'have':len(have),'missing':len(missing)}))
+          if len(missing)==0: raise RuntimeError('NO_GAP_TO_RECOVER')
+          PY
+      - name: Apply audited odds parser fix and bounded workers
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/export-selected-historical-official-odds.py')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("            tab[m.group(2)] = m.group(1)","            tab['15' + m.group(2)] = m.group(1)",1)
+          s=s.replace('WORKERS = 20','WORKERS = 12',1)
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Recover missing official odds only
+        run: python scripts/export-selected-historical-official-odds.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fixed-odds-gap-recovery
+          path: |
+            artifacts/selected-historical-official-odds.jsonl.gz
+            artifacts/selected-historical-official-odds-meta.json
+            artifacts/fixed-odds-gap-input-meta.json
+          compression-level: 0
+          retention-days: 14
+      - name: Publish success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='analysis/fixed-odds-gap' -f description='ロック済み公式オッズ欠損復元完了' -f target_url="$TARGET" >/dev/null
+      - name: Publish failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='analysis/fixed-odds-gap' -f description='ロック済み公式オッズ欠損復元失敗' -f target_url="$TARGET" >/dev/null
