@@ -51,6 +51,16 @@ jobs:
         run: python -m pip install --disable-pip-version-check numpy pandas lightgbm scikit-learn
       - name: Verify immutable constraints
         run: python scripts/verify-race-tantei-fixed-constraints.py
+      - name: Optimize race-row lookup without changing model or policy
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/evaluate-speed-enriched-light-policy.py'); s=p.read_text(encoding='utf-8')
+          old='''for ri, rid in enumerate(race_ids):\n    g = meta[meta["raceIndex"] == ri]\n    mi = g.index.to_numpy(int)'''
+          new='''for ri, rid in enumerate(race_ids):\n    mi = np.fromiter(race_rows[rid].values(), dtype=int)\n    g = meta.iloc[mi]'''
+          if old not in s: raise SystemExit('LIGHT_RACE_LOOKUP_PATCH_TARGET_NOT_FOUND')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
       - name: Evaluate exact locked Light policy
         run: python scripts/evaluate-speed-enriched-light-policy.py
       - uses: actions/upload-artifact@v4
