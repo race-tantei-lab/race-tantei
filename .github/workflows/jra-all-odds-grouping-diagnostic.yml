@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: {node-version: 22, cache: npm}
       - run: npm ci
-      - name: Print odds_list beginnings for all types
+      - name: Print odds_list beginnings for all types with pacing
         shell: bash
         run: |
           set -euo pipefail
@@ -33,24 +33,25 @@ jobs:
           w(x);print(next(r['entryUrl'] for r in rows if r.get('entryUrl')))
           PY
           entry="$(cat /tmp/entry)"; ua='Mozilla/5.0 Chrome/136 Safari/537.36'
-          curl -sSfL -A "$ua" -c /tmp/cj -b /tmp/cj "$entry" -o /tmp/e
+          curl --retry 6 --retry-delay 2 --retry-all-errors -sSfL -A "$ua" -c /tmp/cj -b /tmp/cj "$entry" -o /tmp/e
           python - <<'PY' >/tmp/base
           import re,html
           s=open('/tmp/e','rb').read().decode('shift_jis',errors='ignore');xs=[html.unescape(x) for x in re.findall(r"doAction\(\s*['\"]\/JRADB\/accessO\.html['\"]\s*,\s*['\"]([^'\"]+)",s,re.I)];print(next(x for x in xs if x.startswith('pw151') and re.search(r'20\d{6}',x)))
           PY
-          curl -sSfL -A "$ua" -H 'Content-Type: application/x-www-form-urlencoded' -c /tmp/cj -b /tmp/cj --data-urlencode "cname=$(cat /tmp/base)" 'https://www.jra.go.jp/JRADB/accessO.html' -o /tmp/basepage
+          curl --retry 6 --retry-delay 2 --retry-all-errors -sSfL -A "$ua" -H 'Content-Type: application/x-www-form-urlencoded' -c /tmp/cj -b /tmp/cj --data-urlencode "cname=$(cat /tmp/base)" 'https://www.jra.go.jp/JRADB/accessO.html' -o /tmp/basepage
           python - <<'PY' >/tmp/actions
           import re,html
           s=open('/tmp/basepage','rb').read().decode('shift_jis',errors='ignore');xs=[html.unescape(x) for x in re.findall(r"doAction\(\s*['\"]\/JRADB\/accessO\.html['\"]\s*,\s*['\"]([^'\"]+)",s,re.I)]
-          for p,l in [('151','単勝'),('154','馬連'),('155','ワイド'),('156','馬単'),('157','3連複'),('158','3連単')]:
+          for p,l in [('154','馬連'),('155','ワイド'),('156','馬単'),('157','3連複'),('158','3連単')]:
             q=next(x for x in xs if x.startswith('pw'+p) and re.search(r'20\d{6}',x));print(l+'\t'+q)
           PY
           while IFS=$'\t' read -r label cname; do
-            curl -sSfL -A "$ua" -H 'Content-Type: application/x-www-form-urlencoded' -c /tmp/cj -b /tmp/cj --data-urlencode "cname=${cname}" 'https://www.jra.go.jp/JRADB/accessO.html' -o /tmp/t
+            sleep 2
+            curl --retry 6 --retry-delay 3 --retry-all-errors -sSfL -A "$ua" -H 'Content-Type: application/x-www-form-urlencoded' -c /tmp/cj -b /tmp/cj --data-urlencode "cname=${cname}" 'https://www.jra.go.jp/JRADB/accessO.html' -o /tmp/t
             LABEL="$label" python - <<'PY'
           import os,re
           s=open('/tmp/t','rb').read().decode('shift_jis',errors='ignore');m=re.search(r'<div id="odds_list"[\s\S]*',s,re.I)
-          x=(m.group(0) if m else '')[:5000];x=re.sub(r'[\r\n\t]+',' ',x);x=re.sub(r'\s+',' ',x)
-          print('GROUP',os.environ['LABEL'],x[:4500])
+          x=(m.group(0) if m else '')[:8000];x=re.sub(r'[\r\n\t]+',' ',x);x=re.sub(r'\s+',' ',x)
+          print('GROUP',os.environ['LABEL'],x[:7000])
           PY
           done </tmp/actions
