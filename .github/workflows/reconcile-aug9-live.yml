@@ -26,12 +26,15 @@ jobs:
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
+      STATUS_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
       JRA_ODDS_REQUEST_PAUSE_SECONDS: '0.50'
       JRA_ODDS_D1_BATCH_ROWS: '20'
     steps:
+      - name: Mark reconciliation pending
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/aug9-reconcile' -f description='正しい番組スナップショットで買い目再検算中' -f target_url="$STATUS_URL" >/dev/null
       - uses: actions/checkout@v4
         with: {fetch-depth: 0}
       - uses: actions/setup-python@v5
@@ -87,3 +90,9 @@ jobs:
             git pull --rebase origin main
             git push origin HEAD:main
           fi
+      - name: Mark reconciliation success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/aug9-reconcile' -f description='正しい番組スナップショットとの再検算完了' -f target_url="$STATUS_URL" >/dev/null
+      - name: Mark reconciliation failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/aug9-reconcile' -f description='買い目再検算に失敗' -f target_url="$STATUS_URL" >/dev/null
