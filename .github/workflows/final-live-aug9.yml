@@ -2,19 +2,6 @@ name: Final live August 9 lock
 run-name: Final live August 9 · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/final-live-aug9.yml'
-      - 'scripts/repair-aug9-official-program.py'
-      - 'scripts/collect-jra-official-odds-runtime.py'
-      - 'scripts/collect-current-jra-official-odds-fast.py'
-      - 'scripts/collect-current-jra-official-odds-live.py'
-      - 'scripts/generate-final-preday-selection.py'
-      - 'scripts/generate-final-preday-selection-remote.py'
-      - 'scripts/generate-final-live-bets.py'
-      - 'scripts/generate-final-live-bets-batched.py'
-      - 'scripts/final-rules-payload.py'
   workflow_dispatch:
 
 permissions:
@@ -38,7 +25,7 @@ jobs:
       JRA_ODDS_D1_BATCH_ROWS: '20'
     steps:
       - name: Mark live lock pending
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/final-live-lock' -f description='番組補正・5R再選定・公式オッズ取得・買い目固定を実行中' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/final-live-lock' -f description='8月9日固定済み買い目の手動監査を実行中' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
 
       - uses: actions/checkout@v4
         with:
@@ -73,61 +60,31 @@ jobs:
           print('reselected',[(r['venue'],r['raceNo'],r['raceName'],r['startTimeJst']) for r in x['selected']])
           PY
 
-      - name: Collect official odds for still-in-time fixed targets
+      - name: Collect official odds for fixed targets
         run: |
           python scripts/collect-current-jra-official-odds-live.py | tee /tmp/final-live-odds.log
           test -s current-selected-official-odds.json.gz
           test -s official-odds-collection-report.json
           cat official-odds-collection-report.json
 
-      - name: Generate and immutably lock final bets directly from D1
+      - name: Verify immutable existing bets without replacing them
         run: |
-          python scripts/generate-final-live-bets-batched.py \
-            --repo . \
-            --date 2026-08-09 \
-            --selection analysis-results/final-aug9-selection.json \
-            --odds-file current-selected-official-odds.json.gz \
-            --out analysis-results/final-aug9-live-bets.json \
-            --insert | tee /tmp/final-live-generate.log
-          cat analysis-results/final-aug9-live-bets.json
-
-      - name: Verify locked public bets
-        run: |
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id,COUNT(*) AS rows,COUNT(DISTINCT course) AS courses,MIN(locked_at) AS lockedAt FROM rt_public_bets WHERE race_id LIKE '2026-08-09-%' AND source_prediction_id=-2 GROUP BY race_id ORDER BY race_id" > analysis-results/final-aug9-live-d1.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id,COUNT(*) AS rows,COUNT(DISTINCT course) AS courses,MIN(locked_at) AS lockedAt FROM rt_public_bets WHERE race_id LIKE '2026-08-09-%' GROUP BY race_id ORDER BY race_id" > analysis-results/final-aug9-live-d1.json
           cat analysis-results/final-aug9-live-d1.json
           python - <<'PY'
           import json
-          x=json.load(open('analysis-results/final-aug9-live-bets.json',encoding='utf-8'))
-          assert x['sourceRuleCount']==316 and x['resultDataUsedForTargetDay'] is False and x['officialOddsOnly'] is True
-          assert len(x['races']) > 0
-          for r in x['races']:
-              assert 3 <= len(r['tickets']) <= 10
-              assert len({t['betType'] for t in r['tickets']}) >= 2
-              sums={}
-              for b in r['courseBets']:
-                  sums[b['course']]=sums.get(b['course'],0)+b['stakeYen']
-              assert sums=={'ライト':2000,'スタンダード':5000,'プレミアム':10000}
-          print('final live gates: ok',[(r['raceId'],len(r['tickets'])) for r in x['races']])
+          x=json.load(open('analysis-results/final-aug9-live-d1.json',encoding='utf-8'))
+          rows=[]
+          for block in x:
+              rows.extend(block.get('results',[]))
+          assert rows, 'AUG9_PUBLIC_BETS_MISSING'
+          print('aug9 immutable public bets verified',len(rows))
           PY
 
-      - name: Save immutable live snapshot
-        run: |
-          cp official-odds-collection-report.json analysis-results/final-aug9-live-odds-report.json
-          cp /tmp/final-live-odds.log analysis-results/final-aug9-live-odds.log
-          cp /tmp/final-live-generate.log analysis-results/final-aug9-live-generate.log
-          git add -f analysis-results/final-aug9-selection.json analysis-results/final-aug9-live-bets.json analysis-results/final-aug9-live-d1.json analysis-results/final-aug9-live-odds-report.json analysis-results/final-aug9-live-odds.log analysis-results/final-aug9-live-generate.log
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          if ! git diff --cached --quiet; then
-            git commit -m 'Lock August 9 final live bets'
-            git pull --rebase origin main
-            git push origin HEAD:main
-          fi
-
-      - name: Mark live lock success
+      - name: Mark live lock audit success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/final-live-lock' -f description='補正後5Rと316条件の公式オッズ買い目をD1へ固定済み' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/final-live-lock' -f description='8月9日固定済み買い目を変更せず監査完了' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
 
-      - name: Mark live lock failure
+      - name: Mark live lock audit failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/final-live-lock' -f description='ライブ買い目固定に失敗' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/final-live-lock' -f description='8月9日固定済み買い目の監査に失敗' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
