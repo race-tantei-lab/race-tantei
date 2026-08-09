@@ -37,7 +37,7 @@ def fetch_url(url: str, *, cname: str | None = None, referer: str | None = None)
         data = urllib.parse.urlencode({"cname": cname}).encode("ascii")
         headers["Content-Type"] = "application/x-www-form-urlencoded"
     last_error: Exception | None = None
-    for attempt in range(3):
+    for attempt in range(5):
         request = urllib.request.Request(url, data=data, headers=headers, method="POST" if data is not None else "GET")
         try:
             with OPENER.open(request, timeout=35) as response:
@@ -56,8 +56,8 @@ def fetch_url(url: str, *, cname: str | None = None, referer: str | None = None)
             last_error = error
             if isinstance(error, RuntimeError) and str(error) != "JRA_ODDS_PAGE_BLOCKED":
                 raise
-        if attempt < 2:
-            time.sleep(1.5 * (2**attempt))
+        if attempt < 4:
+            time.sleep(2.0 * (attempt + 1))
     raise RuntimeError(f"JRA_ODDS_FETCH_FAILED:{type(last_error).__name__}:{last_error}")
 
 
@@ -79,6 +79,116 @@ def parse_page_identity(page_html: str, cname: str) -> tuple[str, str, int] | No
         return None
     race_date = f"{int(date_match.group(1)):04d}-{int(date_match.group(2)):02d}-{int(date_match.group(3)):02d}"
     return race_date, venue_match.group(1), race_no
+
+
+def _class_table_matches(page_html: str, token: str):
+    pattern = re.compile(
+        rf"<table\b[^>]*class=(['\"])[^'\"]*(?:^|\s){re.escape(token)}(?:\s|$)[^'\"]*\1[^>]*>([\s\S]*?)</table>",
+        re.I,
+    )
+    matches = list(pattern.finditer(page_html))
+    if matches:
+        return matches
+    # JRA may include multiple classes without whitespace boundaries exactly as expected.
+    return list(re.finditer(
+        rf"<table\b[^>]*class=(['\"])[^'\"]*{re.escape(token)}[^'\"]*\1[^>]*>([\s\S]*?)</table>",
+        page_html,
+        re.I,
+    ))
+
+
+def _caption_numbers(table_body: str) -> list[int]:
+    match = re.search(r"<caption\b[^>]*>([\s\S]*?)</caption>", table_body, re.I)
+    if not match:
+        return []
+    return [int(value) for value in re.findall(r"(?<!\d)(\d{1,2})(?!\d)", base.strip_tags(match.group(1))) if 1 <= int(value) <= 18]
+
+
+def _row_horse_and_odds(row_html: str) -> tuple[int, tuple[float, float]] | None:
+    th = re.search(r"<th\b[^>]*>([\s\S]*?)</th>", row_html, re.I)
+    if not th:
+        return None
+    nums = [int(value) for value in re.findall(r"(?<!\d)(\d{1,2})(?!\d)", base.strip_tags(th.group(1))) if 1 <= int(value) <= 18]
+    if not nums:
+        return None
+    horse = nums[-1]
+    td_values = [base.strip_tags(m.group(1)) for m in re.finditer(r"<td\b[^>]*>([\s\S]*?)</td>", row_html, re.I)]
+    for text in td_values:
+        value = base.odds_value(text)
+        if value is not None:
+            return horse, value
+    return None
+
+
+def _parse_grouped_table(page_html: str, bet_type: str, class_token: str, caption_arity: int) -> list[tuple[str, float, float]]:
+    parsed: dict[str, tuple[float, float]] = {}
+    for table in _class_table_matches(page_html, class_token):
+        body = table.group(2)
+        prefix = _caption_numbers(body)
+        if len(prefix) < caption_arity:
+            continue
+        prefix = prefix[-caption_arity:]
+        for row in re.finditer(r"<tr\b[^>]*>([\s\S]*?)</tr>", body, re.I):
+            item = _row_horse_and_odds(row.group(1))
+            if item is None:
+                continue
+            horse, value = item
+            horses = [*prefix, horse]
+            if len(set(horses)) != len(horses):
+                continue
+            combination = base.normalize_combination(bet_type, horses)
+            previous = parsed.get(combination)
+            if previous is None or value[0] < previous[0]:
+                parsed[combination] = value
+    return [(key, low, high) for key, (low, high) in sorted(parsed.items())]
+
+
+def _parse_trifecta(page_html: str) -> list[tuple[str, float, float]]:
+    parsed: dict[str, tuple[float, float]] = {}
+    for table in _class_table_matches(page_html, "tan3"):
+        body = table.group(2)
+        before = page_html[max(0, table.start() - 2600):table.start()]
+        li_start = before.rfind("<li")
+        if li_start >= 0:
+            before = before[li_start:]
+        # JRA tan3 groups explicitly show 1着 and 2着 in p_line divs before the table.
+        first_match = re.search(r"1着[\s\S]{0,600}?<div\b[^>]*class=(['\"])[^'\"]*\bnum\b[^'\"]*\1[^>]*>\s*(\d{1,2})\s*</div>", before, re.I)
+        second_match = re.search(r"2着[\s\S]{0,600}?<div\b[^>]*class=(['\"])[^'\"]*\bnum\b[^'\"]*\1[^>]*>\s*(\d{1,2})\s*</div>", before, re.I)
+        if first_match and second_match:
+            first, second = int(first_match.group(2)), int(second_match.group(2))
+        else:
+            nums = [int(v) for v in re.findall(r"<div\b[^>]*class=(?:['\"])[^'\"]*\bnum\b[^'\"]*(?:['\"])[^>]*>\s*(\d{1,2})\s*</div>", before, re.I)]
+            if len(nums) < 2:
+                continue
+            first, second = nums[-2], nums[-1]
+        if not (1 <= first <= 18 and 1 <= second <= 18) or first == second:
+            continue
+        for row in re.finditer(r"<tr\b[^>]*>([\s\S]*?)</tr>", body, re.I):
+            item = _row_horse_and_odds(row.group(1))
+            if item is None:
+                continue
+            third, value = item
+            if third in {first, second}:
+                continue
+            combination = f"{first}-{second}-{third}"
+            parsed[combination] = value
+    return [(key, low, high) for key, (low, high) in sorted(parsed.items())]
+
+
+def parse_odds_rows(page_html: str, bet_type: str) -> list[tuple[str, float, float]]:
+    if bet_type == "単勝":
+        return base.parse_odds_rows(page_html, bet_type)
+    if bet_type == "馬連":
+        return _parse_grouped_table(page_html, bet_type, "umaren", 1)
+    if bet_type == "ワイド":
+        return _parse_grouped_table(page_html, bet_type, "wide", 1)
+    if bet_type == "馬単":
+        return _parse_grouped_table(page_html, bet_type, "umatan", 1)
+    if bet_type == "3連複":
+        return _parse_grouped_table(page_html, bet_type, "fuku3", 2)
+    if bet_type == "3連単":
+        return _parse_trifecta(page_html)
+    return []
 
 
 def insert_rows(rows: list[dict]) -> None:
@@ -159,7 +269,7 @@ def main() -> None:
             bet_type = base.detect_bet_type(page, hints.get(cname, ""))
             if identity in target_by_identity and bet_type:
                 race = target_by_identity[identity]
-                for combination, low, high in base.parse_odds_rows(page, bet_type):
+                for combination, low, high in parse_odds_rows(page, bet_type):
                     records[(race["raceId"], bet_type, combination)] = {
                         "raceId": race["raceId"], "betType": bet_type, "combination": combination,
                         "oddsMin": low, "oddsMax": high, "capturedAtUtc": captured_iso,
@@ -167,7 +277,7 @@ def main() -> None:
                         "secondsToStart": base.seconds_to_start(race.get("startTimeUtc"), captured),
                         "sourceCname": cname, "sourceHash": source_hash,
                     }
-            time.sleep(base.REQUEST_PAUSE_SECONDS)
+            time.sleep(max(base.REQUEST_PAUSE_SECONDS, 0.35))
         except Exception as error:
             errors.append(f"ODDS:{cname}:{type(error).__name__}:{error}")
     rows = list(records.values()); insert_rows(rows)
