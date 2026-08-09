@@ -4,6 +4,7 @@ import {
   ensureSchema,
   finishSyncRun,
   getDueRaceSources,
+  getRace,
   getState,
   resetRaceSourcesForDiscoveryRevision,
   saveEntryBundle,
@@ -23,7 +24,7 @@ import {
 } from "./v1/jra.js";
 import { isJstEntryWindow, isJstRaceWindow, nowIso, positiveInt } from "./v1/utils.js";
 
-const DISCOVERY_REVISION = "2026-08-09-public-data-only-v1";
+const DISCOVERY_REVISION = "2026-08-09-public-data-only-v2";
 const SYNC_LOCK_KEY = "public_data_sync_lock_until";
 let schemaReady: Promise<void> | null = null;
 let inMemorySync: Promise<unknown> | null = null;
@@ -63,11 +64,83 @@ function nextEntryFetch(race: RaceRecord, now: Date): string {
   if (deltaMinutes > 180) return addMinutes(now, 60);
   if (deltaMinutes > 45) return addMinutes(now, 15);
   if (deltaMinutes > 0) return addMinutes(now, 5);
-  return addMinutes(now, 8);
+  return addMinutes(now, 5);
 }
 
 function hasResultUrl(url: string): boolean {
   return /\/JRADB\/accessS\.html/i.test(url) && /(?:pw|sw)01sde/i.test(decodeURIComponent(url));
+}
+
+function resultUrlCandidates(race: RaceRecord, sourceResultUrl: string, entryUrl: string): string[] {
+  const candidates = [race.resultUrl, sourceResultUrl];
+  try { candidates.push(toResultUrl(entryUrl)); } catch { /* invalid source URL is handled by the normal retry path */ }
+  return [...new Set(candidates.filter((value): value is string => Boolean(value) && hasResultUrl(value)))];
+}
+
+function canonicalCombination(betType: string, combination: string): string {
+  const numbers = (combination.match(/\d{1,2}/g) ?? []).map(Number);
+  if (["ワイド", "馬連", "3連複"].includes(betType)) numbers.sort((a, b) => a - b);
+  return numbers.join("-");
+}
+
+async function settlePublicBetsFromResult(env: Env, result: Awaited<ReturnType<typeof parseResultPage>>): Promise<void> {
+  try {
+    const pending = await env.DB.prepare(`
+      SELECT id,bet_type AS betType,combination,stake_yen AS stakeYen
+      FROM rt_public_bets
+      WHERE race_id=? AND settlement_status='pending'
+      ORDER BY id
+    `).bind(result.race.raceId).all<{ id: number; betType: string; combination: string; stakeYen: number }>();
+    if (!pending.results.length) return;
+
+    const payoutTypes = new Set(result.payouts.map((payout) => payout.betType));
+    const payoutMap = new Map(result.payouts.map((payout) => [
+      `${payout.betType}:${canonicalCombination(payout.betType, payout.combination)}`,
+      Number(payout.payoutYen)
+    ]));
+    const refunds = new Set(result.refundHorseNos.map(Number));
+    const updates = [];
+
+    for (const bet of pending.results) {
+      const horses = (bet.combination.match(/\d{1,2}/g) ?? []).map(Number);
+      let returnYen: number | null = null;
+      if (horses.some((horseNo) => refunds.has(horseNo))) {
+        returnYen = Number(bet.stakeYen);
+      } else if (payoutTypes.has(bet.betType)) {
+        const payout = payoutMap.get(`${bet.betType}:${canonicalCombination(bet.betType, bet.combination)}`) ?? 0;
+        returnYen = Math.round((Number(bet.stakeYen) / 100) * payout);
+      }
+      if (returnYen !== null) {
+        updates.push(env.DB.prepare(`
+          UPDATE rt_public_bets
+          SET settlement_status='settled',return_yen=?
+          WHERE id=? AND settlement_status='pending'
+        `).bind(returnYen, bet.id));
+      }
+    }
+    if (updates.length) await env.DB.batch(updates);
+  } catch {
+    // Public history may not be initialized yet. The normal settlement layer will retry later.
+  }
+}
+
+async function loadRaceForSync(
+  env: Env,
+  source: Awaited<ReturnType<typeof getDueRaceSources>>[number]
+): Promise<{ race: RaceRecord; entryFetched: boolean; entryError: string | null }> {
+  try {
+    const entryPage = await fetchJraPage(source.entryUrl);
+    if (!pageLooksLikeEntry(entryPage.html)) throw new Error("ENTRY_PAGE_SIGNATURE_MISSING");
+    const entry = parseEntryPage(entryPage.html, entryPage.url);
+    await saveEntryBundle(env.DB, entry);
+    return { race: entry.race, entryFetched: true, entryError: null };
+  } catch (error) {
+    const entryError = error instanceof Error ? error.message : String(error);
+    if (!source.raceId) throw error;
+    const stored = await getRace(env.DB, source.raceId);
+    if (!stored) throw error;
+    return { race: stored, entryFetched: false, entryError };
+  }
 }
 
 async function processSource(
@@ -76,54 +149,60 @@ async function processSource(
   now: Date
 ): Promise<boolean> {
   try {
-    const entryPage = await fetchJraPage(source.entryUrl);
-    if (!pageLooksLikeEntry(entryPage.html)) throw new Error("ENTRY_PAGE_SIGNATURE_MISSING");
-    const entry = parseEntryPage(entryPage.html, entryPage.url);
-    await saveEntryBundle(env.DB, entry);
-
-    const startMs = entry.race.startTimeUtc ? new Date(entry.race.startTimeUtc).getTime() : Number.POSITIVE_INFINITY;
+    const loaded = await loadRaceForSync(env, source);
+    const race = loaded.race;
+    const startMs = race.startTimeUtc ? new Date(race.startTimeUtc).getTime() : Number.POSITIVE_INFINITY;
     const resultDue = now.getTime() >= startMs + 4 * 60_000;
+
     if (!resultDue) {
       await updateRaceSource(env.DB, source.entryUrl, {
-        raceId: entry.race.raceId,
+        raceId: race.raceId,
         status: "active",
-        nextFetchAt: nextEntryFetch(entry.race, now),
-        entryFetched: true,
-        error: null
+        nextFetchAt: loaded.entryError ? addMinutes(now, 5) : nextEntryFetch(race, now),
+        entryFetched: loaded.entryFetched,
+        error: loaded.entryError
       });
-      return true;
+      return !loaded.entryError;
     }
 
-    try {
-      if (!hasResultUrl(entry.race.resultUrl)) throw new Error("RESULT_URL_NOT_READY");
-      const resultPage = await fetchJraPage(entry.race.resultUrl);
-      if (!pageLooksLikeResult(resultPage.html)) throw new Error("RESULT_NOT_READY");
-      const result = parseResultPage(resultPage.html, resultPage.url);
-      if (result.race.raceId !== entry.race.raceId) throw new Error("RACE_ID_MISMATCH");
-      await saveResultBundle(env.DB, result);
-      await updateRaceSource(env.DB, source.entryUrl, {
-        raceId: entry.race.raceId,
-        status: "complete",
-        nextFetchAt: addMinutes(now, 7 * 24 * 60),
-        entryFetched: true,
-        resultFetched: true,
-        error: null
-      });
-      return true;
-    } catch (resultError) {
-      const message = resultError instanceof Error ? resultError.message : String(resultError);
-      await updateRaceSource(env.DB, source.entryUrl, {
-        raceId: entry.race.raceId,
-        status: "awaiting_result",
-        nextFetchAt: addMinutes(now, message === "RESULT_URL_NOT_READY" ? 5 : 10),
-        entryFetched: true,
-        error: message
-      });
-      return message === "RESULT_NOT_READY" || message === "RESULT_URL_NOT_READY";
+    const candidates = resultUrlCandidates(race, source.resultUrl, source.entryUrl);
+    const errors: string[] = [];
+    for (const candidate of candidates) {
+      try {
+        const resultPage = await fetchJraPage(candidate);
+        if (!pageLooksLikeResult(resultPage.html)) throw new Error("RESULT_PAGE_SIGNATURE_MISSING");
+        const result = parseResultPage(resultPage.html, resultPage.url);
+        if (result.race.raceId !== race.raceId) throw new Error(`RACE_ID_MISMATCH:${result.race.raceId}`);
+        await saveResultBundle(env.DB, result);
+        await settlePublicBetsFromResult(env, result);
+        await updateRaceSource(env.DB, source.entryUrl, {
+          raceId: race.raceId,
+          status: "complete",
+          nextFetchAt: addMinutes(now, 7 * 24 * 60),
+          entryFetched: loaded.entryFetched,
+          resultFetched: true,
+          error: null
+        });
+        return true;
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
+      }
     }
+
+    const resultError = candidates.length
+      ? `RESULT_FETCH_FAILED:${[...new Set(errors)].join("|")}`
+      : "RESULT_URL_NOT_READY";
+    await updateRaceSource(env.DB, source.entryUrl, {
+      raceId: race.raceId,
+      status: "awaiting_result",
+      nextFetchAt: addMinutes(now, 3),
+      entryFetched: loaded.entryFetched,
+      error: loaded.entryError ? `${loaded.entryError}|${resultError}` : resultError
+    });
+    return false;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const delay = Math.min(240, 15 * Math.pow(2, Math.min(4, source.failureCount)));
+    const delay = Math.min(120, 10 * Math.pow(2, Math.min(3, source.failureCount)));
     await updateRaceSource(env.DB, source.entryUrl, {
       raceId: source.raceId,
       status: "discovered",
