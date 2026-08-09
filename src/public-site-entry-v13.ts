@@ -1,4 +1,5 @@
 import publicSite from "./public-site-entry-v12.js";
+import { runPublicDataSync } from "./public-data-sync.js";
 import { jstDateKey, syncOfficialCalendarDay } from "./v1/jra-calendar.js";
 import { isInvalidRaceName } from "./v1/race-display.js";
 import type { Env } from "./v1/types.js";
@@ -70,6 +71,53 @@ function requestRaceDate(url: URL): string | null {
   return null;
 }
 
+function hasStarted(startTimeUtc: unknown, nowMs = Date.now()): boolean {
+  const startMs = Date.parse(String(startTimeUtc ?? ""));
+  return Number.isFinite(startMs) && startMs <= nowMs;
+}
+
+async function normalizePostStartDay(response: Response): Promise<Response> {
+  if (!response.ok) return response;
+  try {
+    const data = await response.clone().json() as { races?: Array<Record<string, any>>; [key: string]: any };
+    if (!Array.isArray(data.races)) return response;
+    const nowMs = Date.now();
+    data.races = data.races.map((race) => {
+      const publicState = { ...(race.publicState ?? {}) };
+      if (publicState.code === "buy" && hasStarted(race.startTimeUtc, nowMs)) {
+        publicState.code = "pending";
+        publicState.label = "結果反映待ち";
+        publicState.deadline = null;
+      }
+      return { ...race, publicState };
+    });
+    const headers = new Headers(response.headers);
+    headers.delete("content-length");
+    headers.set("content-type", "application/json; charset=utf-8");
+    return new Response(JSON.stringify(data), { status: response.status, headers });
+  } catch {
+    return response;
+  }
+}
+
+async function normalizePostStartDetail(request: Request, response: Response, db: D1Database): Promise<Response> {
+  if (!response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
+  const path = new URL(request.url).pathname;
+  if (!path.startsWith("/races/")) return response;
+  try {
+    const raceId = decodeURIComponent(path.slice("/races/".length));
+    const race = await db.prepare(`SELECT start_time_utc AS startTimeUtc FROM rt_races WHERE race_id=? LIMIT 1`).bind(raceId).first<{ startTimeUtc: string | null }>();
+    if (!race || !hasStarted(race.startTimeUtc)) return response;
+    let html = await response.text();
+    html = html.replace(/<span class="status buy">(?:買い目あり|固定済み)<\/span>/g, '<span class="status pending">結果反映待ち</span>');
+    const headers = new Headers(response.headers);
+    headers.delete("content-length");
+    return new Response(html, { status: response.status, headers });
+  } catch {
+    return response;
+  }
+}
+
 async function needsRaceNameBackfill(db: D1Database, raceDate: string): Promise<boolean> {
   const rows = await db.prepare(`SELECT race_name AS raceName FROM rt_races WHERE race_date=?`).bind(raceDate).all<{ raceName: string | null }>();
   return rows.results.some((row) => isInvalidRaceName(row.raceName));
@@ -117,11 +165,16 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
     const url = new URL(request.url);
+    const path = url.pathname;
     const raceDate = requestRaceDate(url);
     if (raceDate) await backfillRaceNamesForDate(env.DB, raceDate);
+    if (raceDate === jstDateKey() && (path === "/api/public/day" || path.startsWith("/races/"))) {
+      ctx.waitUntil(runPublicDataSync(env, "manual"));
+    }
 
-    const response = await publicSite.fetch(request, env, ctx);
-    const path = url.pathname;
+    let response = await publicSite.fetch(request, env, ctx);
+    if (path === "/api/public/day") response = await normalizePostStartDay(response);
+    if (path.startsWith("/races/")) response = await normalizePostStartDetail(request, response, env.DB);
     if (path !== "/" || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
     try {
       const headers = new Headers(response.headers);
