@@ -21,9 +21,10 @@ import {
   parseResultPage,
   toResultUrl
 } from "./v1/jra.js";
-import { isJstEntryWindow, isJstRaceWindow, nowIso, positiveInt } from "./v1/utils.js";
+import { isJstEntryWindow, isJstRaceWindow, nowIso, positiveInt, stripHtml } from "./v1/utils.js";
+import { syncOfficialCalendar } from "./public-calendar-sync.js";
 
-const DISCOVERY_REVISION = "2026-08-09-public-data-only-v1";
+const DISCOVERY_REVISION = "2026-08-09-public-data-only-v2";
 const SYNC_LOCK_KEY = "public_data_sync_lock_until";
 let schemaReady: Promise<void> | null = null;
 let inMemorySync: Promise<unknown> | null = null;
@@ -53,21 +54,42 @@ async function shouldDiscover(env: Env, now: Date): Promise<boolean> {
   if (!Number.isFinite(lastMs)) return true;
   const elapsedMinutes = (now.getTime() - lastMs) / 60_000;
   if (!isJstEntryWindow(now)) return elapsedMinutes >= 24 * 60;
-  return elapsedMinutes >= (isJstRaceWindow(now) ? 20 : 90);
+  return elapsedMinutes >= (isJstRaceWindow(now) ? 5 : 60);
 }
 
 function nextEntryFetch(race: RaceRecord, now: Date): string {
-  if (!race.startTimeUtc) return addMinutes(now, 60);
+  if (!race.startTimeUtc) return addMinutes(now, 30);
   const deltaMinutes = (new Date(race.startTimeUtc).getTime() - now.getTime()) / 60_000;
   if (deltaMinutes > 24 * 60) return addMinutes(now, 180);
-  if (deltaMinutes > 180) return addMinutes(now, 60);
-  if (deltaMinutes > 45) return addMinutes(now, 15);
+  if (deltaMinutes > 180) return addMinutes(now, 45);
+  if (deltaMinutes > 45) return addMinutes(now, 10);
   if (deltaMinutes > 0) return addMinutes(now, 5);
   return addMinutes(now, 8);
 }
 
 function hasResultUrl(url: string): boolean {
   return /\/JRADB\/accessS\.html/i.test(url) && /(?:pw|sw)01sde/i.test(decodeURIComponent(url));
+}
+
+function invalidRaceName(value:string):boolean {
+  const compact=value.replace(/\s+/g,"").trim();
+  return !compact || /^(?:検索ウィンドウ|検索|出馬表|関連メニュー|開催日程|JRAからのお知らせ|レース)$/.test(compact);
+}
+
+function raceNameFromEntryHtml(html:string,raceNo:number):string|null {
+  const headings=[...html.matchAll(/<h[1-6]\b[^>]*>([\s\S]*?)<\/h[1-6]>/gi)]
+    .map((m)=>stripHtml(m[1]??"").replace(/\s+/g," ").trim()).filter(Boolean);
+  const direct=headings.find((h)=>new RegExp(`^${raceNo}R\\s+`,"i").test(h));
+  if(direct){const name=direct.replace(new RegExp(`^${raceNo}R\\s+`,"i"),"").trim();if(!invalidRaceName(name))return name;}
+  const marker=headings.findIndex((h)=>/出馬表/.test(h)&&new RegExp(`${raceNo}(?:レース|R)`).test(h));
+  const start=marker>=0?marker+1:0;
+  for(let i=start;i<headings.length;i+=1){
+    const candidate=headings[i]??"";
+    if(invalidRaceName(candidate)||/^(?:ホーム|競馬メニュー|ここから本文)/.test(candidate))continue;
+    if(/出馬表/.test(candidate))continue;
+    return candidate;
+  }
+  return null;
 }
 
 async function processSource(
@@ -79,6 +101,10 @@ async function processSource(
     const entryPage = await fetchJraPage(source.entryUrl);
     if (!pageLooksLikeEntry(entryPage.html)) throw new Error("ENTRY_PAGE_SIGNATURE_MISSING");
     const entry = parseEntryPage(entryPage.html, entryPage.url);
+    if(invalidRaceName(entry.race.raceName)){
+      const corrected=raceNameFromEntryHtml(entryPage.html,entry.race.raceNo);
+      if(corrected)entry.race.raceName=corrected;
+    }
     await saveEntryBundle(env.DB, entry);
 
     const startMs = entry.race.startTimeUtc ? new Date(entry.race.startTimeUtc).getTime() : Number.POSITIVE_INFINITY;
@@ -123,7 +149,7 @@ async function processSource(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const delay = Math.min(240, 15 * Math.pow(2, Math.min(4, source.failureCount)));
+    const delay = Math.min(120, 10 * Math.pow(2, Math.min(4, source.failureCount)));
     await updateRaceSource(env.DB, source.entryUrl, {
       raceId: source.raceId,
       status: "discovered",
@@ -153,9 +179,16 @@ async function executeSync(env: Env, triggerType: "cron" | "manual"): Promise<un
   let success = 0;
   let errors = 0;
   let discoveryError: string | null = null;
+  let calendarToday = 0;
+  let calendarYesterday = 0;
   let fatal: string | undefined;
 
   try {
+    try {
+      const calendar=await syncOfficialCalendar(env.DB,now);
+      calendarToday=calendar.today;calendarYesterday=calendar.yesterday;
+    } catch { /* entry discovery below remains authoritative */ }
+
     if (await shouldDiscover(env, now)) {
       try {
         const previousRevision = await getState(env.DB, "public_data_last_discovery_revision");
@@ -174,7 +207,7 @@ async function executeSync(env: Env, triggerType: "cron" | "manual"): Promise<un
       }
     }
 
-    const due = await getDueRaceSources(env.DB, positiveInt(env.SYNC_BATCH_SIZE, 12));
+    const due = await getDueRaceSources(env.DB, positiveInt(env.SYNC_BATCH_SIZE, 48));
     processed = due.length;
     for (const source of due) {
       const ok = await processSource(env, source, now);
@@ -194,7 +227,7 @@ async function executeSync(env: Env, triggerType: "cron" | "manual"): Promise<un
     await setState(env.DB, SYNC_LOCK_KEY, new Date(0).toISOString());
   }
 
-  return { ok: !fatal, discovered, processed, success, errors, discoveryError, error: fatal ?? null, now: nowIso() };
+  return { ok: !fatal, calendarToday, calendarYesterday, discovered, processed, success, errors, discoveryError, error: fatal ?? null, now: nowIso() };
 }
 
 export function runPublicDataSync(env: Env, triggerType: "cron" | "manual"): Promise<unknown> {
