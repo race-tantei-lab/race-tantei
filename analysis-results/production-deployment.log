@@ -1,13 +1,13 @@
 
  ⛅️ wrangler 4.118.0
 ────────────────────
-Total Upload: 413.89 KiB / gzip: 120.11 KiB
+Total Upload: 417.13 KiB / gzip: 120.67 KiB
 Worker Startup Time: 2 ms
 Your Worker has access to the following bindings:
 Binding                                                                   Resource                  
 env.DB (race-tantei-phase0)                                               D1 Database               
 env.ENVIRONMENT ("production")                                            Environment Variable      
-env.DEPLOY_REVISION ("public-site-auto-payout-settlement-20...")          Environment Variable      
+env.DEPLOY_REVISION ("public-site-mobile-ticket-stakes-2026...")          Environment Variable      
 env.MODEL_VERSION ("v5.0.0-nonlinear-course-policy")                      Environment Variable      
 env.JRA_HOME_URL ("https://sp.jra.jp/")                                   Environment Variable      
 env.JRA_SEED_ENTRY_URLS ("https://sp.jra.jp/JRADB/accessD.html?...")      Environment Variable      
@@ -15,10 +15,10 @@ env.MIN_EXPECTED_VALUE ("108")                                            Enviro
 env.MAX_RACE_BUDGET_YEN ("10000")                                         Environment Variable      
 env.SYNC_BATCH_SIZE ("12")                                                Environment Variable      
 
-Uploaded race-tantei-phase0 (1.30 sec)
-Deployed race-tantei-phase0 triggers (0.48 sec)
+Uploaded race-tantei-phase0 (1.40 sec)
+Deployed race-tantei-phase0 triggers (0.63 sec)
   https://race-tantei-phase0.race-tantei.workers.dev
   schedule: */5 * * * *
-Current Version ID: b264e037-a94d-4de9-8b2c-effc68f0cfc4
+Current Version ID: f2253869-4278-44ee-93f6-e93dfb497c9b
 
 Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
