@@ -1,0 +1,31 @@
+{
+  "model": "rule-first-20260809-rebuild",
+  "status": "FROZEN_ANALYSIS_ONLY",
+  "productionDeployment": false,
+  "holdoutEvaluated": false,
+  "rulesFile": "consolidated_rules_v2.json",
+  "summaryFile": "final_model_summary_v2.json",
+  "featureSpecFiles": ["meta.json", "hist_meta.json"],
+  "policyFile": "freeze_policy_v2.json",
+  "sourceScripts": ["rebuild_rules_stage1.py", "build_history_ticket_features.py", "build_consolidated_v2.py", "search_race_penalty_v2.py", "final_audit_v2.py"],
+  "inputHashes": {
+    "fixed_db": {"path":"race-tantei-master-20240504-20260802.sqlite","sha256":"17eb6947fe846807df802b3cf3e6c98f580870b52007ffba310cee2fd7d13f70","bytes":171102208},
+    "official_odds": {"path":"all7695-official-odds.jsonl.gz","sha256":"bcd9e09c7047160de10016055bbc2448b052c722d3569f89ccd278fb746830a2","bytes":66073604},
+    "analysis_dataset": {"path":"completion-analysis-dataset.pkl.gz","sha256":"92648adcd60bad15fb6097106d290b743423494549fa0fd84c69f8e09732fd30","bytes":5980750},
+    "oof_probs": {"path":"runner-oos-probabilities.npz","sha256":"5b8cb8a7938708fe91e4f6aa4809708e49c5bab11c7339abeb2c2ab0d96ec94c","bytes":1062015}
+  },
+  "scriptSha256": {
+    "rebuild_rules_stage1.py":"1c567a958715a4671cbc74fa3c78124c494186db1a8c32febc81033d315768e9",
+    "build_history_ticket_features.py":"597938a54e0eb3333fe6b529eb94287cc6d9f36a555605811cd8e8ebd4ea64bd",
+    "build_consolidated_v2.py":"72d1403ace79be447d3cbf2e514e380c0ed89fe758c2dfec07b3bd8571562986",
+    "search_race_penalty_v2.py":"477d5a7f9d5266ba30b05e36a3a27d1d1f5e930d90d9918538b7f4bbee6139a9",
+    "final_audit_v2.py":"3496db7e2349d0049d379b8a29ecc53cc5d8f4d1e20f97c977f05007af151029"
+  },
+  "frozenFileSha256": {
+    "consolidated_rules_v2.json":"ad81f4be88064e9b08756bd585019b487b8f96b3f4fc262710d02d8d149143c1",
+    "final_model_summary_v2.json":"674d806a164dd8fbd24eb92de47f02d6894036d81bf1d505c539139bb6b83f30",
+    "meta.json":"392324c27f03492f31ce17202de0aa508028177ac449c5625ee391c93d96aa84",
+    "hist_meta.json":"8af9df649ab764c7a447dfe249373996e96e38b9f406c3c2df11588dea362257",
+    "freeze_policy_v2.json":"bea43866f654b9e13ccaafbd7b9afa7676377b6a879428efc5d1cd781372934a"
+  }
+}
