@@ -1,0 +1,38 @@
+name: Diagnose live result ingestion
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-live-results.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Inspect Niigata 11R live ingestion
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        run: |
+          set -euo pipefail
+          echo '=== race ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --command "SELECT race_id,race_name,start_time_jst,start_time_utc,status,result_url,result_updated_at FROM rt_races WHERE race_date='2026-08-09' AND venue='新潟' AND race_no=11;"
+          echo '=== source ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --command "SELECT entry_url,result_url,race_id,status,next_fetch_at,last_entry_fetch_at,last_result_fetch_at,failure_count,last_error,updated_at FROM rt_race_sources WHERE race_id='2026-08-09-niigata-11' OR entry_url IN (SELECT entry_url FROM rt_races WHERE race_id='2026-08-09-niigata-11');"
+          echo '=== payouts ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --command "SELECT bet_type,combination,payout_yen FROM rt_payouts WHERE race_id='2026-08-09-niigata-11' ORDER BY bet_type,combination;"
+          echo '=== public bets ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --command "SELECT course,bet_type,combination,stake_yen,settlement_status,return_yen FROM rt_public_bets WHERE race_id='2026-08-09-niigata-11' ORDER BY course,id;"
+          echo '=== latest sync runs ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --command "SELECT id,started_at,finished_at,trigger_type,processed_count,success_count,error_count,error_message FROM rt_sync_runs ORDER BY id DESC LIMIT 8;"
