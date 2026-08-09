@@ -3,7 +3,7 @@ import importlib.util
 import json
 import sys
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,6 +17,10 @@ sys.modules[spec.name] = current
 spec.loader.exec_module(current)
 runtime = current.runtime
 base = runtime.base
+
+
+def same_race_link(cname: str, race_date_digits: str, race_no: int) -> bool:
+    return race_date_digits in cname and current.current_race_no_from_cname(cname) == race_no
 
 
 def main() -> None:
@@ -44,24 +48,36 @@ def main() -> None:
 
         race_date_digits = str(race["raceDate"]).replace("-", "")
         race_no = int(race["raceNo"])
-        local_links: list[tuple[str, str]] = []
-        for cname, context in base.action_links(entry_html):
-            if race_date_digits not in cname:
-                continue
-            if current.current_race_no_from_cname(cname) != race_no:
-                continue
-            local_links.append((cname, context))
+        queue: deque[tuple[str, str]] = deque()
+        local_seen: set[str] = set()
 
-        for cname, context in local_links:
+        for cname, context in base.action_links(entry_html):
+            if same_race_link(cname, race_date_digits, race_no):
+                queue.append((cname, context))
+
+        while queue:
+            cname, context = queue.popleft()
+            if cname in local_seen:
+                continue
+            local_seen.add(cname)
             if cname in fetched_cnames:
                 continue
             fetched_cnames.add(cname)
+
             try:
                 page = runtime.fetch_url(base.JRA_ODDS_URL, cname=cname)
                 odds_pages += 1
                 identity = runtime.parse_page_identity(page, cname)
                 bet_type = base.detect_bet_type(page, context)
+
+                # JRA exposes the other bet-type pages from the first odds page.
+                # Follow only links that belong to this exact date/race number.
+                for child, child_context in base.action_links(page):
+                    if child not in local_seen and same_race_link(child, race_date_digits, race_no):
+                        queue.append((child, child_context))
+
                 if identity is None or bet_type is None:
+                    time.sleep(base.REQUEST_PAUSE_SECONDS)
                     continue
                 target = next(
                     (
@@ -73,6 +89,7 @@ def main() -> None:
                     None,
                 )
                 if target is None:
+                    time.sleep(base.REQUEST_PAUSE_SECONDS)
                     continue
                 source_hash = hashlib.sha256(page.encode("utf-8", errors="replace")).hexdigest()
                 for combination, low, high in base.parse_odds_rows(page, bet_type):
