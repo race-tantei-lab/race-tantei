@@ -1,0 +1,75 @@
+name: Verify public payout display
+run-name: Verify public payout display · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-public-payouts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BASE_URL: https://race-tantei-phase0.race-tantei.workers.dev
+    steps:
+      - name: Mark verification pending
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/payout-display' -f description='本番の的中・払戻・累計表示を確認中' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+
+      - name: Verify August 9 API payout object
+        run: |
+          for i in $(seq 1 12); do
+            if curl -fsS "$BASE_URL/api/public/day?date=2026-08-09" -o /tmp/day.json; then
+              if python - <<'PY'
+          import json
+          x=json.load(open('/tmp/day.json',encoding='utf-8'))
+          race=next(r for r in x['races'] if r['raceId']=='2026-08-09-chukyo-01')
+          assert race['publicState']['code']=='hit',race
+          p=race['publicState']['payouts']
+          assert p['ライト']==18420,p
+          assert p['スタンダード']==55260,p
+          assert p['プレミアム']==101310,p
+          print(race['publicState'])
+          PY
+              then break; fi
+            fi
+            sleep 5
+          done
+          python - <<'PY'
+          import json
+          x=json.load(open('/tmp/day.json',encoding='utf-8'))
+          race=next(r for r in x['races'] if r['raceId']=='2026-08-09-chukyo-01')
+          assert race['publicState']['code']=='hit'
+          assert race['publicState']['payouts']=={'ライト':18420,'スタンダード':55260,'プレミアム':101310}
+          PY
+
+      - name: Verify race detail visible payout amounts
+        run: |
+          curl -fsS "$BASE_URL/races/2026-08-09-chukyo-01" -o /tmp/race.html
+          grep -q '的中' /tmp/race.html
+          grep -q '¥18,420' /tmp/race.html
+          grep -q '¥55,260' /tmp/race.html
+          grep -q '¥101,310' /tmp/race.html
+
+      - name: Verify cumulative ROI includes settled August 9 races
+        run: |
+          curl -fsS "$BASE_URL/" -o /tmp/home.html
+          grep -q '296.0%' /tmp/home.html
+          grep -q '296.8%' /tmp/home.html
+          grep -q '296.3%' /tmp/home.html
+          grep -q 'race-payout' /tmp/home.html
+
+      - name: Mark verification success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/payout-display' -f description='本番で的中・3コース払戻・累計反映を確認済み' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+
+      - name: Mark verification failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/payout-display' -f description='本番の払戻表示確認に失敗' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
