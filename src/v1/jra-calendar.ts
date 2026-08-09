@@ -108,7 +108,13 @@ async function upsertCalendarRaces(db: D1Database, races: RaceRecord[]): Promise
     ON CONFLICT(race_id) DO UPDATE SET
       race_date=excluded.race_date, venue=excluded.venue, meeting_no=excluded.meeting_no, meeting_day=excluded.meeting_day,
       race_no=excluded.race_no,
-      race_name=CASE WHEN rt_races.race_name GLOB '[0-9]*レース' OR rt_races.race_name IN ('検索ウィンドウ','検索','出馬表','レース','') OR rt_races.entry_url LIKE '%/keiba/calendar%' THEN excluded.race_name ELSE rt_races.race_name END,
+      race_name=CASE
+        WHEN rt_races.race_name IS NULL OR trim(rt_races.race_name)=''
+          OR rt_races.race_name GLOB '[0-9]*レース'
+          OR rt_races.race_name GLOB '[0-9]*R'
+          OR rt_races.race_name IN ('検索ウィンドウ','検索メニュー','サイト内検索','検索','出馬表','レース','JRAホーム','メニューを開く','レース情報トップ')
+          OR rt_races.entry_url LIKE '%/keiba/calendar%'
+        THEN excluded.race_name ELSE rt_races.race_name END,
       conditions=COALESCE(rt_races.conditions,excluded.conditions), surface=COALESCE(rt_races.surface,excluded.surface),
       distance_m=COALESCE(rt_races.distance_m,excluded.distance_m), direction=COALESCE(rt_races.direction,excluded.direction),
       start_time_jst=COALESCE(rt_races.start_time_jst,excluded.start_time_jst), start_time_utc=COALESCE(rt_races.start_time_utc,excluded.start_time_utc),
