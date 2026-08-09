@@ -15,10 +15,10 @@ env.MIN_EXPECTED_VALUE ("108")                                            Enviro
 env.MAX_RACE_BUDGET_YEN ("10000")                                         Environment Variable      
 env.SYNC_BATCH_SIZE ("12")                                                Environment Variable      
 
-Uploaded race-tantei-phase0 (2.31 sec)
-Deployed race-tantei-phase0 triggers (0.87 sec)
+Uploaded race-tantei-phase0 (1.63 sec)
+Deployed race-tantei-phase0 triggers (0.47 sec)
   https://race-tantei-phase0.race-tantei.workers.dev
   schedule: */5 * * * *
-Current Version ID: 61e4138f-fac7-4d95-b63b-4a6ff4c2034e
+Current Version ID: 4c4b5036-b214-4f06-a0b7-36a4f0ecd7c3
 
 Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
