@@ -85,7 +85,7 @@ export function parseOfficialCalendar(html: string, raceDate: string, calendarUr
     if (raceNo < 1 || raceNo > 12 || !descriptor || hour < 1 || minute < 0 || minute > 59) continue;
     const parsed = descriptorParts(descriptor, raceNo);
     const startTimeJst = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-    const raceId = `${raceDate}-${venueSlug(meeting.venue)}-${String(raceNo).padStart(2, "0")}`;
+    const raceId = `${raceDate}-${venueSlug(meeting.venue)}-${String(raceNo).padStart(2,"0")}`;
     races.push({
       raceId, raceDate, venue: meeting.venue, meetingNo: meeting.meetingNo, meetingDay: meeting.meetingDay,
       raceNo, raceName: parsed.raceName, conditions: parsed.conditions, surface: parsed.surface,
@@ -108,7 +108,7 @@ async function upsertCalendarRaces(db: D1Database, races: RaceRecord[]): Promise
     ON CONFLICT(race_id) DO UPDATE SET
       race_date=excluded.race_date, venue=excluded.venue, meeting_no=excluded.meeting_no, meeting_day=excluded.meeting_day,
       race_no=excluded.race_no,
-      race_name=CASE WHEN rt_races.race_name GLOB '[0-9]*レース' OR rt_races.entry_url LIKE '%/keiba/calendar%' THEN excluded.race_name ELSE rt_races.race_name END,
+      race_name=CASE WHEN rt_races.race_name GLOB '[0-9]*レース' OR rt_races.race_name IN ('検索ウィンドウ','検索','出馬表','レース','') OR rt_races.entry_url LIKE '%/keiba/calendar%' THEN excluded.race_name ELSE rt_races.race_name END,
       conditions=COALESCE(rt_races.conditions,excluded.conditions), surface=COALESCE(rt_races.surface,excluded.surface),
       distance_m=COALESCE(rt_races.distance_m,excluded.distance_m), direction=COALESCE(rt_races.direction,excluded.direction),
       start_time_jst=COALESCE(rt_races.start_time_jst,excluded.start_time_jst), start_time_utc=COALESCE(rt_races.start_time_utc,excluded.start_time_utc),
