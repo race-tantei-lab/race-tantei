@@ -3,7 +3,7 @@ import importlib.util
 import json
 import sys
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,6 +17,12 @@ sys.modules[spec.name] = current
 spec.loader.exec_module(current)
 runtime = current.runtime
 base = runtime.base
+
+TARGET_BET_TYPES = {"単勝", "馬連", "ワイド", "馬単", "3連複", "3連単"}
+
+
+def belongs_to_race(cname: str, race_date_digits: str, race_no: int) -> bool:
+    return race_date_digits in cname and current.current_race_no_from_cname(cname) == race_no
 
 
 def main() -> None:
@@ -44,47 +50,51 @@ def main() -> None:
 
         race_date_digits = str(race["raceDate"]).replace("-", "")
         race_no = int(race["raceNo"])
-        local_links: list[tuple[str, str]] = []
+        queue: deque[tuple[str, str]] = deque()
+        queued: set[str] = set()
         for cname, context in base.action_links(entry_html):
-            if race_date_digits not in cname:
-                continue
-            if current.current_race_no_from_cname(cname) != race_no:
-                continue
-            local_links.append((cname, context))
+            if belongs_to_race(cname, race_date_digits, race_no) and cname not in queued:
+                queue.append((cname, context))
+                queued.add(cname)
 
-        for cname, context in local_links:
+        while queue:
+            cname, context = queue.popleft()
             if cname in fetched_cnames:
                 continue
             fetched_cnames.add(cname)
             try:
                 page = runtime.fetch_url(base.JRA_ODDS_URL, cname=cname)
                 odds_pages += 1
+
+                # JRA exposes the other bet-type tabs only after the first odds page opens.
+                # Follow only links that remain on this exact date/race number.
+                for child, child_context in base.action_links(page):
+                    if belongs_to_race(child, race_date_digits, race_no) and child not in queued and child not in fetched_cnames:
+                        queue.append((child, child_context))
+                        queued.add(child)
+
                 identity = runtime.parse_page_identity(page, cname)
                 bet_type = base.detect_bet_type(page, context)
-                if identity is None or bet_type is None:
+                if identity is None or bet_type not in TARGET_BET_TYPES:
                     continue
-                target = next(
-                    (
-                        row for row in races
-                        if row["raceDate"] == identity[0]
-                        and row["venue"] == identity[1]
-                        and int(row["raceNo"]) == identity[2]
-                    ),
-                    None,
-                )
-                if target is None:
+                if not (
+                    identity[0] == race["raceDate"]
+                    and identity[1] == race["venue"]
+                    and identity[2] == race_no
+                ):
                     continue
+
                 source_hash = hashlib.sha256(page.encode("utf-8", errors="replace")).hexdigest()
                 for combination, low, high in base.parse_odds_rows(page, bet_type):
-                    records[(target["raceId"], bet_type, combination)] = {
-                        "raceId": target["raceId"],
+                    records[(race["raceId"], bet_type, combination)] = {
+                        "raceId": race["raceId"],
                         "betType": bet_type,
                         "combination": combination,
                         "oddsMin": low,
                         "oddsMax": high,
                         "capturedAtUtc": captured_iso,
-                        "startTimeUtc": target.get("startTimeUtc"),
-                        "secondsToStart": base.seconds_to_start(target.get("startTimeUtc"), captured),
+                        "startTimeUtc": race.get("startTimeUtc"),
+                        "secondsToStart": base.seconds_to_start(race.get("startTimeUtc"), captured),
                         "sourceCname": cname,
                         "sourceHash": source_hash,
                     }
