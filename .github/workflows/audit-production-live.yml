@@ -25,21 +25,13 @@ jobs:
         run: |
           set -euo pipefail
           q(){ npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$1"; }
-          echo '=== RAW_RACE_ARCHIVE ==='
-          q "SELECT COUNT(*) AS races,MIN(race_date) AS min_date,MAX(race_date) AS max_date,COUNT(DISTINCT race_date||'|'||venue) AS venue_days FROM rt_races WHERE race_date BETWEEN '2024-05-04' AND '2026-08-02'"
-          echo '=== RAW_RUNNERS ==='
-          q "SELECT COUNT(*) AS runners,COUNT(DISTINCT r.race_id) AS races FROM rt_runners rr JOIN rt_races r ON r.race_id=rr.race_id WHERE r.race_date BETWEEN '2024-05-04' AND '2026-08-02'"
-          echo '=== RAW_RESULTS ==='
-          q "SELECT COUNT(*) AS results,COUNT(DISTINCT r.race_id) AS races FROM rt_results x JOIN rt_races r ON r.race_id=x.race_id WHERE r.race_date BETWEEN '2024-05-04' AND '2026-08-02'"
-          echo '=== TABLES_ODDS_PAYOUTS ==='
-          q "SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE '%odds%' OR name LIKE '%payout%') ORDER BY name"
-          echo '=== HIST_OFFICIAL_LATEST ==='
-          q "SELECT COUNT(*) AS rows,COUNT(DISTINCT race_id) AS races,MIN(substr(race_id,1,10)) AS min_date,MAX(substr(race_id,1,10)) AS max_date FROM rt_official_odds_latest WHERE substr(race_id,1,10) BETWEEN '2024-05-04' AND '2026-08-02'" || true
-          echo '=== PUBLIC_BETS ==='
-          q "SELECT course,COUNT(DISTINCT race_id) AS races,COUNT(*) AS tickets,SUM(stake_yen) AS stake,SUM(COALESCE(return_yen,0)) AS return_yen FROM rt_public_bets WHERE settlement_status='settled' GROUP BY course ORDER BY CASE course WHEN 'ライト' THEN 1 WHEN 'スタンダード' THEN 2 ELSE 3 END"
-          echo '=== AUG9_RACES_RUNNERS_BETS ==='
-          q "SELECT venue,COUNT(*) AS races FROM rt_races WHERE race_date='2026-08-09' GROUP BY venue ORDER BY venue"
-          q "SELECT r.venue,COUNT(rr.horse_no) AS runners,COUNT(DISTINCT r.race_id) AS races FROM rt_races r JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date='2026-08-09' GROUP BY r.venue ORDER BY r.venue"
-          q "SELECT COUNT(*) AS bets,COUNT(DISTINCT b.race_id) AS races FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date='2026-08-09'"
+          echo '=== AUG9_RACES ==='
+          q "SELECT race_id,venue,race_no,race_name,status,start_time_jst FROM rt_races WHERE race_date='2026-08-09' ORDER BY venue,race_no"
+          echo '=== AUG9_PREDICTIONS ==='
+          q "SELECT p.id,p.race_id,p.status,p.created_at,p.locked_at FROM rt_predictions p JOIN rt_races r ON r.race_id=p.race_id WHERE r.race_date='2026-08-09' ORDER BY p.race_id,p.id" || true
+          echo '=== AUG9_BETS ==='
+          q "SELECT b.race_id,b.bet_type,b.combination,b.stake_yen,b.assumed_odds,b.return_yen,b.settlement_status,p.status AS prediction_status,p.locked_at FROM rt_bets b JOIN rt_predictions p ON p.id=b.prediction_id JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date='2026-08-09' ORDER BY b.race_id,b.id" || true
+          echo '=== AUG9_PUBLIC_BETS ==='
+          q "SELECT race_id,course,bet_type,combination,stake_yen,assumed_odds,return_yen,settlement_status,locked_at FROM rt_public_bets WHERE race_id LIKE '2026-08-09-%' ORDER BY race_id,course,id" || true
           echo '=== AUG9_OFFICIAL_ODDS ==='
-          q "SELECT bet_type,COUNT(DISTINCT race_id) AS races,COUNT(*) AS rows,MAX(captured_at_utc) AS latest FROM rt_official_odds_latest WHERE race_id LIKE '2026-08-09-%' GROUP BY bet_type ORDER BY bet_type" || true
+          q "SELECT bet_type,COUNT(DISTINCT race_id) AS races,COUNT(*) AS rows,MIN(captured_at_utc) AS first_seen,MAX(captured_at_utc) AS latest FROM rt_official_odds_snapshots WHERE race_id LIKE '2026-08-09-%' GROUP BY bet_type ORDER BY bet_type" || true
