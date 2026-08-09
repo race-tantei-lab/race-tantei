@@ -1,0 +1,116 @@
+name: Final live August 9 lock
+run-name: Final live August 9 · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/final-live-aug9.yml'
+      - 'scripts/collect-jra-official-odds-runtime.py'
+      - 'scripts/collect-current-jra-official-odds-fast.py'
+      - 'scripts/generate-final-live-bets.py'
+      - 'scripts/final-rules-payload.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+concurrency:
+  group: final-live-aug9
+  cancel-in-progress: true
+
+jobs:
+  lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      JRA_ODDS_REQUEST_PAUSE_SECONDS: '0.50'
+      JRA_ODDS_D1_BATCH_ROWS: '20'
+    steps:
+      - name: Mark live lock pending
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/final-live-lock' -f description='公式オッズ取得と買い目固定を実行中' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Compile frozen live pipeline
+        run: python -m py_compile scripts/collect-jra-official-odds.py scripts/collect-jra-official-odds-runtime.py scripts/collect-current-jra-official-odds.py scripts/collect-current-jra-official-odds-fast.py scripts/generate-final-preday-selection.py scripts/final-rules-payload.py scripts/generate-final-live-bets.py
+
+      - name: Export production database
+        run: |
+          npx wrangler d1 export race-tantei-phase0 --remote --output=/tmp/race-tantei.sql
+          sqlite3 /tmp/race-tantei.db < /tmp/race-tantei.sql
+          sqlite3 /tmp/race-tantei.db "SELECT COUNT(*) FROM rt_races; SELECT COUNT(*) FROM rt_runners; SELECT COUNT(*) FROM rt_results;"
+
+      - name: Collect official odds for still-in-time fixed targets
+        run: |
+          python scripts/collect-current-jra-official-odds-fast.py | tee /tmp/final-live-odds.log
+          test -s current-selected-official-odds.json.gz
+          test -s official-odds-collection-report.json
+          cat official-odds-collection-report.json
+
+      - name: Generate and immutably lock final bets
+        run: |
+          mkdir -p analysis-results
+          python scripts/generate-final-live-bets.py \
+            --repo . \
+            --db /tmp/race-tantei.db \
+            --date 2026-08-09 \
+            --selection analysis-results/final-aug9-selection.json \
+            --odds-file current-selected-official-odds.json.gz \
+            --out analysis-results/final-aug9-live-bets.json \
+            --insert | tee /tmp/final-live-generate.log
+          cat analysis-results/final-aug9-live-bets.json
+
+      - name: Verify locked public bets
+        run: |
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id,COUNT(*) AS rows,COUNT(DISTINCT course) AS courses,MIN(locked_at) AS lockedAt FROM rt_public_bets WHERE race_id LIKE '2026-08-09-%' AND source_prediction_id=-2 GROUP BY race_id ORDER BY race_id" > analysis-results/final-aug9-live-d1.json
+          cat analysis-results/final-aug9-live-d1.json
+          python - <<'PY'
+          import json
+          x=json.load(open('analysis-results/final-aug9-live-bets.json',encoding='utf-8'))
+          assert x['sourceRuleCount']==316 and x['resultDataUsedForTargetDay'] is False and x['officialOddsOnly'] is True
+          for r in x['races']:
+              assert 3 <= len(r['tickets']) <= 10
+              assert len({t['betType'] for t in r['tickets']}) >= 2
+              sums={}
+              for b in r['courseBets']: sums[b['course']]=sums.get(b['course'],0)+b['stakeYen']
+              assert sums=={'ライト':2000,'スタンダード':5000,'プレミアム':10000}
+          print('final live gates: ok',[(r['raceId'],len(r['tickets'])) for r in x['races']])
+          PY
+
+      - name: Save immutable live snapshot
+        run: |
+          cp official-odds-collection-report.json analysis-results/final-aug9-live-odds-report.json
+          cp /tmp/final-live-odds.log analysis-results/final-aug9-live-odds.log
+          cp /tmp/final-live-generate.log analysis-results/final-aug9-live-generate.log
+          git add -f analysis-results/final-aug9-live-bets.json analysis-results/final-aug9-live-d1.json analysis-results/final-aug9-live-odds-report.json analysis-results/final-aug9-live-odds.log analysis-results/final-aug9-live-generate.log
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git diff --cached --quiet; then
+            git commit -m 'Lock August 9 final live bets'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+
+      - name: Mark live lock success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/final-live-lock' -f description='316条件の公式オッズ買い目をD1へ固定済み' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+
+      - name: Mark live lock failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/final-live-lock' -f description='ライブ買い目固定に失敗' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
