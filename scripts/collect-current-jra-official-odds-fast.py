@@ -54,22 +54,43 @@ def exact_decimal_odds(text: str) -> tuple[float, float] | None:
 
 
 def parse_win(page: str) -> tuple[list[int], list[tuple[str, float, float]]]:
-    rows = base.parsed_rows(page); header_index = horse_index = win_index = -1
+    rows = base.parsed_rows(page)
+    header_index = -1
+    pairs: list[tuple[int, int]] = []
     for i, row in enumerate(rows):
-        if "馬番" in row and any(cell == "単勝" or cell.startswith("単勝") for cell in row):
+        horse_indexes = [j for j, cell in enumerate(row) if cell.strip() == "馬番"]
+        win_indexes = [j for j, cell in enumerate(row) if cell.strip() == "単勝" or cell.strip().startswith("単勝")]
+        if not horse_indexes or not win_indexes:
+            continue
+        candidate_pairs: list[tuple[int, int]] = []
+        for pos, horse_index in enumerate(horse_indexes):
+            block_end = horse_indexes[pos + 1] if pos + 1 < len(horse_indexes) else len(row)
+            within = [win_index for win_index in win_indexes if horse_index < win_index < block_end]
+            if within:
+                candidate_pairs.append((horse_index, within[0]))
+        if candidate_pairs:
             header_index = i
-            horse_index = row.index("馬番")
-            win_index = next(j for j, cell in enumerate(row) if cell == "単勝" or cell.startswith("単勝"))
+            pairs = candidate_pairs
             break
-    if header_index < 0:
+    if header_index < 0 or not pairs:
         raise RuntimeError("WIN_HEADER_NOT_FOUND")
+
     by_horse: dict[int, tuple[float, float]] = {}
     for row in rows[header_index + 1:]:
-        if len(row) <= max(horse_index, win_index) or not re.fullmatch(r"\d{1,2}", row[horse_index].strip()):
+        # Stop only when a new unrelated table header starts; repeated horse/odds headers are harmless.
+        if "馬番" in row and any(cell == "単勝" or cell.startswith("単勝") for cell in row):
             continue
-        odds = exact_decimal_odds(row[win_index]); horse = int(row[horse_index])
-        if odds and 1 <= horse <= 30:
-            by_horse.setdefault(horse, odds)
+        for horse_index, win_index in pairs:
+            if len(row) <= max(horse_index, win_index):
+                continue
+            horse_text = row[horse_index].strip()
+            if not re.fullmatch(r"\d{1,2}", horse_text):
+                continue
+            odds = exact_decimal_odds(row[win_index])
+            horse = int(horse_text)
+            if odds and 1 <= horse <= 30:
+                by_horse.setdefault(horse, odds)
+
     horses = sorted(by_horse)
     if len(horses) < 2:
         raise RuntimeError(f"WIN_HORSES_TOO_FEW:{len(horses)}")
