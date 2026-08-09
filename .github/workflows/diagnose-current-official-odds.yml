@@ -17,6 +17,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
       JRA_ODDS_REQUEST_PAUSE_SECONDS: '0.02'
+      JRA_ODDS_D1_BATCH_ROWS: '8'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
