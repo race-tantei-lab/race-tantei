@@ -1,0 +1,141 @@
+name: JRA odds link diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Find recent real JRA entry page
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT race_id AS raceId, race_date AS raceDate, venue, race_no AS raceNo, entry_url AS entryUrl FROM rt_races WHERE entry_url LIKE 'https://%/JRADB/accessD.html?%' ORDER BY race_date DESC, updated_at DESC LIMIT 12" \
+            > /tmp/d1.json
+          python - <<'PY' >/tmp/entry_url.txt
+          import json
+          data=json.load(open('/tmp/d1.json'))
+          rows=[]
+          def walk(x):
+              if isinstance(x,dict):
+                  if isinstance(x.get('results'),list): rows.extend(x['results'])
+                  for v in x.values(): walk(v)
+              elif isinstance(x,list):
+                  for v in x: walk(v)
+          walk(data)
+          seen=set()
+          rows=[r for r in rows if isinstance(r,dict) and r.get('entryUrl') and not (r.get('entryUrl') in seen or seen.add(r.get('entryUrl')))]
+          if not rows: raise SystemExit('NO_REAL_ENTRY_URL')
+          row=rows[0]
+          print(row['entryUrl'])
+          print('ENTRY_META',row.get('raceId'),row.get('raceDate'),row.get('venue'),row.get('raceNo'),file=__import__('sys').stderr)
+          PY
+
+      - name: Download entry page and inspect link patterns
+        run: |
+          set -euo pipefail
+          url="$(head -n1 /tmp/entry_url.txt)"
+          curl --silent --show-error --fail --location --max-time 30 \
+            -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/136 Safari/537.36' \
+            -H 'Accept-Language: ja-JP,ja;q=0.9' \
+            "$url" -o /tmp/entry.bin
+
+          python - <<'PY'
+          from pathlib import Path
+          import html,re
+          raw=Path('/tmp/entry.bin').read_bytes()
+          text=None
+          for enc in ('shift_jis','cp932','utf-8'):
+              try:
+                  t=raw.decode(enc)
+                  if 'オッズ' in t or '出馬表' in t:
+                      text=t; print('ENTRY_ENCODING',enc,'BYTES',len(raw)); break
+              except Exception: pass
+          if text is None: raise SystemExit('ENTRY_DECODE_FAILED')
+          Path('/tmp/entry.html').write_text(text,encoding='utf-8')
+
+          patterns=[
+              r'.{0,180}オッズ.{0,260}',
+              r'.{0,180}accessO.{0,260}',
+              r'.{0,180}CNAME.{0,260}',
+              r'.{0,180}(?:odds|Odds|ODDS).{0,260}',
+              r'.{0,180}(?:onclick|data-url|data-href).{0,260}'
+          ]
+          printed=set()
+          for pat in patterns:
+              for m in re.finditer(pat,text,re.S):
+                  s=re.sub(r'\s+',' ',html.unescape(m.group(0))).strip()
+                  if s in printed: continue
+                  printed.add(s)
+                  print('ENTRY_MATCH',s[:700])
+                  if len(printed)>=80: break
+              if len(printed)>=80: break
+
+          scripts=[]
+          for m in re.finditer(r'<script\b[^>]*\bsrc=["\']([^"\']+)["\']',text,re.I):
+              src=html.unescape(m.group(1))
+              if src not in scripts: scripts.append(src)
+          print('SCRIPT_COUNT',len(scripts))
+          for src in scripts[:50]: print('SCRIPT_SRC',src)
+          Path('/tmp/scripts.txt').write_text('\n'.join(scripts),encoding='utf-8')
+          PY
+
+      - name: Inspect referenced JavaScript for odds routing
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from urllib.parse import urljoin
+          base='https://www.jra.go.jp/'
+          lines=[x.strip() for x in Path('/tmp/scripts.txt').read_text().splitlines() if x.strip()]
+          urls=[]
+          for x in lines:
+              u=urljoin(base,x)
+              if u not in urls: urls.append(u)
+          Path('/tmp/script_urls.txt').write_text('\n'.join(urls))
+          PY
+
+          count=0
+          while IFS= read -r src; do
+            [ -n "$src" ] || continue
+            count=$((count+1))
+            [ "$count" -le 30 ] || break
+            out="/tmp/js-${count}.txt"
+            code="$(curl --silent --show-error --location --max-time 20 -A 'Mozilla/5.0' -o "$out" -w '%{http_code}' "$src" || true)"
+            [ "$code" = "200" ] || continue
+            SRC="$src" OUT="$out" python - <<'PY'
+          import os,re,html
+          src=os.environ['SRC']; text=open(os.environ['OUT'],encoding='utf-8',errors='ignore').read()
+          keys=['accessO','CNAME','odds','Odds','ODDS','オッズ','pw15','pw30','pw31','pw32','pw33','pw34','pw35','pw36','pw37','pw38']
+          if not any(k in text for k in keys): raise SystemExit(0)
+          print('JS_SOURCE',src)
+          shown=0
+          for key in keys:
+              for m in re.finditer(re.escape(key),text,re.I):
+                  s=re.sub(r'\s+',' ',html.unescape(text[max(0,m.start()-220):m.end()+420])).strip()
+                  print('JS_MATCH',s[:800])
+                  shown+=1
+                  if shown>=30: raise SystemExit(0)
+          PY
+          done </tmp/script_urls.txt
