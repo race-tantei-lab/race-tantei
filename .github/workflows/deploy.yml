@@ -121,5 +121,5 @@ jobs:
             echo "No deployment report change."
           else
             git commit -m "Save verified production deployment"
-            git push
+            git push || echo "Production report push skipped because main moved concurrently."
           fi
