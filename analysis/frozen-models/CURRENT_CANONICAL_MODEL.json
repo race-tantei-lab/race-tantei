@@ -1,0 +1,39 @@
+{
+  "modelName": "rule-first-risk-damped-20260809",
+  "status": "FROZEN",
+  "deployed": false,
+  "ruleCount": 316,
+  "backtestThrough": "2026-08-02",
+  "canonicalLibraryFolder": "/RaceTantei/FrozenModels/rule-first-risk-damped-20260809/",
+  "bundleSha256": "89cb4057828f125b23161be843b13033e1e7e81cb934054dd74663f5a3cce0fd",
+  "rulesSha256": "6afa77ed6c648fe19512b0b68f99a48ac63d175f17eb74cec414a7c8c710c344",
+  "github": {
+    "repository": "race-tantei-lab/race-tantei",
+    "branch": "analysis/frozen-rule-first-risk-damped-20260809",
+    "indexPath": "analysis/frozen-models/rule-first-risk-damped-20260809/INDEX.md"
+  },
+  "identity": {
+    "allRulesBetSpecific": true,
+    "racesPerVenueDay": 5,
+    "historicalSelectedRaces": 3210,
+    "minimumTicketsPerRace": 3,
+    "maximumTicketsPerRace": 10,
+    "singleTicketStakeCap": 0.35,
+    "relativeRuleScoreThreshold": 0.85,
+    "oddsRiskGamma": 1.5,
+    "budgetsYen": [2000,5000,10000]
+  },
+  "backtestSnapshot": {
+    "2000": {"roi":343.3855,"top5RemovedROI":297.4745},
+    "5000": {"roi":344.7326,"top5RemovedROI":298.7193},
+    "10000": {"roi":345.3369,"top5RemovedROI":300.0820},
+    "worstFoldTop5RemovedROI":205.9348,
+    "worstBetTypeROI":263.8569
+  },
+  "holdoutIntegrity": {
+    "2026-08-08": "NOT pristine for this revision; structural failure of deprecated model motivated redesign",
+    "nextEvaluationRule": "do not change this frozen model after observing future outcomes; report them separately"
+  },
+  "deprecatedArchive": "/RaceTantei/Archive/DeprecatedModels/rule-first-20260809-rebuild-419/",
+  "doNotUse": ["rule-first-20260809-rebuild (419-rule deprecated)","v16/177 recovery artifacts","800-rule 50/50 model"]
+}
