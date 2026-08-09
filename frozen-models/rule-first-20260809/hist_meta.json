@@ -1,0 +1,13 @@
+{
+  "features":["goodcnt","bestform","bestspeed","bestj","bestt","expcnt","top3lastsum"],
+  "radices":[4,5,5,5,5,4,8],
+  "labels":{
+    "goodcnt":["0","1","2","3"],
+    "bestform":["nohist","weak","mid","good","elite"],
+    "bestspeed":["nohist","slow","mid","good","elite"],
+    "bestj":["<15%","15-25%","25-35%","35-45%","45%+"],
+    "bestt":["<15%","15-25%","25-35%","35-45%","45%+"],
+    "expcnt":["0","1","2","3"],
+    "top3lastsum":["0","1","2","3","4","5","6","7+"]
+  }
+}
