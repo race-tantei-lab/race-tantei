@@ -20,7 +20,7 @@ export function renderPublicConditions(): string {
     <article class="rule-box"><b>過去情報の扱い</b><span>馬・騎手・厩舎・近走などの履歴は、そのレースより前の情報だけを使用します。終了したレースは将来の改善材料になりますが、過去の記録は変更しません。</span></article>
   </section>
   <div class="section-title"><h2>実際に使う全条件</h2><span class="muted">全${FROZEN_RULE_COUNT}条件</span></div>
-  <div class="notice">下の各項目は「その券種で買い目候補になる組合せの条件」です。会場・距離・JRA実オッズ・馬場・人気構成・市場との乖離・近走・騎手・厩舎など、記載された条件をすべて満たした候補を同じ手順で判定します。</div>
+  <div class="notice" style="color:#d7e1eb;border-color:#2b3d52;background:#0c1723;box-shadow:inset 3px 0 0 #2d806c">下の各項目は「その券種で買い目候補になる組合せの条件」です。会場・距離・JRA実オッズ・馬場・人気構成・市場との乖離・近走・騎手・厩舎など、記載された条件をすべて満たした候補を同じ手順で判定します。</div>
   ${ruleGroups}`;
 
   return shell("条件詳細", body);
