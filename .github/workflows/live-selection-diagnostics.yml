@@ -12,35 +12,43 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect public race API and JRA entry candidates
+      - name: Inspect public API and official calendar parsing shape
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-
-          calendar="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/public/calendar")"
-          aug8="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/public/day?date=2026-08-08")"
-          aug9="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/public/day?date=2026-08-09")"
-
-          CALENDAR="$calendar" AUG8="$aug8" AUG9="$aug9" python - <<'PY'
-          import collections, json, os
-          calendar=json.loads(os.environ['CALENDAR']); aug8=json.loads(os.environ['AUG8']); aug9=json.loads(os.environ['AUG9'])
-          def summarize(payload):
-              rows=payload.get('races') or []
-              return {'races':len(rows),'venues':dict(collections.Counter(r.get('venue') for r in rows)),'selected':sum((r.get('publicState') or {}).get('code')=='buy' for r in rows)}
-          print(json.dumps({'calendarVenueDays':len(calendar.get('calendar') or []),'aug8':summarize(aug8),'aug9':summarize(aug9)},ensure_ascii=False))
+          aug8="$(curl --silent --show-error --fail --max-time 25 "${base}/api/public/day?date=2026-08-08")"
+          aug9="$(curl --silent --show-error --fail --max-time 25 "${base}/api/public/day?date=2026-08-09")"
+          AUG8="$aug8" AUG9="$aug9" python - <<'PY'
+          import collections,json,os
+          for key in ('AUG8','AUG9'):
+              p=json.loads(os.environ[key]); rows=p.get('races') or []
+              print(key, json.dumps({'races':len(rows),'venues':dict(collections.Counter(r.get('venue') for r in rows)),'selected':sum((r.get('publicState') or {}).get('code')=='buy' for r in rows)},ensure_ascii=False))
           PY
 
-          python - <<'PY' >/tmp/candidates.txt
-          venues=[('sapporo','01','01','06'),('niigata','04','02','06'),('chukyo','07','02','06')]
-          for name,code,meeting,day in venues:
-              core=f"pw01dde01{code}2026{meeting}{day}0120260809"
-              print(name+'|https://www.jra.go.jp/JRADB/accessD.html?CNAME='+core)
-              print(name+'-00|https://www.jra.go.jp/JRADB/accessD.html?CNAME='+core+'%2F00')
-          PY
+          curl --silent --show-error --fail --max-time 25 -A 'Mozilla/5.0' \
+            'https://www.jra.go.jp/keiba/calendar2026/2026/8/0809.html' -o /tmp/calendar.bin
 
-          while IFS='|' read -r label url; do
-            code="$(curl --silent --show-error --location --max-time 25 -A 'Mozilla/5.0' -o "/tmp/${label}.html" -w '%{http_code}' "$url" || true)"
-            size="$(wc -c < "/tmp/${label}.html" 2>/dev/null || echo 0)"
-            if grep -q '2026年8月9日' "/tmp/${label}.html" 2>/dev/null && grep -q '1レース' "/tmp/${label}.html" 2>/dev/null; then ok=true; else ok=false; fi
-            echo "JRA_CANDIDATE label=${label} http=${code} bytes=${size} valid=${ok}"
-          done </tmp/candidates.txt
+          python - <<'PY'
+          import html,re
+          raw=open('/tmp/calendar.bin','rb').read()
+          text=None
+          for enc in ('utf-8','shift_jis','cp932'):
+              try:
+                  candidate=raw.decode(enc)
+                  if '新潟' in candidate and 'レース' in candidate:
+                      text=candidate; print('CALENDAR_ENCODING',enc,'bytes',len(raw)); break
+              except Exception: pass
+          if text is None:
+              raise SystemExit('calendar decode failed')
+          shaped=re.sub(r'</(?:td|th|tr|li|p|div|section|article|h[1-6]|dt|dd|ul|ol|table)>','\n',text,flags=re.I)
+          shaped=re.sub(r'<\s*br\s*/?>','\n',shaped,flags=re.I)
+          shaped=re.sub(r'<script\b[^>]*>[\s\S]*?</script>','',shaped,flags=re.I)
+          shaped=re.sub(r'<style\b[^>]*>[\s\S]*?</style>','',shaped,flags=re.I)
+          shaped=re.sub(r'<[^>]+>',' ',shaped)
+          shaped=html.unescape(shaped)
+          lines=[re.sub(r'[\u00a0\t ]+',' ',x).strip() for x in shaped.replace('\r','').split('\n')]
+          lines=[x for x in lines if x]
+          for i,line in enumerate(lines):
+              if re.search(r'(?:回(?:新潟|中京|札幌).*日|レース|時\d+分)',line):
+                  if 0 <= i < len(lines): print(f'{i}: {line}')
+          PY
