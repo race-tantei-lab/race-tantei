@@ -1,4 +1,5 @@
 import { runPublicDataSync } from "./public-data-sync.js";
+import { syncOfficialCalendar } from "./public-calendar-sync.js";
 import { ensurePublicHistory, getPublicBets } from "./v1/public-history-db.js";
 import {
   FROZEN_PUBLIC_METRICS,
@@ -7,6 +8,7 @@ import {
   type FrozenMetric,
   type FrozenMonthlyMetric
 } from "./v1/frozen-public-data.js";
+import { isFrozenHitRace } from "./v1/frozen-hit-races.js";
 import type { Env } from "./v1/types.js";
 import { escapeHtml, formatYen } from "./v1/utils.js";
 import { conditionsPage, guidePage, json, redirect, response, shell } from "./v1/public-ui.js";
@@ -30,11 +32,16 @@ type RunnerRow = {
   winOdds: number | null; popularity: number | null; runnerStatus: string;
   finishPosition: number | null; resultStatus: string | null;
 };
+type PublicState = { code: "hit" | "miss" | "buy" | "skip" | "pending"; label: string; deadline: string | null };
 
 function jstDateKey(date = new Date()): string {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
   const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
   return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+function previousJstDateKey(): string {
+  return jstDateKey(new Date(Date.now() - 24 * 60 * 60 * 1000));
 }
 
 function monthlyRows(budget: number, rows: FrozenMonthlyMetric[]): string {
@@ -58,9 +65,18 @@ async function racesOnDate(db: D1Database, date: string): Promise<RaceIndexRow[]
   return rows.results.map((row) => ({ ...row, raceNo: Number(row.raceNo), distanceM: row.distanceM === null ? null : Number(row.distanceM) }));
 }
 
-function publicRaceState(row: RaceIndexRow, today: string, selected: boolean): { code: string; label: string; deadline: string | null } {
+function isSettledRace(row: RaceIndexRow, today: string): boolean {
+  return row.raceDate < today || row.status === "finished";
+}
+
+function publicRaceState(row: RaceIndexRow, today: string, selected: boolean): PublicState {
+  if (selected && isSettledRace(row, today)) {
+    return isFrozenHitRace(row.raceId)
+      ? { code: "hit", label: "的中", deadline: null }
+      : { code: "miss", label: "不的中", deadline: null };
+  }
   if (selected) return { code: "buy", label: "買い目あり", deadline: null };
-  if (row.raceDate < today || row.status === "finished") return { code: "skip", label: "見送り", deadline: null };
+  if (isSettledRace(row, today)) return { code: "skip", label: "見送り", deadline: null };
   let deadline = "発走15分前までに確定";
   const m = row.startTimeJst?.match(/^(\d{1,2}):(\d{2})$/);
   if (m) {
@@ -90,14 +106,19 @@ renderHierarchy();`;
 async function home(env: Env, ctx: ExecutionContext): Promise<string> {
   const today = jstDateKey();
   await ensurePublicHistory(env.DB);
+  await syncOfficialCalendar(env.DB).catch(() => ({ today: 0, yesterday: 0 }));
   const rows = await calendar(env.DB);
   ctx.waitUntil(runPublicDataSync(env, "manual"));
   const hasToday = rows.some((row) => row.raceDate === today);
   const intro = hasToday
-    ? `<section class="hero today-hero"><span class="today-pill">TODAY</span><h1>今日のレース</h1><p>年 → 月 → 日付 → 会場 → レースの順に選ぶだけで、全レースを確認できます。買い目対象・見送り・判定中も同じ画面で分かります。</p></section>`
+    ? `<section class="hero today-hero"><span class="today-pill">TODAY</span><h1>今日のレース</h1><p>公式開催情報を表示しています。終了した購入対象は的中・不的中まで一覧で確認できます。</p></section>`
     : `<section class="hero"><h1>全レース</h1><p>年 → 月 → 日付 → 会場 → レースの順に選んで、これまでの全開催を確認できます。開催日のデータは自動取得されます。</p></section>`;
   const body = `${intro}<div class="section-title"><h2>累計回収率</h2><span class="muted">タップで月別表示</span></div>${metricCards(FROZEN_PUBLIC_METRICS, FROZEN_PUBLIC_MONTHLY)}<div class="section-title"><h2 id="selected-date">レースを選ぶ</h2><span class="muted">横にスワイプできます</span></div><section class="card navigator"><div class="nav-step"><p class="nav-label">1. 年</p><div class="rail" id="years"></div></div><div class="nav-step"><p class="nav-label">2. 月</p><div class="rail" id="months"></div></div><div class="nav-step"><p class="nav-label">3. 日付</p><div class="rail" id="dates"></div></div><div class="nav-step"><p class="nav-label">4. 会場</p><div class="rail" id="venues"></div></div><div class="nav-step"><p class="nav-label">5. レース</p><div class="race-rail" id="races"></div></div></section>`;
   return shell("レース一覧", body, homeScript(rows, today));
+}
+
+function compactBetNote(): string {
+  return `<details class="bet-note"><summary>買い目のルール</summary><div>確定した買い目・購入額は結果後も変更しません。終了レースは将来の改善材料にのみ使います。</div></details>`;
 }
 
 async function raceDetail(db: D1Database, raceId: string): Promise<string | null> {
@@ -117,9 +138,9 @@ async function raceDetail(db: D1Database, raceId: string): Promise<string | null
       const tableRows = rows.map((t) => `<tr><td>${escapeHtml(t.betType)}</td><td>${escapeHtml(t.combination)}</td><td>${t.assumedOdds === null ? "—" : Number(t.assumedOdds).toFixed(1)+"倍"}</td><td>${formatYen(t.stakeYen)}</td><td class="${Number(t.returnYen ?? 0) > 0 ? "plus" : ""}">${t.settlementStatus === "settled" ? formatYen(Number(t.returnYen ?? 0)) : "—"}</td></tr>`).join("");
       return `<div class="course-view" data-course="${idx}" style="${idx===0?"":"display:none"}"><div class="bet-table"><table><thead><tr><th>券種</th><th>組合せ</th><th>オッズ</th><th>購入</th><th>払戻</th></tr></thead><tbody>${tableRows || `<tr><td colspan="5">このコースの買い目記録はありません。</td></tr>`}</tbody></table></div></div>`;
     }).join("");
-    bets = `<div class="section-title"><h2>確定買い目</h2><span class="status buy">固定済み</span></div><div class="course-tabs">${COURSE_NAMES.map((name,idx)=>`<button class="course-tab ${idx===0?"active":""}" data-course-tab="${idx}">${name} ${formatYen(COURSE_BUDGETS[idx])}</button>`).join("")}</div>${courseBlocks}<section class="panel" style="margin-top:12px"><h3>買い目について</h3><ul><li>このページに保存された買い目と購入額は、結果が出たあとも変更しません。</li><li>購入対象の判定は、その時点で利用できる情報だけを使って行います。</li><li>新しいレース結果は将来の改善材料に加えますが、このレースの記録には反映しません。</li></ul></section>`;
-  } else if (state.code === "buy") {
-    bets = `<div class="section-title"><h2>確定買い目</h2><span class="status buy">買い目あり</span></div><div class="notice">このレースは固定購入対象です。累計・月別成績には正本の購入額と払戻を反映済みです。馬番ごとの組合せ明細は、正本データからの移行が完了したものから表示します。</div>`;
+    bets = `<div class="section-title"><h2>確定買い目</h2><span class="status ${state.code}">${state.label}</span></div><div class="course-tabs">${COURSE_NAMES.map((name,idx)=>`<button class="course-tab ${idx===0?"active":""}" data-course-tab="${idx}">${name} ${formatYen(COURSE_BUDGETS[idx])}</button>`).join("")}</div>${courseBlocks}${compactBetNote()}`;
+  } else if (state.code === "buy" || state.code === "hit" || state.code === "miss") {
+    bets = `<div class="section-title"><h2>確定買い目</h2><span class="status ${state.code}">${state.label}</span></div><div class="notice">このレースは固定購入対象です。過去の馬番別買い目を正本から復元しているため、明細が未反映のレースは順次同じ記録へ置き換えます。</div>${compactBetNote()}`;
   } else if (state.code === "pending") {
     bets = `<div class="section-title"><h2>買い目</h2><span class="status pending">判定中</span></div><div class="notice">${escapeHtml(state.deadline ?? "発走15分前までに確定")}</div>`;
   } else {
@@ -131,10 +152,13 @@ async function raceDetail(db: D1Database, raceId: string): Promise<string | null
   return shell(`${race.venue}${race.raceNo}R`, body).replace("</body></html>", `${script}</body></html>`);
 }
 
-async function dayApi(db: D1Database, date: string): Promise<unknown> {
+async function dayApi(env: Env, date: string): Promise<unknown> {
   if (!/^20\d{2}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: "INVALID_DATE" };
   const today = jstDateKey();
-  const rows = await racesOnDate(db, date);
+  if (date === today || date === previousJstDateKey()) {
+    await syncOfficialCalendar(env.DB).catch(() => ({ today: 0, yesterday: 0 }));
+  }
+  const rows = await racesOnDate(env.DB, date);
   return { ok: true, date, races: rows.map((row) => ({
     ...row,
     publicState: publicRaceState(row, today, isFrozenSelectedRace(row.raceDate, row.venue, row.raceNo))
@@ -149,8 +173,11 @@ export default {
     if (path === "/guide") return response(guidePage());
     if (path === "/performance") return redirect("/");
     if (path === "/validation" || path.startsWith("/validation/")) return redirect("/conditions");
-    if (path === "/api/public/calendar") return json({ ok: true, calendar: await calendar(env.DB) });
-    if (path === "/api/public/day") return json(await dayApi(env.DB, url.searchParams.get("date") ?? ""));
+    if (path === "/api/public/calendar") {
+      await syncOfficialCalendar(env.DB).catch(() => ({ today: 0, yesterday: 0 }));
+      return json({ ok: true, calendar: await calendar(env.DB) });
+    }
+    if (path === "/api/public/day") return json(await dayApi(env, url.searchParams.get("date") ?? ""));
     if (path.startsWith("/races/")) {
       const page = await raceDetail(env.DB, decodeURIComponent(path.slice("/races/".length)));
       return page ? response(page) : response(shell("レースが見つかりません", `<section class="panel"><h1>レースが見つかりません</h1><p><a class="back" href="/">レース一覧へ戻る</a></p></section>`), 404);
