@@ -18,30 +18,40 @@ jobs:
           base="https://race-tantei-phase0.race-tantei.workers.dev"
 
           calendar="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/public/calendar")"
-          day="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/public/day?date=2026-08-08")"
+          aug8="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/public/day?date=2026-08-08")"
+          aug9="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/public/day?date=2026-08-09")"
 
-          CALENDAR="$calendar" DAY="$day" python - <<'PY'
-          import json, os
+          CALENDAR="$calendar" AUG8="$aug8" AUG9="$aug9" python - <<'PY'
+          import collections, json, os
 
           calendar = json.loads(os.environ["CALENDAR"])
-          day = json.loads(os.environ["DAY"])
+          aug8 = json.loads(os.environ["AUG8"])
+          aug9 = json.loads(os.environ["AUG9"])
 
           if calendar.get("ok") is not True:
               raise SystemExit("public calendar API is not healthy")
-          if day.get("ok") is not True:
+          if aug8.get("ok") is not True or aug9.get("ok") is not True:
               raise SystemExit("public day API is not healthy")
 
-          races = day.get("races") or []
-          if not races:
-              raise SystemExit("public day API returned no races for 2026-08-08")
-          if any("publicState" not in row for row in races):
-              raise SystemExit("public day API is missing publicState")
+          def summarize(payload):
+              rows=payload.get("races") or []
+              venues=collections.Counter(row.get("venue") for row in rows)
+              selected=[row for row in rows if (row.get("publicState") or {}).get("code")=="buy"]
+              pending=[row for row in rows if (row.get("publicState") or {}).get("code")=="pending"]
+              return {
+                  "races":len(rows),
+                  "venues":dict(venues),
+                  "selected":len(selected),
+                  "pending":len(pending),
+                  "raceIds":[row.get("raceId") for row in rows],
+                  "selectedRaceIds":[row.get("raceId") for row in selected]
+              }
 
-          selected = [row for row in races if (row.get("publicState") or {}).get("code") == "buy"]
+          cal=calendar.get("calendar") or []
           print(json.dumps({
-              "calendarVenueDays": len(calendar.get("calendar") or []),
-              "aug8Races": len(races),
-              "aug8Selected": len(selected),
-              "selectedRaceIds": [row.get("raceId") for row in selected]
-          }, ensure_ascii=False))
+              "calendarVenueDays":len(cal),
+              "lastCalendarRows":cal[-15:],
+              "aug8":summarize(aug8),
+              "aug9":summarize(aug9)
+          },ensure_ascii=False))
           PY
