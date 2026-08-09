@@ -1,8 +1,10 @@
 import { getPublicBets, type PublicBetRow } from "./public-history-db.js";
+import { getStaticCanonicalBets, getStaticCanonicalState } from "./static-canonical-history.js";
 import { escapeHtml, formatYen } from "./utils.js";
 
 const COURSE_NAMES=["ライト","スタンダード","プレミアム"] as const;
 const COURSE_BUDGETS=[2000,5000,10000] as const;
+const STATIC_HISTORY_CUTOFF="2026-08-02";
 
 function jstDateKey(date=new Date()):string{
   const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Tokyo",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(date);
@@ -17,7 +19,7 @@ function settledState(raceDate:string,status:string|undefined,hasBets:boolean,hi
   return {code:"buy",label:"買い目あり",deadline:null};
 }
 
-async function betStates(db:D1Database,raceIds:string[]):Promise<Map<string,{hit:boolean}>>{
+async function dbBetStates(db:D1Database,raceIds:string[]):Promise<Map<string,{hit:boolean}>>{
   if(!raceIds.length)return new Map();
   const placeholders=raceIds.map(()=>'?').join(',');
   const rows=await db.prepare(`SELECT race_id AS raceId,MAX(CASE WHEN COALESCE(return_yen,0)>0 THEN 1 ELSE 0 END) AS hit FROM rt_public_bets WHERE race_id IN (${placeholders}) GROUP BY race_id`).bind(...raceIds).all<{raceId:string;hit:number}>();
@@ -42,12 +44,28 @@ async function enhanceDay(request:Request,db:D1Database,response:Response):Promi
   if(!response.ok)return response;
   const data=await response.json() as {ok?:boolean;races?:Array<Record<string,unknown>>};
   const races=Array.isArray(data.races)?data.races:[];
-  const ids=races.map(r=>String(r.raceId??'')).filter(Boolean);
-  const states=await betStates(db,ids);
+  const currentIds=races
+    .filter(r=>String(r.raceDate??'')>STATIC_HISTORY_CUTOFF)
+    .map(r=>String(r.raceId??''))
+    .filter(Boolean);
+  const currentStates=await dbBetStates(db,currentIds);
   for(const race of races){
-    const raceId=String(race.raceId??'');const s=states.get(raceId);if(!s)continue;
-    const state=settledState(String(race.raceDate??''),String(race.status??''),true,s.hit);
-    if(state)race.publicState=state;
+    const raceId=String(race.raceId??'');
+    const raceDate=String(race.raceDate??'');
+    const status=String(race.status??'');
+    if(raceDate<=STATIC_HISTORY_CUTOFF){
+      const canonical=await getStaticCanonicalState(raceId);
+      if(canonical?.hasBets){
+        const state=settledState(raceDate,status,true,canonical.hit);
+        if(state)race.publicState=state;
+      }
+      continue;
+    }
+    const current=currentStates.get(raceId);
+    if(current){
+      const state=settledState(raceDate,status,true,current.hit);
+      if(state)race.publicState=state;
+    }
   }
   const headers=new Headers(response.headers);headers.set('content-type','application/json; charset=utf-8');headers.delete('content-length');
   return new Response(JSON.stringify(data),{status:response.status,headers});
@@ -56,8 +74,11 @@ async function enhanceDay(request:Request,db:D1Database,response:Response):Promi
 async function enhanceRace(request:Request,db:D1Database,response:Response):Promise<Response>{
   if(!response.ok)return response;
   const raceId=decodeURIComponent(new URL(request.url).pathname.slice('/races/'.length));
-  const bets=await getPublicBets(db,raceId);if(!bets.length)return response;
-  const raceDate=raceId.slice(0,10);const hit=bets.some(b=>Number(b.returnYen??0)>0);const state=settledState(raceDate,'',true,hit)??{code:'buy',label:'買い目あり',deadline:null};
+  const raceDate=raceId.slice(0,10);
+  const bets=raceDate<=STATIC_HISTORY_CUTOFF?await getStaticCanonicalBets(raceId):await getPublicBets(db,raceId);
+  if(!bets.length)return response;
+  const hit=bets.some(b=>Number(b.returnYen??0)>0);
+  const state=settledState(raceDate,'',true,hit)??{code:'buy',label:'買い目あり',deadline:null};
   let html=await response.text();
   const missing=/\<div class="section-title"\>\<h2\>確定買い目\<\/h2\>\<span class="status buy"\>買い目あり\<\/span\>\<\/div\>\<div class="notice"\>[\s\S]*?\<\/div\>/;
   if(missing.test(html))html=html.replace(missing,tables(bets,state));
