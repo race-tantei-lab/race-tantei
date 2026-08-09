@@ -22,7 +22,7 @@ OPENER = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(COOKIE_J
 D1_BATCH_ROWS = int(base.os.environ.get("JRA_ODDS_D1_BATCH_ROWS", "40"))
 
 
-def fetch_url(url: str, *, cname: str | None = None) -> str:
+def fetch_url(url: str, *, cname: str | None = None, referer: str | None = None) -> str:
     data = None
     headers = {
         "User-Agent": base.USER_AGENT,
@@ -30,7 +30,7 @@ def fetch_url(url: str, *, cname: str | None = None) -> str:
         "Accept-Language": "ja-JP,ja;q=0.9",
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
-        "Referer": "https://www.jra.go.jp/",
+        "Referer": referer or "https://www.jra.go.jp/",
         "Upgrade-Insecure-Requests": "1",
     }
     if cname is not None:
@@ -38,23 +38,14 @@ def fetch_url(url: str, *, cname: str | None = None) -> str:
         headers["Content-Type"] = "application/x-www-form-urlencoded"
     last_error: Exception | None = None
     for attempt in range(3):
-        request = urllib.request.Request(
-            url,
-            data=data,
-            headers=headers,
-            method="POST" if data is not None else "GET",
-        )
+        request = urllib.request.Request(url, data=data, headers=headers, method="POST" if data is not None else "GET")
         try:
             with OPENER.open(request, timeout=35) as response:
                 raw = response.read(4_000_001)
                 if len(raw) > 4_000_000:
                     raise RuntimeError("JRA_ODDS_BODY_TOO_LARGE")
                 text = base.decode_body(raw, response.headers.get("content-type"))
-            if re.search(
-                r"captcha|アクセスが集中|利用を制限|Access Denied|Forbidden|Service Unavailable",
-                text,
-                re.I,
-            ):
+            if re.search(r"captcha|アクセスが集中|利用を制限|Access Denied|Forbidden|Service Unavailable", text, re.I):
                 raise RuntimeError("JRA_ODDS_PAGE_BLOCKED")
             return text
         except urllib.error.HTTPError as error:
@@ -105,17 +96,13 @@ def insert_rows(rows: list[dict]) -> None:
                 f"{base.JRA_ODDS_URL}?CNAME={urllib.parse.quote(row['sourceCname'], safe='')}",
                 row["sourceCname"], row["sourceHash"],
             ])
-        base.d1_query(
-            """
+        base.d1_query("""
             INSERT OR IGNORE INTO rt_official_odds_snapshots (
               race_id, bet_type, combination, odds_min, odds_max, captured_at_utc,
               race_start_time_utc, seconds_to_start, source_url, source_cname, source_hash, odds_source
             ) VALUES
-            """ + placeholders,
-            params,
-        )
-        base.d1_query(
-            """
+            """ + placeholders, params)
+        base.d1_query("""
             INSERT INTO rt_official_odds_latest (
               race_id, bet_type, combination, odds_min, odds_max, captured_at_utc,
               race_start_time_utc, seconds_to_start, source_url, source_cname, source_hash, odds_source
@@ -130,9 +117,7 @@ def insert_rows(rows: list[dict]) -> None:
               source_hash=excluded.source_hash, odds_source='jra_official',
               updated_at=CURRENT_TIMESTAMP
             WHERE excluded.captured_at_utc >= rt_official_odds_latest.captured_at_utc
-            """,
-            params,
-        )
+            """, params)
 
 
 def main() -> None:
@@ -147,7 +132,6 @@ def main() -> None:
     errors: list[str] = []
     pages_fetched = 0
     records: dict[tuple[str, str, str], dict] = {}
-
     for race in races:
         entry_url = race.get("entryUrl")
         if not entry_url:
@@ -156,66 +140,44 @@ def main() -> None:
             entry_html = fetch_url(entry_url)
             for cname, context in base.action_links(entry_html):
                 if cname not in seen:
-                    queue.append(cname)
-                    hints.setdefault(cname, context)
+                    queue.append(cname); hints.setdefault(cname, context)
         except Exception as error:
             errors.append(f"ENTRY:{race['raceId']}:{type(error).__name__}:{error}")
-
     while queue and pages_fetched < base.MAX_PAGES:
         cname = queue.popleft()
         if cname in seen:
             continue
         seen.add(cname)
         try:
-            page = fetch_url(base.JRA_ODDS_URL, cname=cname)
+            page = fetch_url(base.JRA_ODDS_URL, cname=cname, referer=base.JRA_ODDS_URL)
             pages_fetched += 1
             source_hash = base.hashlib.sha256(page.encode("utf-8", errors="replace")).hexdigest()
             for child, context in base.action_links(page):
                 hints.setdefault(child, context)
-                if child not in seen:
-                    queue.append(child)
+                if child not in seen: queue.append(child)
             identity = parse_page_identity(page, cname)
             bet_type = base.detect_bet_type(page, hints.get(cname, ""))
             if identity in target_by_identity and bet_type:
                 race = target_by_identity[identity]
                 for combination, low, high in base.parse_odds_rows(page, bet_type):
                     records[(race["raceId"], bet_type, combination)] = {
-                        "raceId": race["raceId"], "betType": bet_type,
-                        "combination": combination, "oddsMin": low, "oddsMax": high,
-                        "capturedAtUtc": captured_iso, "startTimeUtc": race.get("startTimeUtc"),
+                        "raceId": race["raceId"], "betType": bet_type, "combination": combination,
+                        "oddsMin": low, "oddsMax": high, "capturedAtUtc": captured_iso,
+                        "startTimeUtc": race.get("startTimeUtc"),
                         "secondsToStart": base.seconds_to_start(race.get("startTimeUtc"), captured),
                         "sourceCname": cname, "sourceHash": source_hash,
                     }
             time.sleep(base.REQUEST_PAUSE_SECONDS)
         except Exception as error:
             errors.append(f"ODDS:{cname}:{type(error).__name__}:{error}")
-
-    rows = list(records.values())
-    insert_rows(rows)
-    counts_by_type = base.defaultdict(int)
-    races_by_type = base.defaultdict(set)
+    rows = list(records.values()); insert_rows(rows)
+    counts_by_type = base.defaultdict(int); races_by_type = base.defaultdict(set)
     for row in rows:
-        counts_by_type[row["betType"]] += 1
-        races_by_type[row["betType"]].add(row["raceId"])
-    report = {
-        "generatedAt": captured_iso,
-        "status": "stored_official_odds" if rows else "waiting_for_official_odds",
-        "oddsSource": "jra_official",
-        "upcomingRaceCount": len(races),
-        "pagesFetched": pages_fetched,
-        "cnamesSeen": len(seen),
-        "storedOddsRows": len(rows),
-        "coveredRaces": len({row["raceId"] for row in rows}),
-        "rowsByBetType": dict(sorted(counts_by_type.items())),
-        "racesByBetType": {key: len(value) for key, value in sorted(races_by_type.items())},
-        "errors": errors[:100],
-        "errorCount": len(errors),
-    }
-    base.REPORT_PATH.write_text(base.json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        counts_by_type[row["betType"]] += 1; races_by_type[row["betType"]].add(row["raceId"])
+    report = {"generatedAt": captured_iso,"status":"stored_official_odds" if rows else "waiting_for_official_odds","oddsSource":"jra_official","upcomingRaceCount":len(races),"pagesFetched":pages_fetched,"cnamesSeen":len(seen),"storedOddsRows":len(rows),"coveredRaces":len({row["raceId"] for row in rows}),"rowsByBetType":dict(sorted(counts_by_type.items())),"racesByBetType":{k:len(v) for k,v in sorted(races_by_type.items())},"errors":errors[:100],"errorCount":len(errors)}
+    base.REPORT_PATH.write_text(base.json.dumps(report, ensure_ascii=False, indent=2)+"\n",encoding="utf-8")
     print(base.json.dumps(report, ensure_ascii=False, indent=2))
-    if races and pages_fetched == 0:
-        raise RuntimeError("JRA_OFFICIAL_ODDS_PAGES_UNREACHABLE")
-
+    if races and pages_fetched == 0: raise RuntimeError("JRA_OFFICIAL_ODDS_PAGES_UNREACHABLE")
 
 if __name__ == "__main__":
     main()
