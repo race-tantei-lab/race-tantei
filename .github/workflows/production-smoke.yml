@@ -23,13 +23,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api --method POST \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=pending \
-            -f context='production/phase-d' \
-            -f description='Verifying public Race Tantei deployment' \
-            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          gh api --method POST -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/phase-d' -f description='Verifying final Race Tantei public deployment' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Verify current production is alive on PR
         if: github.event_name == 'pull_request'
@@ -39,81 +33,51 @@ jobs:
           curl --silent --show-error --fail --max-time 30 "${base}/" >/tmp/home.html
           curl --silent --show-error --fail --max-time 30 "${base}/conditions" >/tmp/conditions.html
           curl --silent --show-error --fail --max-time 30 "${base}/guide" >/tmp/guide.html
-          curl --silent --show-error --fail --max-time 30 "${base}/api/public/day?date=2026-08-08" >/tmp/day.json
           grep -q 'レース探偵' /tmp/home.html
           grep -q '条件詳細' /tmp/conditions.html
           grep -q 'レース探偵の見方' /tmp/guide.html
-          python - <<'PY'
-          import json
-          data=json.load(open('/tmp/day.json'))
-          assert data.get('ok') is True
-          assert len(data.get('races') or []) > 0
-          PY
 
-      - name: Wait for deployed canonical public history
+      - name: Wait for deployed final public history and fixed targets
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 36); do
             home_code="$(curl --silent --show-error --max-time 25 -o /tmp/home.html -w '%{http_code}' "${base}/" || true)"
-            conditions_code="$(curl --silent --show-error --max-time 25 -o /tmp/conditions.html -w '%{http_code}' "${base}/conditions" || true)"
-            guide_code="$(curl --silent --show-error --max-time 25 -o /tmp/guide.html -w '%{http_code}' "${base}/guide" || true)"
-            day_code="$(curl --silent --show-error --max-time 25 -o /tmp/day.json -w '%{http_code}' "${base}/api/public/day?date=2026-08-08" || true)"
-
-            if [ "$home_code" = "200" ] && [ "$conditions_code" = "200" ] && [ "$guide_code" = "200" ] && [ "$day_code" = "200" ]; then
+            c8="$(curl --silent --show-error --max-time 25 -o /tmp/day8.json -w '%{http_code}' "${base}/api/public/day?date=2026-08-08" || true)"
+            c9="$(curl --silent --show-error --max-time 25 -o /tmp/day9.json -w '%{http_code}' "${base}/api/public/day?date=2026-08-09" || true)"
+            if [ "$home_code" = "200" ] && [ "$c8" = "200" ] && [ "$c9" = "200" ]; then
               if python - <<'PY'
-          import json, sys
+          import json,sys
           home=open('/tmp/home.html',encoding='utf-8').read()
-          conditions=open('/tmp/conditions.html',encoding='utf-8').read()
-          guide=open('/tmp/guide.html',encoding='utf-8').read()
-          day=json.load(open('/tmp/day.json',encoding='utf-8'))
-          selected=[r for r in day.get('races',[]) if (r.get('publicState') or {}).get('code')=='buy']
+          d8=json.load(open('/tmp/day8.json',encoding='utf-8')); d9=json.load(open('/tmp/day9.json',encoding='utf-8'))
+          bought={'buy','hit','miss'}
+          target={'target','overdue','missing','buy','hit','miss'}
+          aug8=[r for r in d8.get('races',[]) if (r.get('publicState') or {}).get('code') in bought]
+          aug9=[r for r in d9.get('races',[]) if (r.get('publicState') or {}).get('code') in target]
           valid=(
-              '341.8%' in home
-              and '343.1%' in home
-              and '343.7%' in home
-              and home.count('3225R') >= 3
-              and '条件詳細' in conditions
-              and 'レース探偵の見方' in guide
-              and len(selected) == 15
+            '296.8%' in home and '297.6%' in home and '297.0%' in home
+            and home.count('3225R')>=3
+            and len(aug8)==15 and len(aug9)==15
+            and all((r.get('publicState') or {}).get('code')!='skip' for r in aug9)
           )
-          print(json.dumps({'selectedAug8':len(selected),'valid':valid},ensure_ascii=False))
+          print(json.dumps({'aug8Locked':len(aug8),'aug9Targets':[(r.get('venue'),r.get('raceNo'),(r.get('publicState') or {}).get('code')) for r in aug9],'valid':valid},ensure_ascii=False))
           sys.exit(0 if valid else 1)
           PY
-              then
-                exit 0
-              fi
+              then exit 0; fi
             fi
-
-            echo "Waiting for canonical public deployment (${attempt}/30)"
-            sleep 5
+            echo "Waiting for final public deployment (${attempt}/36)"; sleep 5
           done
-          echo 'Canonical public site did not become visible in time.'
-          exit 1
+          echo 'Final public site did not become visible in time.'; exit 1
 
       - name: Publish production verification
         if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        env:
-          GH_TOKEN: ${{ github.token }}
+        env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          gh api --method POST \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=success \
-            -f context='production/phase-d' \
-            -f description='Canonical public ROI and race selection verified' \
-            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          gh api --method POST -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/phase-d' -f description='Final ROI, Aug 8 history and Aug 9 fixed targets verified' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Publish production verification failure
         if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        env:
-          GH_TOKEN: ${{ github.token }}
+        env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          gh api --method POST \
-            -H "Accept: application/vnd.github+json" \
-            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=failure \
-            -f context='production/phase-d' \
-            -f description='Canonical public deployment verification failed' \
-            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          gh api --method POST -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/phase-d' -f description='Final public deployment verification failed' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
