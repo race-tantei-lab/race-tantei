@@ -83,8 +83,8 @@ async function load():Promise<Map<string,CompactRace>>{
     const bins=tickets.map(t=>t.bin);
     for(const [,unitsTotal] of COURSES){const units=allocation(bins,unitsTotal),a=audit.get(unitsTotal)!;a[0]+=units.reduce((s,u)=>s+u*100,0);a[1]+=units.reduce((s,u,i)=>s+u*tickets[i].payout,0);}
   }
-  if(cursor.i!==bytes.length||ticketCount!==16905)throw new Error(`CANONICAL_ARCHIVE_INTEGRITY:${cursor.i}/${bytes.length}/${ticketCount}`);
-  const expected=new Map<number,[number,number]>([[20,[6420000,22045350]],[50,[16050000,55329590]],[100,[32100000,110853150]]]);
+  if(cursor.i!==bytes.length||ticketCount!==17735)throw new Error(`CANONICAL_ARCHIVE_INTEGRITY:${cursor.i}/${bytes.length}/${ticketCount}`);
+  const expected=new Map<number,[number,number]>([[20,[6420000,19141940]],[50,[16050000,47986180]],[100,[32100000,95798280]]]);
   for(const [unitsTotal,value] of expected){const actual=audit.get(unitsTotal)!;if(actual[0]!==value[0]||actual[1]!==value[1])throw new Error(`CANONICAL_TOTAL_MISMATCH:${unitsTotal}:${actual.join("/")}`);}
   return map;
 }
