@@ -1,0 +1,77 @@
+name: Collect current JRA official odds
+run-name: Collect current official odds · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/collect-current-official-odds.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: collect-current-official-odds
+  cancel-in-progress: true
+
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      JRA_ODDS_MAX_PAGES: '600'
+      JRA_ODDS_REQUEST_PAUSE_SECONDS: '0.12'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Verify collector only
+        run: |
+          python -m py_compile scripts/collect-jra-official-odds.py scripts/collect-jra-official-odds-runtime.py
+          python scripts/test-official-odds-runtime.py
+
+      - name: Collect JRA official odds only
+        run: |
+          set -o pipefail
+          python scripts/collect-jra-official-odds-runtime.py 2>&1 | tee current-official-odds.log
+
+      - name: Audit August 9 official odds
+        run: |
+          mkdir -p analysis-results
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT bet_type,COUNT(DISTINCT race_id) AS races,COUNT(*) AS rows,MAX(captured_at_utc) AS latest FROM rt_official_odds_latest WHERE race_id LIKE '2026-08-09-%' GROUP BY bet_type ORDER BY bet_type" > analysis-results/current-official-odds-d1.json
+          cp official-odds-collection-report.json analysis-results/current-official-odds-collection.json
+          cp current-official-odds.log analysis-results/current-official-odds.log
+          cat analysis-results/current-official-odds-d1.json
+
+      - name: Save collector result
+        if: always()
+        run: |
+          mkdir -p analysis-results
+          if [ -f current-official-odds.log ]; then cp current-official-odds.log analysis-results/current-official-odds.log; fi
+          if [ -f official-odds-collection-report.json ]; then cp official-odds-collection-report.json analysis-results/current-official-odds-collection.json; fi
+          git add -f analysis-results/current-official-odds.log analysis-results/current-official-odds-collection.json analysis-results/current-official-odds-d1.json 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git diff --cached --quiet; then
+            echo 'No collector report changes.'
+          else
+            git commit -m 'Save current JRA official odds collection result'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
