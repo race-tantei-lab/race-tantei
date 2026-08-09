@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/settle-aug9-now.yml'
+      - 'scripts/sync-aug9-selected-payouts.py'
+      - 'scripts/settle-aug9-public-bets.py'
   workflow_dispatch:
 
 permissions:
@@ -66,11 +68,8 @@ jobs:
             FROM rt_public_bets WHERE race_id LIKE '2026-08-09-%' AND settlement_status='settled'
             GROUP BY course ORDER BY course
           ''')
-          hit=[]
-          by={}
-          for x in per_race:
-            item=by.setdefault(x['raceId'],{})
-            item[x['course']]=int(x.get('returnYen') or 0)
+          hit=[];by={}
+          for x in per_race: by.setdefault(x['raceId'],{})[x['course']]=int(x.get('returnYen') or 0)
           for race,payouts in by.items():
             if any(v>0 for v in payouts.values()):hit.append({'raceId':race,'payouts':payouts})
           payload={'finishedCourseRows':per_race,'aug9Totals':totals,'hitRaces':hit}
