@@ -9,6 +9,7 @@ on:
       - 'scripts/repair-aug9-official-program.py'
       - 'scripts/collect-jra-official-odds-runtime.py'
       - 'scripts/collect-current-jra-official-odds-fast.py'
+      - 'scripts/collect-current-jra-official-odds-live.py'
       - 'scripts/generate-final-preday-selection.py'
       - 'scripts/generate-final-preday-selection-remote.py'
       - 'scripts/generate-final-live-bets.py'
@@ -52,7 +53,7 @@ jobs:
       - run: npm ci
 
       - name: Compile frozen live pipeline
-        run: python -m py_compile scripts/repair-aug9-official-program.py scripts/collect-jra-official-odds.py scripts/collect-jra-official-odds-runtime.py scripts/collect-current-jra-official-odds.py scripts/collect-current-jra-official-odds-fast.py scripts/generate-final-preday-selection.py scripts/generate-final-preday-selection-remote.py scripts/final-rules-payload.py scripts/generate-final-live-bets.py scripts/generate-final-live-bets-batched.py
+        run: python -m py_compile scripts/repair-aug9-official-program.py scripts/collect-jra-official-odds.py scripts/collect-jra-official-odds-runtime.py scripts/collect-current-jra-official-odds.py scripts/collect-current-jra-official-odds-fast.py scripts/collect-current-jra-official-odds-live.py scripts/generate-final-preday-selection.py scripts/generate-final-preday-selection-remote.py scripts/final-rules-payload.py scripts/generate-final-live-bets.py scripts/generate-final-live-bets-batched.py
 
       - name: Repair August 9 official race program
         run: python scripts/repair-aug9-official-program.py
@@ -74,7 +75,7 @@ jobs:
 
       - name: Collect official odds for still-in-time fixed targets
         run: |
-          python scripts/collect-current-jra-official-odds-fast.py | tee /tmp/final-live-odds.log
+          python scripts/collect-current-jra-official-odds-live.py | tee /tmp/final-live-odds.log
           test -s current-selected-official-odds.json.gz
           test -s official-odds-collection-report.json
           cat official-odds-collection-report.json
