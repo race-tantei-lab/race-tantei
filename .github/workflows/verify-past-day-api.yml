@@ -1,0 +1,49 @@
+name: Verify historical day API
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-past-day-api.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Mark pending
+        run: |
+          curl -sS -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -d '{"state":"pending","context":"production/past-day-api","description":"checking historical day API"}' >/dev/null
+      - name: Probe historical and current days
+        run: |
+          set -euo pipefail
+          for d in 2024-05-26 2026-08-09; do
+            echo "=== $d ==="
+            code=$(curl -sS -o "/tmp/$d.body" -w '%{http_code}' "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$d")
+            echo "HTTP $code"
+            head -c 1200 "/tmp/$d.body"; echo
+            if [ "$d" = "2024-05-26" ]; then
+              test "$code" = "200"
+              python - <<PY
+import json
+p=json.load(open('/tmp/$d.body'))
+assert isinstance(p.get('races'), list) and len(p['races']) >= 24, p
+print('historical races', len(p['races']))
+PY
+            fi
+          done
+      - name: Mark success
+        if: success()
+        run: |
+          curl -sS -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -d '{"state":"success","context":"production/past-day-api","description":"historical day API is healthy"}' >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          curl -sS -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
+            -d '{"state":"failure","context":"production/past-day-api","description":"historical day API failed"}' >/dev/null
