@@ -2,8 +2,8 @@ import publicSite from "./public-site-entry-v6.js";
 import type { Env } from "./v1/types.js";
 
 const AUG9_SELECTED = new Set([
-  "2026-08-09-chukyo-01","2026-08-09-chukyo-05","2026-08-09-chukyo-08","2026-08-09-chukyo-11","2026-08-09-chukyo-12",
-  "2026-08-09-niigata-01","2026-08-09-niigata-03","2026-08-09-niigata-04","2026-08-09-niigata-11","2026-08-09-niigata-12",
+  "2026-08-09-chukyo-01","2026-08-09-chukyo-05","2026-08-09-chukyo-07","2026-08-09-chukyo-08","2026-08-09-chukyo-11",
+  "2026-08-09-niigata-01","2026-08-09-niigata-03","2026-08-09-niigata-07","2026-08-09-niigata-11","2026-08-09-niigata-12",
   "2026-08-09-sapporo-01","2026-08-09-sapporo-02","2026-08-09-sapporo-05","2026-08-09-sapporo-06","2026-08-09-sapporo-09",
 ]);
 
