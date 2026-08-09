@@ -12,6 +12,13 @@ function venueSlug(venue: string): string {
   return map[venue] ?? encodeURIComponent(venue);
 }
 
+function meetingHeading(value: string): { venue: string; meetingNo: number; meetingDay: number } | null {
+  const compact = value.replace(/[\s\u3000]+/g, "");
+  const match = compact.match(new RegExp(`^(\\d+)回(${VENUES})(\\d+)日$`));
+  if (!match) return null;
+  return { venue: match[2] ?? "", meetingNo: Number(match[1]), meetingDay: Number(match[3]) };
+}
+
 export function jstDateKey(date = new Date(), offsetDays = 0): string {
   const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000 + offsetDays * 24 * 60 * 60 * 1000);
   return `${jst.getUTCFullYear()}-${String(jst.getUTCMonth() + 1).padStart(2, "0")}-${String(jst.getUTCDate()).padStart(2, "0")}`;
@@ -52,9 +59,9 @@ export function parseOfficialCalendar(html: string, raceDate: string, calendarUr
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i] ?? "";
-    const heading = line.match(new RegExp(`^(\\d+)回(${VENUES})(\\d+)日$`));
+    const heading = meetingHeading(line);
     if (heading) {
-      meeting = { venue: heading[2] ?? "", meetingNo: Number(heading[1]), meetingDay: Number(heading[3]) };
+      meeting = heading;
       continue;
     }
     if (!meeting) continue;
@@ -74,7 +81,7 @@ export function parseOfficialCalendar(html: string, raceDate: string, calendarUr
       const pieces: string[] = [];
       for (let j = i + 1; j < Math.min(lines.length, i + 8); j += 1) {
         const next = lines[j] ?? "";
-        if (new RegExp(`^\\d+回(${VENUES})\\d+日$`).test(next) || /^\d{1,2}\s*レース$/.test(next)) break;
+        if (meetingHeading(next) || /^\d{1,2}\s*レース$/.test(next)) break;
         const time = next.match(/^(\d{1,2})時(\d{2})分$/);
         if (time) { hour = Number(time[1]); minute = Number(time[2]); i = j; break; }
         if (!/^(?:レース\s*番号|レース名・条件|発走時刻|---|\|)/.test(next)) pieces.push(next);
