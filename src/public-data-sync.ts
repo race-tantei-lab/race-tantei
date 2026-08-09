@@ -28,6 +28,7 @@ const DISCOVERY_REVISION = "2026-08-09-public-data-only-v2";
 const SYNC_LOCK_KEY = "public_data_sync_lock_until";
 let schemaReady: Promise<void> | null = null;
 let inMemorySync: Promise<unknown> | null = null;
+type RaceSource = Awaited<ReturnType<typeof getDueRaceSources>>[number];
 
 function ready(db: D1Database): Promise<void> {
   schemaReady ??= ensureSchema(db).catch((error) => {
@@ -124,9 +125,35 @@ async function settlePublicBetsFromResult(env: Env, result: Awaited<ReturnType<t
   }
 }
 
+async function getUrgentResultSources(db: D1Database, limit: number): Promise<RaceSource[]> {
+  const safeLimit = Math.max(1, Math.min(36, Math.floor(limit)));
+  const rows = await db.prepare(`
+    SELECT s.entry_url AS entryUrl,s.result_url AS resultUrl,s.race_id AS raceId,
+           s.status,s.next_fetch_at AS nextFetchAt,s.failure_count AS failureCount
+    FROM rt_race_sources s
+    JOIN rt_races r ON r.race_id=s.race_id
+    WHERE r.status!='finished'
+      AND r.start_time_utc IS NOT NULL
+      AND julianday(r.start_time_utc)<=julianday('now','-4 minutes')
+    ORDER BY r.start_time_utc ASC,s.updated_at DESC
+    LIMIT ?
+  `).bind(safeLimit * 3).all<RaceSource>();
+
+  const deduped: RaceSource[] = [];
+  const seen = new Set<string>();
+  for (const row of rows.results) {
+    const key = row.raceId ?? row.entryUrl;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(row);
+    if (deduped.length >= safeLimit) break;
+  }
+  return deduped;
+}
+
 async function loadRaceForSync(
   env: Env,
-  source: Awaited<ReturnType<typeof getDueRaceSources>>[number]
+  source: RaceSource
 ): Promise<{ race: RaceRecord; entryFetched: boolean; entryError: string | null }> {
   try {
     const entryPage = await fetchJraPage(source.entryUrl);
@@ -145,7 +172,7 @@ async function loadRaceForSync(
 
 async function processSource(
   env: Env,
-  source: Awaited<ReturnType<typeof getDueRaceSources>>[number],
+  source: RaceSource,
   now: Date
 ): Promise<boolean> {
   try {
@@ -253,7 +280,15 @@ async function executeSync(env: Env, triggerType: "cron" | "manual"): Promise<un
       }
     }
 
-    const due = await getDueRaceSources(env.DB, positiveInt(env.SYNC_BATCH_SIZE, 12));
+    const batchSize = positiveInt(env.SYNC_BATCH_SIZE, 12);
+    const urgent = await getUrgentResultSources(env.DB, batchSize);
+    const urgentEntries = new Set(urgent.map((source) => source.entryUrl));
+    const regularCandidates = urgent.length < batchSize ? await getDueRaceSources(env.DB, batchSize * 2) : [];
+    const due = [
+      ...urgent,
+      ...regularCandidates.filter((source) => !urgentEntries.has(source.entryUrl))
+    ].slice(0, batchSize);
+
     processed = due.length;
     for (const source of due) {
       const ok = await processSource(env, source, now);
