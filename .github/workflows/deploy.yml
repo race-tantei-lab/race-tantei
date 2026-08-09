@@ -64,7 +64,7 @@ jobs:
             echo "Checking $d"
             code=$(curl --retry 5 --retry-delay 2 --retry-all-errors -sS -o "/tmp/$d.json" -w '%{http_code}' "$base/api/public/day?date=$d")
             test "$code" = '200'
-            DATE="$d" node -e "const fs=require('fs');const d=process.env.DATE;const p=JSON.parse(fs.readFileSync('/tmp/'+d+'.json','utf8'));const r=p.races;if(!Array.isArray(r)||r.length<12)throw new Error('bad historical races '+d);const venues=new Set(r.map(x=>x.venue));const s=r.filter(x=>['hit','miss','buy'].includes(x.publicState?.code));const skip=r.filter(x=>x.publicState?.code==='skip');if(s.length!==venues.size*5)throw new Error('historical selection count '+d+': '+s.length+' expected '+venues.size*5);if(skip.length!==r.length-s.length)throw new Error('historical skip count '+d);console.log(d,'races=',r.length,'venues=',venues.size,'selected=',s.length,'skip=',skip.length)"
+            DATE="$d" node -e "const fs=require('fs');const d=process.env.DATE;const p=JSON.parse(fs.readFileSync('/tmp/'+d+'.json','utf8'));const r=p.races;if(!Array.isArray(r)||r.length<12)throw new Error('bad historical races '+d);const venues=new Set(r.map(x=>x.venue));const s=r.filter(x=>['hit','miss','buy'].includes(x.publicState?.code));const skip=r.filter(x=>x.publicState?.code==='skip');const badNames=r.filter(x=>{const n=String(x.raceName||'').replace(/\\s+/g,' ').trim();return !n||/^\\d{1,2}(?:R|レース)$/i.test(n)||/検索ウィンドウ|検索メニュー|サイト内検索|JRAホーム|メニューを開く|レース情報トップ|出馬表/.test(n)});if(s.length!==venues.size*5)throw new Error('historical selection count '+d+': '+s.length+' expected '+venues.size*5);if(skip.length!==r.length-s.length)throw new Error('historical skip count '+d);if(badNames.length)throw new Error('historical race names missing '+d+': '+badNames.map(x=>x.raceId+':'+x.raceName).join(','));console.log(d,'races=',r.length,'venues=',venues.size,'selected=',s.length,'skip=',skip.length,'names=ok')"
           done
           race_id=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/2024-05-26.json','utf8'));const r=p.races.find(x=>['hit','miss','buy'].includes(x.publicState?.code));if(!r)process.exit(2);process.stdout.write(r.raceId)")
           test -n "$race_id"
@@ -74,6 +74,10 @@ jobs:
           grep -q '確定買い目' /tmp/historical-detail.html
           grep -q '購入額' /tmp/historical-detail.html
           grep -q '出走馬' /tmp/historical-detail.html
+          if grep -Eq '<h1>[0-9]{1,2}(R|レース)</h1>|<h1>(検索ウィンドウ|検索メニュー|サイト内検索|出馬表)</h1>' /tmp/historical-detail.html; then
+            echo 'Historical detail still has a placeholder race name.' >&2
+            exit 1
+          fi
 
       - name: Publish deployment success
         if: success()
