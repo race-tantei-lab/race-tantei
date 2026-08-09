@@ -64,7 +64,7 @@ jobs:
             echo "Checking $d"
             code=$(curl --retry 5 --retry-delay 2 --retry-all-errors -sS -o "/tmp/$d.json" -w '%{http_code}' "$base/api/public/day?date=$d")
             test "$code" = '200'
-            DATE="$d" node -e "const fs=require('fs');const d=process.env.DATE;const p=JSON.parse(fs.readFileSync('/tmp/'+d+'.json','utf8'));const r=p.races;if(!Array.isArray(r)||r.length<12)throw new Error('bad historical races '+d);const s=r.filter(x=>['hit','miss','buy'].includes(x.publicState?.code));if(!s.length)throw new Error('no selected historical races '+d);console.log(d,'races=',r.length,'selected=',s.length)"
+            DATE="$d" node -e "const fs=require('fs');const d=process.env.DATE;const p=JSON.parse(fs.readFileSync('/tmp/'+d+'.json','utf8'));const r=p.races;if(!Array.isArray(r)||r.length<12)throw new Error('bad historical races '+d);const venues=new Set(r.map(x=>x.venue));const s=r.filter(x=>['hit','miss','buy'].includes(x.publicState?.code));const skip=r.filter(x=>x.publicState?.code==='skip');if(s.length!==venues.size*5)throw new Error('historical selection count '+d+': '+s.length+' expected '+venues.size*5);if(skip.length!==r.length-s.length)throw new Error('historical skip count '+d);console.log(d,'races=',r.length,'venues=',venues.size,'selected=',s.length,'skip=',skip.length)"
           done
           race_id=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/2024-05-26.json','utf8'));const r=p.races.find(x=>['hit','miss','buy'].includes(x.publicState?.code));if(!r)process.exit(2);process.stdout.write(r.raceId)")
           test -n "$race_id"
@@ -85,7 +85,7 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/cloudflare-deploy' \
-            -f description='Cloudflare deploy and historical race verification succeeded' \
+            -f description='Cloudflare deploy and frozen historical verification succeeded' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Publish deployment failure
@@ -98,7 +98,7 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/cloudflare-deploy' \
-            -f description='Cloudflare deploy or historical race verification failed' \
+            -f description='Cloudflare deploy or frozen historical verification failed' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Save production deployment report
