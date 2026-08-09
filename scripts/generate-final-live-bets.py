@@ -75,44 +75,59 @@ def rule_score(rules_by_bet,bet,vals,preday=False):
         if ok:best=max(best,float(rule['newScore']))
     return best
 
-def history_features(con,target,pmod):
-    horse_hist=collections.defaultdict(lambda:collections.deque(maxlen=3));horse_stats=collections.defaultdict(lambda:[0,0,0]);jstats=collections.defaultdict(lambda:[0,0,0]);tstats=collections.defaultdict(lambda:[0,0,0])
-    races=con.execute("SELECT race_id,race_date,venue,race_no FROM rt_races WHERE race_date<=? ORDER BY race_date,venue,race_no",(target,)).fetchall()
-    rr=collections.defaultdict(list)
-    for r in con.execute("SELECT race_id,horse_no,horse_name,jockey,trainer,runner_status FROM rt_runners WHERE race_id IN (SELECT race_id FROM rt_races WHERE race_date<=?) ORDER BY race_id,horse_no",(target,)):
-        rr[r['race_id']].append(r)
-    res=collections.defaultdict(dict)
-    for x in con.execute("SELECT race_id,horse_no,finish_position,final3f FROM rt_results WHERE race_id IN (SELECT race_id FROM rt_races WHERE race_date<?)",(target,)):
-        res[x['race_id']][int(x['horse_no'])]=x
-    target_feat={}
-    for race in races:
-        rid=race['race_id'];date=race['race_date'];rs=[x for x in rr[rid] if (x['runner_status'] or 'active')=='active'];n=len(rs)
-        validf=[]
-        if date<target:
-            for r in rs:
-                x=res[rid].get(int(r['horse_no']));v=x['final3f'] if x else None
-                if v is not None:validf.append((int(r['horse_no']),float(v)))
-            validf.sort(key=lambda z:z[1]);fscore={h:(1.0-(i/max(1,len(validf)-1))) for i,(h,_) in enumerate(validf)}
-        else:fscore={}
-        hf={}
-        for r in rs:
-            hn=r['horse_name'] or str(r['horse_no']);jk=r['jockey'] or '';tr=r['trainer'] or '';hh=horse_hist[hn];hs=horse_stats[hn];js=jstats[jk];ts=tstats[tr]
-            if hh:form=sum(q[0] for q in hh)/len(hh);speed=sum(q[1] for q in hh)/len(hh);top3=sum(q[2] for q in hh)
-            else:form=speed=0.;top3=0
-            jr=(js[2]+3)/(js[0]+15);trr=(ts[2]+3)/(ts[0]+15)
-            hf[int(r['horse_no'])]=(pmod.formcode(form,bool(hh)),pmod.formcode(speed,bool(hh)),pmod.ratecode(jr),pmod.ratecode(trr),pmod.startsbin(hs[0]),min(3,top3))
-        if date==target:target_feat[rid]=hf
-        if date<target:
-            for r in rs:
-                x=res[rid].get(int(r['horse_no']))
-                if not x:continue
-                try:pos=int(x['finish_position'])
-                except:continue
-                if pos<=0:continue
-                hn=r['horse_name'] or str(r['horse_no']);jk=r['jockey'] or '';tr=r['trainer'] or '';finishscore=max(0.,1.0-(pos-1)/max(1,n-1));sp=fscore.get(int(r['horse_no']),.5);is3=int(pos<=3);is1=int(pos==1)
-                horse_hist[hn].append((finishscore,sp,is3))
-                for st in (horse_stats[hn],jstats[jk],tstats[tr]):st[0]+=1;st[1]+=is1;st[2]+=is3
-    return target_feat
+def history_features_remote(collector,target,current_runners):
+    horses=sorted({str(r['horseName']) for r in current_runners if r.get('horseName')})
+    jockeys=sorted({str(r['jockey']) for r in current_runners if r.get('jockey')})
+    trainers=sorted({str(r['trainer']) for r in current_runners if r.get('trainer')})
+    horse_rows=[]
+    if horses:
+        ph=','.join('?' for _ in horses)
+        horse_rows=collector.d1_query(f"""
+          WITH prior AS (
+            SELECT u.horse_name AS horseName,u.horse_no AS horseNo,r.race_id AS raceId,
+                   r.race_date AS raceDate,r.race_no AS raceNo,z.finish_position AS finishPosition,z.final3f AS final3f,
+                   COUNT(*) OVER(PARTITION BY u.horse_name) AS starts,
+                   ROW_NUMBER() OVER(PARTITION BY u.horse_name ORDER BY r.race_date DESC,r.race_no DESC,r.race_id DESC) AS rn,
+                   (SELECT COUNT(*) FROM rt_runners u2 WHERE u2.race_id=r.race_id AND COALESCE(u2.runner_status,'active')='active') AS fieldCount,
+                   (SELECT COUNT(*) FROM rt_results z2 WHERE z2.race_id=r.race_id AND z2.final3f IS NOT NULL) AS valid3f,
+                   (SELECT COUNT(*) FROM rt_results z2 JOIN rt_runners u2 ON u2.race_id=z2.race_id AND u2.horse_no=z2.horse_no
+                    WHERE z2.race_id=r.race_id AND z.final3f IS NOT NULL AND z2.final3f IS NOT NULL
+                      AND (CAST(z2.final3f AS REAL)<CAST(z.final3f AS REAL) OR (CAST(z2.final3f AS REAL)=CAST(z.final3f AS REAL) AND u2.horse_no<u.horse_no))) AS faster
+            FROM rt_runners u JOIN rt_races r ON r.race_id=u.race_id
+            JOIN rt_results z ON z.race_id=u.race_id AND z.horse_no=u.horse_no
+            WHERE u.horse_name IN ({ph}) AND r.race_date<? AND z.finish_position IS NOT NULL AND z.finish_position>0
+          )
+          SELECT * FROM prior WHERE rn<=3 ORDER BY horseName,rn
+        """,[*horses,target])
+    by_horse=collections.defaultdict(list);starts={}
+    for x in horse_rows:
+        hn=str(x['horseName']);starts[hn]=int(x.get('starts') or 0)
+        pos=int(x['finishPosition']);n=max(1,int(x.get('fieldCount') or 0))
+        form=max(0.0,1.0-(pos-1)/max(1,n-1))
+        if x.get('final3f') is None: speed=.5
+        else:
+            vf=int(x.get('valid3f') or 0);faster=int(x.get('faster') or 0);speed=1.0-(faster/max(1,vf-1))
+        by_horse[hn].append((form,speed,int(pos<=3)))
+    def grouped_stats(names,column):
+        if not names:return {}
+        ph=','.join('?' for _ in names)
+        rows=collector.d1_query(f"""
+          SELECT u.{column} AS name,COUNT(*) AS starts,SUM(CASE WHEN z.finish_position<=3 THEN 1 ELSE 0 END) AS top3
+          FROM rt_runners u JOIN rt_races r ON r.race_id=u.race_id
+          JOIN rt_results z ON z.race_id=u.race_id AND z.horse_no=u.horse_no
+          WHERE u.{column} IN ({ph}) AND r.race_date<? AND z.finish_position IS NOT NULL AND z.finish_position>0
+          GROUP BY u.{column}
+        """,[*names,target])
+        return {str(x['name']):(int(x.get('starts') or 0),int(x.get('top3') or 0)) for x in rows if x.get('name') is not None}
+    jstats=grouped_stats(jockeys,'jockey');tstats=grouped_stats(trainers,'trainer')
+    out={}
+    for r in current_runners:
+        hn=str(r.get('horseName') or r['horseNo']);jk=str(r.get('jockey') or '');tr=str(r.get('trainer') or '');hh=by_horse.get(hn,[])
+        if hh:form=sum(q[0] for q in hh)/len(hh);speed=sum(q[1] for q in hh)/len(hh);top3=sum(q[2] for q in hh)
+        else:form=speed=0.;top3=0
+        js=jstats.get(jk,(0,0));ts=tstats.get(tr,(0,0));jr=(js[1]+3)/(js[0]+15);trr=(ts[1]+3)/(ts[0]+15)
+        out[(str(r['raceId']),int(r['horseNo']))]=(form,speed,jr,trr,int(starts.get(hn,0)),min(3,top3),bool(hh))
+    return out
 
 def allocate(bin_codes,U):
     n=len(bin_codes);cap=max(1,int(math.floor(U*.35+1e-12)))
@@ -155,7 +170,7 @@ def select_tickets(tickets):
     return chosen
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--repo',default='.');ap.add_argument('--db',required=True);ap.add_argument('--date',default='2026-08-09');ap.add_argument('--selection',default='analysis-results/final-aug9-selection.json');ap.add_argument('--out',default='analysis-results/final-live-bets.json');ap.add_argument('--odds-file',default='current-selected-official-odds.json.gz');ap.add_argument('--insert',action='store_true');a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--repo',default='.');ap.add_argument('--date',default='2026-08-09');ap.add_argument('--selection',default='analysis-results/final-aug9-selection.json');ap.add_argument('--out',default='analysis-results/final-live-bets.json');ap.add_argument('--odds-file',default='current-selected-official-odds.json.gz');ap.add_argument('--insert',action='store_true');a=ap.parse_args()
     repo=Path(a.repo).resolve();pmod=load_selection_module(repo);collector=load_collector(repo);rmod=load_rules_module(repo)
     rules=rmod.load_rules();assert len(rules)==316
     rb=collections.defaultdict(list)
@@ -165,11 +180,17 @@ def main():
         else:
             for bt in range(6):rb[bt].append(rule)
     sel=json.loads((repo/a.selection).read_text(encoding='utf-8'));ids=[r['raceId'] for r in sel['selected']];assert len(ids)==15 and sel.get('resultDataUsedForTargetDay') is False
-    con=sqlite3.connect(a.db);con.row_factory=sqlite3.Row
-    hf_all=history_features(con,a.date,pmod)
     q=','.join('?'*len(ids))
-    races={r['race_id']:r for r in con.execute(f"SELECT race_id,race_date,venue,race_no,race_name,conditions,surface,distance_m,direction,weather,track_condition,start_time_jst FROM rt_races WHERE race_id IN ({q})",ids)}
-    runner={rid:[r for r in con.execute("SELECT horse_no,horse_name,jockey,trainer,runner_status FROM rt_runners WHERE race_id=? ORDER BY horse_no",(rid,)) if (r['runner_status'] or 'active')=='active'] for rid in ids}
+    race_rows=collector.d1_query(f"SELECT race_id AS raceId,race_date AS raceDate,venue,race_no AS raceNo,race_name AS raceName,conditions,surface,distance_m AS distanceM,direction,weather,track_condition AS trackCondition,start_time_jst AS startTimeJst FROM rt_races WHERE race_id IN ({q})",ids)
+    races={str(r['raceId']):r for r in race_rows}
+    current_runners=collector.d1_query(f"SELECT race_id AS raceId,horse_no AS horseNo,horse_name AS horseName,jockey,trainer,runner_status AS runnerStatus FROM rt_runners WHERE race_id IN ({q}) ORDER BY race_id,horse_no",ids)
+    current_runners=[r for r in current_runners if (r.get('runnerStatus') or 'active')=='active']
+    runner=collections.defaultdict(list)
+    for r in current_runners: runner[str(r['raceId'])].append(r)
+    raw_hf=history_features_remote(collector,a.date,current_runners)
+    hf_all=collections.defaultdict(dict)
+    for (rid,hno),(form,speed,jr,trr,starts,top3,has) in raw_hf.items():
+        hf_all[rid][hno]=(pmod.formcode(form,has),pmod.formcode(speed,has),pmod.ratecode(jr),pmod.ratecode(trr),pmod.startsbin(starts),top3)
     odds=collections.defaultdict(lambda:collections.defaultdict(dict))
     odds_path=repo/a.odds_file
     if not odds_path.exists(): raise RuntimeError(f'ODDS_FILE_MISSING:{odds_path}')
@@ -200,14 +221,14 @@ def main():
     for rid in ids:
         race=races.get(rid);rs=runner.get(rid,[])
         if race is None or len(rs)<3:raise RuntimeError(f'RACE_INPUT_MISSING:{rid}')
-        hnos=[int(r['horse_no']) for r in rs];pos_by_h={h:i for i,h in enumerate(hnos)};hf=hf_all.get(rid,{})
+        hnos=[int(r['horseNo']) for r in rs];pos_by_h={h:i for i,h in enumerate(hnos)};hf=hf_all.get(rid,{})
         single=odds[rid].get('単勝',{})
         if any(str(h) not in single for h in hnos):raise RuntimeError(f'WIN_ODDS_INCOMPLETE:{rid}:{len(single)}/{len(hnos)}')
         win=[single[str(h)] for h in hnos];raw=[1/x for x in win];s=sum(raw);w=[x/s for x in raw]
         pop_order=sorted(range(len(hnos)),key=lambda i:(win[i],i));pop=[0]*len(hnos)
         for rank,i in enumerate(pop_order,1):pop[i]=rank
-        surface=race['surface'] or '障害';dm=int(race['distance_m'] or 0);venue=race['venue'];rn=int(race['race_no']);n=len(hnos)
-        base={'venue':pmod.VENUE_MAP[venue],'surface':{'芝':0,'ダート':1,'障害':2}.get(surface,2),'dist':pmod.distbin(dm),'track':{'良':0,'稍重':1,'重':2,'不良':3}.get(race['track_condition'],-1),'weather':weatherbin(race['weather']) if race['weather'] in ('晴','曇','雨','小雨','雪','小雪') else -1,'field':pmod.fieldbin(n),'raceNo':pmod.rnobin(rn),'season':pmod.seasonbin(int(a.date[5:7])),'rclass':pmod.classbin(race['race_name'],race['conditions']),'direction':pmod.directionbin(venue,surface,dm,race['direction'])}
+        surface=race['surface'] or '障害';dm=int(race['distanceM'] or 0);venue=race['venue'];rn=int(race['raceNo']);n=len(hnos)
+        base={'venue':pmod.VENUE_MAP[venue],'surface':{'芝':0,'ダート':1,'障害':2}.get(surface,2),'dist':pmod.distbin(dm),'track':{'良':0,'稍重':1,'重':2,'不良':3}.get(race['trackCondition'],-1),'weather':weatherbin(race['weather']) if race['weather'] in ('晴','曇','雨','小雨','雪','小雪') else -1,'field':pmod.fieldbin(n),'raceNo':pmod.rnobin(rn),'season':pmod.seasonbin(int(a.date[5:7])),'rclass':pmod.classbin(race['raceName'],race['conditions']),'direction':pmod.directionbin(venue,surface,dm,race['direction'])}
         tickets=[]
         for bt,jp,en,k,ordered in specs:
             omap=odds[rid].get(jp,{})
@@ -232,7 +253,7 @@ def main():
             for t,u in zip(chosen,units):course_rows.append({'course':course,'betType':t['betType'],'combination':t['combo'],'stakeYen':u*100,'assumedOdds':t['odds']})
             assert sum(x['stakeYen'] for x in course_rows)==budget and max(x['stakeYen'] for x in course_rows)<=budget*.35+1e-9
             courses.extend(course_rows)
-        out.append({'raceId':rid,'venue':venue,'raceNo':rn,'raceName':race['race_name'],'startTimeJst':race['start_time_jst'],'tickets':[{'betType':t['betType'],'combination':t['combo'],'odds':t['odds'],'fullScore':t['full'],'predayScore':t['pre']} for t in chosen],'courseBets':courses})
+        out.append({'raceId':rid,'venue':venue,'raceNo':rn,'raceName':race['raceName'],'startTimeJst':race['startTimeJst'],'tickets':[{'betType':t['betType'],'combination':t['combo'],'odds':t['odds'],'fullScore':t['full'],'predayScore':t['pre']} for t in chosen],'courseBets':courses})
     artifact={'date':a.date,'lockedRaceCount':len(out),'selectedRaceCount':len(sel['selected']),'sourceRuleCount':316,'resultDataUsedForTargetDay':False,'officialOddsOnly':True,'generatedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'races':out}
     (repo/a.out).write_text(json.dumps(artifact,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     if a.insert:
