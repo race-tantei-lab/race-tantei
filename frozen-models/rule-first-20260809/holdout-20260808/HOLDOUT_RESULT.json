@@ -1,0 +1,20 @@
+{
+  "model":"rule-first-20260809-rebuild",
+  "raceDate":"2026-08-08",
+  "preResultLockCommit":"22be7584af6211d94255f74df787432048643dee",
+  "preResultPredictionSha256":"aa3e201d8a5412e43a9aa0ba035438f647acfb99ff2c454ff3599f4efe9e44f7",
+  "status":"FAILED_TRUE_HOLDOUT",
+  "selectedRaces":15,
+  "ticketCount":26,
+  "hits":0,
+  "refundTickets":0,
+  "courses":{
+    "light":{"investmentYen":30000,"returnYen":0,"profitYen":-30000,"roiPct":0.0},
+    "standard":{"investmentYen":75000,"returnYen":0,"profitYen":-75000,"roiPct":0.0},
+    "premium":{"investmentYen":150000,"returnYen":0,"profitYen":-150000,"roiPct":0.0}
+  },
+  "settlementCsvSha256LocalWithUtf8Bom":"9f6b74e26f56816818e1adc762285c2fab3782c5fba0e0b0acf284713b0eacea",
+  "settlementJsonSha256":"8fc3b37f46095c76ee739ee43f5559f9810ca5a3e19173220f0a7dd865536204",
+  "diagnosis":"No direct target-outcome feature leakage was found, but rule discovery/model selection used the same fixed history later used for robustness scoring. The true holdout failure demonstrates material selection/multiple-testing bias. This artifact must not be promoted to production.",
+  "nextMethod":"Do not tune on 2026-08-08. Rebuild with nested/rolling-origin discovery: rules are discovered only inside each training window and evaluated on untouched outer windows; only hyperparameters/selection policy that survive nested OOS may be frozen for a future unseen race day."
+}
