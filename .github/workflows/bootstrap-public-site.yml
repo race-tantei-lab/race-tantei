@@ -1,0 +1,41 @@
+name: Bootstrap public site
+on:
+  push:
+    branches: [feat/public-site-current-rules]
+    paths: ['bootstrap/TRIGGER']
+permissions:
+  contents: write
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/public-site-current-rules
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Restore implementation bundle
+        run: |
+          cat bootstrap/part-* > /tmp/site.tar.gz.b64
+          base64 -d /tmp/site.tar.gz.b64 > /tmp/site.tar.gz
+          mkdir -p /tmp/site
+          tar -xzf /tmp/site.tar.gz -C /tmp/site
+          cp -a /tmp/site/repo/. ./
+      - name: Import immutable public history
+        env:
+          PUBLIC_HISTORY_DIR: /tmp/site/history
+        run: python scripts/import-public-history.py
+      - name: Save site implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/public-site-entry.ts src/v1/public-site-db.ts scripts/import-public-history.py wrangler.jsonc .github/workflows/import-public-history.yml .github/workflows/validate-public-site.yml
+          git commit -m 'Implement immutable public race site' || true
+          git push origin HEAD:feat/public-site-current-rules
