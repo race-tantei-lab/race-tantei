@@ -1,0 +1,122 @@
+name: Finalize August 9 production
+run-name: Finalize Aug 9 selection and bets · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/finalize-aug9-production.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+concurrency:
+  group: finalize-aug9-production
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      JRA_ODDS_MAX_PAGES: '1200'
+      JRA_ODDS_REQUEST_PAUSE_SECONDS: '0.08'
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Repair August 9 race program from official schedule
+        run: python scripts/repair-aug9-official-program.py
+
+      - name: Export repaired production D1
+        run: |
+          rm -f /tmp/race-tantei.sql /tmp/race-tantei.db
+          npx wrangler d1 export race-tantei-phase0 --remote --output=/tmp/race-tantei.sql
+          sqlite3 /tmp/race-tantei.db < /tmp/race-tantei.sql
+
+      - name: Rebuild fixed five races from pre-result data only
+        run: |
+          python scripts/generate-final-preday-selection.py --db /tmp/race-tantei.db --date 2026-08-09 --out analysis-results/final-aug9-selection.json
+          python - <<'PY'
+          import json
+          x=json.load(open('analysis-results/final-aug9-selection.json',encoding='utf-8'))
+          assert x['resultDataUsedForTargetDay'] is False
+          assert len(x['selected'])==15
+          for v in ('札幌','新潟','中京'):
+              assert sum(r['venue']==v for r in x['selected'])==5
+          assert all(int(r['distanceM'])>0 for r in x['selected'])
+          print([(r['venue'],r['raceNo'],r['raceName'],r['startTimeJst']) for r in x['selected']])
+          PY
+
+      - name: Save fixed selected races to D1
+        run: |
+          python - <<'PY'
+          import json, importlib.util, pathlib
+          root=pathlib.Path('.')
+          spec=importlib.util.spec_from_file_location('c',root/'scripts'/'collect-jra-official-odds.py')
+          m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+          x=json.load(open('analysis-results/final-aug9-selection.json',encoding='utf-8'))
+          m.d1_query('''CREATE TABLE IF NOT EXISTS rt_daily_selected_races (race_date TEXT NOT NULL,race_id TEXT NOT NULL,venue TEXT NOT NULL,race_no INTEGER NOT NULL,selected_at TEXT NOT NULL,selection_source TEXT NOT NULL,PRIMARY KEY(race_date,race_id))''')
+          existing=m.d1_query("SELECT race_id FROM rt_daily_selected_races WHERE race_date='2026-08-09' ORDER BY race_id")
+          wanted=sorted(r['raceId'] for r in x['selected'])
+          if existing:
+              got=sorted(r['race_id'] for r in existing)
+              if got!=wanted: raise RuntimeError('IMMUTABLE_AUG9_SELECTION_MISMATCH')
+          else:
+              for r in x['selected']:
+                  m.d1_query("INSERT INTO rt_daily_selected_races(race_date,race_id,venue,race_no,selected_at,selection_source) VALUES(?,?,?,?,datetime('now'),'previous_day_fixed')",['2026-08-09',r['raceId'],r['venue'],int(r['raceNo'])])
+          PY
+
+      - name: Collect six JRA official odds types for fixed fifteen races
+        run: python scripts/collect-final-aug9-selected-odds.py
+
+      - name: Export D1 including official odds
+        run: |
+          rm -f /tmp/race-tantei.sql /tmp/race-tantei.db
+          npx wrangler d1 export race-tantei-phase0 --remote --output=/tmp/race-tantei.sql
+          sqlite3 /tmp/race-tantei.db < /tmp/race-tantei.sql
+
+      - name: Generate and immutably save August 9 bets
+        run: |
+          python scripts/generate-final-aug9-bets.py --repo . --db /tmp/race-tantei.db --date 2026-08-09 --selection analysis-results/final-aug9-selection.json --out analysis-results/final-aug9-bets.json --insert
+          python - <<'PY'
+          import json,collections
+          x=json.load(open('analysis-results/final-aug9-bets.json',encoding='utf-8'))
+          assert x['resultDataUsedForTargetDay'] is False and x['officialOddsOnly'] is True and x['sourceRuleCount']==316
+          assert len(x['races'])==15
+          for r in x['races']:
+              assert 3<=len(r['tickets'])<=10
+              assert len({b['betType'] for b in r['tickets']})>=2
+              for course,budget in [('ライト',2000),('スタンダード',5000),('プレミアム',10000)]:
+                  rows=[b for b in r['courseBets'] if b['course']==course]
+                  assert sum(b['stakeYen'] for b in rows)==budget
+                  assert max(b['stakeYen'] for b in rows)<=budget*.35+1e-9
+          print('FINAL_AUG9_BETS_PASS',[(r['venue'],r['raceNo'],len(r['tickets'])) for r in x['races']])
+          PY
+
+      - name: Audit production D1
+        run: |
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT venue,COUNT(*) AS selected FROM rt_daily_selected_races WHERE race_date='2026-08-09' GROUP BY venue ORDER BY venue; SELECT course,COUNT(DISTINCT race_id) AS races,SUM(stake_yen) AS stake FROM rt_public_bets WHERE race_id LIKE '2026-08-09-%' GROUP BY course ORDER BY course" > analysis-results/final-aug9-production-audit.json
+          cat analysis-results/final-aug9-production-audit.json
+
+      - name: Save final August 9 artifacts
+        run: |
+          git add -f analysis-results/final-aug9-selection.json analysis-results/final-aug9-bets.json analysis-results/final-aug9-production-audit.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Save finalized August 9 production bets'
+          git pull --rebase origin main
+          git push origin HEAD:main
