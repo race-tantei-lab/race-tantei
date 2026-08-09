@@ -135,6 +135,10 @@ async function getUrgentResultSources(db: D1Database, limit: number): Promise<Ra
     WHERE r.status!='finished'
       AND r.start_time_utc IS NOT NULL
       AND julianday(r.start_time_utc)<=julianday('now','-4 minutes')
+      AND EXISTS (
+        SELECT 1 FROM rt_public_bets b
+        WHERE b.race_id=r.race_id AND b.settlement_status='pending'
+      )
     ORDER BY r.start_time_utc ASC,s.updated_at DESC
     LIMIT ?
   `).bind(safeLimit * 3).all<RaceSource>();
