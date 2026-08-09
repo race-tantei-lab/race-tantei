@@ -9,7 +9,7 @@ on:
     paths:
       - ".github/workflows/continuous-final-rule-learning.yml"
       - "scripts/update-final-rule-learning.py"
-      - "scripts/generate-final-live-bets-learning.py"
+      - "scripts/generate-final-live-bets-batched.py"
 
 concurrency:
   group: continuous-final-rule-learning
@@ -32,7 +32,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile continuous learner
-        run: python -m py_compile scripts/update-final-rule-learning.py scripts/generate-final-live-bets-learning.py
+        run: python -m py_compile scripts/update-final-rule-learning.py scripts/generate-final-live-bets-batched.py
       - name: Learn only from settled immutable live bets
         shell: bash
         run: |
