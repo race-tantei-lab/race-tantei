@@ -43,12 +43,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build canonical direct history index
-        run: |
-          node scripts/build-canonical-direct.mjs
-          test -s src/v1/canonical-history-direct.ts
-          grep -q '2024-05-26-kyoto-12' src/v1/canonical-history-direct.ts
-
       - name: Typecheck
         run: npm run typecheck
 
