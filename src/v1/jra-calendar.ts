@@ -32,7 +32,6 @@ function descriptorParts(descriptor: string, raceNo: number): {
   const distanceM = distance?.[1] ? Number(distance[1].replace(/,/g, "")) : null;
   const surface = /^ダ/.test(inside) ? "ダート" : /^芝/.test(inside) ? (/^障害/.test(clean) ? "障害" : "芝") : /^障害/.test(clean) ? "障害" : null;
   const direction = /直/.test(inside) ? "直線" : /右/.test(inside) ? "右" : /左/.test(inside) ? "左" : /外/.test(inside) ? "外" : /内/.test(inside) ? "内" : null;
-
   const classStart = clean.search(/(?:障害)?(?:2歳|3歳|4歳|3歳以上|4歳以上)(?:\s|　)*(?:未勝利|新馬|1勝クラス|2勝クラス|3勝クラス|オープン)/);
   let raceName = "";
   if (classStart > 0) raceName = clean.slice(0, classStart).trim();
@@ -65,20 +64,20 @@ export function parseOfficialCalendar(html: string, raceDate: string, calendarUr
     let hour = 0;
     let minute = 0;
 
-    const full = line.match(/^(\d{1,2})レース\s+(.+?)\s+(\d{1,2})時(\d{2})分$/);
+    const full = line.match(/^(\d{1,2})\s*レース\s+(.+?)\s+(\d{1,2})時(\d{2})分$/);
     if (full) {
       raceNo = Number(full[1]); descriptor = full[2] ?? ""; hour = Number(full[3]); minute = Number(full[4]);
     } else {
-      const raceOnly = line.match(/^(\d{1,2})レース$/);
+      const raceOnly = line.match(/^(\d{1,2})\s*レース$/);
       if (!raceOnly) continue;
       raceNo = Number(raceOnly[1]);
       const pieces: string[] = [];
       for (let j = i + 1; j < Math.min(lines.length, i + 8); j += 1) {
         const next = lines[j] ?? "";
-        if (new RegExp(`^\\d+回(${VENUES})\\d+日$`).test(next) || /^\d{1,2}レース$/.test(next)) break;
+        if (new RegExp(`^\\d+回(${VENUES})\\d+日$`).test(next) || /^\d{1,2}\s*レース$/.test(next)) break;
         const time = next.match(/^(\d{1,2})時(\d{2})分$/);
         if (time) { hour = Number(time[1]); minute = Number(time[2]); i = j; break; }
-        if (!/^(?:レース番号|レース名・条件|発走時刻|---|\|)/.test(next)) pieces.push(next);
+        if (!/^(?:レース\s*番号|レース名・条件|発走時刻|---|\|)/.test(next)) pieces.push(next);
       }
       descriptor = pieces.join(" ").trim();
     }
