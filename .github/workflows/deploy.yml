@@ -84,6 +84,22 @@ jobs:
           test "$code" = '200'
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/today.json','utf8'));const r=Array.isArray(p.races)?p.races:[];const now=Date.now();const stale=r.filter(x=>x.publicState?.code==='buy'&&x.startTimeUtc&&Date.parse(x.startTimeUtc)<=now);if(stale.length)throw new Error('post-start races still shown as buy: '+stale.map(x=>x.raceId).join(','));console.log('post-start buy states=ok')"
 
+      - name: Verify live result ingestion and settlement
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          curl --retry 3 --retry-delay 2 --retry-all-errors -fsS "$base/api/public/day?date=$today" >/dev/null
+          sleep 6
+          query="SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.start_time_jst AS startTimeJst,r.status AS raceStatus,(SELECT s.status FROM rt_race_sources s WHERE s.race_id=r.race_id ORDER BY s.updated_at DESC LIMIT 1) AS sourceStatus,(SELECT s.last_error FROM rt_race_sources s WHERE s.race_id=r.race_id ORDER BY s.updated_at DESC LIMIT 1) AS lastError,(SELECT COUNT(*) FROM rt_payouts p WHERE p.race_id=r.race_id) AS payoutRows,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.settlement_status='pending') AS pendingBets FROM rt_races r WHERE r.race_date='$today' AND EXISTS (SELECT 1 FROM rt_public_bets b WHERE b.race_id=r.race_id) AND r.start_time_utc IS NOT NULL AND julianday(r.start_time_utc)<=julianday('now','-20 minutes') ORDER BY r.venue,r.race_no;"
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$query" > /tmp/live-results.json
+          cat /tmp/live-results.json
+          TODAY="$today" node -e "const fs=require('fs');const raw=JSON.parse(fs.readFileSync('/tmp/live-results.json','utf8'));const blocks=Array.isArray(raw)?raw:[raw];const rows=blocks.flatMap(x=>Array.isArray(x?.results)?x.results:[]);const bad=rows.filter(x=>String(x.raceStatus)!=='finished'||Number(x.payoutRows||0)<=0||Number(x.pendingBets||0)>0);const target=rows.find(x=>String(x.raceId)===process.env.TODAY+'-niigata-11');if(target)console.log('Niigata 11R',JSON.stringify(target));if(bad.length)throw new Error('live result ingestion incomplete: '+bad.map(x=>x.raceId+' status='+x.raceStatus+' source='+x.sourceStatus+' payouts='+x.payoutRows+' pending='+x.pendingBets+' error='+(x.lastError||'')).join(' | '));console.log('live result ingestion and settlement=ok, checked',rows.length,'races')"
+
       - name: Publish deployment success
         if: success()
         env:
