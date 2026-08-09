@@ -1,5 +1,6 @@
 import publicSite from "./public-site-entry-v2.js";
 import { handleCanonicalHistorySeed } from "./v1/canonical-history-seed.js";
+import { enhancePublicResponse } from "./v1/public-enhancements.js";
 import { renderPublicConditions } from "./v1/public-conditions.js";
 import { response } from "./v1/public-ui.js";
 import type { Env } from "./v1/types.js";
@@ -12,7 +13,8 @@ export default {
       return response(renderPublicConditions());
     }
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
-    return publicSite.fetch(request, env, ctx);
+    const upstream=await publicSite.fetch(request, env, ctx);
+    return enhancePublicResponse(request,env.DB,upstream);
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
