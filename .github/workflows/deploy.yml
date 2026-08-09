@@ -40,17 +40,12 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
       - name: Install dependencies
         run: npm ci
 
       - name: Build canonical direct history index
         run: |
-          python scripts/build-canonical-direct.py
+          node scripts/build-canonical-direct.mjs
           test -s src/v1/canonical-history-direct.ts
           grep -q '2024-05-26-kyoto-12' src/v1/canonical-history-direct.ts
 
