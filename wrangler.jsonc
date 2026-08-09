@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "race-tantei-phase0",
-  "main": "src/public-site-entry-v5.ts",
+  "main": "src/public-site-entry-v6.ts",
   "compatibility_date": "2026-08-01",
   "account_id": "3c6d1826b573b2e68cb13ec37e9e8ade",
   "workers_dev": true,
@@ -10,7 +10,7 @@
   },
   "vars": {
     "ENVIRONMENT": "production",
-    "DEPLOY_REVISION": "public-site-live-truth-ui-20260809",
+    "DEPLOY_REVISION": "public-site-live-truth-detail-20260809",
     "MODEL_VERSION": "v5.0.0-nonlinear-course-policy",
     "JRA_HOME_URL": "https://sp.jra.jp/",
     "JRA_SEED_ENTRY_URLS": "https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0101202601030520260801%2F15",
