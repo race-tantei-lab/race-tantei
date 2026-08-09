@@ -1,5 +1,12 @@
 import { runPublicDataSync } from "./public-data-sync.js";
-import { ensurePublicHistory, getPublicBetRaceIds, getPublicBets, getPublicCourseMetrics, getPublicMonthlyMetrics, type PublicCourseMetric, type PublicMonthlyMetric } from "./v1/public-history-db.js";
+import { ensurePublicHistory, getPublicBets } from "./v1/public-history-db.js";
+import {
+  FROZEN_PUBLIC_METRICS,
+  FROZEN_PUBLIC_MONTHLY,
+  isFrozenSelectedRace,
+  type FrozenMetric,
+  type FrozenMonthlyMetric
+} from "./v1/frozen-public-data.js";
 import type { Env } from "./v1/types.js";
 import { escapeHtml, formatYen } from "./v1/utils.js";
 import { conditionsPage, guidePage, json, redirect, response, shell } from "./v1/public-ui.js";
@@ -30,15 +37,15 @@ function jstDateKey(date = new Date()): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-function monthlyRows(budget: number, rows: PublicMonthlyMetric[]): string {
+function monthlyRows(budget: number, rows: FrozenMonthlyMetric[]): string {
   const course = COURSE_NAMES[COURSE_BUDGETS.indexOf(budget as 2000 | 5000 | 10000)] ?? "ライト";
   return rows.filter((row) => row.course === course).map((row) =>
-    `<div class="monthly-row"><b>${escapeHtml(row.month.replace("-", "/"))}</b><span>${row.settledRaces}R　${formatYen(row.stakeYen)} → ${formatYen(row.returnYen)}</span><strong class="${(row.roiPct ?? 0) >= 100 ? "plus" : "minus"}">${row.roiPct === null ? "—" : row.roiPct.toFixed(1)+"%"}</strong></div>`
+    `<div class="monthly-row"><b>${escapeHtml(row.month.replace("-", "/"))}</b><span>${row.settledRaces}R　${formatYen(row.stakeYen)} → ${formatYen(row.returnYen)}</span><strong class="${row.roiPct >= 100 ? "plus" : "minus"}">${row.roiPct.toFixed(1)}%</strong></div>`
   ).join("");
 }
 
-function metricCards(metrics: PublicCourseMetric[], monthly: PublicMonthlyMetric[]): string {
-  return `<section class="metrics">${metrics.map((row) => `<details class="card metric"><summary><b>${row.course}</b><strong>${row.roiPct === null ? "—" : row.roiPct.toFixed(1)+"%"}</strong><small>${row.settledRaces}R　購入 ${formatYen(row.stakeYen)}　払戻 ${formatYen(row.returnYen)}</small></summary><div class="monthly">${monthlyRows(COURSE_BUDGETS[COURSE_NAMES.indexOf(row.course)], monthly)}</div></details>`).join("")}</section>`;
+function metricCards(metrics: FrozenMetric[], monthly: FrozenMonthlyMetric[]): string {
+  return `<section class="metrics">${metrics.map((row) => `<details class="card metric"><summary><b>${row.course}</b><strong>${row.roiPct.toFixed(1)}%</strong><small>${row.settledRaces}R　購入 ${formatYen(row.stakeYen)}　払戻 ${formatYen(row.returnYen)}</small></summary><div class="monthly">${monthlyRows(row.budget, monthly)}</div></details>`).join("")}</section>`;
 }
 
 async function calendar(db: D1Database): Promise<CalendarRow[]> {
@@ -51,8 +58,8 @@ async function racesOnDate(db: D1Database, date: string): Promise<RaceIndexRow[]
   return rows.results.map((row) => ({ ...row, raceNo: Number(row.raceNo), distanceM: row.distanceM === null ? null : Number(row.distanceM) }));
 }
 
-function publicRaceState(row: RaceIndexRow, today: string, hasBets: boolean): { code: string; label: string; deadline: string | null } {
-  if (hasBets) return { code: "buy", label: "買い目あり", deadline: null };
+function publicRaceState(row: RaceIndexRow, today: string, selected: boolean): { code: string; label: string; deadline: string | null } {
+  if (selected) return { code: "buy", label: "買い目あり", deadline: null };
   if (row.raceDate < today || row.status === "finished") return { code: "skip", label: "見送り", deadline: null };
   let deadline = "発走15分前までに確定";
   const m = row.startTimeJst?.match(/^(\d{1,2}):(\d{2})$/);
@@ -83,13 +90,13 @@ renderHierarchy();`;
 async function home(env: Env, ctx: ExecutionContext): Promise<string> {
   const today = jstDateKey();
   await ensurePublicHistory(env.DB);
-  const [rows, metrics, monthly] = await Promise.all([calendar(env.DB), getPublicCourseMetrics(env.DB), getPublicMonthlyMetrics(env.DB)]);
+  const rows = await calendar(env.DB);
   ctx.waitUntil(runPublicDataSync(env, "manual"));
   const hasToday = rows.some((row) => row.raceDate === today);
   const intro = hasToday
     ? `<section class="hero today-hero"><span class="today-pill">TODAY</span><h1>今日のレース</h1><p>年 → 月 → 日付 → 会場 → レースの順に選ぶだけで、全レースを確認できます。買い目対象・見送り・判定中も同じ画面で分かります。</p></section>`
     : `<section class="hero"><h1>全レース</h1><p>年 → 月 → 日付 → 会場 → レースの順に選んで、これまでの全開催を確認できます。開催日のデータは自動取得されます。</p></section>`;
-  const body = `${intro}<div class="section-title"><h2>累計回収率</h2><span class="muted">タップで月別表示</span></div>${metricCards(metrics, monthly)}<div class="section-title"><h2 id="selected-date">レースを選ぶ</h2><span class="muted">横にスワイプできます</span></div><section class="card navigator"><div class="nav-step"><p class="nav-label">1. 年</p><div class="rail" id="years"></div></div><div class="nav-step"><p class="nav-label">2. 月</p><div class="rail" id="months"></div></div><div class="nav-step"><p class="nav-label">3. 日付</p><div class="rail" id="dates"></div></div><div class="nav-step"><p class="nav-label">4. 会場</p><div class="rail" id="venues"></div></div><div class="nav-step"><p class="nav-label">5. レース</p><div class="race-rail" id="races"></div></div></section>`;
+  const body = `${intro}<div class="section-title"><h2>累計回収率</h2><span class="muted">タップで月別表示</span></div>${metricCards(FROZEN_PUBLIC_METRICS, FROZEN_PUBLIC_MONTHLY)}<div class="section-title"><h2 id="selected-date">レースを選ぶ</h2><span class="muted">横にスワイプできます</span></div><section class="card navigator"><div class="nav-step"><p class="nav-label">1. 年</p><div class="rail" id="years"></div></div><div class="nav-step"><p class="nav-label">2. 月</p><div class="rail" id="months"></div></div><div class="nav-step"><p class="nav-label">3. 日付</p><div class="rail" id="dates"></div></div><div class="nav-step"><p class="nav-label">4. 会場</p><div class="rail" id="venues"></div></div><div class="nav-step"><p class="nav-label">5. レース</p><div class="race-rail" id="races"></div></div></section>`;
   return shell("レース一覧", body, homeScript(rows, today));
 }
 
@@ -98,8 +105,10 @@ async function raceDetail(db: D1Database, raceId: string): Promise<string | null
   if (!race) return null;
   race.raceNo = Number(race.raceNo); race.distanceM = race.distanceM === null ? null : Number(race.distanceM);
   const runners = await db.prepare(`SELECT r.horse_no AS horseNo, r.frame_no AS frameNo, r.horse_name AS horseName, r.sex_age AS sexAge, r.horse_weight AS horseWeight, r.weight_change AS weightChange, r.jockey, r.assigned_weight AS assignedWeight, r.trainer, r.stable, r.win_odds AS winOdds, r.popularity, r.runner_status AS runnerStatus, x.finish_position AS finishPosition, x.result_status AS resultStatus FROM rt_runners r LEFT JOIN rt_results x ON x.race_id=r.race_id AND x.horse_no=r.horse_no WHERE r.race_id=? ORDER BY r.horse_no`).bind(raceId).all<RunnerRow>();
-  const publicBets = await getPublicBets(db, raceId); const today = jstDateKey();
-  const state = publicRaceState(race, today, publicBets.length > 0);
+  const selected = isFrozenSelectedRace(race.raceDate, race.venue, race.raceNo);
+  const publicBets = race.raceDate === "2026-08-08" ? await getPublicBets(db, raceId) : [];
+  const today = jstDateKey();
+  const state = publicRaceState(race, today, selected);
   const meta = [race.raceDate.replaceAll("-","/"), race.venue, `${race.raceNo}R`, race.startTimeJst ? `${race.startTimeJst}発走` : null, race.surface, race.distanceM ? `${race.distanceM}m` : null, race.trackCondition].filter(Boolean).join("　");
   let bets = "";
   if (publicBets.length > 0) {
@@ -109,6 +118,8 @@ async function raceDetail(db: D1Database, raceId: string): Promise<string | null
       return `<div class="course-view" data-course="${idx}" style="${idx===0?"":"display:none"}"><div class="bet-table"><table><thead><tr><th>券種</th><th>組合せ</th><th>オッズ</th><th>購入</th><th>払戻</th></tr></thead><tbody>${tableRows || `<tr><td colspan="5">このコースの買い目記録はありません。</td></tr>`}</tbody></table></div></div>`;
     }).join("");
     bets = `<div class="section-title"><h2>確定買い目</h2><span class="status buy">固定済み</span></div><div class="course-tabs">${COURSE_NAMES.map((name,idx)=>`<button class="course-tab ${idx===0?"active":""}" data-course-tab="${idx}">${name} ${formatYen(COURSE_BUDGETS[idx])}</button>`).join("")}</div>${courseBlocks}<section class="panel" style="margin-top:12px"><h3>買い目について</h3><ul><li>このページに保存された買い目と購入額は、結果が出たあとも変更しません。</li><li>購入対象の判定は、その時点で利用できる情報だけを使って行います。</li><li>新しいレース結果は将来の改善材料に加えますが、このレースの記録には反映しません。</li></ul></section>`;
+  } else if (state.code === "buy") {
+    bets = `<div class="section-title"><h2>確定買い目</h2><span class="status buy">買い目あり</span></div><div class="notice">このレースは固定購入対象です。累計・月別成績には正本の購入額と払戻を反映済みです。馬番ごとの組合せ明細は、正本データからの移行が完了したものから表示します。</div>`;
   } else if (state.code === "pending") {
     bets = `<div class="section-title"><h2>買い目</h2><span class="status pending">判定中</span></div><div class="notice">${escapeHtml(state.deadline ?? "発走15分前までに確定")}</div>`;
   } else {
@@ -117,13 +128,17 @@ async function raceDetail(db: D1Database, raceId: string): Promise<string | null
   const runnerTable = `<div class="section-title"><h2>出走馬</h2><span class="muted">${runners.results.length}頭</span></div><div class="runner-table"><table><thead><tr><th>馬番</th><th>馬名</th><th>性齢</th><th>騎手</th><th>調教師</th><th>馬体重</th><th>単勝</th><th>人気</th><th>結果</th></tr></thead><tbody>${runners.results.map((r)=>`<tr><td><span class="horse-no">${r.horseNo}</span></td><td><b>${escapeHtml(r.horseName)}</b></td><td>${escapeHtml(r.sexAge ?? "—")}</td><td>${escapeHtml(r.jockey ?? "—")}${r.assignedWeight !== null ? `<br><span class="muted">${r.assignedWeight}kg</span>`:""}</td><td>${escapeHtml(r.trainer ?? "—")}</td><td>${r.horseWeight === null ? "—" : `${r.horseWeight}kg${r.weightChange === null ? "" : ` (${r.weightChange>=0?"+":""}${r.weightChange})`}`}</td><td>${r.winOdds === null ? "—" : `${r.winOdds}倍`}</td><td>${r.popularity === null ? "—" : `${r.popularity}番人気`}</td><td>${r.finishPosition === null ? "—" : `${r.finishPosition}着`}</td></tr>`).join("")}</tbody></table></div>`;
   const body = `<a class="back" href="/">← レース一覧へ</a><section class="hero ${race.raceDate===today?"today-hero":""}"><div class="race-title"><span class="race-no">${race.raceNo}R</span><h1>${escapeHtml(race.raceName)}</h1><span class="status ${state.code}">${state.label}</span></div><p>${escapeHtml(meta)}</p>${race.conditions ? `<p>${escapeHtml(race.conditions)}</p>`:""}</section>${bets}${runnerTable}`;
   const script = `<script>document.querySelectorAll('[data-course-tab]').forEach(b=>b.addEventListener('click',()=>{const n=b.getAttribute('data-course-tab');document.querySelectorAll('[data-course-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-course]').forEach(x=>x.style.display=x.getAttribute('data-course')===n?'block':'none');}));</script>`;
-  return shell(`${race.venue}${race.raceNo}R`, body) .replace("</body></html>", `${script}</body></html>`);
+  return shell(`${race.venue}${race.raceNo}R`, body).replace("</body></html>", `${script}</body></html>`);
 }
 
 async function dayApi(db: D1Database, date: string): Promise<unknown> {
   if (!/^20\d{2}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: "INVALID_DATE" };
-  const today = jstDateKey(); const rows = await racesOnDate(db, date); const ids = await getPublicBetRaceIds(db, rows.map((row)=>row.raceId));
-  return { ok: true, date, races: rows.map((row) => ({ ...row, publicState: publicRaceState(row, today, ids.has(row.raceId)) })) };
+  const today = jstDateKey();
+  const rows = await racesOnDate(db, date);
+  return { ok: true, date, races: rows.map((row) => ({
+    ...row,
+    publicState: publicRaceState(row, today, isFrozenSelectedRace(row.raceDate, row.venue, row.raceNo))
+  })) };
 }
 
 export default {
