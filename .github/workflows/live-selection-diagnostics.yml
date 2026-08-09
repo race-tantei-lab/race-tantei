@@ -12,67 +12,36 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect active production predictions
+      - name: Inspect public race API
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-          races="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/races")"
 
-          RACES="$races" python - <<'PY' >/tmp/active-race-ids.txt
-          import json, os
-          rows = json.loads(os.environ.get("RACES", "[]"))
-          active = [row for row in rows if row.get("raceDate") == "2026-08-02" and row.get("status") != "finished"]
-          print(json.dumps({
-              "activeRaceRows": [
-                  {
-                      "raceId": row.get("raceId"),
-                      "raceNo": row.get("raceNo"),
-                      "status": row.get("status"),
-                      "predictionStatus": row.get("predictionStatus"),
-                      "betCount": int(row.get("betCount") or 0)
-                  }
-                  for row in active
-              ]
-          }, ensure_ascii=False))
-          for row in active[:12]:
-              if row.get("raceId"):
-                  print(row["raceId"])
-          PY
+          calendar="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/public/calendar")"
+          day="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/public/day?date=2026-08-08")"
 
-          head -n 1 /tmp/active-race-ids.txt
-          tail -n +2 /tmp/active-race-ids.txt | while IFS= read -r race_id; do
-            detail="$(curl --silent --show-error --fail --max-time 25 -A 'race-tantei-diagnostics/1.0' "${base}/api/races/${race_id}" || true)"
-            RACE_ID="$race_id" DETAIL="$detail" python - <<'PY'
+          CALENDAR="$calendar" DAY="$day" python - <<'PY'
           import json, os
-          race_id = os.environ.get("RACE_ID", "")
-          try:
-              detail = json.loads(os.environ.get("DETAIL", ""))
-          except Exception:
-              print(json.dumps({"raceId": race_id, "detailError": "invalid response"}, ensure_ascii=False))
-              raise SystemExit
-          prediction = detail.get("prediction") or {}
-          predicted = detail.get("predictedRunners") or []
-          bets = detail.get("bets") or []
-          ranked = sorted(
-              [
-                  {
-                      "horseNo": item.get("horseNo"),
-                      "odds": item.get("currentOdds"),
-                      "winProbability": round(float(item.get("winProbability") or 0) * 100, 1),
-                      "winEvPct": round(float(item.get("expectedValuePct") or 0), 1)
-                  }
-                  for item in predicted
-              ],
-              key=lambda item: item["winEvPct"],
-              reverse=True
-          )
+
+          calendar = json.loads(os.environ["CALENDAR"])
+          day = json.loads(os.environ["DAY"])
+
+          if calendar.get("ok") is not True:
+              raise SystemExit("public calendar API is not healthy")
+          if day.get("ok") is not True:
+              raise SystemExit("public day API is not healthy")
+
+          races = day.get("races") or []
+          if not races:
+              raise SystemExit("public day API returned no races for 2026-08-08")
+          if any("publicState" not in row for row in races):
+              raise SystemExit("public day API is missing publicState")
+
+          selected = [row for row in races if (row.get("publicState") or {}).get("code") == "buy"]
           print(json.dumps({
-              "raceId": race_id,
-              "modelVersion": prediction.get("modelVersion"),
-              "predictionStatus": prediction.get("status"),
-              "runnerCount": len(predicted),
-              "betCount": len(bets),
-              "topWinEv": ranked[:3]
+              "calendarVenueDays": len(calendar.get("calendar") or []),
+              "aug8Races": len(races),
+              "aug8Selected": len(selected),
+              "selectedRaceIds": [row.get("raceId") for row in selected]
           }, ensure_ascii=False))
           PY
-          done
