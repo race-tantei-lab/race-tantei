@@ -1,0 +1,50 @@
+name: Verify mobile ticket stakes
+run-name: Verify mobile ticket stakes · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-mobile-ticket-stakes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Mark verification pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/mobile-ticket-stakes' -f description='買い目の購入額表示を本番確認中' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+
+      - name: Verify production race page contains visible stake layout
+        run: |
+          set -euo pipefail
+          URL='https://race-tantei-phase0.race-tantei.workers.dev/races/2026-08-09-niigata-11'
+          for i in $(seq 1 20); do
+            html="$(curl -fsSL "$URL")"
+            if grep -q '購入額' <<<"$html" && grep -q 'grid-template-areas:&quot;type combo stake&quot;' <<<"$html" || grep -q 'grid-template-areas:"type combo stake"' <<<"$html"; then
+              grep -q 'data-live-course="2"' <<<"$html"
+              grep -Eq '¥[0-9,]+' <<<"$html"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo 'mobile ticket stake layout not found in production' >&2
+          exit 1
+
+      - name: Mark verification success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/mobile-ticket-stakes' -f description='買い目ごとの購入額が本番表示済み' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+
+      - name: Mark verification failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/mobile-ticket-stakes' -f description='買い目の購入額表示が本番未確認' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
