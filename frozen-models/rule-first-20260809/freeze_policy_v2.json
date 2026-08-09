@@ -1,0 +1,36 @@
+{
+  "model": "rule-first-20260809-rebuild",
+  "frozenBeforeHoldoutEvaluation": true,
+  "productionDeployment": false,
+  "ruleCount": 419,
+  "ruleEligibilityGate": {
+    "totalSupportMin": 24,
+    "periodSupportMinEach": 8,
+    "overallRoiMinPct": 200,
+    "periodRoiMinPctEach": 200,
+    "periodMaxOneHitRemovalRoiMinPctEach": 100,
+    "dateConditionForbidden": true,
+    "currentRaceOutcomeFeaturesForbidden": true
+  },
+  "ruleScoreFormula": "min(periodMaxOneHitRemovalRoi) + 0.15*min(periodRoi) + 0.02*overallRoi + 0.001*min(periodSupport)",
+  "ticketScore": "maximum ruleScore among strict rules matched by the ticket",
+  "primarySelection": {
+    "ticketScoreRatioToRaceBest": 0.99,
+    "maxTicketsPerRace": 10,
+    "raceScore": "raceBestTicketScore / candidateTicketCount^0.30",
+    "racesPerVenueDay": 5
+  },
+  "unseenVenueDayFallbackFrozenBeforeAug8": [
+    {"step":1,"ticketScoreRatioToRaceBest":0.99,"maxTicketsPerRace":20,"ruleUniverse":"same frozen 419 strict rules only"},
+    {"step":2,"ticketScoreRatioToRaceBest":0.0,"maxTicketsPerRace":20,"ruleUniverse":"same frozen 419 strict rules only","ticketHandling":"take top 20 matched tickets by ticketScore then canonical ticket key"}
+  ],
+  "fallbackUse": "only if a new venue-day has fewer than 5 primary-eligible races; never add or tune rules from the target-day result",
+  "allocation": {
+    "courseBudgetsYen": [2000,5000,10000],
+    "unitYen": 100,
+    "method": "split full race budget as evenly as possible over selected candidate tickets; assign remainder units in descending ticketScore, then canonical ticket key"
+  },
+  "betTypePolicy": "no fixed number of bet types; all six JRA bet types allowed when matched by frozen strict rules",
+  "historyFeatureTiming": "freeze current-race features first; update horse/jockey/trainer history only after current race result",
+  "holdout20260808": "not inspected when this policy was frozen"
+}
