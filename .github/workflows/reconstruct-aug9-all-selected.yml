@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/reconstruct-aug9-all-selected.yml'
       - 'scripts/collect-aug9-all-selected-official-odds.py'
+      - 'scripts/sync-aug9-selected-payouts.py'
       - 'scripts/settle-aug9-public-bets.py'
   workflow_dispatch:
 
@@ -53,15 +54,18 @@ jobs:
             scripts/collect-aug9-all-selected-official-odds.py \
             scripts/generate-final-live-bets.py \
             scripts/generate-final-live-bets-batched.py \
+            scripts/sync-aug9-selected-payouts.py \
             scripts/settle-aug9-public-bets.py
 
       - name: Collect JRA final odds for all 15 selected races
         run: |
+          set -o pipefail
           python scripts/collect-aug9-all-selected-official-odds.py | tee /tmp/aug9-all-odds.log
           test -s aug9-all-selected-official-odds.json.gz
 
       - name: Generate missing selected-race bets with frozen 316 conditions
         run: |
+          set -o pipefail
           python scripts/generate-final-live-bets-batched.py \
             --repo . \
             --date 2026-08-09 \
@@ -92,8 +96,33 @@ jobs:
           print('all 15 selected races have three courses')
           PY
 
+      - name: Sync JRA official payouts for finished selected races
+        run: |
+          set -o pipefail
+          python scripts/sync-aug9-selected-payouts.py | tee /tmp/aug9-payout-sync.log
+
       - name: Settle every finished August 9 selected race
-        run: python scripts/settle-aug9-public-bets.py | tee /tmp/aug9-settle.log
+        run: |
+          set -o pipefail
+          python scripts/settle-aug9-public-bets.py | tee /tmp/aug9-settle.log
+
+      - name: Audit settled race payouts and cumulative additions
+        run: |
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT b.race_id,b.course,SUM(b.stake_yen) AS stakeYen,SUM(COALESCE(b.return_yen,0)) AS returnYen,
+                   MIN(b.settlement_status) AS minStatus,MAX(b.settlement_status) AS maxStatus
+            FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
+            WHERE b.race_id LIKE '2026-08-09-%' AND r.status='finished'
+            GROUP BY b.race_id,b.course ORDER BY b.race_id,b.course
+          " > analysis-results/aug9-settlement-d1.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT course,COUNT(DISTINCT race_id) AS settledRaces,SUM(stake_yen) AS stakeYen,SUM(COALESCE(return_yen,0)) AS returnYen
+            FROM rt_public_bets
+            WHERE race_id LIKE '2026-08-09-%' AND settlement_status='settled'
+            GROUP BY course ORDER BY course
+          " > analysis-results/aug9-settlement-totals-d1.json
+          cat analysis-results/aug9-settlement-d1.json
+          cat analysis-results/aug9-settlement-totals-d1.json
 
       - name: Save reconstruction audit
         if: always()
@@ -101,6 +130,7 @@ jobs:
           mkdir -p analysis-results
           cp /tmp/aug9-all-odds.log analysis-results/aug9-all-selected-official-odds.log 2>/dev/null || true
           cp /tmp/aug9-all-generate.log analysis-results/aug9-all-selected-generate.log 2>/dev/null || true
+          cp /tmp/aug9-payout-sync.log analysis-results/aug9-selected-payout-sync.log 2>/dev/null || true
           cp /tmp/aug9-settle.log analysis-results/aug9-public-settlement.log 2>/dev/null || true
           git add -f \
             analysis-results/aug9-all-selected-official-odds-report.json \
@@ -108,8 +138,12 @@ jobs:
             analysis-results/aug9-all-selected-bets.json \
             analysis-results/aug9-all-selected-generate.log \
             analysis-results/aug9-all-selected-d1.json \
+            analysis-results/aug9-selected-payout-sync.json \
+            analysis-results/aug9-selected-payout-sync.log \
             analysis-results/aug9-public-settlement.json \
-            analysis-results/aug9-public-settlement.log 2>/dev/null || true
+            analysis-results/aug9-public-settlement.log \
+            analysis-results/aug9-settlement-d1.json \
+            analysis-results/aug9-settlement-totals-d1.json 2>/dev/null || true
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           if ! git diff --cached --quiet; then
@@ -120,8 +154,8 @@ jobs:
 
       - name: Mark reconstruction success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/aug9-reconstruction' -f description='8/9の15R買い目再現・精算が完了' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/aug9-reconstruction' -f description='8/9の買い目再現・公式払戻精算が完了' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
 
       - name: Mark reconstruction failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/aug9-reconstruction' -f description='8/9買い目再現・精算で失敗' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/aug9-reconstruction' -f description='8/9買い目再現・公式払戻精算で失敗' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
