@@ -6,8 +6,11 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/final-live-aug9.yml'
+      - 'scripts/repair-aug9-official-program.py'
       - 'scripts/collect-jra-official-odds-runtime.py'
       - 'scripts/collect-current-jra-official-odds-fast.py'
+      - 'scripts/generate-final-preday-selection.py'
+      - 'scripts/generate-final-preday-selection-remote.py'
       - 'scripts/generate-final-live-bets.py'
       - 'scripts/final-rules-payload.py'
   workflow_dispatch:
@@ -33,7 +36,7 @@ jobs:
       JRA_ODDS_D1_BATCH_ROWS: '20'
     steps:
       - name: Mark live lock pending
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/final-live-lock' -f description='公式オッズ取得と買い目固定を実行中' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/final-live-lock' -f description='番組補正・5R再選定・公式オッズ取得・買い目固定を実行中' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
 
       - uses: actions/checkout@v4
         with:
@@ -48,7 +51,25 @@ jobs:
       - run: npm ci
 
       - name: Compile frozen live pipeline
-        run: python -m py_compile scripts/collect-jra-official-odds.py scripts/collect-jra-official-odds-runtime.py scripts/collect-current-jra-official-odds.py scripts/collect-current-jra-official-odds-fast.py scripts/generate-final-preday-selection.py scripts/final-rules-payload.py scripts/generate-final-live-bets.py
+        run: python -m py_compile scripts/repair-aug9-official-program.py scripts/collect-jra-official-odds.py scripts/collect-jra-official-odds-runtime.py scripts/collect-current-jra-official-odds.py scripts/collect-current-jra-official-odds-fast.py scripts/generate-final-preday-selection.py scripts/generate-final-preday-selection-remote.py scripts/final-rules-payload.py scripts/generate-final-live-bets.py
+
+      - name: Repair August 9 official race program
+        run: python scripts/repair-aug9-official-program.py
+
+      - name: Rebuild fixed five races directly from D1 without target results
+        run: |
+          mkdir -p analysis-results
+          python scripts/generate-final-preday-selection-remote.py --date 2026-08-09 --out analysis-results/final-aug9-selection.json
+          python - <<'PY'
+          import json
+          x=json.load(open('analysis-results/final-aug9-selection.json',encoding='utf-8'))
+          assert x['resultDataUsedForTargetDay'] is False
+          assert len(x['selected'])==15
+          for v in ('札幌','新潟','中京'):
+              assert sum(r['venue']==v for r in x['selected'])==5
+          assert all(int(r['distanceM'])>0 for r in x['selected'])
+          print('reselected',[(r['venue'],r['raceNo'],r['raceName'],r['startTimeJst']) for r in x['selected']])
+          PY
 
       - name: Collect official odds for still-in-time fixed targets
         run: |
@@ -59,7 +80,6 @@ jobs:
 
       - name: Generate and immutably lock final bets directly from D1
         run: |
-          mkdir -p analysis-results
           python scripts/generate-final-live-bets.py \
             --repo . \
             --date 2026-08-09 \
@@ -77,11 +97,13 @@ jobs:
           import json
           x=json.load(open('analysis-results/final-aug9-live-bets.json',encoding='utf-8'))
           assert x['sourceRuleCount']==316 and x['resultDataUsedForTargetDay'] is False and x['officialOddsOnly'] is True
+          assert len(x['races']) > 0
           for r in x['races']:
               assert 3 <= len(r['tickets']) <= 10
               assert len({t['betType'] for t in r['tickets']}) >= 2
               sums={}
-              for b in r['courseBets']: sums[b['course']]=sums.get(b['course'],0)+b['stakeYen']
+              for b in r['courseBets']:
+                  sums[b['course']]=sums.get(b['course'],0)+b['stakeYen']
               assert sums=={'ライト':2000,'スタンダード':5000,'プレミアム':10000}
           print('final live gates: ok',[(r['raceId'],len(r['tickets'])) for r in x['races']])
           PY
@@ -91,7 +113,7 @@ jobs:
           cp official-odds-collection-report.json analysis-results/final-aug9-live-odds-report.json
           cp /tmp/final-live-odds.log analysis-results/final-aug9-live-odds.log
           cp /tmp/final-live-generate.log analysis-results/final-aug9-live-generate.log
-          git add -f analysis-results/final-aug9-live-bets.json analysis-results/final-aug9-live-d1.json analysis-results/final-aug9-live-odds-report.json analysis-results/final-aug9-live-odds.log analysis-results/final-aug9-live-generate.log
+          git add -f analysis-results/final-aug9-selection.json analysis-results/final-aug9-live-bets.json analysis-results/final-aug9-live-d1.json analysis-results/final-aug9-live-odds-report.json analysis-results/final-aug9-live-odds.log analysis-results/final-aug9-live-generate.log
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           if ! git diff --cached --quiet; then
@@ -102,7 +124,7 @@ jobs:
 
       - name: Mark live lock success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/final-live-lock' -f description='316条件の公式オッズ買い目をD1へ固定済み' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/final-live-lock' -f description='補正後5Rと316条件の公式オッズ買い目をD1へ固定済み' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
 
       - name: Mark live lock failure
         if: failure()
