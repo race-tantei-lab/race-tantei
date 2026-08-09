@@ -1,0 +1,17 @@
+{
+  "model":"rule-first-20260809-rebuild",
+  "raceDate":"2026-08-08",
+  "status":"LOCKED_BEFORE_RESULT_SETTLEMENT",
+  "resultDataUsedForSelection":false,
+  "archiveCutoff":"2026-08-02",
+  "selectedRaces":15,
+  "racesPerVenue":{"札幌":5,"新潟":5,"中京":5},
+  "selectionStage":{"札幌":"primary","新潟":"primary","中京":"primary"},
+  "predictionJsonSha256":"aa3e201d8a5412e43a9aa0ba035438f647acfb99ff2c454ff3599f4efe9e44f7",
+  "betsCsvSha256":"82062e6c0a53977ba36d21f5d249b820749d0e4cd9c51b20011aacba3183bd90",
+  "sanitizedConditionsSha256":"6074bc648d5cad353c549242ab4f8df07ec06da64feb0744a057751fee5899b9",
+  "weatherTrackSource":"JRA result-page header prefix only; parser physically stops before race_title and does not read finish/order/payout sections",
+  "budgetsPerSelectedRaceYen":{"light":2000,"standard":5000,"premium":10000},
+  "totalInvestmentYen":{"light":30000,"standard":75000,"premium":150000},
+  "note":"This lock was committed before target-day result/payout settlement. No target-day result was used to select races, tickets, rules, or stake allocation."
+}
