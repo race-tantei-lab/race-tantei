@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/collect-current-official-odds.yml'
+      - 'scripts/collect-current-jra-official-odds.py'
   workflow_dispatch:
 
 permissions:
@@ -18,13 +19,13 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 10
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-      JRA_ODDS_MAX_PAGES: '600'
-      JRA_ODDS_REQUEST_PAUSE_SECONDS: '0.12'
+      JRA_ODDS_MAX_PAGES: '320'
+      JRA_ODDS_REQUEST_PAUSE_SECONDS: '0.08'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,31 +42,40 @@ jobs:
 
       - run: npm ci
 
-      - name: Verify collector only
+      - name: Verify current collector
         run: |
-          python -m py_compile scripts/collect-jra-official-odds.py scripts/collect-jra-official-odds-runtime.py
+          python -m py_compile scripts/collect-jra-official-odds.py scripts/collect-jra-official-odds-runtime.py scripts/collect-current-jra-official-odds.py
           python scripts/test-official-odds-runtime.py
+          CLOUDFLARE_ACCOUNT_ID=test CLOUDFLARE_D1_DATABASE_ID=test CLOUDFLARE_API_TOKEN=test python - <<'PY'
+          import importlib.util, pathlib, sys
+          p=pathlib.Path('scripts/collect-current-jra-official-odds.py')
+          spec=importlib.util.spec_from_file_location('current_odds',p); m=importlib.util.module_from_spec(spec);sys.modules[spec.name]=m;spec.loader.exec_module(m);m.self_test();print('current CNAME tests: ok')
+          PY
 
       - name: Collect JRA official odds only
         run: |
           set -o pipefail
-          python scripts/collect-jra-official-odds-runtime.py 2>&1 | tee current-official-odds.log
+          timeout 420 python scripts/collect-current-jra-official-odds.py 2>&1 | tee current-official-odds.log
 
       - name: Audit August 9 official odds
+        if: always()
         run: |
           mkdir -p analysis-results
           npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT bet_type,COUNT(DISTINCT race_id) AS races,COUNT(*) AS rows,MAX(captured_at_utc) AS latest FROM rt_official_odds_latest WHERE race_id LIKE '2026-08-09-%' GROUP BY bet_type ORDER BY bet_type" > analysis-results/current-official-odds-d1.json
-          cp official-odds-collection-report.json analysis-results/current-official-odds-collection.json
-          cp current-official-odds.log analysis-results/current-official-odds.log
+          if [ -f official-odds-collection-report.json ]; then cp official-odds-collection-report.json analysis-results/current-official-odds-collection.json; fi
+          if [ -f current-official-odds.log ]; then cp current-official-odds.log analysis-results/current-official-odds.log; fi
           cat analysis-results/current-official-odds-d1.json
 
       - name: Save collector result
         if: always()
         run: |
           mkdir -p analysis-results
-          if [ -f current-official-odds.log ]; then cp current-official-odds.log analysis-results/current-official-odds.log; fi
-          if [ -f official-odds-collection-report.json ]; then cp official-odds-collection-report.json analysis-results/current-official-odds-collection.json; fi
-          git add -f analysis-results/current-official-odds.log analysis-results/current-official-odds-collection.json analysis-results/current-official-odds-d1.json 2>/dev/null || true
+          touch analysis-results/current-official-odds.log
+          [ -f current-official-odds.log ] && cp current-official-odds.log analysis-results/current-official-odds.log || true
+          [ -f official-odds-collection-report.json ] && cp official-odds-collection-report.json analysis-results/current-official-odds-collection.json || true
+          [ -f analysis-results/current-official-odds-d1.json ] || echo '[]' > analysis-results/current-official-odds-d1.json
+          git add -f analysis-results/current-official-odds.log analysis-results/current-official-odds-d1.json
+          [ -f analysis-results/current-official-odds-collection.json ] && git add -f analysis-results/current-official-odds-collection.json || true
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           if git diff --cached --quiet; then
