@@ -12,6 +12,7 @@ on:
       - 'scripts/generate-final-preday-selection.py'
       - 'scripts/generate-final-preday-selection-remote.py'
       - 'scripts/generate-final-live-bets.py'
+      - 'scripts/generate-final-live-bets-batched.py'
       - 'scripts/final-rules-payload.py'
   workflow_dispatch:
 
@@ -51,7 +52,7 @@ jobs:
       - run: npm ci
 
       - name: Compile frozen live pipeline
-        run: python -m py_compile scripts/repair-aug9-official-program.py scripts/collect-jra-official-odds.py scripts/collect-jra-official-odds-runtime.py scripts/collect-current-jra-official-odds.py scripts/collect-current-jra-official-odds-fast.py scripts/generate-final-preday-selection.py scripts/generate-final-preday-selection-remote.py scripts/final-rules-payload.py scripts/generate-final-live-bets.py
+        run: python -m py_compile scripts/repair-aug9-official-program.py scripts/collect-jra-official-odds.py scripts/collect-jra-official-odds-runtime.py scripts/collect-current-jra-official-odds.py scripts/collect-current-jra-official-odds-fast.py scripts/generate-final-preday-selection.py scripts/generate-final-preday-selection-remote.py scripts/final-rules-payload.py scripts/generate-final-live-bets.py scripts/generate-final-live-bets-batched.py
 
       - name: Repair August 9 official race program
         run: python scripts/repair-aug9-official-program.py
@@ -80,7 +81,7 @@ jobs:
 
       - name: Generate and immutably lock final bets directly from D1
         run: |
-          python scripts/generate-final-live-bets.py \
+          python scripts/generate-final-live-bets-batched.py \
             --repo . \
             --date 2026-08-09 \
             --selection analysis-results/final-aug9-selection.json \
