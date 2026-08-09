@@ -1,0 +1,116 @@
+name: Reconstruct August 9 selected races
+run-name: Reconstruct August 9 all selected · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/reconstruct-aug9-all-selected.yml'
+      - 'scripts/collect-aug9-all-selected-official-odds.py'
+      - 'scripts/settle-aug9-public-bets.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+concurrency:
+  group: reconstruct-aug9-all-selected
+  cancel-in-progress: true
+
+jobs:
+  reconstruct:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      JRA_ODDS_REQUEST_PAUSE_SECONDS: '0.35'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Compile reconstruction pipeline
+        run: |
+          python -m py_compile \
+            scripts/collect-aug9-all-selected-official-odds.py \
+            scripts/generate-final-live-bets.py \
+            scripts/generate-final-live-bets-batched.py \
+            scripts/settle-aug9-public-bets.py
+
+      - name: Collect JRA final odds for all 15 selected races
+        run: |
+          python scripts/collect-aug9-all-selected-official-odds.py | tee /tmp/aug9-all-odds.log
+          test -s aug9-all-selected-official-odds.json.gz
+
+      - name: Generate missing selected-race bets with frozen 316 conditions
+        run: |
+          python scripts/generate-final-live-bets-batched.py \
+            --repo . \
+            --date 2026-08-09 \
+            --selection analysis-results/final-aug9-selection.json \
+            --odds-file aug9-all-selected-official-odds.json.gz \
+            --out analysis-results/aug9-all-selected-bets.json \
+            --insert | tee /tmp/aug9-all-generate.log
+
+      - name: Verify all 15 selected races have three-course bets
+        run: |
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT race_id,COUNT(*) AS rows,COUNT(DISTINCT course) AS courses
+            FROM rt_public_bets
+            WHERE race_id IN (
+              '2026-08-09-sapporo-01','2026-08-09-sapporo-02','2026-08-09-sapporo-05','2026-08-09-sapporo-06','2026-08-09-sapporo-09',
+              '2026-08-09-niigata-01','2026-08-09-niigata-03','2026-08-09-niigata-07','2026-08-09-niigata-11','2026-08-09-niigata-12',
+              '2026-08-09-chukyo-01','2026-08-09-chukyo-05','2026-08-09-chukyo-07','2026-08-09-chukyo-08','2026-08-09-chukyo-11'
+            )
+            GROUP BY race_id ORDER BY race_id
+          " > analysis-results/aug9-all-selected-d1.json
+          cat analysis-results/aug9-all-selected-d1.json
+          python - <<'PY'
+          import json
+          x=json.load(open('analysis-results/aug9-all-selected-d1.json',encoding='utf-8'))
+          rows=x[0]['results'] if x else []
+          assert len(rows)==15, len(rows)
+          assert all(int(r['courses'])==3 for r in rows), rows
+          print('all 15 selected races have three courses')
+          PY
+
+      - name: Settle every finished August 9 selected race
+        run: |
+          python scripts/settle-aug9-public-bets.py | tee /tmp/aug9-settle.log
+
+      - name: Save reconstruction audit
+        if: always()
+        run: |
+          mkdir -p analysis-results
+          cp /tmp/aug9-all-odds.log analysis-results/aug9-all-selected-official-odds.log 2>/dev/null || true
+          cp /tmp/aug9-all-generate.log analysis-results/aug9-all-selected-generate.log 2>/dev/null || true
+          cp /tmp/aug9-settle.log analysis-results/aug9-public-settlement.log 2>/dev/null || true
+          git add -f \
+            analysis-results/aug9-all-selected-official-odds-report.json \
+            analysis-results/aug9-all-selected-official-odds.log \
+            analysis-results/aug9-all-selected-bets.json \
+            analysis-results/aug9-all-selected-generate.log \
+            analysis-results/aug9-all-selected-d1.json \
+            analysis-results/aug9-public-settlement.json \
+            analysis-results/aug9-public-settlement.log 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git diff --cached --quiet; then
+            git commit -m 'Save August 9 reconstructed bets and settlement'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
