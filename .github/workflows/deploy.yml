@@ -82,7 +82,7 @@ jobs:
           today=$(TZ=Asia/Tokyo date +%F)
           code=$(curl --retry 5 --retry-delay 2 --retry-all-errors -sS -o /tmp/today.json -w '%{http_code}' "$base/api/public/day?date=$today")
           test "$code" = '200'
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/today.json','utf8'));const r=Array.isArray(p.races)?p.races:[];const now=Date.now();const stale=r.filter(x=>x.publicState?.code==='buy'&&x.startTimeUtc&&Date.parse(x.startTimeUtc)<=now);if(stale.length)throw new Error('post-start races still shown as buy: '+stale.map(x=>x.raceId).join(','));console.log(today,'post-start buy states=ok')"
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/today.json','utf8'));const r=Array.isArray(p.races)?p.races:[];const now=Date.now();const stale=r.filter(x=>x.publicState?.code==='buy'&&x.startTimeUtc&&Date.parse(x.startTimeUtc)<=now);if(stale.length)throw new Error('post-start races still shown as buy: '+stale.map(x=>x.raceId).join(','));console.log('post-start buy states=ok')"
 
       - name: Publish deployment success
         if: success()
