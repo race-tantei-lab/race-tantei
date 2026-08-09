@@ -14,7 +14,7 @@ def bin_text(i:int):
     text=(V1/'canonical-history-data'/f'bin-{i:02d}.ts').read_text(encoding='utf-8')
     m=re.search(r'export default\s+(["\'])(.*?)\1\s*;?\s*$',text,re.S)
     if not m: raise RuntimeError(f'BAD_BIN:{i}')
-    return bytes(m.group(2),'utf-8').decode('unicode_escape')
+    return m.group(2)
 
 def read_varint(data:bytes,pos:int):
     value=0; shift=0
