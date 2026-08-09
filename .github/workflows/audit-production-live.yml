@@ -1,0 +1,43 @@
+name: Audit production live state
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/audit-production-live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Query production D1
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        run: |
+          set -euo pipefail
+          q(){ npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$1"; }
+          echo '=== CANONICAL_STATE ==='
+          q "SELECT state_key,state_value FROM rt_system_state WHERE state_key IN ('canonical_history_seed_complete','canonical_history_seed_count') ORDER BY state_key"
+          echo '=== PUBLIC_BETS_TOTALS ==='
+          q "SELECT course,COUNT(DISTINCT race_id) AS races,COUNT(*) AS tickets,SUM(stake_yen) AS stake,SUM(COALESCE(return_yen,0)) AS return_yen FROM rt_public_bets WHERE settlement_status='settled' GROUP BY course ORDER BY CASE course WHEN 'ライト' THEN 1 WHEN 'スタンダード' THEN 2 ELSE 3 END"
+          echo '=== CANONICAL_IMPORTED ==='
+          q "SELECT course,COUNT(DISTINCT race_id) AS races,COUNT(*) AS tickets,SUM(stake_yen) AS stake,SUM(COALESCE(return_yen,0)) AS return_yen FROM rt_public_bets WHERE source_prediction_id=-2 GROUP BY course ORDER BY CASE course WHEN 'ライト' THEN 1 WHEN 'スタンダード' THEN 2 ELSE 3 END"
+          echo '=== AUG9_RACES ==='
+          q "SELECT venue,COUNT(*) AS races,MIN(race_no) AS min_race,MAX(race_no) AS max_race FROM rt_races WHERE race_date='2026-08-09' GROUP BY venue ORDER BY venue"
+          echo '=== AUG9_RUNNERS ==='
+          q "SELECT r.venue,COUNT(rr.horse_no) AS runner_rows,COUNT(DISTINCT CASE WHEN rr.horse_no IS NOT NULL THEN r.race_id END) AS races_with_runners FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date='2026-08-09' GROUP BY r.venue ORDER BY r.venue"
+          echo '=== AUG9_BETS ==='
+          q "SELECT course,COUNT(DISTINCT b.race_id) AS races,COUNT(*) AS tickets,SUM(b.stake_yen) AS stake FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date='2026-08-09' GROUP BY course ORDER BY course"
+          echo '=== ODDS_TABLES ==='
+          q "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('rt_official_odds_latest','rt_official_odds_snapshots') ORDER BY name"
+          echo '=== AUG9_OFFICIAL_ODDS ==='
+          q "SELECT bet_type,COUNT(DISTINCT race_id) AS races,COUNT(*) AS rows,MAX(captured_at_utc) AS latest FROM rt_official_odds_latest WHERE race_id LIKE '2026-08-09-%' GROUP BY bet_type ORDER BY bet_type" || true
