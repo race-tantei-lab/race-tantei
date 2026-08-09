@@ -1,4 +1,6 @@
 import publicSite from "./public-site-entry-v12.js";
+import { jstDateKey, syncOfficialCalendarDay } from "./v1/jra-calendar.js";
+import { isInvalidRaceName } from "./v1/race-display.js";
 import type { Env } from "./v1/types.js";
 
 type VenueRoi = {
@@ -55,11 +57,71 @@ function injectVenueRoi(html: string): string {
   return withCss.includes(anchor) ? withCss.replace(anchor, `${venueRoiHtml()}${anchor}`) : withCss;
 }
 
+function requestRaceDate(url: URL): string | null {
+  if (url.pathname === "/api/public/day") {
+    const date = url.searchParams.get("date") ?? "";
+    return /^20\d{2}-\d{2}-\d{2}$/.test(date) ? date : null;
+  }
+  if (url.pathname.startsWith("/races/")) {
+    const raceId = decodeURIComponent(url.pathname.slice("/races/".length));
+    const date = raceId.slice(0, 10);
+    return /^20\d{2}-\d{2}-\d{2}$/.test(date) ? date : null;
+  }
+  return null;
+}
+
+async function needsRaceNameBackfill(db: D1Database, raceDate: string): Promise<boolean> {
+  const rows = await db.prepare(`SELECT race_name AS raceName FROM rt_races WHERE race_date=?`).bind(raceDate).all<{ raceName: string | null }>();
+  return rows.results.some((row) => isInvalidRaceName(row.raceName));
+}
+
+async function backfillRaceNamesForDate(db: D1Database, raceDate: string): Promise<boolean> {
+  if (raceDate >= jstDateKey()) return false;
+  try {
+    if (!(await needsRaceNameBackfill(db, raceDate))) return false;
+    await syncOfficialCalendarDay(db, raceDate);
+    return true;
+  } catch (error) {
+    console.warn("HISTORICAL_RACE_NAME_BACKFILL_SKIPPED", raceDate, error instanceof Error ? error.message : String(error));
+    return false;
+  }
+}
+
+async function backfillHistoricalRaceNames(db: D1Database, limit = 3): Promise<void> {
+  const safeLimit = Math.max(1, Math.min(6, Math.floor(limit)));
+  const today = jstDateKey();
+  const rows = await db.prepare(`
+    SELECT DISTINCT race_date AS raceDate
+    FROM rt_races
+    WHERE race_date < ?
+      AND (
+        race_name IS NULL OR trim(race_name)=''
+        OR race_name GLOB '[0-9]*R'
+        OR race_name GLOB '[0-9]*レース'
+        OR race_name LIKE '%検索ウィンドウ%'
+        OR race_name LIKE '%検索メニュー%'
+        OR race_name LIKE '%サイト内検索%'
+        OR race_name LIKE '%メニューを開く%'
+        OR race_name LIKE '%レース情報トップ%'
+      )
+    ORDER BY race_date DESC
+    LIMIT ${safeLimit}
+  `).bind(today).all<{ raceDate: string }>();
+
+  for (const row of rows.results) {
+    await backfillRaceNamesForDate(db, row.raceDate);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
+    const url = new URL(request.url);
+    const raceDate = requestRaceDate(url);
+    if (raceDate) await backfillRaceNamesForDate(env.DB, raceDate);
+
     const response = await publicSite.fetch(request, env, ctx);
-    const path = new URL(request.url).pathname;
+    const path = url.pathname;
     if (path !== "/" || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
     try {
       const headers = new Headers(response.headers);
@@ -70,6 +132,7 @@ export default {
     }
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    await backfillHistoricalRaceNames(env.DB, 3);
     if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
   }
 } satisfies ExportedHandler<Env>;
