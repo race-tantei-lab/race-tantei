@@ -33,12 +33,17 @@ For **2,000 / 5,000 / 10,000 yen** courses, all of the following pass:
 - Worst bet-type ROI across all courses: 263.86%
 
 ## Canonical storage
-**ChatGPT Library (primary):** `/RaceTantei/FrozenModels/rule-first-risk-damped-20260809/`  
+**ChatGPT Library is the single source of truth for the full model body:**  
+`/RaceTantei/FrozenModels/rule-first-risk-damped-20260809/`
+
 Pointer: `/RaceTantei/FrozenModels/CURRENT_CANONICAL_MODEL.json`
 
-**Bundle SHA256:** `89cb4057828f125b23161be843b13033e1e7e81cb934054dd74663f5a3cce0fd`
+Files there include the exact `rules.json`, `policy.json`, `summary.json`, `manifest.json`, audit script and full reproducibility bundle.
 
-Rules are also stored on this branch as gzip+base64 parts and can be restored with `restore_rules.py`.
+**Bundle SHA256:** `89cb4057828f125b23161be843b13033e1e7e81cb934054dd74663f5a3cce0fd`  
+**Rules JSON SHA256:** `6afa77ed6c648fe19512b0b68f99a48ac63d175f17eb74cec414a7c8c710c344`
+
+This GitHub branch intentionally stores identity/policy/validation metadata only, to avoid competing copies of the canonical rule body.
 
 ## Holdout integrity note
 2026-08-08 is **not** a pristine holdout for this revision because the failure of the deprecated 419-rule model motivated the structural redesign. Do not describe 8/8 as untouched OOS for this model.
