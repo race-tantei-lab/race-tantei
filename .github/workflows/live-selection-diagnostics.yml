@@ -12,7 +12,7 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect public race API
+      - name: Inspect public race API and JRA entry candidates
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
@@ -23,35 +23,24 @@ jobs:
 
           CALENDAR="$calendar" AUG8="$aug8" AUG9="$aug9" python - <<'PY'
           import collections, json, os
-
-          calendar = json.loads(os.environ["CALENDAR"])
-          aug8 = json.loads(os.environ["AUG8"])
-          aug9 = json.loads(os.environ["AUG9"])
-
-          if calendar.get("ok") is not True:
-              raise SystemExit("public calendar API is not healthy")
-          if aug8.get("ok") is not True or aug9.get("ok") is not True:
-              raise SystemExit("public day API is not healthy")
-
+          calendar=json.loads(os.environ['CALENDAR']); aug8=json.loads(os.environ['AUG8']); aug9=json.loads(os.environ['AUG9'])
           def summarize(payload):
-              rows=payload.get("races") or []
-              venues=collections.Counter(row.get("venue") for row in rows)
-              selected=[row for row in rows if (row.get("publicState") or {}).get("code")=="buy"]
-              pending=[row for row in rows if (row.get("publicState") or {}).get("code")=="pending"]
-              return {
-                  "races":len(rows),
-                  "venues":dict(venues),
-                  "selected":len(selected),
-                  "pending":len(pending),
-                  "raceIds":[row.get("raceId") for row in rows],
-                  "selectedRaceIds":[row.get("raceId") for row in selected]
-              }
-
-          cal=calendar.get("calendar") or []
-          print(json.dumps({
-              "calendarVenueDays":len(cal),
-              "lastCalendarRows":cal[-15:],
-              "aug8":summarize(aug8),
-              "aug9":summarize(aug9)
-          },ensure_ascii=False))
+              rows=payload.get('races') or []
+              return {'races':len(rows),'venues':dict(collections.Counter(r.get('venue') for r in rows)),'selected':sum((r.get('publicState') or {}).get('code')=='buy' for r in rows)}
+          print(json.dumps({'calendarVenueDays':len(calendar.get('calendar') or []),'aug8':summarize(aug8),'aug9':summarize(aug9)},ensure_ascii=False))
           PY
+
+          python - <<'PY' >/tmp/candidates.txt
+          venues=[('sapporo','01','01','06'),('niigata','04','02','06'),('chukyo','07','02','06')]
+          for name,code,meeting,day in venues:
+              core=f"pw01dde01{code}2026{meeting}{day}0120260809"
+              print(name+'|https://www.jra.go.jp/JRADB/accessD.html?CNAME='+core)
+              print(name+'-00|https://www.jra.go.jp/JRADB/accessD.html?CNAME='+core+'%2F00')
+          PY
+
+          while IFS='|' read -r label url; do
+            code="$(curl --silent --show-error --location --max-time 25 -A 'Mozilla/5.0' -o "/tmp/${label}.html" -w '%{http_code}' "$url" || true)"
+            size="$(wc -c < "/tmp/${label}.html" 2>/dev/null || echo 0)"
+            if grep -q '2026年8月9日' "/tmp/${label}.html" 2>/dev/null && grep -q '1レース' "/tmp/${label}.html" 2>/dev/null; then ok=true; else ok=false; fi
+            echo "JRA_CANDIDATE label=${label} http=${code} bytes=${size} valid=${ok}"
+          done </tmp/candidates.txt
