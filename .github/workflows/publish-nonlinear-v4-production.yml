@@ -1,18 +1,7 @@
-name: Publish future course-specific predictions
+name: Legacy course-specific prediction publisher
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "17 * * * *"
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/publish-nonlinear-v4-production.yml"
-      - "scripts/final-course-policy.py"
-      - "scripts/run-final-course-production.py"
-      - "scripts/publish-nonlinear-v4-production.py"
-      - "scripts/train-nonlinear-market-blend-v4.py"
 
 concurrency:
   group: publish-future-production
