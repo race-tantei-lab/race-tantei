@@ -131,8 +131,9 @@ def main() -> None:
                     best.append({"bet": bt, "horses": [horse_nos[i] for i in pos], "predayScore": score})
         targets.append({
             "raceId": rid, "raceDate": args.date, "venue": venue, "raceNo": rn,
-            "raceName": race.get("raceName"), "startTimeJst": race.get("startTimeJst"),
-            "surface": surface, "distanceM": dm, "raceScore": race_score,
+            "raceName": race.get("raceName"), "conditions": race.get("conditions"),
+            "startTimeJst": race.get("startTimeJst"), "surface": surface,
+            "distanceM": dm, "direction": race.get("direction"), "raceScore": race_score,
             "bestPredayTickets": best,
         })
 
@@ -154,7 +155,7 @@ def main() -> None:
         "sourceRuleCount": 316,
         "selectionRule": "previous-day score, top five per venue, tie raceNo ascending",
         "resultDataUsedForTargetDay": False,
-        "dataSource": "production D1 direct; target-date results excluded",
+        "dataSource": "production D1 direct; target-date results excluded; structural metadata frozen in snapshot",
     }
     Path(args.out).write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"selected": [(x["venue"], x["raceNo"], round(x["raceScore"], 3)) for x in selected]}, ensure_ascii=False))
