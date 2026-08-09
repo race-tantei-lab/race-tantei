@@ -1,0 +1,31 @@
+{"eligibleFixedTargets": [["2026-08-09-niigata-11", "2026-08-09T08:50:00.000Z"], ["2026-08-09-chukyo-11", "2026-08-09T09:00:00Z"], ["2026-08-09-niigata-12", "2026-08-09T09:20:00Z"]]}
+SINGLE_WIN_DISPLAY_PERSIST_FAILED:HTTPError:HTTP Error 400: Bad Request
+{
+  "generatedAt": "2026-08-09T07:45:57.724404+00:00",
+  "status": "parsed_selected_official_odds",
+  "oddsSource": "jra_official",
+  "eligibleFixedTargetCount": 3,
+  "entryPagesFetched": 3,
+  "oddsPagesFetched": 18,
+  "parsedOddsRows": 18141,
+  "rowsByBetType": {
+    "3連単": 13803,
+    "3連複": 2448,
+    "ワイド": 459,
+    "単勝": 54,
+    "馬単": 918,
+    "馬連": 459
+  },
+  "racesByBetType": {
+    "3連単": 3,
+    "3連複": 3,
+    "ワイド": 3,
+    "単勝": 3,
+    "馬単": 3,
+    "馬連": 3
+  },
+  "errorCount": 0,
+  "errors": [],
+  "persistenceWarning": "SINGLE_WIN_DISPLAY_PERSIST_FAILED:HTTPError:HTTP Error 400: Bad Request",
+  "rowsFile": "current-selected-official-odds.json.gz"
+}
