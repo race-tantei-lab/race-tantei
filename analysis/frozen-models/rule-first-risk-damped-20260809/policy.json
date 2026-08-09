@@ -1,0 +1,41 @@
+{
+  "modelName": "rule-first-risk-damped-20260809",
+  "status": "FROZEN",
+  "ruleFile": "rules.json",
+  "ruleCount": 316,
+  "fixedDbThrough": "2026-08-02",
+  "allRulesBetSpecific": true,
+  "candidatePolicy": {
+    "minimumTickets": 3,
+    "maximumTickets": 10,
+    "relativeRuleScoreThreshold": 0.85,
+    "ifFewerThan3AboveThreshold": "take strongest 3 rule-matched tickets",
+    "eligibleRaceRequired": true
+  },
+  "racePolicy": {
+    "perVenueDay": 5,
+    "ranking": "strongest surviving rule score descending; race_no ascending tie-break"
+  },
+  "allocationPolicy": {
+    "unitYen": 100,
+    "budgetsYen": [2000,5000,10000],
+    "minimumUnitPerTicket": 1,
+    "maxSingleTicketShare": 0.35,
+    "oddsRiskGamma": 1.5,
+    "oddsRepresentative": [1.4,2.45,3.9,5.9,8.4,12.2,17.3,24.5,38.7,61.2,86.6,122.5,212.1,387.3,632.5,979.8,1549.2,2500.0],
+    "targetWeight": "min(1,(100/representative_odds)^1.5)",
+    "distribution": "start 1 unit each; add units one at a time toward target weights without exceeding 35% cap"
+  },
+  "forbidden": [
+    "bet-type-agnostic rules",
+    "single-ticket races",
+    "single ticket stake >35%",
+    "selection using race result or payout",
+    "post-result rule changes"
+  ],
+  "holdoutNote": {
+    "2026-08-08": "already observed before this revision; not a pristine holdout",
+    "backtestDataEnd": "2026-08-02",
+    "note": "2026-08-08 outcomes were not used in numeric policy search, but its structural failure motivated the redesign; do not label it untouched holdout."
+  }
+}
