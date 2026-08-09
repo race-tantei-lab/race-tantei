@@ -1,0 +1,115 @@
+name: Automatic final live bets
+
+on:
+  workflow_dispatch:
+  schedule:
+    # JST Saturday/Sunday/Monday 08:00-19:00. Monday covers holiday meetings.
+    - cron: "*/10 23 * * 5,6,0"
+    - cron: "*/10 0-10 * * 6,0,1"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/auto-final-live-bets.yml"
+      - "scripts/run-auto-final-live.py"
+      - "scripts/generate-final-live-bets.py"
+      - "scripts/generate-final-live-bets-batched.py"
+      - "scripts/generate-final-preday-selection-remote.py"
+      - "scripts/collect-current-jra-official-odds-live.py"
+      - "scripts/collect-current-jra-official-odds-fast.py"
+      - "scripts/final-rules-payload.py"
+
+concurrency:
+  group: automatic-final-live-bets
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+  JRA_ODDS_REQUEST_PAUSE_SECONDS: "0.55"
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Mark automatic live lock pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='production/auto-final-live' \
+            -f description='事前予想の自動固定を確認中' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Compile automatic live runner
+        run: |
+          python -m py_compile \
+            scripts/run-auto-final-live.py \
+            scripts/generate-final-live-bets.py \
+            scripts/generate-final-live-bets-batched.py \
+            scripts/generate-final-preday-selection-remote.py \
+            scripts/collect-current-jra-official-odds-live.py \
+            scripts/collect-current-jra-official-odds-fast.py
+
+      - name: Check integration on code changes
+        if: github.event_name == 'push'
+        run: python scripts/run-auto-final-live.py --check-only
+
+      - name: Wake current-day data sync
+        if: github.event_name != 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          curl --retry 3 --retry-delay 2 --retry-all-errors -fsS \
+            "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$today" >/dev/null || true
+          sleep 7
+
+      - name: Freeze selection and lock due live bets
+        if: github.event_name != 'push'
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/run-auto-final-live.py | tee automatic-final-live.log
+
+      - name: Upload automatic live audit
+        if: always() && github.event_name != 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: automatic-final-live-audit
+          path: |
+            analysis-results/auto-final-live-run.json
+            analysis-results/auto-final-live-*.json
+            official-odds-collection-report.json
+            automatic-final-live.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Mark automatic live lock success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='production/auto-final-live' \
+            -f description='事前予想の自動固定経路は正常' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Mark automatic live lock failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='production/auto-final-live' \
+            -f description='事前予想の自動固定に失敗' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
