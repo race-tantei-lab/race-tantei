@@ -8,10 +8,11 @@
   "racesPerVenue":{"札幌":5,"新潟":5,"中京":5},
   "selectionStage":{"札幌":"primary","新潟":"primary","中京":"primary"},
   "predictionJsonSha256":"aa3e201d8a5412e43a9aa0ba035438f647acfb99ff2c454ff3599f4efe9e44f7",
-  "betsCsvSha256":"82062e6c0a53977ba36d21f5d249b820749d0e4cd9c51b20011aacba3183bd90",
+  "betsCsvSha256GitHubStored":"473343f587444e65879f02ae4146dde1a3f1f282ee45027c2b3eb38acb99991b",
+  "betsCsvSha256LocalWithUtf8Bom":"82062e6c0a53977ba36d21f5d249b820749d0e4cd9c51b20011aacba3183bd90",
   "sanitizedConditionsSha256":"6074bc648d5cad353c549242ab4f8df07ec06da64feb0744a057751fee5899b9",
   "weatherTrackSource":"JRA result-page header prefix only; parser physically stops before race_title and does not read finish/order/payout sections",
   "budgetsPerSelectedRaceYen":{"light":2000,"standard":5000,"premium":10000},
   "totalInvestmentYen":{"light":30000,"standard":75000,"premium":150000},
-  "note":"This lock was committed before target-day result/payout settlement. No target-day result was used to select races, tickets, rules, or stake allocation."
+  "note":"This lock was committed before target-day result/payout settlement. No target-day result was used to select races, tickets, rules, or stake allocation. The only lock update before settlement was to record the BOM/no-BOM byte-hash distinction; no bet row changed."
 }
