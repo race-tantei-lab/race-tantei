@@ -64,25 +64,11 @@ jobs:
             echo "Checking $d"
             code=$(curl --retry 5 --retry-delay 2 --retry-all-errors -sS -o "/tmp/$d.json" -w '%{http_code}' "$base/api/public/day?date=$d")
             test "$code" = '200'
-            python - "$d" <<'PY'
-import json,sys
-p=json.load(open('/tmp/'+sys.argv[1]+'.json'))
-r=p.get('races')
-assert isinstance(r,list) and len(r)>=12,(sys.argv[1],p)
-selected=[x for x in r if (x.get('publicState') or {}).get('code') in ('hit','miss','buy')]
-assert selected,(sys.argv[1],'no selected historical races')
-print(sys.argv[1], 'races=',len(r),'selected=',len(selected))
-PY
+            DATE="$d" node -e "const fs=require('fs');const d=process.env.DATE;const p=JSON.parse(fs.readFileSync('/tmp/'+d+'.json','utf8'));const r=p.races;if(!Array.isArray(r)||r.length<12)throw new Error('bad historical races '+d);const s=r.filter(x=>['hit','miss','buy'].includes(x.publicState?.code));if(!s.length)throw new Error('no selected historical races '+d);console.log(d,'races=',r.length,'selected=',s.length)"
           done
-          race_id=$(python - <<'PY'
-import json
-p=json.load(open('/tmp/2024-05-26.json'))
-for r in p['races']:
-    if (r.get('publicState') or {}).get('code') in ('hit','miss','buy'):
-        print(r['raceId']);break
-PY
-          )
+          race_id=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/2024-05-26.json','utf8'));const r=p.races.find(x=>['hit','miss','buy'].includes(x.publicState?.code));if(!r)process.exit(2);process.stdout.write(r.raceId)")
           test -n "$race_id"
+          echo "Historical detail: $race_id"
           code=$(curl --retry 5 --retry-delay 2 --retry-all-errors -sS -o /tmp/historical-detail.html -w '%{http_code}' "$base/races/$race_id")
           test "$code" = '200'
           grep -q '確定買い目' /tmp/historical-detail.html
