@@ -23,7 +23,7 @@ concurrency:
 jobs:
   lock:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -50,12 +50,6 @@ jobs:
       - name: Compile frozen live pipeline
         run: python -m py_compile scripts/collect-jra-official-odds.py scripts/collect-jra-official-odds-runtime.py scripts/collect-current-jra-official-odds.py scripts/collect-current-jra-official-odds-fast.py scripts/generate-final-preday-selection.py scripts/final-rules-payload.py scripts/generate-final-live-bets.py
 
-      - name: Export production database
-        run: |
-          npx wrangler d1 export race-tantei-phase0 --remote --output=/tmp/race-tantei.sql
-          sqlite3 /tmp/race-tantei.db < /tmp/race-tantei.sql
-          sqlite3 /tmp/race-tantei.db "SELECT COUNT(*) FROM rt_races; SELECT COUNT(*) FROM rt_runners; SELECT COUNT(*) FROM rt_results;"
-
       - name: Collect official odds for still-in-time fixed targets
         run: |
           python scripts/collect-current-jra-official-odds-fast.py | tee /tmp/final-live-odds.log
@@ -63,12 +57,11 @@ jobs:
           test -s official-odds-collection-report.json
           cat official-odds-collection-report.json
 
-      - name: Generate and immutably lock final bets
+      - name: Generate and immutably lock final bets directly from D1
         run: |
           mkdir -p analysis-results
           python scripts/generate-final-live-bets.py \
             --repo . \
-            --db /tmp/race-tantei.db \
             --date 2026-08-09 \
             --selection analysis-results/final-aug9-selection.json \
             --odds-file current-selected-official-odds.json.gz \
