@@ -15,6 +15,7 @@ const VENUE_SLUG:Record<string,string>={札幌:"sapporo",函館:"hakodate",福�
 
 type CompactTicket={bet:number;combo:number;bin:number;payout:number};
 type CompactRace=CompactTicket[];
+export type CanonicalCoursePayouts={ライト:number;スタンダード:number;プレミアム:number};
 let cache:Promise<Map<string,CompactRace>>|null=null;
 
 function raceIds(record:Record<string,string>):string[]{
@@ -94,6 +95,18 @@ function archive():Promise<Map<string,CompactRace>>{cache??=load().catch(error=>
 export async function getStaticCanonicalState(raceId:string):Promise<{hasBets:boolean;hit:boolean}|null>{
   if(raceId.slice(0,10)>CUTOFF)return null;const tickets=(await archive()).get(raceId);if(!tickets)return null;
   return {hasBets:true,hit:tickets.some(t=>t.payout>0)};
+}
+
+export async function getStaticCanonicalCoursePayouts(raceId:string):Promise<CanonicalCoursePayouts|null>{
+  if(raceId.slice(0,10)>CUTOFF)return null;
+  const tickets=(await archive()).get(raceId);if(!tickets)return null;
+  const bins=tickets.map(t=>t.bin);
+  const out:CanonicalCoursePayouts={ライト:0,スタンダード:0,プレミアム:0};
+  for(const [course,unitsTotal] of COURSES){
+    const units=allocation(bins,unitsTotal);
+    out[course]=units.reduce((sum,u,i)=>sum+u*tickets[i].payout,0);
+  }
+  return out;
 }
 
 export async function getStaticCanonicalBets(raceId:string):Promise<PublicBetRow[]>{
