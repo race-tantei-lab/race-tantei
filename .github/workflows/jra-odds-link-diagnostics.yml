@@ -34,9 +34,8 @@ jobs:
             "SELECT race_id AS raceId, race_date AS raceDate, venue, race_no AS raceNo, entry_url AS entryUrl FROM rt_races WHERE entry_url LIKE 'https://%/JRADB/accessD.html?%' ORDER BY race_date DESC, updated_at DESC LIMIT 12" \
             > /tmp/d1.json
           python - <<'PY' >/tmp/entry_url.txt
-          import json
-          data=json.load(open('/tmp/d1.json'))
-          rows=[]
+          import json,sys
+          data=json.load(open('/tmp/d1.json')); rows=[]
           def walk(x):
               if isinstance(x,dict):
                   if isinstance(x.get('results'),list): rows.extend(x['results'])
@@ -44,98 +43,107 @@ jobs:
               elif isinstance(x,list):
                   for v in x: walk(v)
           walk(data)
-          seen=set()
-          rows=[r for r in rows if isinstance(r,dict) and r.get('entryUrl') and not (r.get('entryUrl') in seen or seen.add(r.get('entryUrl')))]
+          seen=set(); rows=[r for r in rows if isinstance(r,dict) and r.get('entryUrl') and not (r['entryUrl'] in seen or seen.add(r['entryUrl']))]
           if not rows: raise SystemExit('NO_REAL_ENTRY_URL')
-          row=rows[0]
-          print(row['entryUrl'])
-          print('ENTRY_META',row.get('raceId'),row.get('raceDate'),row.get('venue'),row.get('raceNo'),file=__import__('sys').stderr)
+          row=rows[0]; print(row['entryUrl']); print('ENTRY_META',row.get('raceId'),row.get('raceDate'),row.get('venue'),row.get('raceNo'),file=sys.stderr)
           PY
 
-      - name: Download entry page and inspect link patterns
+      - name: Extract race-specific odds CNAME
         run: |
           set -euo pipefail
           url="$(head -n1 /tmp/entry_url.txt)"
           curl --silent --show-error --fail --location --max-time 30 \
             -A 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/136 Safari/537.36' \
-            -H 'Accept-Language: ja-JP,ja;q=0.9' \
-            "$url" -o /tmp/entry.bin
-
-          python - <<'PY'
+            -H 'Accept-Language: ja-JP,ja;q=0.9' "$url" -o /tmp/entry.bin
+          python - <<'PY' >/tmp/odds_cname.txt
           from pathlib import Path
-          import html,re
-          raw=Path('/tmp/entry.bin').read_bytes()
-          text=None
-          for enc in ('shift_jis','cp932','utf-8'):
-              try:
-                  t=raw.decode(enc)
-                  if 'オッズ' in t or '出馬表' in t:
-                      text=t; print('ENTRY_ENCODING',enc,'BYTES',len(raw)); break
-              except Exception: pass
-          if text is None: raise SystemExit('ENTRY_DECODE_FAILED')
+          import re,sys
+          raw=Path('/tmp/entry.bin').read_bytes(); text=raw.decode('shift_jis',errors='ignore')
           Path('/tmp/entry.html').write_text(text,encoding='utf-8')
-
-          patterns=[
-              r'.{0,180}オッズ.{0,260}',
-              r'.{0,180}accessO.{0,260}',
-              r'.{0,180}CNAME.{0,260}',
-              r'.{0,180}(?:odds|Odds|ODDS).{0,260}',
-              r'.{0,180}(?:onclick|data-url|data-href).{0,260}'
-          ]
-          printed=set()
-          for pat in patterns:
-              for m in re.finditer(pat,text,re.S):
-                  s=re.sub(r'\s+',' ',html.unescape(m.group(0))).strip()
-                  if s in printed: continue
-                  printed.add(s)
-                  print('ENTRY_MATCH',s[:700])
-                  if len(printed)>=80: break
-              if len(printed)>=80: break
-
-          scripts=[]
-          for m in re.finditer(r'<script\b[^>]*\bsrc=["\']([^"\']+)["\']',text,re.I):
-              src=html.unescape(m.group(1))
-              if src not in scripts: scripts.append(src)
-          print('SCRIPT_COUNT',len(scripts))
-          for src in scripts[:50]: print('SCRIPT_SRC',src)
-          Path('/tmp/scripts.txt').write_text('\n'.join(scripts),encoding='utf-8')
+          matches=re.findall(r"doAction\(\s*['\"]\/JRADB\/accessO\.html['\"]\s*,\s*['\"]([^'\"]+)['\"]",text,re.I)
+          specific=[x for x in matches if re.search(r'20\d{6}',x) and not x.endswith('oli00/6D')]
+          if not specific: raise SystemExit('NO_RACE_ODDS_CNAME')
+          print(specific[0])
+          print('ODDS_CNAME',specific[0],file=sys.stderr)
+          form=re.search(r'<form\b[^>]*id=["\']commForm01["\'][^>]*>',text,re.I)
+          if form: print('FORM',re.sub(r'\s+',' ',form.group(0)),file=sys.stderr)
           PY
 
-      - name: Inspect referenced JavaScript for odds routing
+      - name: Fetch official odds page
         run: |
           set -euo pipefail
+          cname="$(head -n1 /tmp/odds_cname.txt)"
+          base='https://www.jra.go.jp/JRADB/accessO.html'
+          encoded="$(CNAME="$cname" python - <<'PY'
+          import os,urllib.parse
+          print(urllib.parse.quote(os.environ['CNAME'],safe=''))
+          PY
+          )"
+          get_code="$(curl --silent --show-error --location --max-time 30 -A 'Mozilla/5.0' -o /tmp/odds-get.bin -w '%{http_code}' "${base}?CNAME=${encoded}" || true)"
+          post_code="$(curl --silent --show-error --location --max-time 30 -A 'Mozilla/5.0' -H 'Content-Type: application/x-www-form-urlencoded' --data-urlencode "CNAME=${cname}" -o /tmp/odds-post.bin -w '%{http_code}' "$base" || true)"
+          echo "ODDS_HTTP get=${get_code} post=${post_code}"
+
           python - <<'PY'
           from pathlib import Path
-          from urllib.parse import urljoin
-          base='https://www.jra.go.jp/'
-          lines=[x.strip() for x in Path('/tmp/scripts.txt').read_text().splitlines() if x.strip()]
-          urls=[]
-          for x in lines:
-              u=urljoin(base,x)
-              if u not in urls: urls.append(u)
-          Path('/tmp/script_urls.txt').write_text('\n'.join(urls))
+          import re,html
+          for mode in ('get','post'):
+              p=Path(f'/tmp/odds-{mode}.bin')
+              if not p.exists(): continue
+              raw=p.read_bytes(); text=None
+              for enc in ('shift_jis','cp932','utf-8'):
+                  try:
+                      t=raw.decode(enc)
+                      if any(k in t for k in ('単勝','馬連','3連単','オッズ')):
+                          text=t; print('ODDS_PAGE',mode,'encoding',enc,'bytes',len(raw)); break
+                  except Exception: pass
+              if text is None: continue
+              Path(f'/tmp/odds-{mode}.html').write_text(text,encoding='utf-8')
+              labels=['単勝','複勝','枠連','馬連','ワイド','馬単','3連複','3連単']
+              print('ODDS_LABELS',mode,{x:text.count(x) for x in labels})
+              links=[]
+              for m in re.finditer(r"doAction\(\s*['\"]\/JRADB\/accessO\.html['\"]\s*,\s*['\"]([^'\"]+)['\"]",text,re.I):
+                  v=html.unescape(m.group(1))
+                  if v not in links: links.append(v)
+              print('ODDS_ACTION_COUNT',mode,len(links))
+              for v in links[:80]: print('ODDS_ACTION',mode,v)
+              for pat in [r'<table\b[^>]*>[\s\S]{0,7000}?</table>',r'<ul\b[^>]*class=["\'][^"\']*(?:odds|nav)[^"\']*["\'][^>]*>[\s\S]{0,5000}?</ul>']:
+                  shown=0
+                  for m in re.finditer(pat,text,re.I):
+                      s=re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',m.group(0)))).strip()
+                      if any(x in s for x in labels):
+                          print('ODDS_BLOCK',mode,s[:1800]); shown+=1
+                          if shown>=12: break
           PY
 
-          count=0
-          while IFS= read -r src; do
-            [ -n "$src" ] || continue
-            count=$((count+1))
-            [ "$count" -le 30 ] || break
-            out="/tmp/js-${count}.txt"
-            code="$(curl --silent --show-error --location --max-time 20 -A 'Mozilla/5.0' -o "$out" -w '%{http_code}' "$src" || true)"
-            [ "$code" = "200" ] || continue
-            SRC="$src" OUT="$out" python - <<'PY'
-          import os,re,html
-          src=os.environ['SRC']; text=open(os.environ['OUT'],encoding='utf-8',errors='ignore').read()
-          keys=['accessO','CNAME','odds','Odds','ODDS','オッズ','pw15','pw30','pw31','pw32','pw33','pw34','pw35','pw36','pw37','pw38']
-          if not any(k in text for k in keys): raise SystemExit(0)
-          print('JS_SOURCE',src)
-          shown=0
-          for key in keys:
-              for m in re.finditer(re.escape(key),text,re.I):
-                  s=re.sub(r'\s+',' ',html.unescape(text[max(0,m.start()-220):m.end()+420])).strip()
-                  print('JS_MATCH',s[:800])
-                  shown+=1
-                  if shown>=30: raise SystemExit(0)
+      - name: Probe odds action pages
+        run: |
+          set -euo pipefail
+          source=/tmp/odds-get.html
+          [ -f "$source" ] || source=/tmp/odds-post.html
+          python - <<'PY' >/tmp/odds_actions.txt
+          import re,html
+          text=open('/tmp/odds-get.html' if __import__('os').path.exists('/tmp/odds-get.html') else '/tmp/odds-post.html',encoding='utf-8').read()
+          seen=[]
+          for m in re.finditer(r"doAction\(\s*['\"]\/JRADB\/accessO\.html['\"]\s*,\s*['\"]([^'\"]+)['\"]",text,re.I):
+              v=html.unescape(m.group(1))
+              if v not in seen and re.search(r'20\d{6}',v): seen.append(v)
+          for v in seen[:30]: print(v)
           PY
-          done </tmp/script_urls.txt
+          n=0
+          while IFS= read -r cname; do
+            [ -n "$cname" ] || continue
+            n=$((n+1)); [ "$n" -le 20 ] || break
+            out="/tmp/action-${n}.bin"
+            code="$(curl --silent --show-error --location --max-time 25 -A 'Mozilla/5.0' -G --data-urlencode "CNAME=${cname}" -o "$out" -w '%{http_code}' 'https://www.jra.go.jp/JRADB/accessO.html' || true)"
+            CNAME="$cname" OUT="$out" CODE="$code" python - <<'PY'
+          import os,re,html
+          raw=open(os.environ['OUT'],'rb').read(); text=raw.decode('shift_jis',errors='ignore')
+          title=re.search(r'<title[^>]*>(.*?)</title>',text,re.I|re.S)
+          plain=re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',text)))
+          labels=[x for x in ['単勝','複勝','枠連','馬連','ワイド','馬単','3連複','3連単'] if x in plain]
+          print('ACTION_PAGE',os.environ['CODE'],os.environ['CNAME'],'TITLE',re.sub(r'\s+',' ',title.group(1)).strip() if title else '', 'LABELS',','.join(labels),'BYTES',len(raw))
+          for key in labels:
+              i=plain.find(key)
+              if i>=0: print('ACTION_SAMPLE',key,plain[max(0,i-120):i+900][:1000])
+          PY
+          done </tmp/odds_actions.txt
