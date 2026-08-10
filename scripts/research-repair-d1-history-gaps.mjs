@@ -32,16 +32,8 @@ const CONCURRENCY = Math.max(1, Math.min(4, Number(arg("--concurrency", "3"))));
 const ATTEMPTS = 6;
 
 const VENUE_CODE = {
-  "札幌": "01",
-  "函館": "02",
-  "福島": "03",
-  "新潟": "04",
-  "東京": "05",
-  "中山": "06",
-  "中京": "07",
-  "京都": "08",
-  "阪神": "09",
-  "小倉": "10"
+  "札幌": "01", "函館": "02", "福島": "03", "新潟": "04", "東京": "05",
+  "中山": "06", "中京": "07", "京都": "08", "阪神": "09", "小倉": "10"
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -50,35 +42,75 @@ const pad2 = (value) => String(value ?? 0).padStart(2, "0");
 function parseJsonl(text) {
   return text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
 }
+async function readJsonl(file) { return parseJsonl(await readFile(file, "utf8")); }
+async function readGzJsonl(file) { return parseJsonl(gunzipSync(await readFile(file)).toString("utf8")); }
 
-async function readJsonl(file) {
-  return parseJsonl(await readFile(file, "utf8"));
-}
-
-async function readGzJsonl(file) {
-  return parseJsonl(gunzipSync(await readFile(file)).toString("utf8"));
+function groupByRace(rows) {
+  const map = new Map();
+  for (const row of rows) {
+    const list = map.get(row.race_id) ?? [];
+    list.push(row);
+    map.set(row.race_id, list);
+  }
+  return map;
 }
 
 function d1RaceToCamel(r) {
   return {
-    raceId: r.race_id,
-    raceDate: r.race_date,
-    venue: r.venue,
-    meetingNo: r.meeting_no ?? null,
-    meetingDay: r.meeting_day ?? null,
-    raceNo: r.race_no,
-    raceName: r.race_name ?? null,
-    conditions: r.conditions ?? null,
-    surface: r.surface ?? null,
-    distanceM: r.distance_m ?? null,
-    direction: r.direction ?? null,
-    startTimeJst: r.start_time_jst ?? null,
-    startTimeUtc: r.start_time_utc ?? null,
-    weather: r.weather ?? null,
-    trackCondition: r.track_condition ?? null,
-    entryUrl: r.entry_url ?? null,
-    resultUrl: r.result_url ?? null,
-    status: r.status ?? null
+    raceId: r.race_id, raceDate: r.race_date, venue: r.venue,
+    meetingNo: r.meeting_no ?? null, meetingDay: r.meeting_day ?? null, raceNo: r.race_no,
+    raceName: r.race_name ?? null, conditions: r.conditions ?? null, surface: r.surface ?? null,
+    distanceM: r.distance_m ?? null, direction: r.direction ?? null,
+    startTimeJst: r.start_time_jst ?? null, startTimeUtc: r.start_time_utc ?? null,
+    weather: r.weather ?? null, trackCondition: r.track_condition ?? null,
+    entryUrl: r.entry_url ?? null, resultUrl: r.result_url ?? null, status: r.status ?? null
+  };
+}
+
+function d1Runner(r) {
+  return {
+    horseNo: r.horse_no, frameNo: r.frame_no ?? null, horseName: r.horse_name,
+    sexAge: r.sex_age ?? null, coatColor: r.coat_color ?? null,
+    horseWeight: r.horse_weight ?? null, weightChange: r.weight_change ?? null,
+    jockey: r.jockey ?? null, assignedWeight: r.assigned_weight ?? null,
+    trainer: r.trainer ?? null, stable: r.stable ?? null, popularity: r.popularity ?? null,
+    runnerStatus: r.runner_status ?? "active", winOdds: r.win_odds ?? null
+  };
+}
+
+function d1Result(r) {
+  return {
+    horseNo: r.horse_no, finishPosition: r.finish_position ?? null,
+    resultStatus: r.result_status ?? null, timeText: r.time_text ?? null,
+    marginText: r.margin_text ?? null, final3f: r.final3f ?? null
+  };
+}
+
+function d1Payout(r) {
+  return {
+    betType: r.bet_type, combination: r.combination,
+    payoutYen: r.payout_yen, popularity: r.popularity ?? null
+  };
+}
+
+function refundHorseNos(race) {
+  try { return JSON.parse(race.refund_horse_nos_json || "[]"); }
+  catch { return []; }
+}
+
+function makeD1Bundle(race, runnersByRace, resultsByRace, payoutsByRace) {
+  return {
+    race: d1RaceToCamel(race),
+    runners: (runnersByRace.get(race.race_id) ?? []).map(d1Runner).sort((a,b) => a.horseNo-b.horseNo),
+    results: (resultsByRace.get(race.race_id) ?? []).map(d1Result),
+    payouts: (payoutsByRace.get(race.race_id) ?? []).map(d1Payout),
+    refundHorseNos: refundHorseNos(race),
+    provenance: {
+      resultUrl: race.result_url ?? null,
+      source: "existing_production_d1_read_only",
+      syntheticOddsUsed: false,
+      productionDatabaseWritten: false
+    }
   };
 }
 
@@ -87,16 +119,14 @@ function mergeRace(d1, fallback) {
   return {
     ...fallback,
     ...Object.fromEntries(Object.entries(base).filter(([, value]) => value !== null && value !== "")),
-    status: fallback?.status === "finished" || fallback?.status === "cancelled" ? fallback.status : (base.status ?? fallback?.status ?? "finished")
+    status: fallback?.status === "finished" || fallback?.status === "cancelled"
+      ? fallback.status : (base.status ?? fallback?.status ?? "finished")
   };
 }
 
 function cnameFromUrl(url) {
-  try {
-    return decodeURIComponent(new URL(url).searchParams.get("CNAME") ?? "");
-  } catch {
-    return "";
-  }
+  try { return decodeURIComponent(new URL(url).searchParams.get("CNAME") ?? ""); }
+  catch { return ""; }
 }
 
 function expectedCnamePrefix(race) {
@@ -117,9 +147,7 @@ async function resolveArchiveResultUrl(race, monthCache) {
   const urls = await promise;
   const prefix = expectedCnamePrefix(race);
   const matches = urls.filter((url) => cnameFromUrl(url).toLowerCase().startsWith(prefix));
-  if (matches.length !== 1) {
-    throw new Error(`ARCHIVE_RACE_URL_MATCH:${race.race_id}:count=${matches.length}`);
-  }
+  if (matches.length !== 1) throw new Error(`ARCHIVE_RACE_URL_MATCH:${race.race_id}:count=${matches.length}`);
   return matches[0];
 }
 
@@ -131,16 +159,12 @@ async function fetchOfficialHtml(resultUrl) {
       try {
         const page = await fetchJraArchivePage(cname);
         return { html: page.html, method: "archive_post" };
-      } catch (error) {
-        last = error;
-      }
+      } catch (error) { last = error; }
     }
     try {
       const page = await fetchJraPage(resultUrl);
       return { html: page.html, method: "direct_get" };
-    } catch (error) {
-      last = error;
-    }
+    } catch (error) { last = error; }
     if (attempt < ATTEMPTS) await sleep(Math.min(10_000, 1000 * attempt));
   }
   throw last instanceof Error ? last : new Error(String(last));
@@ -158,7 +182,7 @@ function canonicalConditionsFromOfficialHtml(html, raceName) {
   const text = normalizeOfficialText(html);
   const index = raceName ? text.indexOf(raceName) : -1;
   const scopes = index >= 0
-    ? [text.slice(Math.max(0, index - 180), Math.min(text.length, index + 800)), text]
+    ? [text.slice(Math.max(0, index - 220), Math.min(text.length, index + 900)), text]
     : [text];
   const patterns = [
     /(障害(?:2歳|3歳|3歳以上|4歳以上)?\s*(?:新馬|未勝利|オープン))/u,
@@ -176,22 +200,18 @@ function canonicalConditionsFromOfficialHtml(html, raceName) {
 
 function metadataComplete(race) {
   return Boolean(
-    race?.raceName
-    && race?.conditions
+    race?.raceName && race?.conditions
     && ["芝", "ダート", "障害"].includes(race?.surface)
-    && Number.isFinite(race?.distanceM)
-    && race.distanceM > 0
+    && Number.isFinite(race?.distanceM) && race.distanceM > 0
   );
 }
 
 function outcomeComplete(bundle) {
   return Boolean(
     bundle?.race?.status === "cancelled"
-    || (
-      Array.isArray(bundle?.runners) && bundle.runners.length >= 2
+    || (Array.isArray(bundle?.runners) && bundle.runners.length >= 2
       && Array.isArray(bundle?.results) && bundle.results.length >= 2
-      && Array.isArray(bundle?.payouts) && bundle.payouts.length > 0
-    )
+      && Array.isArray(bundle?.payouts) && bundle.payouts.length > 0)
   );
 }
 
@@ -208,17 +228,22 @@ function repairFromLegacy(d1Race, legacy) {
   };
 }
 
-function repairFromOfficialHtml(d1Race, html, resultUrl, method) {
+function repairFromOfficialHtml(d1Race, baseBundle, html, resultUrl, method) {
   if (!pageLooksLikeResult(html)) throw new Error("RESULT_SIGNATURE_MISSING");
   const parsed = parseResultPage(html, resultUrl);
   const meta = parseLegacyRaceMeta(html, resultUrl);
-  const conditionFallback = canonicalConditionsFromOfficialHtml(html, d1Race.race_name ?? parsed.race?.raceName ?? meta.raceName);
-  const desktopRunners = parseDesktopResultRunners(html).map((runner) => ({ ...runner, winOdds: null }));
-  const payouts = parsed.payouts?.length ? parsed.payouts : parseDesktopPayouts(html);
+  const conditionFallback = canonicalConditionsFromOfficialHtml(
+    html,
+    d1Race.race_name ?? parsed.race?.raceName ?? meta.raceName
+  );
+  const fetchedRunners = parseDesktopResultRunners(html).map((runner) => ({ ...runner, winOdds: null }));
+  const fetchedPayouts = parsed.payouts?.length ? parsed.payouts : parseDesktopPayouts(html);
+
   const fallbackRace = {
     ...parsed.race,
-    raceName: parsed.race?.raceName && !/検索ウィンドウ|緊急情報/.test(parsed.race.raceName) ? parsed.race.raceName : meta.raceName,
-    conditions: parsed.race?.conditions ?? meta.conditions ?? conditionFallback,
+    raceName: parsed.race?.raceName && !/検索ウィンドウ|緊急情報/.test(parsed.race.raceName)
+      ? parsed.race.raceName : meta.raceName,
+    conditions: conditionFallback ?? parsed.race?.conditions ?? meta.conditions,
     surface: parsed.race?.surface ?? meta.surface,
     distanceM: parsed.race?.distanceM ?? meta.distanceM,
     direction: parsed.race?.direction ?? meta.direction,
@@ -227,22 +252,34 @@ function repairFromOfficialHtml(d1Race, html, resultUrl, method) {
     status: parsed.race?.status ?? "finished"
   };
   const race = mergeRace(d1Race, fallbackRace);
-  if (!race.conditions) race.conditions = meta.conditions ?? conditionFallback;
+  if (!race.conditions) race.conditions = conditionFallback ?? meta.conditions;
   if (!race.surface) race.surface = meta.surface;
   if (!race.distanceM) race.distanceM = meta.distanceM;
   if (!race.direction) race.direction = meta.direction;
   if (!race.raceName || /検索ウィンドウ|緊急情報/.test(race.raceName)) race.raceName = meta.raceName;
   race.resultUrl = resultUrl;
+
+  // Preserve already-complete D1 outcome fields. Only replace the component that is actually missing.
+  const runners = baseBundle.runners.length >= 2 ? baseBundle.runners : fetchedRunners;
+  const results = baseBundle.results.length >= 2 ? baseBundle.results : (parsed.results ?? []);
+  const payouts = baseBundle.payouts.length > 0 ? baseBundle.payouts : fetchedPayouts;
+  const refund = baseBundle.refundHorseNos?.length ? baseBundle.refundHorseNos : (parsed.refundHorseNos ?? []);
+
   return {
     race,
-    runners: desktopRunners,
-    results: parsed.results ?? [],
+    runners,
+    results,
     payouts,
-    refundHorseNos: parsed.refundHorseNos ?? [],
+    refundHorseNos: refund,
     provenance: {
       resultUrl,
       source: "jra_official_targeted_d1_gap_repair",
       fetchMethod: method,
+      preservedExistingD1Outcome: {
+        runners: baseBundle.runners.length >= 2,
+        results: baseBundle.results.length >= 2,
+        payouts: baseBundle.payouts.length > 0
+      },
       syntheticOddsUsed: false,
       productionDatabaseWritten: false
     }
@@ -268,17 +305,17 @@ async function main() {
   const runners = await readGzJsonl(path.join(D1_DIR, "runners.jsonl.gz"));
   const results = await readGzJsonl(path.join(D1_DIR, "results.jsonl.gz"));
   const payouts = await readGzJsonl(path.join(D1_DIR, "payouts.jsonl.gz"));
-
-  const runnerCount = new Map();
-  const resultCount = new Map();
-  const payoutCount = new Map();
-  for (const row of runners) runnerCount.set(row.race_id, (runnerCount.get(row.race_id) ?? 0) + 1);
-  for (const row of results) resultCount.set(row.race_id, (resultCount.get(row.race_id) ?? 0) + 1);
-  for (const row of payouts) payoutCount.set(row.race_id, (payoutCount.get(row.race_id) ?? 0) + 1);
+  const runnersByRace = groupByRace(runners);
+  const resultsByRace = groupByRace(results);
+  const payoutsByRace = groupByRace(payouts);
 
   const gaps = races.filter((r) => {
     const metadataGap = !r.race_name || !r.conditions || !["芝", "ダート", "障害"].includes(r.surface) || !r.distance_m;
-    const outcomeGap = r.status !== "cancelled" && ((runnerCount.get(r.race_id) ?? 0) < 2 || (resultCount.get(r.race_id) ?? 0) < 2 || (payoutCount.get(r.race_id) ?? 0) < 1);
+    const outcomeGap = r.status !== "cancelled" && (
+      (runnersByRace.get(r.race_id)?.length ?? 0) < 2
+      || (resultsByRace.get(r.race_id)?.length ?? 0) < 2
+      || (payoutsByRace.get(r.race_id)?.length ?? 0) < 1
+    );
     return metadataGap || outcomeGap;
   });
 
@@ -317,7 +354,8 @@ async function main() {
       const fetched = await fetchOfficialHtml(resultUrl);
       if (fetched.method === "archive_post") archivePost += 1;
       else directGet += 1;
-      const repaired = repairFromOfficialHtml(race, fetched.html, resultUrl, fetched.method);
+      const baseBundle = makeD1Bundle(race, runnersByRace, resultsByRace, payoutsByRace);
+      const repaired = repairFromOfficialHtml(race, baseBundle, fetched.html, resultUrl, fetched.method);
       if (!metadataComplete(repaired.race) || !outcomeComplete(repaired)) {
         throw new Error(`NETWORK_REPAIR_INCOMPLETE:${race.race_id}:conditions=${JSON.stringify(repaired.race.conditions)}:runners=${repaired.runners.length}:results=${repaired.results.length}:payouts=${repaired.payouts.length}`);
       }
