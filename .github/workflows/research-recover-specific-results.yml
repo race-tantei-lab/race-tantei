@@ -16,7 +16,19 @@ env:
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
+  begin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark targeted recovery pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/targeted-history-recovery' \
+            -f description='Recovering only blocked historical result pages' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
   recover:
+    needs: begin
     strategy:
       fail-fast: false
       max-parallel: 1
@@ -77,3 +89,27 @@ jobs:
             recovered-${{ matrix.key }}.log
           if-no-files-found: error
           retention-days: 30
+
+  finish:
+    if: always()
+    needs: recover
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish targeted recovery result
+        env:
+          RESULT: ${{ needs.recover.result }}
+        run: |
+          if [ "$RESULT" = "success" ]; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=success \
+              -f context='research/targeted-history-recovery' \
+              -f description='Blocked historical results recovered and validated' \
+              -f target_url="$STATUS_TARGET_URL" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=failure \
+              -f context='research/targeted-history-recovery' \
+              -f description='At least one blocked historical result still needs recovery' \
+              -f target_url="$STATUS_TARGET_URL" >/dev/null
+            exit 1
+          fi
