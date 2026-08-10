@@ -1,0 +1,214 @@
+name: Research sharded ten-year canonical transfer
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-ten-year-canonical-transfer-sharded.yml"
+      - "scripts/research-evaluate-canonical-transfer-year.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  DEMAND_RUN_ID: '31373103782'
+  ODDS_RUN_ID: '31373205723'
+  PARTIAL_REPAIR_RUN_ID: '31400807509'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark sharded evaluation pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/ten-year-canonical-transfer-sharded' \
+            -f description='Preparing year-sharded 297-rule transfer evaluation' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Download shared history, demand, rules and 50 recovered odds races
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p shared/history shared/demand shared/repair
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip -d shared/history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEMAND_RUN_ID}/artifacts?per_page=100" > demand-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-ten-year-canonical-demand" and .expired==false) | .id' demand-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != "null"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d shared/demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PARTIAL_REPAIR_RUN_ID}/artifacts?per_page=100" > repair-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-demanded-odds-repair" and .expired==false) | .id' repair-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != "null"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > repair.zip
+          unzip -q repair.zip -d shared/repair
+          test -s shared/history/ten-year-history-corpus.jsonl
+          test -s shared/demand/research-ten-year-canonical-demand.jsonl
+          test -s shared/demand/research-canonical-rules-297.json
+          test -s shared/repair/research-demanded-odds-repair.jsonl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-transfer-shared-ready
+          path: shared
+          if-no-files-found: error
+          retention-days: 14
+
+  year:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      max-parallel: 11
+      matrix:
+        year: ['2016','2017','2018','2019','2020','2021','2022','2023','2024','2025','2026']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-transfer-shared-ready
+          path: shared
+      - name: Download official odds shard for ${{ matrix.year }} only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p year-odds
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > odds-artifacts.json
+          name="research-demanded-odds-${{ matrix.year }}"
+          id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' odds-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != "null"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > year.zip
+          unzip -q year.zip -d year-odds
+          test -s year-odds/research-demanded-odds-${{ matrix.year }}.jsonl
+      - name: Evaluate ${{ matrix.year }} shard
+        run: |
+          set -euo pipefail
+          python scripts/research-evaluate-canonical-transfer-year.py \
+            --year '${{ matrix.year }}' \
+            --corpus shared/history/ten-year-history-corpus.jsonl \
+            --demand shared/demand/research-ten-year-canonical-demand.jsonl \
+            --rules shared/demand/research-canonical-rules-297.json \
+            --odds year-odds/research-demanded-odds-${{ matrix.year }}.jsonl \
+            --repair shared/repair/research-demanded-odds-repair.jsonl \
+            --out analysis-results/research-canonical-transfer-${{ matrix.year }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-canonical-transfer-${{ matrix.year }}
+          path: analysis-results/research-canonical-transfer-${{ matrix.year }}.json
+          if-no-files-found: error
+          retention-days: 30
+
+  summarize:
+    needs: year
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: research-canonical-transfer-20*
+          path: shards
+          merge-multiple: true
+      - name: Combine year shards and calculate exact-period zero-return lower bound
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          courses=('ライト','スタンダード','プレミアム')
+          budgets={'ライト':2000,'スタンダード':5000,'プレミアム':10000}
+          files=sorted(Path('shards').glob('research-canonical-transfer-20*.json'))
+          assert len(files)==11, [p.name for p in files]
+          rows=[json.loads(p.read_text()) for p in files]
+          assert [r['year'] for r in rows]==[str(y) for y in range(2016,2027)]
+          assert all(r['evaluationErrorCount']==0 and not r['missingDemandRacesInCorpus'] for r in rows), rows
+          def aggregate(year_rows, course):
+            keys=('races','tickets','hitRaces','stakeYen','returnYen')
+            a={k:sum(int(r['courses'][course][k]) for r in year_rows) for k in keys}
+            selected=sum(int(r['selectedDemandRaces']) for r in year_rows)
+            exact_stake=selected*budgets[course]
+            a['profitYen']=a['returnYen']-a['stakeYen']
+            a['roiPct']=round(100*a['returnYen']/a['stakeYen'],4) if a['stakeYen'] else None
+            a['hitRacePct']=round(100*a['hitRaces']/a['races'],4) if a['races'] else None
+            a['selectedDemandRaces']=selected
+            a['exactSelectedStakeYen']=exact_stake
+            a['zeroReturnLowerBoundRoiPct']=round(100*a['returnYen']/exact_stake,4) if exact_stake else None
+            return a
+          periods={
+            '2016-08-10..2018': {'2016','2017','2018'},
+            '2019..2021': {'2019','2020','2021'},
+            '2022..2024': {'2022','2023','2024'},
+            '2025..2026-08-09': {'2025','2026'},
+          }
+          selected=sum(r['selectedDemandRaces'] for r in rows)
+          odds=sum(r['oddsRaces'] for r in rows)
+          missing=sum(r['missingOddsRaceCount'] for r in rows)
+          evaluated=sum(r['evaluatedRaces'] for r in rows)
+          assert selected==14410,selected
+          assert odds==14380,odds
+          assert missing==30,missing
+          assert evaluated==14380,evaluated
+          result={
+            'purpose':'research_only_sharded_canonical_297_transfer_provisional',
+            'evaluationStart':'2016-08-10','evaluationEnd':'2026-08-09',
+            'sourceRuleCount':297,
+            'selectedDemandRaces':selected,'oddsRaces':odds,'missingOddsRaceCount':missing,'evaluatedRaces':evaluated,
+            'missingOddsRaceIds':[rid for r in rows for rid in r['missingOddsRaceIds']],
+            'evaluationErrorCount':0,
+            'courses':{},
+            'historicalFinalOddsUsed':True,'targetDayResultsUsedForSelection':False,
+            'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False,
+          }
+          for c in courses:
+            overall=aggregate(rows,c)
+            tops=sorted([x for r in rows for x in r['courses'][c]['topRaceReturns']],key=lambda x:x['returnYen'],reverse=True)
+            total_ret=overall['returnYen']
+            def share(n): return round(100*sum(x['returnYen'] for x in tops[:n])/total_ret,4) if total_ret else 0.0
+            overall['byYear']={r['year']:r['courses'][c] for r in rows}
+            overall['byPeriod']={name:aggregate([r for r in rows if r['year'] in years],c) for name,years in periods.items()}
+            overall['returnConcentration']={
+              'largestRaceReturnYen':tops[0]['returnYen'] if tops else 0,
+              'largestRaceId':tops[0]['raceId'] if tops else None,
+              'top1ReturnSharePct':share(1),'top5ReturnSharePct':share(5),'top10ReturnSharePct':share(10),'top25ReturnSharePct':share(25)
+            }
+            result['courses'][c]=overall
+          result['allThreeProvisionalAtLeast200Pct']=all(result['courses'][c]['roiPct']>=200 for c in courses)
+          result['allThreeZeroReturnLowerBoundAtLeast200Pct']=all(result['courses'][c]['zeroReturnLowerBoundRoiPct']>=200 for c in courses)
+          Path('analysis-results').mkdir(exist_ok=True)
+          Path('analysis-results/research-canonical-297-ten-year-transfer-sharded.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({
+            'evaluated':evaluated,'missing':missing,
+            'roi':{c:result['courses'][c]['roiPct'] for c in courses},
+            'zeroReturnLowerBoundRoi':{c:result['courses'][c]['zeroReturnLowerBoundRoiPct'] for c in courses},
+            'allThreeProvisional200':result['allThreeProvisionalAtLeast200Pct'],
+            'allThreeLowerBound200':result['allThreeZeroReturnLowerBoundAtLeast200Pct']
+          },ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-canonical-297-ten-year-transfer-sharded
+          path: analysis-results/research-canonical-297-ten-year-transfer-sharded.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Mark sharded evaluation success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/ten-year-canonical-transfer-sharded' \
+            -f description='Year-sharded 297-rule ten-year transfer completed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark sharded evaluation failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/ten-year-canonical-transfer-sharded' \
+            -f description='Year-sharded transfer needs targeted fix' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
