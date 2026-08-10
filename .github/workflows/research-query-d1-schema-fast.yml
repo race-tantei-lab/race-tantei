@@ -1,0 +1,78 @@
+name: Research query D1 schema fast
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - '.github/workflows/research-query-d1-schema-fast.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CLOUDFLARE_ACCOUNT_ID: '3c6d1826b573b2e68cb13ec37e9e8ade'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/d1-schema-fast' \
+            -f description='Querying D1 schema read-only' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Query schema read-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p analysis-results
+          npx wrangler d1 execute race-tantei-phase0 --remote --json \
+            --command="SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE '_cf_%' AND name NOT LIKE 'sqlite_%' ORDER BY name;" \
+            > analysis-results/d1-schema-fast.json
+          python - <<'PY'
+          import json
+          p='analysis-results/d1-schema-fast.json'
+          raw=json.load(open(p))
+          rows=[]
+          if isinstance(raw,list):
+              for block in raw:
+                  rows.extend(block.get('results') or [])
+          elif isinstance(raw,dict):
+              rows=raw.get('results') or []
+          print(json.dumps({'tableCount':len(rows),'tables':[r.get('name') for r in rows]},ensure_ascii=False))
+          for r in rows:
+              name=str(r.get('name') or '')
+              if any(k in name.lower() for k in ('odd','bet','pred','ticket','snap','cache','state','select','runner')):
+                  print(json.dumps({'candidate':name,'sql':r.get('sql')},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-d1-schema-fast
+          path: analysis-results/d1-schema-fast.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Mark success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/d1-schema-fast' \
+            -f description='D1 schema read-only query complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/d1-schema-fast' \
+            -f description='D1 schema query requires syntax correction' -f target_url="$STATUS_TARGET_URL" >/dev/null
