@@ -1,0 +1,95 @@
+name: Research audit existing D1 segment
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-audit-existing-d1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark audit pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/existing-d1-audit' \
+            -f description='Auditing reusable 2024-2026 D1 segment read-only' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Read D1 schema and research-range counts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p analysis-results
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT name, sql FROM sqlite_master WHERE type='table' AND name LIKE 'rt_%' ORDER BY name;" > analysis-results/existing-d1-schema.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT MIN(race_date) AS minDate, MAX(race_date) AS maxDate, COUNT(*) AS races FROM rt_races WHERE race_date BETWEEN '2024-05-04' AND '2026-08-09';" > analysis-results/existing-d1-races.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT COUNT(*) AS runners FROM rt_runners rr JOIN rt_races r ON r.race_id=rr.race_id WHERE r.race_date BETWEEN '2024-05-04' AND '2026-08-09';" > analysis-results/existing-d1-runners.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT COUNT(*) AS payouts FROM rt_payouts p JOIN rt_races r ON r.race_id=p.race_id WHERE r.race_date BETWEEN '2024-05-04' AND '2026-08-09';" > analysis-results/existing-d1-payouts.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT COUNT(*) AS publicBets FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date BETWEEN '2024-05-04' AND '2026-08-09';" > analysis-results/existing-d1-public-bets.json
+          cat analysis-results/existing-d1-races.json
+          cat analysis-results/existing-d1-runners.json
+          cat analysis-results/existing-d1-payouts.json
+
+      - name: Verify existing segment is reusable
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const rows=p=>{const x=JSON.parse(fs.readFileSync(p,'utf8'));return (Array.isArray(x)?x:[x]).flatMap(v=>Array.isArray(v?.results)?v.results:[])};
+          const race=rows('analysis-results/existing-d1-races.json')[0]||{};
+          const runners=rows('analysis-results/existing-d1-runners.json')[0]||{};
+          const payouts=rows('analysis-results/existing-d1-payouts.json')[0]||{};
+          if(race.minDate!=='2024-05-04') throw new Error('unexpected minDate '+race.minDate);
+          if(race.maxDate!=='2026-08-09') throw new Error('unexpected maxDate '+race.maxDate);
+          if(Number(race.races)<7800) throw new Error('too few races '+race.races);
+          if(Number(runners.runners)<=0) throw new Error('no runners');
+          if(Number(payouts.payouts)<=0) throw new Error('no payouts');
+          console.log(JSON.stringify({reusable:true,minDate:race.minDate,maxDate:race.maxDate,races:Number(race.races),runners:Number(runners.runners),payouts:Number(payouts.payouts),productionWrite:false}));
+          NODE
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-existing-d1-audit
+          path: analysis-results/existing-d1-*.json
+          retention-days: 14
+
+      - name: Mark audit success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='research/existing-d1-audit' \
+            -f description='Existing 2024-05-04 to 2026-08-09 D1 segment is reusable' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Mark audit failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='research/existing-d1-audit' \
+            -f description='Existing D1 reuse audit failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+          exit 1
