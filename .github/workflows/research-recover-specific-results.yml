@@ -5,6 +5,7 @@ on:
     branches: [research/ten-year-minimal-rules]
     paths:
       - ".github/workflows/research-recover-specific-results.yml"
+      - "scripts/research-recover-specific-result.mjs"
   workflow_dispatch:
 
 permissions:
@@ -58,7 +59,7 @@ jobs:
           set -o pipefail
           node scripts/research-recover-specific-result.mjs \
             --url '${{ matrix.url }}' \
-            --rounds 6 \
+            --rounds 4 \
             --out 'analysis-results/recovered-${{ matrix.key }}.jsonl' \
             --meta 'analysis-results/recovered-${{ matrix.key }}-meta.json' \
             | tee 'recovered-${{ matrix.key }}.log'
@@ -78,7 +79,7 @@ jobs:
           assert len(rows)==1, len(rows)
           row=json.loads(rows[0])
           assert row['race']['status'] in ('finished','cancelled'), row['race']
-          print(json.dumps({'key':key,'raceId':row['race']['raceId'],'recoveredUrl':m['recoveredUrl']},ensure_ascii=False))
+          print(json.dumps({'key':key,'raceId':row['race']['raceId'],'recoveredMethod':m['recoveredMethod']},ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
         with:
