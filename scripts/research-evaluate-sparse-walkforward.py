@@ -92,7 +92,9 @@ def main():
         for line in fh:
             if line.strip():
                 r=json.loads(line);demand[str(r['raceId'])]=r
-    folds={x['fold']:x['rules'] for x in json.loads((ROOT/a.rules).read_text(encoding='utf-8')) if x['startDate']>='2016-08-10'}
+    rule_rows=json.loads((ROOT/a.rules).read_text(encoding='utf-8'))
+    eval_start='2016-08-10'; y=int(eval_start[:4]); month=int(eval_start[5:7]); first_eval_fold=f"{y}Q{(month-1)//3+1}"
+    folds={x['fold']:x['rules'] for x in rule_rows if x['fold']>=first_eval_fold}
     odds,files=load_odds(ROOT/a.odds_dir);missing=sorted(set(demand)-set(odds));seen=set();errors=[];records=[]
     state={'horse_hist':collections.defaultdict(lambda:collections.deque(maxlen=3)),'horse_starts':collections.Counter(),'jstats':collections.defaultdict(lambda:[0,0]),'tstats':collections.defaultdict(lambda:[0,0])}
     overall={c:init_stat() for c in COURSES};yearly={c:collections.defaultdict(init_stat) for c in COURSES};periods={c:collections.defaultdict(init_stat) for c in COURSES};returns={c:[] for c in COURSES}
