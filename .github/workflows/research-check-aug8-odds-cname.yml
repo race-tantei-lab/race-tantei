@@ -1,0 +1,51 @@
+name: Research check Aug8 odds CNAME checksum
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths: ['.github/workflows/research-check-aug8-odds-cname.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mark pending
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/aug8-odds-cname-check' -f description='Checking dde10 to odds checksum on live JRA page' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Check JRA links
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import html,re,urllib.request
+          cases=[
+            ('2026-08-08-sapporo-01','https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1001202601050120260808/A4'),
+            ('2026-08-09-chukyo-01','https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060120260809/E2'),
+          ]
+          for rid,url in cases:
+            req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'ja-JP,ja;q=0.9'})
+            raw=urllib.request.urlopen(req,timeout=30).read()
+            text=raw.decode('shift_jis','replace')
+            cnames=[]
+            for m in re.finditer(r'(?:pw|sw)15[145678]ou[^\"\'<> ]+/[0-9A-Fa-f]{2}',html.unescape(text),re.I):
+              c=m.group(0)
+              if c not in cnames: cnames.append(c)
+            dde=int(url[-2:],16)
+            print(rid,'dde',f'{dde:02X}','links',cnames[:20])
+            for c in cnames:
+              code=re.match(r'(?:pw|sw)(15[145678])ou',c,re.I)
+              if not code: continue
+              suffix=int(c[-2:],16)
+              print('delta',code.group(1),(suffix-dde)%256,'cname',c)
+          PY
+      - name: Mark success
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/aug8-odds-cname-check' -f description='dde10 odds checksum check complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
