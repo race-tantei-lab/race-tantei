@@ -38,7 +38,7 @@ def main():
             if rid:
                 demand_rows[rid] = row
 
-    meta_paths = sorted((ROOT / args.meta_dir).glob("research-demanded-odds-*-meta.json"))
+    meta_paths = sorted((ROOT / args.meta_dir).rglob("research-demanded-odds-*-meta.json"))
     if len(meta_paths) != 11:
         raise RuntimeError(f"ODDS_META_COUNT_INVALID:{len(meta_paths)}")
 
