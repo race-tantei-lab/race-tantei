@@ -1,0 +1,79 @@
+name: Research recover specific historical results
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-recover-specific-results.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  recover:
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - key: '2015-08-22-niigata-02'
+            url: 'https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004201502070220150822%2FC6'
+          - key: '2016-08-28-niigata-12'
+            url: 'https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004201602101220160828%2F78'
+          - key: '2019-06-29-hakodate-11'
+            url: 'https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1002201901051120190629%2F09'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install and build official parsers
+        run: |
+          npm ci
+          npm run build:test
+      - name: Recover one blocked official result
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/research-recover-specific-result.mjs \
+            --url '${{ matrix.url }}' \
+            --rounds 6 \
+            --out 'analysis-results/recovered-${{ matrix.key }}.jsonl' \
+            --meta 'analysis-results/recovered-${{ matrix.key }}-meta.json' \
+            | tee 'recovered-${{ matrix.key }}.log'
+      - name: Verify recovered result
+        env:
+          KEY: ${{ matrix.key }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          key=os.environ['KEY']
+          m=json.loads(Path(f'analysis-results/recovered-{key}-meta.json').read_text())
+          assert m['recovered'] is True, m
+          assert m['syntheticOddsUsed'] is False
+          assert m['productionDatabaseWritten'] is False
+          rows=Path(f'analysis-results/recovered-{key}.jsonl').read_text().strip().splitlines()
+          assert len(rows)==1, len(rows)
+          row=json.loads(rows[0])
+          assert row['race']['status'] in ('finished','cancelled'), row['race']
+          print(json.dumps({'key':key,'raceId':row['race']['raceId'],'recoveredUrl':m['recoveredUrl']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-targeted-recovery-${{ matrix.key }}
+          path: |
+            analysis-results/recovered-${{ matrix.key }}.jsonl
+            analysis-results/recovered-${{ matrix.key }}-meta.json
+            recovered-${{ matrix.key }}.log
+          if-no-files-found: error
+          retention-days: 30
