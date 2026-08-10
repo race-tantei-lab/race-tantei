@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, gzip, json, zipfile
+import argparse, gzip, json
 from collections import defaultdict
 from pathlib import Path
 
@@ -169,8 +169,16 @@ def main():
 
     if len(ids) != len(set(ids)) or len(eval_ids) != len(set(eval_ids)):
         raise SystemExit('duplicate race ids after assembly')
-    if not evaluation or evaluation[0]['race']['raceDate'] != EVAL_START or evaluation[-1]['race']['raceDate'] != EVAL_END:
-        raise SystemExit(f'evaluation boundary mismatch: {evaluation[0]["race"]["raceDate"] if evaluation else None} .. {evaluation[-1]["race"]["raceDate"] if evaluation else None}')
+    if not evaluation:
+        raise SystemExit('evaluation window contains no races')
+    first_eval_race_date = evaluation[0]['race']['raceDate']
+    last_eval_race_date = evaluation[-1]['race']['raceDate']
+    if first_eval_race_date < EVAL_START or last_eval_race_date > EVAL_END:
+        raise SystemExit(f'evaluation filter escaped configured window: {first_eval_race_date} .. {last_eval_race_date}')
+    if any(not (EVAL_START <= x['race']['raceDate'] <= EVAL_END) for x in evaluation):
+        raise SystemExit('evaluation contains a race outside configured date window')
+    if not any(x['race']['raceDate'] < EVAL_START for x in corpus):
+        raise SystemExit('warmup history before evaluation start is missing')
     if not PATCH_IDS.issubset(set(eval_ids)):
         raise SystemExit('one or more official recovery races missing after assembly')
     if incomplete_eval:
@@ -183,6 +191,8 @@ def main():
         'purpose': 'research_only_ten_year_history_assembly',
         'corpusStart': corpus[0]['race']['raceDate'], 'corpusEnd': corpus[-1]['race']['raceDate'],
         'evaluationStart': EVAL_START, 'evaluationEnd': EVAL_END,
+        'firstEvaluationRaceDate': first_eval_race_date,
+        'lastEvaluationRaceDate': last_eval_race_date,
         'legacyMetadataShards': len(legacy_files), 'd1Races': len(d1_rows),
         'officialBlockedEvaluationRacesRecovered': sorted(PATCH_IDS),
         'corpusRaceCount': len(corpus), 'evaluationRaceCount': len(evaluation),
