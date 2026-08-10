@@ -1,0 +1,89 @@
+name: Research walk-forward capacity sweep
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-walkforward-capacity-sweep.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - max_rules: 32
+            max_per_bet: 8
+          - max_rules: 64
+            max_per_bet: 16
+          - max_rules: 128
+            max_per_bet: 32
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download frozen ten-year corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl ten-year-history-assembly-meta.json -d history
+      - name: Run prior-only walk-forward capacity candidate
+        env:
+          SPARSE_MAX_RULES: ${{ matrix.max_rules }}
+          SPARSE_MAX_PER_BET: ${{ matrix.max_per_bet }}
+        run: |
+          set -euo pipefail
+          python scripts/research-sparse-walkforward-run.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --out analysis-results/demand.jsonl \
+            --rules-out analysis-results/rules.json \
+            --meta analysis-results/meta.json
+      - name: Summarize completion coverage and proxy ROI
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/meta.json').read_text())
+          selected=m['selectedRaces']; invalid=m['constraintBackfillCount']; valid=selected-invalid
+          out={
+            'maxRules':int(os.environ['MAX_RULES']),
+            'maxPerBet':int(os.environ['MAX_PER_BET']),
+            'selectedRaces':selected,
+            'validTicketRaces':valid,
+            'invalidBackfillRaces':invalid,
+            'validCoveragePct':round(100*valid/selected,4) if selected else 0,
+            'proxyTicketRoiPct':m['proxyTicketRoiPct'],
+            'proxyTickets':m['proxyTickets'],
+            'targetDayResultsUsedForSelection':m['targetDayResultsUsedForSelection'],
+            'historicalFinalOddsUsedForDiscovery':m['historicalFinalOddsUsedForDiscovery'],
+            'syntheticOddsUsed':m['syntheticOddsUsed'],
+            'productionDatabaseWritten':m['productionDatabaseWritten'],
+            'productionModelChanged':m['productionModelChanged'],
+          }
+          Path('analysis-results/summary.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(out,ensure_ascii=False))
+          PY
+        env:
+          MAX_RULES: ${{ matrix.max_rules }}
+          MAX_PER_BET: ${{ matrix.max_per_bet }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-capacity-${{ matrix.max_rules }}
+          path: |
+            analysis-results/meta.json
+            analysis-results/rules.json
+            analysis-results/summary.json
+          if-no-files-found: error
+          retention-days: 30
