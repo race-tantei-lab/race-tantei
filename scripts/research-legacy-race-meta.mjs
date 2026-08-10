@@ -52,32 +52,33 @@ function plausibleRaceName(text, raceNo) {
   return value;
 }
 
-function rawCourseIndex(html) {
-  const candidates = ["コース", "course"];
-  let found = -1;
-  for (const marker of candidates) {
-    const index = html.search(new RegExp(marker, "i"));
-    if (index >= 0 && (found < 0 || index < found)) found = index;
+function raceBodyStartIndex(html) {
+  const markers = ["発走時刻", "ここから本文", "ここから本文です"];
+  let best = -1;
+  for (const marker of markers) {
+    const index = html.indexOf(marker);
+    if (index > best) best = index;
   }
-  return found;
+  return best;
 }
 
 function parseRaceName(html, raceNo, flat) {
   const explicit = explicitRaceName(html);
-  if (explicit && plausibleRaceName(explicit, raceNo)) return plausibleRaceName(explicit, raceNo);
+  const explicitCandidate = explicit ? plausibleRaceName(explicit, raceNo) : null;
+  if (explicitCandidate) return explicitCandidate;
 
-  const courseIndex = rawCourseIndex(html);
-  const bodyHeadings = headingRecords(html)
-    .filter((record) => courseIndex < 0 || record.index < courseIndex)
-    .map((record) => ({ ...record, candidate: plausibleRaceName(record.text, raceNo) }))
-    .filter((record) => Boolean(record.candidate));
+  const bodyStart = raceBodyStartIndex(html);
+  const bodyCandidates = headingRecords(html)
+    .filter((record) => bodyStart < 0 || record.index > bodyStart)
+    .map((record) => plausibleRaceName(record.text, raceNo))
+    .filter(Boolean);
 
-  // The race title is the nearest plausible heading before the race conditions/course block.
-  const nearest = bodyHeadings.at(-1)?.candidate;
-  if (nearest) return nearest;
+  // On legacy JRA result pages the first meaningful heading after the race-body
+  // boundary (発走時刻/ここから本文) is the race title. Page chrome is before it.
+  if (bodyCandidates[0]) return bodyCandidates[0];
 
   const fallbackPatterns = [
-    new RegExp(`${raceNo}(?:R|レース)\\s+([^\\n]{2,100}?)\\s+(?=(?:サラ系|障害|\\d+歳|発走|コース))`),
+    new RegExp(`(?:発走時刻[^\\n]{0,80})?${raceNo}(?:R|レース)\\s+([^\\n]{2,100}?)\\s+(?=(?:サラ系|障害|\\d+歳|コース))`),
     new RegExp(`${raceNo}(?:R|レース)\\s+([^\\n]{2,80})`)
   ];
   for (const pattern of fallbackPatterns) {
@@ -120,7 +121,6 @@ function parseConditions(flat, raceName) {
   const raceNameIndex = raceName ? before.lastIndexOf(raceName) : -1;
   let candidate = raceNameIndex >= 0 ? before.slice(raceNameIndex + raceName.length).trim() : before;
 
-  // Drop page chrome and race-status fragments, retaining the class/sex/weight-condition block nearest the course.
   candidate = candidate
     .replace(/^.*?(?:発走時刻\s*:?\s*\d{1,2}時\d{2}分|発走\s*:?\s*\d{1,2}:\d{2})\s*/u, "")
     .replace(/^.*?(?:天候\s*:?\s*\S+\s*)?(?:芝|ダート)\s*:?\s*(?:良|稍重|重|不良)\s*/u, "")
