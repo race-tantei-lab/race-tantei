@@ -1,0 +1,74 @@
+name: Research query Aug 1-2 D1 state blobs
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - '.github/workflows/research-query-august-state-blobs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CLOUDFLARE_ACCOUNT_ID: '3c6d1826b573b2e68cb13ec37e9e8ade'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/august-state-blobs' \
+            -f description='Searching D1 state blobs for retained Aug 1-2 official odds' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Query state blobs read-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p analysis-results
+          for table in phase0_state system_state rt_system_state; do
+            npx wrangler d1 execute race-tantei-phase0 --remote --json \
+              --command="SELECT state_key, LENGTH(state_value) AS bytes, SUBSTR(state_value,1,2000) AS sample FROM ${table} WHERE LOWER(state_key) LIKE '%odd%' OR LOWER(state_key) LIKE '%snap%' OR LOWER(state_key) LIKE '%candidate%' OR state_value LIKE '%2026-08-01%' OR state_value LIKE '%2026-08-02%' ORDER BY state_key;" \
+              > "analysis-results/${table}.json"
+          done
+          python - <<'PY'
+          import json,glob,os
+          for p in sorted(glob.glob('analysis-results/*state*.json')):
+              raw=json.load(open(p)); rows=[]
+              if isinstance(raw,list):
+                  for b in raw: rows.extend(b.get('results') or [])
+              elif isinstance(raw,dict): rows=raw.get('results') or []
+              print(json.dumps({'table':os.path.basename(p), 'rows':len(rows), 'keys':[{'key':r.get('state_key'),'bytes':r.get('bytes'),'sample':r.get('sample')} for r in rows]},ensure_ascii=False,default=str))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-august-state-blobs
+          path: analysis-results/*state*.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Mark success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/august-state-blobs' \
+            -f description='D1 state blob search complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/august-state-blobs' \
+            -f description='D1 state blob query requires adjustment' -f target_url="$STATUS_TARGET_URL" >/dev/null
