@@ -1,0 +1,111 @@
+name: Research continuous walk-forward sweep
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-continuous-walkforward-sweep.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  mark-pending:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/continuous-walk-forward-sweep' \
+            -f description='Testing continuous prior-only ticket scores' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+  sweep:
+    needs: mark-pending
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: n100-p500
+            min_n: 100
+            key_prior: 500
+          - label: n100-p2000
+            min_n: 100
+            key_prior: 2000
+          - label: n300-p1000
+            min_n: 300
+            key_prior: 1000
+          - label: n500-p2000
+            min_n: 500
+            key_prior: 2000
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download frozen ten-year corpus
+        run: |
+          set -euo pipefail
+          mkdir -p history analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl ten-year-history-assembly-meta.json -d history
+      - name: Run continuous prior-only walk-forward
+        env:
+          CONT_MIN_N: ${{ matrix.min_n }}
+          CONT_KEY_PRIOR: ${{ matrix.key_prior }}
+          CONT_BET_PRIOR: '5000'
+          CONT_PRIOR_ROI: '0.80'
+          CONT_TOP_COMPONENTS: '4'
+          CONT_TICKETS_PER_RACE: '3'
+        run: |
+          set -euo pipefail
+          python scripts/research-continuous-walkforward-demand.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --out analysis-results/demand.jsonl \
+            --meta analysis-results/meta.json
+      - name: Verify invariant gates
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/meta.json').read_text())
+          assert m['selectedRaces']==14410,m
+          assert m['ticketsPerRace']==3,m
+          assert m['constraintBackfillCount']==0,m
+          assert m['structuralCancellationExceptions']==[{'date':'2020-03-29','venue':'中山','eligible':2}],m
+          assert m['targetDayResultsUsedForSelection'] is False,m
+          assert m['historicalFinalOddsUsedForDiscovery'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          assert m['productionModelChanged'] is False,m
+          print(json.dumps({'roi':m['proxyTicketRoiPct'],'byYear':m['proxyRoiByYearPct'],'selected':m['selectedRaces']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-continuous-${{ matrix.label }}
+          path: |
+            analysis-results/meta.json
+            analysis-results/demand.jsonl
+          if-no-files-found: error
+          retention-days: 30
+
+  mark-complete:
+    needs: sweep
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ '${{ needs.sweep.result }}' = 'success' ]; then
+            state=success; desc='Continuous walk-forward sweep completed'
+          else
+            state=failure; desc='Continuous walk-forward sweep requires repair'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" -f context='research/continuous-walk-forward-sweep' \
+            -f description="$desc" -f target_url="$STATUS_TARGET_URL" >/dev/null
