@@ -1,0 +1,91 @@
+name: Research refetch already-resolved official odds only
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - '.github/workflows/research-refetch-resolved-odds-only.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  RESOLVED_ARTIFACT_ID: '9071967432'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  refetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/refetch-resolved-odds' \
+            -f description='Refetching 80 already-resolved JRA odds races with corrected checksum rule' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install parser dependency
+        run: pip install beautifulsoup4==4.13.4
+      - name: Download already-resolved 80 race URLs
+        run: |
+          set -euo pipefail
+          mkdir -p resolved analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${RESOLVED_ARTIFACT_ID}/zip" > resolved.zip
+          unzip -q resolved.zip -d resolved
+          test -s resolved/research-demanded-odds-resolved-failures.jsonl
+          test "$(wc -l < resolved/research-demanded-odds-resolved-failures.jsonl)" -eq 80
+      - name: Refetch official odds only
+        run: |
+          set -euo pipefail
+          python scripts/research-fetch-resolved-demanded-official-odds.py \
+            --input resolved/research-demanded-odds-resolved-failures.jsonl \
+            --workers 3 \
+            --out analysis-results/research-demanded-odds-repair.jsonl \
+            --meta analysis-results/research-demanded-odds-repair-meta.json
+      - name: Verify 80 of 80
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-demanded-odds-repair-meta.json').read_text())
+          assert m['inputDemandRaces']==80,m
+          assert m['completedRaces']==80,m
+          assert not m['failures'],m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          print(json.dumps({'input':80,'completed':m['completedRaces'],'failures':len(m['failures'])},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-demanded-odds-repair
+          path: |
+            analysis-results/research-demanded-odds-repair.jsonl
+            analysis-results/research-demanded-odds-repair-meta.json
+            resolved/research-demanded-odds-resolved-failures.jsonl
+            resolved/research-demanded-odds-resolved-failures-meta.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Mark success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/refetch-resolved-odds' \
+            -f description='All 80 previously failed official odds races recovered' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/refetch-resolved-odds' \
+            -f description='Resolved-race odds refetch still has parser gaps' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
