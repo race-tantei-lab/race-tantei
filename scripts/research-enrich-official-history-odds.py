@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import concurrent.futures
+import html
 import http.cookiejar
 import itertools
 import json
@@ -52,6 +53,22 @@ def post_odds(opener, cname, referer):
     )
     raw, final = open_retry(opener, req)
     return raw.decode("cp932", "replace"), final
+
+
+def extract_odds_cnames(text, prefix, marker):
+    clean = html.unescape(text).replace("\\u0026", "&").replace("\\/", "/")
+    found = []
+    patterns = (
+        r"(?:CNAME=|cname=)([^\"'&<>\s)]+)",
+        r"((?:pw|sw)15[1-8]ou[^\"'<>\s,)]+)",
+    )
+    for pattern in patterns:
+        for match in re.finditer(pattern, clean, re.I):
+            value = urllib.parse.unquote(match.group(1)).strip()
+            value = re.sub(r"^cname=", "", value, flags=re.I)
+            if value.lower().startswith(prefix.lower()) and marker in value:
+                found.append(value)
+    return list(dict.fromkeys(found))
 
 
 def odds_float(text):
@@ -195,17 +212,17 @@ def fetch_race(bundle):
         raise RuntimeError("RESULT_ID_PARSE_MISS")
     venue, year, meeting, day, race_no, ymd = rm.groups()
     marker = f"10{venue}{year}{meeting}{day}{race_no}{ymd}"
-    first = re.search(r"pw151ou" + re.escape(marker) + r"[^'\"<>,)\s]+", page)
-    if not first:
+    first_values = extract_odds_cnames(page, "pw151ou", marker)
+    if not first_values:
         raise RuntimeError("FIRST_ODDS_CNAME_MISS")
-    first_cname = first.group(0)
+    first_cname = first_values[0]
     html151, url151 = post_odds(opener, first_cname, result_url)
     soup151 = BeautifulSoup(html151, "html.parser")
     tabs = {"151": first_cname}
-    for tag in soup151.find_all(onclick=True):
-        m = re.search(r"(pw15([4-8])ou[^'\"<>,)\s]+)", tag.get("onclick", ""))
-        if m and marker in m.group(1):
-            tabs[m.group(2)] = m.group(1)
+    for code in ("154", "155", "156", "157", "158"):
+        values = extract_odds_cnames(html151, f"pw{code}ou", marker)
+        if values:
+            tabs[code] = values[0]
     missing_tabs = [x for x in ("154", "155", "156", "157", "158") if x not in tabs]
     if missing_tabs:
         raise RuntimeError("REQUIRED_TAB_CNAME_MISS:" + ",".join(missing_tabs))
