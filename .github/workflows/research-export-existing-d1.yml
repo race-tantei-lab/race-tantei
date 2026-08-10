@@ -45,6 +45,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/d1-export analysis-results/existing-d1-segment
+          # No JRA network refetch here: copy only tables already present in D1.
           for table in rt_races rt_runners rt_results rt_payouts rt_official_odds_latest rt_official_odds_snapshots; do
             echo "Exporting $table"
             npx wrangler d1 export race-tantei-phase0 --remote --skip-confirmation --table="$table" --output="/tmp/d1-export/${table}.sql"
