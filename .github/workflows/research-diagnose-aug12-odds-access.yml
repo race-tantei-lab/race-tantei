@@ -1,0 +1,71 @@
+name: Research diagnose Aug1-2 odds access modes
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths: ['.github/workflows/research-diagnose-aug12-odds-access.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Mark pending
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/aug12-odds-access' -f description='Testing archived JRA odds access modes' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Probe access modes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import http.cookiejar,html,re,urllib.parse,urllib.request,json
+          UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/136 Safari/537.36'
+          O='https://www.jra.go.jp/JRADB/accessO.html'
+          cases=[
+            ('aug1-chukyo3','pw151ou1007202602030320260801Z/75','https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1007202602030320260801%2F77','2026年8月1日','中京'),
+            ('aug2-chukyo2','pw151ou1007202602040220260802Z/F0','https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602040220260802%2F13','2026年8月2日','中京'),
+            ('aug9-control','pw151ou1007202602060120260809Z/BF','https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060120260809%2FE2','2026年8月9日','中京'),
+          ]
+          def decode(raw,ct=''):
+            for enc in ('cp932','shift_jis','utf-8'):
+              try:return raw.decode(enc)
+              except:pass
+            return raw.decode('utf-8','replace')
+          def summarize(label,text,date,venue):
+            t=re.sub(r'\s+',' ',re.sub(r'<[^>]+>',' ',html.unescape(text)))
+            return {'mode':label,'bytes':len(text.encode('utf-8','replace')),'hasDate':date in t,'hasVenue':venue in t,'hasOddsWord':'単勝' in t or 'オッズ' in t,'genericMenu':'競馬メニュー' in t[:5000] or 'メニュー' in t[:1000]}
+          for name,cname,referer,date,venue in cases:
+            print('CASE',name,cname)
+            modes=[]
+            # Each mode uses a fresh cookie jar except session-prefill variants.
+            specs=[]
+            specs.append(('GET_CNAME', O+'?CNAME='+urllib.parse.quote(cname,safe=''), None, referer, False))
+            specs.append(('GET_cname', O+'?cname='+urllib.parse.quote(cname,safe=''), None, referer, False))
+            specs.append(('POST_cname', O, urllib.parse.urlencode({'cname':cname}).encode('ascii'), referer, False))
+            specs.append(('POST_CNAME', O, urllib.parse.urlencode({'CNAME':cname}).encode('ascii'), referer, False))
+            specs.append(('SESSION_GET_CNAME', O+'?CNAME='+urllib.parse.quote(cname,safe=''), None, referer, True))
+            specs.append(('SESSION_POST_cname', O, urllib.parse.urlencode({'cname':cname}).encode('ascii'), referer, True))
+            for label,url,data,ref,prefill in specs:
+              jar=http.cookiejar.CookieJar(); op=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+              headers={'User-Agent':UA,'Accept-Language':'ja-JP,ja;q=0.9','Referer':ref}
+              try:
+                if prefill:
+                  op.open(urllib.request.Request(ref,headers={'User-Agent':UA,'Accept-Language':'ja-JP,ja;q=0.9'}),timeout=30).read()
+                if data is not None: headers['Content-Type']='application/x-www-form-urlencoded'
+                req=urllib.request.Request(url,data=data,headers=headers,method='POST' if data is not None else 'GET')
+                resp=op.open(req,timeout=30); raw=resp.read(4000001); text=decode(raw,resp.headers.get('content-type',''))
+                row=summarize(label,text,date,venue); row['finalUrl']=resp.geturl(); row['cookies']=[c.name for c in jar]
+              except Exception as e:
+                row={'mode':label,'error':f'{type(e).__name__}:{e}'}
+              print(json.dumps(row,ensure_ascii=False))
+          PY
+      - name: Mark success
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/aug12-odds-access' -f description='Archived JRA odds access diagnostic complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
