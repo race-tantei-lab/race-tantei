@@ -1,0 +1,90 @@
+name: Research continuous bet-local blend sweep
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-continuous-blend-sweep.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  mark:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/continuous-bet-local-blend' \
+            -f description='Testing prior-only bet/local score blend' -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+  sweep:
+    needs: mark
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        local_weight: ['0.15','0.30','0.45','0.60']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download corpus
+        run: |
+          set -euo pipefail
+          mkdir -p history analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+      - name: Run score blend candidate
+        env:
+          CONT_MIN_N: '500'
+          CONT_KEY_PRIOR: '2000'
+          CONT_BET_PRIOR: '5000'
+          CONT_PRIOR_ROI: '0.80'
+          CONT_TOP_COMPONENTS: '8'
+          CONT_TICKETS_PER_RACE: '3'
+          CONT_QUARTER_DECAY: '1.0'
+          CONT_LOCAL_WEIGHT: ${{ matrix.local_weight }}
+        run: |
+          python scripts/research-continuous-blend-run.py \
+            --corpus history/ten-year-history-corpus.jsonl --out analysis-results/demand.jsonl --meta analysis-results/meta.json
+      - name: Verify invariant gates
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/meta.json').read_text())
+          assert m['selectedRaces']==14410,m
+          assert m['constraintBackfillCount']==0,m
+          assert m['structuralCancellationExceptions']==[{'date':'2020-03-29','venue':'中山','eligible':2}],m
+          assert m['targetDayResultsUsedForSelection'] is False,m
+          assert m['historicalFinalOddsUsedForDiscovery'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          assert m['productionModelChanged'] is False,m
+          print(json.dumps({'roi':m['proxyTicketRoiPct'],'byYear':m['proxyRoiByYearPct']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-blend-${{ matrix.local_weight }}
+          path: |
+            analysis-results/meta.json
+            analysis-results/demand.jsonl
+          retention-days: 30
+
+  done:
+    needs: sweep
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ '${{ needs.sweep.result }}' = success ]; then state=success; desc='Bet/local blend sweep completed'; else state=failure; desc='Bet/local blend sweep requires repair'; fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" -f context='research/continuous-bet-local-blend' -f description="$desc" -f target_url="$STATUS_TARGET_URL" >/dev/null
