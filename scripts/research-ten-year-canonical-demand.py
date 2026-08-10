@@ -20,6 +20,9 @@ BET_SPECS = {
     4: (3, "trio"),
     5: (3, "trifecta"),
 }
+EXPECTED_STRUCTURAL_EXCEPTIONS = [
+    {"date": "2020-03-29", "venue": "中山", "eligible": 2},
+]
 
 
 def load_module(path, name):
@@ -272,7 +275,7 @@ def process_date(pmod, rules_by_bet, state, date, bundles, output, stats):
         for venue, rows in by_venue.items():
             rows.sort(key=lambda row: (-row["raceScore"], row["raceNo"]))
             if len(rows) < 5:
-                stats["venueDaysBelowFive"].append({"date": date, "venue": venue, "eligible": len(rows)})
+                stats["structuralCancellationExceptions"].append({"date": date, "venue": venue, "eligible": len(rows)})
                 continue
             chosen = rows[:5]
             stats["venueDays"] += 1
@@ -320,7 +323,7 @@ def main():
         "selectedByYear": collections.Counter(),
         "marketRaceDemand": collections.Counter(),
         "zeroScoreSelected": 0,
-        "venueDaysBelowFive": [],
+        "structuralCancellationExceptions": [],
     }
     output = []
     current_date = None
@@ -352,8 +355,10 @@ def main():
 
     if stats["evaluationRacesSeen"] != 34566:
         raise RuntimeError(f"EVALUATION_RACE_COUNT_MISMATCH:{stats['evaluationRacesSeen']}")
-    if stats["venueDaysBelowFive"]:
-        raise RuntimeError(f"VENUE_DAYS_BELOW_FIVE:{stats['venueDaysBelowFive'][:20]}:count={len(stats['venueDaysBelowFive'])}")
+    if stats["structuralCancellationExceptions"] != EXPECTED_STRUCTURAL_EXCEPTIONS:
+        raise RuntimeError(
+            f"UNEXPECTED_STRUCTURAL_EXCEPTIONS:{stats['structuralCancellationExceptions']}:expected={EXPECTED_STRUCTURAL_EXCEPTIONS}"
+        )
     if not output:
         raise RuntimeError("NO_SELECTED_RACES")
 
@@ -372,10 +377,11 @@ def main():
         "selectedByYear": dict(sorted(stats["selectedByYear"].items())),
         "marketRaceDemand": {name: int(stats["marketRaceDemand"].get(name, 0)) for name in ("win", "umaren", "wide", "umatan", "trio", "trifecta")},
         "zeroScoreSelected": stats["zeroScoreSelected"],
-        "venueDaysBelowFive": stats["venueDaysBelowFive"],
+        "structuralCancellationExceptions": stats["structuralCancellationExceptions"],
         "selectionRule": "behavior-equivalent 297 canonical rules; prior-date history only; top five by preday max score per venue/day; raceNo ascending ties",
         "orderedMarketsCollapsedToHorseCombinationsForPredaySelection": True,
         "reason": "Preday-known rule features are order-symmetric; order-dependent market features are ignored at preday selection exactly as production rule_score(preday=True).",
+        "structuralExceptionPolicy": "A venue-day with fewer than five official settled races is not backfilled with invented races; the known abandoned 2020-03-29 Nakayama venue-day is explicitly reported and omitted from five-race selection.",
         "targetDayResultsUsedForSelection": False,
         "historicalClassNormalizationApplied": True,
         "syntheticOddsUsed": False,
