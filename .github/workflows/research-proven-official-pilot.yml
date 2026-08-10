@@ -1,0 +1,130 @@
+name: Research proven official-history pilot
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-proven-official-pilot.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  PROVEN_RESEARCH_COMMIT: 28ba141ca123964070925e42194763a3b3800f0f
+
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Mark proven pilot pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/proven-official-pilot' \
+            -f description='Validating 2016 official results and six odds markets' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Bring proven research-only collectors into runner workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$PROVEN_RESEARCH_COMMIT"
+          git show "$PROVEN_RESEARCH_COMMIT:scripts/research-export-official-history.mjs" > scripts/research-export-official-history.mjs
+          git show "$PROVEN_RESEARCH_COMMIT:scripts/research-enrich-official-history-odds.py" > scripts/research-enrich-official-history-odds.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install and build current official parsers
+        run: |
+          npm ci
+          npm run build:test
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install odds parser dependency
+        run: python -m pip install --disable-pip-version-check beautifulsoup4
+
+      - name: Export 20 archived official races
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/research-export-official-history.mjs \
+            --start-month 201605 \
+            --end-month 201605 \
+            --limit 20 \
+            --concurrency 2 \
+            --out analysis-results/proven-pilot-results.jsonl \
+            --meta analysis-results/proven-pilot-results-meta.json | tee proven-pilot-results.log
+
+      - name: Enrich all six official odds markets
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/research-enrich-official-history-odds.py \
+            --input analysis-results/proven-pilot-results.jsonl \
+            --out analysis-results/proven-pilot-enriched.jsonl \
+            --meta analysis-results/proven-pilot-enriched-meta.json \
+            --workers 2 | tee proven-pilot-odds.log
+
+      - name: Verify no synthetic odds and full research isolation
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('analysis-results/proven-pilot-results-meta.json').read_text())
+          o=json.loads(Path('analysis-results/proven-pilot-enriched-meta.json').read_text())
+          assert r['completed'] == 20 and not r['failures'], r
+          assert r['syntheticOddsUsed'] is False and r['productionDatabaseWritten'] is False
+          assert o['inputRaces'] == 20 and o['completed'] == 20 and not o['failures'], o
+          assert o['syntheticOddsUsed'] is False and o['productionDatabaseWritten'] is False
+          for market in ('win','umaren','wide','umatan','trio','trifecta'):
+              assert o['coverage'][market] >= 0.999, (market,o['coverage'][market])
+          print(json.dumps({'pilot':'ok','races':20,'coverage':o['coverage'],'productionWrite':False,'syntheticOdds':False},ensure_ascii=False))
+          PY
+
+      - name: Upload proven pilot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-proven-official-pilot
+          path: |
+            analysis-results/proven-pilot-results.jsonl
+            analysis-results/proven-pilot-results-meta.json
+            analysis-results/proven-pilot-enriched.jsonl
+            analysis-results/proven-pilot-enriched-meta.json
+            proven-pilot-results.log
+            proven-pilot-odds.log
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Mark proven pilot success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='research/proven-official-pilot' \
+            -f description='2016 official results and six odds markets validated' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Mark proven pilot failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='research/proven-official-pilot' \
+            -f description='Proven official-history pilot failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
