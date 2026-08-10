@@ -10,13 +10,26 @@ on:
 permissions:
   contents: read
   actions: read
+  statuses: write
 
 env:
   GH_TOKEN: ${{ github.token }}
   HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
+  mark-pending:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark capacity sweep pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/walk-forward-capacity-sweep' \
+            -f description='Comparing prior-only rule capacities' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
   sweep:
+    needs: mark-pending
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
@@ -87,3 +100,19 @@ jobs:
             analysis-results/summary.json
           if-no-files-found: error
           retention-days: 30
+
+  mark-complete:
+    needs: sweep
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark capacity sweep result
+        run: |
+          if [ '${{ needs.sweep.result }}' = 'success' ]; then
+            state=success; desc='Prior-only capacity sweep completed'
+          else
+            state=failure; desc='Capacity sweep requires targeted repair'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" -f context='research/walk-forward-capacity-sweep' \
+            -f description="$desc" -f target_url="$STATUS_TARGET_URL" >/dev/null
