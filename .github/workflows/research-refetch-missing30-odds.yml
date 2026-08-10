@@ -1,0 +1,120 @@
+name: Research refetch only 30 still-missing official odds races
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - '.github/workflows/research-refetch-missing30-odds.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  OLD_REPAIR_ARTIFACT_ID: '9071967432'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  refetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/refetch-missing30-odds' \
+            -f description='Refetching only the 30 Aug 1-2 official odds gaps' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install beautifulsoup4==4.13.4
+      - name: Download previous 50-success repair artifact
+        run: |
+          set -euo pipefail
+          mkdir -p old analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${OLD_REPAIR_ARTIFACT_ID}/zip" > old.zip
+          unzip -q old.zip -d old
+          test "$(wc -l < old/research-demanded-odds-resolved-failures.jsonl)" -eq 80
+          test "$(wc -l < old/research-demanded-odds-repair.jsonl)" -eq 50
+      - name: Build exact missing-30 input
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          resolved=[json.loads(x) for x in Path('old/research-demanded-odds-resolved-failures.jsonl').read_text().splitlines() if x.strip()]
+          success=[json.loads(x) for x in Path('old/research-demanded-odds-repair.jsonl').read_text().splitlines() if x.strip()]
+          done={str(x['raceId']) for x in success}
+          missing=[x for x in resolved if str(x['raceId']) not in done]
+          assert len(resolved)==80 and len(success)==50 and len(missing)==30,(len(resolved),len(success),len(missing))
+          assert all(str(x.get('raceDate')) in ('2026-08-01','2026-08-02') for x in missing),sorted({x.get('raceDate') for x in missing})
+          Path('analysis-results/missing30.jsonl').write_text(''.join(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n' for x in missing))
+          print(json.dumps({'oldSuccess':50,'missing':30,'dates':sorted({x['raceDate'] for x in missing})},ensure_ascii=False))
+          PY
+      - name: Refetch missing 30 from official JRA odds pages
+        run: |
+          set -euo pipefail
+          python scripts/research-fetch-resolved-demanded-official-odds.py \
+            --input analysis-results/missing30.jsonl \
+            --workers 4 \
+            --out analysis-results/new30.jsonl \
+            --meta analysis-results/new30-meta.json
+      - name: Merge 50 plus 30 and verify 80
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          old=[json.loads(x) for x in Path('old/research-demanded-odds-repair.jsonl').read_text().splitlines() if x.strip()]
+          new=[json.loads(x) for x in Path('analysis-results/new30.jsonl').read_text().splitlines() if x.strip()]
+          nm=json.loads(Path('analysis-results/new30-meta.json').read_text())
+          assert len(old)==50 and len(new)==30,(len(old),len(new))
+          assert nm['completedRaces']==30 and not nm['failures'],nm
+          combined={str(x['raceId']):x for x in old}
+          for x in new:
+              rid=str(x['raceId'])
+              assert rid not in combined,rid
+              combined[rid]=x
+          assert len(combined)==80,len(combined)
+          rows=sorted(combined.values(),key=lambda x:(x['raceDate'],x['venue'],x['raceNo']))
+          Path('analysis-results/research-demanded-odds-repair.jsonl').write_text(''.join(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n' for x in rows))
+          meta={
+            'purpose':'research_only_selective_official_final_odds_repair_50_plus_30',
+            'inputDemandRaces':80,'completedRaces':80,'failures':[],
+            'previousOfficialSuccessesReused':50,'newOfficialRecoveries':30,
+            'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False,
+          }
+          Path('analysis-results/research-demanded-odds-repair-meta.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n')
+          Path('analysis-results/research-demanded-odds-resolved-failures.jsonl').write_text(Path('old/research-demanded-odds-resolved-failures.jsonl').read_text())
+          Path('analysis-results/research-demanded-odds-resolved-failures-meta.json').write_text(Path('old/research-demanded-odds-resolved-failures-meta.json').read_text())
+          print(json.dumps(meta,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-demanded-odds-repair
+          path: |
+            analysis-results/research-demanded-odds-repair.jsonl
+            analysis-results/research-demanded-odds-repair-meta.json
+            analysis-results/research-demanded-odds-resolved-failures.jsonl
+            analysis-results/research-demanded-odds-resolved-failures-meta.json
+            analysis-results/new30-meta.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Mark success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/refetch-missing30-odds' \
+            -f description='All 30 remaining Aug 1-2 official odds gaps recovered' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/refetch-missing30-odds' \
+            -f description='The 30-race official odds repair still has a targeted gap' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
