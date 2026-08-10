@@ -109,7 +109,7 @@ def result_urls_for_year(year: int):
         meeting_html = fetch_archive(meeting)
         for cname in extract_cnames(meeting_html, r"^(?:pw|sw)01sde"):
             desktop = re.sub(r"^sw01sde", "pw01sde", cname, flags=re.I)
-            url = f"{ARCHIVE_ENDPOINT}?CNAME={urllib.parse.quote(desktop, safe='') }"
+            url = f"{ARCHIVE_ENDPOINT}?CNAME={urllib.parse.quote(desktop, safe='')}"
             if url not in results:
                 results.append(url)
         if len(results) >= 12:
@@ -119,12 +119,39 @@ def result_urls_for_year(year: int):
     return results
 
 
+def historical_odds_identity(page_html: str, cname: str):
+    text = collector.page_text(page_html)
+    date_match = re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日", text)
+    venue_match = re.search(rf"\d+回({collector.VENUES})\d+日", text)
+    decoded = urllib.parse.unquote(html_module.unescape(cname))
+    race_values = [
+        int(value)
+        for value in re.findall(r"(\d{2})(?=20\d{6}[A-Za-z0-9]*?(?:/|$))", decoded)
+    ]
+    race_no = next((value for value in reversed(race_values) if 1 <= value <= 12), None)
+    if race_no is None:
+        text_values = [int(value) for value in re.findall(r"(?:^|\s)(\d{1,2})(?:レース|R)(?:\s|$)", text)]
+        race_no = next((value for value in text_values if 1 <= value <= 12), None)
+    if not date_match:
+        cname_dates = re.findall(r"20\d{6}", decoded)
+        if cname_dates:
+            value = cname_dates[-1]
+            date_text = f"{value[:4]}-{value[4:6]}-{value[6:8]}"
+        else:
+            date_text = None
+    else:
+        date_text = f"{int(date_match.group(1)):04d}-{int(date_match.group(2)):02d}-{int(date_match.group(3)):02d}"
+    if date_text is None or venue_match is None or race_no is None:
+        return None
+    return date_text, venue_match.group(1), race_no
+
+
 def validate_result_url(year: int, result_url: str):
     race_odds_cname, discovered_from, discovery_mode = period.discover_race_odds_cname(result_url)
     race_odds_html = validator.fetch_retry(collector, race_odds_cname)
-    identity = collector.parse_page_identity(race_odds_html)
+    identity = historical_odds_identity(race_odds_html, race_odds_cname)
     if not identity or len(identity) < 3:
-        raise RuntimeError("ODDS_IDENTITY_NOT_FOUND")
+        raise RuntimeError(f"ODDS_IDENTITY_NOT_FOUND:{race_odds_cname}")
     race_date, venue, race_no = identity
     race_no = int(race_no)
     if int(str(race_date)[:4]) != year:
@@ -152,7 +179,16 @@ def validate_result_url(year: int, result_url: str):
     if not all_valid:
         raise RuntimeError(
             "MATRIX_VALIDATION_FAILED:"
-            + json.dumps({label: {"expected": row.get("expectedCombinationCount"), "parsed": row.get("parsedMatrixRowCount")} for label, row in validations.items()}, ensure_ascii=False)
+            + json.dumps(
+                {
+                    label: {
+                        "expected": row.get("expectedCombinationCount"),
+                        "parsed": row.get("parsedMatrixRowCount"),
+                    }
+                    for label, row in validations.items()
+                },
+                ensure_ascii=False,
+            )
         )
     return {
         "year": year,
@@ -188,7 +224,12 @@ def validate_year(year: int):
         except Exception as error:
             errors.append(f"{type(error).__name__}:{error}")
             time.sleep(0.7)
-    return {"year": year, "validated": False, "attemptedResultPages": min(6, len(urls)), "errors": errors}
+    return {
+        "year": year,
+        "validated": False,
+        "attemptedResultPages": min(6, len(urls)),
+        "errors": errors,
+    }
 
 
 def main():
@@ -209,7 +250,16 @@ def main():
         "betTypes": list(validator.LABELS),
     }
     OUTPUT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"allYearsValidated": report["allYearsValidated"], "validatedYearCount": report["validatedYearCount"], "report": str(OUTPUT.relative_to(ROOT))}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "allYearsValidated": report["allYearsValidated"],
+                "validatedYearCount": report["validatedYearCount"],
+                "report": str(OUTPUT.relative_to(ROOT)),
+            },
+            ensure_ascii=False,
+        )
+    )
     if not report["allYearsValidated"]:
         raise SystemExit("TEN_YEAR_ODDS_VALIDATION_INCOMPLETE")
 
