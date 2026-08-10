@@ -119,6 +119,7 @@ def main():
     ap.add_argument('--legacy-dir', required=True)
     ap.add_argument('--d1-dir', required=True)
     ap.add_argument('--patch', required=True)
+    ap.add_argument('--d1-repair', required=True)
     ap.add_argument('--out-corpus', required=True)
     ap.add_argument('--out-eval', required=True)
     ap.add_argument('--meta', required=True)
@@ -148,7 +149,18 @@ def main():
         rows[row['race']['raceId']] = row
 
     d1_rows = assemble_d1(d1_dir)
-    for row in d1_rows:
+    d1_by_id = {row['race']['raceId']: row for row in d1_rows}
+    d1_repair_rows = list(read_jsonl(args.d1_repair))
+    d1_repair_ids = [row.get('race', {}).get('raceId') for row in d1_repair_rows]
+    if len(d1_repair_ids) != len(set(d1_repair_ids)):
+        raise SystemExit('duplicate race ids in D1 repair file')
+    unknown_repairs = sorted(rid for rid in d1_repair_ids if rid not in d1_by_id)
+    if unknown_repairs:
+        raise SystemExit(f'D1 repairs reference unknown races: {unknown_repairs[:20]} count={len(unknown_repairs)}')
+    for row in d1_repair_rows:
+        d1_by_id[row['race']['raceId']] = row
+
+    for row in d1_by_id.values():
         rid = row['race']['raceId']
         if rid in rows:
             raise SystemExit(f'legacy/D1 overlap raceId: {rid}')
@@ -164,7 +176,11 @@ def main():
         race = row['race']
         if not race.get('raceName') or not race.get('conditions') or race.get('surface') not in ('芝','ダート','障害') or not race.get('distanceM'):
             incomplete_eval.append(race['raceId'])
-        if len(row.get('runners', [])) < 2 or (race.get('status') != 'cancelled' and not row.get('payouts')):
+        if race.get('status') != 'cancelled' and (
+            len(row.get('runners', [])) < 2
+            or len(row.get('results', [])) < 2
+            or not row.get('payouts')
+        ):
             incomplete_eval.append(race['raceId'])
 
     if len(ids) != len(set(ids)) or len(eval_ids) != len(set(eval_ids)):
@@ -194,6 +210,7 @@ def main():
         'firstEvaluationRaceDate': first_eval_race_date,
         'lastEvaluationRaceDate': last_eval_race_date,
         'legacyMetadataShards': len(legacy_files), 'd1Races': len(d1_rows),
+        'd1GapRepairs': len(d1_repair_rows),
         'officialBlockedEvaluationRacesRecovered': sorted(PATCH_IDS),
         'corpusRaceCount': len(corpus), 'evaluationRaceCount': len(evaluation),
         'duplicateRaceIds': 0, 'incompleteEvaluationRaceIds': [],
