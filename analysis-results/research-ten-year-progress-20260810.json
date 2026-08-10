@@ -29,6 +29,25 @@
       },
       "parseMissPolicy": "exclude_without_estimation"
     },
+    "officialHistoryFullMonth201605": {
+      "requestedRaces": 300,
+      "completedRaces": 300,
+      "resultFailures": 0,
+      "oddsFailures": 0,
+      "syntheticOddsUsed": false,
+      "productionDatabaseWritten": false,
+      "officialOddsCoverage": {
+        "win": 1.0,
+        "umaren": 1.0,
+        "wide": 1.0,
+        "umatan": 0.9999526290857413,
+        "trio": 0.9999859783927032,
+        "trifecta": 0.9916010572291902
+      },
+      "parseMissPolicy": "exclude_without_estimation",
+      "workflowRun": 31349539777,
+      "workflowConclusion": "success"
+    },
     "ruleComplexityAudit": {
       "sourceRuleCount": 316,
       "exactDuplicateGroups": 0,
@@ -53,8 +72,8 @@
     "historicalFinalOddsAndLivePrestartOddsAreDifferentEvidence": true
   },
   "inProgress": {
-    "fullMonthScaleTest": "2016-05 all discovered races, official results plus six official odds markets",
-    "workflowRun": 31349539777,
-    "statusAtRecord": "running"
+    "tenYearResultShards": "2015 warmup plus 2016-2026 official result history, year-sharded, max two years in parallel",
+    "workflowCommit": "9345fbb49354001f5604fcfcb0c1025c5fe23d97",
+    "nextAfterResults": "pre-odds candidate filtering, then fetch only required official odds markets"
   }
 }
