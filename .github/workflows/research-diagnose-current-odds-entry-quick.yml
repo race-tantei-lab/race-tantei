@@ -1,0 +1,60 @@
+name: Research quick diagnose recent odds entry
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-diagnose-current-odds-entry-quick.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  quick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mark quick diagnostic pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/recent-odds-entry-quick' \
+            -f description='Checking raw JRA entry odds tokens' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check raw entry and one odds-home page
+        env:
+          CLOUDFLARE_ACCOUNT_ID: research-unused
+          CLOUDFLARE_D1_DATABASE_ID: research-unused
+          CLOUDFLARE_API_TOKEN: research-unused
+        run: |
+          set -euo pipefail
+          python scripts/research-diagnose-current-odds-archive.py \
+            --entry-url 'https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde1007202602030320260801/77' \
+            --date 2026-08-01 --venue 中京 --race-no 3 --max-pages 1 \
+            --out analysis-results/research-diagnose-current-odds-entry-quick.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-diagnose-current-odds-entry-quick
+          path: analysis-results/research-diagnose-current-odds-entry-quick.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Mark quick diagnostic success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/recent-odds-entry-quick' \
+            -f description='Raw JRA entry odds-token diagnostic completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark quick diagnostic failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/recent-odds-entry-quick' \
+            -f description='Raw JRA entry odds-token diagnostic failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
