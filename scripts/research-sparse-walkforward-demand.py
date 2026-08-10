@@ -152,9 +152,10 @@ def main():
                 race=b['race'];s=scored_race(pmod,dmod,state,b,rules);by[str(race.get('venue'))].append((b,s))
             for venue,rows in by.items():
                 rows.sort(key=lambda x:(-x[1]['score'],-len(x[1]['types']),-len(x[1]['tickets']),int(x[0]['race'].get('raceNo') or 0)))
-                take=min(5,len(rows))
-                if take<5:struct.append({'date':date,'venue':venue,'eligible':len(rows)})
-                for b,s in rows[:take]:
+                if len(rows)<5:
+                    struct.append({'date':date,'venue':venue,'eligible':len(rows)})
+                    continue
+                for b,s in rows[:5]:
                     race=b['race'];valid=len(s['tickets'])>=3 and len(s['types'])>=2
                     if not valid:backfills.append(str(race['raceId']))
                     req={'win'}|{BET_SPECS[t['bt']][1] for t in s['tickets']}
