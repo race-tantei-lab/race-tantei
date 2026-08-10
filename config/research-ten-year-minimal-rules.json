@@ -9,21 +9,34 @@
     "targetYearsApprox": 10,
     "officialJraDataOnly": true,
     "targetDayResultsForbiddenForPrediction": true,
-    "pastPublishedBetsImmutable": true
+    "pastPublishedBetsImmutable": true,
+    "racesPerVenueDay": 5,
+    "courseBudgetsYen": {
+      "ライト": 2000,
+      "スタンダード": 5000,
+      "プレミアム": 10000
+    }
   },
   "objective": {
-    "primary": "minimize_rule_count",
-    "hardGateOverallRoiPct": 200,
-    "secondary": [
-      "maximize_period_stability",
+    "lexicographicOrder": [
+      "pass_all_three_course_10y_roi_gate",
+      "minimize_rule_count",
+      "minimize_total_predicate_count",
+      "maximize_forward_stability",
       "reduce_largest_payout_dependency",
       "maximize_overall_roi"
-    ]
+    ],
+    "hardGateOverallRoiPctEachCourse": 200,
+    "reportWalkForwardSeparately": true,
+    "walkForwardIsNeverReplacedByRetrospectiveRoi": true
   },
   "ruleReduction": {
     "startFromCanonicalRuleCount": 316,
+    "knownDataIndependentRemovableRuleCount": 19,
+    "behaviorEquivalentStartingRuleCount": 297,
     "removeDataIndependentDominatedRulesFirst": true,
-    "preferFewerRulesAtEquivalentOrHigherGatePerformance": true,
+    "preferFewerRulesOverHigherRoiOnceEveryHardGatePasses": true,
+    "afterRuleCountMinimizedMinimizePredicateCount": true,
     "doNotAddRulesToRescueRoi": true
   },
   "oddsValidation": {
