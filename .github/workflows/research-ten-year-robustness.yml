@@ -1,0 +1,42 @@
+name: Ten-year robustness research
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - agent/ten-year-robustness-research
+    paths:
+      - ".github/workflows/research-ten-year-robustness.yml"
+      - "scripts/research-ten-year-smoke.py"
+      - "scripts/research-rule-pruning.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ten-year-robustness-research
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Verify 2016-2026 official archive and odds
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile research scripts
+        run: python -m py_compile scripts/research-ten-year-smoke.py
+      - name: Verify one official race and all six odds markets per year
+        run: python scripts/research-ten-year-smoke.py --start-year 2016 --end-year 2026
+      - name: Upload research-only report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ten-year-robustness-smoke
+          path: analysis-results/research-ten-year-smoke.json
+          if-no-files-found: warn
+          retention-days: 30
