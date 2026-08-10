@@ -64,16 +64,27 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json
+          import collections,json
           from pathlib import Path
           m=json.loads(Path('analysis-results/research-sparse-walkforward-meta.json').read_text())
           rules=json.loads(Path('analysis-results/research-sparse-walkforward-rules.json').read_text())
-          eval_start=m['evaluationStart']
+          eval_start=m['evaluationStart']; eval_end=m['evaluationEnd']
+          schedule=collections.Counter()
+          with Path('history/ten-year-history-corpus.jsonl').open(encoding='utf-8') as fh:
+            for line in fh:
+              if not line.strip(): continue
+              b=json.loads(line); r=b['race']; d=str(r.get('raceDate') or '')
+              if eval_start<=d<=eval_end: schedule[(d,str(r.get('venue')))] += 1
+          expected_selected=sum(min(5,n) for n in schedule.values())
+          structural=[{'date':d,'venue':v,'races':n} for (d,v),n in sorted(schedule.items()) if n<5]
           y=int(eval_start[:4]); month=int(eval_start[5:7])
           first_eval_fold=f"{y}Q{(month-1)//3+1}"
           eval_rules=[x for x in rules if x['fold']>=first_eval_fold]
           diag={
             'meta':m,
+            'evaluationVenueDays':len(schedule),
+            'expectedSelectedRaces':expected_selected,
+            'structuralShortVenueDays':structural,
             'ruleRows':len(rules),
             'firstRuleFold':rules[0]['fold'] if rules else None,
             'lastRuleFold':rules[-1]['fold'] if rules else None,
@@ -103,12 +114,20 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json
+          import collections,json
           from pathlib import Path
           m=json.loads(Path('analysis-results/research-sparse-walkforward-meta.json').read_text())
           assert m['evaluationStart']=='2016-08-10',m
           assert m['evaluationEnd']=='2026-08-09',m
-          assert m['selectedRaces']==14410,m
+          schedule=collections.Counter()
+          with Path('history/ten-year-history-corpus.jsonl').open(encoding='utf-8') as fh:
+            for line in fh:
+              if not line.strip(): continue
+              b=json.loads(line); r=b['race']; d=str(r.get('raceDate') or '')
+              if m['evaluationStart']<=d<=m['evaluationEnd']: schedule[(d,str(r.get('venue')))] += 1
+          expected_selected=sum(min(5,n) for n in schedule.values())
+          assert expected_selected==14412,expected_selected
+          assert m['selectedRaces']==expected_selected,(m['selectedRaces'],expected_selected)
           assert m['maxRulesPerFold']==8,m
           assert m['maxPredicatesPerRule']==3,m
           assert m['targetDayResultsUsedForSelection'] is False,m
@@ -123,7 +142,7 @@ jobs:
           eval_rules=[x for x in rules if x['fold']>=first_eval_fold]
           assert len(eval_rules)==41,len(eval_rules)
           assert all(x['ruleCount']<=8 and x['predicateCount']<=24 for x in eval_rules),eval_rules
-          print(json.dumps({'selected':m['selectedRaces'],'proxyRoi':m['proxyTicketRoiPct'],'backfills':m['constraintBackfillCount'],'evaluationFolds':len(eval_rules)},ensure_ascii=False))
+          print(json.dumps({'selected':m['selectedRaces'],'expectedSelected':expected_selected,'proxyRoi':m['proxyTicketRoiPct'],'backfills':m['constraintBackfillCount'],'evaluationFolds':len(eval_rules)},ensure_ascii=False))
           PY
 
       - uses: actions/upload-artifact@v4
