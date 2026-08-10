@@ -1,0 +1,80 @@
+{
+  "purpose": "research_only_canonical_297_ten_year_transfer_final_summary",
+  "evaluationStart": "2016-08-10",
+  "evaluationEnd": "2026-08-09",
+  "sourceRuleCount": 297,
+  "selectedDemandRaces": 14410,
+  "evaluatedRaces": 14410,
+  "missingOddsRaceCount": 0,
+  "evaluationErrorCount": 0,
+  "hardGateEligible": true,
+  "allThreeCoursesAtLeast200Pct": false,
+  "courses": {
+    "ライト": {
+      "stakeYen": 28820000,
+      "returnYen": 30127060,
+      "profitYen": 1307060,
+      "roiPct": 104.5353,
+      "pass200": false,
+      "periodRoiPct": {
+        "2016-08-10..2018": 72.9921,
+        "2019..2021": 68.9671,
+        "2022..2024": 105.9574,
+        "2025..2026-08-09": 213.8103
+      }
+    },
+    "スタンダード": {
+      "stakeYen": 72050000,
+      "returnYen": 75525500,
+      "profitYen": 3475500,
+      "roiPct": 104.8237,
+      "pass200": false,
+      "periodRoiPct": {
+        "2016-08-10..2018": 72.192,
+        "2019..2021": 71.094,
+        "2022..2024": 106.0662,
+        "2025..2026-08-09": 212.6321
+      }
+    },
+    "プレミアム": {
+      "stakeYen": 144100000,
+      "returnYen": 152065210,
+      "profitYen": 7965210,
+      "roiPct": 105.5276,
+      "pass200": false,
+      "periodRoiPct": {
+        "2016-08-10..2018": 72.4382,
+        "2019..2021": 71.8545,
+        "2022..2024": 106.7821,
+        "2025..2026-08-09": 213.8798
+      }
+    }
+  },
+  "returnConcentrationPct": {
+    "ライト": {"top1": 4.5071, "top5": 9.1949, "top10": 14.2597, "top25": 26.3492},
+    "スタンダード": {"top1": 4.3663, "top5": 9.1647, "top10": 14.1843, "top25": 26.1792},
+    "プレミアム": {"top1": 4.3372, "top5": 8.9911, "top10": 13.9981, "top25": 25.926}
+  },
+  "finalCorrection": {
+    "raceId": "2026-08-09-niigata-12",
+    "reason": "Historical runner_status lagged final official betting eligibility; ticket generation used the official final win market, a pre-race source.",
+    "chosenTickets": 10,
+    "courseReturnsYen": {"ライト": 0, "スタンダード": 0, "プレミアム": 0},
+    "targetRaceResultsUsedForSelection": false
+  },
+  "oddsRepair": {
+    "initialFailures": 80,
+    "networkRepaired": 50,
+    "archiveRepaired": 30,
+    "remainingFailures": 0,
+    "auditedArchiveArtifactId": 9018047154
+  },
+  "historicalFinalOddsUsed": true,
+  "prestartTimingValidationPerformed": false,
+  "targetDayResultsUsedForSelection": false,
+  "syntheticOddsUsed": false,
+  "estimatedOddsUsed": false,
+  "productionDatabaseWritten": false,
+  "productionModelChanged": false,
+  "warning": "Retrospective transfer diagnostic only. The canonical family was developed using 2024-2026 data; historical odds are final odds rather than live 15-45 minute pre-start snapshots."
+}
