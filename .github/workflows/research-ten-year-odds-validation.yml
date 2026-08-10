@@ -5,8 +5,8 @@ on:
     branches: [research/ten-year-minimal-rules]
     paths:
       - "scripts/research-ten-year-odds-validation.py"
-      - "scripts/research-ten-year-odds-validation-v2.py"
-      - "scripts/research-ten-year-odds-validation-v3.py"
+      - "scripts/research-ten-year-odds-validation-v4.py"
+      - "scripts/export-selected-historical-official-odds.py"
       - ".github/workflows/research-ten-year-odds-validation.yml"
   workflow_dispatch:
 
@@ -19,7 +19,6 @@ env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-  JRA_ODDS_REQUEST_PAUSE_SECONDS: "0.45"
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
@@ -41,21 +40,21 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install proven parser dependency
+        run: python -m pip install --disable-pip-version-check beautifulsoup4
+
       - name: Compile validation scripts
         run: |
           python -m py_compile \
             scripts/research-ten-year-odds-validation.py \
-            scripts/research-ten-year-odds-validation-v2.py \
-            scripts/research-ten-year-odds-validation-v3.py \
-            scripts/validate-jra-historical-parser-across-period.py \
-            scripts/validate-jra-historical-combination-parser.py \
-            scripts/collect-jra-official-odds.py
+            scripts/research-ten-year-odds-validation-v4.py \
+            scripts/export-selected-historical-official-odds.py
 
       - name: Validate official historical odds
         shell: bash
         run: |
           set -o pipefail
-          python scripts/research-ten-year-odds-validation-v3.py | tee research-ten-year-odds.log
+          python scripts/research-ten-year-odds-validation-v4.py | tee research-ten-year-odds.log
 
       - name: Upload validation artifact
         if: always()
