@@ -1,0 +1,35 @@
+{
+  "purpose": "Research-only durability and rule minimization. Never write research outputs into production automatically.",
+  "productionWriteForbidden": true,
+  "productionPromotionRequiresExplicitUserInstruction": true,
+  "evaluation": {
+    "startDate": "2016-08-10",
+    "endDate": "2026-08-09",
+    "warmupStartDate": "2015-01-01",
+    "targetYearsApprox": 10,
+    "officialJraDataOnly": true,
+    "targetDayResultsForbiddenForPrediction": true,
+    "pastPublishedBetsImmutable": true
+  },
+  "objective": {
+    "primary": "minimize_rule_count",
+    "hardGateOverallRoiPct": 200,
+    "secondary": [
+      "maximize_period_stability",
+      "reduce_largest_payout_dependency",
+      "maximize_overall_roi"
+    ]
+  },
+  "ruleReduction": {
+    "startFromCanonicalRuleCount": 316,
+    "removeDataIndependentDominatedRulesFirst": true,
+    "preferFewerRulesAtEquivalentOrHigherGatePerformance": true,
+    "doNotAddRulesToRescueRoi": true
+  },
+  "oddsValidation": {
+    "historicalArchiveOddsAreFinalOdds": true,
+    "livePredictionUsesPrestartOdds": true,
+    "treatHistoricalFinalOddsAndLivePrestartOddsAsDifferentEvidence": true,
+    "prospectivePrestartSnapshotsRequiredForTimingValidation": true
+  }
+}
