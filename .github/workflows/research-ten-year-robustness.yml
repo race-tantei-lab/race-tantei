@@ -92,8 +92,8 @@ jobs:
             --workers 4
           parser_exit=$?
           set -e
-          python - <<'PY'
-          import json
+          PARSER_EXIT="$parser_exit" python - <<'PY'
+          import json, os
           from pathlib import Path
           meta=json.loads(Path('analysis-results/research-pilot-201605-enriched-meta.json').read_text())
           assert meta['inputRaces'] == 20
@@ -107,7 +107,7 @@ jobs:
           print(json.dumps({
               'officialOddsPilot':'accepted_with_parse_misses_excluded',
               'coverage':meta['coverage'],
-              'originalParserExit':${parser_exit}
+              'originalParserExit':int(os.environ['PARSER_EXIT'])
           },ensure_ascii=False))
           PY
       - name: Verify pilot provenance and coverage
