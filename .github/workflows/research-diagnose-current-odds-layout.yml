@@ -5,6 +5,7 @@ on:
     branches: [research/ten-year-minimal-rules]
     paths:
       - 'scripts/research-diagnose-current-odds-layout.mjs'
+      - 'scripts/research-diagnose-session-odds.py'
       - '.github/workflows/research-diagnose-current-odds-layout.yml'
   workflow_dispatch:
 
@@ -26,7 +27,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='research/jra-odds-layout-diagnostic' \
-            -f description='Comparing official JRA result/odds layouts around August transition' \
+            -f description='Testing session-aware official JRA odds navigation' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -37,12 +38,16 @@ jobs:
         run: |
           npm ci
           npm run build:test
-      - name: Diagnose official pages
+      - name: Diagnose alternate layouts
         run: node scripts/research-diagnose-current-odds-layout.mjs | tee analysis-results/jra-odds-layout-diagnostic.json
+      - name: Diagnose session-aware odds route
+        run: python scripts/research-diagnose-session-odds.py | tee analysis-results/jra-session-odds-diagnostic.json
       - uses: actions/upload-artifact@v4
         with:
           name: research-jra-odds-layout-diagnostic
-          path: analysis-results/jra-odds-layout-diagnostic.json
+          path: |
+            analysis-results/jra-odds-layout-diagnostic.json
+            analysis-results/jra-session-odds-diagnostic.json
           if-no-files-found: error
           retention-days: 7
       - name: Mark diagnostic success
@@ -51,7 +56,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='research/jra-odds-layout-diagnostic' \
-            -f description='JRA odds layout diagnostic complete' \
+            -f description='JRA odds session diagnostic complete' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark diagnostic failure
         if: failure()
@@ -59,5 +64,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='research/jra-odds-layout-diagnostic' \
-            -f description='JRA odds layout diagnostic failed' \
+            -f description='JRA odds session diagnostic failed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
