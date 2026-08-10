@@ -6,6 +6,7 @@ import {
   pageLooksLikeResult,
   parseResultPage
 } from "../dist-test/src/v1/jra.js";
+import { fetchJraArchivePage } from "../dist-test/src/v1/three-month-archive.js";
 import {
   parseDesktopPayouts,
   parseDesktopResultRunners
@@ -19,36 +20,37 @@ function arg(name, fallback = null) {
 const RAW_URL = arg("--url");
 const OUT = path.resolve(arg("--out", "analysis-results/recovered-result.jsonl"));
 const META = path.resolve(arg("--meta", "analysis-results/recovered-result-meta.json"));
-const ROUNDS = Math.max(1, Number(arg("--rounds", "6")));
+const ROUNDS = Math.max(1, Number(arg("--rounds", "4")));
 
 if (!RAW_URL) throw new Error("--url is required");
+
+const raw = new URL(RAW_URL);
+const CNAME = decodeURIComponent(raw.searchParams.get("CNAME") ?? "");
+if (!CNAME) throw new Error("CNAME_MISSING");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function candidateUrls(rawUrl) {
-  const u = new URL(rawUrl);
-  const cname = decodeURIComponent(u.searchParams.get("CNAME") ?? "");
-  if (!cname) throw new Error("CNAME_MISSING");
+  const cname = CNAME;
   const desktop = cname.replace(/^sw01/i, "pw01");
   const mobile = cname.replace(/^pw01/i, "sw01");
   const encDesktop = encodeURIComponent(desktop);
   const encMobile = encodeURIComponent(mobile);
   const slashDesktop = encDesktop.replace(/%2F/gi, "/");
   const slashMobile = encMobile.replace(/%2F/gi, "/");
-  const candidates = [
+  return [...new Set([
     rawUrl,
     `https://www.jra.go.jp/JRADB/accessS.html?CNAME=${slashDesktop}`,
     `https://jra.jp/JRADB/accessS.html?CNAME=${encDesktop}`,
     `https://jra.jp/JRADB/accessS.html?CNAME=${slashDesktop}`,
     `https://sp.jra.jp/JRADB/accessS.html?CNAME=${encMobile}`,
     `https://sp.jra.jp/JRADB/accessS.html?CNAME=${slashMobile}`
-  ];
-  return [...new Set(candidates)];
+  ])];
 }
 
-function parseBundle(page) {
+function parseBundle(page, canonicalUrl = page.url) {
   if (!pageLooksLikeResult(page.html)) throw new Error("RESULT_SIGNATURE_MISSING");
-  const parsed = parseResultPage(page.html, page.url);
+  const parsed = parseResultPage(page.html, canonicalUrl);
   const runners = parseDesktopResultRunners(page.html).map((r) => ({ ...r, winOdds: null }));
   const payouts = parsed.payouts.length > 0 ? parsed.payouts : parseDesktopPayouts(page.html);
   if (runners.filter((r) => r.runnerStatus === "active").length < 2) throw new Error(`RUNNERS_NOT_FOUND:${runners.length}`);
@@ -60,7 +62,7 @@ function parseBundle(page) {
     payouts,
     refundHorseNos: parsed.refundHorseNos ?? [],
     provenance: {
-      resultUrl: page.url,
+      resultUrl: canonicalUrl,
       source: "jra_official_targeted_recovery",
       syntheticOddsUsed: false,
       productionDatabaseWritten: false
@@ -73,33 +75,47 @@ async function main() {
   const errors = [];
   let recovered = null;
   let recoveredUrl = null;
+  let recoveredMethod = null;
 
   for (let round = 1; round <= ROUNDS && !recovered; round += 1) {
+    try {
+      const page = await fetchJraArchivePage(CNAME);
+      recovered = parseBundle({ html: page.html, url: RAW_URL }, RAW_URL);
+      recoveredUrl = RAW_URL;
+      recoveredMethod = "archive_post";
+      console.log(JSON.stringify({ recovered: true, round, method: recoveredMethod, raceId: recovered.race.raceId }));
+      break;
+    } catch (error) {
+      const message = error instanceof Error ? `${error.name}:${error.message}` : String(error);
+      errors.push({ round, method: "archive_post", candidate: RAW_URL, error: message });
+      console.log(JSON.stringify({ recovered: false, round, method: "archive_post", error: message }));
+    }
+
     for (const candidate of candidates) {
-      const cacheBusted = candidate.includes("?")
-        ? `${candidate}&_rt_recover=${Date.now()}_${round}`
-        : candidate;
       try {
-        const page = await fetchJraPage(cacheBusted);
-        recovered = parseBundle(page);
+        const page = await fetchJraPage(candidate);
+        recovered = parseBundle(page, RAW_URL);
         recoveredUrl = page.url;
-        console.log(JSON.stringify({ recovered: true, round, candidate, finalUrl: page.url, raceId: recovered.race.raceId }));
+        recoveredMethod = "direct_get";
+        console.log(JSON.stringify({ recovered: true, round, method: recoveredMethod, candidate, finalUrl: page.url, raceId: recovered.race.raceId }));
         break;
       } catch (error) {
         const message = error instanceof Error ? `${error.name}:${error.message}` : String(error);
-        errors.push({ round, candidate, error: message });
-        console.log(JSON.stringify({ recovered: false, round, candidate, error: message }));
+        errors.push({ round, method: "direct_get", candidate, error: message });
+        console.log(JSON.stringify({ recovered: false, round, method: "direct_get", candidate, error: message }));
       }
-      await sleep(1200 * round);
+      await sleep(1000 * round);
     }
-    if (!recovered) await sleep(4000 * round);
+    if (!recovered) await sleep(3000 * round);
   }
 
   await mkdir(path.dirname(OUT), { recursive: true });
   const meta = {
     requestedUrl: RAW_URL,
+    cname: CNAME,
     recovered: Boolean(recovered),
     recoveredUrl,
+    recoveredMethod,
     attempts: errors.length + (recovered ? 1 : 0),
     errors,
     syntheticOddsUsed: false,
