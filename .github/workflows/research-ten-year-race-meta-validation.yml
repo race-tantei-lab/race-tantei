@@ -5,6 +5,7 @@ on:
     branches: [research/ten-year-minimal-rules]
     paths:
       - "scripts/research-ten-year-race-meta-validation.py"
+      - "scripts/research-ten-year-race-meta-validation-v2.py"
       - ".github/workflows/research-ten-year-race-meta-validation.yml"
   workflow_dispatch:
 
@@ -36,12 +37,12 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile metadata validator
-        run: python -m py_compile scripts/research-ten-year-race-meta-validation.py
+        run: python -m py_compile scripts/research-ten-year-race-meta-validation-v2.py
       - name: Validate 2016-2026 metadata
         shell: bash
         run: |
           set -o pipefail
-          python scripts/research-ten-year-race-meta-validation.py | tee research-ten-year-race-meta.log
+          python scripts/research-ten-year-race-meta-validation-v2.py | tee research-ten-year-race-meta.log
       - name: Upload metadata audit
         if: always()
         uses: actions/upload-artifact@v4
