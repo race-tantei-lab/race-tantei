@@ -1,0 +1,72 @@
+name: Research official result month pilot
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - "scripts/research-archive-result-month-pilot.ts"
+      - ".github/workflows/research-result-month-pilot.yml"
+      - "src/v1/three-month-archive.ts"
+      - "src/v1/three-month-desktop.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Mark pilot pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/result-month-pilot' \
+            -f description='Collecting 2016-08 official result pages' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Compile research pilot
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Collect August 2016 official results
+        shell: bash
+        run: |
+          set -o pipefail
+          npx tsx scripts/research-archive-result-month-pilot.ts 201608 | tee research-result-month-pilot.log
+      - name: Upload pilot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-result-pilot-201608
+          path: |
+            analysis-results/research-result-pilot-201608.json
+            research-result-month-pilot.log
+          if-no-files-found: error
+          retention-days: 30
+      - name: Mark pilot success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='research/result-month-pilot' \
+            -f description='2016-08 official result pilot complete' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark pilot failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='research/result-month-pilot' \
+            -f description='2016-08 official result pilot failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
