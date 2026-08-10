@@ -1,10 +1,11 @@
-name: Research diagnose 2026 transfer error
+name: Research verify fixed 2026 transfer shard
 
 on:
   push:
     branches: [research/ten-year-minimal-rules]
     paths:
       - ".github/workflows/research-diagnose-2026-eval-error.yml"
+      - "scripts/research-evaluate-canonical-transfer-fast.py"
   workflow_dispatch:
 
 permissions:
@@ -21,17 +22,17 @@ env:
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
-  diagnose:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Mark diagnostic pending
+      - name: Mark 2026 verification pending
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=pending -f context='research/2026-transfer-error-diagnostic' \
-            -f description='Locating the single 2026 transfer evaluation error' -f target_url="$STATUS_TARGET_URL" >/dev/null
+            -f state=pending -f context='research/2026-transfer-fixed' \
+            -f description='Re-evaluating 2026 with official final-odds betting field' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
-      - name: Download 2026 diagnostic inputs
+      - name: Download 2026 inputs
         shell: bash
         run: |
           set -euo pipefail
@@ -46,10 +47,9 @@ jobs:
           unzip -q odds.zip -d odds
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PARTIAL_REPAIR_ARTIFACT_ID}/zip" > repair.zip
           unzip -q repair.zip -d repair
-      - name: Run 2026 evaluation and print exact errors
-        shell: bash
+      - name: Evaluate fixed 2026 shard
         run: |
-          set +e
+          set -euo pipefail
           python scripts/research-evaluate-canonical-transfer-year.py \
             --year 2026 \
             --corpus history/ten-year-history-corpus.jsonl \
@@ -57,25 +57,38 @@ jobs:
             --rules demand/research-canonical-rules-297.json \
             --odds odds/research-demanded-odds-2026.jsonl \
             --repair repair/research-demanded-odds-repair.jsonl \
-            --out analysis-results/research-canonical-transfer-2026-diagnostic.json
-          code=$?
+            --out analysis-results/research-canonical-transfer-2026-fixed.json
+      - name: Verify 2026 shard integrity
+        run: |
+          set -euo pipefail
           python - <<'PY'
           import json
           from pathlib import Path
-          m=json.loads(Path('analysis-results/research-canonical-transfer-2026-diagnostic.json').read_text())
-          print(json.dumps({'evaluationErrors':m['evaluationErrors'],'missingOddsRaceIds':m['missingOddsRaceIds']},ensure_ascii=False))
-          assert m['evaluationErrorCount']==1,m
+          m=json.loads(Path('analysis-results/research-canonical-transfer-2026-fixed.json').read_text())
+          assert m['selectedDemandRaces']==900,m
+          assert m['missingOddsRaceCount']==30,m
+          assert m['evaluatedRaces']==870,m
+          assert m['evaluationErrorCount']==0,m
+          assert not m['missingDemandRacesInCorpus'],m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          print(json.dumps({'evaluated':m['evaluatedRaces'],'missing':m['missingOddsRaceCount'],'roi':{k:v['roiPct'] for k,v in m['courses'].items()},'lowerBound':{k:v['zeroReturnLowerBoundRoiPct'] for k,v in m['courses'].items()}},ensure_ascii=False))
           PY
-          exit 0
       - uses: actions/upload-artifact@v4
         with:
-          name: research-canonical-transfer-2026-diagnostic
-          path: analysis-results/research-canonical-transfer-2026-diagnostic.json
+          name: research-canonical-transfer-2026-fixed
+          path: analysis-results/research-canonical-transfer-2026-fixed.json
           if-no-files-found: error
-          retention-days: 14
-      - name: Mark diagnostic success
+          retention-days: 30
+      - name: Mark 2026 verification success
         if: success()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=success -f context='research/2026-transfer-error-diagnostic' \
-            -f description='Single 2026 transfer evaluation error identified' -f target_url="$STATUS_TARGET_URL" >/dev/null
+            -f state=success -f context='research/2026-transfer-fixed' \
+            -f description='2026 shard evaluated with zero errors; 30 final-odds races explicitly missing' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark 2026 verification failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/2026-transfer-fixed' \
+            -f description='2026 shard still needs targeted correction' -f target_url="$STATUS_TARGET_URL" >/dev/null
