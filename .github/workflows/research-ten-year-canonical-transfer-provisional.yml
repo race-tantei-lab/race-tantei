@@ -1,0 +1,104 @@
+name: Research provisional ten-year canonical transfer
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-ten-year-canonical-transfer-provisional.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  DEMAND_RUN_ID: '31373103782'
+  ODDS_RUN_ID: '31373205723'
+  PARTIAL_REPAIR_RUN_ID: '31400807509'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Mark provisional evaluation pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/ten-year-canonical-transfer-provisional' \
+            -f description='Evaluating 297 rules on all races with complete official odds' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Download history, demand, annual odds, and 50-race repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assembled demand odds repair
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip -d assembled
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEMAND_RUN_ID}/artifacts?per_page=100" > demand-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-ten-year-canonical-demand" and .expired==false) | .id' demand-artifacts.json | head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > odds-artifacts.json
+          for year in $(seq 2016 2026); do
+            name="research-demanded-odds-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' odds-artifacts.json | head -n1)
+            mkdir -p "odds/$year"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$name.zip"
+            unzip -q "$name.zip" -d "odds/$year"
+          done
+          find odds -mindepth 2 -name 'research-demanded-odds-20*.jsonl' -type f -exec cp {} odds/ \;
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PARTIAL_REPAIR_RUN_ID}/artifacts?per_page=100" > repair-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-demanded-odds-repair" and .expired==false) | .id' repair-artifacts.json | head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > repair.zip
+          unzip -q repair.zip -d repair
+          cp repair/research-demanded-odds-repair.jsonl odds/research-demanded-odds-repair.jsonl
+      - name: Evaluate provisional transfer without treating missing races as losses
+        run: |
+          set -euo pipefail
+          python scripts/research-evaluate-canonical-transfer.py \
+            --corpus assembled/ten-year-history-corpus.jsonl \
+            --demand demand/research-ten-year-canonical-demand.jsonl \
+            --rules demand/research-canonical-rules-297.json \
+            --odds-dir odds \
+            --out analysis-results/research-canonical-297-ten-year-transfer-provisional.json
+      - name: Verify exactly 30 races remain excluded
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-canonical-297-ten-year-transfer-provisional.json').read_text())
+          assert m['selectedDemandRaces']==14410,m
+          assert m['oddsRaces']==14380,m
+          assert m['missingOddsRaceCount']==30,m
+          assert m['evaluatedRaces']==14380,m
+          assert m['evaluationErrorCount']==0,m
+          assert m['hardGateEligible'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          print(json.dumps({'evaluated':m['evaluatedRaces'],'missing':m['missingOddsRaceCount'],'roi':{k:v['roiPct'] for k,v in m['courses'].items()},'allThreeProvisional200':all(v['roiPct']>=200 for v in m['courses'].values())},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-canonical-297-ten-year-transfer-provisional
+          path: analysis-results/research-canonical-297-ten-year-transfer-provisional.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Mark provisional evaluation success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/ten-year-canonical-transfer-provisional' \
+            -f description='297-rule provisional transfer completed on 14380 races; 30 explicitly excluded' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark provisional evaluation failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/ten-year-canonical-transfer-provisional' \
+            -f description='Provisional transfer diagnostic failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
