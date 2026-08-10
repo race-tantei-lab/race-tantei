@@ -1,0 +1,150 @@
+name: Research repair demanded official odds
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-repair-demanded-odds.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  DEMAND_RUN_ID: '31373103782'
+  ODDS_RUN_ID: '31373205723'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Mark repair pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/ten-year-demanded-odds-repair' \
+            -f description='Waiting for yearly odds shards then retrying only failed races' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install research parser dependency
+        run: pip install beautifulsoup4==4.13.4
+
+      - name: Wait for demanded official odds workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 300); do
+            status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.status')
+            conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.conclusion // ""')
+            echo "odds run: status=$status conclusion=$conclusion poll=$i"
+            if [ "$status" = "completed" ]; then
+              echo "yearly odds workflow completed with conclusion=$conclusion"
+              exit 0
+            fi
+            sleep 60
+          done
+          echo "odds workflow wait timeout"
+          exit 1
+
+      - name: Download demand manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEMAND_RUN_ID}/artifacts?per_page=100" > demand-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-ten-year-canonical-demand" and .expired==false) | .id' demand-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != "null"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+          test -s demand/research-ten-year-canonical-demand.jsonl
+
+      - name: Download all yearly odds artifacts and failure metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p base-odds
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > odds-artifacts.json
+          for year in $(seq 2016 2026); do
+            name="research-demanded-odds-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' odds-artifacts.json | head -n1)
+            if [ -z "$id" ] || [ "$id" = "null" ]; then echo "missing artifact $name"; exit 1; fi
+            mkdir -p "base-odds/$year"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$name.zip"
+            unzip -q "$name.zip" -d "base-odds/$year"
+          done
+          count=$(find base-odds -name 'research-demanded-odds-*-meta.json' -type f | wc -l)
+          test "$count" -eq 11
+
+      - name: Retry only failed race ids
+        shell: bash
+        run: |
+          set +e
+          python scripts/research-repair-demanded-official-odds.py \
+            --demand demand/research-ten-year-canonical-demand.jsonl \
+            --meta-dir base-odds \
+            --passes 4 \
+            --out analysis-results/research-demanded-odds-repair.jsonl \
+            --meta analysis-results/research-demanded-odds-repair-meta.json
+          code=$?
+          echo "$code" > analysis-results/research-demanded-odds-repair-exit.txt
+          exit 0
+
+      - name: Verify repair provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-demanded-odds-repair-meta.json').read_text())
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          assert m['productionModelChanged'] is False,m
+          print(json.dumps(m,ensure_ascii=False))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-demanded-odds-repair
+          path: |
+            analysis-results/research-demanded-odds-repair.jsonl
+            analysis-results/research-demanded-odds-repair-meta.json
+            analysis-results/research-demanded-odds-repair-exit.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Mark repair success
+        run: |
+          unresolved=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-demanded-odds-repair-meta.json').read_text())
+          print(int(m.get('unresolvedCount') or 0))
+          PY
+          )
+          if [ "$unresolved" = "0" ]; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=success \
+              -f context='research/ten-year-demanded-odds-repair' \
+              -f description='All yearly odds failures repaired or no failures existed' \
+              -f target_url="$STATUS_TARGET_URL" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=failure \
+              -f context='research/ten-year-demanded-odds-repair' \
+              -f description="${unresolved} demanded odds races still require targeted parser repair" \
+              -f target_url="$STATUS_TARGET_URL" >/dev/null
+            exit 1
+          fi
