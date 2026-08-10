@@ -10,6 +10,9 @@ BET_PRIOR=int(os.environ.get('CONT_BET_PRIOR','5000'))
 PRIOR_ROI=float(os.environ.get('CONT_PRIOR_ROI','0.80'))
 TOP_COMPONENTS=int(os.environ.get('CONT_TOP_COMPONENTS','4'))
 TICKETS_PER_RACE=int(os.environ.get('CONT_TICKETS_PER_RACE','3'))
+QUARTER_DECAY=float(os.environ.get('CONT_QUARTER_DECAY','1.0'))
+if not (0.0 < QUARTER_DECAY <= 1.0):
+    raise RuntimeError(f'INVALID_QUARTER_DECAY:{QUARTER_DECAY}')
 
 
 def load(path,name):
@@ -20,6 +23,10 @@ def load(path,name):
 smod=load(ROOT/'scripts/research-sparse-walkforward-demand.py','continuous_sparse_utils')
 pmod=load(ROOT/'scripts/generate-final-preday-selection.py','continuous_bins')
 dmod=load(ROOT/'scripts/research-ten-year-canonical-demand.py','continuous_history')
+
+
+def quarter(date):
+    y=int(date[:4]);m=int(date[5:7]);return f'{y}Q{(m-1)//3+1}'
 
 
 def candidate_rows(state,bundle):
@@ -82,14 +89,29 @@ def select_tickets(rows,stats,bet_stats):
     return chosen
 
 
+def decay_stats(stats,bet_stats):
+    if QUARTER_DECAY >= 1.0:return
+    for v in stats.values():
+        v[0]*=QUARTER_DECAY;v[1]*=QUARTER_DECAY
+    for v in bet_stats.values():
+        v[0]*=QUARTER_DECAY;v[1]*=QUARTER_DECAY
+
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--corpus',required=True);ap.add_argument('--out',required=True);ap.add_argument('--meta',required=True);a=ap.parse_args()
     state={'horse_hist':collections.defaultdict(lambda:collections.deque(maxlen=3)),'horse_starts':collections.Counter(),'jstats':collections.defaultdict(lambda:[0,0]),'tstats':collections.defaultdict(lambda:[0,0])}
-    stats=collections.defaultdict(lambda:[0,0]);bet_stats=collections.defaultdict(lambda:[0,0])
+    stats=collections.defaultdict(lambda:[0.0,0.0]);bet_stats=collections.defaultdict(lambda:[0.0,0.0])
     selected=[];struct=[];proxy={'tickets':0,'returnYen':0};by_year=collections.defaultdict(lambda:[0,0])
-    current_date=None;day=[]
+    current_date=None;day=[];current_quarter=None
 
     def process(date,bundles):
+        nonlocal current_quarter
+        q=quarter(date)
+        if current_quarter is None:
+            current_quarter=q
+        elif q!=current_quarter:
+            decay_stats(stats,bet_stats)
+            current_quarter=q
         if EVAL_START<=date<=EVAL_END:
             by=collections.defaultdict(list)
             for b in bundles:
@@ -135,7 +157,7 @@ def main():
     out=ROOT/a.out;out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(''.join(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n' for x in selected),encoding='utf-8')
     yearly={y:round(100*v[1]/(100*v[0]),4) if v[0] else None for y,v in sorted(by_year.items())}
-    meta={'purpose':'research_only_continuous_walk_forward_demand','evaluationStart':EVAL_START,'evaluationEnd':EVAL_END,'selectedRaces':len(selected),'ticketsPerRace':TICKETS_PER_RACE,'minHistoricalCellN':MIN_N,'keyPriorTickets':KEY_PRIOR,'betPriorTickets':BET_PRIOR,'priorRoi':PRIOR_ROI,'topComponents':TOP_COMPONENTS,'proxyTickets':proxy['tickets'],'proxyTicketRoiPct':round(100*proxy['returnYen']/(100*proxy['tickets']),4) if proxy['tickets'] else None,'proxyRoiByYearPct':yearly,'structuralCancellationExceptions':struct,'constraintBackfillCount':0,'targetDayResultsUsedForSelection':False,'historicalFinalOddsUsedForDiscovery':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+    meta={'purpose':'research_only_continuous_walk_forward_demand','evaluationStart':EVAL_START,'evaluationEnd':EVAL_END,'selectedRaces':len(selected),'ticketsPerRace':TICKETS_PER_RACE,'minHistoricalCellN':MIN_N,'keyPriorTickets':KEY_PRIOR,'betPriorTickets':BET_PRIOR,'priorRoi':PRIOR_ROI,'topComponents':TOP_COMPONENTS,'quarterDecay':QUARTER_DECAY,'proxyTickets':proxy['tickets'],'proxyTicketRoiPct':round(100*proxy['returnYen']/(100*proxy['tickets']),4) if proxy['tickets'] else None,'proxyRoiByYearPct':yearly,'structuralCancellationExceptions':struct,'constraintBackfillCount':0,'targetDayResultsUsedForSelection':False,'historicalFinalOddsUsedForDiscovery':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
     (ROOT/a.meta).write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     print(json.dumps(meta,ensure_ascii=False),flush=True)
 
