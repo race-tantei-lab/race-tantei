@@ -19,30 +19,6 @@ PREFIX_BY_EN = {
     "umatan": "156", "trio": "157", "trifecta": "158",
 }
 
-# Verified against live official JRA pages on 2026-08-08 (dde10) and
-# 2026-08-09 (dde01). These are checksum deltas from the entry CNAME's
-# final hexadecimal byte to the horse-number-order odds CNAME's final byte.
-# Every derived page is still fetched from JRA and its date/venue/race identity
-# is verified below before any odds are accepted.
-ENTRY_ODDS_DELTA_BY_LAYOUT = {
-    "01": {
-        "win": 0xDD,
-        "umaren": 0x69,
-        "wide": 0xED,
-        "umatan": 0x71,
-        "trio": 0x57,
-        "trifecta": 0x79,
-    },
-    "10": {
-        "win": 0xFE,
-        "umaren": 0x8A,
-        "wide": 0x0E,
-        "umatan": 0x92,
-        "trio": 0x78,
-        "trifecta": 0x9A,
-    },
-}
-
 
 def load_module(path, name):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -85,55 +61,49 @@ def odds_value(low, high):
     return lo if abs(lo - hi) < 1e-12 else [lo, hi]
 
 
-def derive_entry_odds_cnames(entry_url):
-    cname = cname_from_url(entry_url)
+def derive_win_cname_from_result(result_url):
+    """Derive JRA's official win-odds CNAME from an official result CNAME.
+
+    Verified research evidence:
+      * 37/37 archive-resolved sde10 races: win checksum = result + 0x42 mod 256.
+      * 13/13 successful 2026-08-09 sde01 races: win checksum = result + 0x21 mod 256.
+    The fetched odds page is still independently validated by date, venue and
+    race number before any value is accepted.
+    """
+    cname = cname_from_url(result_url)
     match = re.match(
-        r"^(?:pw|sw)01dde(01|10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})/([0-9A-F]{2})$",
+        r"^(?:pw|sw)01sde(01|10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})/([0-9A-F]{2})$",
         cname, re.I,
     )
     if not match:
-        raise RuntimeError(f"CURRENT_ENTRY_CNAME_PARSE_MISS:{cname}")
+        raise RuntimeError(f"CURRENT_RESULT_CNAME_PARSE_MISS:{cname}")
     layout, venue, year, meeting, day, race_no, ymd, raw_checksum = match.groups()
     checksum = int(raw_checksum, 16)
+    delta = 0x21 if layout == "01" else 0x42
+    win_checksum = (checksum + delta) % 256
     identity = f"{venue}{year}{meeting}{day}{race_no}{ymd}"
-    deltas = ENTRY_ODDS_DELTA_BY_LAYOUT[layout]
-    out = {}
-    for market, code in PREFIX_BY_EN.items():
-        suffix = "Z99" if market == "trio" else "Z"
-        market_checksum = (checksum + deltas[market]) % 256
-        out[market] = f"pw{code}ou10{identity}{suffix}/{market_checksum:02X}"
-    return out
+    return f"pw151ou10{identity}Z/{win_checksum:02X}"
 
 
-def entry_derivation_self_test():
+def result_derivation_self_test():
     cases = [
         (
-            "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060120260809%2FE2",
-            {
-                "win": "pw151ou1007202602060120260809Z/BF",
-                "umaren": "pw154ou1007202602060120260809Z/4B",
-                "wide": "pw155ou1007202602060120260809Z/CF",
-                "umatan": "pw156ou1007202602060120260809Z/53",
-                "trio": "pw157ou1007202602060120260809Z99/39",
-                "trifecta": "pw158ou1007202602060120260809Z/5B",
-            },
+            "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1002202601120620260719%2F86",
+            "pw151ou1002202601120620260719Z/C8",
         ),
         (
-            "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1001202601050120260808%2FA4",
-            {
-                "win": "pw151ou1001202601050120260808Z/A2",
-                "umaren": "pw154ou1001202601050120260808Z/2E",
-                "wide": "pw155ou1001202601050120260808Z/B2",
-                "umatan": "pw156ou1001202601050120260808Z/36",
-                "trio": "pw157ou1001202601050120260808Z99/1C",
-                "trifecta": "pw158ou1001202601050120260808Z/3E",
-            },
+            "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0107202602060120260809%2F9E",
+            "pw151ou1007202602060120260809Z/BF",
+        ),
+        (
+            "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1008202403110220240525%2FBF",
+            "pw151ou1008202403110220240525Z/01",
         ),
     ]
     for url, expected in cases:
-        got = derive_entry_odds_cnames(url)
+        got = derive_win_cname_from_result(url)
         if got != expected:
-            raise AssertionError(f"ENTRY_CNAME_DERIVATION:{url}:{got}:{expected}")
+            raise AssertionError(f"RESULT_WIN_CNAME_DERIVATION:{url}:{got}:{expected}")
 
 
 def current_fetch(row, historical, current):
@@ -148,24 +118,15 @@ def current_fetch(row, historical, current):
     required = tuple(m for m in historical.MARKETS if m in set(row.get("requiredMarkets") or ()))
     if not required or "win" not in required:
         raise RuntimeError(f"REQUIRED_MARKETS_INVALID:{required}")
-    if not entry_url:
-        raise RuntimeError("CURRENT_ENTRY_URL_MISSING")
+    if not result_url:
+        raise RuntimeError("CURRENT_RESULT_URL_MISSING")
 
     def same_race(cname):
         decoded = urllib.parse.unquote(str(cname or ""))
         return date_digits in decoded and current.current_race_no_from_cname(decoded) == race_no
 
-    derived = derive_entry_odds_cnames(entry_url)
-    entry_actions = []
-    try:
-        entry_html = runtime.fetch_url(entry_url)
-        entry_actions = [c for c, _ in base.action_links(entry_html) if same_race(c)]
-    except Exception:
-        entry_actions = []
-
-    win_seeds = [c for c in entry_actions if prefix_match(c, PREFIX_BY_EN["win"])]
-    win_cname = win_seeds[0] if win_seeds else derived["win"]
-    win_page = runtime.fetch_url(base.JRA_ODDS_URL, cname=win_cname, referer=entry_url)
+    win_cname = derive_win_cname_from_result(result_url)
+    win_page = runtime.fetch_url(base.JRA_ODDS_URL, cname=win_cname, referer=result_url)
     identity = runtime.parse_page_identity(win_page, win_cname)
     if identity != (race_date, venue, race_no):
         raise RuntimeError(
@@ -179,20 +140,19 @@ def current_fetch(row, historical, current):
     if len(horses) < 2:
         raise RuntimeError(f"CURRENT_WIN_HORSES_TOO_FEW:{len(horses)}")
 
-    all_actions = list(entry_actions)
-    for cname, _ in base.action_links(win_page):
-        if same_race(cname) and cname not in all_actions:
-            all_actions.append(cname)
-
+    # A valid official win page exposes the other bet-type tabs. Read those
+    # official links rather than reconstructing their checksums independently.
+    all_actions = [c for c, _ in base.action_links(win_page) if same_race(c)]
     parsed_by_market = {"win": win_rows}
     source_cnames = {"win": win_cname}
-    derived_markets = {"win": not bool(win_seeds)}
     for market in required:
         if market == "win":
             continue
         code = PREFIX_BY_EN[market]
         candidates = [c for c in all_actions if prefix_match(c, code)]
-        cname = candidates[0] if candidates else derived[market]
+        if not candidates:
+            raise RuntimeError(f"CURRENT_{market.upper()}_TAB_CNAME_MISSING")
+        cname = candidates[0]
         page = runtime.fetch_url(base.JRA_ODDS_URL, cname=cname, referer=base.JRA_ODDS_URL)
         page_identity = runtime.parse_page_identity(page, cname)
         if page_identity != (race_date, venue, race_no):
@@ -202,7 +162,6 @@ def current_fetch(row, historical, current):
             raise RuntimeError(f"CURRENT_{market.upper()}_ROWS_EMPTY")
         parsed_by_market[market] = rows
         source_cnames[market] = cname
-        derived_markets[market] = not bool(candidates)
 
     official = {}
     coverage = {}
@@ -228,10 +187,10 @@ def current_fetch(row, historical, current):
         "officialOddsCoverage": coverage,
         "provenance": {
             "resultUrl": result_url,
-            "entryUrl": entry_url,
-            "officialOddsSource": "jra_official_final_odds_entry_checksum_verified",
+            "entryUrl": entry_url or None,
+            "officialOddsSource": "jra_official_final_odds_result_checksum_verified",
             "sourceCnames": source_cnames,
-            "derivedCnameMarkets": [m for m, used in derived_markets.items() if used],
+            "resultToWinChecksumRule": "sde01:+0x21;sde10:+0x42",
             "officialPageIdentityVerified": True,
             "syntheticOddsUsed": False,
             "productionDatabaseWritten": False,
@@ -249,7 +208,7 @@ def main():
     os.environ.setdefault("CLOUDFLARE_API_TOKEN", "research-unused")
     current = load_module(CURRENT, "research_current_official_odds")
     current.self_test()
-    entry_derivation_self_test()
+    result_derivation_self_test()
 
     def dispatch(row):
         if row.get("resultUrlResolutionMethod") == "validated_current_direct_desktop":
