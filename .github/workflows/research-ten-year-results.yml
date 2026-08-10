@@ -1,10 +1,6 @@
-name: Research ten-year official results
+name: Research missing ten-year official results
 
 on:
-  push:
-    branches: [research/ten-year-minimal-rules]
-    paths:
-      - ".github/workflows/research-ten-year-results.yml"
   workflow_dispatch:
 
 permissions:
@@ -20,12 +16,12 @@ jobs:
   begin:
     runs-on: ubuntu-latest
     steps:
-      - name: Mark ten-year result collection pending
+      - name: Mark missing-history collection pending
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='research/ten-year-results' \
-            -f description='Collecting sharded official result history' \
+            -f description='Collecting only history missing before existing production range' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
   collect:
@@ -35,18 +31,18 @@ jobs:
       max-parallel: 2
       matrix:
         include:
-          - { year: 2015, start: '201501', end: '201512' }
-          - { year: 2016, start: '201601', end: '201612' }
-          - { year: 2017, start: '201701', end: '201712' }
-          - { year: 2018, start: '201801', end: '201812' }
-          - { year: 2019, start: '201901', end: '201912' }
-          - { year: 2020, start: '202001', end: '202012' }
-          - { year: 2021, start: '202101', end: '202112' }
-          - { year: 2022, start: '202201', end: '202212' }
-          - { year: 2023, start: '202301', end: '202312' }
-          - { year: 2024, start: '202401', end: '202412' }
-          - { year: 2025, start: '202501', end: '202512' }
-          - { year: 2026, start: '202601', end: '202608' }
+          # 2015 is warmup only. Evaluation begins 2016-08-10.
+          - { shard: '2015', start: '201501', end: '201512' }
+          - { shard: '2016', start: '201601', end: '201612' }
+          - { shard: '2017', start: '201701', end: '201712' }
+          - { shard: '2018', start: '201801', end: '201812' }
+          - { shard: '2019', start: '201901', end: '201912' }
+          - { shard: '2020', start: '202001', end: '202012' }
+          - { shard: '2021', start: '202101', end: '202112' }
+          - { shard: '2022', start: '202201', end: '202212' }
+          - { shard: '2023', start: '202301', end: '202312' }
+          # Production D1 already starts 2024-05-04. Only Jan-Apr is missing.
+          - { shard: '2024-01-04', start: '202401', end: '202404' }
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -71,7 +67,7 @@ jobs:
           npm ci
           npm run build:test
 
-      - name: Export official result history for ${{ matrix.year }}
+      - name: Export official result history for ${{ matrix.shard }}
         shell: bash
         run: |
           set -o pipefail
@@ -79,35 +75,35 @@ jobs:
             --start-month ${{ matrix.start }} \
             --end-month ${{ matrix.end }} \
             --concurrency 2 \
-            --out analysis-results/history-${{ matrix.year }}.jsonl \
-            --meta analysis-results/history-${{ matrix.year }}-meta.json \
-            | tee history-${{ matrix.year }}.log
+            --out analysis-results/history-${{ matrix.shard }}.jsonl \
+            --meta analysis-results/history-${{ matrix.shard }}-meta.json \
+            | tee history-${{ matrix.shard }}.log
 
       - name: Verify complete result shard
         env:
-          YEAR: ${{ matrix.year }}
+          SHARD: ${{ matrix.shard }}
         run: |
           python - <<'PY'
           import json, os
           from pathlib import Path
-          year=os.environ['YEAR']
-          m=json.loads(Path(f'analysis-results/history-{year}-meta.json').read_text())
-          assert m['requestedUrls'] > 1500, m
+          shard=os.environ['SHARD']
+          m=json.loads(Path(f'analysis-results/history-{shard}-meta.json').read_text())
+          assert m['requestedUrls'] > 500, m
           assert m['completed'] == m['requestedUrls'], m
           assert not m['failures'], m['failures'][:10]
           assert m['syntheticOddsUsed'] is False
           assert m['productionDatabaseWritten'] is False
-          print(json.dumps({'year':year,'races':m['completed'],'failures':0,'productionWrite':False},ensure_ascii=False))
+          print(json.dumps({'shard':shard,'races':m['completed'],'failures':0,'productionWrite':False},ensure_ascii=False))
           PY
 
       - name: Upload result shard
         uses: actions/upload-artifact@v4
         with:
-          name: research-results-${{ matrix.year }}
+          name: research-results-${{ matrix.shard }}
           path: |
-            analysis-results/history-${{ matrix.year }}.jsonl
-            analysis-results/history-${{ matrix.year }}-meta.json
-            history-${{ matrix.year }}.log
+            analysis-results/history-${{ matrix.shard }}.jsonl
+            analysis-results/history-${{ matrix.shard }}-meta.json
+            history-${{ matrix.shard }}.log
           if-no-files-found: error
           retention-days: 14
 
@@ -116,7 +112,7 @@ jobs:
     needs: collect
     runs-on: ubuntu-latest
     steps:
-      - name: Mark ten-year result collection status
+      - name: Mark missing-history collection status
         env:
           RESULT: ${{ needs.collect.result }}
         run: |
@@ -124,13 +120,13 @@ jobs:
             gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
               -f state=success \
               -f context='research/ten-year-results' \
-              -f description='Official 2015-2026 result shards validated' \
+              -f description='Missing pre-2024-05 history validated; existing 2024-2026 reused' \
               -f target_url="$STATUS_TARGET_URL" >/dev/null
           else
             gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
               -f state=failure \
               -f context='research/ten-year-results' \
-              -f description='Ten-year result collection needs repair' \
+              -f description='Missing-history collection needs repair' \
               -f target_url="$STATUS_TARGET_URL" >/dev/null
             exit 1
           fi
