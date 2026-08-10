@@ -17,7 +17,7 @@ env:
   HISTORY_ARTIFACT_ID: '9056288221'
   DEMAND_RUN_ID: '31373103782'
   ODDS_RUN_ID: '31373205723'
-  REPAIR_RUN_ID: '31410390882'
+  REPAIR_RUN_ID: '31417562544'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
@@ -115,9 +115,10 @@ jobs:
           assert not m.get('failures'),m
           assert int(m.get('completedRaces') or 0)==int(r.get('resolvedCount') or 0),(r,m)
           assert m['syntheticOddsUsed'] is False,m
+          assert m.get('estimatedOddsUsed') is False,m
           assert m['productionDatabaseWritten'] is False,m
           assert m['productionModelChanged'] is False,m
-          print(json.dumps({'resolved':r['resolvedCount'],'repaired':m['completedRaces'],'failures':len(m.get('failures',[]))},ensure_ascii=False))
+          print(json.dumps({'resolved':r['resolvedCount'],'repaired':m['completedRaces'],'network':m.get('networkRepairedRaces'),'archive':m.get('archiveRepairedRaces'),'failures':len(m.get('failures',[]))},ensure_ascii=False))
           PY
           cp repair/research-demanded-odds-repair.jsonl odds/research-demanded-odds-repair.jsonl
 
