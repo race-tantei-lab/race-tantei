@@ -17,38 +17,39 @@ env:
   HISTORY_ARTIFACT_ID: '9056288221'
   DEMAND_RUN_ID: '31373103782'
   ODDS_RUN_ID: '31373205723'
+  REPAIR_RUN_ID: '31374288753'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   evaluate:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 420
     steps:
       - name: Mark transfer research pending
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='research/ten-year-canonical-transfer' \
-            -f description='Waiting for demanded official odds then evaluating 297-rule transfer' \
+            -f description='Waiting for official odds plus targeted repair before 297-rule transfer' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - uses: actions/checkout@v4
 
-      - name: Wait for demanded official odds workflow
+      - name: Wait for targeted official odds repair
         shell: bash
         run: |
           set -euo pipefail
-          for i in $(seq 1 300); do
-            status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.status')
-            conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.conclusion // ""')
-            echo "odds run: status=$status conclusion=$conclusion poll=$i"
+          for i in $(seq 1 360); do
+            status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${REPAIR_RUN_ID}" --jq '.status')
+            conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${REPAIR_RUN_ID}" --jq '.conclusion // ""')
+            echo "repair run: status=$status conclusion=$conclusion poll=$i"
             if [ "$status" = "completed" ]; then
               test "$conclusion" = "success"
               exit 0
             fi
             sleep 60
           done
-          echo "odds workflow wait timeout"
+          echo "repair workflow wait timeout"
           exit 1
 
       - name: Download assembled history
@@ -87,9 +88,33 @@ jobs:
             gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$name.zip"
             unzip -q "$name.zip" -d "odds/$year"
           done
-          find odds -name 'research-demanded-odds-*.jsonl' -type f -exec cp {} odds/ \;
-          count=$(find odds -maxdepth 1 -name 'research-demanded-odds-*.jsonl' -type f | wc -l)
+          find odds -mindepth 2 -name 'research-demanded-odds-20*.jsonl' -type f -exec cp {} odds/ \;
+          count=$(find odds -maxdepth 1 -name 'research-demanded-odds-20*.jsonl' -type f | wc -l)
           test "$count" -eq 11
+
+      - name: Download targeted odds repair artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p repair
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${REPAIR_RUN_ID}/artifacts?per_page=100" > repair-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-demanded-odds-repair" and .expired==false) | .id' repair-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != "null"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > repair.zip
+          unzip -q repair.zip -d repair
+          test -f repair/research-demanded-odds-repair.jsonl
+          test -s repair/research-demanded-odds-repair-meta.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('repair/research-demanded-odds-repair-meta.json').read_text())
+          assert int(m.get('unresolvedCount') or 0)==0,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          assert m['productionModelChanged'] is False,m
+          print(json.dumps(m,ensure_ascii=False))
+          PY
+          cp repair/research-demanded-odds-repair.jsonl odds/research-demanded-odds-repair.jsonl
 
       - name: Evaluate canonical transfer
         run: |
@@ -111,6 +136,9 @@ jobs:
           assert m['evaluationStart']=='2016-08-10',m
           assert m['evaluationEnd']=='2026-08-09',m
           assert m['sourceRuleCount']==297,m
+          assert m['missingOddsRaceCount']==0,m
+          assert m['evaluationErrorCount']==0,m
+          assert m['hardGateEligible'] is True,m
           assert m['historicalFinalOddsUsed'] is True,m
           assert m['prestartTimingValidationPerformed'] is False,m
           assert m['targetDayResultsUsedForSelection'] is False,m
@@ -143,7 +171,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='research/ten-year-canonical-transfer' \
-            -f description='297-rule retrospective ten-year transfer diagnostic completed' \
+            -f description='297-rule retrospective ten-year transfer diagnostic completed with zero odds gaps' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Mark transfer research failure
