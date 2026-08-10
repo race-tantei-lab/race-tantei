@@ -6,6 +6,8 @@ on:
     branches: [research/ten-year-minimal-rules]
     paths:
       - ".github/workflows/research-legacy-race-meta-smoke.yml"
+      - "scripts/research-legacy-race-meta.mjs"
+      - "scripts/research-legacy-race-meta-smoke.mjs"
   workflow_dispatch:
 
 permissions:
@@ -26,7 +28,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='research/legacy-race-meta-smoke' \
-            -f description='Validating legacy JRA race metadata parser' \
+            -f description='Validating position-aware legacy JRA metadata parser' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
