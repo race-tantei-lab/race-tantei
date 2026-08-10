@@ -1,0 +1,124 @@
+name: Research repair missing history
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-repair-missing-history.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  begin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark repair pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/history-gap-repair' \
+            -f description='Repairing transient gaps in 2015/2016/2017/2019 research history' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+  repair:
+    needs: begin
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - { shard: '2015', start: '201501', end: '201512' }
+          - { shard: '2016', start: '201601', end: '201612' }
+          - { shard: '2017', start: '201701', end: '201712' }
+          - { shard: '2019', start: '201901', end: '201912' }
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install and build official parsers
+        run: |
+          npm ci
+          npm run build:test
+
+      - name: Resilient official history export for ${{ matrix.shard }}
+        id: export
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/research-export-official-history-resilient.mjs \
+            --start-month ${{ matrix.start }} \
+            --end-month ${{ matrix.end }} \
+            --concurrency 2 \
+            --out analysis-results/history-${{ matrix.shard }}.jsonl \
+            --meta analysis-results/history-${{ matrix.shard }}-meta.json \
+            | tee history-${{ matrix.shard }}-repair.log
+
+      - name: Verify repaired shard is complete
+        if: always()
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          shard=os.environ['SHARD']
+          p=Path(f'analysis-results/history-{shard}-meta.json')
+          assert p.exists(), f'meta missing for {shard}'
+          m=json.loads(p.read_text())
+          assert m['requestedUrls'] > 1500, m
+          assert m['completed'] == m['requestedUrls'], m
+          assert not m['failures'], m['failures'][:10]
+          assert m['syntheticOddsUsed'] is False
+          assert m['productionDatabaseWritten'] is False
+          print(json.dumps({'shard':shard,'races':m['completed'],'failures':0,'repairPasses':m.get('repairPasses'),'productionWrite':False},ensure_ascii=False))
+          PY
+
+      - name: Upload repaired shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-repaired-results-${{ matrix.shard }}
+          path: |
+            analysis-results/history-${{ matrix.shard }}.jsonl
+            analysis-results/history-${{ matrix.shard }}-meta.json
+            history-${{ matrix.shard }}-repair.log
+          if-no-files-found: error
+          retention-days: 30
+
+  finish:
+    if: always()
+    needs: repair
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish repair status
+        env:
+          RESULT: ${{ needs.repair.result }}
+        run: |
+          if [ "$RESULT" = "success" ]; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=success \
+              -f context='research/history-gap-repair' \
+              -f description='2015/2016/2017/2019 history gaps repaired and validated' \
+              -f target_url="$STATUS_TARGET_URL" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=failure \
+              -f context='research/history-gap-repair' \
+              -f description='Historical gap repair still has unresolved races' \
+              -f target_url="$STATUS_TARGET_URL" >/dev/null
+            exit 1
+          fi
