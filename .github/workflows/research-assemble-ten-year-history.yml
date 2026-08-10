@@ -1,0 +1,163 @@
+name: Research assemble ten-year history
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-assemble-ten-year-history.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  SOURCE_RUN_ID: '31364499578'
+  D1_ARTIFACT_ID: '9051583271'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Mark assembly pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/ten-year-history-assembly' \
+            -f description='Waiting for metadata shards then assembling ten-year history' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - name: Wait for metadata enrichment run
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 210); do
+            status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq '.status')
+            conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq '.conclusion // ""')
+            echo "metadata run: status=$status conclusion=$conclusion poll=$i"
+            if [ "$status" = "completed" ]; then
+              break
+            fi
+            sleep 60
+          done
+          status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq '.status')
+          test "$status" = "completed"
+
+      - name: Download all ten metadata shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p legacy
+          names=(
+            research-metadata-2015 research-metadata-2016 research-metadata-2017
+            research-metadata-2018 research-metadata-2019 research-metadata-2020
+            research-metadata-2021 research-metadata-2022 research-metadata-2023
+            research-metadata-2024-01-05-03
+          )
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100" > artifacts.json
+          for name in "${names[@]}"; do
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' artifacts.json | head -n1)
+            if [ -z "$id" ] || [ "$id" = "null" ]; then echo "missing artifact: $name"; exit 1; fi
+            mkdir -p "legacy/$name"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$name.zip"
+            unzip -q "$name.zip" -d "legacy/$name"
+          done
+
+      - name: Verify metadata artifacts before assembly
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          metas=list(Path('legacy').rglob('*-metadata-meta.json'))
+          assert len(metas)==10, len(metas)
+          summary=[]
+          for p in metas:
+            m=json.loads(p.read_text())
+            summary.append((p.name,m.get('outputRows'),len(m.get('failures',[])),len(m.get('incompleteRaceIds',[]))))
+            assert m.get('outputRows')==m.get('selectedRows'), (p,m)
+            assert not m.get('failures'), (p,m.get('failures',[])[:5])
+            assert not m.get('incompleteRaceIds'), (p,m.get('incompleteRaceIds',[])[:10])
+            assert m.get('syntheticOddsUsed') is False
+            assert m.get('productionDatabaseWritten') is False
+          print(summary)
+          PY
+
+      - name: Download existing D1 research segment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p d1
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${D1_ARTIFACT_ID}/zip" > d1.zip
+          unzip -q d1.zip -d d1
+          test -s d1/races.jsonl.gz
+          test -s d1/runners.jsonl.gz
+          test -s d1/results.jsonl.gz
+          test -s d1/payouts.jsonl.gz
+
+      - name: Assemble corpus and exact ten-year evaluation window
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/research-assemble-ten-year-history.py \
+            --legacy-dir legacy \
+            --d1-dir d1 \
+            --patch analysis-results/research-official-recovery-3r.jsonl \
+            --out-corpus analysis-results/ten-year-history-corpus.jsonl \
+            --out-eval analysis-results/ten-year-history-evaluation.jsonl \
+            --meta analysis-results/ten-year-history-assembly-meta.json
+
+      - name: Verify exact evaluation boundaries and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/ten-year-history-assembly-meta.json').read_text())
+          assert m['evaluationStart']=='2016-08-10', m
+          assert m['evaluationEnd']=='2026-08-09', m
+          assert m['d1Races']==7863, m
+          assert m['duplicateRaceIds']==0, m
+          assert not m['incompleteEvaluationRaceIds'], m
+          assert len(m['officialBlockedEvaluationRacesRecovered'])==3, m
+          assert m['evaluationRaceCount'] > 30000, m
+          assert m['syntheticOddsUsed'] is False
+          assert m['productionDatabaseWritten'] is False
+          print(json.dumps(m,ensure_ascii=False))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-ten-year-history-assembled
+          path: |
+            analysis-results/ten-year-history-corpus.jsonl
+            analysis-results/ten-year-history-evaluation.jsonl
+            analysis-results/ten-year-history-assembly-meta.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Mark assembly success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='research/ten-year-history-assembly' \
+            -f description='Exact ten-year evaluation history assembled and validated' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Mark assembly failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='research/ten-year-history-assembly' \
+            -f description='Ten-year history assembly requires targeted repair' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
