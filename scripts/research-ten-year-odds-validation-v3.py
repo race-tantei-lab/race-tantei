@@ -18,7 +18,7 @@ def load_v2():
 
 v2 = load_v2()
 collector = v2.collector
-validator = v2.validator
+validator = v2.base.validator
 
 
 def odds_matrix_rows_current(collector_module, page_html):
