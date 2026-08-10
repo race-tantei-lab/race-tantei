@@ -17,7 +17,7 @@ env:
   HISTORY_ARTIFACT_ID: '9056288221'
   DEMAND_RUN_ID: '31373103782'
   ODDS_RUN_ID: '31373205723'
-  REPAIR_RUN_ID: '31399136169'
+  REPAIR_RUN_ID: '31399828698'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='research/ten-year-canonical-transfer' \
-            -f description='Waiting for archive-resolved official odds repair before 297-rule transfer' \
+            -f description='Waiting for zero-gap official odds repair before 297-rule transfer' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - uses: actions/checkout@v4
