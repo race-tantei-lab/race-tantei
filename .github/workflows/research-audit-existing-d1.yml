@@ -44,6 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p analysis-results
+          # Read only: no INSERT/UPDATE/DELETE/DDL is allowed in this research audit.
           npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT name, sql FROM sqlite_master WHERE type='table' AND name LIKE 'rt_%' ORDER BY name;" > analysis-results/existing-d1-schema.json
           npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT MIN(race_date) AS minDate, MAX(race_date) AS maxDate, COUNT(*) AS races FROM rt_races WHERE race_date BETWEEN '2024-05-04' AND '2026-08-09';" > analysis-results/existing-d1-races.json
           npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT COUNT(*) AS runners FROM rt_runners rr JOIN rt_races r ON r.race_id=rr.race_id WHERE r.race_date BETWEEN '2024-05-04' AND '2026-08-09';" > analysis-results/existing-d1-runners.json
