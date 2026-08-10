@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/research-assemble-ten-year-history.yml"
       - "scripts/research-assemble-ten-year-history.py"
+      - "scripts/research-repair-d1-history-gaps.mjs"
   workflow_dispatch:
 
 permissions:
@@ -17,6 +18,8 @@ env:
   GH_TOKEN: ${{ github.token }}
   SOURCE_RUN_ID: '31364499578'
   D1_ARTIFACT_ID: '9051583271'
+  HISTORY_2024_ARTIFACT_ID: '9051613640'
+  HISTORY_2025_ARTIFACT_ID: '9051931262'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
@@ -29,10 +32,20 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='research/ten-year-history-assembly' \
-            -f description='Assembling exact configured ten-year evaluation window' \
+            -f description='Repairing residual gaps and assembling exact ten-year window' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Build official parsers
+        run: |
+          npm ci
+          npm run build:test
 
       - name: Confirm metadata enrichment run completed
         shell: bash
@@ -97,6 +110,50 @@ jobs:
           test -s d1/results.jsonl.gz
           test -s d1/payouts.jsonl.gz
 
+      - name: Download 2024 and 2025 official year artifacts for local gap repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p yearly/2024 yearly/2025
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_2024_ARTIFACT_ID}/zip" > history-2024.zip
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_2025_ARTIFACT_ID}/zip" > history-2025.zip
+          unzip -q history-2024.zip -d yearly/2024
+          unzip -q history-2025.zip -d yearly/2025
+          test -s yearly/2024/analysis-results/history-2024.jsonl
+          test -s yearly/2025/analysis-results/history-2025.jsonl
+
+      - name: Repair residual D1 history gaps
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/research-repair-d1-history-gaps.mjs \
+            --d1-dir d1 \
+            --history-2024 yearly/2024/analysis-results/history-2024.jsonl \
+            --history-2025 yearly/2025/analysis-results/history-2025.jsonl \
+            --out analysis-results/d1-history-gap-repairs.jsonl \
+            --meta analysis-results/d1-history-gap-repairs-meta.json \
+            --concurrency 3
+
+      - name: Verify D1 gap repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/d1-history-gap-repairs-meta.json').read_text())
+          assert m['detectedGaps']==225, m
+          assert m['repairedFrom2024Artifact']==60, m
+          assert m['repairedFrom2025Artifact']==24, m
+          assert m['networkTargets2026']==141, m
+          assert m['networkRepairs2026']==141, m
+          assert not m['failures'], m
+          assert not m['unresolved'], m
+          assert m['syntheticOddsUsed'] is False
+          assert m['productionDatabaseWritten'] is False
+          print(json.dumps(m,ensure_ascii=False))
+          PY
+
       - name: Assemble corpus and exact ten-year evaluation window
         shell: bash
         run: |
@@ -105,6 +162,7 @@ jobs:
             --legacy-dir legacy \
             --d1-dir d1 \
             --patch analysis-results/research-official-recovery-3r.jsonl \
+            --d1-repair analysis-results/d1-history-gap-repairs.jsonl \
             --out-corpus analysis-results/ten-year-history-corpus.jsonl \
             --out-eval analysis-results/ten-year-history-evaluation.jsonl \
             --meta analysis-results/ten-year-history-assembly-meta.json
@@ -122,6 +180,7 @@ jobs:
           assert m['firstEvaluationRaceDate'] >= m['evaluationStart'], m
           assert m['lastEvaluationRaceDate'] <= m['evaluationEnd'], m
           assert m['d1Races']==7863, m
+          assert m['d1GapRepairs']==225, m
           assert m['duplicateRaceIds']==0, m
           assert not m['incompleteEvaluationRaceIds'], m
           assert len(m['officialBlockedEvaluationRacesRecovered'])==3, m
@@ -138,6 +197,7 @@ jobs:
             analysis-results/ten-year-history-corpus.jsonl
             analysis-results/ten-year-history-evaluation.jsonl
             analysis-results/ten-year-history-assembly-meta.json
+            analysis-results/d1-history-gap-repairs-meta.json
           if-no-files-found: error
           retention-days: 30
 
