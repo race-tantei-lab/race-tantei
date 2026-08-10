@@ -22,6 +22,22 @@
       "1600万下": "3勝クラス"
     }
   },
+  "researchTracks": {
+    "canonicalTransferDiagnosis": {
+      "purpose": "Measure how the current canonical rule family transfers across the ten-year archive without claiming unseen validation.",
+      "startRuleCount": 316,
+      "behaviorEquivalentRuleCountAfterDataIndependentPruning": 297,
+      "neverCall2024To2026UnseenForCanonicalRules": true
+    },
+    "honestMinimalForwardModel": {
+      "purpose": "Build a small rule set using only information available before each evaluation block, then evaluate forward.",
+      "allowedFeatureAxes": "same information axes as the canonical model; no date-specific axes and no new outcome-derived feature axes",
+      "ruleDiscoveryMustExcludeEvaluationBlock": true,
+      "rulePruningMustExcludeEvaluationBlock": true,
+      "rollingOrExpandingWalkForwardRequired": true,
+      "retrospectiveFullPeriodOptimizationForbidden": true
+    }
+  },
   "objective": {
     "lexicographicOrder": [
       "pass_all_three_course_10y_roi_gate",
@@ -33,7 +49,8 @@
     ],
     "hardGateOverallRoiPctEachCourse": 200,
     "reportWalkForwardSeparately": true,
-    "walkForwardIsNeverReplacedByRetrospectiveRoi": true
+    "walkForwardIsNeverReplacedByRetrospectiveRoi": true,
+    "honestModelAcceptanceRequiresForwardEvidence": true
   },
   "ruleReduction": {
     "startFromCanonicalRuleCount": 316,
