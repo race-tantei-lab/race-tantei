@@ -18,6 +18,16 @@ PREFIX_BY_EN = {
     "win": "151", "umaren": "154", "wide": "155",
     "umatan": "156", "trio": "157", "trifecta": "158",
 }
+# Verified across every successfully fetched 2026-08-09 race. JRA's current
+# result and odds CNAME checksums use fixed per-market deltas modulo 256.
+CHECKSUM_DELTA = {
+    "win": 0x21,
+    "umaren": 0xAD,
+    "wide": 0x31,
+    "umatan": 0xB5,
+    "trio": 0x9B,
+    "trifecta": 0xBD,
+}
 
 
 def load_module(path, name):
@@ -52,12 +62,45 @@ def odds_value(low, high):
     return lo if abs(lo - hi) < 1e-12 else [lo, hi]
 
 
+def derive_current_odds_cnames(result_url):
+    decoded = urllib.parse.unquote(str(result_url or ""))
+    match = re.search(
+        r"(?:pw|sw)01sde(?:01|10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})/([0-9A-F]{2})$",
+        decoded, re.I,
+    )
+    if not match:
+        raise RuntimeError("CURRENT_RESULT_CNAME_CHECKSUM_PARSE_MISS")
+    venue, year, meeting, day, race_no, ymd, result_checksum = match.groups()
+    identity = f"{venue}{year}{meeting}{day}{race_no}{ymd}"
+    checksum = int(result_checksum, 16)
+    out = {}
+    for market, code in PREFIX_BY_EN.items():
+        suffix = "Z99" if market == "trio" else "Z"
+        market_checksum = (checksum + CHECKSUM_DELTA[market]) % 256
+        out[market] = f"pw{code}ou10{identity}{suffix}/{market_checksum:02X}"
+    return out
+
+
+def checksum_self_test():
+    result = "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0107202602060120260809%2F9E"
+    got = derive_current_odds_cnames(result)
+    expected = {
+        "win": "pw151ou1007202602060120260809Z/BF",
+        "umaren": "pw154ou1007202602060120260809Z/4B",
+        "wide": "pw155ou1007202602060120260809Z/CF",
+        "umatan": "pw156ou1007202602060120260809Z/53",
+        "trio": "pw157ou1007202602060120260809Z99/39",
+        "trifecta": "pw158ou1007202602060120260809Z/5B",
+    }
+    if got != expected:
+        raise AssertionError(f"CURRENT_CHECKSUM_DERIVATION:{got}:{expected}")
+
+
 def current_fetch(row, historical, current):
     runtime = current.runtime
     base = runtime.base
     entry_url = str(row.get("entryUrl") or "")
-    if not entry_url:
-        raise RuntimeError("CURRENT_ENTRY_URL_MISSING")
+    result_url = str(row.get("resultUrl") or "")
     race_date = str(row.get("raceDate") or "")
     date_digits = race_date.replace("-", "")
     venue = str(row.get("venue") or "")
@@ -70,13 +113,18 @@ def current_fetch(row, historical, current):
         decoded = urllib.parse.unquote(str(cname or ""))
         return date_digits in decoded and current.current_race_no_from_cname(decoded) == race_no
 
-    entry_html = runtime.fetch_url(entry_url)
-    entry_actions = [c for c, _ in base.action_links(entry_html) if same_race(c)]
+    derived = derive_current_odds_cnames(result_url)
+    entry_actions = []
+    if entry_url:
+        try:
+            entry_html = runtime.fetch_url(entry_url)
+            entry_actions = [c for c, _ in base.action_links(entry_html) if same_race(c)]
+        except Exception:
+            entry_actions = []
+
     win_seeds = [c for c in entry_actions if prefix_match(c, PREFIX_BY_EN["win"])]
-    if not win_seeds:
-        raise RuntimeError("CURRENT_WIN_CNAME_NOT_FOUND")
-    win_cname = win_seeds[0]
-    win_page = runtime.fetch_url(base.JRA_ODDS_URL, cname=win_cname, referer=entry_url)
+    win_cname = win_seeds[0] if win_seeds else derived["win"]
+    win_page = runtime.fetch_url(base.JRA_ODDS_URL, cname=win_cname, referer=entry_url or result_url)
     identity = runtime.parse_page_identity(win_page, win_cname)
     if identity != (race_date, venue, race_no):
         raise RuntimeError(f"CURRENT_WIN_IDENTITY_MISMATCH:{identity}:{race_date}:{venue}:{race_no}")
@@ -95,14 +143,13 @@ def current_fetch(row, historical, current):
 
     parsed_by_market = {"win": win_rows}
     source_cnames = {"win": win_cname}
+    derived_markets = {"win": not bool(win_seeds)}
     for market in required:
         if market == "win":
             continue
         code = PREFIX_BY_EN[market]
         candidates = [c for c in all_actions if prefix_match(c, code)]
-        if not candidates:
-            raise RuntimeError(f"CURRENT_{market.upper()}_CNAME_NOT_FOUND")
-        cname = candidates[0]
+        cname = candidates[0] if candidates else derived[market]
         page = runtime.fetch_url(base.JRA_ODDS_URL, cname=cname, referer=base.JRA_ODDS_URL)
         page_identity = runtime.parse_page_identity(page, cname)
         if page_identity != (race_date, venue, race_no):
@@ -112,6 +159,7 @@ def current_fetch(row, historical, current):
             raise RuntimeError(f"CURRENT_{market.upper()}_ROWS_EMPTY")
         parsed_by_market[market] = rows
         source_cnames[market] = cname
+        derived_markets[market] = not bool(candidates)
 
     official = {}
     coverage = {}
@@ -136,10 +184,12 @@ def current_fetch(row, historical, current):
         "officialOdds": official,
         "officialOddsCoverage": coverage,
         "provenance": {
-            "resultUrl": row.get("resultUrl"),
-            "entryUrl": entry_url,
-            "officialOddsSource": "jra_current_official_final_odds_entry_route",
+            "resultUrl": result_url,
+            "entryUrl": entry_url or None,
+            "officialOddsSource": "jra_current_official_final_odds_cname_verified",
             "sourceCnames": source_cnames,
+            "derivedCnameMarkets": [m for m, used in derived_markets.items() if used],
+            "checksumDerivationVerifiedAgainst20260809": True,
             "syntheticOddsUsed": False,
             "productionDatabaseWritten": False,
         },
@@ -151,14 +201,12 @@ def main():
     historical.result_marker = flexible_result_marker
     original_fetch = historical.fetch_race
 
-    # The production current-odds parser imports a D1-capable base module, but this
-    # research wrapper never calls D1. Dummy values prevent import-time env lookups;
-    # no production query/write is executed from this path.
     os.environ.setdefault("CLOUDFLARE_ACCOUNT_ID", "research-unused")
     os.environ.setdefault("CLOUDFLARE_D1_DATABASE_ID", "research-unused")
     os.environ.setdefault("CLOUDFLARE_API_TOKEN", "research-unused")
     current = load_module(CURRENT, "research_current_official_odds")
     current.self_test()
+    checksum_self_test()
 
     def dispatch(row):
         if row.get("resultUrlResolutionMethod") == "validated_current_direct_desktop":
