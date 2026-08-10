@@ -1,0 +1,102 @@
+name: Research continuous score calibration sweep
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-continuous-calibration-sweep.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  mark:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/continuous-score-calibration' \
+            -f description='Testing conservative score aggregation' -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+  sweep:
+    needs: mark
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: n500-c8
+            min_n: 500
+            key_prior: 2000
+            components: 8
+          - label: n500-c12
+            min_n: 500
+            key_prior: 2000
+            components: 12
+          - label: n500-c20
+            min_n: 500
+            key_prior: 2000
+            components: 20
+          - label: n100-c20
+            min_n: 100
+            key_prior: 2000
+            components: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download corpus
+        run: |
+          set -euo pipefail
+          mkdir -p history analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+      - name: Run candidate
+        env:
+          CONT_MIN_N: ${{ matrix.min_n }}
+          CONT_KEY_PRIOR: ${{ matrix.key_prior }}
+          CONT_BET_PRIOR: '5000'
+          CONT_PRIOR_ROI: '0.80'
+          CONT_TOP_COMPONENTS: ${{ matrix.components }}
+          CONT_TICKETS_PER_RACE: '3'
+        run: |
+          python scripts/research-continuous-walkforward-demand.py \
+            --corpus history/ten-year-history-corpus.jsonl --out analysis-results/demand.jsonl --meta analysis-results/meta.json
+      - name: Verify
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/meta.json').read_text())
+          assert m['selectedRaces']==14410,m
+          assert m['constraintBackfillCount']==0,m
+          assert m['structuralCancellationExceptions']==[{'date':'2020-03-29','venue':'中山','eligible':2}],m
+          assert m['targetDayResultsUsedForSelection'] is False,m
+          assert m['historicalFinalOddsUsedForDiscovery'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          print(json.dumps({'roi':m['proxyTicketRoiPct'],'byYear':m['proxyRoiByYearPct']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-calibration-${{ matrix.label }}
+          path: |
+            analysis-results/meta.json
+            analysis-results/demand.jsonl
+          retention-days: 30
+
+  done:
+    needs: sweep
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          if [ '${{ needs.sweep.result }}' = success ]; then state=success; desc='Continuous score calibration completed'; else state=failure; desc='Calibration sweep requires repair'; fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" -f context='research/continuous-score-calibration' -f description="$desc" -f target_url="$STATUS_TARGET_URL" >/dev/null
