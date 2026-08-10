@@ -1,0 +1,110 @@
+name: Research evaluate sparse walk-forward
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-sparse-walkforward-evaluate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  DISCOVERY_RUN_ID: '31406751562'
+  ODDS_RUN_ID: '31406865720'
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Mark evaluation pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/sparse-walk-forward-evaluation' \
+            -f description='Waiting for sparse odds then evaluating frozen folds' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Wait for sparse odds workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 560); do
+            s=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.status')
+            c=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.conclusion // ""')
+            echo "odds status=$s conclusion=$c poll=$i"
+            if [ "$s" = completed ]; then test "$c" = success; exit 0; fi
+            sleep 30
+          done
+          exit 1
+      - name: Download history and sparse discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history demand odds analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > h.zip
+          unzip -q h.zip ten-year-history-corpus.jsonl -d history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DISCOVERY_RUN_ID}/artifacts?per_page=100" > da.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-sparse-walkforward-discovery" and .expired==false) | .id' da.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > d.zip
+          unzip -q d.zip -d demand
+      - name: Download sparse odds shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > oa.json
+          for y in $(seq 2016 2026); do
+            n="research-sparse-odds-${y}"
+            id=$(jq -r --arg n "$n" '.artifacts[] | select(.name==$n and .expired==false) | .id' oa.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$y.zip"
+            mkdir -p "tmp-$y"; unzip -q "$y.zip" -d "tmp-$y"
+            cp "tmp-$y/research-sparse-odds-${y}.jsonl" odds/
+          done
+      - name: Evaluate sparse walk-forward
+        run: |
+          set -euo pipefail
+          python scripts/research-evaluate-sparse-walkforward.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --demand demand/research-sparse-walkforward-demand.jsonl \
+            --rules demand/research-sparse-walkforward-rules.json \
+            --odds-dir odds \
+            --out analysis-results/research-sparse-walkforward-evaluation.json
+      - name: Verify research provenance
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-sparse-walkforward-evaluation.json').read_text())
+          assert m['selectedDemandRaces']==14410,m
+          assert not m['missingDemandRacesInCorpus'],m
+          assert m['targetDayResultsUsedForSelection'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          assert m['productionModelChanged'] is False,m
+          print(json.dumps({'evaluated':m['evaluatedRaces'],'missing':m['missingOddsRaceCount'],'errors':m['evaluationErrorCount'],'roi':{c:v['roiPct'] for c,v in m['courses'].items()},'all200':m['allThreeObservedAtLeast200Pct']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-sparse-walkforward-evaluation
+          path: analysis-results/research-sparse-walkforward-evaluation.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Mark evaluation success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success \
+            -f context='research/sparse-walk-forward-evaluation' -f description='Sparse walk-forward evaluation completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark evaluation failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure \
+            -f context='research/sparse-walk-forward-evaluation' -f description='Sparse walk-forward evaluation needs targeted fix' -f target_url="$STATUS_TARGET_URL" >/dev/null
