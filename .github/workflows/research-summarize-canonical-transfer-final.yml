@@ -15,7 +15,7 @@ permissions:
 env:
   GH_TOKEN: ${{ github.token }}
   YEAR_RUN_ID: '31402968689'
-  FIXED_2026_RUN_ID: '31404378837'
+  PROVISIONAL_2026_RUN_ID: '31404666766'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
@@ -27,17 +27,17 @@ jobs:
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending -f context='research/ten-year-canonical-transfer-summary' \
-            -f description='Waiting for fixed 2026 shard then aggregating exact ten-year diagnostic' \
+            -f description='Waiting for explicit-unresolved 2026 shard then aggregating ten-year diagnostic' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
-      - name: Wait for fixed 2026 shard
+      - name: Wait for provisional 2026 shard
         shell: bash
         run: |
           set -euo pipefail
           for i in $(seq 1 80); do
-            status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FIXED_2026_RUN_ID}" --jq '.status')
-            conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FIXED_2026_RUN_ID}" --jq '.conclusion // ""')
-            echo "fixed2026 status=$status conclusion=$conclusion poll=$i"
+            status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROVISIONAL_2026_RUN_ID}" --jq '.status')
+            conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROVISIONAL_2026_RUN_ID}" --jq '.conclusion // ""')
+            echo "2026 status=$status conclusion=$conclusion poll=$i"
             if [ "$status" = completed ]; then
               test "$conclusion" = success
               exit 0
@@ -59,17 +59,17 @@ jobs:
             unzip -q "${year}.zip" -d shards
           done
           test "$(find shards -name 'research-canonical-transfer-20*.json' -type f | wc -l)" -eq 10
-      - name: Download fixed 2026 shard
+      - name: Download provisional 2026 shard
         shell: bash
         run: |
           set -euo pipefail
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FIXED_2026_RUN_ID}/artifacts?per_page=100" > fixed-artifacts.json
-          id=$(jq -r '.artifacts[] | select(.name=="research-canonical-transfer-2026-fixed" and .expired==false) | .id' fixed-artifacts.json | head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROVISIONAL_2026_RUN_ID}/artifacts?per_page=100" > provisional-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-canonical-transfer-2026-provisional-clean" and .expired==false) | .id' provisional-artifacts.json | head -n1)
           test -n "$id" && test "$id" != null
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > fixed2026.zip
-          unzip -q fixed2026.zip -d shards
-          mv shards/research-canonical-transfer-2026-fixed.json shards/research-canonical-transfer-2026.json
-      - name: Aggregate ten-year diagnostic and zero-return lower bound
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > provisional2026.zip
+          unzip -q provisional2026.zip -d shards
+          mv shards/research-canonical-transfer-2026-provisional.json shards/research-canonical-transfer-2026.json
+      - name: Aggregate ten-year diagnostic with unresolved races explicit
         shell: bash
         run: |
           set -euo pipefail
@@ -81,26 +81,33 @@ jobs:
           files=sorted(Path('shards').glob('research-canonical-transfer-20*.json'))
           rows=[json.loads(p.read_text()) for p in files]
           assert len(rows)==11,[p.name for p in files]
-          assert [r['year'] for r in rows]==[str(y) for y in range(2016,2027)], [r['year'] for r in rows]
-          assert all(r['evaluationErrorCount']==0 and not r['missingDemandRacesInCorpus'] for r in rows), rows
+          assert [r['year'] for r in rows]==[str(y) for y in range(2016,2027)]
+          assert all(not r['missingDemandRacesInCorpus'] for r in rows),rows
+          assert all(r['evaluationErrorCount']==0 for r in rows[:-1]),rows[:-1]
+          assert rows[-1]['evaluationErrorCount']==8,rows[-1]
           selected=sum(int(r['selectedDemandRaces']) for r in rows)
-          odds=sum(int(r['oddsRaces']) for r in rows)
-          missing=sum(int(r['missingOddsRaceCount']) for r in rows)
+          final_odds_missing=sum(int(r['missingOddsRaceCount']) for r in rows)
+          evaluation_errors=sum(int(r['evaluationErrorCount']) for r in rows)
           evaluated=sum(int(r['evaluatedRaces']) for r in rows)
+          unresolved=set()
+          for r in rows:
+            unresolved.update(r['missingOddsRaceIds'])
+            unresolved.update(e['raceId'] for e in r['evaluationErrors'])
           assert selected==14410,selected
-          assert odds==14380,odds
-          assert missing==30,missing
-          assert evaluated==14380,evaluated
-          def aggregate(subset, course):
+          assert final_odds_missing==30,final_odds_missing
+          assert evaluation_errors==8,evaluation_errors
+          assert len(unresolved)==38,len(unresolved)
+          assert evaluated==14372,evaluated
+          def aggregate(subset,course):
             keys=('races','tickets','hitRaces','stakeYen','returnYen')
             a={k:sum(int(r['courses'][course][k]) for r in subset) for k in keys}
             sel=sum(int(r['selectedDemandRaces']) for r in subset)
             exact_stake=sel*budgets[course]
             a['profitYen']=a['returnYen']-a['stakeYen']
-            a['roiPct']=round(100*a['returnYen']/a['stakeYen'],4) if a['stakeYen'] else None
+            a['observedSubsetRoiPct']=round(100*a['returnYen']/a['stakeYen'],4) if a['stakeYen'] else None
             a['selectedDemandRaces']=sel
             a['exactSelectedStakeYen']=exact_stake
-            a['zeroReturnLowerBoundRoiPct']=round(100*a['returnYen']/exact_stake,4) if exact_stake else None
+            a['zeroReturnReferenceRoiPct']=round(100*a['returnYen']/exact_stake,4) if exact_stake else None
             a['hitRacePct']=round(100*a['hitRaces']/a['races'],4) if a['races'] else None
             return a
           periods={
@@ -110,15 +117,15 @@ jobs:
             '2025..2026-08-09': {'2025','2026'},
           }
           result={
-            'purpose':'research_only_canonical_297_ten_year_transfer_summary',
-            'evaluationStart':'2016-08-10','evaluationEnd':'2026-08-09',
-            'sourceRuleCount':297,'selectedDemandRaces':selected,'oddsRaces':odds,
-            'missingOddsRaceCount':missing,'evaluatedRaces':evaluated,
-            'missingOddsRaceIds':[rid for r in rows for rid in r['missingOddsRaceIds']],
-            'evaluationErrorCount':0,'courses':{},
-            'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,
+            'purpose':'research_only_canonical_297_ten_year_transfer_provisional_summary',
+            'evaluationStart':'2016-08-10','evaluationEnd':'2026-08-09','sourceRuleCount':297,
+            'selectedDemandRaces':selected,'evaluatedRaces':evaluated,
+            'missingFinalOddsRaceCount':final_odds_missing,'evaluationErrorRaceCount':evaluation_errors,
+            'unresolvedRaceCount':len(unresolved),'unresolvedRaceIds':sorted(unresolved),
+            'courses':{},'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,
             'targetDayResultsUsedForSelection':False,'syntheticOddsUsed':False,
             'productionDatabaseWritten':False,'productionModelChanged':False,
+            'zeroReturnReferenceWarning':'Reference only: unresolved races are assigned zero return in the denominator calculation. This is not an exact model ROI because incomplete market coverage can alter ticket selection.',
           }
           for c in courses:
             overall=aggregate(rows,c)
@@ -134,17 +141,17 @@ jobs:
               'top10ReturnSharePct':share(10),'top25ReturnSharePct':share(25)
             }
             result['courses'][c]=overall
-          result['allThreeObservedSubsetAtLeast200Pct']=all(result['courses'][c]['roiPct']>=200 for c in courses)
-          result['allThreeZeroReturnLowerBoundAtLeast200Pct']=all(result['courses'][c]['zeroReturnLowerBoundRoiPct']>=200 for c in courses)
+          result['allThreeObservedSubsetAtLeast200Pct']=all(result['courses'][c]['observedSubsetRoiPct']>=200 for c in courses)
+          result['allThreeZeroReturnReferenceAtLeast200Pct']=all(result['courses'][c]['zeroReturnReferenceRoiPct']>=200 for c in courses)
           Path('analysis-results').mkdir(exist_ok=True)
           Path('analysis-results/research-canonical-297-ten-year-transfer-summary.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
           print(json.dumps({
-            'evaluated':evaluated,'missing':missing,
-            'roi':{c:result['courses'][c]['roiPct'] for c in courses},
-            'lowerBound':{c:result['courses'][c]['zeroReturnLowerBoundRoiPct'] for c in courses},
+            'evaluated':evaluated,'unresolved':len(unresolved),
+            'observedRoi':{c:result['courses'][c]['observedSubsetRoiPct'] for c in courses},
+            'zeroReturnReference':{c:result['courses'][c]['zeroReturnReferenceRoiPct'] for c in courses},
             'observedAll200':result['allThreeObservedSubsetAtLeast200Pct'],
-            'lowerBoundAll200':result['allThreeZeroReturnLowerBoundAtLeast200Pct'],
-            'periods':{c:{p:v['roiPct'] for p,v in result['courses'][c]['byPeriod'].items()} for c in courses},
+            'zeroReturnReferenceAll200':result['allThreeZeroReturnReferenceAtLeast200Pct'],
+            'periods':{c:{p:v['observedSubsetRoiPct'] for p,v in result['courses'][c]['byPeriod'].items()} for c in courses},
             'concentration':{c:result['courses'][c]['returnConcentration'] for c in courses}
           },ensure_ascii=False))
           PY
@@ -159,10 +166,10 @@ jobs:
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success -f context='research/ten-year-canonical-transfer-summary' \
-            -f description='Canonical 297 ten-year transfer summary completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+            -f description='Canonical 297 provisional ten-year summary completed with unresolved races explicit' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark summary failure
         if: failure()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure -f context='research/ten-year-canonical-transfer-summary' \
-            -f description='Canonical 297 summary requires targeted fix' -f target_url="$STATUS_TARGET_URL" >/dev/null
+            -f description='Canonical 297 provisional summary requires targeted fix' -f target_url="$STATUS_TARGET_URL" >/dev/null
