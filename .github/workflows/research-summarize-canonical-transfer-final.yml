@@ -1,0 +1,168 @@
+name: Research summarize canonical 297 transfer
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-summarize-canonical-transfer-final.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  YEAR_RUN_ID: '31402968689'
+  FIXED_2026_RUN_ID: '31404378837'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  summarize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Mark summary pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/ten-year-canonical-transfer-summary' \
+            -f description='Waiting for fixed 2026 shard then aggregating exact ten-year diagnostic' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Wait for fixed 2026 shard
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 80); do
+            status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FIXED_2026_RUN_ID}" --jq '.status')
+            conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FIXED_2026_RUN_ID}" --jq '.conclusion // ""')
+            echo "fixed2026 status=$status conclusion=$conclusion poll=$i"
+            if [ "$status" = completed ]; then
+              test "$conclusion" = success
+              exit 0
+            fi
+            sleep 15
+          done
+          exit 1
+      - name: Download successful 2016-2025 shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p shards
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${YEAR_RUN_ID}/artifacts?per_page=100" > year-artifacts.json
+          for year in $(seq 2016 2025); do
+            name="research-canonical-transfer-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' year-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "${year}.zip"
+            unzip -q "${year}.zip" -d shards
+          done
+          test "$(find shards -name 'research-canonical-transfer-20*.json' -type f | wc -l)" -eq 10
+      - name: Download fixed 2026 shard
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FIXED_2026_RUN_ID}/artifacts?per_page=100" > fixed-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-canonical-transfer-2026-fixed" and .expired==false) | .id' fixed-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > fixed2026.zip
+          unzip -q fixed2026.zip -d shards
+          mv shards/research-canonical-transfer-2026-fixed.json shards/research-canonical-transfer-2026.json
+      - name: Aggregate ten-year diagnostic and zero-return lower bound
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          courses=('ライト','スタンダード','プレミアム')
+          budgets={'ライト':2000,'スタンダード':5000,'プレミアム':10000}
+          files=sorted(Path('shards').glob('research-canonical-transfer-20*.json'))
+          rows=[json.loads(p.read_text()) for p in files]
+          assert len(rows)==11,[p.name for p in files]
+          assert [r['year'] for r in rows]==[str(y) for y in range(2016,2027)], [r['year'] for r in rows]
+          assert all(r['evaluationErrorCount']==0 and not r['missingDemandRacesInCorpus'] for r in rows), rows
+          selected=sum(int(r['selectedDemandRaces']) for r in rows)
+          odds=sum(int(r['oddsRaces']) for r in rows)
+          missing=sum(int(r['missingOddsRaceCount']) for r in rows)
+          evaluated=sum(int(r['evaluatedRaces']) for r in rows)
+          assert selected==14410,selected
+          assert odds==14380,odds
+          assert missing==30,missing
+          assert evaluated==14380,evaluated
+          def aggregate(subset, course):
+            keys=('races','tickets','hitRaces','stakeYen','returnYen')
+            a={k:sum(int(r['courses'][course][k]) for r in subset) for k in keys}
+            sel=sum(int(r['selectedDemandRaces']) for r in subset)
+            exact_stake=sel*budgets[course]
+            a['profitYen']=a['returnYen']-a['stakeYen']
+            a['roiPct']=round(100*a['returnYen']/a['stakeYen'],4) if a['stakeYen'] else None
+            a['selectedDemandRaces']=sel
+            a['exactSelectedStakeYen']=exact_stake
+            a['zeroReturnLowerBoundRoiPct']=round(100*a['returnYen']/exact_stake,4) if exact_stake else None
+            a['hitRacePct']=round(100*a['hitRaces']/a['races'],4) if a['races'] else None
+            return a
+          periods={
+            '2016-08-10..2018': {'2016','2017','2018'},
+            '2019..2021': {'2019','2020','2021'},
+            '2022..2024': {'2022','2023','2024'},
+            '2025..2026-08-09': {'2025','2026'},
+          }
+          result={
+            'purpose':'research_only_canonical_297_ten_year_transfer_summary',
+            'evaluationStart':'2016-08-10','evaluationEnd':'2026-08-09',
+            'sourceRuleCount':297,'selectedDemandRaces':selected,'oddsRaces':odds,
+            'missingOddsRaceCount':missing,'evaluatedRaces':evaluated,
+            'missingOddsRaceIds':[rid for r in rows for rid in r['missingOddsRaceIds']],
+            'evaluationErrorCount':0,'courses':{},
+            'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,
+            'targetDayResultsUsedForSelection':False,'syntheticOddsUsed':False,
+            'productionDatabaseWritten':False,'productionModelChanged':False,
+          }
+          for c in courses:
+            overall=aggregate(rows,c)
+            tops=sorted([x for r in rows for x in r['courses'][c]['topRaceReturns']],key=lambda x:x['returnYen'],reverse=True)
+            total=overall['returnYen']
+            def share(n): return round(100*sum(x['returnYen'] for x in tops[:n])/total,4) if total else 0.0
+            overall['byYear']={r['year']:r['courses'][c] for r in rows}
+            overall['byPeriod']={name:aggregate([r for r in rows if r['year'] in years],c) for name,years in periods.items()}
+            overall['returnConcentration']={
+              'largestRaceReturnYen':tops[0]['returnYen'] if tops else 0,
+              'largestRaceId':tops[0]['raceId'] if tops else None,
+              'top1ReturnSharePct':share(1),'top5ReturnSharePct':share(5),
+              'top10ReturnSharePct':share(10),'top25ReturnSharePct':share(25)
+            }
+            result['courses'][c]=overall
+          result['allThreeObservedSubsetAtLeast200Pct']=all(result['courses'][c]['roiPct']>=200 for c in courses)
+          result['allThreeZeroReturnLowerBoundAtLeast200Pct']=all(result['courses'][c]['zeroReturnLowerBoundRoiPct']>=200 for c in courses)
+          Path('analysis-results').mkdir(exist_ok=True)
+          Path('analysis-results/research-canonical-297-ten-year-transfer-summary.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({
+            'evaluated':evaluated,'missing':missing,
+            'roi':{c:result['courses'][c]['roiPct'] for c in courses},
+            'lowerBound':{c:result['courses'][c]['zeroReturnLowerBoundRoiPct'] for c in courses},
+            'observedAll200':result['allThreeObservedSubsetAtLeast200Pct'],
+            'lowerBoundAll200':result['allThreeZeroReturnLowerBoundAtLeast200Pct'],
+            'periods':{c:{p:v['roiPct'] for p,v in result['courses'][c]['byPeriod'].items()} for c in courses},
+            'concentration':{c:result['courses'][c]['returnConcentration'] for c in courses}
+          },ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-canonical-297-ten-year-transfer-summary
+          path: analysis-results/research-canonical-297-ten-year-transfer-summary.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Mark summary success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/ten-year-canonical-transfer-summary' \
+            -f description='Canonical 297 ten-year transfer summary completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark summary failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/ten-year-canonical-transfer-summary' \
+            -f description='Canonical 297 summary requires targeted fix' -f target_url="$STATUS_TARGET_URL" >/dev/null
