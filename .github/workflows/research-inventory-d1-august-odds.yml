@@ -1,0 +1,122 @@
+name: Research inventory D1 Aug 1-2 retained odds
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - '.github/workflows/research-inventory-d1-august-odds.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CLOUDFLARE_ACCOUNT_ID: '3c6d1826b573b2e68cb13ec37e9e8ade'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Mark inventory pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/d1-august-odds-inventory' \
+            -f description='Read-only inventory of all D1 tables for Aug 1-2 odds evidence' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Export full D1 read-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/d1-full analysis-results/d1-august-inventory
+          npx wrangler d1 export race-tantei-phase0 --remote --skip-confirmation \
+            --output=/tmp/d1-full/full.sql
+          test -s /tmp/d1-full/full.sql
+          rm -f /tmp/d1-full/full.sqlite
+          sqlite3 /tmp/d1-full/full.sqlite < /tmp/d1-full/full.sql
+      - name: Inventory schemas and Aug 1-2 rows
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, re, sqlite3
+          from pathlib import Path
+
+          db=sqlite3.connect('/tmp/d1-full/full.sqlite')
+          db.row_factory=sqlite3.Row
+          out=Path('analysis-results/d1-august-inventory')
+          schemas=[]
+          candidates=[]
+          evidence={}
+          names=[r['name'] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
+          for name in names:
+              cols=[dict(r) for r in db.execute(f'PRAGMA table_info("{name}")')]
+              colnames=[c['name'] for c in cols]
+              create=db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?",(name,)).fetchone()[0]
+              schemas.append({'table':name,'columns':colnames,'createSql':create})
+              lowered=name.lower()
+              relevant=bool(re.search(r'odds|bet|prediction|ticket|snapshot|cache|state|selection|pick|runner',lowered))
+              race_col=next((c for c in colnames if c.lower()=='race_id'),None)
+              date_col=next((c for c in colnames if c.lower() in ('race_date','date')),None)
+              if relevant or race_col or date_col:
+                  candidates.append(name)
+              rows=[]
+              try:
+                  if race_col:
+                      q=f'''SELECT * FROM "{name}" WHERE "{race_col}" LIKE '2026-08-01-%' OR "{race_col}" LIKE '2026-08-02-%' LIMIT 50000'''
+                      rows=[dict(r) for r in db.execute(q)]
+                  elif date_col:
+                      q=f'''SELECT * FROM "{name}" WHERE "{date_col}" IN ('2026-08-01','2026-08-02') LIMIT 50000'''
+                      rows=[dict(r) for r in db.execute(q)]
+              except Exception as exc:
+                  evidence[name]={'error':str(exc)}
+                  continue
+              if rows:
+                  evidence[name]={'rowCount':len(rows),'rows':rows}
+
+          meta={
+            'purpose':'research_only_full_d1_schema_and_august_evidence_inventory',
+            'tableCount':len(names),
+            'candidateTables':candidates,
+            'tablesWithAug1Aug2Rows':sorted(evidence),
+            'productionWrite':False,
+            'networkJraRefetch':False,
+          }
+          (out/'schema.json').write_text(json.dumps(schemas,ensure_ascii=False,indent=2)+'\n')
+          (out/'august-evidence.json').write_text(json.dumps(evidence,ensure_ascii=False,indent=2,default=str)+'\n')
+          (out/'meta.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(meta,ensure_ascii=False))
+          for table in sorted(evidence):
+              item=evidence[table]
+              print(json.dumps({'table':table,'rowCount':item.get('rowCount'),'error':item.get('error')},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-d1-august-odds-inventory
+          path: analysis-results/d1-august-inventory/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Mark inventory success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/d1-august-odds-inventory' \
+            -f description='Read-only D1 Aug 1-2 evidence inventory complete' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark inventory failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/d1-august-odds-inventory' \
+            -f description='D1 August inventory requires query correction' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
