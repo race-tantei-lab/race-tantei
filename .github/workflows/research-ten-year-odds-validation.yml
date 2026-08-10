@@ -48,7 +48,10 @@ jobs:
             scripts/collect-jra-official-odds.py
 
       - name: Validate official historical odds
-        run: python scripts/research-ten-year-odds-validation.py | tee research-ten-year-odds.log
+        shell: bash
+        run: |
+          set -o pipefail
+          python scripts/research-ten-year-odds-validation.py | tee research-ten-year-odds.log
 
       - name: Upload validation artifact
         if: always()
