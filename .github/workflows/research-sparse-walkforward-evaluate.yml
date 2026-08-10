@@ -14,8 +14,8 @@ permissions:
 
 env:
   GH_TOKEN: ${{ github.token }}
-  DISCOVERY_RUN_ID: '31406751562'
-  ODDS_RUN_ID: '31406865720'
+  DISCOVERY_RUN_ID: '31414640777'
+  ODDS_RUN_ID: '31414716030'
   HISTORY_ARTIFACT_ID: '9056288221'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
