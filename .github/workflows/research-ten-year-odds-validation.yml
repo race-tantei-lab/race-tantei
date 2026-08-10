@@ -5,6 +5,7 @@ on:
     branches: [research/ten-year-minimal-rules]
     paths:
       - "scripts/research-ten-year-odds-validation.py"
+      - "scripts/research-ten-year-odds-validation-v2.py"
       - ".github/workflows/research-ten-year-odds-validation.yml"
   workflow_dispatch:
 
@@ -43,6 +44,7 @@ jobs:
         run: |
           python -m py_compile \
             scripts/research-ten-year-odds-validation.py \
+            scripts/research-ten-year-odds-validation-v2.py \
             scripts/validate-jra-historical-parser-across-period.py \
             scripts/validate-jra-historical-combination-parser.py \
             scripts/collect-jra-official-odds.py
@@ -51,7 +53,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python scripts/research-ten-year-odds-validation.py | tee research-ten-year-odds.log
+          python scripts/research-ten-year-odds-validation-v2.py | tee research-ten-year-odds.log
 
       - name: Upload validation artifact
         if: always()
