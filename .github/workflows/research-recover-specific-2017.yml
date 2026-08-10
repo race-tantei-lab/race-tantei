@@ -1,0 +1,89 @@
+name: Research recover final 2017 historical result
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-recover-specific-2017.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/targeted-history-recovery-2017' \
+            -f description='Recovering final blocked 2017 historical result' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install and build official parsers
+        run: |
+          npm ci
+          npm run build:test
+      - name: Recover 2017-08-26 Sapporo 10R
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/research-recover-specific-result.mjs \
+            --url 'https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1001201702031020170826%2F06' \
+            --rounds 6 \
+            --out analysis-results/recovered-2017-08-26-sapporo-10.jsonl \
+            --meta analysis-results/recovered-2017-08-26-sapporo-10-meta.json \
+            | tee recovered-2017-08-26-sapporo-10.log
+      - name: Verify
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/recovered-2017-08-26-sapporo-10-meta.json').read_text())
+          assert m['recovered'] is True, m
+          assert m['syntheticOddsUsed'] is False
+          assert m['productionDatabaseWritten'] is False
+          rows=Path('analysis-results/recovered-2017-08-26-sapporo-10.jsonl').read_text().strip().splitlines()
+          assert len(rows)==1
+          row=json.loads(rows[0])
+          assert row['race']['raceDate']=='2017-08-26', row['race']
+          assert row['race']['venue']=='札幌', row['race']
+          assert row['race']['raceNo']==10, row['race']
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-targeted-recovery-2017-08-26-sapporo-10
+          path: |
+            analysis-results/recovered-2017-08-26-sapporo-10.jsonl
+            analysis-results/recovered-2017-08-26-sapporo-10-meta.json
+            recovered-2017-08-26-sapporo-10.log
+          if-no-files-found: error
+          retention-days: 30
+      - name: Mark success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='research/targeted-history-recovery-2017' \
+            -f description='Final blocked 2017 result recovered and validated' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='research/targeted-history-recovery-2017' \
+            -f description='Final blocked 2017 result still unresolved' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
