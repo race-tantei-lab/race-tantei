@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/research-repair-demanded-odds.yml"
       - "scripts/research-resolve-demanded-odds-failures.mjs"
+      - "scripts/research-fetch-resolved-demanded-official-odds.py"
   workflow_dispatch:
 
 permissions:
@@ -30,7 +31,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='research/ten-year-demanded-odds-repair' \
-            -f description='Resolving failed race URLs through JRA archive and refetching only failures' \
+            -f description='Resolving failed race URLs and refetching only failures' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - uses: actions/checkout@v4
@@ -99,7 +100,7 @@ jobs:
           count=$(find base-odds -name 'research-demanded-odds-*-meta.json' -type f | wc -l)
           test "$count" -eq 11
 
-      - name: Resolve all failed races to canonical JRA archive result URLs
+      - name: Resolve all failed races to official JRA result URLs
         shell: bash
         run: |
           set -euo pipefail
@@ -134,7 +135,7 @@ jobs:
           Path('analysis-results/research-demanded-odds-repair-meta.json').write_text(json.dumps(m,ensure_ascii=False,indent=2)+'\n')
           PY
           else
-            python scripts/research-fetch-demanded-official-odds.py \
+            python scripts/research-fetch-resolved-demanded-official-odds.py \
               --input analysis-results/research-demanded-odds-resolved-failures.jsonl \
               --workers 3 \
               --out analysis-results/research-demanded-odds-repair.jsonl \
@@ -158,7 +159,7 @@ jobs:
           assert r['syntheticOddsUsed'] is False and m['syntheticOddsUsed'] is False
           assert r['productionDatabaseWritten'] is False and m['productionDatabaseWritten'] is False
           assert r['productionModelChanged'] is False and m['productionModelChanged'] is False
-          print(json.dumps({'initialFailures':r['initialFailureCount'],'resolvedUrls':r['resolvedCount'],'repairedOdds':m['completedRaces'],'remainingFailures':len(m.get('failures',[]))},ensure_ascii=False))
+          print(json.dumps({'initialFailures':r['initialFailureCount'],'archiveResolved':r.get('archiveResolvedCount'),'currentDirectResolved':r.get('currentDirectResolvedCount'),'resolvedUrls':r['resolvedCount'],'repairedOdds':m['completedRaces'],'remainingFailures':len(m.get('failures',[]))},ensure_ascii=False))
           PY
 
       - uses: actions/upload-artifact@v4
@@ -179,7 +180,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='research/ten-year-demanded-odds-repair' \
-            -f description='All failed demanded odds races repaired through canonical JRA archive URLs' \
+            -f description='All failed demanded odds races repaired from official JRA sources' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Mark repair failure
@@ -188,5 +189,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='research/ten-year-demanded-odds-repair' \
-            -f description='Targeted demanded odds repair still needs URL/parser correction' \
+            -f description='Targeted demanded odds repair still needs parser correction' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
