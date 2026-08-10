@@ -6,6 +6,7 @@ on:
     branches: [research/ten-year-minimal-rules]
     paths:
       - ".github/workflows/research-recover-specific-2017.yml"
+      - "scripts/research-recover-specific-result.mjs"
   workflow_dispatch:
 
 permissions:
@@ -43,7 +44,7 @@ jobs:
           set -o pipefail
           node scripts/research-recover-specific-result.mjs \
             --url 'https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1001201702031020170826%2F06' \
-            --rounds 6 \
+            --rounds 4 \
             --out analysis-results/recovered-2017-08-26-sapporo-10.jsonl \
             --meta analysis-results/recovered-2017-08-26-sapporo-10-meta.json \
             | tee recovered-2017-08-26-sapporo-10.log
@@ -62,6 +63,7 @@ jobs:
           assert row['race']['raceDate']=='2017-08-26', row['race']
           assert row['race']['venue']=='札幌', row['race']
           assert row['race']['raceNo']==10, row['race']
+          print(json.dumps({'raceId':row['race']['raceId'],'recoveredMethod':m['recoveredMethod']},ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
         with:
