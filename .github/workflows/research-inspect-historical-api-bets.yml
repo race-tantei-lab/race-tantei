@@ -1,0 +1,54 @@
+name: Research inspect historical API bet fields
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - '.github/workflows/research-inspect-historical-api-bets.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/historical-api-bet-fields' \
+            -f description='Inspecting retained historical bet fields read-only' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Inspect representative Aug 2 race
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          curl --silent --show-error --fail --max-time 30 -A 'race-tantei-research/1.0' \
+            "$base/api/races/2026-08-02-chukyo-11" > /tmp/detail.json
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/detail.json'))
+          bets=d.get('bets') or []
+          pred=d.get('predictedRunners') or []
+          out={
+            'topKeys':sorted(d.keys()),
+            'betCount':len(bets),
+            'betKeys':sorted(bets[0].keys()) if bets else [],
+            'betSamples':bets[:3],
+            'predictedRunnerKeys':sorted(pred[0].keys()) if pred else [],
+            'predictedRunnerSample':pred[:2],
+          }
+          print(json.dumps(out,ensure_ascii=False,default=str))
+          PY
+      - name: Mark success
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/historical-api-bet-fields' \
+            -f description='Historical API bet field inspection complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
