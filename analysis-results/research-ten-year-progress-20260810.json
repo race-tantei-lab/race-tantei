@@ -1,0 +1,60 @@
+{
+  "recordedAt": "2026-08-10",
+  "researchOnly": true,
+  "productionDataChanged": false,
+  "verified": {
+    "productionD1CurrentRange": {
+      "firstDate": "2024-05-04",
+      "lastDate": "2026-08-09",
+      "raceCount": 7863
+    },
+    "jraArchiveReachability": {
+      "years": [2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],
+      "passedYears": 11,
+      "failedYears": 0
+    },
+    "officialHistoryPilot201605": {
+      "requestedRaces": 20,
+      "completedRaces": 20,
+      "failures": 0,
+      "syntheticOddsUsed": false,
+      "productionDatabaseWritten": false,
+      "officialOddsCoverage": {
+        "win": 1.0,
+        "umaren": 1.0,
+        "wide": 1.0,
+        "umatan": 1.0,
+        "trio": 1.0,
+        "trifecta": 0.9946820227194059
+      },
+      "parseMissPolicy": "exclude_without_estimation"
+    },
+    "ruleComplexityAudit": {
+      "sourceRuleCount": 316,
+      "exactDuplicateGroups": 0,
+      "dataIndependentSemanticallyDominatedRules": 19,
+      "behaviorEquivalentRuleCount": 297
+    }
+  },
+  "researchPolicy": {
+    "tenYearEvaluationStart": "2016-08-10",
+    "tenYearEvaluationEnd": "2026-08-09",
+    "warmupStart": "2015-01-01",
+    "hardGateRoiPctEachCourse": 200,
+    "priorityAfterPassingGate": [
+      "minimize_rule_count",
+      "minimize_total_predicate_count",
+      "forward_stability",
+      "reduce_largest_payout_dependency",
+      "overall_roi"
+    ],
+    "canonicalTransferIsDiagnosisOnly": true,
+    "honestModelRequiresWalkForwardDiscoveryAndPruning": true,
+    "historicalFinalOddsAndLivePrestartOddsAreDifferentEvidence": true
+  },
+  "inProgress": {
+    "fullMonthScaleTest": "2016-05 all discovered races, official results plus six official odds markets",
+    "workflowRun": 31349539777,
+    "statusAtRecord": "running"
+  }
+}
