@@ -6,7 +6,12 @@
     "productionD1CurrentRange": {
       "firstDate": "2024-05-04",
       "lastDate": "2026-08-09",
-      "raceCount": 7863
+      "raceCount": 7863,
+      "runnerRows": 107077,
+      "payoutRows": 92036,
+      "reuseAuditConclusion": "success",
+      "reuseMode": "read_only_research_reuse",
+      "productionRowsWrittenByAudit": 0
     },
     "jraArchiveReachability": {
       "years": [2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026],
@@ -48,6 +53,19 @@
       "workflowRun": 31349539777,
       "workflowConclusion": "success"
     },
+    "oldYearShardPass": {
+      "completeYears": [2018,2020,2021,2022,2023],
+      "singleRaceFailureYears": [2016,2017,2019],
+      "warmupSingleRaceFailureYears": [2015],
+      "knownCounts": {
+        "2016": {"requested":3454,"completed":3453,"failed":1},
+        "2017": {"requested":3455,"completed":3454,"failed":1},
+        "2018": {"requested":3454,"completed":3454,"failed":0},
+        "2019": {"requested":3452,"completed":3451,"failed":1}
+      },
+      "legacyRun": 31351748191,
+      "note": "The legacy run also queued 2024-2026 network refetches. Those duplicate outputs are no longer required by research and will not be used as the canonical recent segment."
+    },
     "ruleComplexityAudit": {
       "sourceRuleCount": 316,
       "exactDuplicateGroups": 0,
@@ -59,6 +77,8 @@
     "tenYearEvaluationStart": "2016-08-10",
     "tenYearEvaluationEnd": "2026-08-09",
     "warmupStart": "2015-01-01",
+    "newNetworkHistoricalFetchEnd": "2024-05-03",
+    "reuseExistingD1From": "2024-05-04",
     "hardGateRoiPctEachCourse": 200,
     "priorityAfterPassingGate": [
       "minimize_rule_count",
@@ -72,8 +92,9 @@
     "historicalFinalOddsAndLivePrestartOddsAreDifferentEvidence": true
   },
   "inProgress": {
-    "tenYearResultShards": "2015 warmup plus 2016-2026 official result history, year-sharded, max two years in parallel",
-    "workflowCommit": "9345fbb49354001f5604fcfcb0c1025c5fe23d97",
-    "nextAfterResults": "pre-odds candidate filtering, then fetch only required official odds markets"
+    "missingOldHistory": "Repair the one-race gaps in 2016, 2017 and 2019; 2015 has one warmup-only gap.",
+    "existingRecentSegment": "Read-only export of 2024-05-04 through 2026-08-09 from production D1 into research artifacts.",
+    "existingRecentSegmentWorkflowRun": 31358473953,
+    "nextAfterResults": "deduplicate on race_id, build ten-year normalized result/runner corpus, pre-odds candidate filtering, then fetch only required official odds markets"
   }
 }
