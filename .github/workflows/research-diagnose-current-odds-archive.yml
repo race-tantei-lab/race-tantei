@@ -12,11 +12,22 @@ permissions:
   contents: read
   statuses: write
 
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
 jobs:
   diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      - name: Mark diagnostic pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/recent-odds-route-diagnostic' \
+            -f description='Checking JRA entry HTML and odds-home route for Aug 1 historical odds' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -41,3 +52,19 @@ jobs:
           path: analysis-results/research-diagnose-current-odds-archive.json
           if-no-files-found: error
           retention-days: 14
+      - name: Mark diagnostic success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='research/recent-odds-route-diagnostic' \
+            -f description='Recent historical JRA odds route diagnostic completed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark diagnostic failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='research/recent-odds-route-diagnostic' \
+            -f description='Recent historical JRA odds diagnostic failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
