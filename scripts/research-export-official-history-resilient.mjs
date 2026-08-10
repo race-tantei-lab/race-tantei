@@ -23,6 +23,7 @@ const OUT = path.resolve(arg("--out", `analysis-results/research-history-${START
 const META = path.resolve(arg("--meta", `analysis-results/research-history-${START_MONTH}-${END_MONTH}-meta.json`));
 const CONCURRENCY = Math.max(1, Math.min(8, Number(arg("--concurrency", "2"))));
 const MAX_ATTEMPTS_PER_CALL = 4;
+const MONTH_DISCOVERY_ATTEMPTS = 8;
 const REPAIR_PASSES = 3;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -51,6 +52,28 @@ async function retry(fn) {
     catch (error) {
       last = error;
       if (attempt < MAX_ATTEMPTS_PER_CALL) await sleep(600 * attempt);
+    }
+  }
+  throw last;
+}
+
+async function discoverMonth(month) {
+  let last = null;
+  for (let attempt = 1; attempt <= MONTH_DISCOVERY_ATTEMPTS; attempt += 1) {
+    try {
+      const urls = await getArchiveResultUrls(month);
+      if (!Array.isArray(urls) || urls.length === 0) throw new Error(`NO_ARCHIVE_RESULTS:${month}`);
+      if (attempt > 1) console.log(JSON.stringify({ phase: "month-discovery-recovered", month, attempt, discovered: urls.length }));
+      return urls;
+    } catch (error) {
+      last = error;
+      console.log(JSON.stringify({
+        phase: "month-discovery-retry",
+        month,
+        attempt,
+        error: error instanceof Error ? `${error.name}:${error.message}` : String(error)
+      }));
+      if (attempt < MONTH_DISCOVERY_ATTEMPTS) await sleep(1800 * attempt);
     }
   }
   throw last;
@@ -109,7 +132,7 @@ async function main() {
   const months = monthsBetween(START_MONTH, END_MONTH);
   const monthRows = [];
   for (const month of months) {
-    const urls = await getArchiveResultUrls(month);
+    const urls = await discoverMonth(month);
     monthRows.push({ month, count: urls.length, urls });
     console.log(JSON.stringify({ month, discovered: urls.length }));
   }
@@ -161,6 +184,7 @@ async function main() {
     completed: ok.length,
     failures,
     concurrency: CONCURRENCY,
+    monthDiscoveryAttempts: MONTH_DISCOVERY_ATTEMPTS,
     repairPasses: REPAIR_PASSES,
     syntheticOddsUsed: false,
     productionDatabaseWritten: false
