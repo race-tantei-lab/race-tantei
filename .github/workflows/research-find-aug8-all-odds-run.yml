@@ -1,0 +1,39 @@
+name: Research find Aug8 all historical odds run
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths: ['.github/workflows/research-find-aug8-all-odds-run.yml']
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mark pending
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/aug8-all-odds-run' -f description='Finding Aug8 full official odds artifacts' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Find runs and artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate --method GET "repos/${GITHUB_REPOSITORY}/actions/runs" \
+            -f created='2026-08-08T00:00:00Z..2026-08-08T23:59:59Z' -f per_page=100 --slurp > /tmp/pages.json
+          jq -r '[.[][] .workflow_runs[]?] | .[] | select(.name=="Export all historical official odds sharded") | [.id,.status,.conclusion,.created_at,.updated_at,.head_sha] | @tsv' /tmp/pages.json | sort -k4,4 | tee /tmp/runs.tsv
+          while IFS=$'\t' read -r run status conclusion created updated sha; do
+            [ -n "$run" ] || continue
+            echo "=== RUN $run $created $conclusion ==="
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run}/artifacts?per_page=100" > /tmp/artifacts.json
+            jq -r '.artifacts[] | [.id,.name,.size_in_bytes,.expired,.created_at,.expires_at] | @tsv' /tmp/artifacts.json
+          done < /tmp/runs.tsv
+      - name: Mark success
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/aug8-all-odds-run' -f description='Aug8 full official odds artifact search complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
