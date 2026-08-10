@@ -165,12 +165,21 @@ def verify_year(year: int, checksums: dict[str, str], preferred_months: list[int
     page_checks = {}
     for bet_type, cname in tabs.items():
         page = first_html if bet_type == "単勝" else fetch(ODDS_URL, cname=cname, referer=ODDS_URL)
-        # Do not require exact historic markup. Require a real odds page with enough structure/content.
-        has_table = "<table" in page.lower()
-        has_digits = len(re.findall(r"\d+\.\d+", page)) >= 2
-        if not has_table or not has_digits:
+        # Historical JRA pages do not use one stable decimal layout for every market/year.
+        # Validate the real odds-page structure rather than requiring decimal text specifically.
+        lower = page.lower()
+        has_table = "<table" in lower
+        numeric_tokens = re.findall(r"\d+(?:,\d{3})*(?:\.\d+)?", page)
+        has_enough_numeric_content = len(numeric_tokens) >= 10
+        has_odds_context = any(token in page for token in ("オッズ", "人気", "馬番", "組合せ", "組み合わせ"))
+        if not has_table or not has_enough_numeric_content or not has_odds_context:
             raise RuntimeError(f"ODDS_PAGE_UNRECOGNIZED:{year}:{bet_type}")
-        page_checks[bet_type] = {"cname": cname, "table": has_table, "numericOdds": has_digits}
+        page_checks[bet_type] = {
+            "cname": cname,
+            "table": has_table,
+            "numericTokenCount": len(numeric_tokens),
+            "oddsContext": has_odds_context,
+        }
         time.sleep(0.2)
 
     return {
