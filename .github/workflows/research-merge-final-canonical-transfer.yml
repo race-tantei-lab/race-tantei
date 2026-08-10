@@ -1,0 +1,62 @@
+name: Research merge final canonical transfer
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - 'scripts/research-merge-final-canonical-transfer.py'
+      - '.github/workflows/research-merge-final-canonical-transfer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  BASE_ARTIFACT_ID: '9075089480'
+  CORRECTION_ARTIFACT_ID: '9075228796'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/ten-year-canonical-transfer-merged-final' \
+            -f description='Merging validated final race into 14,409-race canonical result' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Download validated components
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p base-result correction
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${BASE_ARTIFACT_ID}/zip" > base.zip
+          unzip -q base.zip -d base-result
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${CORRECTION_ARTIFACT_ID}/zip" > correction.zip
+          unzip -q correction.zip -d correction
+          test -s base-result/research-canonical-297-ten-year-transfer.json
+          test -s correction/research-final-missing-race.json
+      - name: Merge and verify final result
+        run: |
+          set -euo pipefail
+          python scripts/research-merge-final-canonical-transfer.py \
+            --base-result base-result/research-canonical-297-ten-year-transfer.json \
+            --correction correction/research-final-missing-race.json \
+            --out analysis-results/research-canonical-297-ten-year-transfer-final-merged.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-canonical-297-ten-year-transfer-final
+          path: analysis-results/research-canonical-297-ten-year-transfer-final-merged.json
+          retention-days: 30
+      - name: Mark success
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/ten-year-canonical-transfer-merged-final' \
+            -f description='Final 14,410-race canonical transfer result verified' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
