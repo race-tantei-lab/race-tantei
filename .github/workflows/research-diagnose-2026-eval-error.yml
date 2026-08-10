@@ -1,0 +1,81 @@
+name: Research diagnose 2026 transfer error
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-diagnose-2026-eval-error.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  DEMAND_RUN_ID: '31373103782'
+  ODDS_2026_ARTIFACT_ID: '9063550877'
+  PARTIAL_REPAIR_ARTIFACT_ID: '9067680353'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Mark diagnostic pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/2026-transfer-error-diagnostic' \
+            -f description='Locating the single 2026 transfer evaluation error' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Download 2026 diagnostic inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history demand odds repair
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip -d history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEMAND_RUN_ID}/artifacts?per_page=100" > demand-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-ten-year-canonical-demand" and .expired==false) | .id' demand-artifacts.json | head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ODDS_2026_ARTIFACT_ID}/zip" > odds.zip
+          unzip -q odds.zip -d odds
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PARTIAL_REPAIR_ARTIFACT_ID}/zip" > repair.zip
+          unzip -q repair.zip -d repair
+      - name: Run 2026 evaluation and print exact errors
+        shell: bash
+        run: |
+          set +e
+          python scripts/research-evaluate-canonical-transfer-year.py \
+            --year 2026 \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --demand demand/research-ten-year-canonical-demand.jsonl \
+            --rules demand/research-canonical-rules-297.json \
+            --odds odds/research-demanded-odds-2026.jsonl \
+            --repair repair/research-demanded-odds-repair.jsonl \
+            --out analysis-results/research-canonical-transfer-2026-diagnostic.json
+          code=$?
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-canonical-transfer-2026-diagnostic.json').read_text())
+          print(json.dumps({'evaluationErrors':m['evaluationErrors'],'missingOddsRaceIds':m['missingOddsRaceIds']},ensure_ascii=False))
+          assert m['evaluationErrorCount']==1,m
+          PY
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-canonical-transfer-2026-diagnostic
+          path: analysis-results/research-canonical-transfer-2026-diagnostic.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Mark diagnostic success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/2026-transfer-error-diagnostic' \
+            -f description='Single 2026 transfer evaluation error identified' -f target_url="$STATUS_TARGET_URL" >/dev/null
