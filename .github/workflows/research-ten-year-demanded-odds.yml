@@ -1,0 +1,220 @@
+name: Research ten-year demanded official odds
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-ten-year-demanded-odds.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  DEMAND_RUN_ID: '31373103782'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Mark odds research pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/ten-year-demanded-odds' \
+            -f description='Waiting for demand scan then fetching only required official odds' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - name: Wait for canonical demand run
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEMAND_RUN_ID}" --jq '.status')
+            conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEMAND_RUN_ID}" --jq '.conclusion // ""')
+            echo "demand run: status=$status conclusion=$conclusion poll=$i"
+            if [ "$status" = "completed" ]; then
+              test "$conclusion" = "success"
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "demand run timeout"
+          exit 1
+
+      - name: Download canonical demand artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEMAND_RUN_ID}/artifacts?per_page=100" > artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-ten-year-canonical-demand" and .expired==false) | .id' artifacts.json | head -n1)
+          test -n "$id" && test "$id" != "null"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+          test -s demand/research-ten-year-canonical-demand.jsonl
+          test -s demand/research-ten-year-canonical-demand-meta.json
+          test -s demand/research-canonical-rules-297.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('demand/research-ten-year-canonical-demand-meta.json').read_text())
+          assert d['evaluationRaceCount']==34566,d
+          assert d['sourceRuleCount']==297,d
+          assert d['selectedRaces']==d['venueDays']*5,d
+          assert d['structuralCancellationExceptions']==[{'date':'2020-03-29','venue':'中山','eligible':2}],d
+          assert d['targetDayResultsUsedForSelection'] is False,d
+          assert d['syntheticOddsUsed'] is False,d
+          assert d['productionDatabaseWritten'] is False,d
+          print(json.dumps(d,ensure_ascii=False))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-canonical-demand-ready
+          path: demand/*
+          if-no-files-found: error
+          retention-days: 30
+
+  odds:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        year: ['2016','2017','2018','2019','2020','2021','2022','2023','2024','2025','2026']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install research parser dependency
+        run: pip install beautifulsoup4==4.13.4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-canonical-demand-ready
+          path: demand
+
+      - name: Fetch demanded official final odds for ${{ matrix.year }}
+        run: |
+          set -euo pipefail
+          python scripts/research-fetch-demanded-official-odds.py \
+            --input demand/research-ten-year-canonical-demand.jsonl \
+            --year '${{ matrix.year }}' \
+            --workers 3 \
+            --out analysis-results/research-demanded-odds-${{ matrix.year }}.jsonl \
+            --meta analysis-results/research-demanded-odds-${{ matrix.year }}-meta.json
+
+      - name: Verify shard provenance
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          year=os.environ['YEAR']
+          m=json.loads(Path(f'analysis-results/research-demanded-odds-{year}-meta.json').read_text())
+          assert m['year']==year,m
+          assert m['inputDemandRaces']>0,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          assert m['productionModelChanged'] is False,m
+          print(json.dumps({'year':year,'input':m['inputDemandRaces'],'completed':m['completedRaces'],'failures':len(m['failures']),'coverage':m['coverage']},ensure_ascii=False))
+          PY
+        env:
+          YEAR: ${{ matrix.year }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-demanded-odds-${{ matrix.year }}
+          path: |
+            analysis-results/research-demanded-odds-${{ matrix.year }}.jsonl
+            analysis-results/research-demanded-odds-${{ matrix.year }}-meta.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  summarize:
+    needs: odds
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: research-demanded-odds-*
+          path: odds-shards
+          merge-multiple: true
+
+      - name: Summarize official odds coverage and failures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          markets=('win','umaren','wide','umatan','trio','trifecta')
+          metas=[]
+          for p in sorted(Path('odds-shards').glob('research-demanded-odds-*-meta.json')):
+            metas.append(json.loads(p.read_text()))
+          assert len(metas)==11,len(metas)
+          total_input=sum(m['inputDemandRaces'] for m in metas)
+          total_completed=sum(m['completedRaces'] for m in metas)
+          failures=[x for m in metas for x in m['failures']]
+          demanded={k:sum(int(m['demandedRacesByMarket'].get(k,0)) for m in metas) for k in markets}
+          # Weight coverage by successfully parsed combinations where available.
+          by_year={str(m['year']):{'input':m['inputDemandRaces'],'completed':m['completedRaces'],'failures':len(m['failures']),'coverage':m['coverage']} for m in metas}
+          summary={
+            'purpose':'research_only_selective_official_final_odds_summary',
+            'years':[str(m['year']) for m in metas],
+            'inputDemandRaces':total_input,
+            'completedRaces':total_completed,
+            'failureCount':len(failures),
+            'failures':failures,
+            'demandedRacesByMarket':demanded,
+            'byYear':by_year,
+            'syntheticOddsUsed':False,
+            'productionDatabaseWritten':False,
+            'productionModelChanged':False,
+          }
+          Path('analysis-results').mkdir(exist_ok=True)
+          Path('analysis-results/research-demanded-odds-summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(summary,ensure_ascii=False))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-demanded-odds-summary
+          path: analysis-results/research-demanded-odds-summary.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Mark odds research success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='research/ten-year-demanded-odds' \
+            -f description='Demanded official odds shards completed; inspect summary for targeted repairs' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Mark odds research failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='research/ten-year-demanded-odds' \
+            -f description='Demanded odds workflow requires targeted repair' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
