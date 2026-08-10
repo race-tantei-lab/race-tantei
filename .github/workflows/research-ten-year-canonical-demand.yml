@@ -84,7 +84,7 @@ jobs:
           assert d['evaluationRaceCount']==34566,d
           assert d['sourceRuleCount']==297,d
           assert d['selectedRaces']==d['venueDays']*5,d
-          assert not d['venueDaysBelowFive'],d
+          assert d['structuralCancellationExceptions']==[{'date':'2020-03-29','venue':'中山','eligible':2}],d
           assert d['targetDayResultsUsedForSelection'] is False,d
           assert d['syntheticOddsUsed'] is False,d
           assert d['productionDatabaseWritten'] is False,d
