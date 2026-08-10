@@ -41,7 +41,7 @@ function normalizedCname(url) {
   return cnameFromUrl(url).toLowerCase().replace(/^sw/, "pw");
 }
 
-function expectedPrefix(race) {
+function expectedIdentity(race) {
   const venueCode = VENUE_CODE[race.venue];
   if (!venueCode) throw new Error(`VENUE_CODE_NOT_FOUND:${race.venue}`);
   if (race.meetingNo == null || race.meetingDay == null) {
@@ -49,7 +49,25 @@ function expectedPrefix(race) {
   }
   const compactDate = String(race.raceDate).replace(/-/g, "");
   const year = String(race.raceDate).slice(0, 4);
-  return `pw01sde10${venueCode}${year}${pad2(race.meetingNo)}${pad2(race.meetingDay)}${pad2(race.raceNo)}${compactDate}`.toLowerCase();
+  return `${venueCode}${year}${pad2(race.meetingNo)}${pad2(race.meetingDay)}${pad2(race.raceNo)}${compactDate}`.toLowerCase();
+}
+
+function expectedArchivePrefix(race) {
+  return `pw01sde10${expectedIdentity(race)}`;
+}
+
+function validateAndNormalizeDirectResultUrl(url, race) {
+  const cname = cnameFromUrl(url);
+  const match = cname.match(/^(?:pw|sw)01sde(?:01|10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})(?:\/([0-9a-f]{2}))?$/i);
+  if (!match) throw new Error(`DIRECT_RESULT_CNAME_INVALID:${race.raceId}:${cname}`);
+  const [, venue, year, meeting, day, raceNo, ymd] = match;
+  const actualIdentity = `${venue}${year}${meeting}${day}${raceNo}${ymd}`.toLowerCase();
+  const wanted = expectedIdentity(race);
+  if (actualIdentity !== wanted) {
+    throw new Error(`DIRECT_RESULT_IDENTITY_MISMATCH:${race.raceId}:${actualIdentity}:${wanted}`);
+  }
+  const desktopCname = cname.replace(/^sw/i, "pw");
+  return `https://www.jra.go.jp/JRADB/accessS.html?CNAME=${encodeURIComponent(desktopCname)}`;
 }
 
 async function findMetaFiles(dir) {
@@ -92,6 +110,8 @@ async function main() {
 
   const resolved = [];
   const unresolved = [];
+  let archiveResolved = 0;
+  let currentDirectResolved = 0;
   for (const rid of [...failures.keys()].sort()) {
     try {
       const demand = demandById.get(rid);
@@ -99,16 +119,28 @@ async function main() {
       if (!demand) throw new Error(`DEMAND_ROW_MISSING:${rid}`);
       if (!race) throw new Error(`CORPUS_RACE_MISSING:${rid}`);
       const month = String(race.raceDate).slice(0, 7).replace("-", "");
-      const urls = await monthUrls(month);
-      const prefix = expectedPrefix(race);
-      const matches = urls.filter((url) => normalizedCname(url).startsWith(prefix));
-      if (matches.length !== 1) {
-        throw new Error(`ARCHIVE_RACE_URL_MATCH:${rid}:count=${matches.length}:prefix=${prefix}`);
+      let resolvedUrl = null;
+      let resolutionMethod = null;
+      try {
+        const urls = await monthUrls(month);
+        const prefix = expectedArchivePrefix(race);
+        const matches = urls.filter((url) => normalizedCname(url).startsWith(prefix));
+        if (matches.length !== 1) {
+          throw new Error(`ARCHIVE_RACE_URL_MATCH:${rid}:count=${matches.length}:prefix=${prefix}`);
+        }
+        resolvedUrl = matches[0];
+        resolutionMethod = "jra_month_archive";
+        archiveResolved += 1;
+      } catch (archiveError) {
+        const direct = validateAndNormalizeDirectResultUrl(demand.resultUrl ?? "", race);
+        resolvedUrl = direct;
+        resolutionMethod = "validated_current_direct_desktop";
+        currentDirectResolved += 1;
       }
       resolved.push({
         ...demand,
-        resultUrl: matches[0],
-        archiveResolvedResultUrl: true,
+        resultUrl: resolvedUrl,
+        resultUrlResolutionMethod: resolutionMethod,
         originalResultUrl: demand.resultUrl ?? null,
         syntheticOddsUsed: false,
         productionDatabaseWritten: false,
@@ -126,12 +158,14 @@ async function main() {
   await mkdir(path.dirname(OUT), { recursive: true });
   await writeFile(OUT, resolved.map((row) => JSON.stringify(row)).join("\n") + (resolved.length ? "\n" : ""));
   const meta = {
-    purpose: "research_only_resolve_failed_odds_urls_via_jra_archive",
+    purpose: "research_only_resolve_failed_odds_urls_via_jra_official_sources",
     initialFailureCount: failures.size,
     resolvedCount: resolved.length,
+    archiveResolvedCount: archiveResolved,
+    currentDirectResolvedCount: currentDirectResolved,
     unresolvedCount: unresolved.length,
     unresolved,
-    archiveMonthsFetched: [...monthCache.keys()].sort(),
+    archiveMonthsAttempted: [...monthCache.keys()].sort(),
     syntheticOddsUsed: false,
     productionDatabaseWritten: false,
     productionModelChanged: false
