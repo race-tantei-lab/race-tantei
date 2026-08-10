@@ -1,4 +1,5 @@
 # Research-only repair. Never writes to production.
+# Month discovery is retried because JRA archive meeting pages can fail transiently.
 name: Research repair missing history
 
 on:
