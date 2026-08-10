@@ -1,0 +1,147 @@
+name: Research enrich historical race metadata
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-enrich-history-metadata.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  begin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark metadata enrichment pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/ten-year-history-metadata' \
+            -f description='Repairing legacy JRA race metadata without refetching results' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+  enrich:
+    needs: begin
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - { shard: '2015', artifact_id: '9053085715', start: '2015-01-01', end: '2015-12-31' }
+          - { shard: '2016', artifact_id: '9053082280', start: '2016-01-01', end: '2016-12-31' }
+          - { shard: '2017', artifact_id: '9053169865', start: '2017-01-01', end: '2017-12-31' }
+          - { shard: '2018', artifact_id: '9050203578', start: '2018-01-01', end: '2018-12-31' }
+          - { shard: '2019', artifact_id: '9053061754', start: '2019-01-01', end: '2019-12-31' }
+          - { shard: '2020', artifact_id: '9050594656', start: '2020-01-01', end: '2020-12-31' }
+          - { shard: '2021', artifact_id: '9050848258', start: '2021-01-01', end: '2021-12-31' }
+          - { shard: '2022', artifact_id: '9051148326', start: '2022-01-01', end: '2022-12-31' }
+          - { shard: '2023', artifact_id: '9051365961', start: '2023-01-01', end: '2023-12-31' }
+          - { shard: '2024-01-05-03', artifact_id: '9051613640', start: '2024-01-01', end: '2024-05-03' }
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install and build parsers
+        run: |
+          npm ci
+          npm run build:test
+      - name: Download existing history artifact
+        env:
+          ARTIFACT_ID: ${{ matrix.artifact_id }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" > source.zip
+          mkdir -p source
+          unzip -q source.zip -d source
+          if [ "$SHARD" = "2024-01-05-03" ]; then
+            test -s source/analysis-results/history-2024.jsonl
+          else
+            test -s "source/analysis-results/history-${SHARD}.jsonl"
+          fi
+      - name: Enrich legacy metadata for ${{ matrix.shard }}
+        id: enrich
+        continue-on-error: true
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+          START_DATE: ${{ matrix.start }}
+          END_DATE: ${{ matrix.end }}
+        run: |
+          set -o pipefail
+          if [ "$SHARD" = "2024-01-05-03" ]; then INPUT="source/analysis-results/history-2024.jsonl"; else INPUT="source/analysis-results/history-${SHARD}.jsonl"; fi
+          node scripts/research-enrich-history-metadata.mjs \
+            --input "$INPUT" \
+            --out "analysis-results/history-${SHARD}-metadata.jsonl" \
+            --meta "analysis-results/history-${SHARD}-metadata-meta.json" \
+            --start-date "$START_DATE" \
+            --end-date "$END_DATE" \
+            --concurrency 3 \
+            | tee "history-${SHARD}-metadata.log"
+      - name: Verify metadata shard is complete
+        if: always()
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          shard=os.environ['SHARD']
+          p=Path(f'analysis-results/history-{shard}-metadata-meta.json')
+          assert p.exists(), f'meta missing: {shard}'
+          m=json.loads(p.read_text())
+          assert m['selectedRows'] > 500, m
+          assert m['outputRows'] == m['selectedRows'], m
+          assert not m['failures'], m['failures'][:5]
+          assert not m['incompleteRaceIds'], m['incompleteRaceIds'][:10]
+          assert m['syntheticOddsUsed'] is False
+          assert m['productionDatabaseWritten'] is False
+          print(json.dumps({'shard':shard,'rows':m['outputRows'],'failures':0,'incomplete':0,'productionWrite':False},ensure_ascii=False))
+          PY
+      - name: Upload enriched metadata shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-metadata-${{ matrix.shard }}
+          path: |
+            analysis-results/history-${{ matrix.shard }}-metadata.jsonl
+            analysis-results/history-${{ matrix.shard }}-metadata-meta.json
+            history-${{ matrix.shard }}-metadata.log
+          if-no-files-found: error
+          retention-days: 30
+
+  finish:
+    if: always()
+    needs: enrich
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish metadata enrichment status
+        env:
+          RESULT: ${{ needs.enrich.result }}
+        run: |
+          if [ "$RESULT" = "success" ]; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=success \
+              -f context='research/ten-year-history-metadata' \
+              -f description='Legacy race metadata repaired for all research shards' \
+              -f target_url="$STATUS_TARGET_URL" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=failure \
+              -f context='research/ten-year-history-metadata' \
+              -f description='At least one metadata shard needs targeted repair' \
+              -f target_url="$STATUS_TARGET_URL" >/dev/null
+            exit 1
+          fi
