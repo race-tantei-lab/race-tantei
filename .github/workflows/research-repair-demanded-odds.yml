@@ -1,5 +1,5 @@
 name: Research repair demanded official odds
-# Research-only targeted repair. Current-month JRA result CNAME layouts are normalized before refetch.
+# Research only. Network-repair current pages first, then fill only residual failures from the audited Aug 8 official archive.
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
       - ".github/workflows/research-repair-demanded-odds.yml"
       - "scripts/research-resolve-demanded-odds-failures.mjs"
       - "scripts/research-fetch-resolved-demanded-official-odds.py"
+      - "scripts/research-merge-demanded-odds-archive-repair.py"
   workflow_dispatch:
 
 permissions:
@@ -20,6 +21,7 @@ env:
   DEMAND_RUN_ID: '31373103782'
   ODDS_RUN_ID: '31373205723'
   HISTORY_ARTIFACT_ID: '9056288221'
+  AUDITED_ODDS_ARCHIVE_ARTIFACT_ID: '9018047154'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
@@ -32,7 +34,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='research/ten-year-demanded-odds-repair' \
-            -f description='Resolving failed race URLs and refetching only failures' \
+            -f description='Repairing odds gaps from official JRA network and audited archive' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - uses: actions/checkout@v4
@@ -143,6 +145,38 @@ jobs:
               --meta analysis-results/research-demanded-odds-repair-meta.json
           fi
 
+      - name: Download audited Aug 8 official odds archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audited-archive
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${AUDITED_ODDS_ARCHIVE_ARTIFACT_ID}/zip" > audited-archive.zip
+          unzip -q audited-archive.zip -d audited-archive
+          test -s audited-archive/all7695-official-odds.jsonl.gz
+          test -s audited-archive/input-meta.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('audited-archive/input-meta.json').read_text())
+          assert int(m['races'])==7695 and int(m['uniqueOddsRaces'])==7695,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['estimatedOddsUsed'] is False,m
+          assert m['outcomeBasedRaceFiltering'] is False,m
+          print(json.dumps({'archiveRaces':m['races'],'coveragePct':m['coveragePct'],'synthetic':m['syntheticOddsUsed'],'estimated':m['estimatedOddsUsed']},ensure_ascii=False))
+          PY
+
+      - name: Fill residual failures from audited official archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/research-merge-demanded-odds-archive-repair.py \
+            --current-jsonl analysis-results/research-demanded-odds-repair.jsonl \
+            --current-meta analysis-results/research-demanded-odds-repair-meta.json \
+            --archive-gz audited-archive/all7695-official-odds.jsonl.gz \
+            --archive-meta audited-archive/input-meta.json \
+            --out-jsonl analysis-results/research-demanded-odds-repair.jsonl \
+            --out-meta analysis-results/research-demanded-odds-repair-meta.json
+
       - name: Verify repair is complete and research-only
         shell: bash
         run: |
@@ -157,10 +191,20 @@ jobs:
           assert not m.get('failures'),m
           assert int(m.get('inputDemandRaces') or 0)==r['resolvedCount'],(r,m)
           assert int(m.get('completedRaces') or 0)==r['resolvedCount'],(r,m)
+          assert int(m.get('networkRepairedRaces') or 0)+int(m.get('archiveRepairedRaces') or 0)==r['resolvedCount'],(r,m)
+          assert int(m.get('archiveArtifactId') or 0)==9018047154,m
           assert r['syntheticOddsUsed'] is False and m['syntheticOddsUsed'] is False
+          assert m['estimatedOddsUsed'] is False,m
           assert r['productionDatabaseWritten'] is False and m['productionDatabaseWritten'] is False
           assert r['productionModelChanged'] is False and m['productionModelChanged'] is False
-          print(json.dumps({'initialFailures':r['initialFailureCount'],'archiveResolved':r.get('archiveResolvedCount'),'currentDirectResolved':r.get('currentDirectResolvedCount'),'resolvedUrls':r['resolvedCount'],'repairedOdds':m['completedRaces'],'remainingFailures':len(m.get('failures',[]))},ensure_ascii=False))
+          print(json.dumps({
+            'initialFailures':r['initialFailureCount'],
+            'networkRepaired':m['networkRepairedRaces'],
+            'archiveRepaired':m['archiveRepairedRaces'],
+            'repairedOdds':m['completedRaces'],
+            'remainingFailures':len(m.get('failures',[])),
+            'archiveArtifactId':m['archiveArtifactId']
+          },ensure_ascii=False))
           PY
 
       - uses: actions/upload-artifact@v4
@@ -181,7 +225,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='research/ten-year-demanded-odds-repair' \
-            -f description='All failed demanded odds races repaired from official JRA sources' \
+            -f description='All demanded odds gaps repaired from official JRA sources with zero synthetic odds' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Mark repair failure
@@ -190,5 +234,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='research/ten-year-demanded-odds-repair' \
-            -f description='Targeted demanded odds repair still needs parser correction' \
+            -f description='Targeted demanded odds repair still needs correction' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
