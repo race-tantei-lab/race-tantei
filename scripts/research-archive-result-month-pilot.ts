@@ -23,7 +23,7 @@ function decodePage(buffer: ArrayBuffer, contentType: string | null): string {
 
 async function fetchHtml(url: string): Promise<string> {
   let lastError: unknown = null;
-  for (let attempt = 1; attempt <= 4; attempt += 1) {
+  for (let attempt = 1; attempt <= 7; attempt += 1) {
     try {
       const response = await fetch(url, {
         headers: { "User-Agent": USER_AGENT, "Accept-Language": "ja-JP,ja;q=0.9", Referer: "https://www.jra.go.jp/" },
@@ -39,7 +39,11 @@ async function fetchHtml(url: string): Promise<string> {
       return html;
     } catch (error) {
       lastError = error;
-      await new Promise((resolveDelay) => setTimeout(resolveDelay, attempt * 800));
+      const message = error instanceof Error ? error.message : String(error);
+      const delay = message.includes("BLOCKED_PAGE") || /HTTP_(429|5\d\d)/.test(message)
+        ? Math.min(20_000, 2_500 * attempt)
+        : Math.min(8_000, 800 * attempt);
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, delay));
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
@@ -145,7 +149,7 @@ async function main(): Promise<void> {
       }
       races.push({ ...id, raceKey: key, sourceUrl: url, runners: parsedRunners, results: parsedResults, payouts });
       if ((races.length % 50) === 0) console.log(JSON.stringify({ progress: races.length, totalUrls: urls.length }));
-      await new Promise((resolveDelay) => setTimeout(resolveDelay, 180));
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 260));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       errors.push(`${url}:${message}`);
