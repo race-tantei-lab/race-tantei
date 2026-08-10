@@ -1,0 +1,43 @@
+name: Research diagnose recent historical odds route
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-diagnose-current-odds-archive.yml"
+      - "scripts/research-diagnose-current-odds-archive.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Diagnose 2026-08-01 Chukyo 3R official odds routes
+        env:
+          CLOUDFLARE_ACCOUNT_ID: research-unused
+          CLOUDFLARE_D1_DATABASE_ID: research-unused
+          CLOUDFLARE_API_TOKEN: research-unused
+        run: |
+          set -euo pipefail
+          python scripts/research-diagnose-current-odds-archive.py \
+            --entry-url 'https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde1007202602030320260801/77' \
+            --date 2026-08-01 \
+            --venue 中京 \
+            --race-no 3 \
+            --max-pages 220 \
+            --out analysis-results/research-diagnose-current-odds-archive.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-diagnose-current-odds-archive
+          path: analysis-results/research-diagnose-current-odds-archive.json
+          if-no-files-found: error
+          retention-days: 14
