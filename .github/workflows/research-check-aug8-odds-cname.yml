@@ -20,32 +20,51 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Mark pending
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/aug8-odds-cname-check' -f description='Checking dde10 to odds checksum on live JRA page' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/aug8-odds-cname-check' -f description='Checking dde10 all-market odds checksums on live JRA page' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Check JRA links
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import html,re,urllib.request
+          import html,re,urllib.parse,urllib.request,http.cookiejar
+          jar=http.cookiejar.CookieJar(); opener=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+          headers={'User-Agent':'Mozilla/5.0','Accept-Language':'ja-JP,ja;q=0.9'}
+          odds_url='https://www.jra.go.jp/JRADB/accessO.html'
           cases=[
             ('2026-08-08-sapporo-01','https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde1001202601050120260808/A4'),
             ('2026-08-09-chukyo-01','https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602060120260809/E2'),
           ]
+          pat=re.compile(r'(?:pw|sw)15[145678]ou[^\"\'<> ]+/[0-9A-Fa-f]{2}',re.I)
           for rid,url in cases:
-            req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'ja-JP,ja;q=0.9'})
-            raw=urllib.request.urlopen(req,timeout=30).read()
-            text=raw.decode('shift_jis','replace')
-            cnames=[]
-            for m in re.finditer(r'(?:pw|sw)15[145678]ou[^\"\'<> ]+/[0-9A-Fa-f]{2}',html.unescape(text),re.I):
+            req=urllib.request.Request(url,headers=headers)
+            text=opener.open(req,timeout=30).read().decode('shift_jis','replace')
+            entry_links=[]
+            for m in pat.finditer(html.unescape(text)):
               c=m.group(0)
-              if c not in cnames: cnames.append(c)
+              if c not in entry_links: entry_links.append(c)
             dde=int(url[-2:],16)
-            print(rid,'dde',f'{dde:02X}','links',cnames[:20])
-            for c in cnames:
+            print(rid,'dde',f'{dde:02X}','entryLinks',entry_links)
+            if not entry_links: continue
+            win=next((c for c in entry_links if re.match(r'(?:pw|sw)151ou',c,re.I)),None)
+            if not win: continue
+            data=urllib.parse.urlencode({'cname':win}).encode('ascii')
+            req2=urllib.request.Request(odds_url,data=data,headers={**headers,'Content-Type':'application/x-www-form-urlencoded','Referer':url},method='POST')
+            win_text=opener.open(req2,timeout=30).read().decode('shift_jis','replace')
+            all_links=list(entry_links)
+            for m in pat.finditer(html.unescape(win_text)):
+              c=m.group(0)
+              if c not in all_links: all_links.append(c)
+            print(rid,'allLinks',all_links)
+            by_code={}
+            for c in all_links:
               code=re.match(r'(?:pw|sw)(15[145678])ou',c,re.I)
               if not code: continue
+              k=code.group(1)
+              if k in by_code: continue
               suffix=int(c[-2:],16)
-              print('delta',code.group(1),(suffix-dde)%256,'cname',c)
+              by_code[k]=((suffix-dde)%256,c)
+            print(rid,'deltas',{k:v[0] for k,v in by_code.items()})
+            for k,v in sorted(by_code.items()): print('delta',rid,k,v[0],v[1])
           PY
       - name: Mark success
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/aug8-odds-cname-check' -f description='dde10 odds checksum check complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/aug8-odds-cname-check' -f description='dde10 all-market odds checksum check complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
