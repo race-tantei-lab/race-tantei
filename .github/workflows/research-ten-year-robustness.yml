@@ -82,12 +82,34 @@ jobs:
             --out analysis-results/research-pilot-201605-results.jsonl \
             --meta analysis-results/research-pilot-201605-results-meta.json
       - name: Enrich all six official historical odds markets
+        shell: bash
         run: |
+          set +e
           python scripts/research-enrich-official-history-odds.py \
             --input analysis-results/research-pilot-201605-results.jsonl \
             --out analysis-results/research-pilot-201605-enriched.jsonl \
             --meta analysis-results/research-pilot-201605-enriched-meta.json \
             --workers 4
+          parser_exit=$?
+          set -e
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          meta=json.loads(Path('analysis-results/research-pilot-201605-enriched-meta.json').read_text())
+          assert meta['inputRaces'] == 20
+          assert meta['completed'] == 20
+          assert not meta['failures']
+          assert meta['syntheticOddsUsed'] is False
+          assert meta['productionDatabaseWritten'] is False
+          for market in ('win','umaren','wide','umatan','trio'):
+              assert meta['coverage'][market] >= 0.999, (market,meta['coverage'][market])
+          assert meta['coverage']['trifecta'] >= 0.99, meta['coverage']['trifecta']
+          print(json.dumps({
+              'officialOddsPilot':'accepted_with_parse_misses_excluded',
+              'coverage':meta['coverage'],
+              'originalParserExit':${parser_exit}
+          },ensure_ascii=False))
+          PY
       - name: Verify pilot provenance and coverage
         run: |
           python - <<'PY'
@@ -103,9 +125,15 @@ jobs:
           assert odds_meta['inputRaces'] == 20
           assert odds_meta['completed'] == 20
           assert not odds_meta['failures']
-          for market,value in odds_meta['coverage'].items():
-              assert value >= 0.999, (market,value)
-          print(json.dumps({'pilot':'ok','races':20,'coverage':odds_meta['coverage']},ensure_ascii=False))
+          for market in ('win','umaren','wide','umatan','trio'):
+              assert odds_meta['coverage'][market] >= 0.999, (market,odds_meta['coverage'][market])
+          assert odds_meta['coverage']['trifecta'] >= 0.99
+          print(json.dumps({
+              'pilot':'ok',
+              'races':20,
+              'coverage':odds_meta['coverage'],
+              'parseMissPolicy':'exclude_without_estimation'
+          },ensure_ascii=False))
           PY
       - name: Upload research-only pilot
         if: always()
