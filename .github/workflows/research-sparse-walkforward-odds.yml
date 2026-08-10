@@ -1,0 +1,139 @@
+name: Research sparse walk-forward official odds
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-sparse-walkforward-odds.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  DISCOVERY_RUN_ID: '31406751562'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 190
+    steps:
+      - name: Mark sparse odds pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/sparse-walk-forward-odds' \
+            -f description='Waiting for sparse discovery then fetching required official odds' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Wait for sparse discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 360); do
+            s=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DISCOVERY_RUN_ID}" --jq '.status')
+            c=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DISCOVERY_RUN_ID}" --jq '.conclusion // ""')
+            echo "discovery status=$s conclusion=$c poll=$i"
+            if [ "$s" = completed ]; then test "$c" = success; exit 0; fi
+            sleep 30
+          done
+          exit 1
+      - name: Download sparse demand
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DISCOVERY_RUN_ID}/artifacts?per_page=100" > a.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-sparse-walkforward-discovery" and .expired==false) | .id' a.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > d.zip
+          unzip -q d.zip -d demand
+          test -s demand/research-sparse-walkforward-demand.jsonl
+          test -s demand/research-sparse-walkforward-rules.json
+          test -s demand/research-sparse-walkforward-meta.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-sparse-demand-ready
+          path: demand/*
+          if-no-files-found: error
+          retention-days: 30
+
+  odds:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        year: ['2016','2017','2018','2019','2020','2021','2022','2023','2024','2025','2026']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install beautifulsoup4==4.13.4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-sparse-demand-ready
+          path: demand
+      - name: Fetch required official odds
+        run: |
+          set -euo pipefail
+          python scripts/research-fetch-demanded-official-odds.py \
+            --input demand/research-sparse-walkforward-demand.jsonl \
+            --year '${{ matrix.year }}' --workers 3 \
+            --out analysis-results/research-sparse-odds-${{ matrix.year }}.jsonl \
+            --meta analysis-results/research-sparse-odds-${{ matrix.year }}-meta.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-sparse-odds-${{ matrix.year }}
+          path: |
+            analysis-results/research-sparse-odds-${{ matrix.year }}.jsonl
+            analysis-results/research-sparse-odds-${{ matrix.year }}-meta.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  summarize:
+    needs: odds
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: research-sparse-odds-*
+          path: shards
+          merge-multiple: true
+      - name: Summarize sparse odds coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          ms=[json.loads(p.read_text()) for p in sorted(Path('shards').glob('research-sparse-odds-*-meta.json'))]
+          assert len(ms)==11,len(ms)
+          out={'purpose':'research_only_sparse_walkforward_official_odds_summary','inputRaces':sum(m['inputDemandRaces'] for m in ms),'completedRaces':sum(m['completedRaces'] for m in ms),'failureCount':sum(len(m['failures']) for m in ms),'failures':[x for m in ms for x in m['failures']],'byYear':{str(m['year']):{'input':m['inputDemandRaces'],'completed':m['completedRaces'],'failures':len(m['failures']),'coverage':m['coverage']} for m in ms},'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+          Path('analysis-results').mkdir(exist_ok=True);Path('analysis-results/research-sparse-odds-summary.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(out,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-sparse-odds-summary
+          path: analysis-results/research-sparse-odds-summary.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Mark sparse odds success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success \
+            -f context='research/sparse-walk-forward-odds' -f description='Sparse demanded official odds completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark sparse odds failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure \
+            -f context='research/sparse-walk-forward-odds' -f description='Sparse odds need targeted repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
