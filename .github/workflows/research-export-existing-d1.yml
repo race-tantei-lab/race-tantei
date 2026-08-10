@@ -1,0 +1,138 @@
+name: Research export existing D1 segment
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-export-existing-d1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Mark export pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/existing-d1-export' \
+            -f description='Exporting existing 2024-2026 D1 segment read-only' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Export required D1 tables read-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/d1-export analysis-results/existing-d1-segment
+          for table in rt_races rt_runners rt_results rt_payouts rt_official_odds_latest rt_official_odds_snapshots; do
+            echo "Exporting $table"
+            npx wrangler d1 export race-tantei-phase0 --remote --skip-confirmation --table="$table" --output="/tmp/d1-export/${table}.sql"
+          done
+
+      - name: Build local research subset
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/research-existing.sqlite
+          for sql in /tmp/d1-export/*.sql; do
+            sqlite3 /tmp/research-existing.sqlite < "$sql"
+          done
+          python - <<'PY'
+          import gzip, json, sqlite3
+          from pathlib import Path
+
+          start='2024-05-04'
+          end='2026-08-09'
+          out=Path('analysis-results/existing-d1-segment')
+          db=sqlite3.connect('/tmp/research-existing.sqlite')
+          db.row_factory=sqlite3.Row
+
+          specs={
+            'races': ("SELECT * FROM rt_races WHERE race_date BETWEEN ? AND ? ORDER BY race_date, venue, race_no", (start,end)),
+            'runners': ("SELECT rr.* FROM rt_runners rr JOIN rt_races r ON r.race_id=rr.race_id WHERE r.race_date BETWEEN ? AND ? ORDER BY rr.race_id, rr.horse_no", (start,end)),
+            'results': ("SELECT x.* FROM rt_results x JOIN rt_races r ON r.race_id=x.race_id WHERE r.race_date BETWEEN ? AND ? ORDER BY x.race_id, x.horse_no", (start,end)),
+            'payouts': ("SELECT p.* FROM rt_payouts p JOIN rt_races r ON r.race_id=p.race_id WHERE r.race_date BETWEEN ? AND ? ORDER BY p.race_id, p.bet_type, p.combination", (start,end)),
+            'official_odds_latest': ("SELECT o.* FROM rt_official_odds_latest o JOIN rt_races r ON r.race_id=o.race_id WHERE r.race_date BETWEEN ? AND ? ORDER BY o.race_id, o.bet_type, o.combination", (start,end)),
+            'official_odds_snapshots': ("SELECT o.* FROM rt_official_odds_snapshots o JOIN rt_races r ON r.race_id=o.race_id WHERE r.race_date BETWEEN ? AND ? ORDER BY o.race_id, o.captured_at_utc, o.bet_type, o.combination", (start,end)),
+          }
+
+          counts={}
+          for name,(sql,args) in specs.items():
+            path=out/f'{name}.jsonl.gz'
+            n=0
+            with gzip.open(path,'wt',encoding='utf-8') as f:
+              for row in db.execute(sql,args):
+                f.write(json.dumps(dict(row),ensure_ascii=False,separators=(',',':'))+'\n')
+                n+=1
+            counts[name]=n
+            print(name,n)
+
+          race_meta=db.execute("SELECT MIN(race_date),MAX(race_date),COUNT(*) FROM rt_races WHERE race_date BETWEEN ? AND ?",(start,end)).fetchone()
+          meta={
+            'source':'existing_production_d1_read_only',
+            'startDate':race_meta[0],
+            'endDate':race_meta[1],
+            'counts':counts,
+            'productionWrite':False,
+            'networkJraRefetch':False,
+            'deduplicationKey':'race_id',
+            'note':'Existing official segment reused for ten-year research; historical archived odds and pre-start snapshots remain separate evidence.'
+          }
+          (out/'meta.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          assert meta['startDate']==start, meta
+          assert meta['endDate']==end, meta
+          assert counts['races']==7863, counts
+          assert counts['runners']>100000, counts
+          assert counts['results']>0, counts
+          assert counts['payouts']>0, counts
+          print(json.dumps(meta,ensure_ascii=False))
+          PY
+
+      - name: Upload existing segment research artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-existing-d1-segment-20240504-20260809
+          path: analysis-results/existing-d1-segment/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Mark export success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='research/existing-d1-export' \
+            -f description='Existing D1 segment exported for research without refetch' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Mark export failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='research/existing-d1-export' \
+            -f description='Existing D1 research export failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+          exit 1
