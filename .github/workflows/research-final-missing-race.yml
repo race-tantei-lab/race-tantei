@@ -1,0 +1,80 @@
+name: Research final missing race correction
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - 'scripts/research-evaluate-final-missing-race.py'
+      - '.github/workflows/research-final-missing-race.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  DEMAND_ARTIFACT_ID: '9057033953'
+  ODDS_2026_ARTIFACT_ID: '9063550877'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/final-missing-race' \
+            -f description='Re-evaluating final race using official betting eligibility' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Download inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assembled demand odds2026
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip -d assembled
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${DEMAND_ARTIFACT_ID}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ODDS_2026_ARTIFACT_ID}/zip" > odds2026.zip
+          unzip -q odds2026.zip -d odds2026
+          test -s assembled/ten-year-history-corpus.jsonl
+          test -s demand/research-canonical-rules-297.json
+          test -s odds2026/research-demanded-odds-2026.jsonl
+      - name: Evaluate only 2026-08-09 Niigata 12R
+        run: |
+          set -euo pipefail
+          python scripts/research-evaluate-final-missing-race.py \
+            --corpus assembled/ten-year-history-corpus.jsonl \
+            --rules demand/research-canonical-rules-297.json \
+            --odds odds2026/research-demanded-odds-2026.jsonl \
+            --out analysis-results/research-final-missing-race.json
+      - name: Verify research-only provenance
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-final-missing-race.json').read_text())
+          assert m['raceId']=='2026-08-09-niigata-12',m
+          assert m['targetRaceResultsUsedForSelection'] is False,m
+          assert m['bettingEligibilitySource']=='official_final_win_market',m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False and m['productionModelChanged'] is False,m
+          print(json.dumps({'tickets':m['chosenTickets'],'returns':{k:v['returnYen'] for k,v in m['courses'].items()}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-final-missing-race
+          path: analysis-results/research-final-missing-race.json
+          retention-days: 30
+      - name: Mark success
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/final-missing-race' \
+            -f description='Final race correction evaluated successfully' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
