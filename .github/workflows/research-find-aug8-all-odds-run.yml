@@ -21,12 +21,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Mark pending
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/aug8-all-odds-run' -f description='Finding retained Aug8 official odds artifacts by commit SHA' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/aug8-all-odds-run' -f description='Finding retained sharded official odds artifacts by commit SHA' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Find target commit runs and artifacts
         shell: bash
         run: |
           set -euo pipefail
-          target='af052e070094c9cbcf98aff60ee8829ee32aaec9'
+          target='06cb4c01a72e7d7acd2b29366094f285708f36c2'
           gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs" -f head_sha="$target" -f per_page=100 > /tmp/runs.json
           jq -r '.workflow_runs[] | [.id,.name,.event,.status,.conclusion,.created_at,.updated_at,.head_sha] | @tsv' /tmp/runs.json | tee /tmp/runs.tsv
           while IFS=$'\t' read -r run name event status conclusion created updated sha; do
@@ -36,4 +36,4 @@ jobs:
             jq -r '.artifacts[] | [.id,.name,.size_in_bytes,.expired,.created_at,.expires_at] | @tsv' /tmp/artifacts.json
           done < /tmp/runs.tsv
       - name: Mark success
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/aug8-all-odds-run' -f description='Target Aug8 official odds artifact search complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/aug8-all-odds-run' -f description='Target sharded official odds artifact search complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
