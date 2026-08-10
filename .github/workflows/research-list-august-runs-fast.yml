@@ -1,0 +1,43 @@
+name: Research list Aug 1-2 runs fast
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - '.github/workflows/research-list-august-runs-fast.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/august-run-list' \
+            -f description='Listing Aug 1-3 workflow runs' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: List runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate --method GET "repos/${GITHUB_REPOSITORY}/actions/runs" \
+            -f created='2026-08-01T00:00:00Z..2026-08-03T23:59:59Z' -f per_page=100 \
+            --jq '.workflow_runs[] | [.id,.name,.event,.status,.conclusion,.created_at,.head_sha] | @tsv' \
+            | tee /tmp/runs.tsv
+          echo '--- relevant ---'
+          grep -Ei 'odds|final|live|bet|race|public|auto|sync' /tmp/runs.tsv || true
+      - name: Mark success
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/august-run-list' \
+            -f description='Aug 1-3 workflow run list complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
