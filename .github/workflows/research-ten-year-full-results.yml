@@ -2,6 +2,11 @@ name: Ten-year full result research
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/research-ten-year-full-results.yml"
+      - "scripts/research-export-official-history.mjs"
   push:
     branches:
       - agent/ten-year-full-results
@@ -13,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ten-year-full-result-research
+  group: ten-year-full-result-research-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
