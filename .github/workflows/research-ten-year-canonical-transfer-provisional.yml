@@ -5,6 +5,7 @@ on:
     branches: [research/ten-year-minimal-rules]
     paths:
       - ".github/workflows/research-ten-year-canonical-transfer-provisional.yml"
+      - "scripts/research-evaluate-canonical-transfer-fast.py"
   workflow_dispatch:
 
 permissions:
@@ -23,13 +24,13 @@ env:
 jobs:
   evaluate:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 90
     steps:
       - name: Mark provisional evaluation pending
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=pending -f context='research/ten-year-canonical-transfer-provisional' \
-            -f description='Evaluating 297 rules on all races with complete official odds' \
+            -f state=pending -f context='research/ten-year-canonical-transfer-provisional-fast' \
+            -f description='Fast behavior-equivalent 297-rule evaluation on complete-odds races' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - name: Download history, demand, annual odds, and 50-race repair
@@ -57,10 +58,10 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > repair.zip
           unzip -q repair.zip -d repair
           cp repair/research-demanded-odds-repair.jsonl odds/research-demanded-odds-repair.jsonl
-      - name: Evaluate provisional transfer without treating missing races as losses
+      - name: Fast evaluate provisional transfer without treating missing races as losses
         run: |
           set -euo pipefail
-          python scripts/research-evaluate-canonical-transfer.py \
+          python scripts/research-evaluate-canonical-transfer-fast.py \
             --corpus assembled/ten-year-history-corpus.jsonl \
             --demand demand/research-ten-year-canonical-demand.jsonl \
             --rules demand/research-canonical-rules-297.json \
@@ -85,7 +86,7 @@ jobs:
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: research-canonical-297-ten-year-transfer-provisional
+          name: research-canonical-297-ten-year-transfer-provisional-fast
           path: analysis-results/research-canonical-297-ten-year-transfer-provisional.json
           if-no-files-found: error
           retention-days: 30
@@ -93,12 +94,12 @@ jobs:
         if: success()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=success -f context='research/ten-year-canonical-transfer-provisional' \
-            -f description='297-rule provisional transfer completed on 14380 races; 30 explicitly excluded' \
+            -f state=success -f context='research/ten-year-canonical-transfer-provisional-fast' \
+            -f description='Fast 297-rule provisional transfer completed on 14380 races' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark provisional evaluation failure
         if: failure()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=failure -f context='research/ten-year-canonical-transfer-provisional' \
-            -f description='Provisional transfer diagnostic failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+            -f state=failure -f context='research/ten-year-canonical-transfer-provisional-fast' \
+            -f description='Fast provisional transfer diagnostic failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
