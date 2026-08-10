@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-07T05:59:26.772Z",
+  "generatedAt": "2026-08-10T05:16:42.322Z",
   "targetRoiPct": 200,
   "minimumRacesPerVenueDay": 5,
   "featureCount": 32,
@@ -22,9 +22,9 @@
     },
     "modelValidation": {
       "races": 600,
-      "logLoss": 2.1071,
+      "logLoss": 2.1062,
       "top1Pct": 33.5,
-      "top3Pct": 63.8333
+      "top3Pct": 63.3333
     },
     "marketHoldout": {
       "races": 288,
@@ -34,14 +34,14 @@
     },
     "modelHoldout": {
       "races": 288,
-      "logLoss": 2.0053,
+      "logLoss": 2.005,
       "top1Pct": 35.7639,
-      "top3Pct": 67.0139
+      "top3Pct": 68.75
     }
   },
   "selectedRaceConfiguration": {
     "mode": "confidence",
-    "count": 12
+    "count": 11
   },
   "validation": {
     "ライト": {
@@ -54,11 +54,11 @@
         "maxRank": 2,
         "includesFirst": "yes",
         "ticketCount": 4,
-        "hedge": "hit"
+        "hedge": "none"
       },
-      "roi": 80.5083,
-      "hit": 49.1667,
-      "minMonth": 77.7604,
+      "roi": 82.3273,
+      "hit": 48.1818,
+      "minMonth": 78.4427,
       "hitRequirementMet": true
     },
     "スタンダード": {
@@ -71,50 +71,50 @@
         "maxRank": 2,
         "includesFirst": "yes",
         "ticketCount": 4,
-        "hedge": "hit"
+        "hedge": "none"
       },
-      "roi": 80.5004,
-      "hit": 49.1667,
-      "minMonth": 77.0085,
+      "roi": 81.8485,
+      "hit": 48.1818,
+      "minMonth": 77.99,
       "hitRequirementMet": true
     },
     "プレミアム": {
       "policy": {
         "profile": "stable",
-        "stakeMode": "hit",
+        "stakeMode": "equal",
         "minEv": 0,
         "minHit": 0.25,
         "maxOdds": 10,
         "maxRank": 2,
         "includesFirst": "yes",
         "ticketCount": 4,
-        "hedge": "hit"
+        "hedge": "none"
       },
-      "roi": 80.3979,
-      "hit": 49.1667,
-      "minMonth": 76.8298,
+      "roi": 83.6248,
+      "hit": 48.1818,
+      "minMonth": 80.2273,
       "hitRequirementMet": true
     }
   },
   "holdout": {
     "ライト": {
-      "roi": 76.0959,
-      "hit": 46.5278,
-      "profit": -110150,
+      "roi": 74.5289,
+      "hit": 45.8333,
+      "profit": -107590,
       "pass200": false,
       "hitRequirementMet": true
     },
     "スタンダード": {
-      "roi": 76.3335,
-      "hit": 46.5278,
-      "profit": -286270,
+      "roi": 74.7159,
+      "hit": 45.8333,
+      "profit": -280350,
       "pass200": false,
       "hitRequirementMet": true
     },
     "プレミアム": {
-      "roi": 76.4935,
-      "hit": 46.5278,
-      "profit": -595750,
+      "roi": 73.4603,
+      "hit": 45.8333,
+      "profit": -616570,
       "pass200": false,
       "hitRequirementMet": true
     }
