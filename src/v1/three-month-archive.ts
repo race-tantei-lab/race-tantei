@@ -67,6 +67,28 @@ export async function fetchJraArchivePage(
   }
 }
 
+async function fetchJraArchivePageRobust(
+  cname: string,
+  fetchImpl: typeof fetch = fetch,
+  attempts = 7
+): Promise<ArchivePage> {
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fetchJraArchivePage(cname, fetchImpl);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts) break;
+      const message = error instanceof Error ? error.message : String(error);
+      const transient = /ARCHIVE_HTTP_(429|500|502|503|504)|ARCHIVE_BLOCKED_PAGE|AbortError|timeout/i.test(message);
+      if (!transient) throw error;
+      const delay = Math.min(20_000, 1_800 * attempt);
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, delay));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 function normalizedHtml(html: string): string {
   return decodeEntities(html)
     .replace(/\\u0026/gi, "&")
@@ -126,7 +148,7 @@ export async function getArchiveMonthChecksum(
   fetchImpl: typeof fetch = fetch
 ): Promise<string> {
   if (!/^\d{6}$/.test(yearMonth)) throw new Error(`INVALID_ARCHIVE_MONTH:${yearMonth}`);
-  const page = await fetchJraArchivePage(ARCHIVE_INDEX_CNAME, fetchImpl);
+  const page = await fetchJraArchivePageRobust(ARCHIVE_INDEX_CNAME, fetchImpl);
   const checksum = parseArchiveMonthChecksums(page.html).get(yearMonth.slice(2));
   if (!checksum) throw new Error(`ARCHIVE_MONTH_CHECKSUM_NOT_FOUND:${yearMonth}`);
   return checksum;
@@ -137,7 +159,7 @@ export async function getArchiveMeetingCnames(
   fetchImpl: typeof fetch = fetch
 ): Promise<string[]> {
   const checksum = await getArchiveMonthChecksum(yearMonth, fetchImpl);
-  const page = await fetchJraArchivePage(`pw01skl10${yearMonth}/${checksum}`, fetchImpl);
+  const page = await fetchJraArchivePageRobust(`pw01skl10${yearMonth}/${checksum}`, fetchImpl);
   const meetings = parseArchiveMeetingCnames(page.html);
   if (meetings.length === 0) throw new Error(`ARCHIVE_MEETINGS_NOT_FOUND:${yearMonth}`);
   return meetings;
@@ -165,15 +187,11 @@ export async function getArchiveResultUrls(
   fetchImpl: typeof fetch = fetch
 ): Promise<string[]> {
   const meetings = await getArchiveMeetingCnames(yearMonth, fetchImpl);
-  const resultGroups = await mapWithConcurrency(meetings, 6, async (meeting) => {
-    try {
-      const page = await fetchJraArchivePage(meeting, fetchImpl);
-      return parseArchiveResultCnames(page.html);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn("ARCHIVE_MEETING_SKIPPED", yearMonth, meeting, message);
-      return [];
-    }
+  const resultGroups = await mapWithConcurrency(meetings, 2, async (meeting) => {
+    const page = await fetchJraArchivePageRobust(meeting, fetchImpl);
+    const results = parseArchiveResultCnames(page.html);
+    if (results.length === 0) throw new Error(`ARCHIVE_MEETING_RESULTS_NOT_FOUND:${yearMonth}:${meeting}`);
+    return results;
   });
   const cnames = unique(resultGroups.flat());
   if (cnames.length === 0) throw new Error(`ARCHIVE_RESULTS_NOT_FOUND:${yearMonth}`);
