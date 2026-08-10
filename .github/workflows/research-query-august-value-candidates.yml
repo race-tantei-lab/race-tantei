@@ -1,0 +1,85 @@
+name: Research query Aug 1-2 official value candidates
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - '.github/workflows/research-query-august-value-candidates.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CLOUDFLARE_ACCOUNT_ID: '3c6d1826b573b2e68cb13ec37e9e8ade'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/august-value-candidates' \
+            -f description='Reading retained Aug 1-2 official value candidates' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Query schemas and Aug 1-2 rows read-only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p analysis-results
+          query () {
+            local name="$1"; shift
+            npx wrangler d1 execute race-tantei-phase0 --remote --json --command="$*" > "analysis-results/${name}.json"
+          }
+          query schema_value "SELECT sql FROM sqlite_master WHERE type='table' AND name='rt_official_value_candidates';"
+          query value_counts "SELECT race_id, COUNT(*) AS rows FROM rt_official_value_candidates WHERE race_id LIKE '2026-08-01-%' OR race_id LIKE '2026-08-02-%' GROUP BY race_id ORDER BY race_id;"
+          query value_sample "SELECT * FROM rt_official_value_candidates WHERE race_id LIKE '2026-08-01-%' OR race_id LIKE '2026-08-02-%' LIMIT 20;"
+          query rt_bet_counts "SELECT race_id, bet_type, COUNT(*) AS rows, MIN(assumed_odds) AS min_odds, MAX(assumed_odds) AS max_odds FROM rt_bets WHERE race_id LIKE '2026-08-01-%' OR race_id LIKE '2026-08-02-%' GROUP BY race_id,bet_type ORDER BY race_id,bet_type;"
+          query legacy_bet_counts "SELECT race_id, bet_type, COUNT(*) AS rows, MIN(assumed_odds) AS min_odds, MAX(assumed_odds) AS max_odds FROM bets WHERE race_id LIKE '2026-08-01-%' OR race_id LIKE '2026-08-02-%' GROUP BY race_id,bet_type ORDER BY race_id,bet_type;"
+          query public_bet_counts "SELECT race_id, course, bet_type, COUNT(*) AS rows, MIN(assumed_odds) AS min_odds, MAX(assumed_odds) AS max_odds FROM rt_public_bets WHERE race_id LIKE '2026-08-01-%' OR race_id LIKE '2026-08-02-%' GROUP BY race_id,course,bet_type ORDER BY race_id,course,bet_type;"
+          python - <<'PY'
+          import json,glob,os
+          def rows(path):
+              raw=json.load(open(path))
+              out=[]
+              if isinstance(raw,list):
+                  for b in raw: out.extend(b.get('results') or [])
+              elif isinstance(raw,dict): out.extend(raw.get('results') or [])
+              return out
+          for p in sorted(glob.glob('analysis-results/*.json')):
+              rs=rows(p)
+              print(json.dumps({'file':os.path.basename(p),'rowCount':len(rs),'sample':rs[:5]},ensure_ascii=False,default=str))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-august-value-candidates
+          path: analysis-results/*.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Mark success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/august-value-candidates' \
+            -f description='Aug 1-2 retained candidate query complete' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/august-value-candidates' \
+            -f description='Aug 1-2 candidate query requires schema adjustment' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
