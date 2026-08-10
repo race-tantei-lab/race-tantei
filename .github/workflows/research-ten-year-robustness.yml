@@ -1,0 +1,149 @@
+name: Ten-year robustness research
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/research-ten-year-robustness.yml"
+      - "scripts/research-ten-year-smoke.py"
+      - "scripts/research-export-official-history.mjs"
+      - "scripts/research-enrich-official-history-odds.py"
+      - "scripts/research-rule-pruning.py"
+  push:
+    branches:
+      - main
+      - agent/ten-year-robustness-research
+    paths:
+      - ".github/workflows/research-ten-year-robustness.yml"
+      - "scripts/research-ten-year-smoke.py"
+      - "scripts/research-export-official-history.mjs"
+      - "scripts/research-enrich-official-history-odds.py"
+      - "scripts/research-rule-pruning.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ten-year-robustness-research-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Verify 2016-2026 official archive and odds
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile research scripts
+        run: python -m py_compile scripts/research-ten-year-smoke.py
+      - name: Verify one official race and all six odds markets per year
+        run: python scripts/research-ten-year-smoke.py --start-year 2016 --end-year 2026
+      - name: Upload research-only report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ten-year-robustness-smoke
+          path: analysis-results/research-ten-year-smoke.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  pilot:
+    name: Build 20-race 2016 official research dataset
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install and compile current official parsers
+        run: |
+          npm ci
+          npm run build:test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install research-only parser dependency
+        run: python -m pip install --disable-pip-version-check beautifulsoup4
+      - name: Compile research odds enricher
+        run: python -m py_compile scripts/research-enrich-official-history-odds.py
+      - name: Export 20 official archived races without production writes
+        run: |
+          node scripts/research-export-official-history.mjs \
+            --start-month 201605 \
+            --end-month 201605 \
+            --limit 20 \
+            --concurrency 4 \
+            --out analysis-results/research-pilot-201605-results.jsonl \
+            --meta analysis-results/research-pilot-201605-results-meta.json
+      - name: Enrich all six official historical odds markets
+        shell: bash
+        run: |
+          set +e
+          python scripts/research-enrich-official-history-odds.py \
+            --input analysis-results/research-pilot-201605-results.jsonl \
+            --out analysis-results/research-pilot-201605-enriched.jsonl \
+            --meta analysis-results/research-pilot-201605-enriched-meta.json \
+            --workers 4
+          parser_exit=$?
+          set -e
+          PARSER_EXIT="$parser_exit" python - <<'PY'
+          import json, os
+          from pathlib import Path
+          meta=json.loads(Path('analysis-results/research-pilot-201605-enriched-meta.json').read_text())
+          assert meta['inputRaces'] == 20
+          assert meta['completed'] == 20
+          assert not meta['failures']
+          assert meta['syntheticOddsUsed'] is False
+          assert meta['productionDatabaseWritten'] is False
+          for market in ('win','umaren','wide','umatan','trio'):
+              assert meta['coverage'][market] >= 0.999, (market,meta['coverage'][market])
+          assert meta['coverage']['trifecta'] >= 0.99, meta['coverage']['trifecta']
+          print(json.dumps({
+              'officialOddsPilot':'accepted_with_parse_misses_excluded',
+              'coverage':meta['coverage'],
+              'originalParserExit':int(os.environ['PARSER_EXIT'])
+          },ensure_ascii=False))
+          PY
+      - name: Verify pilot provenance and coverage
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path('analysis-results')
+          result_meta=json.loads((root/'research-pilot-201605-results-meta.json').read_text())
+          odds_meta=json.loads((root/'research-pilot-201605-enriched-meta.json').read_text())
+          assert result_meta['productionDatabaseWritten'] is False
+          assert result_meta['syntheticOddsUsed'] is False
+          assert odds_meta['productionDatabaseWritten'] is False
+          assert odds_meta['syntheticOddsUsed'] is False
+          assert odds_meta['inputRaces'] == 20
+          assert odds_meta['completed'] == 20
+          assert not odds_meta['failures']
+          for market in ('win','umaren','wide','umatan','trio'):
+              assert odds_meta['coverage'][market] >= 0.999, (market,odds_meta['coverage'][market])
+          assert odds_meta['coverage']['trifecta'] >= 0.99
+          print(json.dumps({
+              'pilot':'ok',
+              'races':20,
+              'coverage':odds_meta['coverage'],
+              'parseMissPolicy':'exclude_without_estimation'
+          },ensure_ascii=False))
+          PY
+      - name: Upload research-only pilot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ten-year-robustness-pilot-201605
+          path: |
+            analysis-results/research-pilot-201605-results.jsonl
+            analysis-results/research-pilot-201605-results-meta.json
+            analysis-results/research-pilot-201605-enriched.jsonl
+            analysis-results/research-pilot-201605-enriched-meta.json
+          if-no-files-found: warn
+          retention-days: 30
