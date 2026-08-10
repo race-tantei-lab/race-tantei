@@ -1,0 +1,48 @@
+name: Research inventory Aug2 ROI artifacts
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths: ['.github/workflows/research-inventory-aug2-roi-artifacts.yml']
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/aug2-roi-artifact-inventory' \
+            -f description='Inventorying retained Aug 2 ROI artifacts' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Inventory Aug 2 optimizer artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --paginate --method GET "repos/${GITHUB_REPOSITORY}/actions/runs" \
+            -f created='2026-08-02T00:00:00Z..2026-08-02T23:59:59Z' -f per_page=100 \
+            --jq '.workflow_runs[] | select(.name=="Analysis ROI optimizer" and .conclusion=="success") | [.id,.created_at,.updated_at,.head_sha] | @tsv' \
+            | sort -k2,2 > /tmp/roi-runs.tsv
+          echo '=== ROI RUNS ==='
+          cat /tmp/roi-runs.tsv
+          echo '=== ARTIFACTS ==='
+          while IFS=$'\t' read -r run_id created updated sha; do
+            [ -n "$run_id" ] || continue
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" \
+              --jq --arg run "$run_id" --arg created "$created" '.artifacts[] | [$run,$created,.id,.name,.size_in_bytes,.expired,.expires_at] | @tsv' || true
+          done < /tmp/roi-runs.tsv
+      - name: Mark success
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/aug2-roi-artifact-inventory' \
+            -f description='Aug 2 ROI artifact inventory complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
