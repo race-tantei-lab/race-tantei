@@ -66,3 +66,5 @@ jobs:
             -f context='research/jra-odds-layout-diagnostic' \
             -f description='JRA odds session diagnostic failed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+# retrigger 2026-08-11 current-head diagnostic
