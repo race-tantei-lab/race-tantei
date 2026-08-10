@@ -1,0 +1,142 @@
+name: Research proven full-month dataset
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-proven-full-month.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  PROVEN_RESEARCH_COMMIT: 28ba141ca123964070925e42194763a3b3800f0f
+
+jobs:
+  month:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Mark full-month research pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/proven-full-month' \
+            -f description='Building full May 2016 official research dataset' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Bring proven research collectors into runner workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$PROVEN_RESEARCH_COMMIT"
+          git show "$PROVEN_RESEARCH_COMMIT:scripts/research-export-official-history.mjs" > scripts/research-export-official-history.mjs
+          git show "$PROVEN_RESEARCH_COMMIT:scripts/research-enrich-official-history-odds.py" > scripts/research-enrich-official-history-odds.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install and build official result parsers
+        run: |
+          npm ci
+          npm run build:test
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install official odds parser dependency
+        run: python -m pip install --disable-pip-version-check beautifulsoup4
+
+      - name: Export every May 2016 official result
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/research-export-official-history.mjs \
+            --start-month 201605 \
+            --end-month 201605 \
+            --concurrency 2 \
+            --out analysis-results/full-month-201605-results.jsonl \
+            --meta analysis-results/full-month-201605-results-meta.json | tee full-month-results.log
+
+      - name: Verify complete result export before odds
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/full-month-201605-results-meta.json').read_text())
+          assert m['requestedUrls'] >= 250, m
+          assert m['completed'] == m['requestedUrls'], m
+          assert not m['failures'], m
+          assert m['syntheticOddsUsed'] is False
+          assert m['productionDatabaseWritten'] is False
+          print(json.dumps({'results':'complete','races':m['completed']},ensure_ascii=False))
+          PY
+
+      - name: Enrich all six official historical odds markets
+        shell: bash
+        run: |
+          set +e
+          python scripts/research-enrich-official-history-odds.py \
+            --input analysis-results/full-month-201605-results.jsonl \
+            --out analysis-results/full-month-201605-enriched.jsonl \
+            --meta analysis-results/full-month-201605-enriched-meta.json \
+            --workers 2 | tee full-month-odds.log
+          parser_exit=$?
+          set -e
+          PARSER_EXIT="$parser_exit" python - <<'PY'
+          import json, os
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/full-month-201605-enriched-meta.json').read_text())
+          assert not m['failures'], m['failures'][:10]
+          assert m['completed'] == m['inputRaces'], m
+          assert m['syntheticOddsUsed'] is False
+          assert m['productionDatabaseWritten'] is False
+          for market in ('win','umaren','wide','umatan','trio'):
+              assert m['coverage'][market] >= 0.999, (market,m['coverage'][market])
+          assert m['coverage']['trifecta'] >= 0.99, m['coverage']['trifecta']
+          print(json.dumps({'odds':'accepted','races':m['completed'],'coverage':m['coverage'],'parseMissesExcluded':True,'originalParserExit':int(os.environ['PARSER_EXIT'])},ensure_ascii=False))
+          PY
+
+      - name: Upload full-month research dataset
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-full-month-201605
+          path: |
+            analysis-results/full-month-201605-results.jsonl
+            analysis-results/full-month-201605-results-meta.json
+            analysis-results/full-month-201605-enriched.jsonl
+            analysis-results/full-month-201605-enriched-meta.json
+            full-month-results.log
+            full-month-odds.log
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Mark full-month research success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='research/proven-full-month' \
+            -f description='Full May 2016 official research dataset validated' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Mark full-month research failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='research/proven-full-month' \
+            -f description='Full May 2016 research dataset failed validation' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
