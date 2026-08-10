@@ -21,19 +21,19 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Mark pending
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/aug8-all-odds-run' -f description='Finding retained Aug8 official odds artifacts' -f target_url="$STATUS_TARGET_URL" >/dev/null
-      - name: Find runs and artifacts
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/aug8-all-odds-run' -f description='Finding retained Aug8 official odds artifacts by commit SHA' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Find target commit runs and artifacts
         shell: bash
         run: |
           set -euo pipefail
-          gh api --paginate --method GET "repos/${GITHUB_REPOSITORY}/actions/runs" \
-            -f created='2026-08-08T00:00:00Z..2026-08-08T23:59:59Z' -f per_page=100 --slurp > /tmp/pages.json
-          jq -r '.[] | .workflow_runs[]? | select((.name|ascii_downcase|contains("official odds")) or (.name|ascii_downcase|contains("historical official"))) | [.id,.name,.status,.conclusion,.created_at,.updated_at,.head_sha] | @tsv' /tmp/pages.json | sort -k5,5 | tee /tmp/runs.tsv
-          while IFS=$'\t' read -r run name status conclusion created updated sha; do
+          target='af052e070094c9cbcf98aff60ee8829ee32aaec9'
+          gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs" -f head_sha="$target" -f per_page=100 > /tmp/runs.json
+          jq -r '.workflow_runs[] | [.id,.name,.event,.status,.conclusion,.created_at,.updated_at,.head_sha] | @tsv' /tmp/runs.json | tee /tmp/runs.tsv
+          while IFS=$'\t' read -r run name event status conclusion created updated sha; do
             [ -n "$run" ] || continue
-            echo "=== RUN $run | $name | $created | $conclusion ==="
+            echo "=== RUN $run | $name | $event | $created | $conclusion ==="
             gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run}/artifacts?per_page=100" > /tmp/artifacts.json
             jq -r '.artifacts[] | [.id,.name,.size_in_bytes,.expired,.created_at,.expires_at] | @tsv' /tmp/artifacts.json
           done < /tmp/runs.tsv
       - name: Mark success
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/aug8-all-odds-run' -f description='Aug8 official odds artifact search complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/aug8-all-odds-run' -f description='Target Aug8 official odds artifact search complete' -f target_url="$STATUS_TARGET_URL" >/dev/null
