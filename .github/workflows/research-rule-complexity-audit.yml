@@ -1,0 +1,62 @@
+name: Research rule complexity audit
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - "scripts/research-rule-complexity-audit.py"
+      - ".github/workflows/research-rule-complexity-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mark audit pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/rule-complexity' \
+            -f description='Auditing redundant canonical rules' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Audit rule complexity
+        run: python scripts/research-rule-complexity-audit.py | tee research-rule-complexity.log
+      - name: Upload audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-rule-complexity-audit
+          path: |
+            analysis-results/research-rule-complexity-audit.json
+            research-rule-complexity.log
+          if-no-files-found: error
+          retention-days: 30
+      - name: Mark audit success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='research/rule-complexity' \
+            -f description='Redundant-rule audit completed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark audit failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='research/rule-complexity' \
+            -f description='Redundant-rule audit failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
