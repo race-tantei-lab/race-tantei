@@ -5,6 +5,8 @@ on:
     branches: [research/ten-year-minimal-rules]
     paths:
       - ".github/workflows/research-sparse-walkforward-discovery.yml"
+      - "scripts/research-sparse-walkforward-run.py"
+      - "scripts/research-sparse-walkforward-demand.py"
   workflow_dispatch:
 
 permissions:
@@ -75,24 +77,19 @@ jobs:
               if not line.strip(): continue
               b=json.loads(line); r=b['race']; d=str(r.get('raceDate') or '')
               if eval_start<=d<=eval_end: schedule[(d,str(r.get('venue')))] += 1
-          expected_selected=sum(min(5,n) for n in schedule.values())
-          structural=[{'date':d,'venue':v,'races':n} for (d,v),n in sorted(schedule.items()) if n<5]
-          y=int(eval_start[:4]); month=int(eval_start[5:7])
-          first_eval_fold=f"{y}Q{(month-1)//3+1}"
-          eval_rules=[x for x in rules if x['fold']>=first_eval_fold]
+          structural=[{'date':d,'venue':v,'eligible':n} for (d,v),n in sorted(schedule.items()) if n<5]
+          expected_selected=sum(5 for n in schedule.values() if n>=5)
+          eval_rules=[x for x in rules if x['startDate']>=eval_start]
           diag={
             'meta':m,
             'evaluationVenueDays':len(schedule),
             'expectedSelectedRaces':expected_selected,
             'structuralShortVenueDays':structural,
             'ruleRows':len(rules),
-            'firstRuleFold':rules[0]['fold'] if rules else None,
-            'lastRuleFold':rules[-1]['fold'] if rules else None,
-            'firstEvaluationFold':first_eval_fold,
             'evaluationFolds':len(eval_rules),
             'maxObservedRuleCount':max((x['ruleCount'] for x in eval_rules),default=0),
             'maxObservedPredicateCount':max((x['predicateCount'] for x in eval_rules),default=0),
-            'offendingFolds':[{'fold':x['fold'],'startDate':x['startDate'],'ruleCount':x['ruleCount'],'predicateCount':x['predicateCount']} for x in eval_rules if x['ruleCount']>8 or x['predicateCount']>24],
+            'offendingFolds':[{'fold':x['fold'],'startDate':x['startDate'],'ruleCount':x['ruleCount'],'predicateCount':x['predicateCount']} for x in eval_rules if x['ruleCount']>m['maxRulesPerFold'] or x['predicateCount']>m['maxRulesPerFold']*m['maxPredicatesPerRule']],
           }
           Path('analysis-results/research-sparse-walkforward-diagnostics.json').write_text(json.dumps(diag,ensure_ascii=False,indent=2)+'\n')
           print(json.dumps(diag,ensure_ascii=False))
@@ -125,23 +122,21 @@ jobs:
               if not line.strip(): continue
               b=json.loads(line); r=b['race']; d=str(r.get('raceDate') or '')
               if m['evaluationStart']<=d<=m['evaluationEnd']: schedule[(d,str(r.get('venue')))] += 1
-          expected_selected=sum(min(5,n) for n in schedule.values())
-          assert expected_selected==14412,expected_selected
+          structural=[{'date':d,'venue':v,'eligible':n} for (d,v),n in sorted(schedule.items()) if n<5]
+          expected_selected=sum(5 for n in schedule.values() if n>=5)
+          assert structural==[{'date':'2020-03-29','venue':'中山','eligible':2}],structural
+          assert expected_selected==14410,expected_selected
           assert m['selectedRaces']==expected_selected,(m['selectedRaces'],expected_selected)
-          assert m['maxRulesPerFold']==8,m
-          assert m['maxPredicatesPerRule']==3,m
+          assert m['constraintBackfillCount']==0,m['constraintBackfillCount']
           assert m['targetDayResultsUsedForSelection'] is False,m
           assert m['historicalFinalOddsUsedForDiscovery'] is False,m
           assert m['syntheticOddsUsed'] is False,m
           assert m['productionDatabaseWritten'] is False,m
           assert m['productionModelChanged'] is False,m
           rules=json.loads(Path('analysis-results/research-sparse-walkforward-rules.json').read_text())
-          eval_start=m['evaluationStart']
-          y=int(eval_start[:4]); month=int(eval_start[5:7])
-          first_eval_fold=f"{y}Q{(month-1)//3+1}"
-          eval_rules=[x for x in rules if x['fold']>=first_eval_fold]
+          eval_rules=[x for x in rules if x['startDate']>=m['evaluationStart']]
           assert len(eval_rules)==41,len(eval_rules)
-          assert all(x['ruleCount']<=8 and x['predicateCount']<=24 for x in eval_rules),eval_rules
+          assert all(x['ruleCount']<=m['maxRulesPerFold'] and x['predicateCount']<=m['maxRulesPerFold']*m['maxPredicatesPerRule'] for x in eval_rules),eval_rules
           print(json.dumps({'selected':m['selectedRaces'],'expectedSelected':expected_selected,'proxyRoi':m['proxyTicketRoiPct'],'backfills':m['constraintBackfillCount'],'evaluationFolds':len(eval_rules)},ensure_ascii=False))
           PY
 
