@@ -1,0 +1,63 @@
+name: Research diagnose current JRA odds layout
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - 'scripts/research-diagnose-current-odds-layout.mjs'
+      - '.github/workflows/research-diagnose-current-odds-layout.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Mark diagnostic pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/jra-odds-layout-diagnostic' \
+            -f description='Comparing official JRA result/odds layouts around August transition' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Build parser
+        run: |
+          npm ci
+          npm run build:test
+      - name: Diagnose official pages
+        run: node scripts/research-diagnose-current-odds-layout.mjs | tee analysis-results/jra-odds-layout-diagnostic.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-jra-odds-layout-diagnostic
+          path: analysis-results/jra-odds-layout-diagnostic.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Mark diagnostic success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='research/jra-odds-layout-diagnostic' \
+            -f description='JRA odds layout diagnostic complete' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark diagnostic failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='research/jra-odds-layout-diagnostic' \
+            -f description='JRA odds layout diagnostic failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
