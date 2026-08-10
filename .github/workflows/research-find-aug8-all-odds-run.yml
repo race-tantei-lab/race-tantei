@@ -28,7 +28,7 @@ jobs:
           set -euo pipefail
           gh api --paginate --method GET "repos/${GITHUB_REPOSITORY}/actions/runs" \
             -f created='2026-08-08T00:00:00Z..2026-08-08T23:59:59Z' -f per_page=100 --slurp > /tmp/pages.json
-          jq -r '[.[][] .workflow_runs[]?] | .[] | select(.name=="Export all historical official odds sharded") | [.id,.status,.conclusion,.created_at,.updated_at,.head_sha] | @tsv' /tmp/pages.json | sort -k4,4 | tee /tmp/runs.tsv
+          jq -r '.[] | .workflow_runs[]? | select(.name=="Export all historical official odds sharded") | [.id,.status,.conclusion,.created_at,.updated_at,.head_sha] | @tsv' /tmp/pages.json | sort -k4,4 | tee /tmp/runs.tsv
           while IFS=$'\t' read -r run status conclusion created updated sha; do
             [ -n "$run" ] || continue
             echo "=== RUN $run $created $conclusion ==="
