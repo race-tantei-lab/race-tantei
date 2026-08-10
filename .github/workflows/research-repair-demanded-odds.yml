@@ -1,11 +1,11 @@
 name: Research repair demanded official odds
-# Research-only targeted repair; yearly artifacts may be nested by year.
 
 on:
   push:
     branches: [research/ten-year-minimal-rules]
     paths:
       - ".github/workflows/research-repair-demanded-odds.yml"
+      - "scripts/research-resolve-demanded-odds-failures.mjs"
   workflow_dispatch:
 
 permissions:
@@ -17,46 +17,49 @@ env:
   GH_TOKEN: ${{ github.token }}
   DEMAND_RUN_ID: '31373103782'
   ODDS_RUN_ID: '31373205723'
+  HISTORY_ARTIFACT_ID: '9056288221'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   repair:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 180
     steps:
       - name: Mark repair pending
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='research/ten-year-demanded-odds-repair' \
-            -f description='Waiting for yearly odds shards then retrying only failed races' \
+            -f description='Resolving failed race URLs through JRA archive and refetching only failures' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install research parser dependency
-        run: pip install beautifulsoup4==4.13.4
+      - name: Build official archive helpers and install odds parser dependency
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build:test
+          pip install beautifulsoup4==4.13.4
 
-      - name: Wait for demanded official odds workflow
+      - name: Confirm yearly demanded odds workflow completed
         shell: bash
         run: |
           set -euo pipefail
-          for i in $(seq 1 300); do
-            status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.status')
-            conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.conclusion // ""')
-            echo "odds run: status=$status conclusion=$conclusion poll=$i"
-            if [ "$status" = "completed" ]; then
-              echo "yearly odds workflow completed with conclusion=$conclusion"
-              exit 0
-            fi
-            sleep 60
-          done
-          echo "odds workflow wait timeout"
-          exit 1
+          status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.status')
+          conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.conclusion // ""')
+          echo "yearly odds: status=$status conclusion=$conclusion"
+          test "$status" = "completed"
+          test "$conclusion" = "success"
 
       - name: Download demand manifest
         shell: bash
@@ -69,6 +72,15 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
           unzip -q demand.zip -d demand
           test -s demand/research-ten-year-canonical-demand.jsonl
+
+      - name: Download assembled ten-year corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assembled
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip -d assembled
+          test -s assembled/ten-year-history-corpus.jsonl
 
       - name: Download all yearly odds artifacts and failure metadata
         shell: bash
@@ -87,32 +99,66 @@ jobs:
           count=$(find base-odds -name 'research-demanded-odds-*-meta.json' -type f | wc -l)
           test "$count" -eq 11
 
-      - name: Retry only failed race ids
+      - name: Resolve all failed races to canonical JRA archive result URLs
         shell: bash
         run: |
-          set +e
-          python scripts/research-repair-demanded-official-odds.py \
+          set -euo pipefail
+          node scripts/research-resolve-demanded-odds-failures.mjs \
             --demand demand/research-ten-year-canonical-demand.jsonl \
             --meta-dir base-odds \
-            --passes 4 \
-            --out analysis-results/research-demanded-odds-repair.jsonl \
-            --meta analysis-results/research-demanded-odds-repair-meta.json
-          code=$?
-          echo "$code" > analysis-results/research-demanded-odds-repair-exit.txt
-          exit 0
+            --corpus assembled/ten-year-history-corpus.jsonl \
+            --out analysis-results/research-demanded-odds-resolved-failures.jsonl \
+            --meta analysis-results/research-demanded-odds-resolved-failures-meta.json
 
-      - name: Verify repair provenance
+      - name: Fetch official final odds for resolved failed races only
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-demanded-odds-resolved-failures-meta.json').read_text())
+          print(int(m['resolvedCount']))
+          PY
+          )
+          if [ "$count" = "0" ]; then
+            : > analysis-results/research-demanded-odds-repair.jsonl
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          m={
+            'purpose':'research_only_selective_official_final_odds_repair',
+            'inputDemandRaces':0,'completedRaces':0,'failures':[],
+            'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False
+          }
+          Path('analysis-results/research-demanded-odds-repair-meta.json').write_text(json.dumps(m,ensure_ascii=False,indent=2)+'\n')
+          PY
+          else
+            python scripts/research-fetch-demanded-official-odds.py \
+              --input analysis-results/research-demanded-odds-resolved-failures.jsonl \
+              --workers 3 \
+              --out analysis-results/research-demanded-odds-repair.jsonl \
+              --meta analysis-results/research-demanded-odds-repair-meta.json
+          fi
+
+      - name: Verify repair is complete and research-only
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           import json
           from pathlib import Path
+          r=json.loads(Path('analysis-results/research-demanded-odds-resolved-failures-meta.json').read_text())
           m=json.loads(Path('analysis-results/research-demanded-odds-repair-meta.json').read_text())
-          assert m['syntheticOddsUsed'] is False,m
-          assert m['productionDatabaseWritten'] is False,m
-          assert m['productionModelChanged'] is False,m
-          print(json.dumps(m,ensure_ascii=False))
+          assert r['unresolvedCount']==0,r
+          assert r['resolvedCount']==r['initialFailureCount'],r
+          assert not m.get('failures'),m
+          assert int(m.get('inputDemandRaces') or 0)==r['resolvedCount'],(r,m)
+          assert int(m.get('completedRaces') or 0)==r['resolvedCount'],(r,m)
+          assert r['syntheticOddsUsed'] is False and m['syntheticOddsUsed'] is False
+          assert r['productionDatabaseWritten'] is False and m['productionDatabaseWritten'] is False
+          assert r['productionModelChanged'] is False and m['productionModelChanged'] is False
+          print(json.dumps({'initialFailures':r['initialFailureCount'],'resolvedUrls':r['resolvedCount'],'repairedOdds':m['completedRaces'],'remainingFailures':len(m.get('failures',[]))},ensure_ascii=False))
           PY
 
       - uses: actions/upload-artifact@v4
@@ -120,32 +166,27 @@ jobs:
         with:
           name: research-demanded-odds-repair
           path: |
+            analysis-results/research-demanded-odds-resolved-failures.jsonl
+            analysis-results/research-demanded-odds-resolved-failures-meta.json
             analysis-results/research-demanded-odds-repair.jsonl
             analysis-results/research-demanded-odds-repair-meta.json
-            analysis-results/research-demanded-odds-repair-exit.txt
           if-no-files-found: warn
           retention-days: 30
 
       - name: Mark repair success
+        if: success()
         run: |
-          unresolved=$(python - <<'PY'
-          import json
-          from pathlib import Path
-          m=json.loads(Path('analysis-results/research-demanded-odds-repair-meta.json').read_text())
-          print(int(m.get('unresolvedCount') or 0))
-          PY
-          )
-          if [ "$unresolved" = "0" ]; then
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-              -f state=success \
-              -f context='research/ten-year-demanded-odds-repair' \
-              -f description='All yearly odds failures repaired or no failures existed' \
-              -f target_url="$STATUS_TARGET_URL" >/dev/null
-          else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-              -f state=failure \
-              -f context='research/ten-year-demanded-odds-repair' \
-              -f description="${unresolved} demanded odds races still require targeted parser repair" \
-              -f target_url="$STATUS_TARGET_URL" >/dev/null
-            exit 1
-          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='research/ten-year-demanded-odds-repair' \
+            -f description='All failed demanded odds races repaired through canonical JRA archive URLs' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Mark repair failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='research/ten-year-demanded-odds-repair' \
+            -f description='Targeted demanded odds repair still needs URL/parser correction' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
