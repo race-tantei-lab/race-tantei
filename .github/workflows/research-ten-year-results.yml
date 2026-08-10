@@ -1,0 +1,136 @@
+name: Research ten-year official results
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-ten-year-results.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  PROVEN_RESEARCH_COMMIT: 28ba141ca123964070925e42194763a3b3800f0f
+
+jobs:
+  begin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark ten-year result collection pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='research/ten-year-results' \
+            -f description='Collecting sharded official result history' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+  collect:
+    needs: begin
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - { year: 2015, start: '201501', end: '201512' }
+          - { year: 2016, start: '201601', end: '201612' }
+          - { year: 2017, start: '201701', end: '201712' }
+          - { year: 2018, start: '201801', end: '201812' }
+          - { year: 2019, start: '201901', end: '201912' }
+          - { year: 2020, start: '202001', end: '202012' }
+          - { year: 2021, start: '202101', end: '202112' }
+          - { year: 2022, start: '202201', end: '202212' }
+          - { year: 2023, start: '202301', end: '202312' }
+          - { year: 2024, start: '202401', end: '202412' }
+          - { year: 2025, start: '202501', end: '202512' }
+          - { year: 2026, start: '202601', end: '202608' }
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Bring proven research result collector into workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$PROVEN_RESEARCH_COMMIT"
+          git show "$PROVEN_RESEARCH_COMMIT:scripts/research-export-official-history.mjs" > scripts/research-export-official-history.mjs
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install and build official parsers
+        run: |
+          npm ci
+          npm run build:test
+
+      - name: Export official result history for ${{ matrix.year }}
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/research-export-official-history.mjs \
+            --start-month ${{ matrix.start }} \
+            --end-month ${{ matrix.end }} \
+            --concurrency 2 \
+            --out analysis-results/history-${{ matrix.year }}.jsonl \
+            --meta analysis-results/history-${{ matrix.year }}-meta.json \
+            | tee history-${{ matrix.year }}.log
+
+      - name: Verify complete result shard
+        env:
+          YEAR: ${{ matrix.year }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          year=os.environ['YEAR']
+          m=json.loads(Path(f'analysis-results/history-{year}-meta.json').read_text())
+          assert m['requestedUrls'] > 1500, m
+          assert m['completed'] == m['requestedUrls'], m
+          assert not m['failures'], m['failures'][:10]
+          assert m['syntheticOddsUsed'] is False
+          assert m['productionDatabaseWritten'] is False
+          print(json.dumps({'year':year,'races':m['completed'],'failures':0,'productionWrite':False},ensure_ascii=False))
+          PY
+
+      - name: Upload result shard
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-results-${{ matrix.year }}
+          path: |
+            analysis-results/history-${{ matrix.year }}.jsonl
+            analysis-results/history-${{ matrix.year }}-meta.json
+            history-${{ matrix.year }}.log
+          if-no-files-found: error
+          retention-days: 14
+
+  finish:
+    if: always()
+    needs: collect
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark ten-year result collection status
+        env:
+          RESULT: ${{ needs.collect.result }}
+        run: |
+          if [ "$RESULT" = "success" ]; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=success \
+              -f context='research/ten-year-results' \
+              -f description='Official 2015-2026 result shards validated' \
+              -f target_url="$STATUS_TARGET_URL" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              -f state=failure \
+              -f context='research/ten-year-results' \
+              -f description='Ten-year result collection needs repair' \
+              -f target_url="$STATUS_TARGET_URL" >/dev/null
+            exit 1
+          fi
