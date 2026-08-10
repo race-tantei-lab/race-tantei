@@ -1,0 +1,72 @@
+name: Research inventory Aug 1-2 odds runs
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - '.github/workflows/research-inventory-august-odds-runs.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Mark inventory pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/august-odds-run-inventory' \
+            -f description='Searching Aug 1-2 workflow runs for retained official odds' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Inventory runs and artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p analysis-results
+          gh api --paginate --method GET "repos/${GITHUB_REPOSITORY}/actions/runs" \
+            -f created='2026-08-01T00:00:00Z..2026-08-03T23:59:59Z' -f per_page=100 \
+            --jq '.workflow_runs[] | {id,name,event,status,conclusion,created_at,updated_at,head_sha,html_url}' \
+            | jq -s '.' > analysis-results/august-runs.json
+          echo "runs=$(jq length analysis-results/august-runs.json)"
+          : > analysis-results/august-run-artifacts.jsonl
+          jq -r '.[].id' analysis-results/august-runs.json | while read -r run; do
+            gh api --method GET "repos/${GITHUB_REPOSITORY}/actions/runs/${run}/artifacts?per_page=100" \
+              | jq -c --argjson run "$run" '.artifacts[]? | {runId:$run,id,name,size_in_bytes,expired,created_at}' \
+              >> analysis-results/august-run-artifacts.jsonl
+          done
+          echo '--- likely odds runs ---'
+          jq -c '.[] | select((.name|ascii_downcase|test("odds|final|live|bet|race")))' analysis-results/august-runs.json || true
+          echo '--- likely odds artifacts ---'
+          grep -Ei 'odds|final|live|bet|race' analysis-results/august-run-artifacts.jsonl || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-august-odds-run-inventory
+          path: |
+            analysis-results/august-runs.json
+            analysis-results/august-run-artifacts.jsonl
+          if-no-files-found: error
+          retention-days: 7
+      - name: Mark inventory success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/august-odds-run-inventory' \
+            -f description='Aug 1-2 workflow artifact inventory complete' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark inventory failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/august-odds-run-inventory' \
+            -f description='Aug 1-2 workflow artifact inventory failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
