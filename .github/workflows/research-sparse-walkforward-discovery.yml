@@ -1,0 +1,111 @@
+name: Research sparse walk-forward discovery
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-sparse-walkforward-discovery.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Mark discovery pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/sparse-walk-forward-discovery' \
+            -f description='Discovering sparse rules using prior data only' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - name: Download ten-year corpus with warmup
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl ten-year-history-assembly-meta.json -d history
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('history/ten-year-history-assembly-meta.json').read_text())
+          assert m['corpusStart']=='2015-01-04',m
+          assert m['evaluationStart']=='2016-08-10',m
+          assert m['evaluationEnd']=='2026-08-09',m
+          assert m['corpusRaceCount']==40155,m
+          assert m['evaluationRaceCount']==34566,m
+          assert m['productionDatabaseWritten'] is False,m
+          print(json.dumps(m,ensure_ascii=False))
+          PY
+
+      - name: Discover quarterly sparse rules and demand
+        run: |
+          set -euo pipefail
+          python scripts/research-sparse-walkforward-run.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --out analysis-results/research-sparse-walkforward-demand.jsonl \
+            --rules-out analysis-results/research-sparse-walkforward-rules.json \
+            --meta analysis-results/research-sparse-walkforward-meta.json
+
+      - name: Verify no future leakage and immutable research mode
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-sparse-walkforward-meta.json').read_text())
+          assert m['evaluationStart']=='2016-08-10',m
+          assert m['evaluationEnd']=='2026-08-09',m
+          assert m['selectedRaces']==14410,m
+          assert m['maxRulesPerFold']==8,m
+          assert m['maxPredicatesPerRule']==3,m
+          assert m['targetDayResultsUsedForSelection'] is False,m
+          assert m['historicalFinalOddsUsedForDiscovery'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          assert m['productionModelChanged'] is False,m
+          rules=json.loads(Path('analysis-results/research-sparse-walkforward-rules.json').read_text())
+          eval_rules=[x for x in rules if x['startDate']>='2016-08-10']
+          assert len(eval_rules)==41,len(eval_rules)
+          assert all(x['ruleCount']<=8 and x['predicateCount']<=24 for x in eval_rules),eval_rules
+          print(json.dumps({'selected':m['selectedRaces'],'proxyRoi':m['proxyTicketRoiPct'],'backfills':m['constraintBackfillCount'],'evaluationFolds':len(eval_rules)},ensure_ascii=False))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-sparse-walkforward-discovery
+          path: |
+            analysis-results/research-sparse-walkforward-demand.jsonl
+            analysis-results/research-sparse-walkforward-rules.json
+            analysis-results/research-sparse-walkforward-meta.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Mark discovery success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/sparse-walk-forward-discovery' \
+            -f description='Sparse walk-forward discovery completed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Mark discovery failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/sparse-walk-forward-discovery' \
+            -f description='Sparse walk-forward discovery requires targeted fix' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
