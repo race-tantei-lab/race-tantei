@@ -1,0 +1,76 @@
+name: Research collect JRA odds CNAME checksum pairs
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - 'scripts/research-collect-odds-cname-pairs.mjs'
+      - '.github/workflows/research-collect-odds-cname-pairs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  REPAIR_ARTIFACT_ID: '9071967432'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/jra-odds-cname-pairs' \
+            -f description='Collecting official JRA result-to-odds CNAME checksum pairs' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Build parser
+        run: |
+          npm ci
+          npm run build:test
+      - name: Download resolved repair rows
+        run: |
+          set -euo pipefail
+          mkdir -p repair analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${REPAIR_ARTIFACT_ID}/zip" > repair.zip
+          unzip -q repair.zip -d repair
+          test -s repair/research-demanded-odds-resolved-failures.jsonl
+      - name: Collect official CNAME pairs
+        run: |
+          node scripts/research-collect-odds-cname-pairs.mjs \
+            --input repair/research-demanded-odds-resolved-failures.jsonl \
+            --out analysis-results/jra-odds-cname-pairs.jsonl \
+            --meta analysis-results/jra-odds-cname-pairs-meta.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-jra-odds-cname-pairs
+          path: |
+            analysis-results/jra-odds-cname-pairs.jsonl
+            analysis-results/jra-odds-cname-pairs-meta.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Mark success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/jra-odds-cname-pairs' \
+            -f description='Official JRA CNAME checksum pair collection complete' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/jra-odds-cname-pairs' \
+            -f description='CNAME pair collection requires targeted page repair' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
