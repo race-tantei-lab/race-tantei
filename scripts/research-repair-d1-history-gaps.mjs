@@ -7,11 +7,15 @@ import {
   pageLooksLikeResult,
   parseResultPage
 } from "../dist-test/src/v1/jra.js";
-import { fetchJraArchivePage } from "../dist-test/src/v1/three-month-archive.js";
+import {
+  fetchJraArchivePage,
+  getArchiveResultUrls
+} from "../dist-test/src/v1/three-month-archive.js";
 import {
   parseDesktopPayouts,
   parseDesktopResultRunners
 } from "../dist-test/src/v1/three-month-desktop.js";
+import { stripHtml } from "../dist-test/src/v1/utils.js";
 import { parseLegacyRaceMeta } from "./research-legacy-race-meta.mjs";
 
 function arg(name, fallback = null) {
@@ -27,7 +31,21 @@ const META = path.resolve(arg("--meta", "analysis-results/d1-history-gap-repairs
 const CONCURRENCY = Math.max(1, Math.min(4, Number(arg("--concurrency", "3"))));
 const ATTEMPTS = 6;
 
+const VENUE_CODE = {
+  "札幌": "01",
+  "函館": "02",
+  "福島": "03",
+  "新潟": "04",
+  "東京": "05",
+  "中山": "06",
+  "中京": "07",
+  "京都": "08",
+  "阪神": "09",
+  "小倉": "10"
+};
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const pad2 = (value) => String(value ?? 0).padStart(2, "0");
 
 function parseJsonl(text) {
   return text.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
@@ -81,6 +99,30 @@ function cnameFromUrl(url) {
   }
 }
 
+function expectedCnamePrefix(race) {
+  const venueCode = VENUE_CODE[race.venue];
+  if (!venueCode) throw new Error(`VENUE_CODE_NOT_FOUND:${race.venue}`);
+  const compactDate = race.race_date.replace(/-/g, "");
+  const year = race.race_date.slice(0, 4);
+  return `pw01sde10${venueCode}${year}${pad2(race.meeting_no)}${pad2(race.meeting_day)}${pad2(race.race_no)}${compactDate}`.toLowerCase();
+}
+
+async function resolveArchiveResultUrl(race, monthCache) {
+  const month = race.race_date.slice(0, 7).replace("-", "");
+  let promise = monthCache.get(month);
+  if (!promise) {
+    promise = getArchiveResultUrls(month);
+    monthCache.set(month, promise);
+  }
+  const urls = await promise;
+  const prefix = expectedCnamePrefix(race);
+  const matches = urls.filter((url) => cnameFromUrl(url).toLowerCase().startsWith(prefix));
+  if (matches.length !== 1) {
+    throw new Error(`ARCHIVE_RACE_URL_MATCH:${race.race_id}:count=${matches.length}`);
+  }
+  return matches[0];
+}
+
 async function fetchOfficialHtml(resultUrl) {
   const cname = cnameFromUrl(resultUrl);
   let last = null;
@@ -102,6 +144,34 @@ async function fetchOfficialHtml(resultUrl) {
     if (attempt < ATTEMPTS) await sleep(Math.min(10_000, 1000 * attempt));
   }
   throw last instanceof Error ? last : new Error(String(last));
+}
+
+function normalizeOfficialText(html) {
+  return stripHtml(html)
+    .replace(/[０-９]/g, (char) => String(char.charCodeAt(0) - 0xfee0))
+    .replace(/[：﹕]/g, ":")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function canonicalConditionsFromOfficialHtml(html, raceName) {
+  const text = normalizeOfficialText(html);
+  const index = raceName ? text.indexOf(raceName) : -1;
+  const scopes = index >= 0
+    ? [text.slice(Math.max(0, index - 180), Math.min(text.length, index + 800)), text]
+    : [text];
+  const patterns = [
+    /(障害(?:2歳|3歳|3歳以上|4歳以上)?\s*(?:新馬|未勝利|オープン))/u,
+    /((?:2歳|3歳|3歳以上|4歳以上)\s*(?:牝馬限定|牝|牡・牝)?\s*(?:新馬|未勝利|1勝クラス|2勝クラス|3勝クラス|オープン))/u,
+    /(サラ系(?:2歳|3歳|3歳以上|4歳以上)\s*(?:牝馬限定|牝|牡・牝)?\s*(?:新馬|未勝利|1勝クラス|2勝クラス|3勝クラス|オープン))/u
+  ];
+  for (const scope of scopes) {
+    for (const pattern of patterns) {
+      const match = scope.match(pattern)?.[1];
+      if (match) return match.replace(/^サラ系/, "").replace(/\s+/g, " ").trim();
+    }
+  }
+  return null;
 }
 
 function metadataComplete(race) {
@@ -142,12 +212,13 @@ function repairFromOfficialHtml(d1Race, html, resultUrl, method) {
   if (!pageLooksLikeResult(html)) throw new Error("RESULT_SIGNATURE_MISSING");
   const parsed = parseResultPage(html, resultUrl);
   const meta = parseLegacyRaceMeta(html, resultUrl);
+  const conditionFallback = canonicalConditionsFromOfficialHtml(html, d1Race.race_name ?? parsed.race?.raceName ?? meta.raceName);
   const desktopRunners = parseDesktopResultRunners(html).map((runner) => ({ ...runner, winOdds: null }));
   const payouts = parsed.payouts?.length ? parsed.payouts : parseDesktopPayouts(html);
   const fallbackRace = {
     ...parsed.race,
     raceName: parsed.race?.raceName && !/検索ウィンドウ|緊急情報/.test(parsed.race.raceName) ? parsed.race.raceName : meta.raceName,
-    conditions: parsed.race?.conditions ?? meta.conditions,
+    conditions: parsed.race?.conditions ?? meta.conditions ?? conditionFallback,
     surface: parsed.race?.surface ?? meta.surface,
     distanceM: parsed.race?.distanceM ?? meta.distanceM,
     direction: parsed.race?.direction ?? meta.direction,
@@ -156,11 +227,12 @@ function repairFromOfficialHtml(d1Race, html, resultUrl, method) {
     status: parsed.race?.status ?? "finished"
   };
   const race = mergeRace(d1Race, fallbackRace);
-  if (!race.conditions) race.conditions = meta.conditions;
+  if (!race.conditions) race.conditions = meta.conditions ?? conditionFallback;
   if (!race.surface) race.surface = meta.surface;
   if (!race.distanceM) race.distanceM = meta.distanceM;
   if (!race.direction) race.direction = meta.direction;
   if (!race.raceName || /検索ウィンドウ|緊急情報/.test(race.raceName)) race.raceName = meta.raceName;
+  race.resultUrl = resultUrl;
   return {
     race,
     runners: desktopRunners,
@@ -230,21 +302,24 @@ async function main() {
   }
 
   const failures = [];
+  const monthCache = new Map();
   let archivePost = 0;
   let directGet = 0;
+  let archiveUrlResolved = 0;
   const networkRepairs = await mapConcurrent(networkTargets, CONCURRENCY, async (race, index) => {
-    const resultUrl = race.result_url;
-    if (!resultUrl) {
-      failures.push({ raceId: race.race_id, error: "RESULT_URL_MISSING" });
-      return null;
-    }
+    let resultUrl = race.result_url;
     try {
+      if (!cnameFromUrl(resultUrl)) {
+        resultUrl = await resolveArchiveResultUrl(race, monthCache);
+        archiveUrlResolved += 1;
+      }
+      if (!resultUrl) throw new Error("RESULT_URL_MISSING");
       const fetched = await fetchOfficialHtml(resultUrl);
       if (fetched.method === "archive_post") archivePost += 1;
       else directGet += 1;
       const repaired = repairFromOfficialHtml(race, fetched.html, resultUrl, fetched.method);
       if (!metadataComplete(repaired.race) || !outcomeComplete(repaired)) {
-        throw new Error(`NETWORK_REPAIR_INCOMPLETE:${race.race_id}`);
+        throw new Error(`NETWORK_REPAIR_INCOMPLETE:${race.race_id}:conditions=${JSON.stringify(repaired.race.conditions)}:runners=${repaired.runners.length}:results=${repaired.results.length}:payouts=${repaired.payouts.length}`);
       }
       if ((index + 1) % 20 === 0 || index + 1 === networkTargets.length) {
         console.log(JSON.stringify({ repaired2026: index + 1, total2026: networkTargets.length, failures: failures.length }));
@@ -270,6 +345,7 @@ async function main() {
     repairedFrom2025Artifact: localRepairs.filter((row) => row.race.raceDate.startsWith("2025")).length,
     networkTargets2026: networkTargets.length,
     networkRepairs2026: networkRepairs.filter(Boolean).length,
+    archiveUrlResolved,
     fetchMethods: { archivePost, directGet },
     failures,
     unresolved,
