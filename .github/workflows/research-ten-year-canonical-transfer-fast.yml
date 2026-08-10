@@ -1,0 +1,147 @@
+name: Research ten-year canonical transfer fast
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - 'scripts/research-evaluate-canonical-transfer-fast.py'
+      - '.github/workflows/research-ten-year-canonical-transfer-fast.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  DEMAND_ARTIFACT_ID: '9057033953'
+  ODDS_RUN_ID: '31373205723'
+  REPAIR_ARTIFACT_ID: '9074166307'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate-fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Mark fast transfer pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/ten-year-canonical-transfer-fast' \
+            -f description='Running exact-equivalence accelerated 297-rule ten-year evaluation' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - uses: actions/checkout@v4
+
+      - name: Download assembled history
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assembled
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > assembled.zip
+          unzip -q assembled.zip -d assembled
+          test -s assembled/ten-year-history-corpus.jsonl
+
+      - name: Download demand and 297 rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${DEMAND_ARTIFACT_ID}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+          test -s demand/research-ten-year-canonical-demand.jsonl
+          test -s demand/research-canonical-rules-297.json
+
+      - name: Download yearly official odds
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p odds
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > odds-artifacts.json
+          for year in $(seq 2016 2026); do
+            name="research-demanded-odds-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' odds-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != "null"
+            mkdir -p "odds/$year"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$name.zip"
+            unzip -q "$name.zip" -d "odds/$year"
+          done
+          find odds -mindepth 2 -name 'research-demanded-odds-20*.jsonl' -type f -exec cp {} odds/ \;
+          test "$(find odds -maxdepth 1 -name 'research-demanded-odds-20*.jsonl' -type f | wc -l)" -eq 11
+
+      - name: Download zero-gap repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p repair
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${REPAIR_ARTIFACT_ID}/zip" > repair.zip
+          unzip -q repair.zip -d repair
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('repair/research-demanded-odds-repair-meta.json').read_text())
+          assert m['completedRaces']==80 and not m['failures'],m
+          assert m['syntheticOddsUsed'] is False and m['estimatedOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False and m['productionModelChanged'] is False,m
+          print(json.dumps(m,ensure_ascii=False))
+          PY
+          cp repair/research-demanded-odds-repair.jsonl odds/research-demanded-odds-repair.jsonl
+
+      - name: Evaluate canonical transfer with exact matcher accelerator
+        run: |
+          set -euo pipefail
+          python scripts/research-evaluate-canonical-transfer-fast.py \
+            --corpus assembled/ten-year-history-corpus.jsonl \
+            --demand demand/research-ten-year-canonical-demand.jsonl \
+            --rules demand/research-canonical-rules-297.json \
+            --odds-dir odds \
+            --out analysis-results/research-canonical-297-ten-year-transfer-fast.json
+
+      - name: Verify complete zero-gap result
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-canonical-297-ten-year-transfer-fast.json').read_text())
+          assert m['evaluationStart']=='2016-08-10' and m['evaluationEnd']=='2026-08-09',m
+          assert m['sourceRuleCount']==297,m
+          assert m['selectedDemandRaces']==14410,m
+          assert m['missingOddsRaceCount']==0,m
+          assert m['evaluationErrorCount']==0,m
+          assert m['evaluatedRaces']==14410,m
+          assert m['hardGateEligible'] is True,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False and m['productionModelChanged'] is False,m
+          print(json.dumps({
+            'evaluatedRaces':m['evaluatedRaces'],
+            'allThreeCoursesAtLeast200Pct':m['allThreeCoursesAtLeast200Pct'],
+            'roi':{k:v['roiPct'] for k,v in m['courses'].items()}
+          },ensure_ascii=False))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-canonical-297-ten-year-transfer-fast
+          path: analysis-results/research-canonical-297-ten-year-transfer-fast.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Mark fast transfer success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/ten-year-canonical-transfer-fast' \
+            -f description='Exact-equivalence accelerated 297-rule ten-year evaluation complete' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Mark fast transfer failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/ten-year-canonical-transfer-fast' \
+            -f description='Accelerated evaluator requires correction' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
