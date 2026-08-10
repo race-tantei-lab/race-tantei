@@ -1,0 +1,36 @@
+{
+  "purpose": "research_only_known_official_result_exclusions",
+  "policy": {
+    "productionWrite": false,
+    "syntheticFill": false,
+    "estimatedResultData": false,
+    "scoredAsLoss": false,
+    "handling": "exclude these races from result-dependent research calculations until official result payload is recovered; keep them visible in coverage accounting"
+  },
+  "races": [
+    {
+      "raceId": "2015-08-22-niigata-02",
+      "evaluationRole": "warmup_only",
+      "resultUrl": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004201502070220150822%2FC6",
+      "reason": "JRA result page repeatedly returns blocked/non-result response to GitHub Actions; official page existence independently verified"
+    },
+    {
+      "raceId": "2016-08-28-niigata-12",
+      "evaluationRole": "evaluation",
+      "resultUrl": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1004201602101220160828%2F78",
+      "reason": "JRA result page repeatedly returns blocked response to GitHub Actions; official page existence independently verified"
+    },
+    {
+      "raceId": "2017-08-26-sapporo-10",
+      "evaluationRole": "evaluation",
+      "resultUrl": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1001201702031020170826%2F06",
+      "reason": "JRA result page repeatedly returns blocked response to GitHub Actions; official page existence independently verified"
+    },
+    {
+      "raceId": "2019-06-29-hakodate-11",
+      "evaluationRole": "evaluation",
+      "resultUrl": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1002201901051120190629%2F09",
+      "reason": "JRA result page repeatedly returns blocked response to GitHub Actions; official page existence independently verified"
+    }
+  ]
+}
