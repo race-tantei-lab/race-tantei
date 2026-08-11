@@ -17,6 +17,7 @@ env:
   GH_TOKEN: ${{ github.token }}
   ODDS_RUN_ID: '31446629662'
   RECENT_ODDS_RUN_ID: '31446902302'
+  REPAIR_RUN_ID: '31447072766'
   BEST_DEMAND_RUN_ID: '31417411680'
   HISTORY_ARTIFACT_ID: '9056288221'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -30,7 +31,7 @@ jobs:
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending -f context='research/continuous-market-value-evaluation' \
-            -f description='Waiting only for required official odds shards' \
+            -f description='Waiting only for required official odds shards and residual repair' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -38,13 +39,14 @@ jobs:
           python-version: '3.12'
       - name: Compile evaluator before waiting on network research
         run: python -m py_compile scripts/research-evaluate-continuous-market-value.py
-      - name: Wait only for 2016-2023 base shards and 2024-2026 archive-accelerated shards
+      - name: Wait for required base, recent, and repair artifacts
         shell: bash
         run: |
           set -euo pipefail
           for i in $(seq 1 700); do
             gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > base.json
             gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RECENT_ODDS_RUN_ID}/artifacts?per_page=100" > recent.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${REPAIR_RUN_ID}/artifacts?per_page=100" > repair.json
             base_count=0
             for year in $(seq 2016 2023); do
               name="research-continuous-market-odds-${year}"
@@ -57,8 +59,9 @@ jobs:
               n=$(jq -r --arg n "$name" '[.artifacts[] | select(.name==$n and .expired==false)] | length' recent.json)
               recent_count=$((recent_count+n))
             done
-            echo "required odds artifacts base=$base_count/8 recent=$recent_count/3 poll=$i"
-            if [ "$base_count" -eq 8 ] && [ "$recent_count" -eq 3 ]; then exit 0; fi
+            repair_count=$(jq -r '[.artifacts[] | select(.name=="research-continuous-market-odds-repair" and .expired==false)] | length' repair.json)
+            echo "required artifacts base=$base_count/8 recent=$recent_count/3 repair=$repair_count/1 poll=$i"
+            if [ "$base_count" -eq 8 ] && [ "$recent_count" -eq 3 ] && [ "$repair_count" -eq 1 ]; then exit 0; fi
             sleep 30
           done
           exit 1
@@ -66,7 +69,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p history demand odds analysis-results
+          mkdir -p history demand odds repair analysis-results
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
           unzip -q history.zip ten-year-history-corpus.jsonl -d history
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > demand-artifacts.json
@@ -103,6 +106,35 @@ jobs:
             cp "tmp-$year/research-continuous-market-odds-${year}.jsonl" odds/
           done
           test "$(find odds -name 'research-continuous-market-odds-20*.jsonl' -type f | wc -l)" -eq 11
+      - name: Download and merge residual repaired odds
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${REPAIR_RUN_ID}/artifacts?per_page=100" > repair-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-continuous-market-odds-repair" and .expired==false) | .id' repair-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > repair.zip
+          unzip -q repair.zip -d repair
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rp=Path('repair/research-continuous-market-odds-repair.jsonl')
+          repairs=[]
+          if rp.exists():
+            repairs=[json.loads(line) for line in rp.read_text().splitlines() if line.strip()]
+          by_year={str(y):{} for y in range(2016,2027)}
+          for year in by_year:
+            p=Path(f'odds/research-continuous-market-odds-{year}.jsonl')
+            for line in p.read_text().splitlines():
+              if line.strip():
+                r=json.loads(line);by_year[year][str(r['raceId'])]=r
+          for r in repairs:
+            year=str(r['raceDate'])[:4];by_year[year][str(r['raceId'])]=r
+          for year,rows in by_year.items():
+            p=Path(f'odds/research-continuous-market-odds-{year}.jsonl')
+            p.write_text(''.join(json.dumps(rows[k],ensure_ascii=False,separators=(',',':'))+'\n' for k in sorted(rows)))
+          print(json.dumps({'repairedRowsMerged':len(repairs),'counts':{y:len(r) for y,r in by_year.items()}},ensure_ascii=False))
+          PY
       - name: Evaluate probability x official-odds value candidates
         run: |
           python scripts/research-evaluate-continuous-market-value.py \
