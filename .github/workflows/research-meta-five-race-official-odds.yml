@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Compile preparation and merge scripts
-        run: python -m py_compile scripts/research-prepare-meta-market-input.py scripts/research-merge-meta-market-odds.py scripts/research-fetch-demanded-official-odds.py
+        run: python -m py_compile scripts/research-prepare-meta-market-input.py scripts/research-merge-meta-market-odds.py scripts/research-fetch-demanded-official-odds.py scripts/research-fetch-resolved-demanded-official-odds.py
       - name: Download meta selection and source-clean corpus
         run: |
           set -euo pipefail
@@ -140,7 +140,7 @@ jobs:
           path: input
       - name: Fetch only missing official odds for year
         run: |
-          python scripts/research-fetch-demanded-official-odds.py \
+          python scripts/research-fetch-resolved-demanded-official-odds.py \
             --input input/missing-demand.jsonl \
             --year '${{ matrix.year }}' \
             --workers 3 \
