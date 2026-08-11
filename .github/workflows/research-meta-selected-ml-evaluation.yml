@@ -1,0 +1,143 @@
+name: Research meta-selected ML evaluation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-meta-selected-ml-evaluation.yml"
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  ODDS_RUN_ID: '31456303148'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Mark evaluation pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/meta-selected-ml-evaluation' -f description='Waiting for source-clean meta-selected odds then applying Top50 gate' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Wait for source-clean odds and reuse inputs
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 720); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > arts.json
+            oid=$(jq -r '.artifacts[] | select(.name=="research-meta-market-source-clean" and .expired==false) | .id' arts.json | head -n1)
+            iid=$(jq -r '.artifacts[] | select(.name=="research-meta-market-reuse-input" and .expired==false) | .id' arts.json | head -n1)
+            if [ -n "$oid" ] && [ "$oid" != null ] && [ -n "$iid" ] && [ "$iid" != null ]; then echo "$oid" > oid.txt; echo "$iid" > iid.txt; break; fi
+            sleep 15
+          done
+          test -s oid.txt && test -s iid.txt
+          mkdir -p shared/odds shared/input shared/predictions
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$(cat oid.txt)/zip" > odds.zip
+          unzip -q odds.zip -d shared/odds
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$(cat iid.txt)/zip" > inputs.zip
+          unzip -q inputs.zip -d shared/input
+      - name: Normalize filenames for existing audited evaluators
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          src=Path('shared/input/selected-predictions.jsonl');assert src.exists()
+          outs={str(y):(Path('shared/predictions')/f'runner-ranker-{y}.jsonl').open('w') for y in range(2016,2027)}
+          counts={y:0 for y in outs}
+          for line in src.read_text().splitlines():
+            if not line.strip():continue
+            r=json.loads(line);y=str(r['raceDate'])[:4];outs[y].write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n');counts[y]+=1
+          for f in outs.values():f.close()
+          for y in range(2016,2027):
+            p=Path('shared/odds')/f'research-meta-market-odds-{y}.jsonl';assert p.exists(),p
+            p.rename(Path('shared/odds')/f'research-continuous-market-odds-{y}.jsonl')
+          assert all(v>0 for v in counts.values()),counts
+          print(json.dumps(counts,ensure_ascii=False))
+          PY
+          test -s shared/input/selected-history.jsonl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-meta-selected-eval-input
+          path: shared
+          retention-days: 14
+          compression-level: 9
+
+  fixed:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-meta-selected-eval-input
+          path: shared
+      - name: Evaluate fixed ability/gap configurations
+        run: |
+          python scripts/research-evaluate-runner-ml-market.py --predictions-dir shared/predictions --odds-dir shared/odds --history shared/input/selected-history.jsonl --out analysis-results/meta-selected-fixed.json
+      - name: Verify exact Top50 reporting
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('analysis-results/meta-selected-fixed.json'))
+          assert d['selectedRaces']==14410,d
+          for n,c in d['configs'].items():
+            for course in ('light','standard','premium'):
+              x=c['courses'][course];assert x['races']==14410 and x['top50ExcludedRoiPct'] is not None,(n,course,x)
+          print(json.dumps({n:{course:{'roi':c['courses'][course]['roiPct'],'top50':c['courses'][course]['top50ExcludedRoiPct'],'top100':c['courses'][course]['top100ExcludedRoiPct'],'top1pct':c['courses'][course]['top1PctExcludedRoiPct']} for course in ('light','standard','premium')}|{'pass':c['passesCompletionHardGate']} for n,c in d['configs'].items()},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-meta-selected-fixed-evaluation
+          path: analysis-results/meta-selected-fixed.json
+          retention-days: 30
+
+  calibrated:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-meta-selected-eval-input
+          path: shared
+      - name: Evaluate prior-OOS log-loss calibrated model
+        run: |
+          python scripts/research-evaluate-runner-ml-calibrated.py --predictions-dir shared/predictions --odds-dir shared/odds --history shared/input/selected-history.jsonl --out analysis-results/meta-selected-calibrated.json
+      - name: Verify exact Top50 reporting and no target-year ROI tuning
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('analysis-results/meta-selected-calibrated.json'))
+          assert d['selectedRaces']==14410,d
+          assert d['targetYearRoiUsedForCalibration'] is False,d
+          for course in ('light','standard','premium'):
+            x=d['courses'][course];assert x['races']==14410 and x['top50ExcludedRoiPct'] is not None,(course,x)
+          print(json.dumps({'courses':{course:{'roi':d['courses'][course]['roiPct'],'top50':d['courses'][course]['top50ExcludedRoiPct'],'top100':d['courses'][course]['top100ExcludedRoiPct'],'top1pct':d['courses'][course]['top1PctExcludedRoiPct']} for course in ('light','standard','premium')},'pass':d['passesCompletionHardGate'],'params':d['yearParameters']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-meta-selected-calibrated-evaluation
+          path: analysis-results/meta-selected-calibrated.json
+          retention-days: 30
+
+  finish:
+    if: always()
+    needs: [fixed, calibrated]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark evaluation status
+        run: |
+          if [ '${{ needs.fixed.result }}' = success ] && [ '${{ needs.calibrated.result }}' = success ]; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/meta-selected-ml-evaluation' -f description='Meta-selected ML evaluations completed with Top50 robustness' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/meta-selected-ml-evaluation' -f description='Meta-selected ML evaluation requires repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
+            exit 1
+          fi
