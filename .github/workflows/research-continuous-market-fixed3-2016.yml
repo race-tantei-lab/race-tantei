@@ -1,0 +1,84 @@
+name: Research continuous market fixed3 2016
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-continuous-market-fixed3-2016.yml"
+      - "scripts/research-continuous-market-value-fixed3-run.py"
+      - "scripts/research-evaluate-continuous-market-value.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  BASE_ODDS_RUN_ID: '31446629662'
+  BEST_DEMAND_RUN_ID: '31417411680'
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/continuous-market-fixed3-2016' \
+            -f description='Testing exactly three tickets on complete 2016 official odds' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Download corpus, frozen selection and 2016 official odds
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history demand odds analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > d.json
+          did=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' d.json | head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${did}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BASE_ODDS_RUN_ID}/artifacts?per_page=100" > o.json
+          oid=$(jq -r '.artifacts[] | select(.name=="research-continuous-market-odds-2016" and .expired==false) | .id' o.json | head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${oid}/zip" > odds.zip
+          unzip -q odds.zip -d odds
+      - name: Run fixed-three evaluation
+        run: |
+          python scripts/research-continuous-market-value-fixed3-run.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --demand demand/demand.jsonl \
+            --odds-dir odds \
+            --out analysis-results/fixed3-2016.json
+      - name: Verify and summarize
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/fixed3-2016.json').read_text());b=m['bestVariant'];v=m['variants'][b]
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['sameDayResultsUsedForTicketProbability'] is False,m
+          y={c:v['courses'][c]['byYear'].get('2016',{}) for c in v['courses']}
+          assert y['ライト'].get('races')==550,y
+          assert all(x.get('tickets')==1650 for x in y.values()),y
+          print(json.dumps({'best':b,'roi2016':{c:x.get('roiPct') for c,x in y.items()},'tickets':{c:x.get('tickets') for c,x in y.items()},'errors':v['evaluationErrorCount']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-continuous-market-fixed3-2016
+          path: analysis-results/fixed3-2016.json
+          retention-days: 14
+      - name: Mark success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success \
+            -f context='research/continuous-market-fixed3-2016' -f description='Fixed-three 2016 evaluation completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure \
+            -f context='research/continuous-market-fixed3-2016' -f description='Fixed-three 2016 evaluation requires repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
