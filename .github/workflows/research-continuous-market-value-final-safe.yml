@@ -1,0 +1,216 @@
+name: Research continuous market value final safe
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-continuous-market-value-final-safe.yml"
+      - "scripts/research-evaluate-continuous-market-value.py"
+      - "scripts/research-evaluate-continuous-market-value-scratchsafe.py"
+      - "scripts/research-apply-robustness-gates.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  BASE_ODDS_RUN_ID: '31446629662'
+  FAST_2023_RUN_ID: '31447695033'
+  RECENT_ODDS_RUN_ID: '31446902302'
+  RESIDUAL_REPAIR_RUN_ID: '31447072766'
+  WRONG_URL_REPAIR_RUN_ID: '31450464538'
+  BEST_DEMAND_RUN_ID: '31417411680'
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Mark final-safe evaluation pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending \
+            -f context='research/continuous-market-value-final-safe' \
+            -f description='Waiting for provenance-safe 14,410-race official-odds set' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile final evaluator and independent robustness gate
+        run: |
+          python -m py_compile scripts/research-evaluate-continuous-market-value.py
+          python -m py_compile scripts/research-evaluate-continuous-market-value-scratchsafe.py
+          python -m py_compile scripts/research-apply-robustness-gates.py
+      - name: Wait for all required source artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 720); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BASE_ODDS_RUN_ID}/artifacts?per_page=100" > base.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FAST_2023_RUN_ID}/artifacts?per_page=100" > y2023.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RECENT_ODDS_RUN_ID}/artifacts?per_page=100" > recent.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RESIDUAL_REPAIR_RUN_ID}/artifacts?per_page=100" > residual.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${WRONG_URL_REPAIR_RUN_ID}/artifacts?per_page=100" > correction.json
+            base_count=0
+            for year in $(seq 2016 2022); do
+              name="research-continuous-market-odds-${year}"
+              n=$(jq -r --arg n "$name" '[.artifacts[]|select(.name==$n and .expired==false)]|length' base.json)
+              base_count=$((base_count+n))
+            done
+            y2023_count=$(jq -r '[.artifacts[]|select(.name=="research-continuous-market-odds-2023-fast" and .expired==false)]|length' y2023.json)
+            recent_count=0
+            for year in 2024 2025 2026; do
+              name="research-continuous-market-odds-recent-${year}"
+              n=$(jq -r --arg n "$name" '[.artifacts[]|select(.name==$n and .expired==false)]|length' recent.json)
+              recent_count=$((recent_count+n))
+            done
+            residual_count=$(jq -r '[.artifacts[]|select(.name=="research-continuous-market-odds-repair" and .expired==false)]|length' residual.json)
+            correction_count=$(jq -r '[.artifacts[]|select(.name=="research-corrected-odds-20260809" and .expired==false)]|length' correction.json)
+            echo "base=$base_count/7 2023=$y2023_count/1 recent=$recent_count/3 residual=$residual_count/1 correction=$correction_count/1 poll=$i"
+            if [ "$base_count" -eq 7 ] && [ "$y2023_count" -eq 1 ] && [ "$recent_count" -eq 3 ] && [ "$residual_count" -eq 1 ] && [ "$correction_count" -eq 1 ]; then exit 0; fi
+            sleep 20
+          done
+          exit 1
+      - name: Download frozen corpus and pre-odds 14,410-race selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history demand odds residual correction analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > demand.json
+          id=$(jq -r '.artifacts[]|select(.name=="research-blend-0.60" and .expired==false)|.id' demand.json|head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+          test -s history/ten-year-history-corpus.jsonl
+          test -s demand/demand.jsonl
+      - name: Download 2016-2022 base shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BASE_ODDS_RUN_ID}/artifacts?per_page=100" > a.json
+          for year in $(seq 2016 2022); do
+            name="research-continuous-market-odds-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[]|select(.name==$n and .expired==false)|.id' a.json|head -n1)
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
+            cp "tmp-$year/research-continuous-market-odds-${year}.jsonl" odds/
+          done
+      - name: Download fast 2023 and archive-accelerated 2024-2026
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FAST_2023_RUN_ID}/artifacts?per_page=100" > a23.json
+          id=$(jq -r '.artifacts[]|select(.name=="research-continuous-market-odds-2023-fast" and .expired==false)|.id' a23.json|head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > 2023.zip
+          mkdir -p tmp-2023; unzip -q 2023.zip -d tmp-2023
+          cp tmp-2023/research-continuous-market-odds-2023.jsonl odds/
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RECENT_ODDS_RUN_ID}/artifacts?per_page=100" > ar.json
+          for year in 2024 2025 2026; do
+            name="research-continuous-market-odds-recent-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[]|select(.name==$n and .expired==false)|.id' ar.json|head -n1)
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
+            cp "tmp-$year/research-continuous-market-odds-${year}.jsonl" odds/
+          done
+      - name: Download residual and wrong-URL corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RESIDUAL_REPAIR_RUN_ID}/artifacts?per_page=100" > rr.json
+          id=$(jq -r '.artifacts[]|select(.name=="research-continuous-market-odds-repair" and .expired==false)|.id' rr.json|head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > residual.zip
+          unzip -q residual.zip -d residual
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${WRONG_URL_REPAIR_RUN_ID}/artifacts?per_page=100" > cr.json
+          id=$(jq -r '.artifacts[]|select(.name=="research-corrected-odds-20260809" and .expired==false)|.id' cr.json|head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > correction.zip
+          unzip -q correction.zip -d correction
+      - name: Overlay repairs and audit race/date provenance
+        run: |
+          python - <<'PY'
+          import json,re
+          from pathlib import Path
+          by={str(y):{} for y in range(2016,2027)}
+          for y in by:
+            p=Path(f'odds/research-continuous-market-odds-{y}.jsonl')
+            for line in p.read_text().splitlines():
+              if line.strip():
+                r=json.loads(line);by[y][str(r['raceId'])]=r
+          overlays=[]
+          for p in (Path('residual/research-continuous-market-odds-repair.jsonl'),Path('correction/corrected-odds.jsonl')):
+            if p.exists(): overlays.extend(json.loads(x) for x in p.read_text().splitlines() if x.strip())
+          for r in overlays:
+            y=str(r['raceDate'])[:4];by[y][str(r['raceId'])]=r
+          demand={}
+          for line in Path('demand/demand.jsonl').read_text().splitlines():
+            if line.strip():
+              r=json.loads(line);demand[str(r['raceId'])]=r
+          merged=set()
+          for y,rows in by.items():
+            merged.update(rows)
+            Path(f'odds/research-continuous-market-odds-{y}.jsonl').write_text(''.join(json.dumps(rows[k],ensure_ascii=False,separators=(',',':'))+'\n' for k in sorted(rows)))
+          missing=sorted(set(demand)-merged);extra=sorted(merged-set(demand))
+          assert not missing,missing[:30]
+          assert not extra,extra[:30]
+          assert len(merged)==14410,len(merged)
+          bad=[];pat=re.compile(r'(?:pw|sw)01sde10(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
+          for y,rows in by.items():
+            for rid,r in rows.items():
+              url=str((r.get('provenance') or {}).get('resultUrl') or '')
+              m=pat.search(url)
+              if m and (m.group(6)!=str(r['raceDate']).replace('-','') or int(m.group(5))!=int(r['raceNo'])): bad.append((rid,url))
+          assert not bad,bad[:20]
+          print(json.dumps({'officialOddsRows':len(merged),'overlayRows':len(overlays),'wrongDirectResultUrlsRemaining':len(bad),'syntheticOddsUsed':False},ensure_ascii=False))
+          PY
+      - name: Run scratch-safe two-stage 10-year evaluation
+        run: |
+          python scripts/research-evaluate-continuous-market-value-scratchsafe.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --demand demand/demand.jsonl \
+            --odds-dir odds \
+            --out analysis-results/final-safe-raw.json
+      - name: Apply independent robustness completion gates
+        run: |
+          python scripts/research-apply-robustness-gates.py \
+            --input analysis-results/final-safe-raw.json \
+            --out analysis-results/final-safe-robust.json
+      - name: Verify provenance and report final gate
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/final-safe-robust.json').read_text())
+          assert m['selectedDemandRaces']==14410,m
+          assert m['raceSelectionFrozenBeforeOdds'] is True,m
+          assert m['targetDayResultsUsedForRaceSelection'] is False,m
+          assert m['sameDayResultsUsedForTicketProbability'] is False,m
+          assert m['historicalFinalOddsUsed'] is True,m
+          assert m['prestartTimingValidationPerformed'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          assert m['productionModelChanged'] is False,m
+          b=m['bestRobustVariant'];v=m['variants'][b]
+          print(json.dumps({'best':b,'evaluated':v['evaluatedRaces'],'missingOdds':m['missingOddsRaceCount'],'errors':v['evaluationErrorCount'],'rawRoi':{c:x['roiPct'] for c,x in v['courses'].items()},'exLargestRoi':{c:x['roiExLargestRacePct'] for c,x in v['courses'].items()},'completionGatePassed':m['completionGatePassed']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-continuous-market-value-final-safe
+          path: |
+            analysis-results/final-safe-raw.json
+            analysis-results/final-safe-robust.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Mark evaluation executed successfully
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success \
+            -f context='research/continuous-market-value-final-safe' -f description='Provenance-safe robust ten-year evaluation completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark technical failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure \
+            -f context='research/continuous-market-value-final-safe' -f description='Final-safe ten-year evaluation requires technical repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
