@@ -5,6 +5,7 @@ from pathlib import Path
 MARKETS=('win','umaren','wide','umatan','trio','trifecta')
 VENUE_CODE={'札幌':'01','函館':'02','福島':'03','新潟':'04','東京':'05','中山':'06','中京':'07','京都':'08','阪神':'09','小倉':'10'}
 RESULT_RE=re.compile(r'(?:pw|sw)01sde(?:01|10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
+ENTRY_RE=re.compile(r'(?:pw|sw)01dde(?:01|10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
 ODDS_RE=re.compile(r'(?:pw|sw)15[1-8]ou10(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
 
 def read_jsonl(path):
@@ -16,6 +17,11 @@ def write_jsonl(path,rows):
     p=Path(path);p.parent.mkdir(parents=True,exist_ok=True)
     with p.open('w',encoding='utf-8') as f:
         for r in rows:f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
+
+def groups_match(m,date,venue,race_no):
+    if not m:return False
+    vc,year,meeting,day,rn,ymd=m.groups()
+    return ymd==str(date).replace('-','') and int(rn)==int(race_no) and (not VENUE_CODE.get(str(venue)) or vc==VENUE_CODE[str(venue)])
 
 def identity_match(row):
     prov=row.get('provenance') or {}
@@ -38,12 +44,23 @@ def identity_ok(row):
     if expect_v and vc!=expect_v:return False,'VENUE_MISMATCH'
     return True,None
 
-def canonical_result_url(race):
-    venue=str(race.get('venue') or '');date=str(race.get('raceDate') or '');ymd=date.replace('-','')
-    if venue not in VENUE_CODE or len(ymd)!=8:raise RuntimeError(f'RACE_IDENTITY_INVALID:{race}')
-    if race.get('meetingNo') is None or race.get('meetingDay') is None:raise RuntimeError(f'MEETING_META_MISSING:{race.get("raceId")}')
-    identity=f"{VENUE_CODE[venue]}{ymd[:4]}{int(race['meetingNo']):02d}{int(race['meetingDay']):02d}{int(race['raceNo']):02d}{ymd}"
-    return 'https://www.jra.go.jp/JRADB/accessS.html?CNAME='+urllib.parse.quote('pw01sde10'+identity,safe='')
+def verified_result_url(bundle):
+    race=bundle['race'];date=str(race.get('raceDate') or '');venue=str(race.get('venue') or '');rn=int(race.get('raceNo') or 0);prov=bundle.get('provenance') or {}
+    result_url=str(race.get('resultUrl') or prov.get('resultUrl') or '')
+    m=RESULT_RE.search(urllib.parse.unquote(result_url)) if result_url else None
+    if groups_match(m,date,venue,rn):
+        return result_url,'history_result_identity_verified'
+    entry_url=str(race.get('entryUrl') or prov.get('entryUrl') or '')
+    em=ENTRY_RE.search(urllib.parse.unquote(entry_url)) if entry_url else None
+    if groups_match(em,date,venue,rn):
+        parsed=urllib.parse.urlparse(entry_url);qs=urllib.parse.parse_qs(parsed.query);cname=urllib.parse.unquote(qs.get('CNAME',[''])[0])
+        if not cname or '01dde' not in cname:raise RuntimeError(f'ENTRY_CNAME_PARSE_FAILED:{race.get("raceId")}:{entry_url}')
+        result_cname=cname.replace('01dde','01sde',1)
+        result='https://www.jra.go.jp/JRADB/accessS.html?CNAME='+urllib.parse.quote(result_cname,safe='')
+        rm=RESULT_RE.search(urllib.parse.unquote(result))
+        if not groups_match(rm,date,venue,rn):raise RuntimeError(f'DERIVED_RESULT_IDENTITY_FAILED:{race.get("raceId")}:{result}')
+        return result,'derived_from_identity_verified_entry_preserving_checksum'
+    raise RuntimeError(f'NO_VERIFIED_RESULT_OR_ENTRY_URL:{race.get("raceId")}')
 
 def load_odds_dir(path,patterns):
     out={}
@@ -87,15 +104,15 @@ def main():
         if not (r.get('officialOdds') or {}).get('win'):raise RuntimeError(f'SOURCE_CLEAN_WIN_MISSING:{rid}')
         if rid in reused:source_counts['canonical297']-=1
         reused[rid]=r;source_counts['continuousSourceClean']+=1
-    missing=[]
+    missing=[];resolution_counts=collections.Counter()
     for rid in sorted(set(selected)-set(reused),key=lambda x:(selected[x]['raceDate'],x)):
-        race=hist[rid]['race'];url=canonical_result_url(race)
-        missing.append({'raceId':rid,'raceDate':str(race['raceDate']),'venue':str(race['venue']),'raceNo':int(race['raceNo']),'entryUrl':race.get('entryUrl') or (hist[rid].get('provenance') or {}).get('entryUrl'),'resultUrl':url,'requiredMarkets':list(MARKETS),'resultUrlResolutionMethod':'reconstructed_from_verified_race_identity','targetDayResultsUsedForSelection':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False})
+        bundle=hist[rid];race=bundle['race'];url,method=verified_result_url(bundle);resolution_counts[method]+=1
+        missing.append({'raceId':rid,'raceDate':str(race['raceDate']),'venue':str(race['venue']),'raceNo':int(race['raceNo']),'entryUrl':race.get('entryUrl') or (bundle.get('provenance') or {}).get('entryUrl'),'resultUrl':url,'requiredMarkets':list(MARKETS),'resultUrlResolutionMethod':method,'targetDayResultsUsedForSelection':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False})
     reused_rows=[reused[rid] for rid in sorted(reused,key=lambda x:(selected[x]['raceDate'],x))]
     selected_hist=[hist[rid] for rid in sorted(selected,key=lambda x:(selected[x]['raceDate'],x))]
     selected_pred=[r for rid in sorted(pred,key=lambda x:(selected[x]['raceDate'],x)) for r in pred[rid]]
     write_jsonl(a.reused_out,reused_rows);write_jsonl(a.missing_out,missing);write_jsonl(a.history_out,selected_hist);write_jsonl(a.predictions_out,selected_pred)
     by_year=collections.Counter(r['raceDate'][:4] for r in missing)
-    meta={'purpose':'research_only_audited_meta_market_input','selectedRaces':14410,'reusedOddsRaces':len(reused),'missingOddsRaces':len(missing),'reusedSourceCounts':dict(source_counts),'missingByYear':dict(sorted(by_year.items())),'rejectedReuseRows':rejected,'allMissingResultUrlsReconstructedFromRaceIdentity':True,'allMissingRequiredMarkets':list(MARKETS),'selectedPredictionRaces':len(pred),'selectedPredictionRows':len(selected_pred),'selectedHistoryRaces':len(selected_hist),'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+    meta={'purpose':'research_only_audited_meta_market_input','selectedRaces':14410,'reusedOddsRaces':len(reused),'missingOddsRaces':len(missing),'reusedSourceCounts':dict(source_counts),'missingByYear':dict(sorted(by_year.items())),'rejectedReuseRows':rejected,'missingUrlResolutionCounts':dict(resolution_counts),'allMissingResultUrlsIdentityVerified':True,'allMissingRequiredMarkets':list(MARKETS),'selectedPredictionRaces':len(pred),'selectedPredictionRows':len(selected_pred),'selectedHistoryRaces':len(selected_hist),'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
     Path(a.meta).parent.mkdir(parents=True,exist_ok=True);Path(a.meta).write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps(meta,ensure_ascii=False),flush=True)
 if __name__=='__main__':main()
