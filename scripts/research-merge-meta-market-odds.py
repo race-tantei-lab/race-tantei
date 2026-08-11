@@ -3,21 +3,26 @@ import argparse,collections,json,re,urllib.parse
 from pathlib import Path
 
 VENUE_CODE={'札幌':'01','函館':'02','福島':'03','新潟':'04','東京':'05','中山':'06','中京':'07','京都':'08','阪神':'09','小倉':'10'}
-URL_RE=re.compile(r'(?:pw|sw)01sde(?:01|10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
+RESULT_RE=re.compile(r'(?:pw|sw)01sde(?:01|10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
+ODDS_RE=re.compile(r'(?:pw|sw)15[1-8]ou10(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
 
 def read_jsonl(p):
     with Path(p).open(encoding='utf-8') as f:
         for line in f:
             if line.strip():yield json.loads(line)
 def identity(row):
-    url=str((row.get('provenance') or {}).get('resultUrl') or row.get('resultUrl') or '')
-    m=URL_RE.search(urllib.parse.unquote(url))
-    if not m:return False,'UNPARSEABLE',url
+    prov=row.get('provenance') or {};candidates=[str(prov.get('resultUrl') or row.get('resultUrl') or '')];src=prov.get('sourceCnames') or {}
+    if isinstance(src,dict):candidates.extend(str(v or '') for v in src.values())
+    m=None;used=''
+    for text in candidates:
+        decoded=urllib.parse.unquote(text);m=RESULT_RE.search(decoded) or ODDS_RE.search(decoded)
+        if m:used=text;break
+    if not m:return False,'UNPARSEABLE',candidates[0] if candidates else ''
     vc,year,meeting,day,rn,ymd=m.groups();date=str(row.get('raceDate') or '');venue=str(row.get('venue') or '')
-    if ymd!=date.replace('-',''):return False,'DATE',url
-    if int(rn)!=int(row.get('raceNo') or 0):return False,'RACE_NO',url
-    if VENUE_CODE.get(venue) and vc!=VENUE_CODE[venue]:return False,'VENUE',url
-    return True,None,url
+    if ymd!=date.replace('-',''):return False,'DATE',used
+    if int(rn)!=int(row.get('raceNo') or 0):return False,'RACE_NO',used
+    if VENUE_CODE.get(venue) and vc!=VENUE_CODE[venue]:return False,'VENUE',used
+    return True,None,used
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--selection',required=True);ap.add_argument('--reused',required=True);ap.add_argument('--fetched-dir',required=True);ap.add_argument('--out-dir',required=True);ap.add_argument('--meta',required=True);a=ap.parse_args()
@@ -28,7 +33,6 @@ def main():
         rid=str(r['raceId'])
         if rid in selected:merged[rid]=r;source['reused']+=1
     for p in sorted(Path(a.fetched_dir).glob('*.jsonl')):
-        if p.name.endswith('-meta.jsonl'):continue
         for r in read_jsonl(p):
             rid=str(r['raceId'])
             if rid not in selected:continue
