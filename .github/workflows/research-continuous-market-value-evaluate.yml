@@ -1,0 +1,125 @@
+name: Research continuous market value evaluation
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-continuous-market-value-evaluate.yml"
+      - "scripts/research-evaluate-continuous-market-value.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  ODDS_RUN_ID: '31446629662'
+  BEST_DEMAND_RUN_ID: '31417411680'
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Mark evaluation pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/continuous-market-value-evaluation' \
+            -f description='Waiting for official odds then evaluating two-stage walk-forward' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile evaluator before waiting on network research
+        run: python -m py_compile scripts/research-evaluate-continuous-market-value.py
+      - name: Wait for selective official odds run
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 700); do
+            status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.status')
+            conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.conclusion // ""')
+            echo "market odds status=$status conclusion=$conclusion poll=$i"
+            if [ "$status" = completed ]; then
+              test "$conclusion" = success
+              exit 0
+            fi
+            sleep 30
+          done
+          exit 1
+      - name: Download frozen history and pre-odds race selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history demand odds analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > demand-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' demand-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+          test -s demand/demand.jsonl
+          test -s history/ten-year-history-corpus.jsonl
+      - name: Download all selective market odds shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > odds-artifacts.json
+          for year in $(seq 2016 2026); do
+            name="research-continuous-market-odds-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' odds-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
+            cp "tmp-$year/research-continuous-market-odds-${year}.jsonl" odds/
+          done
+          test "$(find odds -name 'research-continuous-market-odds-20*.jsonl' -type f | wc -l)" -eq 11
+      - name: Evaluate probability x official-odds value candidates
+        run: |
+          python scripts/research-evaluate-continuous-market-value.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --demand demand/demand.jsonl \
+            --odds-dir odds \
+            --out analysis-results/research-continuous-market-value-evaluation.json
+      - name: Verify research provenance and completion state
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-continuous-market-value-evaluation.json').read_text())
+          assert m['selectedDemandRaces']==14410,m
+          assert m['raceSelectionFrozenBeforeOdds'] is True,m
+          assert m['targetDayResultsUsedForRaceSelection'] is False,m
+          assert m['sameDayResultsUsedForTicketProbability'] is False,m
+          assert m['historicalFinalOddsUsed'] is True,m
+          assert m['prestartTimingValidationPerformed'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          assert m['productionModelChanged'] is False,m
+          b=m['bestVariant'];v=m['variants'][b]
+          print(json.dumps({'best':b,'evaluated':v['evaluatedRaces'],'missingOdds':m['missingOddsRaceCount'],'errors':v['evaluationErrorCount'],'roi':{c:x['roiPct'] for c,x in v['courses'].items()},'all200':v['allThreeAtLeast200Pct']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-continuous-market-value-evaluation
+          path: analysis-results/research-continuous-market-value-evaluation.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Mark evaluation success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/continuous-market-value-evaluation' \
+            -f description='Two-stage market-value walk-forward evaluated' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark evaluation failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/continuous-market-value-evaluation' \
+            -f description='Two-stage market-value evaluation requires targeted repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
