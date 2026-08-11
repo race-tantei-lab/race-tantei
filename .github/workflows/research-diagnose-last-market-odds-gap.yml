@@ -22,6 +22,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Mark diagnosis pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/last-market-odds-gap-diagnosis' \
+            -f description='Reproducing only the remaining active-candidate odds gap' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -90,3 +95,9 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success -f context='research/last-market-odds-gap-diagnosis' \
             -f description='Last active-candidate official-odds gap identified' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark diagnosis failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/last-market-odds-gap-diagnosis' \
+            -f description='Last odds-gap diagnosis failed structurally' -f target_url="$STATUS_TARGET_URL" >/dev/null
