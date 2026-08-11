@@ -5,6 +5,7 @@ from pathlib import Path
 MARKETS=['win','umaren','wide','umatan','trio','trifecta']
 MARKET_SET=set(MARKETS)
 VARIANTS=('confidence','concentration','disagreement','hybrid')
+DISCOVERY_MAX_YEAR=2022
 
 def read_ids(path,max_year):
     rows=[]
@@ -20,7 +21,8 @@ def complete_six_market(r):
     return MARKET_SET.issubset(req) and MARKET_SET.issubset(set(official))
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--selections-dir',required=True);ap.add_argument('--existing-odds-dir',required=True);ap.add_argument('--history',required=True);ap.add_argument('--max-year',type=int,default=2022);ap.add_argument('--out',required=True);ap.add_argument('--meta',required=True);a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--selections-dir',required=True);ap.add_argument('--existing-odds-dir',required=True);ap.add_argument('--history',required=True);ap.add_argument('--max-year',type=int,default=DISCOVERY_MAX_YEAR);ap.add_argument('--out',required=True);ap.add_argument('--meta',required=True);a=ap.parse_args()
+    if a.max_year!=DISCOVERY_MAX_YEAR:raise RuntimeError(f'DISCOVERY_BOUNDARY_LOCKED:{a.max_year}:{DISCOVERY_MAX_YEAR}')
     sels={}
     for v in VARIANTS:
         p=Path(a.selections_dir)/f'ml-five-selection-{v}.jsonl';rows=read_ids(p,a.max_year);sels[v]=rows
@@ -45,6 +47,6 @@ def main():
     rows=sorted(race_meta.values(),key=lambda r:(r['raceDate'],r['venue'],r['raceNo'],r['raceId']))
     Path(a.out).parent.mkdir(parents=True,exist_ok=True);Path(a.out).write_text(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in rows),encoding='utf-8')
     by_year=collections.Counter(r['raceDate'][:4] for r in rows)
-    meta={'purpose':'research_only_discovery_period_missing_official_odds_demand','discoveryMaxYear':a.max_year,'existingRowsSeen':len(seen_any),'existingCompleteSixMarketRaces':len(existing),'partialMarketRowsNotReusable':len(partial),'unionSelectedRaces':len(union),'reusedRaces':len(union&existing),'missingRaces':len(rows),'missingByYear':dict(sorted(by_year.items())),'variants':{v:{'selectedRaces':len(sels[v]),'reusedRaces':sum(str(r['raceId']) in existing for r in sels[v]),'missingRaces':sum(str(r['raceId']) not in existing for r in sels[v])} for v in VARIANTS},'requiredMarkets':MARKETS,'reuseRequiresAllSixMarkets':True,'targetRaceResultUsedForDemand':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+    meta={'purpose':'research_only_discovery_period_missing_official_odds_demand','discoveryMaxYear':a.max_year,'discoveryBoundaryLocked':True,'holdoutStart':'2023-01-01','existingRowsSeen':len(seen_any),'existingCompleteSixMarketRaces':len(existing),'partialMarketRowsNotReusable':len(partial),'unionSelectedRaces':len(union),'reusedRaces':len(union&existing),'missingRaces':len(rows),'missingByYear':dict(sorted(by_year.items())),'variants':{v:{'selectedRaces':len(sels[v]),'reusedRaces':sum(str(r['raceId']) in existing for r in sels[v]),'missingRaces':sum(str(r['raceId']) not in existing for r in sels[v])} for v in VARIANTS},'requiredMarkets':MARKETS,'reuseRequiresAllSixMarkets':True,'targetRaceResultUsedForDemand':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
     Path(a.meta).write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps(meta,ensure_ascii=False),flush=True)
 if __name__=='__main__':main()
