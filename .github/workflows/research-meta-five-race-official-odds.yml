@@ -82,7 +82,7 @@ jobs:
             --predictions-out analysis-results/selected-predictions.jsonl \
             --meta analysis-results/meta-market-input-meta.json
           cp input/selection/meta-five-race-demand.jsonl analysis-results/meta-five-race-demand.jsonl
-      - name: Verify reuse reduction and reconstruction safety
+      - name: Verify reuse reduction and official identity safety
         run: |
           python - <<'PY'
           import json
@@ -92,7 +92,7 @@ jobs:
           assert m['reusedOddsRaces']+m['missingOddsRaces']==14410,m
           assert m['reusedOddsRaces']>=9500,m
           assert m['missingOddsRaces']<=4900,m
-          assert m['allMissingResultUrlsReconstructedFromRaceIdentity'] is True,m
+          assert m['allMissingResultUrlsIdentityVerified'] is True,m
           assert m['selectedPredictionRaces']==14410,m
           assert m['selectedHistoryRaces']==14410,m
           assert m['syntheticOddsUsed'] is False,m
