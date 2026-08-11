@@ -16,11 +16,15 @@ permissions:
 env:
   GH_TOKEN: ${{ github.token }}
   FEATURE_ARTIFACT_ID: '9087261097'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
     steps:
+      - name: Mark all-race ranker pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/all-race-runner-ranker' -f description='Predicting all evaluation races with past-only yearly rankers' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - name: Download feature corpus
         run: |
@@ -101,3 +105,6 @@ jobs:
           name: research-all-race-ranker-summary
           path: all-race-summary.json
           retention-days: 30
+      - name: Mark all-race ranker success
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/all-race-runner-ranker' -f description='All evaluation races predicted with past-only yearly rankers' -f target_url="$STATUS_TARGET_URL" >/dev/null
