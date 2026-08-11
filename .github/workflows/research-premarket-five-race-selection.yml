@@ -1,0 +1,78 @@
+name: Research pre-market five-race reselection
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-premarket-five-race-selection.yml"
+      - "scripts/research-select-five-races-premarket.py"
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  ALL_RACE_RUN_ID: '31455507850'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Mark pre-market selection pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/premarket-five-race-selection' -f description='Selecting five races without current market popularity or odds' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check --quiet lightgbm==4.6.0 scikit-learn==1.7.1 pandas==2.3.1 numpy==2.2.6
+      - name: Download eleven all-race OOS folds
+        run: |
+          set -euo pipefail
+          mkdir -p input/predictions
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ALL_RACE_RUN_ID}/artifacts?per_page=100" > arts.json
+          for y in $(seq 2016 2026); do
+            id=$(jq -r --arg n "research-all-race-ranker-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' arts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "fold-${y}.zip"
+            unzip -q "fold-${y}.zip" -d input/predictions
+          done
+          test $(find input/predictions -name 'all-race-ranker-20*.jsonl' | wc -l) -eq 11
+      - name: Select exactly five races per venue-day with no current market
+        run: |
+          python scripts/research-select-five-races-premarket.py --predictions-dir input/predictions --out analysis-results/premarket-five-race-demand.jsonl --meta analysis-results/premarket-five-race-demand-meta.json
+      - name: Verify strict no-current-market selection
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('analysis-results/premarket-five-race-demand-meta.json'))
+          assert d['allEvaluationRaces']==34566,d
+          assert d['selectedRaces']==14410,d
+          assert d['targetDayResultsUsedForSelection'] is False,d
+          assert d['futureYearResultsUsedForSelection'] is False,d
+          assert d['currentRaceMarketPopularityUsedForSelection'] is False,d
+          assert d['currentRaceOfficialOddsUsedForSelection'] is False,d
+          assert d['structuralCancellationExceptions']==[{'date':'2020-03-29','venueCode':6,'eligible':2}],d
+          assert d['productionDatabaseWritten'] is False,d
+          print(json.dumps({'selected':d['selectedRaces'],'years':d['selectedByYear'],'diagnostics':d['diagnosticsByYear'],'features':d['selectorFeatures']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-premarket-five-race-selection
+          path: |
+            analysis-results/premarket-five-race-demand.jsonl
+            analysis-results/premarket-five-race-demand-meta.json
+          retention-days: 30
+      - name: Mark pre-market selection success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/premarket-five-race-selection' -f description='Five-race pre-market reselection completed without current market inputs' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark pre-market selection failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/premarket-five-race-selection' -f description='Pre-market five-race reselection needs repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
