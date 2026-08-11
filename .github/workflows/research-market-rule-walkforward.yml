@@ -1,0 +1,108 @@
+name: Research dynamic market rule walk-forward
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-market-rule-walkforward.yml"
+      - "scripts/research-evaluate-market-rule-walkforward.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CORRECTED_INPUT_RUN_ID: '31451680037'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Mark dynamic rule exploration pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/dynamic-market-rule-walkforward' \
+            -f description='Learning market rules only from prior selected races on source-clean odds' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile rule evaluator
+        run: python -m py_compile scripts/research-evaluate-market-rule-walkforward.py
+      - name: Wait for corrected source-clean market inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 120); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CORRECTED_INPUT_RUN_ID}/artifacts?per_page=100" > artifacts.json
+            id=$(jq -r '.artifacts[] | select(.name=="research-corrected-final-market-inputs" and .expired==false) | .id' artifacts.json | head -n1)
+            if [ -n "$id" ] && [ "$id" != null ]; then echo "$id" > artifact-id.txt; exit 0; fi
+            sleep 15
+          done
+          exit 1
+      - name: Download corrected market inputs
+        run: |
+          set -euo pipefail
+          id=$(cat artifact-id.txt)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > input.zip
+          unzip -q input.zip -d input
+          test -s input/history/ten-year-history-corpus.jsonl
+          test -s input/demand/demand.jsonl
+      - name: Evaluate dynamic market-rule variants
+        run: |
+          python scripts/research-evaluate-market-rule-walkforward.py \
+            --corpus input/history/ten-year-history-corpus.jsonl \
+            --demand input/demand/demand.jsonl \
+            --odds-dir input/corrected-odds \
+            --out analysis-results/research-dynamic-market-rule-walkforward.json
+      - name: Verify leakage and summarize robustness
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-dynamic-market-rule-walkforward.json').read_text());b=m['bestVariant'];v=m['variants'][b]
+          assert m['selectedDemandRaces']==14410,m
+          assert m['oddsRaces']==14410,m
+          assert m['missingOddsRaceCount']==0,m
+          assert not m['missingDemandRacesInCorpus'],m
+          assert m['raceSelectionFrozenBeforeOdds'] is True,m
+          assert m['sameDayResultsUsedForTicketRule'] is False,m
+          assert m['productionRulesReused'] is False,m
+          assert m['trainingReturnCapped'] is True,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          assert v['evaluatedRaces']==14410,v
+          assert v['evaluationErrorCount']==0,v['evaluationErrors'][:20]
+          courses={}
+          for c,x in v['courses'].items():
+            budget={'ライト':2000,'スタンダード':5000,'プレミアム':10000}[c]
+            largest=x['returnConcentration']['largestRaceReturnYen']
+            excl=round(100*(x['returnYen']-largest)/(x['stakeYen']-budget),4)
+            courses[c]={'roi':x['roiPct'],'excludeLargest':excl,'top1Share':x['returnConcentration']['top1ReturnSharePct']}
+          print(json.dumps({'best':b,'courses':courses,'periods':{c:{p:s['roiPct'] for p,s in x['byPeriod'].items()} for c,x in v['courses'].items()}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-dynamic-market-rule-walkforward
+          path: analysis-results/research-dynamic-market-rule-walkforward.json
+          retention-days: 30
+      - name: Mark dynamic rule exploration success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/dynamic-market-rule-walkforward' \
+            -f description='Dynamic market-rule ten-year walk-forward completed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark dynamic rule exploration failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/dynamic-market-rule-walkforward' \
+            -f description='Dynamic market-rule exploration requires targeted repair' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
