@@ -8,15 +8,21 @@ on:
       - "scripts/research-build-ml-discovery-odds-demand.py"
   workflow_dispatch:
 
+concurrency:
+  group: research-ml-discovery-demanded-odds
+  cancel-in-progress: true
+
 permissions:
   contents: read
-  actions: read
+  actions: write
   statuses: write
 
 env:
   GH_TOKEN: ${{ github.token }}
   SELECTION_ARTIFACT_ID: '9088036803'
   SOURCE_INPUT_ARTIFACT_ID: '9086766461'
+  OLD_ODDS_RUN_ID: '31373205723'
+  SUPERSEDED_RUN_IDS: '31456300365 31457357885'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
@@ -24,29 +30,48 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
+      - name: Cancel superseded larger discovery fetches
+        run: |
+          for rid in $SUPERSEDED_RUN_IDS; do
+            if [ "$rid" != "$GITHUB_RUN_ID" ]; then
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${rid}/cancel" >/dev/null 2>&1 || true
+            fi
+          done
       - name: Mark discovery odds pending
         run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/ml-discovery-odds' -f description='Fetching only missing 2016-2022 official odds for result-blind ML selections' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/ml-discovery-odds' -f description='Reusing complete legacy odds; fetching only 5978 missing discovery races' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
-      - name: Download selections and source-clean archive
+      - name: Download selections, source-clean archive, and legacy 297 official odds
         run: |
           set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SELECTION_ARTIFACT_ID}/zip" > selections.zip
           mkdir -p input/selections
           unzip -q selections.zip -d input/selections
+
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_INPUT_ARTIFACT_ID}/zip" > source-clean.zip
-          mkdir -p input/source
-          unzip -q source-clean.zip 'corrected-odds/*.jsonl' 'history/ten-year-history-corpus.jsonl' -d input/source
+          mkdir -p input/source/existing-odds input/source/base
+          unzip -q source-clean.zip 'corrected-odds/*.jsonl' 'history/ten-year-history-corpus.jsonl' -d input/source/base
+          cp input/source/base/corrected-odds/*.jsonl input/source/existing-odds/
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${OLD_ODDS_RUN_ID}/artifacts?per_page=100" > old-artifacts.json
+          for y in $(seq 2016 2022); do
+            id=$(jq -r --arg n "research-demanded-odds-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' old-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "old-${y}.zip"
+            unzip -q "old-${y}.zip" "research-demanded-odds-${y}.jsonl" -d input/source/existing-odds
+          done
+          test $(find input/source/existing-odds -name '*.jsonl' | wc -l) -ge 18
+          test -s input/source/base/history/ten-year-history-corpus.jsonl
       - name: Build discovery-only missing demand
         run: |
           python scripts/research-build-ml-discovery-odds-demand.py \
             --selections-dir input/selections/ml-five-selections \
-            --existing-odds-dir input/source/corrected-odds \
-            --history input/source/history/ten-year-history-corpus.jsonl \
+            --existing-odds-dir input/source/existing-odds \
+            --history input/source/base/history/ten-year-history-corpus.jsonl \
             --max-year 2022 \
             --out analysis-results/ml-discovery-odds-demand.jsonl \
             --meta analysis-results/ml-discovery-odds-demand-meta.json
-      - name: Verify discovery boundary and exact reuse counts
+      - name: Verify discovery boundary and complete-six-market reuse counts
         run: |
           python - <<'PY'
           import json
@@ -54,8 +79,10 @@ jobs:
           m=json.loads(Path('analysis-results/ml-discovery-odds-demand-meta.json').read_text())
           assert m['discoveryMaxYear']==2022,m
           assert m['unionSelectedRaces']==16224,m
-          assert m['missingRaces']==9255,m
-          assert m['reusedRaces']==6969,m
+          assert m['missingRaces']==5978,m
+          assert m['reusedRaces']==10246,m
+          assert m['reuseRequiresAllSixMarkets'] is True,m
+          assert m['missingByYear']=={'2016':337,'2017':931,'2018':930,'2019':915,'2020':955,'2021':939,'2022':971},m['missingByYear']
           assert m['targetRaceResultUsedForDemand'] is False,m
           assert m['syntheticOddsUsed'] is False,m
           assert m['productionDatabaseWritten'] is False,m
@@ -97,7 +124,7 @@ jobs:
             --out analysis-results/ml-discovery-odds-${{ matrix.year }}.jsonl \
             --meta analysis-results/ml-discovery-odds-${{ matrix.year }}-meta.json \
             --year '${{ matrix.year }}' \
-            --workers 3
+            --workers 4
       - name: Require every demanded race to succeed
         env:
           YEAR: ${{ matrix.year }}
@@ -131,7 +158,7 @@ jobs:
           pattern: research-ml-discovery-odds-20*
           path: years
           merge-multiple: true
-      - name: Verify all 9255 new discovery races acquired
+      - name: Verify all 5978 new discovery races acquired
         run: |
           python - <<'PY'
           import json
@@ -139,13 +166,13 @@ jobs:
           files=sorted(Path('years').glob('ml-discovery-odds-20*.jsonl'))
           total=sum(sum(1 for line in p.open() if line.strip()) for p in files)
           assert len(files)==7,[p.name for p in files]
-          assert total==9255,total
-          print(json.dumps({'yearFiles':len(files),'newOfficialOddsRaces':total,'syntheticOddsUsed':False,'productionDatabaseWritten':False},ensure_ascii=False))
+          assert total==5978,total
+          print(json.dumps({'yearFiles':len(files),'newOfficialOddsRaces':total,'legacyCompleteSixMarketReused':3277,'currentSourceReused':6969,'syntheticOddsUsed':False,'productionDatabaseWritten':False},ensure_ascii=False))
           PY
       - name: Mark discovery odds success
         if: ${{ needs.year.result == 'success' }}
         run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/ml-discovery-odds' -f description='All 9255 missing 2016-2022 official odds races acquired' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/ml-discovery-odds' -f description='All 5978 genuinely missing 2016-2022 official odds races acquired' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark discovery odds failure
         if: ${{ needs.year.result != 'success' }}
         run: |
