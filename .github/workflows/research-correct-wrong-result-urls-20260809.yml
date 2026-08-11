@@ -1,0 +1,140 @@
+name: Research correct wrong result URLs 20260809
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-correct-wrong-result-urls-20260809.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  BEST_DEMAND_RUN_ID: '31417411680'
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending \
+            -f context='research/correct-wrong-result-urls-20260809' -f description='Resolving three selected races whose saved result URLs point to other dates' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          npm ci
+          npm run build:test
+          pip install beautifulsoup4==4.13.4
+      - name: Download frozen corpus and demand
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history demand fake-meta analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > d.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' d.json | head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+      - name: Build exact three-race failure manifest and full-market demand
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          targets={'2026-08-09-chukyo-09','2026-08-09-niigata-10','2026-08-09-niigata-11'}
+          markets=['win','umaren','wide','umatan','trio','trifecta']
+          rows=[]
+          for line in Path('demand/demand.jsonl').read_text().splitlines():
+            if not line.strip(): continue
+            r=json.loads(line)
+            r['requiredMarkets']=markets
+            rows.append(r)
+          found={str(r['raceId']) for r in rows if str(r['raceId']) in targets}
+          assert found==targets,(found,targets)
+          Path('demand/full-market-demand.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in rows))
+          for year in range(2016,2027):
+            failures=[{'raceId':rid} for rid in sorted(targets)] if year==2026 else []
+            Path(f'fake-meta/research-demanded-odds-{year}-meta.json').write_text(json.dumps({'year':str(year),'failures':failures},ensure_ascii=False,indent=2)+'\n')
+          PY
+      - name: Resolve exact races to correct official JRA result URLs
+        run: |
+          node scripts/research-resolve-demanded-odds-failures.mjs \
+            --demand demand/full-market-demand.jsonl \
+            --meta-dir fake-meta \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --out analysis-results/resolved.jsonl \
+            --meta analysis-results/resolved-meta.json
+      - name: Verify resolved URLs match target race dates and race numbers
+        run: |
+          python - <<'PY'
+          import json,re
+          from pathlib import Path
+          rows=[json.loads(x) for x in Path('analysis-results/resolved.jsonl').read_text().splitlines() if x.strip()]
+          assert len(rows)==3,rows
+          pat=re.compile(r'(?:pw|sw)01sde10(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
+          for r in rows:
+            url=str(r.get('resultUrl') or '')
+            m=pat.search(url)
+            if m:
+              assert m.group(6)==str(r['raceDate']).replace('-',''),(r,m.groups())
+              assert int(m.group(5))==int(r['raceNo']),(r,m.groups())
+          print(json.dumps({'resolved':[(r['raceId'],r['resultUrl']) for r in rows]},ensure_ascii=False))
+          PY
+      - name: Fetch all six official markets from corrected URLs
+        shell: bash
+        run: |
+          set +e
+          python scripts/research-fetch-resolved-demanded-official-odds.py \
+            --input analysis-results/resolved.jsonl --workers 3 \
+            --out analysis-results/corrected-odds.jsonl \
+            --meta analysis-results/corrected-odds-meta.json
+          code=$?
+          set -e
+          echo "fetch exit=$code"
+      - name: Verify all three corrected rows are real official data
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/corrected-odds-meta.json').read_text())
+          assert m['completedRaces']==3,m
+          assert not m['failures'],m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          rows=[json.loads(x) for x in Path('analysis-results/corrected-odds.jsonl').read_text().splitlines() if x.strip()]
+          assert len(rows)==3,rows
+          print(json.dumps({'completed':3,'raceIds':[r['raceId'] for r in rows]},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-corrected-odds-20260809
+          path: |
+            analysis-results/resolved.jsonl
+            analysis-results/resolved-meta.json
+            analysis-results/corrected-odds.jsonl
+            analysis-results/corrected-odds-meta.json
+          retention-days: 30
+      - name: Mark success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success \
+            -f context='research/correct-wrong-result-urls-20260809' -f description='Three mismatched result URLs corrected with official odds' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure \
+            -f context='research/correct-wrong-result-urls-20260809' -f description='Three-race URL correction requires targeted repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
