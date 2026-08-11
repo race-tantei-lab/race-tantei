@@ -15,6 +15,7 @@ OUTPUT = ROOT / "artifacts" / "completion-analysis-dataset.pkl.gz"
 META = ROOT / "artifacts" / "completion-analysis-dataset-meta.json"
 START = "2024-05-01"
 END = "2026-09-01"
+FIXED_END_EXCLUSIVE = "2026-08-03"
 EXPECTED_RACES = 7695
 
 if not TOKEN:
@@ -64,6 +65,9 @@ results = []
 payouts = []
 
 for start, end in month_ranges(START, END):
+    upper = min(end, FIXED_END_EXCLUSIVE)
+    if start >= upper:
+        continue
     races.extend(sql(
         """
         SELECT
@@ -75,7 +79,7 @@ for start, end in month_ranges(START, END):
         WHERE r.race_date >= ? AND r.race_date < ? AND r.status = 'finished'
         ORDER BY r.race_date, r.venue, r.race_no
         """,
-        [start, end],
+        [start, upper],
     ))
     runners.extend(sql(
         """
@@ -90,7 +94,7 @@ for start, end in month_ranges(START, END):
         WHERE r.race_date >= ? AND r.race_date < ? AND r.status = 'finished'
         ORDER BY r.race_date, r.venue, r.race_no, rr.horse_no
         """,
-        [start, end],
+        [start, upper],
     ))
     results.extend(sql(
         """
@@ -103,7 +107,7 @@ for start, end in month_ranges(START, END):
         WHERE r.race_date >= ? AND r.race_date < ? AND r.status = 'finished'
         ORDER BY r.race_date, r.venue, r.race_no, rs.horse_no
         """,
-        [start, end],
+        [start, upper],
     ))
     payouts.extend(sql(
         """
@@ -115,7 +119,7 @@ for start, end in month_ranges(START, END):
         WHERE r.race_date >= ? AND r.race_date < ? AND r.status = 'finished'
         ORDER BY r.race_date, r.race_id, p.bet_type, p.combination
         """,
-        [start, end],
+        [start, upper],
     ))
 
 race_ids = sorted({row["raceId"] for row in races})
@@ -132,7 +136,7 @@ if missing_payout:
 
 payload = {
     "schemaVersion": 2,
-    "source": "fixed existing D1 finished races; no new ingestion",
+    "source": "fixed existing D1 finished races through 2026-08-02; no new ingestion",
     "rules": {
         "postResultLeakageForbidden": True,
         "syntheticOddsForbidden": True,
