@@ -6,6 +6,7 @@ on:
     branches: [research/ten-year-minimal-rules]
     paths:
       - ".github/workflows/research-evaluate-ml-five-discovery.yml"
+      - "scripts/research-build-ml-discovery-odds-demand.py"
       - "scripts/research-evaluate-ml-five-discovery.py"
       - "scripts/research-freeze-practical-ml-discovery-winner.py"
 
@@ -20,7 +21,6 @@ permissions:
 
 env:
   GH_TOKEN: ${{ github.token }}
-  DISCOVERY_ODDS_WORKFLOW: 'research-ml-discovery-demanded-odds-v3.yml'
   SELECTION_ARTIFACT_ID: '9088036803'
   SOURCE_INPUT_ARTIFACT_ID: '9086766461'
   CANONICAL_ODDS_RUN_ID: '31373205723'
@@ -36,13 +36,20 @@ jobs:
     steps:
       - name: Mark discovery pending
         run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/ml-five-discovery-eval' -f description='Strict 2016-2022 discovery using minimized v3 official odds; 2023-2026 untouched' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/ml-five-discovery-eval' -f description='Strict 2016-2022 self-contained discovery; 2023-2026 untouched' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install parser runtime
+        run: pip install --disable-pip-version-check --quiet beautifulsoup4==4.13.4
       - name: Compile scripts
-        run: python -m py_compile scripts/research-evaluate-ml-five-discovery.py scripts/research-freeze-practical-ml-discovery-winner.py
+        run: |
+          python -m py_compile \
+            scripts/research-build-ml-discovery-odds-demand.py \
+            scripts/research-fetch-resolved-demanded-official-odds.py \
+            scripts/research-evaluate-ml-five-discovery.py \
+            scripts/research-freeze-practical-ml-discovery-winner.py
       - name: Download fixed research inputs and base reusable official odds
         run: |
           set -euo pipefail
@@ -62,68 +69,80 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${COMPLETED_2016_ARTIFACT_ID}/zip" > completed-2016.zip
           unzip -q completed-2016.zip 'ml-discovery-odds-2016.jsonl' -d input/existing-odds
           test -s input/source/history/ten-year-history-corpus.jsonl
-      - name: Wait for and reuse meta-selected 2017-2022 official odds
+      - name: Reuse completed meta-selected 2017-2022 official odds
         run: |
           set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${META_ODDS_RUN_ID}/artifacts?per_page=100" > meta-arts.json
           for y in 2017 2018 2019 2020 2021 2022; do
-            id=''
-            for i in $(seq 1 900); do
-              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${META_ODDS_RUN_ID}/artifacts?per_page=100" > meta-arts.json
-              id=$(jq -r --arg n "research-meta-fetched-odds-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' meta-arts.json | head -n1)
-              if [ -n "$id" ] && [ "$id" != null ]; then break; fi
-              sleep 10
-            done
+            id=$(jq -r --arg n "research-meta-fetched-odds-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' meta-arts.json | head -n1)
             test -n "$id" && test "$id" != null
             gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "meta-${y}.zip"
             unzip -q "meta-${y}.zip" "research-meta-fetched-odds-${y}.jsonl" -d input/existing-odds
           done
-      - name: Find latest valid v3 discovery odds run
+      - name: Build exact minimized 3451-race demand
         run: |
           set -euo pipefail
-          rm -f v3-run.txt
-          for attempt in $(seq 1 1200); do
-            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${DISCOVERY_ODDS_WORKFLOW}/runs?branch=research%2Ften-year-minimal-rules&per_page=20" > v3-runs.json
-            for rid in $(jq -r '.workflow_runs[] | select(.conclusion != "cancelled") | .id' v3-runs.json); do
-              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${rid}/artifacts?per_page=100" > candidate.json || continue
-              did=$(jq -r '.artifacts[] | select(.name=="research-ml-discovery-odds-v3-demand" and .expired==false) | .id' candidate.json | head -n1)
-              if [ -z "$did" ] || [ "$did" = null ]; then continue; fi
-              rm -rf demand-check; mkdir demand-check
-              gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${did}/zip" > demand-check.zip
-              unzip -q -o demand-check.zip -d demand-check
-              if python - <<'PY'
+          python scripts/research-build-ml-discovery-odds-demand.py \
+            --selections-dir input/selections/ml-five-selections \
+            --existing-odds-dir input/existing-odds \
+            --history input/source/history/ten-year-history-corpus.jsonl \
+            --max-year 2022 \
+            --out analysis-results/ml-discovery-odds-demand.jsonl \
+            --meta analysis-results/ml-discovery-odds-demand-meta.json
+          python - <<'PY'
           import json
-          from pathlib import Path
-          p=Path('demand-check/ml-discovery-odds-demand-meta.json')
-          if not p.exists(): raise SystemExit(1)
-          m=json.loads(p.read_text())
-          ok=(m.get('discoveryMaxYear')==2022 and m.get('unionSelectedRaces')==16224 and m.get('reusedRaces')==12773 and m.get('missingRaces')==3451 and m.get('missingByYear')=={'2017':476,'2018':582,'2019':576,'2020':576,'2021':591,'2022':650} and m.get('reuseRequiresAllSixMarkets') is True)
-          raise SystemExit(0 if ok else 1)
+          m=json.load(open('analysis-results/ml-discovery-odds-demand-meta.json'))
+          assert m['discoveryBoundaryLocked'] is True,m
+          assert m['unionSelectedRaces']==16224,m
+          assert m['reusedRaces']==12773,m
+          assert m['missingRaces']==3451,m
+          assert m['missingByYear']=={'2017':476,'2018':582,'2019':576,'2020':576,'2021':591,'2022':650},m
+          assert m['reuseRequiresAllSixMarkets'] is True,m
+          assert m['targetRaceResultUsedForDemand'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          print(json.dumps(m,ensure_ascii=False))
           PY
-              then echo "$rid" > v3-run.txt; break 2; fi
-            done
-            sleep 15
-          done
-          test -s v3-run.txt
-          echo "DISCOVERY_ODDS_RUN_ID=$(cat v3-run.txt)" >> "$GITHUB_ENV"
-          echo "Using v3 discovery odds run $(cat v3-run.txt)"
-      - name: Wait for six v3 year artifacts
+      - name: Fetch 2017-2019 missing official odds in parallel
         run: |
           set -euo pipefail
-          for i in $(seq 1 1200); do
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DISCOVERY_ODDS_RUN_ID}/artifacts?per_page=100" > odds-artifacts.json
-            n=$(jq '[.artifacts[] | select(.name|startswith("research-ml-discovery-odds-v3-20")) | select(.expired==false)] | length' odds-artifacts.json)
-            if [ "$n" -ge 6 ]; then break; fi
-            sleep 15
+          for y in 2017 2018 2019; do
+            python scripts/research-fetch-resolved-demanded-official-odds.py \
+              --input analysis-results/ml-discovery-odds-demand.jsonl \
+              --year "$y" --workers 4 \
+              --out "input/new-odds/ml-discovery-odds-${y}.jsonl" \
+              --meta "analysis-results/ml-discovery-odds-${y}-meta.json" &
           done
-          for y in 2017 2018 2019 2020 2021 2022; do
-            id=$(jq -r --arg n "research-ml-discovery-odds-v3-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' odds-artifacts.json | head -n1)
-            test -n "$id" && test "$id" != null
-            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "v3-${y}.zip"
-            unzip -q "v3-${y}.zip" -d input/new-odds
+          wait
+      - name: Fetch 2020-2022 missing official odds in parallel
+        run: |
+          set -euo pipefail
+          for y in 2020 2021 2022; do
+            python scripts/research-fetch-resolved-demanded-official-odds.py \
+              --input analysis-results/ml-discovery-odds-demand.jsonl \
+              --year "$y" --workers 4 \
+              --out "input/new-odds/ml-discovery-odds-${y}.jsonl" \
+              --meta "analysis-results/ml-discovery-odds-${y}-meta.json" &
           done
-          test $(find input/new-odds -name 'ml-discovery-odds-20*.jsonl' | wc -l) -eq 6
-          actual=$(cat input/new-odds/ml-discovery-odds-20*.jsonl | wc -l)
-          test "$actual" -eq 3451
+          wait
+      - name: Require exact 3451 official-odds rows and zero failures
+        run: |
+          python - <<'PY'
+          import json
+          expected={'2017':476,'2018':582,'2019':576,'2020':576,'2021':591,'2022':650}
+          total=0
+          for y,n in expected.items():
+              p=f'input/new-odds/ml-discovery-odds-{y}.jsonl'
+              actual=sum(1 for line in open(p,encoding='utf-8') if line.strip())
+              assert actual==n,(y,actual,n)
+              m=json.load(open(f'analysis-results/ml-discovery-odds-{y}-meta.json'))
+              assert not m.get('failures'),(y,m.get('failures'))
+              assert m.get('syntheticOddsUsed') is False,m
+              assert m.get('productionDatabaseWritten') is False,m
+              total+=actual
+          assert total==3451,total
+          print(json.dumps({'newOfficialOddsRaces':total,'reusedOfficialOddsRaces':12773,'syntheticOddsUsed':False,'productionDatabaseWritten':False},ensure_ascii=False))
+          PY
       - name: Download all-race OOS predictions
         run: |
           set -euo pipefail
@@ -166,6 +185,8 @@ jobs:
         with:
           name: research-ml-five-discovery-evaluation
           path: |
+            analysis-results/ml-discovery-odds-demand-meta.json
+            analysis-results/ml-discovery-odds-*-meta.json
             analysis-results/ml-five-discovery-evaluation.json
             analysis-results/ml-five-discovery-practical-frozen.json
           retention-days: 30
