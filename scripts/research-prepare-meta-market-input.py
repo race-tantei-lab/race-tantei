@@ -4,7 +4,8 @@ from pathlib import Path
 
 MARKETS=('win','umaren','wide','umatan','trio','trifecta')
 VENUE_CODE={'札幌':'01','函館':'02','福島':'03','新潟':'04','東京':'05','中山':'06','中京':'07','京都':'08','阪神':'09','小倉':'10'}
-URL_RE=re.compile(r'(?:pw|sw)01sde(?:01|10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
+RESULT_RE=re.compile(r'(?:pw|sw)01sde(?:01|10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
+ODDS_RE=re.compile(r'(?:pw|sw)15[1-8]ou10(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
 
 def read_jsonl(path):
     with Path(path).open(encoding='utf-8') as f:
@@ -16,10 +17,20 @@ def write_jsonl(path,rows):
     with p.open('w',encoding='utf-8') as f:
         for r in rows:f.write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n')
 
+def identity_match(row):
+    prov=row.get('provenance') or {}
+    candidates=[str(prov.get('resultUrl') or row.get('resultUrl') or '')]
+    source=prov.get('sourceCnames') or {}
+    if isinstance(source,dict):candidates.extend(str(v or '') for v in source.values())
+    for text in candidates:
+        decoded=urllib.parse.unquote(text)
+        m=RESULT_RE.search(decoded) or ODDS_RE.search(decoded)
+        if m:return m,text
+    return None,candidates[0] if candidates else ''
+
 def identity_ok(row):
-    url=str((row.get('provenance') or {}).get('resultUrl') or row.get('resultUrl') or '')
-    m=URL_RE.search(urllib.parse.unquote(url))
-    if not m:return False,'URL_ID_UNPARSEABLE'
+    m,_=identity_match(row)
+    if not m:return False,'SOURCE_ID_UNPARSEABLE'
     vc,year,meeting,day,rn,ymd=m.groups()
     expect_v=VENUE_CODE.get(str(row.get('venue') or ''))
     if ymd!=str(row.get('raceDate') or '').replace('-',''):return False,'DATE_MISMATCH'
@@ -59,7 +70,6 @@ def main():
     continuous=load_odds_dir(a.continuous_odds_dir,['research-continuous-market-odds-20*.jsonl'])
     canonical=load_odds_dir(a.canonical_odds_dir,['research-demanded-odds-20*.jsonl'])
     reused={};source_counts=collections.Counter();rejected=[]
-    # Lower-priority canonical first. It is reused only when source identity matches.
     for rid in selected:
         r=canonical.get(rid)
         if not r:continue
@@ -69,7 +79,6 @@ def main():
         if not (r.get('officialOdds') or {}).get('win'):
             rejected.append({'raceId':rid,'source':'canonical297','reason':'WIN_ODDS_MISSING'});continue
         reused[rid]=r;source_counts['canonical297']+=1
-    # Audited source-clean continuous rows override canonical rows.
     for rid in selected:
         r=continuous.get(rid)
         if not r:continue
