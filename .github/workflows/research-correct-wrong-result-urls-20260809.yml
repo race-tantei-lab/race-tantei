@@ -26,7 +26,7 @@ jobs:
       - name: Mark pending
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending \
-            -f context='research/correct-wrong-result-urls-20260809' -f description='Resolving three selected races whose saved result URLs point to other dates' -f target_url="$STATUS_TARGET_URL" >/dev/null
+            -f context='research/correct-wrong-result-urls-20260809' -f description='Reconstructing three selected August 9 result URLs from race identity' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -43,58 +43,46 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p history demand fake-meta analysis-results
+          mkdir -p history demand analysis-results
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
           unzip -q history.zip ten-year-history-corpus.jsonl -d history
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > d.json
           id=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' d.json | head -n1)
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
           unzip -q demand.zip -d demand
-      - name: Build exact three-race failure manifest and full-market demand
+      - name: Reconstruct exact result CNAMEs from venue and meeting identity
         run: |
           python - <<'PY'
-          import json
+          import json,urllib.parse
           from pathlib import Path
           targets={'2026-08-09-chukyo-09','2026-08-09-niigata-10','2026-08-09-niigata-11'}
           markets=['win','umaren','wide','umatan','trio','trifecta']
-          rows=[]
+          venue={'札幌':'01','函館':'02','福島':'03','新潟':'04','東京':'05','中山':'06','中京':'07','京都':'08','阪神':'09','小倉':'10'}
+          demand={}
           for line in Path('demand/demand.jsonl').read_text().splitlines():
-            if not line.strip(): continue
-            r=json.loads(line)
-            r['requiredMarkets']=markets
-            rows.append(r)
-          found={str(r['raceId']) for r in rows if str(r['raceId']) in targets}
-          assert found==targets,(found,targets)
-          Path('demand/full-market-demand.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in rows))
-          for year in range(2016,2027):
-            failures=[{'raceId':rid} for rid in sorted(targets)] if year==2026 else []
-            Path(f'fake-meta/research-demanded-odds-{year}-meta.json').write_text(json.dumps({'year':str(year),'failures':failures},ensure_ascii=False,indent=2)+'\n')
+            if line.strip():
+              r=json.loads(line);demand[str(r['raceId'])]=r
+          corpus={}
+          for line in Path('history/ten-year-history-corpus.jsonl').read_text().splitlines():
+            if line.strip():
+              b=json.loads(line);rid=str(b.get('race',{}).get('raceId') or '')
+              if rid in targets:corpus[rid]=b['race']
+          assert set(corpus)==targets,(set(corpus),targets)
+          out=[]
+          for rid in sorted(targets):
+            race=corpus[rid];d=demand[rid]
+            assert race.get('meetingNo') is not None and race.get('meetingDay') is not None,race
+            ymd=str(race['raceDate']).replace('-','');year=ymd[:4]
+            identity=f"{venue[race['venue']]}{year}{int(race['meetingNo']):02d}{int(race['meetingDay']):02d}{int(race['raceNo']):02d}{ymd}"
+            cname='pw01sde10'+identity
+            result_url='https://www.jra.go.jp/JRADB/accessS.html?CNAME='+urllib.parse.quote(cname,safe='')
+            row=dict(d);row.update({'requiredMarkets':markets,'resultUrl':result_url,'entryUrl':race.get('entryUrl'),'originalResultUrl':d.get('resultUrl'),'resultUrlResolutionMethod':'reconstructed_from_verified_race_identity','syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False})
+            out.append(row)
+          Path('analysis-results/resolved.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in out))
+          Path('analysis-results/resolved-meta.json').write_text(json.dumps({'purpose':'research_only_reconstruct_wrong_result_urls','resolvedCount':3,'unresolvedCount':0,'raceIds':[r['raceId'] for r in out],'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False},ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({'resolved':[(r['raceId'],r['resultUrl']) for r in out]},ensure_ascii=False))
           PY
-      - name: Resolve exact races to correct official JRA result URLs
-        run: |
-          node scripts/research-resolve-demanded-odds-failures.mjs \
-            --demand demand/full-market-demand.jsonl \
-            --meta-dir fake-meta \
-            --corpus history/ten-year-history-corpus.jsonl \
-            --out analysis-results/resolved.jsonl \
-            --meta analysis-results/resolved-meta.json
-      - name: Verify resolved URLs match target race dates and race numbers
-        run: |
-          python - <<'PY'
-          import json,re
-          from pathlib import Path
-          rows=[json.loads(x) for x in Path('analysis-results/resolved.jsonl').read_text().splitlines() if x.strip()]
-          assert len(rows)==3,rows
-          pat=re.compile(r'(?:pw|sw)01sde10(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
-          for r in rows:
-            url=str(r.get('resultUrl') or '')
-            m=pat.search(url)
-            if m:
-              assert m.group(6)==str(r['raceDate']).replace('-',''),(r,m.groups())
-              assert int(m.group(5))==int(r['raceNo']),(r,m.groups())
-          print(json.dumps({'resolved':[(r['raceId'],r['resultUrl']) for r in rows]},ensure_ascii=False))
-          PY
-      - name: Fetch all six official markets from corrected URLs
+      - name: Fetch all six official markets from reconstructed URLs
         shell: bash
         run: |
           set +e
@@ -108,7 +96,7 @@ jobs:
       - name: Verify all three corrected rows are real official data
         run: |
           python - <<'PY'
-          import json
+          import json,re
           from pathlib import Path
           m=json.loads(Path('analysis-results/corrected-odds-meta.json').read_text())
           assert m['completedRaces']==3,m
@@ -117,6 +105,11 @@ jobs:
           assert m['productionDatabaseWritten'] is False,m
           rows=[json.loads(x) for x in Path('analysis-results/corrected-odds.jsonl').read_text().splitlines() if x.strip()]
           assert len(rows)==3,rows
+          pat=re.compile(r'(?:pw|sw)01sde10(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})',re.I)
+          for r in rows:
+            url=str((r.get('provenance') or {}).get('resultUrl') or '')
+            mm=pat.search(url)
+            assert mm and mm.group(6)==str(r['raceDate']).replace('-','') and int(mm.group(5))==int(r['raceNo']),(r,url)
           print(json.dumps({'completed':3,'raceIds':[r['raceId'] for r in rows]},ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
@@ -132,7 +125,7 @@ jobs:
         if: success()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success \
-            -f context='research/correct-wrong-result-urls-20260809' -f description='Three mismatched result URLs corrected with official odds' -f target_url="$STATUS_TARGET_URL" >/dev/null
+            -f context='research/correct-wrong-result-urls-20260809' -f description='Three mismatched August 9 result URLs corrected with official odds' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark failure
         if: failure()
         run: |
