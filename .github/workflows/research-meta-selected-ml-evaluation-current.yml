@@ -1,0 +1,104 @@
+name: Research current meta-selected ML evaluation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-meta-selected-ml-evaluation-current.yml"
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  ODDS_RUN_ID: '31456971683'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Mark current evaluation pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/current-meta-selected-ml-evaluation' -f description='Waiting for source-clean meta-selected odds then applying Top50 gate' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Wait for exact source-clean odds and selected inputs
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 900); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > arts.json
+            oid=$(jq -r '.artifacts[] | select(.name=="research-meta-market-source-clean" and .expired==false) | .id' arts.json | head -n1)
+            iid=$(jq -r '.artifacts[] | select(.name=="research-meta-market-reuse-input" and .expired==false) | .id' arts.json | head -n1)
+            if [ -n "$oid" ] && [ "$oid" != null ] && [ -n "$iid" ] && [ "$iid" != null ]; then echo "$oid" > oid.txt; echo "$iid" > iid.txt; break; fi
+            sleep 15
+          done
+          test -s oid.txt && test -s iid.txt
+          mkdir -p input/odds input/base input/predictions
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$(cat oid.txt)/zip" > odds.zip
+          unzip -q odds.zip -d input/odds
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$(cat iid.txt)/zip" > base.zip
+          unzip -q base.zip -d input/base
+      - name: Normalize audited inputs
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          src=Path('input/base/selected-predictions.jsonl');assert src.exists()
+          outs={str(y):(Path('input/predictions')/f'runner-ranker-{y}.jsonl').open('w') for y in range(2016,2027)}
+          races={str(y):set() for y in range(2016,2027)}
+          for line in src.read_text().splitlines():
+            if not line.strip():continue
+            r=json.loads(line);y=str(r['raceDate'])[:4];outs[y].write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n');races[y].add(str(r['raceId']))
+          for f in outs.values():f.close()
+          assert sum(len(v) for v in races.values())==14410,{y:len(v) for y,v in races.items()}
+          for y in range(2016,2027):
+            p=Path('input/odds')/f'research-meta-market-odds-{y}.jsonl';assert p.exists(),p
+            p.rename(Path('input/odds')/f'research-continuous-market-odds-{y}.jsonl')
+          assert Path('input/base/selected-history.jsonl').exists()
+          print(json.dumps({'predictionRaces':{y:len(v) for y,v in races.items()}},ensure_ascii=False))
+          PY
+      - name: Evaluate fixed ML configurations
+        run: |
+          python scripts/research-evaluate-runner-ml-market.py --predictions-dir input/predictions --odds-dir input/odds --history input/base/selected-history.jsonl --out analysis-results/meta-selected-fixed.json
+      - name: Evaluate prior-OOS calibrated ML configuration
+        run: |
+          python scripts/research-evaluate-runner-ml-calibrated.py --predictions-dir input/predictions --odds-dir input/odds --history input/base/selected-history.jsonl --out analysis-results/meta-selected-calibrated.json
+      - name: Build strict robustness comparison
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          f=json.loads(Path('analysis-results/meta-selected-fixed.json').read_text())
+          c=json.loads(Path('analysis-results/meta-selected-calibrated.json').read_text())
+          assert f['selectedRaces']==14410 and c['selectedRaces']==14410,(f['selectedRaces'],c['selectedRaces'])
+          assert c['targetYearRoiUsedForCalibration'] is False,c
+          courses=('light','standard','premium')
+          out={'hardGate':'all three courses Top50-excluded ROI >= 200%','fixed':{},'calibrated':{},'anyPass':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+          for n,x in f['configs'].items():
+            out['fixed'][n]={'pass':x['passesCompletionHardGate'],'courses':{k:{z:x['courses'][k][z] for z in ('roiPct','top50ExcludedRoiPct','top100ExcludedRoiPct','top1PctExcludedRoiPct','top50ReturnSharePct')} for k in courses}}
+            out['anyPass']|=bool(x['passesCompletionHardGate'])
+          out['calibrated']={'pass':c['passesCompletionHardGate'],'courses':{k:{z:c['courses'][k][z] for z in ('roiPct','top50ExcludedRoiPct','top100ExcludedRoiPct','top1PctExcludedRoiPct','top50ReturnSharePct')} for k in courses},'yearParameters':c['yearParameters']}
+          out['anyPass']|=bool(c['passesCompletionHardGate'])
+          Path('analysis-results/meta-selected-robust-comparison.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(out,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-current-meta-selected-ml-evaluation
+          path: |
+            analysis-results/meta-selected-fixed.json
+            analysis-results/meta-selected-calibrated.json
+            analysis-results/meta-selected-robust-comparison.json
+          retention-days: 30
+      - name: Mark current evaluation success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/current-meta-selected-ml-evaluation' -f description='Meta-selected robust ML comparison completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark current evaluation failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/current-meta-selected-ml-evaluation' -f description='Meta-selected robust ML comparison needs repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
