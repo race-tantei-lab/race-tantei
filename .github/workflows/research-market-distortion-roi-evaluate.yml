@@ -1,0 +1,179 @@
+name: Research market distortion ROI evaluation
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-market-distortion-roi-evaluate.yml"
+      - "scripts/research-evaluate-market-distortion-roi.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  BASE_ODDS_RUN_ID: '31446629662'
+  FAST_2023_RUN_ID: '31447695033'
+  RECENT_ODDS_RUN_ID: '31446902302'
+  REPAIR_RUN_ID: '31447072766'
+  BEST_DEMAND_RUN_ID: '31417411680'
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Mark market distortion evaluation pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/market-distortion-roi-evaluation' \
+            -f description='Waiting for complete official odds to evaluate production-style market features' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile evaluator before waiting
+        run: python -m py_compile scripts/research-evaluate-market-distortion-roi.py
+      - name: Wait for required official-odds artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 700); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BASE_ODDS_RUN_ID}/artifacts?per_page=100" > base.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FAST_2023_RUN_ID}/artifacts?per_page=100" > fast.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RECENT_ODDS_RUN_ID}/artifacts?per_page=100" > recent.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${REPAIR_RUN_ID}/artifacts?per_page=100" > repair.json
+            base_count=0
+            for year in $(seq 2016 2022); do
+              name="research-continuous-market-odds-${year}"
+              n=$(jq -r --arg n "$name" '[.artifacts[] | select(.name==$n and .expired==false)] | length' base.json)
+              base_count=$((base_count+n))
+            done
+            fast_count=$(jq -r '[.artifacts[] | select(.name=="research-continuous-market-odds-2023-fast" and .expired==false)] | length' fast.json)
+            recent_count=0
+            for year in $(seq 2024 2026); do
+              name="research-continuous-market-odds-recent-${year}"
+              n=$(jq -r --arg n "$name" '[.artifacts[] | select(.name==$n and .expired==false)] | length' recent.json)
+              recent_count=$((recent_count+n))
+            done
+            repair_count=$(jq -r '[.artifacts[] | select(.name=="research-continuous-market-odds-repair" and .expired==false)] | length' repair.json)
+            echo "market distortion prerequisites base=$base_count/7 fast2023=$fast_count/1 recent=$recent_count/3 repair=$repair_count/1 poll=$i"
+            if [ "$base_count" -eq 7 ] && [ "$fast_count" -eq 1 ] && [ "$recent_count" -eq 3 ] && [ "$repair_count" -eq 1 ]; then exit 0; fi
+            sleep 30
+          done
+          exit 1
+      - name: Download corpus and frozen race selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history demand odds repair analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > demand-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' demand-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+      - name: Download complete market odds shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BASE_ODDS_RUN_ID}/artifacts?per_page=100" > base-artifacts.json
+          for year in $(seq 2016 2022); do
+            name="research-continuous-market-odds-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' base-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
+            cp "tmp-$year/research-continuous-market-odds-${year}.jsonl" odds/
+          done
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FAST_2023_RUN_ID}/artifacts?per_page=100" > fast-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-continuous-market-odds-2023-fast" and .expired==false) | .id' fast-artifacts.json | head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > 2023.zip
+          mkdir -p tmp-2023; unzip -q 2023.zip -d tmp-2023
+          cp tmp-2023/research-continuous-market-odds-2023.jsonl odds/
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RECENT_ODDS_RUN_ID}/artifacts?per_page=100" > recent-artifacts.json
+          for year in $(seq 2024 2026); do
+            name="research-continuous-market-odds-recent-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' recent-artifacts.json | head -n1)
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
+            cp "tmp-$year/research-continuous-market-odds-${year}.jsonl" odds/
+          done
+          test "$(find odds -name 'research-continuous-market-odds-20*.jsonl' -type f | wc -l)" -eq 11
+      - name: Merge residual repaired odds
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${REPAIR_RUN_ID}/artifacts?per_page=100" > repair-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-continuous-market-odds-repair" and .expired==false) | .id' repair-artifacts.json | head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > repair.zip
+          unzip -q repair.zip -d repair
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('repair/research-continuous-market-odds-repair.jsonl')
+          repairs=[json.loads(x) for x in p.read_text().splitlines() if x.strip()] if p.exists() else []
+          for year in ('2024','2025','2026'):
+            f=Path(f'odds/research-continuous-market-odds-{year}.jsonl'); rows={}
+            for line in f.read_text().splitlines():
+              if line.strip():
+                r=json.loads(line); rows[str(r['raceId'])]=r
+            for r in repairs:
+              if str(r['raceDate']).startswith(year+'-'): rows[str(r['raceId'])]=r
+            f.write_text(''.join(json.dumps(rows[k],ensure_ascii=False,separators=(',',':'))+'\n' for k in sorted(rows)))
+          print(json.dumps({'repairRows':len(repairs)},ensure_ascii=False))
+          PY
+      - name: Evaluate production-style market distortion ROI model
+        run: |
+          python scripts/research-evaluate-market-distortion-roi.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --demand demand/demand.jsonl \
+            --odds-dir odds \
+            --out analysis-results/research-market-distortion-roi-evaluation.json
+      - name: Verify provenance and completion
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/research-market-distortion-roi-evaluation.json').read_text())
+          assert m['selectedDemandRaces']==14410,m
+          assert m['missingOddsRaceCount']==0,m['missingOddsRaceIds'][:20]
+          assert not m['missingDemandRacesInCorpus'],m['missingDemandRacesInCorpus'][:20]
+          assert m['marketFeatureFormulaMatchesProductionLiveGenerator'] is True,m
+          assert m['productionRulesReused'] is False,m
+          assert m['raceSelectionFrozenBeforeOdds'] is True,m
+          assert m['targetDayResultsUsedForRaceSelection'] is False,m
+          assert m['sameDayResultsUsedForTicketValue'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          assert m['productionModelChanged'] is False,m
+          b=m['bestVariant'];v=m['variants'][b]
+          print(json.dumps({'best':b,'evaluated':v['evaluatedRaces'],'errors':v['evaluationErrorCount'],'roi':{c:x['roiPct'] for c,x in v['courses'].items()},'all200':v['allThreeAtLeast200Pct']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-market-distortion-roi-evaluation
+          path: analysis-results/research-market-distortion-roi-evaluation.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Mark market distortion evaluation success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/market-distortion-roi-evaluation' \
+            -f description='Production-style market distortion ten-year evaluation completed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark market distortion evaluation failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/market-distortion-roi-evaluation' \
+            -f description='Market distortion ten-year evaluation requires repair' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
