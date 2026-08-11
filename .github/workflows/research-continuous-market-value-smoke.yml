@@ -1,0 +1,78 @@
+name: Research continuous market value smoke
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-continuous-market-value-smoke.yml"
+      - "scripts/research-evaluate-continuous-market-value.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  OLD_ODDS_RUN_ID: '31373205723'
+  BEST_DEMAND_RUN_ID: '31417411680'
+  HISTORY_ARTIFACT_ID: '9056288221'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download corpus and frozen current race selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history demand odds analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > demand-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' demand-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+      - name: Download all existing old official odds shards as smoke input
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${OLD_ODDS_RUN_ID}/artifacts?per_page=100" > odds-artifacts.json
+          for year in $(seq 2016 2026); do
+            name="research-demanded-odds-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' odds-artifacts.json | head -n1)
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
+            cp "tmp-$year/research-demanded-odds-${year}.jsonl" "odds/research-continuous-market-odds-${year}.jsonl"
+          done
+      - name: Run evaluator on overlap only
+        run: |
+          python scripts/research-evaluate-continuous-market-value.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --demand demand/demand.jsonl \
+            --odds-dir odds \
+            --out analysis-results/smoke.json
+      - name: Verify smoke is intentionally partial and leakage-safe
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/smoke.json').read_text())
+          assert m['selectedDemandRaces']==14410,m
+          assert m['missingOddsRaceCount']>0,m
+          assert m['candidateOddsCompletenessRequired'] is True,m
+          assert m['raceSelectionFrozenBeforeOdds'] is True,m
+          assert m['targetDayResultsUsedForRaceSelection'] is False,m
+          assert m['sameDayResultsUsedForTicketProbability'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          b=m['bestVariant'];v=m['variants'][b]
+          print(json.dumps({'partialSmokeOnly':True,'oldOddsRows':m['oddsRaces'],'missingSelected':m['missingOddsRaceCount'],'bestVariant':b,'evaluatedRaces':v['evaluatedRaces'],'candidateOddsErrors':v['evaluationErrorCount'],'partialRoi':{c:x['roiPct'] for c,x in v['courses'].items()}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-continuous-market-value-smoke
+          path: analysis-results/smoke.json
+          retention-days: 14
