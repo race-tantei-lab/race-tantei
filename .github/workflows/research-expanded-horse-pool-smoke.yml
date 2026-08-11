@@ -1,0 +1,124 @@
+name: Research expanded horse pool smoke
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-expanded-horse-pool-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  OLD_ODDS_RUN_ID: '31373205723'
+  BEST_DEMAND_RUN_ID: '31417411680'
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  pool:
+    strategy:
+      fail-fast: false
+      matrix:
+        top_horses: [7, 8]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download frozen inputs and old official odds overlap
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history demand odds analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > demand-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' demand-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${OLD_ODDS_RUN_ID}/artifacts?per_page=100" > odds-artifacts.json
+          for year in $(seq 2016 2026); do
+            name="research-demanded-odds-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' odds-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
+            cp "tmp-$year/research-demanded-odds-${year}.jsonl" "odds/research-continuous-market-odds-${year}.jsonl"
+          done
+      - name: Expand candidate horse pool and remove unnecessary unselected ticket generation
+        env:
+          TOP_HORSES: ${{ matrix.top_horses }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          n=os.environ['TOP_HORSES']
+          p=Path('scripts/research-sparse-walkforward-demand.py')
+          s=p.read_text()
+          assert 'TOP_HORSES=5' in s
+          p.write_text(s.replace('TOP_HORSES=5',f'TOP_HORSES={n}',1))
+          p=Path('scripts/research-evaluate-direct-market-roi.py')
+          s=p.read_text()
+          old="""        generated = {}\n        for b in bundles:\n            rid = str(b['race']['raceId'])\n            generated[rid] = cmod.candidate_rows(state, b)\n"""
+          new="""        generated = {str(b['race']['raceId']): cmod.candidate_rows(state, b) for b in bundles if str(b['race']['raceId']) in demand}\n"""
+          assert old in s
+          p.write_text(s.replace(old,new,1))
+          PY
+          python -m py_compile scripts/research-evaluate-direct-market-roi.py scripts/research-sparse-walkforward-demand.py
+      - name: Evaluate expanded candidate pool on identical overlap
+        env:
+          TOP_HORSES: ${{ matrix.top_horses }}
+        run: |
+          python scripts/research-evaluate-direct-market-roi.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --demand demand/demand.jsonl \
+            --odds-dir odds \
+            --out analysis-results/expanded-pool-${TOP_HORSES}.json
+      - name: Verify and summarize
+        env:
+          TOP_HORSES: ${{ matrix.top_horses }}
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          n=os.environ['TOP_HORSES']
+          m=json.loads(Path(f'analysis-results/expanded-pool-{n}.json').read_text())
+          assert m['selectedDemandRaces']==14410,m
+          assert m['raceSelectionFrozenBeforeOdds'] is True,m
+          assert m['sameDayResultsUsedForTicketValue'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          b=m['bestVariant'];v=m['variants'][b]
+          print(json.dumps({'topHorses':int(n),'best':b,'evaluated':v['evaluatedRaces'],'errors':v['evaluationErrorCount'],'roi':{c:x['roiPct'] for c,x in v['courses'].items()}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-expanded-horse-pool-${{ matrix.top_horses }}
+          path: analysis-results/expanded-pool-${{ matrix.top_horses }}.json
+          retention-days: 14
+
+  finish:
+    if: always()
+    needs: pool
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark expanded pool screen status
+        env:
+          RESULT: ${{ needs.pool.result }}
+        run: |
+          if [ "$RESULT" = success ]; then
+            state=success; desc='Expanded 7/8-horse candidate-pool screen completed'
+          else
+            state=failure; desc='Expanded horse-pool screen requires repair'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" -f context='research/expanded-horse-pool-screen' \
+            -f description="$desc" -f target_url="$STATUS_TARGET_URL" >/dev/null
+          test "$state" = success
