@@ -11,18 +11,26 @@ on:
 permissions:
   contents: read
   actions: read
+  statuses: write
 
 env:
   GH_TOKEN: ${{ github.token }}
   OLD_ODDS_RUN_ID: '31373205723'
   BEST_DEMAND_RUN_ID: '31417411680'
   HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      - name: Mark smoke pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/continuous-market-value-smoke' \
+            -f description='Validating market-value evaluator on existing official-odds overlap' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - name: Download corpus and frozen current race selection
         shell: bash
@@ -76,3 +84,15 @@ jobs:
           name: research-continuous-market-value-smoke
           path: analysis-results/smoke.json
           retention-days: 14
+      - name: Mark smoke success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/continuous-market-value-smoke' \
+            -f description='Partial official-odds evaluator smoke completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark smoke failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/continuous-market-value-smoke' \
+            -f description='Market-value evaluator smoke requires repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
