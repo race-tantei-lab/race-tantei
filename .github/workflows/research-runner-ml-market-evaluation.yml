@@ -1,0 +1,97 @@
+name: Research runner ML market evaluation
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-runner-ml-market-evaluation.yml"
+      - "scripts/research-evaluate-runner-ml-market.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  RANKER_RUN_ID: '31454005329'
+  SOURCE_INPUT_ARTIFACT_ID: '9086766461'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Mark ML market evaluation pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/runner-ml-market-evaluation' -f description='Evaluating ML fair-value tickets with Top50 robustness gate' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile evaluator
+        run: python -m py_compile scripts/research-evaluate-runner-ml-market.py
+      - name: Download eleven walk-forward prediction folds
+        run: |
+          set -euo pipefail
+          mkdir -p input/predictions
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RANKER_RUN_ID}/artifacts?per_page=100" > ranker-artifacts.json
+          for y in $(seq 2016 2026); do
+            id=$(jq -r --arg n "research-runner-ranker-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' ranker-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "ranker-${y}.zip"
+            unzip -q "ranker-${y}.zip" -d input/predictions
+          done
+          test $(find input/predictions -name 'runner-ranker-20*.jsonl' | wc -l) -eq 11
+      - name: Download source-clean official odds and result corpus
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_INPUT_ARTIFACT_ID}/zip" > source-clean.zip
+          mkdir -p input/source
+          unzip -q source-clean.zip 'corrected-odds/*.jsonl' 'history/ten-year-history-corpus.jsonl' -d input/source
+          test $(find input/source/corrected-odds -name 'research-continuous-market-odds-20*.jsonl' | wc -l) -eq 11
+          test -s input/source/history/ten-year-history-corpus.jsonl
+      - name: Evaluate fixed ML market configurations
+        run: |
+          python scripts/research-evaluate-runner-ml-market.py \
+            --predictions-dir input/predictions \
+            --odds-dir input/source/corrected-odds \
+            --history input/source/history/ten-year-history-corpus.jsonl \
+            --out analysis-results/runner-ml-market-evaluation.json
+      - name: Enforce exact evaluation and robustness reporting
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('analysis-results/runner-ml-market-evaluation.json');d=json.loads(p.read_text())
+          assert d['selectedRaces']==14410,d
+          assert d['targetRaceResultUsedForPrediction'] is False,d
+          assert d['syntheticOddsUsed'] is False,d
+          assert d['productionDatabaseWritten'] is False,d
+          assert d['productionModelChanged'] is False,d
+          assert d['completionHardGate']['allCoursesTop50ExcludedRoiPctAtLeast']==200.0,d
+          assert len(d['configs'])==5,d['configs'].keys()
+          for name,c in d['configs'].items():
+            for course in ('light','standard','premium'):
+              x=c['courses'][course]
+              assert x['races']==14410,(name,course,x)
+              assert x['top50ExcludedRoiPct'] is not None,(name,course)
+              assert x['top100ExcludedRoiPct'] is not None,(name,course)
+              assert x['top1PctExcludedRoiPct'] is not None,(name,course)
+          print(json.dumps({n:{course:{'roi':c['courses'][course]['roiPct'],'top50':c['courses'][course]['top50ExcludedRoiPct'],'top100':c['courses'][course]['top100ExcludedRoiPct'],'top1pct':c['courses'][course]['top1PctExcludedRoiPct']} for course in ('light','standard','premium')}|{'pass':c['passesCompletionHardGate']} for n,c in d['configs'].items()},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-runner-ml-market-evaluation
+          path: analysis-results/runner-ml-market-evaluation.json
+          retention-days: 30
+      - name: Mark ML market evaluation success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/runner-ml-market-evaluation' -f description='ML market evaluation completed with Top50/Top100/Top1pct robustness' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark ML market evaluation failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/runner-ml-market-evaluation' -f description='ML market evaluation needs repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
