@@ -74,6 +74,19 @@ def robust(rows):
       'hardGateTop50AtLeast200':bool(ret50 is not None and profit50 is not None and ret50>=200.0 and profit50>=200.0),
     }
 
+def read_odds_dir(root,union,odds,existing=False):
+    files=list(Path(root).glob('*.jsonl'))
+    if existing:
+        # Canonical 297 is a fallback; current source-clean rows must win on overlap.
+        files.sort(key=lambda p:(0 if p.name.startswith('research-demanded-odds-') else 1,p.name))
+    else:
+        files.sort()
+    for p in files:
+        for line in p.read_text(encoding='utf-8').splitlines():
+            if not line.strip():continue
+            r=json.loads(line);rid=str(r['raceId'])
+            if rid in union:odds[rid]=r
+
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--predictions-dir',required=True);ap.add_argument('--selections-dir',required=True);ap.add_argument('--existing-odds-dir',required=True);ap.add_argument('--new-odds-dir',required=True);ap.add_argument('--history',required=True);ap.add_argument('--out',required=True);a=ap.parse_args()
     pred=collections.defaultdict(list)
@@ -90,12 +103,8 @@ def main():
         if len(rows)!=9190:raise RuntimeError(f'SELECTION_COUNT_INVALID:{v}:{len(rows)}')
         sels[v]=rows
     odds={}
-    for root in (a.existing_odds_dir,a.new_odds_dir):
-        for p in sorted(Path(root).glob('*.jsonl')):
-            for line in p.read_text(encoding='utf-8').splitlines():
-                if line.strip():
-                    r=json.loads(line);rid=str(r['raceId'])
-                    if rid in union:odds[rid]=r
+    read_odds_dir(a.existing_odds_dir,union,odds,existing=True)
+    read_odds_dir(a.new_odds_dir,union,odds,existing=False)
     missing=sorted(union-set(odds))
     if missing:raise RuntimeError(f'ODDS_MISSING:{len(missing)}:{missing[:5]}')
     hist={}
@@ -105,10 +114,14 @@ def main():
                 b=json.loads(line);rid=str(b['race']['raceId'])
                 if rid in union:hist[rid]=b
     if len(hist)!=len(union):raise RuntimeError(f'HISTORY_MISSING:{len(union)-len(hist)}')
-    top3={}
+    top3={};inactive_filtered=0
     for rid in union:
-        rows=pred.get(rid,[]);ordered=sorted(rows,key=lambda r:(-float(r['abilityScore']),int(r['horseNo'])))
-        if len(ordered)<3:raise RuntimeError(f'PREDICTION_MISSING:{rid}:{len(ordered)}')
+        win=odds[rid].get('officialOdds',{}).get('win',{})
+        active={int(h) for h,v in win.items() if odds_value(v) is not None}
+        all_rows=pred.get(rid,[]);rows=[r for r in all_rows if int(r['horseNo']) in active]
+        inactive_filtered+=max(0,len(all_rows)-len(rows))
+        ordered=sorted(rows,key=lambda r:(-float(r['abilityScore']),int(r['horseNo'])))
+        if len(ordered)<3:raise RuntimeError(f'ACTIVE_PREDICTION_MISSING:{rid}:{len(ordered)}:{len(active)}')
         top3[rid]=tuple(int(r['horseNo']) for r in ordered[:3])
     results={};errors=[]
     for v in VARIANTS:
@@ -148,6 +161,6 @@ def main():
     best_key=max(combos,key=lambda k:(combos[k]['minTop50RobustRoiPct'],combos[k]['minTop100ExcludedRoiPct'],combos[k]['minOverallRoiPct'],k))
     best=combos[best_key];passed=bool(best['passesDiscoveryGate'])
     frozen={'key':best_key,'selector':best['selector'],'template':best['template'],'minTop50RobustRoiPct':best['minTop50RobustRoiPct'],'minTop100ExcludedRoiPct':best['minTop100ExcludedRoiPct'],'minOverallRoiPct':best['minOverallRoiPct'],'selectorUsesHistoricalFinalPopularity':best['selectorUsesHistoricalFinalPopularity']} if passed else None
-    summary={'purpose':'research_only_2016_2022_discovery_for_result_blind_ml_five_race_selection','discoveryPeriod':{'start':'2016-08-10','end':'2022-12-31'},'holdoutPeriodUntouched':{'start':'2023-01-01','end':'2026-08-09'},'selectionVariants':list(VARIANTS),'ticketTemplates':list(TEMPLATES),'candidateCombinations':len(combos),'selectedRacesPerCombination':9190,'completionHardGate':{'allCoursesTop50ReturnAndProfitExcludedRoiPctAtLeast':200.0},'historicalFinalOddsUsed':True,'prestartOddsTimingValidationPerformed':False,'targetRaceResultUsedForRaceSelection':False,'targetRaceResultUsedForHorseRanking':False,'discoveryResultsUsedOnlyToChooseOneFrozenCombinationForHistoricalHoldout':True,'productionDatabaseWritten':False,'productionModelChanged':False,'combinations':combos,'discoveryBestCandidate':{'key':best_key,'selector':best['selector'],'template':best['template'],'minTop50RobustRoiPct':best['minTop50RobustRoiPct'],'minTop100ExcludedRoiPct':best['minTop100ExcludedRoiPct'],'minOverallRoiPct':best['minOverallRoiPct'],'passesDiscoveryGate':best['passesDiscoveryGate'],'selectorUsesHistoricalFinalPopularity':best['selectorUsesHistoricalFinalPopularity']},'discoveryPassed':passed,'frozenCombination':frozen}
-    Path(a.out).parent.mkdir(parents=True,exist_ok=True);Path(a.out).write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps({'discoveryPassed':passed,'best':summary['discoveryBestCandidate'],'frozenCombination':frozen},ensure_ascii=False),flush=True)
+    summary={'purpose':'research_only_2016_2022_discovery_for_result_blind_ml_five_race_selection','discoveryPeriod':{'start':'2016-08-10','end':'2022-12-31'},'holdoutPeriodUntouched':{'start':'2023-01-01','end':'2026-08-09'},'selectionVariants':list(VARIANTS),'ticketTemplates':list(TEMPLATES),'candidateCombinations':len(combos),'selectedRacesPerCombination':9190,'completionHardGate':{'allCoursesTop50ReturnAndProfitExcludedRoiPctAtLeast':200.0},'historicalFinalOddsUsed':True,'prestartOddsTimingValidationPerformed':False,'targetRaceResultUsedForRaceSelection':False,'targetRaceResultUsedForHorseRanking':False,'inactiveHorsesFilteredBeforeRanking':True,'inactivePredictionRowsFiltered':inactive_filtered,'existingOddsPrecedence':'new_fetch_over_current_source_clean_over_canonical297','discoveryResultsUsedOnlyToChooseOneFrozenCombinationForHistoricalHoldout':True,'productionDatabaseWritten':False,'productionModelChanged':False,'combinations':combos,'discoveryBestCandidate':{'key':best_key,'selector':best['selector'],'template':best['template'],'minTop50RobustRoiPct':best['minTop50RobustRoiPct'],'minTop100ExcludedRoiPct':best['minTop100ExcludedRoiPct'],'minOverallRoiPct':best['minOverallRoiPct'],'passesDiscoveryGate':best['passesDiscoveryGate'],'selectorUsesHistoricalFinalPopularity':best['selectorUsesHistoricalFinalPopularity']},'discoveryPassed':passed,'frozenCombination':frozen}
+    Path(a.out).parent.mkdir(parents=True,exist_ok=True);Path(a.out).write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps({'discoveryPassed':passed,'best':summary['discoveryBestCandidate'],'frozenCombination':frozen,'inactivePredictionRowsFiltered':inactive_filtered},ensure_ascii=False),flush=True)
 if __name__=='__main__':main()
