@@ -1,0 +1,75 @@
+name: Research race-level walk-forward selection
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-race-level-walkforward-selection.yml"
+      - "scripts/research-race-level-walkforward-selection.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending \
+            -f context='research/race-level-walk-forward-selection' -f description='Learning race-level portfolio ROI using past dates only' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Compile
+        run: python -m py_compile scripts/research-race-level-walkforward-selection.py
+      - name: Download frozen ten-year corpus
+        run: |
+          mkdir -p history analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+      - name: Run full ten-year race-level walk-forward
+        run: |
+          python scripts/research-race-level-walkforward-selection.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --out analysis-results/race-level-selection.json
+      - name: Verify leakage and structural gates
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/race-level-selection.json').read_text())
+          assert m['raceStatsUpdatedOnlyAfterDateFreeze'] is True,m
+          assert m['ticketStatsUpdatedOnlyAfterDateFreeze'] is True,m
+          assert m['targetDayResultsUsedForSelection'] is False,m
+          assert m['historicalOddsUsed'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          for k,v in m['variants'].items():
+            assert v['selectedRaces']==14410,(k,v)
+            assert v['structuralCancellationExceptions']==[{'date':'2020-03-29','venue':'中山','eligible':2}],(k,v['structuralCancellationExceptions'])
+          b=m['bestVariant'];v=m['variants'][b]
+          print(json.dumps({'best':b,'roi':{k:x['proxyTicketRoiPct'] for k,x in m['variants'].items()},'bestByYear':v['proxyRoiByYearPct']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-race-level-walkforward-selection
+          path: analysis-results/race-level-selection.json
+          retention-days: 30
+      - name: Mark success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success \
+            -f context='research/race-level-walk-forward-selection' -f description='Race-level walk-forward selection evaluated' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure \
+            -f context='research/race-level-walk-forward-selection' -f description='Race-level walk-forward selection requires repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
