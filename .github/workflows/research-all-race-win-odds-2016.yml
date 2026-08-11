@@ -1,0 +1,96 @@
+name: Research all-race win odds 2016
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-all-race-win-odds-2016.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/all-race-win-odds-2016' \
+            -f description='Fetching win market only for every 2016 evaluation race' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install beautifulsoup4==4.13.4
+      - name: Download frozen ten-year corpus
+        run: |
+          mkdir -p history work analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+      - name: Build all-race 2016 win-only demand
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          out=[]
+          for line in Path('history/ten-year-history-corpus.jsonl').read_text().splitlines():
+            if not line.strip():continue
+            b=json.loads(line);r=b['race'];d=str(r.get('raceDate') or '')
+            if '2016-08-10'<=d<='2016-12-31':
+              out.append({'raceId':str(r['raceId']),'raceDate':d,'venue':r.get('venue'),'raceNo':r.get('raceNo'),'resultUrl':r.get('resultUrl') or (b.get('provenance') or {}).get('resultUrl'),'requiredMarkets':['win'],'targetDayResultsUsedForSelection':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False})
+          assert len(out)>1000,len(out)
+          Path('work/demand.jsonl').write_text(''.join(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n' for x in out))
+          Path('work/demand-meta.json').write_text(json.dumps({'races':len(out),'markets':['win'],'evaluationStart':'2016-08-10','evaluationEnd':'2016-12-31'},ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({'allRaceWinDemand2016':len(out)},ensure_ascii=False))
+          PY
+      - name: Fetch only official win odds with low concurrency
+        shell: bash
+        run: |
+          set +e
+          python scripts/research-fetch-demanded-official-odds.py \
+            --input work/demand.jsonl --year 2016 --workers 2 \
+            --out analysis-results/research-all-race-win-odds-2016.jsonl \
+            --meta analysis-results/research-all-race-win-odds-2016-meta.json
+          code=$?
+          set -e
+          echo "fetch exit=$code"
+      - name: Verify provenance
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('work/demand-meta.json').read_text());m=json.loads(Path('analysis-results/research-all-race-win-odds-2016-meta.json').read_text())
+          assert m['inputDemandRaces']==d['races'],(d,m)
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          print(json.dumps({'input':m['inputDemandRaces'],'completed':m['completedRaces'],'failures':len(m['failures']),'winCoverage':m['coverage'].get('win')},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-all-race-win-odds-2016
+          path: |
+            work/demand-meta.json
+            analysis-results/research-all-race-win-odds-2016.jsonl
+            analysis-results/research-all-race-win-odds-2016-meta.json
+          retention-days: 30
+      - name: Mark success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success \
+            -f context='research/all-race-win-odds-2016' -f description='2016 all-race win market ready' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure \
+            -f context='research/all-race-win-odds-2016' -f description='2016 win-market pilot requires targeted repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
