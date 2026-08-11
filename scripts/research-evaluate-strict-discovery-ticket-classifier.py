@@ -9,11 +9,17 @@ base=tc.base
 COURSES=base.COURSES
 SELECTORS=('confidence','concentration')
 DISCOVERY_MAX_YEAR=2022
+MARKETS={'win','umaren','wide','umatan','trio','trifecta'}
 
 def read_jsonl(path):
     with Path(path).open(encoding='utf-8') as fh:
         for line in fh:
             if line.strip():yield json.loads(line)
+
+def complete_six_market(row):
+    required=set(row.get('requiredMarkets') or [])
+    official=set((row.get('officialOdds') or {}).keys())
+    return MARKETS.issubset(required) and MARKETS.issubset(official)
 
 def read_odds(root,selected,odds,existing=False):
     files=list(Path(root).glob('*.jsonl'))
@@ -23,7 +29,9 @@ def read_odds(root,selected,odds,existing=False):
     for p in files:
         for r in read_jsonl(p):
             rid=str(r['raceId'])
-            if rid in selected:odds[rid]=r
+            if rid not in selected:continue
+            if existing and not complete_six_market(r):continue
+            odds[rid]=r
 
 def active_rows(rows,official):
     active={int(h) for h,v in (official.get('win') or {}).items() if base.odds_value(v) is not None}
@@ -112,7 +120,7 @@ def main():
     out={'purpose':'strict_2016_2022_nested_walkforward_ticket_classifier_discovery','discoveryPeriod':{'start':'2016-08-10','end':'2022-12-31'},
          'holdoutPeriodUntouched':{'start':'2023-01-01','end':'2026-08-09'},'selectors':list(SELECTORS),'selectedRacesPerSelector':9190,
          'trainingBoundary':'prior_years_only','targetYearResultsUsedForTicketModel':False,'targetYearRoiUsedForTuning':False,
-         'inactiveHorsesFilteredBeforeCandidateGeneration':True,'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,
+         'inactiveHorsesFilteredBeforeCandidateGeneration':True,'existingOddsReuseRequiresAllSixMarkets':True,'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,
          'completionHardGate':{'allCoursesTop50ReturnAndProfitExcludedRoiPctAtLeast':200.0},'productionDatabaseWritten':False,'productionModelChanged':False,
          'selectorsEvaluation':results,'discoveryBestCandidate':{'selector':best_key,'minTop50RobustRoiPct':best['minTop50RobustRoiPct'],'minTop100ExcludedRoiPct':best['minTop100ExcludedRoiPct'],'minOverallRoiPct':best['minOverallRoiPct'],'passesDiscoveryGate':best['passesDiscoveryGate']},
          'discoveryPassed':passed,'frozenClassifier':frozen}
