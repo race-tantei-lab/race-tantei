@@ -16,6 +16,7 @@ permissions:
 env:
   GH_TOKEN: ${{ github.token }}
   ODDS_RUN_ID: '31446629662'
+  RECENT_ODDS_RUN_ID: '31446902302'
   BEST_DEMAND_RUN_ID: '31417411680'
   HISTORY_ARTIFACT_ID: '9056288221'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -29,7 +30,7 @@ jobs:
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending -f context='research/continuous-market-value-evaluation' \
-            -f description='Waiting for official odds then evaluating two-stage walk-forward' \
+            -f description='Waiting only for required official odds shards' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -37,18 +38,27 @@ jobs:
           python-version: '3.12'
       - name: Compile evaluator before waiting on network research
         run: python -m py_compile scripts/research-evaluate-continuous-market-value.py
-      - name: Wait for selective official odds run
+      - name: Wait only for 2016-2023 base shards and 2024-2026 archive-accelerated shards
         shell: bash
         run: |
           set -euo pipefail
           for i in $(seq 1 700); do
-            status=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.status')
-            conclusion=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}" --jq '.conclusion // ""')
-            echo "market odds status=$status conclusion=$conclusion poll=$i"
-            if [ "$status" = completed ]; then
-              test "$conclusion" = success
-              exit 0
-            fi
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > base.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RECENT_ODDS_RUN_ID}/artifacts?per_page=100" > recent.json
+            base_count=0
+            for year in $(seq 2016 2023); do
+              name="research-continuous-market-odds-${year}"
+              n=$(jq -r --arg n "$name" '[.artifacts[] | select(.name==$n and .expired==false)] | length' base.json)
+              base_count=$((base_count+n))
+            done
+            recent_count=0
+            for year in $(seq 2024 2026); do
+              name="research-continuous-market-odds-recent-${year}"
+              n=$(jq -r --arg n "$name" '[.artifacts[] | select(.name==$n and .expired==false)] | length' recent.json)
+              recent_count=$((recent_count+n))
+            done
+            echo "required odds artifacts base=$base_count/8 recent=$recent_count/3 poll=$i"
+            if [ "$base_count" -eq 8 ] && [ "$recent_count" -eq 3 ]; then exit 0; fi
             sleep 30
           done
           exit 1
@@ -66,14 +76,27 @@ jobs:
           unzip -q demand.zip -d demand
           test -s demand/demand.jsonl
           test -s history/ten-year-history-corpus.jsonl
-      - name: Download all selective market odds shards
+      - name: Download 2016-2023 odds from base run
         shell: bash
         run: |
           set -euo pipefail
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > odds-artifacts.json
-          for year in $(seq 2016 2026); do
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > base-artifacts.json
+          for year in $(seq 2016 2023); do
             name="research-continuous-market-odds-${year}"
-            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' odds-artifacts.json | head -n1)
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' base-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
+            cp "tmp-$year/research-continuous-market-odds-${year}.jsonl" odds/
+          done
+      - name: Download archive-accelerated 2024-2026 odds
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RECENT_ODDS_RUN_ID}/artifacts?per_page=100" > recent-artifacts.json
+          for year in $(seq 2024 2026); do
+            name="research-continuous-market-odds-recent-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' recent-artifacts.json | head -n1)
             test -n "$id" && test "$id" != null
             gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
             mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
