@@ -1,0 +1,140 @@
+name: Research runner ranker walk-forward
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-runner-ranker-walkforward.yml"
+      - "scripts/research-train-runner-ranker-year.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  FEATURE_RUN_ID: '31453726393'
+  DEMAND_RUN_ID: '31417411680'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Mark ranker pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/runner-ranker-walkforward' -f description='Waiting for prior-only runner features then training yearly rankers' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Wait for feature corpus and download shared inputs
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 240); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FEATURE_RUN_ID}/artifacts?per_page=100" > f.json
+            id=$(jq -r '.artifacts[] | select(.name=="research-runner-ml-feature-corpus" and .expired==false) | .id' f.json | head -n1)
+            if [ -n "$id" ] && [ "$id" != null ]; then echo "$id" > id.txt; break; fi
+            sleep 15
+          done
+          id=$(cat id.txt);gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > features.zip;unzip -q features.zip -d shared
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DEMAND_RUN_ID}/artifacts?per_page=100" > d.json
+          did=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' d.json | head -n1)
+          test -n "$did" && test "$did" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${did}/zip" > demand.zip;unzip -q demand.zip -d shared-demand
+          test -s shared/runner-ml-features.csv
+          test -s shared-demand/demand.jsonl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-runner-ranker-shared-input
+          path: |
+            shared/runner-ml-features.csv
+            shared/runner-ml-features-meta.json
+            shared-demand/demand.jsonl
+          retention-days: 14
+
+  year:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        year: ['2016','2017','2018','2019','2020','2021','2022','2023','2024','2025','2026']
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install ML runtime
+        run: pip install --disable-pip-version-check --quiet lightgbm==4.6.0 pandas==2.3.1 numpy==2.2.6
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-runner-ranker-shared-input
+          path: input
+      - name: Train and predict ${{ matrix.year }} with past-only data
+        run: |
+          python scripts/research-train-runner-ranker-year.py --features input/runner-ml-features.csv --demand input/demand.jsonl --year '${{ matrix.year }}' --out analysis-results/runner-ranker-${{ matrix.year }}.jsonl --meta analysis-results/runner-ranker-${{ matrix.year }}-meta.json
+      - name: Verify fold chronology
+        env:
+          YEAR: ${{ matrix.year }}
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          y=os.environ['YEAR'];m=json.loads(Path(f'analysis-results/runner-ranker-{y}-meta.json').read_text())
+          assert m['futureRowsUsedForTraining'] is False,m
+          assert m['sameDayRowsUsedForTraining'] is False,m
+          assert m['selectedEvaluationRaces']==m['predictionRaces'],m
+          assert m['predictionRunners']>5000,m
+          assert m['syntheticDataUsed'] is False,m
+          print(json.dumps({'year':y,'races':m['predictionRaces'],'ability':m['metrics']['ability'],'market':m['metrics']['market']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-runner-ranker-${{ matrix.year }}
+          path: |
+            analysis-results/runner-ranker-${{ matrix.year }}.jsonl
+            analysis-results/runner-ranker-${{ matrix.year }}-meta.json
+          retention-days: 30
+
+  summarize:
+    if: always()
+    needs: year
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: research-runner-ranker-20*
+          path: folds
+          merge-multiple: true
+      - name: Aggregate ranker diagnostics
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          metas=[]
+          for p in sorted(Path('folds').glob('runner-ranker-20*-meta.json')):metas.append(json.loads(p.read_text()))
+          assert len(metas)==11,[m.get('year') for m in metas]
+          total_races=sum(m['predictionRaces'] for m in metas);assert total_races==14410,total_races
+          def wavg(variant,key):
+            return round(sum(m['metrics'][variant][key]*m['predictionRaces'] for m in metas)/total_races,6)
+          result={'folds':metas,'selectedRaces':total_races,'weightedMetrics':{v:{k:wavg(v,k) for k in ('top1WinnerAccuracy','winnerMRR','winnerInTop3')} for v in ('ability','market')},'futureRowsUsedForTraining':False,'sameDayRowsUsedForTraining':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+          Path('summary.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({'races':total_races,'metrics':result['weightedMetrics']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-runner-ranker-walkforward-summary
+          path: summary.json
+          retention-days: 30
+      - name: Mark ranker success
+        if: ${{ needs.year.result == 'success' }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/runner-ranker-walkforward' -f description='Eleven past-only runner-ranker folds completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark ranker failure
+        if: ${{ needs.year.result != 'success' }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/runner-ranker-walkforward' -f description='Runner-ranker walk-forward needs targeted repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          exit 1
