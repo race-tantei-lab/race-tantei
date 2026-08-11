@@ -158,12 +158,9 @@ def main():
     cur=None;day=[]
 
     def process(date,bundles):
-        # State is intentionally frozen for the entire date. Generate every race's pre-result candidates once.
         generated={}
         for b in bundles:
             rid=str(b['race']['raceId']);generated[rid]=cmod.candidate_rows(state,b)
-
-        # Evaluate selected races before any same-day result is incorporated into the probability model.
         for b in bundles:
             race=b['race'];rid=str(race['raceId'])
             if rid not in demand:continue
@@ -181,14 +178,12 @@ def main():
                     chosen=select_tickets(score_variant(prepared,lw,g))
                     for rank,t in enumerate(chosen,1):
                         pay=int(pays.get((t['betType'],t['combo']),0) or 0)
-                        br=bet_returns[(lw,g)][t['betType']];br[0]+=1;br[1]+=pay;br[2]+=int(pay>0)
+                        br=bet_returns[(lw,g)][t['bt']];br[0]+=1;br[1]+=pay;br[2]+=int(pay>0)
                         rr=rank_returns[(lw,g)][rank];rr[0]+=1;rr[1]+=pay
                     for c,budget in COURSES.items():
                         ret,tix=settle(chosen,budget,pays);add(overall[(lw,g,c)],budget,ret,len(tix),ret>0);add(yearly[(lw,g,c)][date[:4]],budget,ret,len(tix),ret>0);add(periods[(lw,g,c)][period(date)],budget,ret,len(tix),ret>0);returns[(lw,g,c)].append({'raceId':rid,'returnYen':ret})
                 except Exception as e:
                     errors[(lw,g)].append({'raceId':rid,'raceDate':date,'venue':race.get('venue'),'raceNo':race.get('raceNo'),'error':f'{type(e).__name__}:{e}'})
-
-        # Only after the full date is frozen/evaluated do its outcomes update historical statistics and runner state.
         for b in bundles:
             rid=str(b['race']['raceId']);pays=smod.payout_index(b)
             for t in generated[rid]:
