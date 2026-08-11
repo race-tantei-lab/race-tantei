@@ -15,25 +15,27 @@ permissions:
 
 env:
   GH_TOKEN: ${{ github.token }}
-  NEW_ODDS_RUN_ID: '31456300365'
+  DISCOVERY_ODDS_WORKFLOW: 'research-ml-discovery-demanded-odds.yml'
   ALL_RACE_RUN_ID: '31455874661'
   SELECTION_ARTIFACT_ID: '9088036803'
   SOURCE_INPUT_ARTIFACT_ID: '9086766461'
+  CANONICAL_ODDS_RUN_ID: '31373205723'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   evaluate:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 300
     steps:
       - name: Mark discovery evaluation pending
         run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/ml-five-discovery-eval' -f description='Waiting for discovery-only odds; no model freezes unless Top50 gate passes' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/ml-five-discovery-eval' -f description='Waiting for latest 5978-race discovery odds; no freeze below Top50 gate' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - name: Compile evaluator
         run: python -m py_compile scripts/research-evaluate-ml-five-discovery.py
       - name: Download four selection files
         run: |
+          set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SELECTION_ARTIFACT_ID}/zip" > selections.zip
           mkdir -p input/selections
           unzip -q selections.zip -d input/selections
@@ -50,17 +52,61 @@ jobs:
             unzip -q "all-${y}.zip" -d input/predictions
           done
           test $(find input/predictions -name 'all-race-ranker-20*.jsonl' | wc -l) -eq 11
-      - name: Download existing official odds and history
+      - name: Download current and legacy official odds plus history
         run: |
+          set -euo pipefail
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_INPUT_ARTIFACT_ID}/zip" > source-clean.zip
-          mkdir -p input/source
+          mkdir -p input/source input/existing-odds
           unzip -q source-clean.zip 'corrected-odds/*.jsonl' 'history/ten-year-history-corpus.jsonl' -d input/source
+          cp input/source/corrected-odds/*.jsonl input/existing-odds/
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANONICAL_ODDS_RUN_ID}/artifacts?per_page=100" > canonical-artifacts.json
+          for y in $(seq 2016 2022); do
+            id=$(jq -r --arg n "research-demanded-odds-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' canonical-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "canonical-${y}.zip"
+            unzip -q "canonical-${y}.zip" "research-demanded-odds-${y}.jsonl" -d input/existing-odds
+          done
+          test -s input/source/history/ten-year-history-corpus.jsonl
+          test $(find input/existing-odds -name '*.jsonl' | wc -l) -ge 18
+      - name: Find latest audited 5978-race discovery odds run
+        run: |
+          set -euo pipefail
+          rm -f selected-odds-run.txt
+          for attempt in $(seq 1 1200); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${DISCOVERY_ODDS_WORKFLOW}/runs?branch=research%2Ften-year-minimal-rules&per_page=20" > workflow-runs.json
+            for rid in $(jq -r '.workflow_runs[] | select(.conclusion != "cancelled") | .id' workflow-runs.json); do
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${rid}/artifacts?per_page=100" > candidate-artifacts.json || continue
+              did=$(jq -r '.artifacts[] | select(.name=="research-ml-discovery-odds-demand" and .expired==false) | .id' candidate-artifacts.json | head -n1)
+              if [ -z "$did" ] || [ "$did" = null ]; then continue; fi
+              rm -rf demand-check; mkdir demand-check
+              gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${did}/zip" > demand-check.zip
+              unzip -q -o demand-check.zip -d demand-check
+              if python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('demand-check/ml-discovery-odds-demand-meta.json')
+          if not p.exists(): raise SystemExit(1)
+          m=json.loads(p.read_text())
+          ok=(m.get('discoveryMaxYear')==2022 and m.get('missingRaces')==5978 and m.get('reusedRaces')==10246 and m.get('reuseRequiresAllSixMarkets') is True)
+          raise SystemExit(0 if ok else 1)
+          PY
+              then
+                echo "$rid" > selected-odds-run.txt
+                cp candidate-artifacts.json selected-odds-artifacts.json
+                break 2
+              fi
+            done
+            sleep 15
+          done
+          test -s selected-odds-run.txt
+          echo "DISCOVERY_ODDS_RUN_ID=$(cat selected-odds-run.txt)" >> "$GITHUB_ENV"
+          echo "Using audited discovery odds run $(cat selected-odds-run.txt)"
       - name: Wait for seven discovery odds artifacts
         run: |
           set -euo pipefail
           mkdir -p input/new-odds
-          for i in $(seq 1 480); do
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NEW_ODDS_RUN_ID}/artifacts?per_page=100" > odds-artifacts.json
+          for i in $(seq 1 1200); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DISCOVERY_ODDS_RUN_ID}/artifacts?per_page=100" > odds-artifacts.json
             n=$(jq '[.artifacts[] | select(.name|startswith("research-ml-discovery-odds-20")) | select(.expired==false)] | length' odds-artifacts.json)
             if [ "$n" -ge 7 ]; then break; fi
             sleep 15
@@ -77,7 +123,7 @@ jobs:
           python scripts/research-evaluate-ml-five-discovery.py \
             --predictions-dir input/predictions \
             --selections-dir input/selections/ml-five-selections \
-            --existing-odds-dir input/source/corrected-odds \
+            --existing-odds-dir input/existing-odds \
             --new-odds-dir input/new-odds \
             --history input/source/history/ten-year-history-corpus.jsonl \
             --out analysis-results/ml-five-discovery-evaluation.json
