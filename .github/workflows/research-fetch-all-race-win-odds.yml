@@ -6,6 +6,7 @@ on:
     branches: [research/ten-year-minimal-rules]
     paths:
       - ".github/workflows/research-fetch-all-race-win-odds.yml"
+      - "scripts/research-evaluate-all-race-win-value.py"
 
 concurrency:
   group: research-fetch-all-race-win-odds
@@ -19,6 +20,7 @@ permissions:
 env:
   GH_TOKEN: ${{ github.token }}
   SOURCE_INPUT_ARTIFACT_ID: '9086766461'
+  ALL_RACE_RUN_ID: '31455874661'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
@@ -67,11 +69,8 @@ jobs:
                   if not line.strip(): continue
                   b=json.loads(line); r=b['race']; d=str(r['raceDate'])
                   if not ('2016-08-10' <= d <= '2026-08-09') or not d.startswith(y+'-'): continue
-                  row={
-                    'raceId':str(r['raceId']),'raceDate':d,'venue':str(r['venue']),
-                    'raceNo':int(r['raceNo']),'entryUrl':r.get('entryUrl'),'resultUrl':r.get('resultUrl'),
-                    'requiredMarkets':['win']
-                  }
+                  row={'raceId':str(r['raceId']),'raceDate':d,'venue':str(r['venue']),'raceNo':int(r['raceNo']),
+                       'entryUrl':r.get('entryUrl'),'resultUrl':r.get('resultUrl'),'requiredMarkets':['win']}
                   w.write(json.dumps(row,ensure_ascii=False)+'\n'); n+=1
           assert n==expected[y],(y,n,expected[y])
           print(json.dumps({'year':y,'demandRaces':n,'requiredMarkets':['win'],'targetResultUsedForDemand':False,'syntheticOddsUsed':False},ensure_ascii=False))
@@ -82,7 +81,7 @@ jobs:
         run: |
           python scripts/research-fetch-resolved-demanded-official-odds.py \
             --input "analysis-results/all-race-win-demand-${TARGET_YEAR}.jsonl" \
-            --year "$TARGET_YEAR" --workers 8 \
+            --year "$TARGET_YEAR" --workers 4 \
             --out "analysis-results/all-race-win-odds-${TARGET_YEAR}.jsonl" \
             --meta "analysis-results/all-race-win-odds-${TARGET_YEAR}-meta.json"
       - name: Require complete win-odds race coverage
@@ -113,12 +112,72 @@ jobs:
             analysis-results/all-race-win-odds-${{ matrix.year }}-meta.json
           retention-days: 30
 
-  mark-complete:
+  evaluate:
+    needs: fetch-win
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install evaluation runtime
+        run: pip install --disable-pip-version-check --quiet numpy==2.2.6 lightgbm==4.6.0
+      - name: Download current-run official win odds
+        uses: actions/download-artifact@v4
+        with:
+          pattern: research-all-race-win-odds-*
+          path: input/win-odds
+          merge-multiple: true
+      - name: Download ten-year history and all-race OOS predictions
+        run: |
+          set -euo pipefail
+          mkdir -p input/source input/predictions analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_INPUT_ARTIFACT_ID}/zip" > source.zip
+          unzip -q source.zip 'history/ten-year-history-corpus.jsonl' -d input/source
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ALL_RACE_RUN_ID}/artifacts?per_page=100" > ranker.json
+          for y in $(seq 2016 2026); do
+            id=$(jq -r --arg n "research-all-race-ranker-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' ranker.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "ranker-${y}.zip"
+            unzip -q "ranker-${y}.zip" 'all-race-ranker-*.jsonl' -d input/predictions
+          done
+          test "$(find input/win-odds -name 'all-race-win-odds-*.jsonl' | wc -l)" -eq 11
+          test "$(find input/predictions -name 'all-race-ranker-*.jsonl' | wc -l)" -eq 11
+      - name: Evaluate all-period price-aware five-race model
+        run: |
+          python scripts/research-evaluate-all-race-win-value.py \
+            --predictions-dir input/predictions \
+            --win-odds-dir input/win-odds \
+            --history input/source/history/ten-year-history-corpus.jsonl \
+            --out analysis-results/all-race-win-value-evaluation.json
+      - name: Publish 200/150 completion status
+        run: |
+          completed=$(jq -r '.completed' analysis-results/all-race-win-value-evaluation.json)
+          minroi=$(jq -r '.bestCandidate.minRoiPct' analysis-results/all-race-win-value-evaluation.json)
+          minr50=$(jq -r '.bestCandidate.minTop50ExcludedRoiPct' analysis-results/all-race-win-value-evaluation.json)
+          if [ "$completed" = true ]; then
+            state=success
+            desc="200/150 passed: ROI ${minroi}%, Top50 ${minr50}%"
+          else
+            state=failure
+            desc="200/150 not passed: ROI ${minroi}%, Top50 ${minr50}%"
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" -f context='research/all-race-win-value' \
+            -f description="$desc" -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-all-race-win-value-evaluation
+          path: analysis-results/all-race-win-value-evaluation.json
+          retention-days: 30
+
+  mark-odds-terminal:
     if: always()
     needs: fetch-win
     runs-on: ubuntu-latest
     steps:
-      - name: Mark aggregate status
+      - name: Mark aggregate win-odds status
         run: |
           if [ "${{ needs.fetch-win.result }}" = "success" ]; then
             state=success
