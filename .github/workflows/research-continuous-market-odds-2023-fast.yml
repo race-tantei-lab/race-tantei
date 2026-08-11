@@ -1,0 +1,125 @@
+name: Research continuous 2023 market odds fast
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-continuous-market-odds-2023-fast.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  BEST_DEMAND_RUN_ID: '31417411680'
+  OLD_ODDS_RUN_ID: '31373205723'
+  PARTIAL_REPAIR_RUN_ID: '31400807509'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  odds2023:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Mark 2023 pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/continuous-market-odds-2023-fast' \
+            -f description='Fetching 2023 selected-race official odds without matrix queue' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install beautifulsoup4==4.13.4
+      - name: Download frozen demand and reusable 2023 odds
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p input old repair work analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > best.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' best.json | head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > best.zip
+          unzip -q best.zip -d input
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${OLD_ODDS_RUN_ID}/artifacts?per_page=100" > old.json
+          oid=$(jq -r '.artifacts[] | select(.name=="research-demanded-odds-2023" and .expired==false) | .id' old.json | head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${oid}/zip" > old.zip
+          unzip -q old.zip -d old
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PARTIAL_REPAIR_RUN_ID}/artifacts?per_page=100" > repair.json
+          rid=$(jq -r '.artifacts[] | select(.name=="research-demanded-odds-repair" and .expired==false) | .id' repair.json | head -n1)
+          if [ -n "$rid" ] && [ "$rid" != null ]; then gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${rid}/zip" > repair.zip; unzip -q repair.zip -d repair; fi
+      - name: Isolate 2023 reuse and network residual
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          markets=('win','umaren','wide','umatan','trio','trifecta')
+          demand=[]
+          for line in Path('input/demand.jsonl').read_text().splitlines():
+            if line.strip():
+              r=json.loads(line)
+              if str(r['raceDate']).startswith('2023-'):
+                r['requiredMarkets']=list(markets);demand.append(r)
+          old={}
+          for p in list(Path('old').glob('research-demanded-odds-*.jsonl'))+list(Path('repair').glob('research-demanded-odds-repair.jsonl')):
+            for line in p.read_text().splitlines():
+              if line.strip():
+                r=json.loads(line);old[str(r['raceId'])]=r
+          reused=[];missing=[]
+          for d in demand:
+            r=old.get(str(d['raceId']))
+            if r and all(m in (r.get('officialOdds') or {}) for m in markets):reused.append(r)
+            else:missing.append(d)
+          Path('work/reused.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in reused))
+          Path('work/fetch-demand.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in missing))
+          Path('work/reuse-meta.json').write_text(json.dumps({'selected':len(demand),'reused':len(reused),'needFetch':len(missing)},ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({'year':'2023','selected':len(demand),'reused':len(reused),'needFetch':len(missing)},ensure_ascii=False))
+          PY
+      - name: Fetch residual official six-market odds
+        run: |
+          python scripts/research-fetch-demanded-official-odds.py \
+            --input work/fetch-demand.jsonl --year 2023 --workers 3 \
+            --out work/fetched.jsonl --meta work/fetched-meta.json || true
+      - name: Merge 2023 rows
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          demand={}
+          for line in Path('input/demand.jsonl').read_text().splitlines():
+            if line.strip():
+              r=json.loads(line)
+              if str(r['raceDate']).startswith('2023-'):demand[str(r['raceId'])]=r
+          merged={}
+          for p in (Path('work/reused.jsonl'),Path('work/fetched.jsonl')):
+            if not p.exists():continue
+            for line in p.read_text().splitlines():
+              if line.strip():
+                r=json.loads(line);merged[str(r['raceId'])]=r
+          missing=sorted(set(demand)-set(merged));rm=json.loads(Path('work/reuse-meta.json').read_text())
+          Path('analysis-results/research-continuous-market-odds-2023.jsonl').write_text(''.join(json.dumps(merged[k],ensure_ascii=False,separators=(',',':'))+'\n' for k in sorted(merged)))
+          meta={'year':'2023','selectedRaces':len(demand),'reusedRaces':rm['reused'],'networkFetchedRaces':len(merged)-rm['reused'],'availableRaces':len(merged),'missingRaceCount':len(missing),'missingRaceIds':missing,'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+          Path('analysis-results/research-continuous-market-odds-2023-meta.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(meta,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-continuous-market-odds-2023-fast
+          path: |
+            analysis-results/research-continuous-market-odds-2023.jsonl
+            analysis-results/research-continuous-market-odds-2023-meta.json
+          retention-days: 30
+      - name: Mark 2023 success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/continuous-market-odds-2023-fast' \
+            -f description='2023 selected-race official odds ready' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark 2023 failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/continuous-market-odds-2023-fast' \
+            -f description='2023 official odds fast path needs repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
