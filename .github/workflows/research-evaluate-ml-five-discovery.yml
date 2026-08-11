@@ -1,0 +1,118 @@
+name: Research evaluate ML five-race discovery
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-evaluate-ml-five-discovery.yml"
+      - "scripts/research-evaluate-ml-five-discovery.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  NEW_ODDS_RUN_ID: '31456300365'
+  ALL_RACE_RUN_ID: '31455874661'
+  SELECTION_ARTIFACT_ID: '9088036803'
+  SOURCE_INPUT_ARTIFACT_ID: '9086766461'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Mark discovery evaluation pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/ml-five-discovery-eval' -f description='Waiting for discovery-only odds then freezing one selector/template' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Compile evaluator
+        run: python -m py_compile scripts/research-evaluate-ml-five-discovery.py
+      - name: Download four selection files
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SELECTION_ARTIFACT_ID}/zip" > selections.zip
+          mkdir -p input/selections
+          unzip -q selections.zip -d input/selections
+          test $(find input/selections/ml-five-selections -name '*.jsonl' | wc -l) -eq 4
+      - name: Download all-race ML prediction folds
+        run: |
+          set -euo pipefail
+          mkdir -p input/predictions
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ALL_RACE_RUN_ID}/artifacts?per_page=100" > all-artifacts.json
+          for y in $(seq 2016 2026); do
+            id=$(jq -r --arg n "research-all-race-ranker-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' all-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "all-${y}.zip"
+            unzip -q "all-${y}.zip" -d input/predictions
+          done
+          test $(find input/predictions -name 'all-race-ranker-20*.jsonl' | wc -l) -eq 11
+      - name: Download existing official odds and history
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_INPUT_ARTIFACT_ID}/zip" > source-clean.zip
+          mkdir -p input/source
+          unzip -q source-clean.zip 'corrected-odds/*.jsonl' 'history/ten-year-history-corpus.jsonl' -d input/source
+      - name: Wait for seven discovery odds artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p input/new-odds
+          for i in $(seq 1 480); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${NEW_ODDS_RUN_ID}/artifacts?per_page=100" > odds-artifacts.json
+            n=$(jq '[.artifacts[] | select(.name|startswith("research-ml-discovery-odds-20")) | select(.expired==false)] | length' odds-artifacts.json)
+            if [ "$n" -ge 7 ]; then break; fi
+            sleep 15
+          done
+          for y in $(seq 2016 2022); do
+            id=$(jq -r --arg n "research-ml-discovery-odds-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' odds-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "new-${y}.zip"
+            unzip -q "new-${y}.zip" -d input/new-odds
+          done
+          test $(find input/new-odds -name 'ml-discovery-odds-20*.jsonl' | wc -l) -eq 7
+      - name: Evaluate discovery combinations
+        run: |
+          python scripts/research-evaluate-ml-five-discovery.py \
+            --predictions-dir input/predictions \
+            --selections-dir input/selections/ml-five-selections \
+            --existing-odds-dir input/source/corrected-odds \
+            --new-odds-dir input/new-odds \
+            --history input/source/history/ten-year-history-corpus.jsonl \
+            --out analysis-results/ml-five-discovery-evaluation.json
+      - name: Verify untouched historical holdout and robustness outputs
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('analysis-results/ml-five-discovery-evaluation.json').read_text())
+          assert d['discoveryPeriod']['end']=='2022-12-31',d
+          assert d['holdoutPeriodUntouched']['start']=='2023-01-01',d
+          assert d['candidateCombinations']==16,d
+          assert d['selectedRacesPerCombination']==9190,d
+          assert d['targetRaceResultUsedForRaceSelection'] is False,d
+          assert d['targetRaceResultUsedForHorseRanking'] is False,d
+          assert d['productionDatabaseWritten'] is False,d
+          assert d['productionModelChanged'] is False,d
+          for key,x in d['combinations'].items():
+            for c in ('light','standard','premium'):
+              r=x['courses'][c]
+              assert r['races']==9190,(key,c,r)
+              assert r['top50ExcludedRoiPct'] is not None,(key,c)
+              assert r['top100ExcludedRoiPct'] is not None,(key,c)
+          print(json.dumps(d['discoveryWinner'],ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-ml-five-discovery-evaluation
+          path: analysis-results/ml-five-discovery-evaluation.json
+          retention-days: 30
+      - name: Mark discovery evaluation success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/ml-five-discovery-eval' -f description='Discovery winner frozen; historical 2023-2026 holdout still untouched' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark discovery evaluation failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/ml-five-discovery-eval' -f description='Discovery evaluation needs targeted repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
