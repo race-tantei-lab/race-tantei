@@ -25,9 +25,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        top_horses: [7, 8]
+        top_horses: [10, 12]
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -115,7 +115,7 @@ jobs:
           RESULT: ${{ needs.pool.result }}
         run: |
           if [ "$RESULT" = success ]; then
-            state=success; desc='Expanded 7/8-horse candidate-pool screen completed'
+            state=success; desc='Expanded 10/12-horse candidate-pool screen completed'
           else
             state=failure; desc='Expanded horse-pool screen requires repair'
           fi
