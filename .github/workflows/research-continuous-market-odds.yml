@@ -1,0 +1,237 @@
+name: Research continuous market odds
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-continuous-market-odds.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  BEST_DEMAND_RUN_ID: '31417411680'
+  OLD_ODDS_RUN_ID: '31373205723'
+  PARTIAL_REPAIR_RUN_ID: '31400807509'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark market odds research pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/continuous-market-odds' \
+            -f description='Reusing official odds and fetching only missing selected races' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Download frozen best pre-odds selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ready
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > best-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' best-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > best.zip
+          unzip -q best.zip -d ready
+          test -s ready/demand.jsonl
+          test -s ready/meta.json
+      - name: Freeze all-six-market odds demand without changing race selection
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          src=Path('ready/demand.jsonl')
+          out=Path('ready/full-market-demand.jsonl')
+          rows=[]
+          for line in src.read_text().splitlines():
+            if not line.strip(): continue
+            r=json.loads(line)
+            r['requiredMarkets']=['win','umaren','wide','umatan','trio','trifecta']
+            r['marketExpansionAfterRaceSelection']=True
+            r['targetDayResultsUsedForSelection']=False
+            r['historicalFinalOddsUsedForSelection']=False
+            rows.append(r)
+          assert len(rows)==14410,len(rows)
+          out.write_text(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in rows))
+          meta=json.loads(Path('ready/meta.json').read_text())
+          assert meta['selectedRaces']==14410,meta
+          assert meta['constraintBackfillCount']==0,meta
+          assert meta['targetDayResultsUsedForSelection'] is False,meta
+          assert meta['historicalFinalOddsUsedForDiscovery'] is False,meta
+          print(json.dumps({'selectedRaces':len(rows),'selectionFrozenBeforeOdds':True,'markets':6},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-continuous-market-demand-ready
+          path: |
+            ready/full-market-demand.jsonl
+            ready/meta.json
+          if-no-files-found: error
+          retention-days: 30
+
+  odds:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        year: ['2016','2017','2018','2019','2020','2021','2022','2023','2024','2025','2026']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install beautifulsoup4==4.13.4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-continuous-market-demand-ready
+          path: ready
+      - name: Download reusable old official odds for year
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p old repair work analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${OLD_ODDS_RUN_ID}/artifacts?per_page=100" > old-artifacts.json
+          name="research-demanded-odds-${{ matrix.year }}"
+          id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' old-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > old.zip
+          unzip -q old.zip -d old
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PARTIAL_REPAIR_RUN_ID}/artifacts?per_page=100" > repair-artifacts.json
+          rid=$(jq -r '.artifacts[] | select(.name=="research-demanded-odds-repair" and .expired==false) | .id' repair-artifacts.json | head -n1)
+          if [ -n "$rid" ] && [ "$rid" != null ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${rid}/zip" > repair.zip
+            unzip -q repair.zip -d repair
+          fi
+      - name: Reuse complete six-market rows and isolate missing races
+        env:
+          YEAR: ${{ matrix.year }}
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          year=os.environ['YEAR']; markets=('win','umaren','wide','umatan','trio','trifecta')
+          demand=[]
+          for line in Path('ready/full-market-demand.jsonl').read_text().splitlines():
+            if line.strip():
+              r=json.loads(line)
+              if str(r['raceDate']).startswith(year+'-'): demand.append(r)
+          old={}
+          for p in list(Path('old').glob('research-demanded-odds-*.jsonl'))+list(Path('repair').glob('research-demanded-odds-repair.jsonl')):
+            for line in p.read_text().splitlines():
+              if not line.strip(): continue
+              r=json.loads(line); old[str(r['raceId'])]=r
+          reused=[];missing=[]
+          for d in demand:
+            r=old.get(str(d['raceId']))
+            if r and all(m in (r.get('officialOdds') or {}) for m in markets): reused.append(r)
+            else: missing.append(d)
+          Path('work/reused.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in reused))
+          Path('work/fetch-demand.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in missing))
+          Path('work/reuse-meta.json').write_text(json.dumps({'year':year,'selected':len(demand),'reused':len(reused),'needFetch':len(missing)},ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({'year':year,'selected':len(demand),'reused':len(reused),'needFetch':len(missing)},ensure_ascii=False))
+          PY
+      - name: Fetch only missing six-market official final odds
+        env:
+          YEAR: ${{ matrix.year }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(grep -cve '^$' work/fetch-demand.jsonl || true)
+          if [ "$count" -eq 0 ]; then
+            : > work/fetched.jsonl
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          Path('work/fetched-meta.json').write_text(json.dumps({'completedRaces':0,'failures':[],'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False})+'\n')
+          PY
+          else
+            python scripts/research-fetch-demanded-official-odds.py \
+              --input work/fetch-demand.jsonl --year "$YEAR" --workers 3 \
+              --out work/fetched.jsonl --meta work/fetched-meta.json || true
+          fi
+      - name: Merge reusable and newly fetched odds with failures explicit
+        env:
+          YEAR: ${{ matrix.year }}
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          year=os.environ['YEAR']
+          demand={}
+          for line in Path('ready/full-market-demand.jsonl').read_text().splitlines():
+            if line.strip():
+              r=json.loads(line)
+              if str(r['raceDate']).startswith(year+'-'): demand[str(r['raceId'])]=r
+          merged={}
+          for p in (Path('work/reused.jsonl'),Path('work/fetched.jsonl')):
+            if not p.exists(): continue
+            for line in p.read_text().splitlines():
+              if line.strip():
+                r=json.loads(line); merged[str(r['raceId'])]=r
+          missing=sorted(set(demand)-set(merged))
+          out=Path(f'analysis-results/research-continuous-market-odds-{year}.jsonl')
+          out.write_text(''.join(json.dumps(merged[k],ensure_ascii=False,separators=(',',':'))+'\n' for k in sorted(merged)))
+          reuse=json.loads(Path('work/reuse-meta.json').read_text())
+          fetchmeta=json.loads(Path('work/fetched-meta.json').read_text()) if Path('work/fetched-meta.json').exists() else {}
+          meta={'year':year,'selectedRaces':len(demand),'reusedRaces':reuse['reused'],'networkFetchedRaces':len(merged)-reuse['reused'],'availableRaces':len(merged),'missingRaceCount':len(missing),'missingRaceIds':missing,'fetchFailures':fetchmeta.get('failures',[]),'allSixMarketsRequestedForNetworkFetch':True,'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+          Path(f'analysis-results/research-continuous-market-odds-{year}-meta.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n')
+          assert meta['reusedRaces']+meta['networkFetchedRaces']==meta['availableRaces'],meta
+          assert meta['availableRaces']+meta['missingRaceCount']==meta['selectedRaces'],meta
+          print(json.dumps(meta,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-continuous-market-odds-${{ matrix.year }}
+          path: |
+            analysis-results/research-continuous-market-odds-${{ matrix.year }}.jsonl
+            analysis-results/research-continuous-market-odds-${{ matrix.year }}-meta.json
+          if-no-files-found: error
+          retention-days: 30
+
+  summarize:
+    needs: odds
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: research-continuous-market-odds-20*
+          path: shards
+          merge-multiple: true
+      - name: Summarize availability and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          metas=[json.loads(p.read_text()) for p in sorted(Path('shards').glob('*-meta.json'))]
+          assert len(metas)==11,[p.name for p in Path('shards').glob('*-meta.json')]
+          s={'selectedRaces':sum(m['selectedRaces'] for m in metas),'reusedRaces':sum(m['reusedRaces'] for m in metas),'networkFetchedRaces':sum(m['networkFetchedRaces'] for m in metas),'availableRaces':sum(m['availableRaces'] for m in metas),'missingRaceCount':sum(m['missingRaceCount'] for m in metas),'missingRaceIds':[x for m in metas for x in m['missingRaceIds']],'byYear':{m['year']:{k:m[k] for k in ('selectedRaces','reusedRaces','networkFetchedRaces','availableRaces','missingRaceCount')} for m in metas},'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+          assert s['selectedRaces']==14410,s
+          Path('summary.json').write_text(json.dumps(s,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(s,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-continuous-market-odds-summary
+          path: summary.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Mark market odds research complete
+        if: always()
+        run: |
+          if [ '${{ needs.odds.result }}' = success ]; then state=success; desc='Continuous market odds ready'; else state=failure; desc='Continuous market odds completed with missing or failed shards'; fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state="$state" -f context='research/continuous-market-odds' -f description="$desc" -f target_url="$STATUS_TARGET_URL" >/dev/null
