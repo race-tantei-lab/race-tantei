@@ -1,0 +1,85 @@
+name: Research select five races from all ML
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-select-five-races-from-all-ml.yml"
+      - "scripts/research-select-five-races-from-all-ml.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  ALL_RACE_RUN_ID: '31455874661'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Mark selection pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/ml-five-race-selection' -f description='Waiting for all-race ML then selecting five races per venue-day' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Compile selector
+        run: python -m py_compile scripts/research-select-five-races-from-all-ml.py
+      - name: Wait for and download all eleven prediction folds
+        run: |
+          set -euo pipefail
+          mkdir -p input/predictions
+          for i in $(seq 1 240); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ALL_RACE_RUN_ID}/artifacts?per_page=100" > artifacts.json
+            n=$(jq '[.artifacts[] | select(.name|startswith("research-all-race-ranker-20")) | select(.expired==false)] | length' artifacts.json)
+            if [ "$n" -ge 11 ]; then break; fi
+            sleep 15
+          done
+          for y in $(seq 2016 2026); do
+            id=$(jq -r --arg n "research-all-race-ranker-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "fold-${y}.zip"
+            unzip -q "fold-${y}.zip" -d input/predictions
+          done
+          test $(find input/predictions -name 'all-race-ranker-20*.jsonl' | wc -l) -eq 11
+      - name: Select five races without target results
+        run: |
+          python scripts/research-select-five-races-from-all-ml.py --predictions-dir input/predictions --out-dir analysis-results/ml-five-selections --summary analysis-results/ml-five-selection-summary.json
+      - name: Enforce fixed five-race structure
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('analysis-results/ml-five-selection-summary.json').read_text())
+          assert d['predictionRaces']>34000,d
+          assert d['targetRaceResultUsedForSelection'] is False,d
+          assert d['targetRacePayoutUsedForSelection'] is False,d
+          assert d['productionDatabaseWritten'] is False,d
+          assert d['productionModelChanged'] is False,d
+          for v,x in d['variants'].items():
+            assert x['selectedRaces']==14410,(v,x)
+            assert x['duplicateRaceIds']==0,(v,x)
+          assert len(d['structuralShortVenueDays'])==1,d['structuralShortVenueDays']
+          s=d['structuralShortVenueDays'][0]
+          assert s['raceDate']=='2020-03-29' and s['eligibleRaces']==2,s
+          print(json.dumps({'predictionRaces':d['predictionRaces'],'variants':d['variants'],'structural':d['structuralShortVenueDays']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-ml-five-race-selections
+          path: |
+            analysis-results/ml-five-selections/*.jsonl
+            analysis-results/ml-five-selection-summary.json
+          retention-days: 30
+      - name: Mark selection success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/ml-five-race-selection' -f description='Four result-blind five-race selections completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark selection failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/ml-five-race-selection' -f description='ML five-race selection needs targeted repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
