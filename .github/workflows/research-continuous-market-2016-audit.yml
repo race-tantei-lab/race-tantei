@@ -1,0 +1,100 @@
+name: Research continuous market 2016 audit
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-continuous-market-2016-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  BASE_ODDS_RUN_ID: '31446629662'
+  BEST_DEMAND_RUN_ID: '31417411680'
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Mark audit pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/continuous-market-2016-audit' \
+            -f description='Auditing candidate-combo completeness on new 2016 six-market odds' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Download corpus, full demand and completed 2016 odds
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history demand odds analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > d.json
+          did=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' d.json | head -n1)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${did}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BASE_ODDS_RUN_ID}/artifacts?per_page=100" > o.json
+          oid=$(jq -r '.artifacts[] | select(.name=="research-continuous-market-odds-2016" and .expired==false) | .id' o.json | head -n1)
+          test -n "$oid" && test "$oid" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${oid}/zip" > odds.zip
+          unzip -q odds.zip -d odds
+      - name: Restrict demand to 2016 while preserving evaluator contract
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=[json.loads(x) for x in Path('demand/demand.jsonl').read_text().splitlines() if x.strip()]
+          ids={str(r['raceId']) for r in rows if str(r['raceDate']).startswith('2016-')}
+          assert len(ids)==550,len(ids)
+          # Keep full demand file because evaluator learns/scans chronologically; only 2016 odds are present, so other years remain explicit missing.
+          print(json.dumps({'selected2016':len(ids)},ensure_ascii=False))
+          PY
+      - name: Run baseline evaluator with only new 2016 odds present
+        run: |
+          python scripts/research-evaluate-continuous-market-value.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --demand demand/demand.jsonl \
+            --odds-dir odds \
+            --out analysis-results/audit2016.json
+      - name: Summarize 2016 candidate completeness
+        run: |
+          python - <<'PY'
+          import json,collections
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/audit2016.json').read_text())
+          b=m['bestVariant'];v=m['variants'][b]
+          errs=[e for e in v['evaluationErrors'] if str(e['raceDate']).startswith('2016-')]
+          kinds=collections.Counter(e['error'].split(':',1)[0] for e in errs)
+          evaluated=v['courses']['ライト']['byYear'].get('2016',{}).get('races',0)
+          out={'selected2016':550,'evaluated2016':evaluated,'candidateErrorRaces2016':len({e['raceId'] for e in errs}),'errorKinds':dict(kinds),'partial2016Roi':{c:v['courses'][c]['byYear'].get('2016',{}).get('roiPct') for c in v['courses']},'syntheticOddsUsed':m['syntheticOddsUsed'],'productionDatabaseWritten':m['productionDatabaseWritten']}
+          Path('analysis-results/audit2016-summary.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(out,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-continuous-market-2016-audit
+          path: |
+            analysis-results/audit2016.json
+            analysis-results/audit2016-summary.json
+          retention-days: 14
+      - name: Mark audit success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/continuous-market-2016-audit' \
+            -f description='2016 candidate odds completeness audit completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark audit failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/continuous-market-2016-audit' \
+            -f description='2016 candidate completeness audit requires repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
