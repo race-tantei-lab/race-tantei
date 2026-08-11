@@ -1,0 +1,227 @@
+name: Research pre-market selected official odds
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-premarket-official-odds.yml"
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  PREMARKET_SELECTION_ARTIFACT_ID: '9088792427'
+  OLD_SOURCE_CLEAN_ARTIFACT_ID: '9086766461'
+  CANONICAL_ODDS_RUN_ID: '31373205723'
+  ALL_RACE_RUN_ID: '31455507850'
+  ADDITIONAL_SOURCE_RUN_ID: '31456971683'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Mark pre-market odds pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/premarket-official-odds' -f description='Waiting for reusable source-clean odds then fetching only pre-market gaps' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile odds preparation tools
+        run: python -m py_compile scripts/research-prepare-meta-market-input.py scripts/research-merge-meta-market-odds.py scripts/research-fetch-resolved-demanded-official-odds.py
+      - name: Download pre-market selection and frozen history
+        run: |
+          set -euo pipefail
+          mkdir -p input/selection input/old input/canonical input/additional input/predictions analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${PREMARKET_SELECTION_ARTIFACT_ID}/zip" > sel.zip
+          unzip -q sel.zip -d input/selection
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${OLD_SOURCE_CLEAN_ARTIFACT_ID}/zip" > old.zip
+          unzip -q old.zip 'corrected-odds/*.jsonl' 'history/ten-year-history-corpus.jsonl' -d input/old
+          test -s input/selection/premarket-five-race-demand.jsonl
+          test -s input/old/history/ten-year-history-corpus.jsonl
+      - name: Wait for current market-aware source-clean odds and download
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 900); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ADDITIONAL_SOURCE_RUN_ID}/artifacts?per_page=100" > a.json
+            id=$(jq -r '.artifacts[] | select(.name=="research-meta-market-source-clean" and .expired==false) | .id' a.json | head -n1)
+            if [ -n "$id" ] && [ "$id" != null ]; then echo "$id" > additional-id.txt; break; fi
+            sleep 15
+          done
+          test -s additional-id.txt
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$(cat additional-id.txt)/zip" > additional.zip
+          unzip -q additional.zip -d input/additional
+          test $(find input/additional -name 'research-meta-market-odds-20*.jsonl' | wc -l) -eq 11
+      - name: Download canonical reuse odds
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANONICAL_ODDS_RUN_ID}/artifacts?per_page=100" > c.json
+          for y in $(seq 2016 2026); do
+            id=$(jq -r --arg n "research-demanded-odds-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' c.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "c-${y}.zip"
+            unzip -q "c-${y}.zip" -d input/canonical
+          done
+      - name: Download all-race OOS predictions
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ALL_RACE_RUN_ID}/artifacts?per_page=100" > r.json
+          for y in $(seq 2016 2026); do
+            id=$(jq -r --arg n "research-all-race-ranker-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' r.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "r-${y}.zip"
+            unzip -q "r-${y}.zip" -d input/predictions
+          done
+      - name: Build three-source audited reuse union
+        run: |
+          python scripts/research-prepare-meta-market-input.py \
+            --selection input/selection/premarket-five-race-demand.jsonl \
+            --history input/old/history/ten-year-history-corpus.jsonl \
+            --continuous-odds-dir input/old/corrected-odds \
+            --canonical-odds-dir input/canonical \
+            --additional-odds-dir input/additional \
+            --predictions-dir input/predictions \
+            --reused-out analysis-results/reused-odds.jsonl \
+            --missing-out analysis-results/missing-demand.jsonl \
+            --history-out analysis-results/selected-history.jsonl \
+            --predictions-out analysis-results/selected-predictions.jsonl \
+            --meta analysis-results/premarket-market-input-meta.json
+          cp input/selection/premarket-five-race-demand.jsonl analysis-results/premarket-five-race-demand.jsonl
+      - name: Verify reduced missing set
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('analysis-results/premarket-market-input-meta.json'))
+          assert d['selectedRaces']==14410,d
+          assert d['reusedOddsRaces']+d['missingOddsRaces']==14410,d
+          assert d['additionalSourceCleanConfigured'] is True,d
+          assert d['reusedOddsRaces']>=12800,d
+          assert d['missingOddsRaces']<=1610,d
+          assert d['allMissingResultUrlsIdentityVerified'] is True,d
+          assert d['syntheticOddsUsed'] is False,d
+          assert d['productionDatabaseWritten'] is False,d
+          print(json.dumps(d,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-premarket-fetch-demand
+          path: |
+            analysis-results/missing-demand.jsonl
+            analysis-results/premarket-market-input-meta.json
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-premarket-reuse-input
+          path: |
+            analysis-results/reused-odds.jsonl
+            analysis-results/selected-history.jsonl
+            analysis-results/selected-predictions.jsonl
+            analysis-results/premarket-five-race-demand.jsonl
+            analysis-results/premarket-market-input-meta.json
+          retention-days: 30
+          compression-level: 9
+
+  fetch:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        year: ['2016','2017','2018','2019','2020','2021','2022','2023','2024','2025','2026']
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check --quiet beautifulsoup4==4.13.4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-premarket-fetch-demand
+          path: input
+      - name: Fetch only remaining pre-market gaps
+        run: |
+          python scripts/research-fetch-resolved-demanded-official-odds.py --input input/missing-demand.jsonl --year '${{ matrix.year }}' --workers 3 --out analysis-results/research-premarket-fetched-odds-${{ matrix.year }}.jsonl --meta analysis-results/research-premarket-fetched-odds-${{ matrix.year }}-meta.json
+      - name: Require zero failures
+        run: |
+          python - <<'PY'
+          import json,glob
+          m=json.load(open(glob.glob('analysis-results/*-meta.json')[0]))
+          assert not m['failures'],m['failures'][:10]
+          assert m['completedRaces']==m['inputDemandRaces'],m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          print(json.dumps({'year':m['year'],'input':m['inputDemandRaces'],'completed':m['completedRaces'],'coverage':m['coverage']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-premarket-fetched-odds-${{ matrix.year }}
+          path: |
+            analysis-results/research-premarket-fetched-odds-${{ matrix.year }}.jsonl
+            analysis-results/research-premarket-fetched-odds-${{ matrix.year }}-meta.json
+          retention-days: 30
+
+  merge:
+    if: always()
+    needs: [prepare, fetch]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-premarket-reuse-input
+          path: input/reuse
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: research-premarket-fetched-odds-20*
+          path: input/fetched
+          merge-multiple: true
+      - name: Normalize fetched names for shared merger
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          for p in Path('input/fetched').glob('research-premarket-fetched-odds-*.jsonl'):
+            p.rename(p.with_name(p.name.replace('research-premarket-fetched-odds-','research-meta-fetched-odds-')))
+          PY
+      - name: Merge and source-audit exact pre-market 14,410
+        run: |
+          python scripts/research-merge-meta-market-odds.py --selection input/reuse/premarket-five-race-demand.jsonl --reused input/reuse/reused-odds.jsonl --fetched-dir input/fetched --out-dir analysis-results/premarket-market-odds --meta analysis-results/premarket-market-odds-meta.json
+      - name: Require exact source-clean completion
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('analysis-results/premarket-market-odds-meta.json'))
+          assert d['mergedOddsRaces']==14410,d
+          assert not d['missingRaceIds'],d['missingRaceIds'][:20]
+          assert not d['identityMismatchRows'],d['identityMismatchRows'][:20]
+          assert not d['syntheticOddsRaceIds'],d['syntheticOddsRaceIds'][:20]
+          assert d['productionDatabaseWritten'] is False,d
+          print(json.dumps({'merged':d['mergedOddsRaces'],'sources':d['sourceCounts'],'byYear':d['byYear']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-premarket-market-source-clean
+          path: |
+            analysis-results/premarket-market-odds/*.jsonl
+            analysis-results/premarket-market-odds-meta.json
+          retention-days: 30
+          compression-level: 9
+      - name: Mark pre-market odds success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/premarket-official-odds' -f description='Pre-market selected 14,410 official odds source-clean' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark pre-market odds failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/premarket-official-odds' -f description='Pre-market official odds needs targeted repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
