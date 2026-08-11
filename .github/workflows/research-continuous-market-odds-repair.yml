@@ -1,0 +1,160 @@
+name: Research continuous market odds repair
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-continuous-market-odds-repair.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  RECENT_ODDS_RUN_ID: '31446902302'
+  BEST_DEMAND_RUN_ID: '31417411680'
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Mark repair pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/continuous-market-odds-repair' \
+            -f description='Resolving residual selected races to verified JRA result URLs' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build official archive helpers and odds parser dependencies
+        run: |
+          npm ci
+          npm run build:test
+          pip install beautifulsoup4==4.13.4
+      - name: Wait for all three recent odds shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 300); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RECENT_ODDS_RUN_ID}/artifacts?per_page=100" > recent.json
+            count=0
+            for year in $(seq 2024 2026); do
+              name="research-continuous-market-odds-recent-${year}"
+              n=$(jq -r --arg n "$name" '[.artifacts[] | select(.name==$n and .expired==false)] | length' recent.json)
+              count=$((count+n))
+            done
+            echo "recent artifacts=$count/3 poll=$i"
+            if [ "$count" -eq 3 ]; then exit 0; fi
+            sleep 20
+          done
+          exit 1
+      - name: Download frozen history, demand, and recent metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history demand recent fake-meta analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > demand-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' demand-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RECENT_ODDS_RUN_ID}/artifacts?per_page=100" > recent-artifacts.json
+          for year in $(seq 2024 2026); do
+            name="research-continuous-market-odds-recent-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' recent-artifacts.json | head -n1)
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "recent/$year"; unzip -q "$year.zip" -d "recent/$year"
+          done
+      - name: Build full-market demand and failure metadata expected by proven resolver
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          markets=['win','umaren','wide','umatan','trio','trifecta']
+          rows=[]
+          for line in Path('demand/demand.jsonl').read_text().splitlines():
+            if not line.strip():continue
+            r=json.loads(line);r['requiredMarkets']=markets;rows.append(r)
+          Path('demand/full-market-demand.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in rows))
+          missing_by_year={str(y):[] for y in range(2016,2027)}
+          for year in ('2024','2025','2026'):
+            p=next(Path(f'recent/{year}').glob('*-meta.json'))
+            m=json.loads(p.read_text())
+            missing_by_year[year]=[{'raceId':rid} for rid in m.get('missingRaceIds',[])]
+          for year in range(2016,2027):
+            Path(f'fake-meta/research-demanded-odds-{year}-meta.json').write_text(json.dumps({'year':str(year),'failures':missing_by_year[str(year)]},ensure_ascii=False,indent=2)+'\n')
+          total=sum(len(v) for v in missing_by_year.values())
+          Path('analysis-results/residual-count.json').write_text(json.dumps({'residualRaces':total,'byYear':{y:len(v) for y,v in missing_by_year.items()}},ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({'residualRaces':total,'byYear':{y:len(v) for y,v in missing_by_year.items()}},ensure_ascii=False))
+          PY
+      - name: Resolve residual races to official JRA result URLs
+        run: |
+          node scripts/research-resolve-demanded-odds-failures.mjs \
+            --demand demand/full-market-demand.jsonl \
+            --meta-dir fake-meta \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --out analysis-results/resolved.jsonl \
+            --meta analysis-results/resolved-meta.json
+      - name: Fetch all six official markets from resolved URLs
+        shell: bash
+        run: |
+          set +e
+          python scripts/research-fetch-resolved-demanded-official-odds.py \
+            --input analysis-results/resolved.jsonl --workers 3 \
+            --out analysis-results/research-continuous-market-odds-repair.jsonl \
+            --meta analysis-results/research-continuous-market-odds-repair-meta.json
+          code=$?
+          set -e
+          echo "fetch exit=$code"
+      - name: Verify repair provenance and expose only real residuals
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          r=json.loads(Path('analysis-results/resolved-meta.json').read_text())
+          m=json.loads(Path('analysis-results/research-continuous-market-odds-repair-meta.json').read_text())
+          assert r['unresolvedCount']==0,r
+          assert r['resolvedCount']==r['initialFailureCount'],r
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          remaining=m.get('failures',[])
+          print(json.dumps({'requestedRepair':r['initialFailureCount'],'resolvedUrls':r['resolvedCount'],'fetched':m.get('completedRaces'),'remainingFailures':len(remaining),'failures':remaining},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-continuous-market-odds-repair
+          path: |
+            analysis-results/residual-count.json
+            analysis-results/resolved.jsonl
+            analysis-results/resolved-meta.json
+            analysis-results/research-continuous-market-odds-repair.jsonl
+            analysis-results/research-continuous-market-odds-repair-meta.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Mark repair success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/continuous-market-odds-repair' \
+            -f description='Residual JRA result URLs resolved and odds refetched' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark repair failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/continuous-market-odds-repair' \
+            -f description='Residual odds repair needs targeted follow-up' -f target_url="$STATUS_TARGET_URL" >/dev/null
