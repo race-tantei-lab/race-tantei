@@ -1,0 +1,76 @@
+name: Research export compact market candidates
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-export-compact-market-candidates.yml"
+      - "scripts/research-export-compact-market-candidates.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  V2_RUN_ID: '31452343000'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Mark compact export pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/compact-market-candidate-corpus' -f description='Exporting compact source-clean 14,410-race candidate corpus' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile exporter
+        run: python -m py_compile scripts/research-export-compact-market-candidates.py
+      - name: Download source-clean v2 input
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${V2_RUN_ID}/artifacts?per_page=100" > a.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-final-active-rerank-input" and .expired==false) | .id' a.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > input.zip
+          unzip -q input.zip -d input
+      - name: Export compact candidates
+        run: |
+          python scripts/research-export-compact-market-candidates.py --corpus input/history/ten-year-history-corpus.jsonl --demand input/demand/demand.jsonl --odds-dir input/corrected-odds --out analysis-results/compact-market-candidates.jsonl --meta analysis-results/compact-market-candidates-meta.json
+      - name: Verify compact corpus
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/compact-market-candidates-meta.json').read_text())
+          assert m['selectedRaces']==14410,m
+          assert m['candidateTickets']>1_000_000,m
+          assert m['activeRunnersFilteredBeforeRanking'] is True,m
+          assert m['targetRaceOutcomeUsedForFeatures'] is False,m
+          assert m['ruleKeysStored'] is False and m['ruleKeysDerivableFromDiscreteVals'] is True,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert sum(1 for x in Path('analysis-results/compact-market-candidates.jsonl').open() if x.strip())==14410
+          print(json.dumps({'races':m['selectedRaces'],'tickets':m['candidateTickets'],'distribution':m['candidateCountDistribution']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-compact-market-candidate-corpus
+          path: |
+            analysis-results/compact-market-candidates.jsonl
+            analysis-results/compact-market-candidates-meta.json
+          retention-days: 30
+          compression-level: 9
+      - name: Mark compact export success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/compact-market-candidate-corpus' -f description='Compact reusable market candidate corpus completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark compact export failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/compact-market-candidate-corpus' -f description='Compact candidate corpus export requires repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
