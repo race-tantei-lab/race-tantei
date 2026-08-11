@@ -84,3 +84,5 @@ jobs:
             -f context='analysis/completion-dataset-export' \
             -f description='固定解析データ出力失敗' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+# v12 discovery dataset refresh: 2026-08-12
