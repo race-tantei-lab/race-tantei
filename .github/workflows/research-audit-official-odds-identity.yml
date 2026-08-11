@@ -1,0 +1,115 @@
+name: Research audit official odds identity
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-audit-official-odds-identity.yml"
+      - "scripts/research-audit-official-odds-identity.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  BASE_ODDS_RUN_ID: '31446629662'
+  FAST_2023_RUN_ID: '31447695033'
+  RECENT_ODDS_RUN_ID: '31446902302'
+  REPAIR_RUN_ID: '31447072766'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Mark audit pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/official-odds-identity-audit' \
+            -f description='Auditing JRA source identity for all 14,410 selected races' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download and compose final official odds shards
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p odds repair analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BASE_ODDS_RUN_ID}/artifacts?per_page=100" > base.json
+          for year in $(seq 2016 2022); do
+            name="research-continuous-market-odds-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' base.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
+            cp "tmp-$year/research-continuous-market-odds-${year}.jsonl" odds/
+          done
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FAST_2023_RUN_ID}/artifacts?per_page=100" > fast.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-continuous-market-odds-2023-fast" and .expired==false) | .id' fast.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > 2023.zip
+          mkdir -p tmp-2023; unzip -q 2023.zip -d tmp-2023
+          cp tmp-2023/research-continuous-market-odds-2023.jsonl odds/
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RECENT_ODDS_RUN_ID}/artifacts?per_page=100" > recent.json
+          for year in $(seq 2024 2026); do
+            name="research-continuous-market-odds-recent-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' recent.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
+            cp "tmp-$year/research-continuous-market-odds-${year}.jsonl" odds/
+          done
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${REPAIR_RUN_ID}/artifacts?per_page=100" > repair-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-continuous-market-odds-repair" and .expired==false) | .id' repair-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > repair.zip
+          unzip -q repair.zip -d repair
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('repair/research-continuous-market-odds-repair.jsonl')
+          repairs=[json.loads(x) for x in p.read_text().splitlines() if x.strip()] if p.exists() else []
+          for year in ('2024','2025','2026'):
+            f=Path(f'odds/research-continuous-market-odds-{year}.jsonl');rows={}
+            for line in f.read_text().splitlines():
+              if line.strip():
+                r=json.loads(line);rows[str(r['raceId'])]=r
+            for r in repairs:
+              if str(r['raceDate']).startswith(year+'-'): rows[str(r['raceId'])]=r
+            f.write_text(''.join(json.dumps(rows[k],ensure_ascii=False,separators=(',',':'))+'\n' for k in sorted(rows)))
+          total=0
+          for f in sorted(Path('odds').glob('research-continuous-market-odds-20*.jsonl')):
+            total+=sum(1 for x in f.read_text().splitlines() if x.strip())
+          assert total==14410,total
+          print(json.dumps({'finalRows':total,'repairRows':len(repairs)},ensure_ascii=False))
+          PY
+      - name: Audit source identities
+        run: |
+          python scripts/research-audit-official-odds-identity.py \
+            --odds-dir odds \
+            --out analysis-results/research-official-odds-identity-audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-official-odds-identity-audit
+          path: analysis-results/research-official-odds-identity-audit.json
+          retention-days: 30
+      - name: Mark audit success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/official-odds-identity-audit' \
+            -f description='Official odds identity audit completed; inspect mismatch counts' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark audit failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/official-odds-identity-audit' \
+            -f description='Official odds identity audit failed structurally' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
