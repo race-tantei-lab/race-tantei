@@ -6,6 +6,7 @@ COURSES={'light':2000,'standard':5000,'premium':10000}
 VARIANTS=('confidence','concentration','disagreement','hybrid')
 TEMPLATES=('pair','spread','trio','ordered')
 BET_JP={'win':'単勝','umaren':'馬連','wide':'ワイド','umatan':'馬単','trio':'3連複','trifecta':'3連単'}
+MARKETS={'win','umaren','wide','umatan','trio','trifecta'}
 ODDS_EDGES=[2,3,5,7,10,15,20,30,50,75,100,150,300,500,800,1200,2000]
 ODDS_MID=[1.4,2.45,3.9,5.9,8.4,12.2,17.3,24.5,38.7,61.2,86.6,122.5,212.1,387.3,632.5,979.8,1549.2,2500.0]
 
@@ -74,10 +75,14 @@ def robust(rows):
       'hardGateTop50AtLeast200':bool(ret50 is not None and profit50 is not None and ret50>=200.0 and profit50>=200.0),
     }
 
+def complete_six_market(row):
+    return MARKETS.issubset(set(row.get('requiredMarkets') or [])) and MARKETS.issubset(set((row.get('officialOdds') or {}).keys()))
+
 def read_odds_dir(root,union,odds,existing=False):
     files=list(Path(root).glob('*.jsonl'))
     if existing:
-        # Canonical 297 is a fallback; current source-clean rows must win on overlap.
+        # Canonical 297 is a fallback; later current/meta files may replace it, but only if the row
+        # satisfies the exact same complete-six-market policy used by the demand builder.
         files.sort(key=lambda p:(0 if p.name.startswith('research-demanded-odds-') else 1,p.name))
     else:
         files.sort()
@@ -85,7 +90,9 @@ def read_odds_dir(root,union,odds,existing=False):
         for line in p.read_text(encoding='utf-8').splitlines():
             if not line.strip():continue
             r=json.loads(line);rid=str(r['raceId'])
-            if rid in union:odds[rid]=r
+            if rid not in union:continue
+            if existing and not complete_six_market(r):continue
+            odds[rid]=r
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--predictions-dir',required=True);ap.add_argument('--selections-dir',required=True);ap.add_argument('--existing-odds-dir',required=True);ap.add_argument('--new-odds-dir',required=True);ap.add_argument('--history',required=True);ap.add_argument('--out',required=True);a=ap.parse_args()
@@ -161,6 +168,6 @@ def main():
     best_key=max(combos,key=lambda k:(combos[k]['minTop50RobustRoiPct'],combos[k]['minTop100ExcludedRoiPct'],combos[k]['minOverallRoiPct'],k))
     best=combos[best_key];passed=bool(best['passesDiscoveryGate'])
     frozen={'key':best_key,'selector':best['selector'],'template':best['template'],'minTop50RobustRoiPct':best['minTop50RobustRoiPct'],'minTop100ExcludedRoiPct':best['minTop100ExcludedRoiPct'],'minOverallRoiPct':best['minOverallRoiPct'],'selectorUsesHistoricalFinalPopularity':best['selectorUsesHistoricalFinalPopularity']} if passed else None
-    summary={'purpose':'research_only_2016_2022_discovery_for_result_blind_ml_five_race_selection','discoveryPeriod':{'start':'2016-08-10','end':'2022-12-31'},'holdoutPeriodUntouched':{'start':'2023-01-01','end':'2026-08-09'},'selectionVariants':list(VARIANTS),'ticketTemplates':list(TEMPLATES),'candidateCombinations':len(combos),'selectedRacesPerCombination':9190,'completionHardGate':{'allCoursesTop50ReturnAndProfitExcludedRoiPctAtLeast':200.0},'historicalFinalOddsUsed':True,'prestartOddsTimingValidationPerformed':False,'targetRaceResultUsedForRaceSelection':False,'targetRaceResultUsedForHorseRanking':False,'inactiveHorsesFilteredBeforeRanking':True,'inactivePredictionRowsFiltered':inactive_filtered,'existingOddsPrecedence':'new_fetch_over_current_source_clean_over_canonical297','discoveryResultsUsedOnlyToChooseOneFrozenCombinationForHistoricalHoldout':True,'productionDatabaseWritten':False,'productionModelChanged':False,'combinations':combos,'discoveryBestCandidate':{'key':best_key,'selector':best['selector'],'template':best['template'],'minTop50RobustRoiPct':best['minTop50RobustRoiPct'],'minTop100ExcludedRoiPct':best['minTop100ExcludedRoiPct'],'minOverallRoiPct':best['minOverallRoiPct'],'passesDiscoveryGate':best['passesDiscoveryGate'],'selectorUsesHistoricalFinalPopularity':best['selectorUsesHistoricalFinalPopularity']},'discoveryPassed':passed,'frozenCombination':frozen}
+    summary={'purpose':'research_only_2016_2022_discovery_for_result_blind_ml_five_race_selection','discoveryPeriod':{'start':'2016-08-10','end':'2022-12-31'},'holdoutPeriodUntouched':{'start':'2023-01-01','end':'2026-08-09'},'selectionVariants':list(VARIANTS),'ticketTemplates':list(TEMPLATES),'candidateCombinations':len(combos),'selectedRacesPerCombination':9190,'completionHardGate':{'allCoursesTop50ReturnAndProfitExcludedRoiPctAtLeast':200.0},'historicalFinalOddsUsed':True,'prestartOddsTimingValidationPerformed':False,'targetRaceResultUsedForRaceSelection':False,'targetRaceResultUsedForHorseRanking':False,'inactiveHorsesFilteredBeforeRanking':True,'inactivePredictionRowsFiltered':inactive_filtered,'existingOddsPrecedence':'new_fetch_over_complete_current_or_meta_over_complete_canonical297','existingOddsReuseRequiresAllSixMarkets':True,'discoveryResultsUsedOnlyToChooseOneFrozenCombinationForHistoricalHoldout':True,'productionDatabaseWritten':False,'productionModelChanged':False,'combinations':combos,'discoveryBestCandidate':{'key':best_key,'selector':best['selector'],'template':best['template'],'minTop50RobustRoiPct':best['minTop50RobustRoiPct'],'minTop100ExcludedRoiPct':best['minTop100ExcludedRoiPct'],'minOverallRoiPct':best['minOverallRoiPct'],'passesDiscoveryGate':best['passesDiscoveryGate'],'selectorUsesHistoricalFinalPopularity':best['selectorUsesHistoricalFinalPopularity']},'discoveryPassed':passed,'frozenCombination':frozen}
     Path(a.out).parent.mkdir(parents=True,exist_ok=True);Path(a.out).write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps({'discoveryPassed':passed,'best':summary['discoveryBestCandidate'],'frozenCombination':frozen,'inactivePredictionRowsFiltered':inactive_filtered},ensure_ascii=False),flush=True)
 if __name__=='__main__':main()
