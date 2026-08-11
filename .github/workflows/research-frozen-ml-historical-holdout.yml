@@ -1,0 +1,261 @@
+name: Research frozen ML historical holdout
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-frozen-ml-historical-holdout.yml"
+      - "scripts/research-build-frozen-ml-holdout-demand.py"
+      - "scripts/research-evaluate-frozen-ml-holdout.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  PRACTICAL_WORKFLOW: 'research-freeze-practical-ml-discovery-winner.yml'
+  SELECTION_ARTIFACT_ID: '9088036803'
+  SOURCE_INPUT_ARTIFACT_ID: '9086766461'
+  CANONICAL_ODDS_RUN_ID: '31373205723'
+  ALL_RACE_RUN_ID: '31455874661'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    outputs:
+      open: ${{ steps.gate.outputs.open }}
+    steps:
+      - name: Mark holdout pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/frozen-ml-historical-holdout' -f description='Holdout remains closed until discovery Top50 gate passes' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile holdout scripts
+        run: python -m py_compile scripts/research-build-frozen-ml-holdout-demand.py scripts/research-evaluate-frozen-ml-holdout.py scripts/research-fetch-resolved-demanded-official-odds.py
+      - name: Find latest valid practical discovery artifact
+        run: |
+          set -euo pipefail
+          rm -f practical-artifact-id.txt
+          for attempt in $(seq 1 1200); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${PRACTICAL_WORKFLOW}/runs?branch=research%2Ften-year-minimal-rules&per_page=20" > practical-runs.json
+            for rid in $(jq -r '.workflow_runs[] | select(.conclusion != "cancelled") | .id' practical-runs.json); do
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${rid}/artifacts?per_page=100" > practical-artifacts.json || continue
+              id=$(jq -r '.artifacts[] | select(.name=="research-ml-five-discovery-practical-frozen" and .expired==false) | .id' practical-artifacts.json | head -n1)
+              if [ -z "$id" ] || [ "$id" = null ]; then continue; fi
+              rm -rf candidate-practical; mkdir candidate-practical
+              gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > candidate-practical.zip
+              unzip -q -o candidate-practical.zip -d candidate-practical
+              if python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('candidate-practical/ml-five-discovery-practical-frozen.json')
+          if not p.exists(): raise SystemExit(1)
+          d=json.loads(p.read_text())
+          w=d.get('practicalDiscoveryWinner',{})
+          ok=(w.get('selector') in ('confidence','concentration') and w.get('historicalFinalPopularityUsedForSelection') is False and d.get('holdoutPeriodUntouched',{}).get('start')=='2023-01-01')
+          raise SystemExit(0 if ok else 1)
+          PY
+              then
+                echo "$id" > practical-artifact-id.txt
+                echo "$rid" > practical-run-id.txt
+                break 2
+              fi
+            done
+            sleep 15
+          done
+          test -s practical-artifact-id.txt
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$(cat practical-artifact-id.txt)/zip" > practical.zip
+          mkdir -p input/practical
+          unzip -q practical.zip -d input/practical
+      - name: Enforce discovery gate before opening holdout
+        id: gate
+        run: |
+          set -euo pipefail
+          open=$(python - <<'PY'
+          import json
+          d=json.load(open('input/practical/ml-five-discovery-practical-frozen.json'))
+          w=d['practicalDiscoveryWinner']
+          ok=bool(d.get('historicalHoldoutMayBeOpened')) and bool(w.get('eligibleForHistoricalHoldout')) and min(w['top50ExcludedRoiPct'].values())>=200.0
+          print('true' if ok else 'false')
+          PY
+          )
+          echo "open=$open" >> "$GITHUB_OUTPUT"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.load(open('input/practical/ml-five-discovery-practical-frozen.json'));w=d['practicalDiscoveryWinner']
+          out={'historicalHoldoutOpened':bool(d.get('historicalHoldoutMayBeOpened')) and bool(w.get('eligibleForHistoricalHoldout')) and min(w['top50ExcludedRoiPct'].values())>=200.0,'discoveryWinner':w,'policy':'2023-2026 is not fetched or evaluated unless all three discovery courses remain >=200% after Top50 exclusion.'}
+          Path('analysis-results').mkdir(exist_ok=True);Path('analysis-results/frozen-holdout-gate.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(out,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-frozen-ml-holdout-gate
+          path: analysis-results/frozen-holdout-gate.json
+          retention-days: 30
+      - name: Download holdout inputs only after gate opens
+        if: steps.gate.outputs.open == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p input/selections input/source input/existing-odds
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SELECTION_ARTIFACT_ID}/zip" > selections.zip
+          unzip -q selections.zip -d input/selections
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_INPUT_ARTIFACT_ID}/zip" > source.zip
+          unzip -q source.zip 'corrected-odds/*.jsonl' 'history/ten-year-history-corpus.jsonl' -d input/source
+          cp input/source/corrected-odds/*.jsonl input/existing-odds/
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANONICAL_ODDS_RUN_ID}/artifacts?per_page=100" > canonical.json
+          for y in $(seq 2023 2026); do
+            id=$(jq -r --arg n "research-demanded-odds-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' canonical.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "canonical-${y}.zip"
+            unzip -q "canonical-${y}.zip" "research-demanded-odds-${y}.jsonl" -d input/existing-odds
+          done
+      - name: Build holdout-only official odds demand
+        if: steps.gate.outputs.open == 'true'
+        run: |
+          python scripts/research-build-frozen-ml-holdout-demand.py \
+            --frozen input/practical/ml-five-discovery-practical-frozen.json \
+            --selections-dir input/selections/ml-five-selections \
+            --existing-odds-dir input/existing-odds \
+            --history input/source/history/ten-year-history-corpus.jsonl \
+            --out analysis-results/frozen-ml-holdout-demand.jsonl \
+            --meta analysis-results/frozen-ml-holdout-demand-meta.json
+      - uses: actions/upload-artifact@v4
+        if: steps.gate.outputs.open == 'true'
+        with:
+          name: research-frozen-ml-holdout-demand
+          path: |
+            analysis-results/frozen-ml-holdout-demand.jsonl
+            analysis-results/frozen-ml-holdout-demand-meta.json
+            input/practical/ml-five-discovery-practical-frozen.json
+          retention-days: 30
+
+  fetch:
+    needs: prepare
+    if: needs.prepare.outputs.open == 'true'
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        year: ['2023','2024','2025','2026']
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check --quiet beautifulsoup4==4.13.4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-frozen-ml-holdout-demand
+          path: input
+      - name: Fetch missing holdout official odds
+        env:
+          YEAR: ${{ matrix.year }}
+        run: |
+          set -euo pipefail
+          n=$(python - <<'PY'
+          import json,os
+          y=os.environ['YEAR'];print(sum(1 for line in open('input/frozen-ml-holdout-demand.jsonl') if line.strip() and str(json.loads(line)['raceDate']).startswith(y+'-')))
+          PY
+          )
+          if [ "$n" -eq 0 ]; then
+            : > "analysis-results/frozen-ml-holdout-odds-${YEAR}.jsonl"
+            printf '{"year":"%s","inputDemandRaces":0,"completedRaces":0,"failures":[],"syntheticOddsUsed":false,"productionDatabaseWritten":false}\n' "$YEAR" > "analysis-results/frozen-ml-holdout-odds-${YEAR}-meta.json"
+          else
+            python scripts/research-fetch-resolved-demanded-official-odds.py --input input/frozen-ml-holdout-demand.jsonl --year "$YEAR" --workers 3 --out "analysis-results/frozen-ml-holdout-odds-${YEAR}.jsonl" --meta "analysis-results/frozen-ml-holdout-odds-${YEAR}-meta.json"
+          fi
+          python - <<'PY'
+          import glob,json
+          p=glob.glob('analysis-results/*-meta.json')[0];m=json.load(open(p));assert not m.get('failures'),m.get('failures');assert m['completedRaces']==m['inputDemandRaces'],m
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-frozen-ml-holdout-odds-${{ matrix.year }}
+          path: |
+            analysis-results/frozen-ml-holdout-odds-${{ matrix.year }}.jsonl
+            analysis-results/frozen-ml-holdout-odds-${{ matrix.year }}-meta.json
+          retention-days: 30
+
+  evaluate:
+    needs: [prepare,fetch]
+    if: needs.prepare.outputs.open == 'true' && needs.fetch.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download frozen winner, selections, predictions, history, and reusable odds
+        run: |
+          set -euo pipefail
+          mkdir -p input/practical input/selections input/predictions input/source input/existing-odds input/new-odds
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" > self-artifacts.json
+          did=$(jq -r '.artifacts[] | select(.name=="research-frozen-ml-holdout-demand") | .id' self-artifacts.json | head -n1);test -n "$did" && test "$did" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${did}/zip" > demand.zip;unzip -q demand.zip -d input/practical
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SELECTION_ARTIFACT_ID}/zip" > selections.zip;unzip -q selections.zip -d input/selections
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_INPUT_ARTIFACT_ID}/zip" > source.zip;unzip -q source.zip 'corrected-odds/*.jsonl' 'history/ten-year-history-corpus.jsonl' -d input/source
+          cp input/source/corrected-odds/*.jsonl input/existing-odds/
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANONICAL_ODDS_RUN_ID}/artifacts?per_page=100" > canonical.json
+          for y in $(seq 2023 2026); do
+            id=$(jq -r --arg n "research-demanded-odds-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' canonical.json | head -n1);test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "canonical-${y}.zip";unzip -q "canonical-${y}.zip" "research-demanded-odds-${y}.jsonl" -d input/existing-odds
+          done
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ALL_RACE_RUN_ID}/artifacts?per_page=100" > ranker.json
+          for y in $(seq 2016 2026); do
+            id=$(jq -r --arg n "research-all-race-ranker-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' ranker.json | head -n1);test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "ranker-${y}.zip";unzip -q "ranker-${y}.zip" -d input/predictions
+          done
+          for y in $(seq 2023 2026); do
+            id=$(jq -r --arg n "research-frozen-ml-holdout-odds-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' self-artifacts.json | head -n1);test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "holdout-${y}.zip";unzip -q "holdout-${y}.zip" -d input/new-odds
+          done
+      - name: Evaluate untouched frozen holdout
+        run: |
+          python scripts/research-evaluate-frozen-ml-holdout.py \
+            --frozen input/practical/ml-five-discovery-practical-frozen.json \
+            --predictions-dir input/predictions \
+            --selections-dir input/selections/ml-five-selections \
+            --existing-odds-dir input/existing-odds \
+            --new-odds-dir input/new-odds \
+            --history input/source/history/ten-year-history-corpus.jsonl \
+            --out analysis-results/frozen-ml-holdout-evaluation.json
+      - name: Verify holdout integrity
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('analysis-results/frozen-ml-holdout-evaluation.json'))
+          assert d['selectedRaces']==5220,d
+          assert d['candidateFrozenBeforeHoldout'] is True,d
+          assert d['holdoutResultsUsedToChooseCandidate'] is False,d
+          assert d['inactiveHorsesFilteredBeforeRanking'] is True,d
+          for c in ('light','standard','premium'):
+            x=d['courses'][c];assert x['races']==5220 and x['top50RobustRoiPct'] is not None and x['top100ExcludedRoiPct'] is not None,(c,x)
+          print(json.dumps({'courses':{c:{'roi':d['courses'][c]['roiPct'],'top50':d['courses'][c]['top50RobustRoiPct'],'top100':d['courses'][c]['top100ExcludedRoiPct'],'top1pct':d['courses'][c]['top1PctExcludedRoiPct']} for c in ('light','standard','premium')},'passesHoldoutTop50Gate':d['passesHoldoutTop50Gate']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-frozen-ml-historical-holdout-evaluation
+          path: analysis-results/frozen-ml-holdout-evaluation.json
+          retention-days: 30
+      - name: Mark holdout evaluation success
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/frozen-ml-historical-holdout' -f description='Frozen 2023-2026 holdout evaluated with Top50 robustness' -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+  closed:
+    needs: prepare
+    if: needs.prepare.outputs.open != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark holdout closed without opening 2023-2026
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/frozen-ml-historical-holdout' -f description='Discovery Top50 gate failed; 2023-2026 strict holdout remains unopened' -f target_url="$STATUS_TARGET_URL" >/dev/null
