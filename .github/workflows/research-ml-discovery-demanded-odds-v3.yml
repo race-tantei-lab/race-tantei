@@ -177,3 +177,5 @@ jobs:
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/ml-discovery-odds-v3' -f description='Targeted repair required' -f target_url="$STATUS_TARGET_URL" >/dev/null
           exit 1
+
+# meta 2022 complete; start minimized strict acquisition
