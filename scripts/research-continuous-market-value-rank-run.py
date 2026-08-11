@@ -37,10 +37,10 @@ def candidate_keys_with_relative_rank(bt,vals):
     pattern=vals.get('rankPattern')
     if pattern:
         pattern=tuple(pattern)
-        yield ('relative-rank-pattern',bt,pattern)
-        yield ('relative-rank-sum',bt,int(vals['rankSum']))
-        yield ('relative-rank-best',bt,int(vals['bestRank']))
-        yield ('relative-rank-worst',bt,int(vals['worstRank']))
+        yield (bt,('rankPattern',),(pattern,))
+        yield (bt,('rankSum',),(int(vals['rankSum']),))
+        yield (bt,('bestRank',),(int(vals['bestRank']),))
+        yield (bt,('worstRank',),(int(vals['worstRank']),))
 
 
 mod.cmod.candidate_rows=candidate_rows_with_relative_rank
