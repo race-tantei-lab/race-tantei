@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse,collections,importlib.util,json,math
+import argparse,collections,importlib.util,json
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -82,14 +82,19 @@ def probability(ticket,key_stats,bet_stats,local_weight):
 
 
 def market_candidates(state,bundle,odds_row,key_stats,bet_stats,local_weight,risk_gamma):
-    rows=cmod.candidate_rows(state,bundle);official=odds_row.get('officialOdds') or {};out=[]
+    rows=cmod.candidate_rows(state,bundle);official=odds_row.get('officialOdds') or {};out=[];missing=[]
     for t in rows:
-        odd=midpoint((official.get(t['market']) or {}).get(t['combo']))
-        if odd is None or odd<=1.0:continue
+        market_rows=official.get(t['market']) or {}
+        odd=midpoint(market_rows.get(t['combo']))
+        if odd is None or odd<1.0:
+            missing.append(f"{t['market']}:{t['combo']}")
+            continue
         p=probability(t,key_stats,bet_stats,local_weight)
         ev=p*odd
-        score=ev*((10.0/odd)**risk_gamma)
+        score=ev*((10.0/max(1.0,odd))**risk_gamma)
         out.append({**t,'odds':odd,'pHat':p,'ev':ev,'marketScore':score,'oddsBin':gen.bsearch(gen.ODDS_EDGES,odd)})
+    if missing:
+        raise RuntimeError(f'CANDIDATE_ODDS_INCOMPLETE:{len(missing)}:{missing[:12]}')
     out.sort(key=lambda x:(-x['marketScore'],-x['ev'],x['odds'],x['bt'],x['combo']))
     return out
 
@@ -195,7 +200,7 @@ def main():
         complete=(not missing and not err_ids and not(set(demand)-seen))
         results[key]={'localWeight':lw,'riskGamma':g,'evaluationErrorCount':len(errors[(lw,g)]),'evaluationErrors':errors[(lw,g)][:200],'evaluatedRaces':courses['ライト']['races'],'courses':courses,'betTypeDiagnostics':br,'selectionRankDiagnostics':rr,'completeOddsAndEvaluation':complete,'allThreeAtLeast200Pct':complete and all((courses[c]['roiPct'] or 0)>=200 for c in COURSES)}
     ranked=sorted(results,key=lambda k:(results[k]['completeOddsAndEvaluation'],min(results[k]['courses'][c]['roiPct'] or 0 for c in COURSES),sum(results[k]['courses'][c]['roiPct'] or 0 for c in COURSES)),reverse=True)
-    result={'purpose':'research_only_two_stage_market_value_walk_forward','evaluationStart':'2016-08-10','evaluationEnd':'2026-08-09','selectedDemandRaces':len(demand),'oddsRaces':len(odds),'missingOddsRaceCount':len(missing),'missingOddsRaceIds':missing,'missingDemandRacesInCorpus':sorted(set(demand)-seen),'variants':results,'ranking':ranked,'bestVariant':ranked[0] if ranked else None,'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,'raceSelectionFrozenBeforeOdds':True,'targetDayResultsUsedForRaceSelection':False,'sameDayResultsUsedForTicketProbability':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+    result={'purpose':'research_only_two_stage_market_value_walk_forward','evaluationStart':'2016-08-10','evaluationEnd':'2026-08-09','selectedDemandRaces':len(demand),'oddsRaces':len(odds),'missingOddsRaceCount':len(missing),'missingOddsRaceIds':missing,'missingDemandRacesInCorpus':sorted(set(demand)-seen),'candidateOddsCompletenessRequired':True,'variants':results,'ranking':ranked,'bestVariant':ranked[0] if ranked else None,'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,'raceSelectionFrozenBeforeOdds':True,'targetDayResultsUsedForRaceSelection':False,'sameDayResultsUsedForTicketProbability':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
     out=ROOT/a.out;out.parent.mkdir(parents=True,exist_ok=True);out.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
     best=result['bestVariant'];print(json.dumps({'selected':len(demand),'odds':len(odds),'missing':len(missing),'best':best,'bestRoi':{c:results[best]['courses'][c]['roiPct'] for c in COURSES} if best else None,'bestErrors':results[best]['evaluationErrorCount'] if best else None,'all200':results[best]['allThreeAtLeast200Pct'] if best else False},ensure_ascii=False),flush=True)
 
