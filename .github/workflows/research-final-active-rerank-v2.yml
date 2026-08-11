@@ -1,0 +1,266 @@
+name: Research final active-runner rerank v2
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-final-active-rerank-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CORRECTED_INPUT_RUN_ID: '31451680037'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark v2 pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/final-active-rerank-v2' \
+            -f description='Reranking active runners before ticket candidate generation on 14,410 races' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Download source-clean corrected input once
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CORRECTED_INPUT_RUN_ID}/artifacts?per_page=100" > a.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-corrected-final-market-inputs" and .expired==false) | .id' a.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > input.zip
+          unzip -q input.zip -d input
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('input/meta/corrected-odds-audit.json').read_text())
+          assert m['rows']==14410,m
+          assert m['resultOrSourceIdentityMismatches']==0,m
+          assert m['unverifiableSources']==0,m
+          assert m['syntheticOrEstimatedOdds']==0,m
+          print(json.dumps(m,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-final-active-rerank-input
+          path: input
+          retention-days: 14
+
+  probability:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-final-active-rerank-input
+          path: input
+      - name: Patch active-runner pre-ranking into probability model
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/research-evaluate-continuous-market-value.py');s=p.read_text()
+          old="""        generated={}\n        for b in bundles:\n            rid=str(b['race']['raceId']);generated[rid]=cmod.candidate_rows(state,b)\n"""
+          new="""        generated={}\n        for b in bundles:\n            rid=str(b['race']['raceId']);source=b\n            if rid in demand and rid in odds:\n                active={int(x) for x in (odds[rid].get('horses') or [])}\n                source=dict(b);source['runners']=[r for r in b.get('runners',[]) if int(r['horseNo']) in active]\n            generated[rid]=cmod.candidate_rows(state,source)\n"""
+          assert old in s;s=s.replace(old,new,1)
+          old2="official=odds_row.get('officialOdds') or {};out=[];missing=[]"
+          new2="official=odds_row.get('officialOdds') or {};active={int(x) for x in (odds_row.get('horses') or [])};rows=[t for t in rows if all(int(h) in active for h in t['horses'])];out=[];missing=[]"
+          assert old2 in s;s=s.replace(old2,new2,1);p.write_text(s)
+          PY
+          python -m py_compile scripts/research-evaluate-continuous-market-value.py
+      - name: Evaluate probability model
+        run: |
+          python scripts/research-evaluate-continuous-market-value.py --corpus input/history/ten-year-history-corpus.jsonl --demand input/demand/demand.jsonl --odds-dir input/corrected-odds --out result.json
+      - name: Require exact completion
+        run: |
+          python - <<'PY'
+          import json
+          m=json.load(open('result.json'));b=m['bestVariant'];v=m['variants'][b]
+          assert m['missingOddsRaceCount']==0 and not m['missingDemandRacesInCorpus'],m
+          assert v['evaluatedRaces']==14410,v['evaluatedRaces']
+          assert v['evaluationErrorCount']==0,v['evaluationErrors'][:20]
+          assert v['completeOddsAndEvaluation'] is True,v
+          print(json.dumps({'model':'probability','best':b,'roi':{c:x['roiPct'] for c,x in v['courses'].items()}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-v2-probability
+          path: result.json
+          retention-days: 30
+
+  direct:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-final-active-rerank-input
+          path: input
+      - name: Patch active-runner pre-ranking into direct ROI model
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/research-evaluate-direct-market-roi.py');s=p.read_text()
+          old="""        generated = {}\n        for b in bundles:\n            rid = str(b['race']['raceId'])\n            generated[rid] = cmod.candidate_rows(state, b)\n"""
+          new="""        generated = {}\n        for b in bundles:\n            rid = str(b['race']['raceId'])\n            source = b\n            if rid in demand and rid in odds:\n                active = {int(x) for x in (odds[rid].get('horses') or [])}\n                source = dict(b)\n                source['runners'] = [r for r in b.get('runners', []) if int(r['horseNo']) in active]\n            generated[rid] = cmod.candidate_rows(state, source)\n"""
+          assert old in s;s=s.replace(old,new,1)
+          old2="    official = odds_row.get('officialOdds') or {}\n    out = []\n    missing = []\n"
+          new2="    official = odds_row.get('officialOdds') or {}\n    active = {int(x) for x in (odds_row.get('horses') or [])}\n    rows = [t for t in rows if all(int(h) in active for h in t['horses'])]\n    out = []\n    missing = []\n"
+          assert old2 in s;s=s.replace(old2,new2,1);p.write_text(s)
+          PY
+          python -m py_compile scripts/research-evaluate-direct-market-roi.py
+      - name: Evaluate direct ROI model
+        run: |
+          python scripts/research-evaluate-direct-market-roi.py --corpus input/history/ten-year-history-corpus.jsonl --demand input/demand/demand.jsonl --odds-dir input/corrected-odds --out result.json
+      - name: Require exact completion
+        run: |
+          python - <<'PY'
+          import json
+          m=json.load(open('result.json'));b=m['bestVariant'];v=m['variants'][b]
+          assert m['missingOddsRaceCount']==0 and not m['missingDemandRacesInCorpus'],m
+          assert v['evaluatedRaces']==14410,v['evaluatedRaces']
+          assert v['evaluationErrorCount']==0,v['evaluationErrors'][:20]
+          assert v['completeOddsAndEvaluation'] is True,v
+          print(json.dumps({'model':'direct','best':b,'roi':{c:x['roiPct'] for c,x in v['courses'].items()}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-v2-direct
+          path: result.json
+          retention-days: 30
+
+  distortion:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-final-active-rerank-input
+          path: input
+      - name: Patch active-runner pre-ranking into distortion model
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/research-evaluate-market-distortion-roi.py');s=p.read_text()
+          old="        generated={str(b['race']['raceId']):cmod.candidate_rows(state,b) for b in bundles}\n"
+          new="""        generated={}\n        for b in bundles:\n            rid=str(b['race']['raceId']);source=b\n            if rid in demand and rid in odds:\n                active={int(x) for x in (odds[rid].get('horses') or [])}\n                source=dict(b);source['runners']=[r for r in b.get('runners',[]) if int(r['horseNo']) in active]\n            generated[rid]=cmod.candidate_rows(state,source)\n"""
+          assert old in s;s=s.replace(old,new,1)
+          old2="    official,horses,pos,pop,weights,ranks=market_context(odds_row)\n    out=[]; missing=[]\n    for t in rows:\n"
+          new2="    official,horses,pos,pop,weights,ranks=market_context(odds_row)\n    active=set(horses)\n    rows=[t for t in rows if all(int(h) in active for h in t['horses'])]\n    out=[]; missing=[]\n    for t in rows:\n"
+          assert old2 in s;s=s.replace(old2,new2,1);p.write_text(s)
+          PY
+          python -m py_compile scripts/research-evaluate-market-distortion-roi.py
+      - name: Evaluate distortion model
+        run: |
+          python scripts/research-evaluate-market-distortion-roi.py --corpus input/history/ten-year-history-corpus.jsonl --demand input/demand/demand.jsonl --odds-dir input/corrected-odds --out result.json
+      - name: Require exact completion
+        run: |
+          python - <<'PY'
+          import json
+          m=json.load(open('result.json'));b=m['bestVariant'];v=m['variants'][b]
+          assert m['missingOddsRaceCount']==0 and not m['missingDemandRacesInCorpus'],m
+          assert v['evaluatedRaces']==14410,v['evaluatedRaces']
+          assert v['evaluationErrorCount']==0,v['evaluationErrors'][:20]
+          assert v['completeOddsAndEvaluation'] is True,v
+          print(json.dumps({'model':'distortion','best':b,'roi':{c:x['roiPct'] for c,x in v['courses'].items()}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-v2-distortion
+          path: result.json
+          retention-days: 30
+
+  dynamic_rules:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-final-active-rerank-input
+          path: input
+      - name: Patch active-runner pre-ranking into dynamic rule model
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/research-evaluate-market-rule-walkforward.py');s=p.read_text()
+          old="""            active={int(x) for x in (odds[rid].get('horses') or [])}\n            raw=cmod.candidate_rows(state,b)\n            raw=[t for t in raw if all(int(h) in active for h in t['horses'])]\n"""
+          new="""            active={int(x) for x in (odds[rid].get('horses') or [])}\n            source=dict(b);source['runners']=[r for r in b.get('runners',[]) if int(r['horseNo']) in active]\n            raw=cmod.candidate_rows(state,source)\n            raw=[t for t in raw if all(int(h) in active for h in t['horses'])]\n"""
+          assert old in s;s=s.replace(old,new,1);p.write_text(s)
+          PY
+          python -m py_compile scripts/research-evaluate-market-rule-walkforward.py
+      - name: Evaluate dynamic rule model
+        run: |
+          python scripts/research-evaluate-market-rule-walkforward.py --corpus input/history/ten-year-history-corpus.jsonl --demand input/demand/demand.jsonl --odds-dir input/corrected-odds --out result.json
+      - name: Require exact completion
+        run: |
+          python - <<'PY'
+          import json
+          m=json.load(open('result.json'));b=m['bestVariant'];v=m['variants'][b]
+          assert m['missingOddsRaceCount']==0 and not m['missingDemandRacesInCorpus'],m
+          assert v['evaluatedRaces']==14410,v['evaluatedRaces']
+          assert v['evaluationErrorCount']==0,v['evaluationErrors'][:20]
+          assert v['completeOddsAndEvaluation'] is True,v
+          print(json.dumps({'model':'dynamicRules','best':b,'roi':{c:x['roiPct'] for c,x in v['courses'].items()}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-v2-dynamic-rules
+          path: result.json
+          retention-days: 30
+
+  summarize:
+    if: always()
+    needs: [prepare, probability, direct, distortion, dynamic_rules]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: research-v2-*
+          path: results
+      - name: Summarize robust gates
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          names={'probability':'research-v2-probability/result.json','direct':'research-v2-direct/result.json','distortion':'research-v2-distortion/result.json','dynamicRules':'research-v2-dynamic-rules/result.json'}
+          out={'models':{},'productionDatabaseWritten':False,'productionModelChanged':False}
+          budgets={'ライト':2000,'スタンダード':5000,'プレミアム':10000}
+          for name,rel in names.items():
+            p=Path('results')/rel
+            if not p.exists():continue
+            m=json.loads(p.read_text());b=m['bestVariant'];v=m['variants'][b];cs={}
+            for c,x in v['courses'].items():
+              largest=int(x['returnConcentration']['largestRaceReturnYen']);stake=int(x['stakeYen']);ret=int(x['returnYen'])
+              cs[c]={'roiPct':x['roiPct'],'excludeLargestRaceRoiPct':round(100*(ret-largest)/(stake-budgets[c]),4),'largestRaceId':x['returnConcentration']['largestRaceId'],'top1ReturnSharePct':x['returnConcentration']['top1ReturnSharePct'],'byYear':{y:s['roiPct'] for y,s in x['byYear'].items()},'byPeriod':{p:s['roiPct'] for p,s in x['byPeriod'].items()}}
+            surface=all((x['roiPct'] or 0)>=200 for x in cs.values());robust=surface and all((x['excludeLargestRaceRoiPct'] or 0)>=100 for x in cs.values())
+            out['models'][name]={'bestVariant':b,'evaluatedRaces':v['evaluatedRaces'],'evaluationErrorCount':v['evaluationErrorCount'],'courses':cs,'allThreeSurfaceAtLeast200Pct':surface,'largestRaceExclusionGatePassed':robust}
+          Path('summary.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({n:{'roi':{c:x['roiPct'] for c,x in d['courses'].items()},'excludeLargest':{c:x['excludeLargestRaceRoiPct'] for c,x in d['courses'].items()},'robust':d['largestRaceExclusionGatePassed']} for n,d in out['models'].items()},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-final-active-rerank-v2-summary
+          path: summary.json
+          retention-days: 30
+      - name: Mark v2 success
+        if: ${{ needs.prepare.result == 'success' && needs.probability.result == 'success' && needs.direct.result == 'success' && needs.distortion.result == 'success' && needs.dynamic_rules.result == 'success' }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/final-active-rerank-v2' -f description='Four source-clean active-reranked ten-year models completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark v2 failure
+        if: ${{ needs.prepare.result != 'success' || needs.probability.result != 'success' || needs.direct.result != 'success' || needs.distortion.result != 'success' || needs.dynamic_rules.result != 'success' }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/final-active-rerank-v2' -f description='Active-rerank v2 requires targeted repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          exit 1
