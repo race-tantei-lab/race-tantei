@@ -15,35 +15,58 @@ permissions:
 
 env:
   GH_TOKEN: ${{ github.token }}
-  DISCOVERY_EVAL_RUN_ID: '31456397337'
+  DISCOVERY_EVAL_WORKFLOW: 'research-evaluate-ml-five-discovery.yml'
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   freeze:
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 300
     steps:
       - name: Mark practical freeze pending
         run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/practical-ml-discovery-winner' -f description='Waiting to freeze result-blind practical discovery winner' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/practical-ml-discovery-winner' -f description='Waiting for latest valid result-blind discovery evaluation' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - name: Compile freezer
         run: python -m py_compile scripts/research-freeze-practical-ml-discovery-winner.py
-      - name: Wait for discovery evaluation artifact
+      - name: Find latest valid discovery evaluation artifact
         run: |
           set -euo pipefail
-          for i in $(seq 1 960); do
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DISCOVERY_EVAL_RUN_ID}/artifacts?per_page=100" > artifacts.json
-            id=$(jq -r '.artifacts[] | select(.name=="research-ml-five-discovery-evaluation" and .expired==false) | .id' artifacts.json | head -n1)
-            if [ -n "$id" ] && [ "$id" != null ]; then break; fi
+          rm -f discovery-artifact-id.txt
+          for attempt in $(seq 1 1200); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${DISCOVERY_EVAL_WORKFLOW}/runs?branch=research%2Ften-year-minimal-rules&per_page=20" > eval-runs.json
+            for rid in $(jq -r '.workflow_runs[] | select(.conclusion != "cancelled") | .id' eval-runs.json); do
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${rid}/artifacts?per_page=100" > eval-artifacts.json || continue
+              id=$(jq -r '.artifacts[] | select(.name=="research-ml-five-discovery-evaluation" and .expired==false) | .id' eval-artifacts.json | head -n1)
+              if [ -z "$id" ] || [ "$id" = null ]; then continue; fi
+              rm -rf candidate-eval; mkdir candidate-eval
+              gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > candidate-eval.zip
+              unzip -q -o candidate-eval.zip -d candidate-eval
+              if python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('candidate-eval/ml-five-discovery-evaluation.json')
+          if not p.exists(): raise SystemExit(1)
+          d=json.loads(p.read_text())
+          gate=d.get('completionHardGate',{})
+          ok=(d.get('discoveryPeriod',{}).get('end')=='2022-12-31' and d.get('holdoutPeriodUntouched',{}).get('start')=='2023-01-01' and d.get('selectedRacesPerCombination')==9190 and gate.get('allCoursesTop50ReturnAndProfitExcludedRoiPctAtLeast')==200.0)
+          raise SystemExit(0 if ok else 1)
+          PY
+              then
+                echo "$id" > discovery-artifact-id.txt
+                echo "$rid" > discovery-eval-run-id.txt
+                break 2
+              fi
+            done
             sleep 15
           done
-          test -n "$id" && test "$id" != null
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > discovery.zip
+          test -s discovery-artifact-id.txt
+          echo "Using discovery evaluation run $(cat discovery-eval-run-id.txt) artifact $(cat discovery-artifact-id.txt)"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$(cat discovery-artifact-id.txt)/zip" > discovery.zip
           mkdir -p input
           unzip -q discovery.zip -d input
           test -s input/ml-five-discovery-evaluation.json
-      - name: Freeze practical winner
+      - name: Freeze practical diagnostic winner and enforce holdout gate
         run: |
           python scripts/research-freeze-practical-ml-discovery-winner.py \
             --input input/ml-five-discovery-evaluation.json \
@@ -61,7 +84,10 @@ jobs:
           assert d['practicalCandidatePool']['candidateCombinations']==8,d
           assert d['holdoutPeriodUntouched']['start']=='2023-01-01',d
           assert d['holdoutPeriodUntouched']['end']=='2026-08-09',d
-          print(json.dumps(w,ensure_ascii=False))
+          assert d['historicalHoldoutMayBeOpened']==w['eligibleForHistoricalHoldout'],d
+          if d['historicalHoldoutMayBeOpened']:
+            assert min(w['top50ExcludedRoiPct'].values())>=200.0,w
+          print(json.dumps({'winner':w,'historicalHoldoutMayBeOpened':d['historicalHoldoutMayBeOpened']},ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -71,8 +97,14 @@ jobs:
       - name: Mark practical freeze success
         if: success()
         run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/practical-ml-discovery-winner' -f description='Practical result-blind discovery winner frozen' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          open=$(jq -r '.historicalHoldoutMayBeOpened' analysis-results/ml-five-discovery-practical-frozen.json)
+          if [ "$open" = true ]; then
+            desc='Practical discovery candidate passed Top50 gate; holdout may be opened'
+          else
+            desc='Practical discovery evaluated; Top50 gate failed so holdout remains closed'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/practical-ml-discovery-winner' -f description="$desc" -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark practical freeze failure
         if: failure()
         run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/practical-ml-discovery-winner' -f description='Practical discovery freeze needs repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/practical-ml-discovery-winner' -f description='Practical discovery evaluation needs repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
