@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-import argparse, importlib.util, json, sys, urllib.parse
+import argparse, importlib.util, json, os, sys, urllib.parse
 from collections import deque
 from pathlib import Path
+
+# The imported production collector reads Cloudflare credentials at import time.
+# Research never calls its D1 write path, but harmless placeholders must exist before import.
+os.environ.setdefault('CLOUDFLARE_ACCOUNT_ID','research-unused')
+os.environ.setdefault('CLOUDFLARE_D1_DATABASE_ID','research-unused')
+os.environ.setdefault('CLOUDFLARE_API_TOKEN','research-unused')
 
 ROOT=Path(__file__).resolve().parents[1]
 CURRENT=ROOT/'scripts'/'collect-current-jra-official-odds.py'
