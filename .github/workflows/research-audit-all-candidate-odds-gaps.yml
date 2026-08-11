@@ -1,0 +1,99 @@
+name: Research audit all candidate odds gaps
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-audit-all-candidate-odds-gaps.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CORRECTED_INPUT_RUN_ID: '31451680037'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Mark candidate audit pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/all-candidate-odds-gap-audit' \
+            -f description='Auditing active-filtered candidate odds across all 14,410 selected races' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download corrected input
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CORRECTED_INPUT_RUN_ID}/artifacts?per_page=100" > a.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-corrected-final-market-inputs" and .expired==false) | .id' a.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > input.zip
+          unzip -q input.zip -d input
+      - name: Scan every frozen selected race without model scoring
+        run: |
+          python - <<'PY'
+          import collections,importlib.util,json
+          from pathlib import Path
+          def load(path,name):
+            s=importlib.util.spec_from_file_location(name,path);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
+          cmod=load(Path('scripts/research-continuous-walkforward-demand.py'),'all_gap_cmod')
+          demand={}
+          for line in Path('input/demand/demand.jsonl').read_text().splitlines():
+            if line.strip():
+              r=json.loads(line);demand[str(r['raceId'])]=r
+          odds={}
+          for p in Path('input/corrected-odds').glob('*.jsonl'):
+            for line in p.read_text().splitlines():
+              if line.strip():
+                r=json.loads(line);odds[str(r['raceId'])]=r
+          assert len(demand)==14410 and len(odds)==14410,(len(demand),len(odds))
+          state={'horse_hist':collections.defaultdict(lambda:collections.deque(maxlen=3)),'horse_starts':collections.Counter(),'jstats':collections.defaultdict(lambda:[0,0]),'tstats':collections.defaultdict(lambda:[0,0])}
+          cur=None;day=[];seen=set();gaps=[];too_few=[]
+          def process(date,bundles):
+            for b in bundles:
+              rid=str(b['race']['raceId'])
+              if rid not in demand:continue
+              seen.add(rid)
+              active={int(x) for x in (odds[rid].get('horses') or [])}
+              raw=cmod.candidate_rows(state,b)
+              raw=[t for t in raw if all(int(h) in active for h in t['horses'])]
+              missing=[]
+              for t in raw:
+                val=(odds[rid].get('officialOdds',{}).get(t['market']) or {}).get(t['combo'])
+                if val is None:missing.append({'betType':t['betType'],'market':t['market'],'combo':t['combo'],'horses':t['horses']})
+              if missing:gaps.append({'raceId':rid,'raceDate':date,'venue':b['race']['venue'],'raceNo':b['race']['raceNo'],'activeHorses':sorted(active),'candidateCount':len(raw),'missing':missing})
+              if len(raw)<3 or len({t['bt'] for t in raw})<2:too_few.append({'raceId':rid,'candidateCount':len(raw),'betTypes':sorted({t['betType'] for t in raw})})
+            cmod.dmod.update_state_for_date(state,bundles)
+          with Path('input/history/ten-year-history-corpus.jsonl').open() as fh:
+            for line in fh:
+              if not line.strip():continue
+              b=json.loads(line);date=str(b['race']['raceDate'])
+              if cur is None:cur=date
+              if date!=cur:process(cur,day);day=[];cur=date
+              day.append(b)
+          if cur:process(cur,day)
+          result={'selected':len(demand),'seen':len(seen),'candidateGapRaceCount':len(gaps),'candidateGapCount':sum(len(x['missing']) for x in gaps),'candidateGaps':gaps,'tooFewRaceCount':len(too_few),'tooFew':too_few}
+          Path('candidate-odds-gap-audit.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({'selected':len(demand),'seen':len(seen),'gapRaces':len(gaps),'gapCount':result['candidateGapCount'],'tooFew':len(too_few),'gaps':gaps[:10]},ensure_ascii=False))
+          assert len(seen)==14410,result
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-all-candidate-odds-gap-audit
+          path: candidate-odds-gap-audit.json
+          retention-days: 14
+      - name: Mark audit success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/all-candidate-odds-gap-audit' \
+            -f description='All selected-race candidate odds gaps enumerated' -f target_url="$STATUS_TARGET_URL" >/dev/null
