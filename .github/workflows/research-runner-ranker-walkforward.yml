@@ -73,9 +73,13 @@ jobs:
         with:
           name: research-runner-ranker-shared-input
           path: input
+      - name: Verify downloaded artifact layout
+        run: |
+          test -s input/shared/runner-ml-features.csv
+          test -s input/shared-demand/demand.jsonl
       - name: Train and predict ${{ matrix.year }} with past-only data
         run: |
-          python scripts/research-train-runner-ranker-year.py --features input/runner-ml-features.csv --demand input/demand.jsonl --year '${{ matrix.year }}' --out analysis-results/runner-ranker-${{ matrix.year }}.jsonl --meta analysis-results/runner-ranker-${{ matrix.year }}-meta.json
+          python scripts/research-train-runner-ranker-year.py --features input/shared/runner-ml-features.csv --demand input/shared-demand/demand.jsonl --year '${{ matrix.year }}' --out analysis-results/runner-ranker-${{ matrix.year }}.jsonl --meta analysis-results/runner-ranker-${{ matrix.year }}-meta.json
       - name: Verify fold chronology
         env:
           YEAR: ${{ matrix.year }}
