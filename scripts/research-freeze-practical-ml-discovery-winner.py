@@ -7,7 +7,7 @@ COURSES=('light','standard','premium')
 
 def rank_key(x):
     return (
-        min(x['courses'][c]['top50ExcludedRoiPct'] for c in COURSES),
+        min(x['courses'][c]['top50RobustRoiPct'] for c in COURSES),
         min(x['courses'][c]['top100ExcludedRoiPct'] for c in COURSES),
         min(x['courses'][c]['top1PctExcludedRoiPct'] for c in COURSES),
         min(x['courses'][c]['roiPct'] for c in COURSES),
@@ -20,22 +20,32 @@ def main():
     practical={k:v for k,v in combos.items() if v['selector'] in PRACTICAL_SELECTORS and not v.get('selectorUsesHistoricalFinalPopularity',False)}
     if len(practical)!=8:raise RuntimeError(f'PRACTICAL_COMBO_COUNT_INVALID:{len(practical)}')
     key=max(practical,key=lambda k:(rank_key(practical[k]),k));w=practical[key]
-    top50={c:w['courses'][c]['top50ExcludedRoiPct'] for c in COURSES}
+    top50_return={c:w['courses'][c]['top50ReturnExcludedRoiPct'] for c in COURSES}
+    top50_profit={c:w['courses'][c]['top50ProfitExcludedRoiPct'] for c in COURSES}
+    top50_robust={c:w['courses'][c]['top50RobustRoiPct'] for c in COURSES}
     top100={c:w['courses'][c]['top100ExcludedRoiPct'] for c in COURSES}
     top1pct={c:w['courses'][c]['top1PctExcludedRoiPct'] for c in COURSES}
     overall={c:w['courses'][c]['roiPct'] for c in COURSES}
     practical_winner={
       'key':key,'selector':w['selector'],'template':w['template'],
-      'top50ExcludedRoiPct':top50,'top100ExcludedRoiPct':top100,'top1PctExcludedRoiPct':top1pct,'overallRoiPct':overall,
-      'minTop50ExcludedRoiPct':min(top50.values()),'minTop100ExcludedRoiPct':min(top100.values()),'minTop1PctExcludedRoiPct':min(top1pct.values()),'minOverallRoiPct':min(overall.values()),
+      'top50ExcludedRoiPct':top50_return,
+      'top50ReturnExcludedRoiPct':top50_return,
+      'top50ProfitExcludedRoiPct':top50_profit,
+      'top50RobustRoiPct':top50_robust,
+      'top100ExcludedRoiPct':top100,'top1PctExcludedRoiPct':top1pct,'overallRoiPct':overall,
+      'minTop50ExcludedRoiPct':min(top50_return.values()),
+      'minTop50ReturnExcludedRoiPct':min(top50_return.values()),
+      'minTop50ProfitExcludedRoiPct':min(top50_profit.values()),
+      'minTop50RobustRoiPct':min(top50_robust.values()),
+      'minTop100ExcludedRoiPct':min(top100.values()),'minTop1PctExcludedRoiPct':min(top1pct.values()),'minOverallRoiPct':min(overall.values()),
       'historicalFinalPopularityUsedForSelection':False,
-      'eligibleForHistoricalHoldout':all(v>=200.0 for v in top50.values()),
-      'holdoutEligibilityRule':'all three courses must have Top50-excluded ROI >= 200% on 2016-2022 discovery',
+      'eligibleForHistoricalHoldout':all(v>=200.0 for v in top50_robust.values()),
+      'holdoutEligibilityRule':'all three courses must have both Top50-return-excluded and Top50-profit-excluded ROI >= 200% on 2016-2022 discovery',
     }
     d['practicalCandidatePool']={'selectors':sorted(PRACTICAL_SELECTORS),'candidateCombinations':len(practical),'historicalFinalPopularityAllowed':False}
     d['practicalDiscoveryWinner']=practical_winner
     d['historicalHoldoutMayBeOpened']=practical_winner['eligibleForHistoricalHoldout']
-    d['historicalHoldoutOpeningPolicy']='Do not fetch or evaluate 2023-2026 for this candidate unless practicalDiscoveryWinner is eligibleForHistoricalHoldout.'
+    d['historicalHoldoutOpeningPolicy']='Do not fetch or evaluate 2023-2026 for this candidate unless all three courses pass both Top50 return-exclusion and Top50 profit-exclusion gates on 2016-2022 discovery.'
     Path(a.out).parent.mkdir(parents=True,exist_ok=True);Path(a.out).write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     print(json.dumps(practical_winner,ensure_ascii=False),flush=True)
 if __name__=='__main__':main()
