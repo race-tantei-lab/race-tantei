@@ -11,6 +11,7 @@ DISCOVERY_MAX_YEAR=2022
 # Retrigger marker 2026-08-11: no logic change.
 # Strict v3 trigger: reuse audited meta official odds through 2022 before fetching the remainder.
 # v3 workflow is now present; this touch intentionally emits its push event without changing logic.
+# Rate-limit-safe v2 trigger: all reusable artifact IDs are now fixed, with no polling.
 def read_ids(path,max_year):
     rows=[]
     for line in Path(path).read_text(encoding='utf-8').splitlines():
