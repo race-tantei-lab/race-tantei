@@ -1,0 +1,224 @@
+name: Research meta-selected official odds
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-meta-five-race-official-odds.yml"
+      - "scripts/research-prepare-meta-market-input.py"
+      - "scripts/research-merge-meta-market-odds.py"
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  META_SELECTION_ARTIFACT_ID: '9087909783'
+  SOURCE_CLEAN_ARTIFACT_ID: '9086766461'
+  CANONICAL_ODDS_RUN_ID: '31373205723'
+  ALL_RACE_RUN_ID: '31455507850'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Mark official odds preparation pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/meta-five-race-official-odds' -f description='Auditing reusable odds and preparing only missing meta-selected races' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile preparation and merge scripts
+        run: python -m py_compile scripts/research-prepare-meta-market-input.py scripts/research-merge-meta-market-odds.py scripts/research-fetch-demanded-official-odds.py
+      - name: Download meta selection and source-clean corpus
+        run: |
+          set -euo pipefail
+          mkdir -p input/selection input/source input/canonical input/predictions analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${META_SELECTION_ARTIFACT_ID}/zip" > selection.zip
+          unzip -q selection.zip -d input/selection
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_CLEAN_ARTIFACT_ID}/zip" > source.zip
+          unzip -q source.zip 'corrected-odds/*.jsonl' 'history/ten-year-history-corpus.jsonl' -d input/source
+          test -s input/selection/meta-five-race-demand.jsonl
+          test -s input/source/history/ten-year-history-corpus.jsonl
+      - name: Download canonical odds reuse shards
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANONICAL_ODDS_RUN_ID}/artifacts?per_page=100" > canonical-artifacts.json
+          for y in $(seq 2016 2026); do
+            name="research-demanded-odds-${y}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' canonical-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "canonical-${y}.zip"
+            unzip -q "canonical-${y}.zip" -d input/canonical
+          done
+      - name: Download all-race OOS predictions
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ALL_RACE_RUN_ID}/artifacts?per_page=100" > ranker-artifacts.json
+          for y in $(seq 2016 2026); do
+            name="research-all-race-ranker-${y}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' ranker-artifacts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "ranker-${y}.zip"
+            unzip -q "ranker-${y}.zip" -d input/predictions
+          done
+      - name: Build audited reuse and missing-race demand
+        run: |
+          python scripts/research-prepare-meta-market-input.py \
+            --selection input/selection/meta-five-race-demand.jsonl \
+            --history input/source/history/ten-year-history-corpus.jsonl \
+            --continuous-odds-dir input/source/corrected-odds \
+            --canonical-odds-dir input/canonical \
+            --predictions-dir input/predictions \
+            --reused-out analysis-results/reused-odds.jsonl \
+            --missing-out analysis-results/missing-demand.jsonl \
+            --history-out analysis-results/selected-history.jsonl \
+            --predictions-out analysis-results/selected-predictions.jsonl \
+            --meta analysis-results/meta-market-input-meta.json
+          cp input/selection/meta-five-race-demand.jsonl analysis-results/meta-five-race-demand.jsonl
+      - name: Verify reuse reduction and reconstruction safety
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/meta-market-input-meta.json').read_text())
+          assert m['selectedRaces']==14410,m
+          assert m['reusedOddsRaces']+m['missingOddsRaces']==14410,m
+          assert m['reusedOddsRaces']>=9500,m
+          assert m['missingOddsRaces']<=4900,m
+          assert m['allMissingResultUrlsReconstructedFromRaceIdentity'] is True,m
+          assert m['selectedPredictionRaces']==14410,m
+          assert m['selectedHistoryRaces']==14410,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          print(json.dumps(m,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-meta-market-fetch-demand
+          path: |
+            analysis-results/missing-demand.jsonl
+            analysis-results/meta-market-input-meta.json
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-meta-market-reuse-input
+          path: |
+            analysis-results/reused-odds.jsonl
+            analysis-results/selected-history.jsonl
+            analysis-results/selected-predictions.jsonl
+            analysis-results/meta-five-race-demand.jsonl
+            analysis-results/meta-market-input-meta.json
+          retention-days: 30
+          compression-level: 9
+
+  fetch:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        year: ['2016','2017','2018','2019','2020','2021','2022','2023','2024','2025','2026']
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install parser runtime
+        run: pip install --disable-pip-version-check --quiet beautifulsoup4==4.13.4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-meta-market-fetch-demand
+          path: input
+      - name: Fetch only missing official odds for year
+        run: |
+          python scripts/research-fetch-demanded-official-odds.py \
+            --input input/missing-demand.jsonl \
+            --year '${{ matrix.year }}' \
+            --workers 3 \
+            --out analysis-results/research-meta-fetched-odds-${{ matrix.year }}.jsonl \
+            --meta analysis-results/research-meta-fetched-odds-${{ matrix.year }}-meta.json
+      - name: Verify zero fetch failures
+        run: |
+          python - <<'PY'
+          import json,glob
+          p=glob.glob('analysis-results/*-meta.json')[0];m=json.load(open(p))
+          assert not m['failures'],m['failures'][:10]
+          assert m['completedRaces']==m['inputDemandRaces'],m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          print(json.dumps({'year':m['year'],'demand':m['inputDemandRaces'],'completed':m['completedRaces'],'coverage':m['coverage']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: research-meta-fetched-odds-${{ matrix.year }}
+          path: |
+            analysis-results/research-meta-fetched-odds-${{ matrix.year }}.jsonl
+            analysis-results/research-meta-fetched-odds-${{ matrix.year }}-meta.json
+          retention-days: 30
+
+  merge:
+    if: always()
+    needs: [prepare, fetch]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-meta-market-reuse-input
+          path: input/reuse
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: research-meta-fetched-odds-20*
+          path: input/fetched
+          merge-multiple: true
+      - name: Merge and audit exact 14,410 race official odds corpus
+        run: |
+          python scripts/research-merge-meta-market-odds.py \
+            --selection input/reuse/meta-five-race-demand.jsonl \
+            --reused input/reuse/reused-odds.jsonl \
+            --fetched-dir input/fetched \
+            --out-dir analysis-results/meta-market-odds \
+            --meta analysis-results/meta-market-odds-meta.json
+      - name: Require exact source-clean completion
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/meta-market-odds-meta.json').read_text())
+          assert m['mergedOddsRaces']==14410,m
+          assert not m['missingRaceIds'],m['missingRaceIds'][:20]
+          assert not m['identityMismatchRows'],m['identityMismatchRows'][:20]
+          assert not m['syntheticOddsRaceIds'],m['syntheticOddsRaceIds'][:20]
+          assert m['productionDatabaseWritten'] is False,m
+          print(json.dumps({'merged':m['mergedOddsRaces'],'sources':m['sourceCounts'],'byYear':m['byYear']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-meta-market-source-clean
+          path: |
+            analysis-results/meta-market-odds/*.jsonl
+            analysis-results/meta-market-odds-meta.json
+          retention-days: 30
+          compression-level: 9
+      - name: Mark official odds success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/meta-five-race-official-odds' -f description='Meta-selected 14,410 race official odds corpus source-audited' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark official odds failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/meta-five-race-official-odds' -f description='Meta-selected official odds requires targeted repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
