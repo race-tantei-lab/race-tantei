@@ -1,0 +1,29 @@
+name: Research stop meta holdout fetches
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-stop-meta-after-2022.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  stop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel meta run after 2016-2022 artifacts are complete
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/31456971683/artifacts?per_page=100" > arts.json
+          for y in 2016 2017 2018 2019 2020 2021 2022; do
+            n=$(jq -r --arg n "research-meta-fetched-odds-${y}" '[.artifacts[] | select(.name==$n and .expired==false)] | length' arts.json)
+            test "$n" -eq 1
+          done
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/31456971683/cancel" >/dev/null 2>&1 || true
+          echo 'Meta 2016-2022 artifacts preserved; unused 2023-2026 jobs cancelled.'
