@@ -1,0 +1,109 @@
+name: Research refetch mismatched current odds
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-refetch-mismatched-current-odds.yml"
+      - "scripts/research-refetch-current-entry-official-odds.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  AUDIT_RUN_ID: '31451069757'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  refetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Mark refetch pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/mismatched-current-odds-refetch' \
+            -f description='Refetching three source-identity mismatches from verified JRA entry routes' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download history and identity audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history audit analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${AUDIT_RUN_ID}/artifacts?per_page=100" > audit-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-official-odds-identity-audit" and .expired==false) | .id' audit-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > audit.zip
+          unzip -q audit.zip -d audit
+      - name: Build targets strictly from audited mismatch ids
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          audit=json.loads(Path('audit/research-official-odds-identity-audit.json').read_text())
+          ids={str(x['raceId']) for x in audit['resultUrlMismatches']}
+          assert len(ids)==3,ids
+          rows=[]
+          for line in Path('history/ten-year-history-corpus.jsonl').read_text().splitlines():
+            if not line.strip(): continue
+            race=json.loads(line)['race']
+            if str(race.get('raceId')) in ids:
+              rows.append({k:race.get(k) for k in ('raceId','raceDate','venue','raceNo','entryUrl','resultUrl')})
+          assert {r['raceId'] for r in rows}==ids,(ids,rows)
+          assert all(r['entryUrl'] for r in rows),rows
+          Path('analysis-results/mismatch-targets.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in rows))
+          print(json.dumps({'targets':rows},ensure_ascii=False))
+          PY
+      - name: Refetch all six markets through correct entry routes
+        run: |
+          python scripts/research-refetch-current-entry-official-odds.py \
+            --targets analysis-results/mismatch-targets.jsonl \
+            --out analysis-results/research-mismatched-current-odds-refetch.jsonl \
+            --meta analysis-results/research-mismatched-current-odds-refetch-meta.json
+      - name: Verify exactly three identity-checked replacements
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          rows=[json.loads(x) for x in Path('analysis-results/research-mismatched-current-odds-refetch.jsonl').read_text().splitlines() if x.strip()]
+          meta=json.loads(Path('analysis-results/research-mismatched-current-odds-refetch-meta.json').read_text())
+          assert len(rows)==3,rows
+          assert meta['completedRaces']==3 and not meta['failures'],meta
+          assert all(r['provenance']['officialPageIdentityVerified'] is True for r in rows)
+          assert all(r['provenance']['syntheticOddsUsed'] is False for r in rows)
+          assert all(set(r['officialOdds'])=={'win','umaren','wide','umatan','trio','trifecta'} for r in rows)
+          print(json.dumps({'raceIds':[r['raceId'] for r in rows],'horseCounts':{r['raceId']:len(r['horses']) for r in rows}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-mismatched-current-odds-refetch
+          path: |
+            analysis-results/mismatch-targets.jsonl
+            analysis-results/research-mismatched-current-odds-refetch.jsonl
+            analysis-results/research-mismatched-current-odds-refetch-meta.json
+          retention-days: 30
+      - name: Mark refetch success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/mismatched-current-odds-refetch' \
+            -f description='Three source-identity mismatches refetched and page-identity verified' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark refetch failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/mismatched-current-odds-refetch' \
+            -f description='Current entry-route mismatch repair needs targeted fix' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
