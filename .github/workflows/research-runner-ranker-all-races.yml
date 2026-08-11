@@ -57,7 +57,7 @@ jobs:
           path: input
       - name: Train and predict all races
         run: |
-          python scripts/research-train-runner-ranker-all-year.py --features input/shared/runner-ml-features.csv --year '${{ matrix.year }}' --out analysis-results/all-race-ranker-${{ matrix.year }}.jsonl --meta analysis-results/all-race-ranker-${{ matrix.year }}-meta.json
+          python scripts/research-train-runner-ranker-all-year.py --features input/runner-ml-features.csv --year '${{ matrix.year }}' --out analysis-results/all-race-ranker-${{ matrix.year }}.jsonl --meta analysis-results/all-race-ranker-${{ matrix.year }}-meta.json
       - name: Verify chronology
         run: |
           python - <<'PY'
