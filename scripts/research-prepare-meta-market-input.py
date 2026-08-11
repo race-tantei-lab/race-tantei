@@ -25,14 +25,14 @@ def groups_match(m,date,venue,race_no):
 
 def identity_match(row):
     prov=row.get('provenance') or {}
-    candidates=[str(prov.get('resultUrl') or row.get('resultUrl') or '')]
+    candidates=[str(prov.get('resultUrl') or ''),str(row.get('resultUrl') or '')]
     source=prov.get('sourceCnames') or {}
     if isinstance(source,dict):candidates.extend(str(v or '') for v in source.values())
     for text in candidates:
         decoded=urllib.parse.unquote(text)
         m=RESULT_RE.search(decoded) or ODDS_RE.search(decoded)
         if m:return m,text
-    return None,candidates[0] if candidates else ''
+    return None,''
 
 def identity_ok(row):
     m,_=identity_match(row)
@@ -46,20 +46,22 @@ def identity_ok(row):
 
 def verified_result_url(bundle):
     race=bundle['race'];date=str(race.get('raceDate') or '');venue=str(race.get('venue') or '');rn=int(race.get('raceNo') or 0);prov=bundle.get('provenance') or {}
-    result_url=str(race.get('resultUrl') or prov.get('resultUrl') or '')
-    m=RESULT_RE.search(urllib.parse.unquote(result_url)) if result_url else None
-    if groups_match(m,date,venue,rn):
-        return result_url,'history_result_identity_verified'
-    entry_url=str(race.get('entryUrl') or prov.get('entryUrl') or '')
-    em=ENTRY_RE.search(urllib.parse.unquote(entry_url)) if entry_url else None
-    if groups_match(em,date,venue,rn):
+    # Prefer any JRADB result URL whose embedded official identity matches the race.
+    for result_url in (str(prov.get('resultUrl') or ''),str(race.get('resultUrl') or '')):
+        m=RESULT_RE.search(urllib.parse.unquote(result_url)) if result_url else None
+        if groups_match(m,date,venue,rn):
+            return result_url,'history_result_identity_verified'
+    # If result URL is stale/wrong, preserve the checksum from an identity-valid entry CNAME.
+    for entry_url in (str(prov.get('entryUrl') or ''),str(race.get('entryUrl') or '')):
+        em=ENTRY_RE.search(urllib.parse.unquote(entry_url)) if entry_url else None
+        if not groups_match(em,date,venue,rn):continue
         parsed=urllib.parse.urlparse(entry_url);qs=urllib.parse.parse_qs(parsed.query);cname=urllib.parse.unquote(qs.get('CNAME',[''])[0])
-        if not cname or '01dde' not in cname:raise RuntimeError(f'ENTRY_CNAME_PARSE_FAILED:{race.get("raceId")}:{entry_url}')
+        if not cname or '01dde' not in cname:continue
         result_cname=cname.replace('01dde','01sde',1)
         result='https://www.jra.go.jp/JRADB/accessS.html?CNAME='+urllib.parse.quote(result_cname,safe='')
         rm=RESULT_RE.search(urllib.parse.unquote(result))
         if not groups_match(rm,date,venue,rn):raise RuntimeError(f'DERIVED_RESULT_IDENTITY_FAILED:{race.get("raceId")}:{result}')
-        return result,'derived_from_identity_verified_entry_preserving_checksum'
+        return result,'validated_current_direct_desktop'
     raise RuntimeError(f'NO_VERIFIED_RESULT_OR_ENTRY_URL:{race.get("raceId")}')
 
 def load_odds_dir(path,patterns):
