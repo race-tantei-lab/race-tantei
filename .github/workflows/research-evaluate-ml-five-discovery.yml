@@ -28,24 +28,26 @@ env:
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
-  prepare:
+  evaluate:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 300
     steps:
       - name: Mark discovery pending
         run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/ml-five-discovery-eval' -f description='Preparing exact 2016-2022 discovery; 2023-2026 untouched' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/ml-five-discovery-eval' -f description='Running strict 2016-2022 discovery; 2023-2026 untouched' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Compile research scripts
+      - name: Install parser runtime
+        run: pip install --disable-pip-version-check --quiet beautifulsoup4==4.13.4
+      - name: Compile scripts
         run: |
           python -m py_compile scripts/research-build-ml-discovery-odds-demand.py scripts/research-fetch-demanded-official-odds.py scripts/research-evaluate-ml-five-discovery.py scripts/research-freeze-practical-ml-discovery-winner.py
-      - name: Build exact missing official odds demand
+      - name: Download fixed research inputs
         run: |
           set -euo pipefail
-          mkdir -p input/selections input/source input/existing-odds analysis-results
+          mkdir -p input/selections input/source input/existing-odds input/new-odds input/predictions analysis-results
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SELECTION_ARTIFACT_ID}/zip" > selections.zip
           unzip -q selections.zip -d input/selections
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_INPUT_ARTIFACT_ID}/zip" > source.zip
@@ -58,6 +60,8 @@ jobs:
             gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "canonical-${y}.zip"
             unzip -q "canonical-${y}.zip" "research-demanded-odds-${y}.jsonl" -d input/existing-odds
           done
+      - name: Build and verify exact missing demand
+        run: |
           python scripts/research-build-ml-discovery-odds-demand.py \
             --selections-dir input/selections/ml-five-selections \
             --existing-odds-dir input/existing-odds \
@@ -65,8 +69,6 @@ jobs:
             --max-year 2022 \
             --out analysis-results/ml-discovery-odds-demand.jsonl \
             --meta analysis-results/ml-discovery-odds-demand-meta.json
-      - name: Verify discovery boundary and demand
-        run: |
           python - <<'PY'
           import json
           m=json.load(open('analysis-results/ml-discovery-odds-demand-meta.json'))
@@ -82,91 +84,28 @@ jobs:
           assert m['productionDatabaseWritten'] is False,m
           print(json.dumps(m,ensure_ascii=False))
           PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: research-ml-discovery-strict-demand
-          path: |
-            analysis-results/ml-discovery-odds-demand.jsonl
-            analysis-results/ml-discovery-odds-demand-meta.json
-          retention-days: 30
-
-  fetch:
-    needs: prepare
-    strategy:
-      fail-fast: false
-      max-parallel: 3
-      matrix:
-        year: ['2016','2017','2018','2019','2020','2021','2022']
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install parser runtime
-        run: pip install --disable-pip-version-check --quiet beautifulsoup4==4.13.4
-      - uses: actions/download-artifact@v4
-        with:
-          name: research-ml-discovery-strict-demand
-          path: input
-      - name: Fetch official six-market odds
+      - name: Fetch all 5978 missing official six-market races
         run: |
           python scripts/research-fetch-demanded-official-odds.py \
-            --input input/ml-discovery-odds-demand.jsonl \
-            --out analysis-results/ml-discovery-odds-${{ matrix.year }}.jsonl \
-            --meta analysis-results/ml-discovery-odds-${{ matrix.year }}-meta.json \
-            --year '${{ matrix.year }}' \
-            --workers 4
-      - name: Require exact success
-        env:
-          YEAR: ${{ matrix.year }}
+            --input analysis-results/ml-discovery-odds-demand.jsonl \
+            --out input/new-odds/ml-discovery-odds-all.jsonl \
+            --meta analysis-results/ml-discovery-odds-all-meta.json \
+            --workers 8
+      - name: Require zero fetch failures and exact count
         run: |
           python - <<'PY'
-          import json,os
-          y=os.environ['YEAR']
-          expected=sum(1 for line in open('input/ml-discovery-odds-demand.jsonl') if line.strip() and str(json.loads(line)['raceDate']).startswith(y+'-'))
-          actual=sum(1 for line in open(f'analysis-results/ml-discovery-odds-{y}.jsonl') if line.strip())
-          m=json.load(open(f'analysis-results/ml-discovery-odds-{y}-meta.json'))
-          assert actual==expected,(y,actual,expected)
+          import json
+          m=json.load(open('analysis-results/ml-discovery-odds-all-meta.json'))
+          actual=sum(1 for line in open('input/new-odds/ml-discovery-odds-all.jsonl') if line.strip())
+          assert actual==5978,actual
           assert not m.get('failures'),m.get('failures')
           assert m.get('syntheticOddsUsed') is False,m
           assert m.get('productionDatabaseWritten') is False,m
-          print(json.dumps({'year':y,'expected':expected,'actual':actual,'coverage':m.get('coverage')},ensure_ascii=False))
+          print(json.dumps({'actual':actual,'coverage':m.get('coverage')},ensure_ascii=False))
           PY
-      - uses: actions/upload-artifact@v4
-        with:
-          name: research-ml-discovery-strict-odds-${{ matrix.year }}
-          path: |
-            analysis-results/ml-discovery-odds-${{ matrix.year }}.jsonl
-            analysis-results/ml-discovery-odds-${{ matrix.year }}-meta.json
-          retention-days: 30
-
-  evaluate:
-    needs: fetch
-    runs-on: ubuntu-latest
-    timeout-minutes: 150
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Download fixed discovery inputs
+      - name: Download all-race OOS predictions only after odds are complete
         run: |
           set -euo pipefail
-          mkdir -p input/selections input/source input/existing-odds input/new-odds input/predictions
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SELECTION_ARTIFACT_ID}/zip" > selections.zip
-          unzip -q selections.zip -d input/selections
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_INPUT_ARTIFACT_ID}/zip" > source.zip
-          unzip -q source.zip 'corrected-odds/*.jsonl' 'history/ten-year-history-corpus.jsonl' -d input/source
-          cp input/source/corrected-odds/*.jsonl input/existing-odds/
-          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANONICAL_ODDS_RUN_ID}/artifacts?per_page=100" > canonical.json
-          for y in $(seq 2016 2022); do
-            id=$(jq -r --arg n "research-demanded-odds-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' canonical.json | head -n1)
-            test -n "$id" && test "$id" != null
-            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "canonical-${y}.zip"
-            unzip -q "canonical-${y}.zip" "research-demanded-odds-${y}.jsonl" -d input/existing-odds
-          done
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ALL_RACE_RUN_ID}/artifacts?per_page=100" > ranker.json
           for y in $(seq 2016 2026); do
             id=$(jq -r --arg n "research-all-race-ranker-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' ranker.json | head -n1)
@@ -174,12 +113,7 @@ jobs:
             gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "ranker-${y}.zip"
             unzip -q "ranker-${y}.zip" -d input/predictions
           done
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: research-ml-discovery-strict-odds-20*
-          path: input/new-odds
-          merge-multiple: true
-      - name: Evaluate 16 fixed combinations
+      - name: Evaluate all 16 fixed combinations
         run: |
           python scripts/research-evaluate-ml-five-discovery.py \
             --predictions-dir input/predictions \
@@ -188,13 +122,11 @@ jobs:
             --new-odds-dir input/new-odds \
             --history input/source/history/ten-year-history-corpus.jsonl \
             --out analysis-results/ml-five-discovery-evaluation.json
-      - name: Freeze practical diagnostic candidate
+      - name: Freeze practical diagnostic candidate and enforce Top50 gate
         run: |
           python scripts/research-freeze-practical-ml-discovery-winner.py \
             --input analysis-results/ml-five-discovery-evaluation.json \
             --out analysis-results/ml-five-discovery-practical-frozen.json
-      - name: Enforce Top50 gate and untouched holdout
-        run: |
           python - <<'PY'
           import json
           d=json.load(open('analysis-results/ml-five-discovery-evaluation.json'))
@@ -213,6 +145,8 @@ jobs:
         with:
           name: research-ml-five-discovery-evaluation
           path: |
+            analysis-results/ml-discovery-odds-demand-meta.json
+            analysis-results/ml-discovery-odds-all-meta.json
             analysis-results/ml-five-discovery-evaluation.json
             analysis-results/ml-five-discovery-practical-frozen.json
           retention-days: 30
