@@ -7,7 +7,7 @@ MARKET_SET=set(MARKETS)
 VARIANTS=('confidence','concentration','disagreement','hybrid')
 DISCOVERY_MAX_YEAR=2022
 
-# Deterministic research demand builder; this marker only retriggers the audited odds workflow.
+# Deterministic research demand builder; marker v2 starts the self-contained strict pipeline.
 def read_ids(path,max_year):
     rows=[]
     for line in Path(path).read_text(encoding='utf-8').splitlines():
