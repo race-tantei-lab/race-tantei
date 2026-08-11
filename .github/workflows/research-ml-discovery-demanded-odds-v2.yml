@@ -163,3 +163,5 @@ jobs:
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/ml-discovery-odds-v2' -f description='Targeted repair required' -f target_url="$STATUS_TARGET_URL" >/dev/null
           exit 1
+
+# retriggered 2026-08-11 strict discovery acquisition
