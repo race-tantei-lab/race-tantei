@@ -1,0 +1,103 @@
+name: Research all-race runner ranker
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-runner-ranker-all-races.yml"
+      - "scripts/research-train-runner-ranker-all-year.py"
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  FEATURE_ARTIFACT_ID: '9087261097'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download feature corpus
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${FEATURE_ARTIFACT_ID}/zip" > features.zip
+          unzip -q features.zip -d shared
+          test -s shared/runner-ml-features.csv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-all-race-ranker-shared-input
+          path: shared/runner-ml-features.csv
+          retention-days: 14
+
+  year:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        year: ['2016','2017','2018','2019','2020','2021','2022','2023','2024','2025','2026']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check --quiet lightgbm==4.6.0 scikit-learn==1.7.1 pandas==2.3.1 numpy==2.2.6
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-all-race-ranker-shared-input
+          path: input
+      - name: Train and predict all races
+        run: |
+          python scripts/research-train-runner-ranker-all-year.py --features input/shared/runner-ml-features.csv --year '${{ matrix.year }}' --out analysis-results/all-race-ranker-${{ matrix.year }}.jsonl --meta analysis-results/all-race-ranker-${{ matrix.year }}-meta.json
+      - name: Verify chronology
+        run: |
+          python - <<'PY'
+          import json,glob
+          p=glob.glob('analysis-results/*-meta.json')[0];m=json.load(open(p))
+          assert m['futureRowsUsedForTraining'] is False
+          assert m['sameDayRowsUsedForTraining'] is False
+          assert m['targetRaceResultUsedForPrediction'] is False
+          assert m['syntheticDataUsed'] is False
+          assert m['productionDatabaseWritten'] is False
+          print(json.dumps({'year':m['year'],'races':m['predictionRaces'],'metrics':m['metrics']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-all-race-ranker-${{ matrix.year }}
+          path: |
+            analysis-results/all-race-ranker-${{ matrix.year }}.jsonl
+            analysis-results/all-race-ranker-${{ matrix.year }}-meta.json
+          retention-days: 30
+
+  summarize:
+    needs: year
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: research-all-race-ranker-20*
+          path: folds
+          merge-multiple: true
+      - name: Verify total race coverage
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          ms=[json.loads(p.read_text()) for p in Path('folds').glob('*-meta.json')]
+          assert len(ms)==11,len(ms)
+          total=sum(m['predictionRaces'] for m in ms)
+          assert total>34000,total
+          out={'predictionRaces':total,'years':{str(m['year']):m['predictionRaces'] for m in ms},'futureRowsUsedForTraining':False,'sameDayRowsUsedForTraining':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+          Path('all-race-summary.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(out,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-all-race-ranker-summary
+          path: all-race-summary.json
+          retention-days: 30
