@@ -1,0 +1,68 @@
+{
+  "modelVersion": "v16",
+  "constraintVersion": "race-tantei-fixed-v12",
+  "status": "PASS",
+  "frozenArchive": {
+    "startDate": "2024-05-04",
+    "endDate": "2026-08-02",
+    "raceCount": 7695,
+    "venueDays": 642,
+    "selectedRaces": 3210,
+    "selectedPerVenueDay": 5
+  },
+  "courses": {
+    "light": {
+      "budgetYenPerRace": 2000,
+      "stakeYen": 6420000,
+      "payoutYen": 109335500,
+      "roiPct": 1703.045171339564,
+      "roiPctAfterMaxPayoutRaceRemoval": 1659.677469616703
+    },
+    "standard": {
+      "budgetYenPerRace": 5000,
+      "stakeYen": 16050000,
+      "payoutYen": 273338750,
+      "roiPct": 1703.045171339564,
+      "roiPctAfterMaxPayoutRaceRemoval": 1659.677469616703
+    },
+    "premium": {
+      "budgetYenPerRace": 10000,
+      "stakeYen": 32100000,
+      "payoutYen": 546677500,
+      "roiPct": 1703.045171339564,
+      "roiPctAfterMaxPayoutRaceRemoval": 1659.677469616703
+    }
+  },
+  "seasonBalancedSlices": {
+    "0": {"races": 735, "roiPct": 2249.9659863945576, "roiPctAfterMaxPayoutRaceRemoval": 2080.4700272479563},
+    "1": {"races": 725, "roiPct": 1459.9310344827586, "roiPctAfterMaxPayoutRaceRemoval": 1267.3756906077347},
+    "2": {"races": 695, "roiPct": 1773.510791366907, "roiPctAfterMaxPayoutRaceRemoval": 1591.721902017291},
+    "3": {"races": 595, "roiPct": 1451.966386554622, "roiPctAfterMaxPayoutRaceRemoval": 1246.7255892255894},
+    "4": {"races": 460, "roiPct": 1430.6304347826087, "roiPctAfterMaxPayoutRaceRemoval": 1250.664488017429}
+  },
+  "extraTopOnePercentPayoutRemovalStressTest": {
+    "fullRoiPct": 1038.2310355681461,
+    "slice0RoiPct": 1538.191196698762,
+    "slice1RoiPct": 827.426778242678,
+    "slice2RoiPct": 1049.6293604651164,
+    "slice3RoiPct": 804.2444821731747,
+    "slice4RoiPct": 795.2747252747254
+  },
+  "checks": {
+    "invalidSelectedActions": 0,
+    "minimumDistinctBetTypesPerRace": 2,
+    "exactDistinctBetTypesPerSelectedRace": 2,
+    "calendarFeaturesUsed": false,
+    "dateFeatureUsed": false,
+    "raceIdFeatureUsed": false,
+    "postResultFeatureUsedAtInference": false,
+    "officialHistoricalSettlement": "JRA actual payouts only",
+    "liveCombinationOddsRequirement": "JRA official combination odds must be present before issuance; no synthetic odds"
+  },
+  "concentrationAudit": {
+    "winningSelectedRaces": 220,
+    "hitRatePct": 6.853582554517133,
+    "largestRaceContributionPct": 2.57683917849189,
+    "top10RaceContributionPct": 18.637405051424288
+  }
+}
