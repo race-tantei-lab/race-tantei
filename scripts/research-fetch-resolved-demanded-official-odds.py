@@ -140,8 +140,6 @@ def current_fetch(row, historical, current):
     if len(horses) < 2:
         raise RuntimeError(f"CURRENT_WIN_HORSES_TOO_FEW:{len(horses)}")
 
-    # A valid official win page exposes the other bet-type tabs. Read those
-    # official links rather than reconstructing their checksums independently.
     all_actions = [c for c, _ in base.action_links(win_page) if same_race(c)]
     parsed_by_market = {"win": win_rows}
     source_cnames = {"win": win_cname}
@@ -198,6 +196,16 @@ def current_fetch(row, historical, current):
     }
 
 
+def market_has_value(result, market):
+    values = ((result.get("officialOdds") or {}).get(market) or {})
+    return any(value is not None for value in values.values())
+
+
+def required_markets_without_values(row, result, historical):
+    required = tuple(m for m in historical.MARKETS if m in set(row.get("requiredMarkets") or ()))
+    return [market for market in required if not market_has_value(result, market)]
+
+
 def main():
     historical = load_module(HISTORICAL, "research_base_demanded_odds")
     historical.result_marker = flexible_result_marker
@@ -213,7 +221,21 @@ def main():
     def dispatch(row):
         if row.get("resultUrlResolutionMethod") == "validated_current_direct_desktop":
             return current_fetch(row, historical, current)
-        return original_fetch(row)
+
+        result = original_fetch(row)
+        missing = required_markets_without_values(row, result, historical)
+        if not missing:
+            return result
+
+        fallback = current_fetch(row, historical, current)
+        still_missing = required_markets_without_values(row, fallback, historical)
+        if still_missing:
+            raise RuntimeError(
+                f"OFFICIAL_MARKET_EMPTY_AFTER_RUNTIME_FALLBACK:{','.join(still_missing)}"
+            )
+        fallback.setdefault("provenance", {})["runtimeParserFallbackMarkets"] = missing
+        fallback["provenance"]["runtimeParserFallbackReason"] = "legacy_parser_returned_zero_values"
+        return fallback
 
     historical.fetch_race = dispatch
     historical.main()
