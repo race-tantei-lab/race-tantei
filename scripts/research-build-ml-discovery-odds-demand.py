@@ -10,6 +10,7 @@ DISCOVERY_MAX_YEAR=2022
 # Deterministic research demand builder; marker v2 starts the self-contained strict pipeline.
 # Retrigger marker 2026-08-11: no logic change.
 # Strict v3 trigger: reuse audited meta official odds through 2022 before fetching the remainder.
+# v3 workflow is now present; this touch intentionally emits its push event without changing logic.
 def read_ids(path,max_year):
     rows=[]
     for line in Path(path).read_text(encoding='utf-8').splitlines():
