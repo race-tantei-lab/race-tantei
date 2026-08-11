@@ -1,0 +1,92 @@
+name: Research current ticket classifier
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-current-ticket-classifier.yml"
+      - "scripts/research-evaluate-runner-ticket-classifier.py"
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  ODDS_RUN_ID: '31456971683'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Mark ticket classifier pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/current-ticket-classifier' -f description='Waiting for meta-selected official odds then fitting prior-year ticket models' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check --quiet lightgbm==4.6.0 scikit-learn==1.7.1 numpy==2.2.6
+      - name: Wait for source-clean odds and selected inputs
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 1000); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ODDS_RUN_ID}/artifacts?per_page=100" > arts.json
+            oid=$(jq -r '.artifacts[] | select(.name=="research-meta-market-source-clean" and .expired==false) | .id' arts.json | head -n1)
+            iid=$(jq -r '.artifacts[] | select(.name=="research-meta-market-reuse-input" and .expired==false) | .id' arts.json | head -n1)
+            if [ -n "$oid" ] && [ "$oid" != null ] && [ -n "$iid" ] && [ "$iid" != null ]; then echo "$oid" > oid.txt; echo "$iid" > iid.txt; break; fi
+            sleep 15
+          done
+          test -s oid.txt && test -s iid.txt
+          mkdir -p input/odds input/base input/predictions
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$(cat oid.txt)/zip" > odds.zip; unzip -q odds.zip -d input/odds
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/$(cat iid.txt)/zip" > base.zip; unzip -q base.zip -d input/base
+      - name: Normalize selected inputs
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          outs={str(y):(Path('input/predictions')/f'runner-ranker-{y}.jsonl').open('w') for y in range(2016,2027)};rids=set()
+          for line in Path('input/base/selected-predictions.jsonl').read_text().splitlines():
+            if not line.strip():continue
+            r=json.loads(line);y=str(r['raceDate'])[:4];outs[y].write(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n');rids.add(str(r['raceId']))
+          for f in outs.values():f.close()
+          assert len(rids)==14410,len(rids)
+          for y in range(2016,2027):
+            p=Path('input/odds')/f'research-meta-market-odds-{y}.jsonl';assert p.exists(),p
+            p.rename(Path('input/odds')/f'research-continuous-market-odds-{y}.jsonl')
+          assert Path('input/base/selected-history.jsonl').exists()
+          PY
+      - name: Fit prior-year ticket classifiers and evaluate
+        run: |
+          python scripts/research-evaluate-runner-ticket-classifier.py --predictions-dir input/predictions --odds-dir input/odds --history input/base/selected-history.jsonl --out analysis-results/meta-selected-ticket-classifier.json
+      - name: Verify strict robustness reporting
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('analysis-results/meta-selected-ticket-classifier.json'))
+          assert d['selectedRaces']==14410,d
+          assert d['targetYearResultsUsedForTicketModel'] is False,d
+          assert d['targetYearRoiUsedForTuning'] is False,d
+          assert d['syntheticOddsUsed'] is False,d
+          for c in ('light','standard','premium'):
+            x=d['courses'][c];assert x['races']==14410 and x['top50ExcludedRoiPct'] is not None,(c,x)
+          print(json.dumps({'courses':{c:{'roi':d['courses'][c]['roiPct'],'top50':d['courses'][c]['top50ExcludedRoiPct'],'top100':d['courses'][c]['top100ExcludedRoiPct'],'top1pct':d['courses'][c]['top1PctExcludedRoiPct']} for c in ('light','standard','premium')},'pass':d['passesCompletionHardGate']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-current-ticket-classifier
+          path: analysis-results/meta-selected-ticket-classifier.json
+          retention-days: 30
+      - name: Mark ticket classifier success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/current-ticket-classifier' -f description='Prior-year ticket classifier completed with Top50 robustness' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark ticket classifier failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/current-ticket-classifier' -f description='Prior-year ticket classifier needs repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
