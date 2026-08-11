@@ -30,8 +30,23 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Compile exporter
-        run: python -m py_compile scripts/research-export-runner-ml-features.py
+      - name: Enforce starter-complete leakage-safe export
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/research-export-runner-ml-features.py')
+          s=p.read_text()
+          old="if valid:wr.writerow(row);runner_count+=1;valid_labels+=1;by_year[date[:4]]+=1"
+          new="wr.writerow(row);runner_count+=1;valid_labels+=int(valid);by_year[date[:4]]+=1"
+          assert old in s
+          s=s.replace(old,new,1)
+          # Graded stakes must be identified before the generic open-class label.
+          oldc="""    if '3勝クラス' in x:return 4\n    if 'オープン' in x or 'OPEN' in x.upper():return 5\n    if 'G3' in x or 'Ｇ３' in x:return 6\n    if 'G2' in x or 'Ｇ２' in x:return 7\n    if 'G1' in x or 'Ｇ１' in x:return 8\n"""
+          newc="""    if '3勝クラス' in x:return 4\n    if 'G1' in x or 'Ｇ１' in x or 'ＧⅠ' in x:return 8\n    if 'G2' in x or 'Ｇ２' in x or 'ＧⅡ' in x:return 7\n    if 'G3' in x or 'Ｇ３' in x or 'ＧⅢ' in x:return 6\n    if 'オープン' in x or 'OPEN' in x.upper():return 5\n"""
+          assert oldc in s
+          p.write_text(s.replace(oldc,newc,1))
+          PY
+          python -m py_compile scripts/research-export-runner-ml-features.py
       - name: Download frozen ten-year history
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
@@ -46,7 +61,7 @@ jobs:
           from pathlib import Path
           m=json.loads(Path('analysis-results/runner-ml-features-meta.json').read_text())
           assert m['racesProcessed']>34000,m
-          assert m['runnerRows']>400000,m
+          assert m['runnerRows']>450000,m
           assert m['featureCount']>=50,m
           assert m['sameDayResultsUsedForFeatures'] is False,m
           assert m['currentRaceFinishOrPayoutUsedForFeatures'] is False,m
@@ -65,7 +80,7 @@ jobs:
       - name: Mark feature export success
         if: success()
         run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/runner-ml-feature-corpus' -f description='Prior-only runner ML feature corpus completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/runner-ml-feature-corpus' -f description='Starter-complete prior-only runner ML feature corpus completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark feature export failure
         if: failure()
         run: |
