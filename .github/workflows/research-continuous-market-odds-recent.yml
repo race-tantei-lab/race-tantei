@@ -1,0 +1,149 @@
+name: Research continuous recent market odds
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-continuous-market-odds-recent.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  BEST_DEMAND_RUN_ID: '31417411680'
+  OLD_ODDS_RUN_ID: '31373205723'
+  PARTIAL_REPAIR_RUN_ID: '31400807509'
+  AUDITED_ARCHIVE_ARTIFACT_ID: '9018047154'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  recent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        year: ['2024','2025','2026']
+    steps:
+      - name: Mark recent odds pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/continuous-market-odds-recent' \
+            -f description='Reusing audited 7695-race official odds archive' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install beautifulsoup4==4.13.4
+      - name: Download best demand, old year odds, repair, and audited archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p input old repair archive work analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > best-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' best-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > best.zip
+          unzip -q best.zip -d input
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${OLD_ODDS_RUN_ID}/artifacts?per_page=100" > old-artifacts.json
+          name="research-demanded-odds-${{ matrix.year }}"
+          oid=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' old-artifacts.json | head -n1)
+          test -n "$oid" && test "$oid" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${oid}/zip" > old.zip
+          unzip -q old.zip -d old
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PARTIAL_REPAIR_RUN_ID}/artifacts?per_page=100" > repair-artifacts.json
+          rid=$(jq -r '.artifacts[] | select(.name=="research-demanded-odds-repair" and .expired==false) | .id' repair-artifacts.json | head -n1)
+          if [ -n "$rid" ] && [ "$rid" != null ]; then gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${rid}/zip" > repair.zip; unzip -q repair.zip -d repair; fi
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${AUDITED_ARCHIVE_ARTIFACT_ID}/zip" > archive.zip
+          unzip -q archive.zip -d archive
+          test -s archive/all7695-official-odds.jsonl.gz
+          test -s archive/input-meta.json
+      - name: Reuse old six-market rows and audited archive rows
+        env:
+          YEAR: ${{ matrix.year }}
+        run: |
+          python - <<'PY'
+          import gzip,importlib.util,json,os
+          from pathlib import Path
+          year=os.environ['YEAR'];markets=('win','umaren','wide','umatan','trio','trifecta')
+          spec=importlib.util.spec_from_file_location('arch',Path('scripts/research-merge-demanded-odds-archive-repair.py'))
+          mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
+          demand=[]
+          for line in Path('input/demand.jsonl').read_text().splitlines():
+            if not line.strip():continue
+            r=json.loads(line)
+            if str(r['raceDate']).startswith(year+'-'):
+              r['requiredMarkets']=list(markets);demand.append(r)
+          byid={str(r['raceId']):r for r in demand};reuse={}
+          for p in list(Path('old').glob('research-demanded-odds-*.jsonl'))+list(Path('repair').glob('research-demanded-odds-repair.jsonl')):
+            for line in p.read_text().splitlines():
+              if not line.strip():continue
+              r=json.loads(line);rid=str(r['raceId'])
+              if rid in byid and all(m in (r.get('officialOdds') or {}) for m in markets):reuse[rid]=r
+          needed=set(byid)-set(reuse);archive_rows={}
+          with gzip.open('archive/all7695-official-odds.jsonl.gz','rt',encoding='utf-8') as f:
+            for line in f:
+              if not line.strip():continue
+              rec=json.loads(line);rid=str(rec.get('raceId') or '')
+              if rid in needed:archive_rows[rid]=rec
+          converted={}
+          for rid,rec in archive_rows.items():
+            converted[rid]=mod.convert_archive_row(rec,byid[rid])
+          combined=dict(reuse);combined.update(converted)
+          missing=[byid[rid] for rid in sorted(set(byid)-set(combined))]
+          Path('work/reused.jsonl').write_text(''.join(json.dumps(combined[k],ensure_ascii=False,separators=(',',':'))+'\n' for k in sorted(combined)))
+          Path('work/fetch-demand.jsonl').write_text(''.join(json.dumps(r,ensure_ascii=False,separators=(',',':'))+'\n' for r in missing))
+          meta={'year':year,'selected':len(byid),'oldReused':len(reuse),'archiveReused':len(converted),'needFetch':len(missing)}
+          Path('work/reuse-meta.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(meta,ensure_ascii=False))
+          PY
+      - name: Fetch only residual network races
+        env:
+          YEAR: ${{ matrix.year }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(grep -cve '^$' work/fetch-demand.jsonl || true)
+          if [ "$count" -eq 0 ]; then
+            : > work/fetched.jsonl
+            echo '{"completedRaces":0,"failures":[],"syntheticOddsUsed":false,"productionDatabaseWritten":false,"productionModelChanged":false}' > work/fetched-meta.json
+          else
+            python scripts/research-fetch-demanded-official-odds.py --input work/fetch-demand.jsonl --year "$YEAR" --workers 3 --out work/fetched.jsonl --meta work/fetched-meta.json || true
+          fi
+      - name: Merge and verify recent year
+        env:
+          YEAR: ${{ matrix.year }}
+        run: |
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          year=os.environ['YEAR'];demand={}
+          for line in Path('input/demand.jsonl').read_text().splitlines():
+            if line.strip():
+              r=json.loads(line)
+              if str(r['raceDate']).startswith(year+'-'):demand[str(r['raceId'])]=r
+          merged={}
+          for p in (Path('work/reused.jsonl'),Path('work/fetched.jsonl')):
+            for line in p.read_text().splitlines() if p.exists() else []:
+              if line.strip():
+                r=json.loads(line);merged[str(r['raceId'])]=r
+          missing=sorted(set(demand)-set(merged));rm=json.loads(Path('work/reuse-meta.json').read_text())
+          out=Path(f'analysis-results/research-continuous-market-odds-{year}.jsonl')
+          out.write_text(''.join(json.dumps(merged[k],ensure_ascii=False,separators=(',',':'))+'\n' for k in sorted(merged)))
+          meta={'year':year,'selectedRaces':len(demand),'oldReusedRaces':rm['oldReused'],'archiveReusedRaces':rm['archiveReused'],'networkFetchedRaces':len(merged)-rm['oldReused']-rm['archiveReused'],'availableRaces':len(merged),'missingRaceCount':len(missing),'missingRaceIds':missing,'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,'syntheticOddsUsed':False,'estimatedOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+          Path(f'analysis-results/research-continuous-market-odds-{year}-meta.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n')
+          assert meta['availableRaces']+meta['missingRaceCount']==meta['selectedRaces'],meta
+          print(json.dumps(meta,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-continuous-market-odds-recent-${{ matrix.year }}
+          path: |
+            analysis-results/research-continuous-market-odds-${{ matrix.year }}.jsonl
+            analysis-results/research-continuous-market-odds-${{ matrix.year }}-meta.json
+          retention-days: 30
