@@ -1,0 +1,88 @@
+name: Research fast dynamic rule v2
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-fast-dynamic-rule-v2.yml"
+      - "scripts/research-evaluate-market-rule-walkforward-fast.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  V2_RUN_ID: '31452343000'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Mark fast dynamic pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/fast-dynamic-rule-v2' \
+            -f description='Running calculation-equivalent optimized dynamic-rule walk-forward' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile optimized evaluator
+        run: python -m py_compile scripts/research-evaluate-market-rule-walkforward-fast.py
+      - name: Download source-clean v2 input
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${V2_RUN_ID}/artifacts?per_page=100" > a.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-final-active-rerank-input" and .expired==false) | .id' a.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > input.zip
+          unzip -q input.zip -d input
+      - name: Evaluate optimized dynamic rules
+        run: |
+          python scripts/research-evaluate-market-rule-walkforward-fast.py \
+            --corpus input/history/ten-year-history-corpus.jsonl \
+            --demand input/demand/demand.jsonl \
+            --odds-dir input/corrected-odds \
+            --out result.json
+      - name: Require exact source-clean completion
+        run: |
+          python - <<'PY'
+          import json
+          m=json.load(open('result.json'));b=m['bestVariant'];v=m['variants'][b]
+          assert m['selectedDemandRaces']==14410,m
+          assert m['oddsRaces']==14410,m
+          assert m['missingOddsRaceCount']==0,m
+          assert not m['missingDemandRacesInCorpus'],m
+          assert m['activeRunnersRerankedBeforeTicketGeneration'] is True,m
+          assert m['sameDayResultsUsedForTicketRule'] is False,m
+          assert m['productionRulesReused'] is False,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert v['evaluatedRaces']==14410,v
+          assert v['evaluationErrorCount']==0,v['evaluationErrors'][:20]
+          assert v['completeOddsAndEvaluation'] is True,v
+          budgets={'ライト':2000,'スタンダード':5000,'プレミアム':10000}
+          summary={}
+          for c,x in v['courses'].items():
+            largest=x['returnConcentration']['largestRaceReturnYen']
+            summary[c]={'roi':x['roiPct'],'excludeLargest':round(100*(x['returnYen']-largest)/(x['stakeYen']-budgets[c]),4),'top1Share':x['returnConcentration']['top1ReturnSharePct']}
+          print(json.dumps({'best':b,'courses':summary,'byPeriod':{c:{p:s['roiPct'] for p,s in x['byPeriod'].items()} for c,x in v['courses'].items()}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-fast-dynamic-rule-v2
+          path: result.json
+          retention-days: 30
+      - name: Mark fast dynamic success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/fast-dynamic-rule-v2' -f description='Optimized dynamic-rule 14,410-race evaluation completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark fast dynamic failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/fast-dynamic-rule-v2' -f description='Optimized dynamic-rule evaluation requires repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
