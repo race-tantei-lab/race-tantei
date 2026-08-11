@@ -28,7 +28,7 @@ jobs:
     steps:
       - name: Mark discovery evaluation pending
         run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/ml-five-discovery-eval' -f description='Waiting for discovery-only odds then freezing one selector/template' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/ml-five-discovery-eval' -f description='Waiting for discovery-only odds; no model freezes unless Top50 gate passes' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - name: Compile evaluator
         run: python -m py_compile scripts/research-evaluate-ml-five-discovery.py
@@ -81,7 +81,7 @@ jobs:
             --new-odds-dir input/new-odds \
             --history input/source/history/ten-year-history-corpus.jsonl \
             --out analysis-results/ml-five-discovery-evaluation.json
-      - name: Verify untouched historical holdout and robustness outputs
+      - name: Verify untouched historical holdout and hard gate semantics
         run: |
           python - <<'PY'
           import json
@@ -91,6 +91,7 @@ jobs:
           assert d['holdoutPeriodUntouched']['start']=='2023-01-01',d
           assert d['candidateCombinations']==16,d
           assert d['selectedRacesPerCombination']==9190,d
+          assert d['completionHardGate']['allCoursesTop50ReturnAndProfitExcludedRoiPctAtLeast']==200.0,d
           assert d['targetRaceResultUsedForRaceSelection'] is False,d
           assert d['targetRaceResultUsedForHorseRanking'] is False,d
           assert d['productionDatabaseWritten'] is False,d
@@ -99,9 +100,15 @@ jobs:
             for c in ('light','standard','premium'):
               r=x['courses'][c]
               assert r['races']==9190,(key,c,r)
-              assert r['top50ExcludedRoiPct'] is not None,(key,c)
+              assert r['top50ReturnExcludedRoiPct'] is not None,(key,c)
+              assert r['top50ProfitExcludedRoiPct'] is not None,(key,c)
               assert r['top100ExcludedRoiPct'] is not None,(key,c)
-          print(json.dumps(d['discoveryWinner'],ensure_ascii=False))
+          if d['discoveryPassed']:
+            assert d['frozenCombination'] is not None,d
+            assert d['discoveryBestCandidate']['passesDiscoveryGate'] is True,d
+          else:
+            assert d['frozenCombination'] is None,d
+          print(json.dumps({'discoveryPassed':d['discoveryPassed'],'best':d['discoveryBestCandidate'],'frozenCombination':d['frozenCombination']},ensure_ascii=False))
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -111,7 +118,13 @@ jobs:
       - name: Mark discovery evaluation success
         if: success()
         run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/ml-five-discovery-eval' -f description='Discovery winner frozen; historical 2023-2026 holdout still untouched' -f target_url="$STATUS_TARGET_URL" >/dev/null
+          passed=$(jq -r '.discoveryPassed' analysis-results/ml-five-discovery-evaluation.json)
+          if [ "$passed" = true ]; then
+            desc='Discovery passed Top50 robustness gate; one combination frozen'
+          else
+            desc='Discovery evaluated; no combination frozen because Top50 gate failed'
+          fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/ml-five-discovery-eval' -f description="$desc" -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark discovery evaluation failure
         if: failure()
         run: |
