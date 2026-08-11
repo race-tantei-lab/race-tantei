@@ -1,0 +1,72 @@
+name: Research export runner ML features
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-export-runner-ml-features.yml"
+      - "scripts/research-export-runner-ml-features.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Mark feature export pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/runner-ml-feature-corpus' -f description='Building prior-only runner feature corpus across ten-year history' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile exporter
+        run: python -m py_compile scripts/research-export-runner-ml-features.py
+      - name: Download frozen ten-year history
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d input
+      - name: Export runner ML features
+        run: |
+          python scripts/research-export-runner-ml-features.py --corpus input/ten-year-history-corpus.jsonl --out analysis-results/runner-ml-features.csv --meta analysis-results/runner-ml-features-meta.json
+      - name: Verify prior-only feature corpus
+        run: |
+          python - <<'PY'
+          import csv,json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/runner-ml-features-meta.json').read_text())
+          assert m['racesProcessed']>34000,m
+          assert m['runnerRows']>400000,m
+          assert m['featureCount']>=50,m
+          assert m['sameDayResultsUsedForFeatures'] is False,m
+          assert m['currentRaceFinishOrPayoutUsedForFeatures'] is False,m
+          assert m['syntheticDataUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          print(json.dumps({'races':m['racesProcessed'],'runners':m['runnerRows'],'features':m['featureCount'],'years':m['rowsByYear']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-runner-ml-feature-corpus
+          path: |
+            analysis-results/runner-ml-features.csv
+            analysis-results/runner-ml-features-meta.json
+          retention-days: 30
+          compression-level: 9
+      - name: Mark feature export success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/runner-ml-feature-corpus' -f description='Prior-only runner ML feature corpus completed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark feature export failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/runner-ml-feature-corpus' -f description='Runner ML feature export requires repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
