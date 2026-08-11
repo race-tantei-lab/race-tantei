@@ -63,7 +63,7 @@ def load_odds(path):
     return out,files
 
 
-def probability(ticket,key_stats,bet_stats,local_weight):
+def probability_parts(ticket,key_stats,bet_stats):
     bt=ticket['bt'];bn,bh=bet_stats.get(bt,(0.0,0.0))
     base=(bh+1.0)/(bn+2.0)
     comps=[]
@@ -74,27 +74,35 @@ def probability(ticket,key_stats,bet_stats,local_weight):
         reliability=n/(n+KEY_PRIOR)
         complexity=1.0 if len(key[1])==1 else 0.92
         comps.append((p,reliability*complexity,n))
-    if not comps:return base
+    if not comps:return base,base
     comps.sort(key=lambda x:(x[0],x[1],x[2]),reverse=True)
     top=comps[:TOP_COMPONENTS];w=sum(x[1] for x in top)
     local=sum(x[0]*x[1] for x in top)/w if w else base
-    return (1.0-local_weight)*base+local_weight*local
+    return base,local
 
 
-def market_candidates(state,bundle,odds_row,key_stats,bet_stats,local_weight,risk_gamma):
-    rows=cmod.candidate_rows(state,bundle);official=odds_row.get('officialOdds') or {};out=[];missing=[]
+def prepare_market_candidates(rows,odds_row,key_stats,bet_stats):
+    official=odds_row.get('officialOdds') or {};out=[];missing=[]
     for t in rows:
         market_rows=official.get(t['market']) or {}
         odd=midpoint(market_rows.get(t['combo']))
         if odd is None or odd<1.0:
             missing.append(f"{t['market']}:{t['combo']}")
             continue
-        p=probability(t,key_stats,bet_stats,local_weight)
-        ev=p*odd
-        score=ev*((10.0/max(1.0,odd))**risk_gamma)
-        out.append({**t,'odds':odd,'pHat':p,'ev':ev,'marketScore':score,'oddsBin':gen.bsearch(gen.ODDS_EDGES,odd)})
+        base,local=probability_parts(t,key_stats,bet_stats)
+        out.append({**t,'odds':odd,'baseProb':base,'localProb':local,'oddsBin':gen.bsearch(gen.ODDS_EDGES,odd)})
     if missing:
         raise RuntimeError(f'CANDIDATE_ODDS_INCOMPLETE:{len(missing)}:{missing[:12]}')
+    return out
+
+
+def score_variant(prepared,local_weight,risk_gamma):
+    out=[]
+    for t in prepared:
+        p=(1.0-local_weight)*t['baseProb']+local_weight*t['localProb']
+        ev=p*t['odds']
+        score=ev*((10.0/max(1.0,t['odds']))**risk_gamma)
+        out.append({**t,'pHat':p,'ev':ev,'marketScore':score})
     out.sort(key=lambda x:(-x['marketScore'],-x['ev'],x['odds'],x['bt'],x['combo']))
     return out
 
@@ -102,10 +110,8 @@ def market_candidates(state,bundle,odds_row,key_stats,bet_stats,local_weight,ris
 def select_tickets(rows):
     if len(rows)<3:raise RuntimeError(f'TOO_FEW_ODDS_CANDIDATES:{len(rows)}')
     mx=rows[0]['marketScore'];chosen=[t for t in rows if t['marketScore']>=mx*0.85-1e-12][:10]
-    if len(chosen)<3:
-        chosen=list(rows[:3])
-    keys={(t['bt'],t['combo']) for t in chosen}
-    types={t['bt'] for t in chosen}
+    if len(chosen)<3:chosen=list(rows[:3])
+    keys={(t['bt'],t['combo']) for t in chosen};types={t['bt'] for t in chosen}
     if len(types)<2:
         alt=next((t for t in rows if t['bt'] not in types and (t['bt'],t['combo']) not in keys),None)
         if alt is None:raise RuntimeError('NO_SECOND_BET_TYPE')
@@ -152,16 +158,27 @@ def main():
     cur=None;day=[]
 
     def process(date,bundles):
-        # Freeze/evaluate target races first. No current-date result is incorporated into key/bet statistics yet.
+        # State is intentionally frozen for the entire date. Generate every race's pre-result candidates once.
+        generated={}
+        for b in bundles:
+            rid=str(b['race']['raceId']);generated[rid]=cmod.candidate_rows(state,b)
+
+        # Evaluate selected races before any same-day result is incorporated into the probability model.
         for b in bundles:
             race=b['race'];rid=str(race['raceId'])
             if rid not in demand:continue
             seen.add(rid)
             if rid not in odds:continue
             pays=smod.payout_index(b)
+            try:
+                prepared=prepare_market_candidates(generated[rid],odds[rid],key_stats,bet_stats)
+            except Exception as e:
+                err={'raceId':rid,'raceDate':date,'venue':race.get('venue'),'raceNo':race.get('raceNo'),'error':f'{type(e).__name__}:{e}'}
+                for variant in variants:errors[variant].append(err)
+                continue
             for lw,g in variants:
                 try:
-                    cand=market_candidates(state,b,odds[rid],key_stats,bet_stats,lw,g);chosen=select_tickets(cand)
+                    chosen=select_tickets(score_variant(prepared,lw,g))
                     for rank,t in enumerate(chosen,1):
                         pay=int(pays.get((t['betType'],t['combo']),0) or 0)
                         br=bet_returns[(lw,g)][t['betType']];br[0]+=1;br[1]+=pay;br[2]+=int(pay>0)
@@ -170,10 +187,11 @@ def main():
                         ret,tix=settle(chosen,budget,pays);add(overall[(lw,g,c)],budget,ret,len(tix),ret>0);add(yearly[(lw,g,c)][date[:4]],budget,ret,len(tix),ret>0);add(periods[(lw,g,c)][period(date)],budget,ret,len(tix),ret>0);returns[(lw,g,c)].append({'raceId':rid,'returnYen':ret})
                 except Exception as e:
                     errors[(lw,g)].append({'raceId':rid,'raceDate':date,'venue':race.get('venue'),'raceNo':race.get('raceNo'),'error':f'{type(e).__name__}:{e}'})
-        # Only after every target race on the date was frozen/evaluated do outcomes update the probability model.
+
+        # Only after the full date is frozen/evaluated do its outcomes update historical statistics and runner state.
         for b in bundles:
-            pays=smod.payout_index(b)
-            for t in cmod.candidate_rows(state,b):
+            rid=str(b['race']['raceId']);pays=smod.payout_index(b)
+            for t in generated[rid]:
                 hit=1.0 if int(pays.get((t['betType'],t['combo']),0) or 0)>0 else 0.0
                 bet_stats[t['bt']][0]+=1.0;bet_stats[t['bt']][1]+=hit
                 for key in smod.candidate_keys(t['bt'],t['vals']):
@@ -191,8 +209,7 @@ def main():
 
     results={}
     for lw,g in variants:
-        key=f'lw{lw:.2f}-g{g:.2f}';courses={}
-        err_ids={e['raceId'] for e in errors[(lw,g)]}
+        key=f'lw{lw:.2f}-g{g:.2f}';courses={};err_ids={e['raceId'] for e in errors[(lw,g)]}
         for c in COURSES:
             x=fin(overall[(lw,g,c)]);x['byYear']={y:fin(s) for y,s in sorted(yearly[(lw,g,c)].items())};x['byPeriod']={p:fin(s) for p,s in periods[(lw,g,c)].items()};x['returnConcentration']=concentration(returns[(lw,g,c)],overall[(lw,g,c)]['returnYen']);courses[c]=x
         br={smod.BET_SPECS[bt][2]:{'tickets':v[0],'returnYenPer100Stake':round(v[1]/v[0],4) if v[0] else None,'hitPct':round(100*v[2]/v[0],4) if v[0] else None} for bt,v in sorted(bet_returns[(lw,g)].items())}
@@ -200,7 +217,7 @@ def main():
         complete=(not missing and not err_ids and not(set(demand)-seen))
         results[key]={'localWeight':lw,'riskGamma':g,'evaluationErrorCount':len(errors[(lw,g)]),'evaluationErrors':errors[(lw,g)][:200],'evaluatedRaces':courses['ライト']['races'],'courses':courses,'betTypeDiagnostics':br,'selectionRankDiagnostics':rr,'completeOddsAndEvaluation':complete,'allThreeAtLeast200Pct':complete and all((courses[c]['roiPct'] or 0)>=200 for c in COURSES)}
     ranked=sorted(results,key=lambda k:(results[k]['completeOddsAndEvaluation'],min(results[k]['courses'][c]['roiPct'] or 0 for c in COURSES),sum(results[k]['courses'][c]['roiPct'] or 0 for c in COURSES)),reverse=True)
-    result={'purpose':'research_only_two_stage_market_value_walk_forward','evaluationStart':'2016-08-10','evaluationEnd':'2026-08-09','selectedDemandRaces':len(demand),'oddsRaces':len(odds),'missingOddsRaceCount':len(missing),'missingOddsRaceIds':missing,'missingDemandRacesInCorpus':sorted(set(demand)-seen),'candidateOddsCompletenessRequired':True,'variants':results,'ranking':ranked,'bestVariant':ranked[0] if ranked else None,'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,'raceSelectionFrozenBeforeOdds':True,'targetDayResultsUsedForRaceSelection':False,'sameDayResultsUsedForTicketProbability':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
+    result={'purpose':'research_only_two_stage_market_value_walk_forward','evaluationStart':'2016-08-10','evaluationEnd':'2026-08-09','selectedDemandRaces':len(demand),'oddsRaces':len(odds),'missingOddsRaceCount':len(missing),'missingOddsRaceIds':missing,'missingDemandRacesInCorpus':sorted(set(demand)-seen),'candidateOddsCompletenessRequired':True,'sharedCandidateComputationAcrossVariants':True,'variants':results,'ranking':ranked,'bestVariant':ranked[0] if ranked else None,'historicalFinalOddsUsed':True,'prestartTimingValidationPerformed':False,'raceSelectionFrozenBeforeOdds':True,'targetDayResultsUsedForRaceSelection':False,'sameDayResultsUsedForTicketProbability':False,'syntheticOddsUsed':False,'productionDatabaseWritten':False,'productionModelChanged':False}
     out=ROOT/a.out;out.parent.mkdir(parents=True,exist_ok=True);out.write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
     best=result['bestVariant'];print(json.dumps({'selected':len(demand),'odds':len(odds),'missing':len(missing),'best':best,'bestRoi':{c:results[best]['courses'][c]['roiPct'] for c in COURSES} if best else None,'bestErrors':results[best]['evaluationErrorCount'] if best else None,'all200':results[best]['allThreeAtLeast200Pct'] if best else False},ensure_ascii=False),flush=True)
 
