@@ -1,0 +1,153 @@
+name: Research strict discovery ticket classifier
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-strict-discovery-ticket-classifier.yml"
+      - "scripts/research-evaluate-strict-discovery-ticket-classifier.py"
+
+concurrency:
+  group: research-strict-discovery-ticket-classifier
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  DISCOVERY_ODDS_WORKFLOW: 'research-ml-discovery-demanded-odds-v2.yml'
+  SELECTION_ARTIFACT_ID: '9088036803'
+  SOURCE_INPUT_ARTIFACT_ID: '9086766461'
+  CANONICAL_ODDS_RUN_ID: '31373205723'
+  COMPLETED_2016_ARTIFACT_ID: '9088548944'
+  ALL_RACE_RUN_ID: '31455874661'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Mark classifier pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/strict-discovery-ticket-classifier' -f description='Nested prior-year ticket classifier on 2016-2022 only' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check --quiet lightgbm==4.6.0 scikit-learn==1.7.1 numpy==2.2.6
+      - name: Compile evaluator
+        run: python -m py_compile scripts/research-evaluate-strict-discovery-ticket-classifier.py
+      - name: Download fixed inputs and reusable odds
+        run: |
+          set -euo pipefail
+          mkdir -p input/selections input/source input/existing-odds input/new-odds input/predictions analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SELECTION_ARTIFACT_ID}/zip" > selections.zip
+          unzip -q selections.zip -d input/selections
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_INPUT_ARTIFACT_ID}/zip" > source.zip
+          unzip -q source.zip 'corrected-odds/*.jsonl' 'history/ten-year-history-corpus.jsonl' -d input/source
+          cp input/source/corrected-odds/*.jsonl input/existing-odds/
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CANONICAL_ODDS_RUN_ID}/artifacts?per_page=100" > canonical.json
+          for y in $(seq 2016 2022); do
+            id=$(jq -r --arg n "research-demanded-odds-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' canonical.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "canonical-${y}.zip"
+            unzip -q "canonical-${y}.zip" "research-demanded-odds-${y}.jsonl" -d input/existing-odds
+          done
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${COMPLETED_2016_ARTIFACT_ID}/zip" > completed-2016.zip
+          unzip -q completed-2016.zip 'ml-discovery-odds-2016.jsonl' -d input/existing-odds
+      - name: Find latest valid v2 discovery odds run
+        run: |
+          set -euo pipefail
+          rm -f v2-run.txt
+          for attempt in $(seq 1 1200); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${DISCOVERY_ODDS_WORKFLOW}/runs?branch=research%2Ften-year-minimal-rules&per_page=20" > v2-runs.json
+            for rid in $(jq -r '.workflow_runs[] | select(.conclusion != "cancelled") | .id' v2-runs.json); do
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${rid}/artifacts?per_page=100" > candidate.json || continue
+              did=$(jq -r '.artifacts[] | select(.name=="research-ml-discovery-odds-v2-demand" and .expired==false) | .id' candidate.json | head -n1)
+              if [ -z "$did" ] || [ "$did" = null ]; then continue; fi
+              rm -rf demand-check; mkdir demand-check
+              gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${did}/zip" > demand-check.zip
+              unzip -q -o demand-check.zip -d demand-check
+              if python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('demand-check/ml-discovery-odds-demand-meta.json')
+          if not p.exists(): raise SystemExit(1)
+          m=json.loads(p.read_text())
+          ok=(m.get('discoveryMaxYear')==2022 and m.get('reusedRaces')==10583 and m.get('missingRaces')==5641 and m.get('reuseRequiresAllSixMarkets') is True)
+          raise SystemExit(0 if ok else 1)
+          PY
+              then echo "$rid" > v2-run.txt; break 2; fi
+            done
+            sleep 15
+          done
+          test -s v2-run.txt
+          echo "DISCOVERY_ODDS_RUN_ID=$(cat v2-run.txt)" >> "$GITHUB_ENV"
+      - name: Wait for six v2 odds artifacts
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 1200); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DISCOVERY_ODDS_RUN_ID}/artifacts?per_page=100" > arts.json
+            n=$(jq '[.artifacts[] | select(.name|startswith("research-ml-discovery-odds-v2-20")) | select(.expired==false)] | length' arts.json)
+            if [ "$n" -ge 6 ]; then break; fi
+            sleep 15
+          done
+          for y in 2017 2018 2019 2020 2021 2022; do
+            id=$(jq -r --arg n "research-ml-discovery-odds-v2-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' arts.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "v2-${y}.zip"
+            unzip -q "v2-${y}.zip" -d input/new-odds
+          done
+          test $(cat input/new-odds/ml-discovery-odds-20*.jsonl | wc -l) -eq 5641
+      - name: Download all-race OOS predictions
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ALL_RACE_RUN_ID}/artifacts?per_page=100" > ranker.json
+          for y in $(seq 2016 2026); do
+            id=$(jq -r --arg n "research-all-race-ranker-${y}" '.artifacts[] | select(.name==$n and .expired==false) | .id' ranker.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "ranker-${y}.zip"
+            unzip -q "ranker-${y}.zip" -d input/predictions
+          done
+      - name: Evaluate strict nested classifier
+        run: |
+          python scripts/research-evaluate-strict-discovery-ticket-classifier.py \
+            --predictions-dir input/predictions \
+            --selections-dir input/selections/ml-five-selections \
+            --existing-odds-dir input/existing-odds \
+            --new-odds-dir input/new-odds \
+            --history input/source/history/ten-year-history-corpus.jsonl \
+            --out analysis-results/strict-discovery-ticket-classifier.json
+      - name: Verify strict holdout gate
+        run: |
+          python - <<'PY'
+          import json
+          d=json.load(open('analysis-results/strict-discovery-ticket-classifier.json'))
+          assert d['discoveryPeriod']['end']=='2022-12-31',d
+          assert d['holdoutPeriodUntouched']=={'start':'2023-01-01','end':'2026-08-09'},d
+          assert d['selectors']==['confidence','concentration'],d
+          assert d['selectedRacesPerSelector']==9190,d
+          assert d['targetYearResultsUsedForTicketModel'] is False,d
+          assert d['targetYearRoiUsedForTuning'] is False,d
+          assert d['inactiveHorsesFilteredBeforeCandidateGeneration'] is True,d
+          assert d['productionDatabaseWritten'] is False,d
+          if d['discoveryPassed']:
+            assert d['frozenClassifier'] is not None,d
+            assert min(d['selectorsEvaluation'][d['frozenClassifier']['selector']]['courses'][c]['top50RobustRoiPct'] for c in ('light','standard','premium'))>=200.0,d
+          else:assert d['frozenClassifier'] is None,d
+          print(json.dumps({'best':d['discoveryBestCandidate'],'passed':d['discoveryPassed'],'frozenClassifier':d['frozenClassifier']},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-strict-discovery-ticket-classifier
+          path: analysis-results/strict-discovery-ticket-classifier.json
+          retention-days: 30
+      - name: Mark success
+        run: |
+          passed=$(jq -r '.discoveryPassed' analysis-results/strict-discovery-ticket-classifier.json)
+          if [ "$passed" = true ]; then desc='Strict discovery classifier passed Top50 gate'; else desc='Strict discovery classifier failed Top50 gate; holdout stays closed'; fi
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/strict-discovery-ticket-classifier' -f description="$desc" -f target_url="$STATUS_TARGET_URL" >/dev/null
