@@ -53,6 +53,9 @@ jobs:
           id=$(cat artifact-id.txt)
           gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > odds.zip
           unzip -q odds.zip -d odds
+          src=$(find odds -name 'research-all-race-win-odds-2016.jsonl' -type f | head -n1)
+          test -n "$src"
+          cp "$src" odds/research-all-race-win-odds-2016.jsonl
           test -s odds/research-all-race-win-odds-2016.jsonl
       - name: Run online market-aware selector
         run: |
