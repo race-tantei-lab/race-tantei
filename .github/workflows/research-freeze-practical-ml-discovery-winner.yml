@@ -1,0 +1,78 @@
+name: Research freeze practical ML discovery winner
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-freeze-practical-ml-discovery-winner.yml"
+      - "scripts/research-freeze-practical-ml-discovery-winner.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  DISCOVERY_EVAL_RUN_ID: '31456397337'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Mark practical freeze pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='research/practical-ml-discovery-winner' -f description='Waiting to freeze result-blind practical discovery winner' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Compile freezer
+        run: python -m py_compile scripts/research-freeze-practical-ml-discovery-winner.py
+      - name: Wait for discovery evaluation artifact
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 960); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DISCOVERY_EVAL_RUN_ID}/artifacts?per_page=100" > artifacts.json
+            id=$(jq -r '.artifacts[] | select(.name=="research-ml-five-discovery-evaluation" and .expired==false) | .id' artifacts.json | head -n1)
+            if [ -n "$id" ] && [ "$id" != null ]; then break; fi
+            sleep 15
+          done
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > discovery.zip
+          mkdir -p input
+          unzip -q discovery.zip -d input
+          test -s input/ml-five-discovery-evaluation.json
+      - name: Freeze practical winner
+        run: |
+          python scripts/research-freeze-practical-ml-discovery-winner.py \
+            --input input/ml-five-discovery-evaluation.json \
+            --out analysis-results/ml-five-discovery-practical-frozen.json
+      - name: Enforce holdout opening policy
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          d=json.loads(Path('analysis-results/ml-five-discovery-practical-frozen.json').read_text())
+          w=d['practicalDiscoveryWinner']
+          assert w['selector'] in ('confidence','concentration'),w
+          assert w['historicalFinalPopularityUsedForSelection'] is False,w
+          assert len(d['practicalCandidatePool']['selectors'])==2,d
+          assert d['practicalCandidatePool']['candidateCombinations']==8,d
+          assert d['holdoutPeriodUntouched']['start']=='2023-01-01',d
+          assert d['holdoutPeriodUntouched']['end']=='2026-08-09',d
+          print(json.dumps(w,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-ml-five-discovery-practical-frozen
+          path: analysis-results/ml-five-discovery-practical-frozen.json
+          retention-days: 30
+      - name: Mark practical freeze success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='research/practical-ml-discovery-winner' -f description='Practical result-blind discovery winner frozen' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark practical freeze failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='research/practical-ml-discovery-winner' -f description='Practical discovery freeze needs repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
