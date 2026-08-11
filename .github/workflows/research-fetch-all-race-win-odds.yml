@@ -1,0 +1,102 @@
+name: Research fetch all-race win odds
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-fetch-all-race-win-odds.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  SOURCE_INPUT_ARTIFACT_ID: '9086766461'
+
+jobs:
+  fetch-win:
+    strategy:
+      fail-fast: false
+      max-parallel: 11
+      matrix:
+        year: [2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install parser runtime
+        run: pip install --disable-pip-version-check --quiet beautifulsoup4==4.13.4
+      - name: Download ten-year result corpus
+        run: |
+          set -euo pipefail
+          mkdir -p input/source/history analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_INPUT_ARTIFACT_ID}/zip" > source.zip
+          unzip -q source.zip 'history/ten-year-history-corpus.jsonl' -d input/source
+          test -s input/source/history/ten-year-history-corpus.jsonl
+      - name: Build all-race win-only demand
+        env:
+          TARGET_YEAR: ${{ matrix.year }}
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          y=str(os.environ['TARGET_YEAR'])
+          expected={'2016':1318,'2017':3455,'2018':3454,'2019':3452,'2020':3456,'2021':3456,'2022':3456,'2023':3456,'2024':3454,'2025':3455,'2026':2154}
+          src=Path('input/source/history/ten-year-history-corpus.jsonl')
+          out=Path(f'analysis-results/all-race-win-demand-{y}.jsonl')
+          n=0
+          with src.open(encoding='utf-8') as fh, out.open('w',encoding='utf-8') as w:
+              for line in fh:
+                  if not line.strip(): continue
+                  b=json.loads(line); r=b['race']; d=str(r['raceDate'])
+                  if not ('2016-08-10' <= d <= '2026-08-09') or not d.startswith(y+'-'): continue
+                  row={
+                    'raceId':str(r['raceId']),'raceDate':d,'venue':str(r['venue']),
+                    'raceNo':int(r['raceNo']),'entryUrl':r.get('entryUrl'),'resultUrl':r.get('resultUrl'),
+                    'requiredMarkets':['win']
+                  }
+                  w.write(json.dumps(row,ensure_ascii=False)+'\n'); n+=1
+          assert n==expected[y],(y,n,expected[y])
+          print(json.dumps({'year':y,'demandRaces':n,'requiredMarkets':['win'],'targetResultUsedForDemand':False,'syntheticOddsUsed':False},ensure_ascii=False))
+          PY
+      - name: Fetch official final win odds
+        env:
+          TARGET_YEAR: ${{ matrix.year }}
+        run: |
+          python scripts/research-fetch-resolved-demanded-official-odds.py \
+            --input "analysis-results/all-race-win-demand-${TARGET_YEAR}.jsonl" \
+            --year "$TARGET_YEAR" --workers 8 \
+            --out "analysis-results/all-race-win-odds-${TARGET_YEAR}.jsonl" \
+            --meta "analysis-results/all-race-win-odds-${TARGET_YEAR}-meta.json"
+      - name: Require complete win-odds race coverage
+        env:
+          TARGET_YEAR: ${{ matrix.year }}
+        run: |
+          python - <<'PY'
+          import json,os
+          y=str(os.environ['TARGET_YEAR']); expected={'2016':1318,'2017':3455,'2018':3454,'2019':3452,'2020':3456,'2021':3456,'2022':3456,'2023':3456,'2024':3454,'2025':3455,'2026':2154}[y]
+          p=f'analysis-results/all-race-win-odds-{y}.jsonl'
+          rows=[json.loads(x) for x in open(p,encoding='utf-8') if x.strip()]
+          meta=json.load(open(f'analysis-results/all-race-win-odds-{y}-meta.json',encoding='utf-8'))
+          assert len(rows)==expected,(y,len(rows),expected)
+          assert not meta.get('failures'),meta.get('failures')
+          for r in rows:
+              assert r.get('requiredMarkets')==['win'],r.get('requiredMarkets')
+              win=(r.get('officialOdds') or {}).get('win') or {}
+              assert sum(v is not None for v in win.values())>=2,r.get('raceId')
+          assert meta.get('syntheticOddsUsed') is False,meta
+          assert meta.get('productionDatabaseWritten') is False,meta
+          print(json.dumps({'year':y,'officialWinOddsRaces':len(rows),'syntheticOddsUsed':False,'productionDatabaseWritten':False},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-all-race-win-odds-${{ matrix.year }}
+          path: |
+            analysis-results/all-race-win-odds-${{ matrix.year }}.jsonl
+            analysis-results/all-race-win-odds-${{ matrix.year }}-meta.json
+          retention-days: 30
