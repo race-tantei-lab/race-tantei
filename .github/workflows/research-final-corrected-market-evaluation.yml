@@ -1,0 +1,361 @@
+name: Research final corrected market evaluation
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-final-corrected-market-evaluation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  BASE_ODDS_RUN_ID: '31446629662'
+  FAST_2023_RUN_ID: '31447695033'
+  RECENT_ODDS_RUN_ID: '31446902302'
+  REPAIR_RUN_ID: '31447072766'
+  MISMATCH_REFETCH_RUN_ID: '31451425762'
+  BEST_DEMAND_RUN_ID: '31417411680'
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Mark corrected evaluation pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/final-corrected-market-evaluation' \
+            -f description='Composing source-clean 14,410-race odds set before three-model rerun' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Download frozen history and race selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p shared/history shared/demand shared/odds shared/repair shared/refetch shared/meta
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d shared/history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BEST_DEMAND_RUN_ID}/artifacts?per_page=100" > demand-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-blend-0.60" and .expired==false) | .id' demand-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > demand.zip
+          unzip -q demand.zip -d shared/demand
+          test -s shared/demand/demand.jsonl
+      - name: Download 2016-2026 source odds and repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${BASE_ODDS_RUN_ID}/artifacts?per_page=100" > base.json
+          for year in $(seq 2016 2022); do
+            name="research-continuous-market-odds-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' base.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
+            cp "tmp-$year/research-continuous-market-odds-${year}.jsonl" shared/odds/
+          done
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${FAST_2023_RUN_ID}/artifacts?per_page=100" > fast.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-continuous-market-odds-2023-fast" and .expired==false) | .id' fast.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > 2023.zip
+          mkdir -p tmp-2023; unzip -q 2023.zip -d tmp-2023
+          cp tmp-2023/research-continuous-market-odds-2023.jsonl shared/odds/
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RECENT_ODDS_RUN_ID}/artifacts?per_page=100" > recent.json
+          for year in $(seq 2024 2026); do
+            name="research-continuous-market-odds-recent-${year}"
+            id=$(jq -r --arg n "$name" '.artifacts[] | select(.name==$n and .expired==false) | .id' recent.json | head -n1)
+            test -n "$id" && test "$id" != null
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$year.zip"
+            mkdir -p "tmp-$year"; unzip -q "$year.zip" -d "tmp-$year"
+            cp "tmp-$year/research-continuous-market-odds-${year}.jsonl" shared/odds/
+          done
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${REPAIR_RUN_ID}/artifacts?per_page=100" > repair-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-continuous-market-odds-repair" and .expired==false) | .id' repair-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > repair.zip
+          unzip -q repair.zip -d shared/repair
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${MISMATCH_REFETCH_RUN_ID}/artifacts?per_page=100" > refetch-artifacts.json
+          id=$(jq -r '.artifacts[] | select(.name=="research-mismatched-current-odds-refetch" and .expired==false) | .id' refetch-artifacts.json | head -n1)
+          test -n "$id" && test "$id" != null
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > refetch.zip
+          unzip -q refetch.zip -d shared/refetch
+      - name: Compose corrected odds and verify source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json,re,urllib.parse
+          from pathlib import Path
+          venues={'札幌':'01','函館':'02','福島':'03','新潟':'04','東京':'05','中山':'06','中京':'07','京都':'08','阪神':'09','小倉':'10'}
+          result_re=re.compile(r'^(?:pw|sw)01sde(?:01|10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})(?:/([0-9A-Fa-f]{2}))?$')
+          odds_re=re.compile(r'^(?:pw|sw)15[1-8]ou(?:01|10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})(?:Z(?:99)?)?(?:/([0-9A-Fa-f]{2}))?$')
+          def ident_from_cname(raw,pat):
+            m=pat.match(str(raw or ''))
+            if not m:return None
+            venue,year,_meeting,_day,race_no,ymd,*_=m.groups()
+            return venue,year,race_no,ymd
+          def cname(url):
+            q=urllib.parse.parse_qs(urllib.parse.urlparse(str(url or '')).query)
+            return urllib.parse.unquote((q.get('CNAME') or q.get('cname') or [''])[0])
+          rows={}
+          for p in sorted(Path('shared/odds').glob('research-continuous-market-odds-20*.jsonl')):
+            for line in p.read_text().splitlines():
+              if line.strip():
+                r=json.loads(line);rows[str(r['raceId'])]=r
+          for p in (Path('shared/repair/research-continuous-market-odds-repair.jsonl'),Path('shared/refetch/research-mismatched-current-odds-refetch.jsonl')):
+            if p.exists():
+              for line in p.read_text().splitlines():
+                if line.strip():
+                  r=json.loads(line);rows[str(r['raceId'])]=r
+          demand=[json.loads(x) for x in Path('shared/demand/demand.jsonl').read_text().splitlines() if x.strip()]
+          demand_ids={str(x['raceId']) for x in demand}
+          assert len(demand_ids)==14410,len(demand_ids)
+          assert set(rows)==demand_ids,(len(rows),len(set(rows)-demand_ids),len(demand_ids-set(rows)))
+          mismatches=[];unverifiable=[];horse_mismatch=[];synthetic=[]
+          for rid,r in sorted(rows.items()):
+            want=(venues[str(r['venue'])],str(r['raceDate'])[:4],f"{int(r['raceNo']):02d}",str(r['raceDate']).replace('-',''))
+            prov=r.get('provenance') or {}
+            if prov.get('syntheticOddsUsed') is True or prov.get('estimatedOddsUsed') is True:synthetic.append(rid)
+            ru=prov.get('resultUrl')
+            if ru:
+              got=ident_from_cname(cname(ru),result_re)
+              if got!=want:mismatches.append({'raceId':rid,'kind':'resultUrl','want':want,'got':got,'url':ru})
+            else:
+              sc=prov.get('sourceCnames') or {}
+              if not sc:
+                unverifiable.append({'raceId':rid,'reason':'NO_RESULT_OR_SOURCE_CNAME'})
+              for market,raw in sc.items():
+                got=ident_from_cname(raw,odds_re)
+                if got!=want:mismatches.append({'raceId':rid,'kind':market,'want':want,'got':got,'cname':raw})
+            horses=sorted(int(x) for x in (r.get('horses') or []))
+            active=sorted(int(k) for k,v in (r.get('officialOdds',{}).get('win') or {}).items() if v is not None)
+            if horses!=active:horse_mismatch.append({'raceId':rid,'horses':horses,'activeWin':active})
+          assert not mismatches,mismatches[:20]
+          assert not unverifiable,unverifiable[:20]
+          assert not horse_mismatch,horse_mismatch[:20]
+          assert not synthetic,synthetic[:20]
+          out=Path('shared/corrected-odds');out.mkdir(exist_ok=True)
+          for year in map(str,range(2016,2027)):
+            ys={rid:r for rid,r in rows.items() if str(r['raceDate']).startswith(year+'-')}
+            Path(out/f'research-continuous-market-odds-{year}.jsonl').write_text(''.join(json.dumps(ys[k],ensure_ascii=False,separators=(',',':'))+'\n' for k in sorted(ys)))
+          meta={'rows':len(rows),'resultOrSourceIdentityMismatches':0,'unverifiableSources':0,'horseSetMismatches':0,'syntheticOrEstimatedOdds':0,'mismatchRefetchRows':3,'productionDatabaseWritten':False,'productionModelChanged':False}
+          Path('shared/meta/corrected-odds-audit.json').write_text(json.dumps(meta,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps(meta,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-corrected-final-market-inputs
+          path: |
+            shared/history/ten-year-history-corpus.jsonl
+            shared/demand/demand.jsonl
+            shared/corrected-odds
+            shared/meta/corrected-odds-audit.json
+          retention-days: 30
+
+  probability:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-corrected-final-market-inputs
+          path: input
+      - name: Apply active-runner ticket gate to research evaluator
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/research-evaluate-continuous-market-value.py');s=p.read_text()
+          old="official=odds_row.get('officialOdds') or {};out=[];missing=[]"
+          new="official=odds_row.get('officialOdds') or {};active={int(x) for x in (odds_row.get('horses') or [])};rows=[t for t in rows if all(int(h) in active for h in t['horses'])];out=[];missing=[]"
+          assert old in s
+          p.write_text(s.replace(old,new,1))
+          PY
+          python -m py_compile scripts/research-evaluate-continuous-market-value.py
+      - name: Evaluate corrected probability x odds model
+        run: |
+          python scripts/research-evaluate-continuous-market-value.py \
+            --corpus input/history/ten-year-history-corpus.jsonl \
+            --demand input/demand/demand.jsonl \
+            --odds-dir input/corrected-odds \
+            --out analysis-results/corrected-probability.json
+      - name: Verify complete 14,410-race evaluation
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/corrected-probability.json').read_text());b=m['bestVariant'];v=m['variants'][b]
+          assert m['missingOddsRaceCount']==0,m
+          assert not m['missingDemandRacesInCorpus'],m
+          assert v['evaluatedRaces']==14410,v['evaluatedRaces']
+          assert v['evaluationErrorCount']==0,v['evaluationErrors'][:20]
+          assert v['completeOddsAndEvaluation'] is True,v
+          print(json.dumps({'best':b,'roi':{c:x['roiPct'] for c,x in v['courses'].items()}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-corrected-probability-evaluation
+          path: analysis-results/corrected-probability.json
+          retention-days: 30
+
+  direct_roi:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-corrected-final-market-inputs
+          path: input
+      - name: Apply active-runner ticket gate to direct ROI evaluator
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/research-evaluate-direct-market-roi.py');s=p.read_text()
+          old="    official = odds_row.get('officialOdds') or {}\n    out = []\n    missing = []\n"
+          new="    official = odds_row.get('officialOdds') or {}\n    active = {int(x) for x in (odds_row.get('horses') or [])}\n    rows = [t for t in rows if all(int(h) in active for h in t['horses'])]\n    out = []\n    missing = []\n"
+          assert old in s
+          p.write_text(s.replace(old,new,1))
+          PY
+          python -m py_compile scripts/research-evaluate-direct-market-roi.py
+      - name: Evaluate corrected direct ROI model
+        run: |
+          python scripts/research-evaluate-direct-market-roi.py \
+            --corpus input/history/ten-year-history-corpus.jsonl \
+            --demand input/demand/demand.jsonl \
+            --odds-dir input/corrected-odds \
+            --out analysis-results/corrected-direct-roi.json
+      - name: Verify complete 14,410-race evaluation
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/corrected-direct-roi.json').read_text());b=m['bestVariant'];v=m['variants'][b]
+          assert m['missingOddsRaceCount']==0,m
+          assert not m['missingDemandRacesInCorpus'],m
+          assert v['evaluatedRaces']==14410,v['evaluatedRaces']
+          assert v['evaluationErrorCount']==0,v['evaluationErrors'][:20]
+          assert v['completeOddsAndEvaluation'] is True,v
+          print(json.dumps({'best':b,'roi':{c:x['roiPct'] for c,x in v['courses'].items()}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-corrected-direct-roi-evaluation
+          path: analysis-results/corrected-direct-roi.json
+          retention-days: 30
+
+  distortion:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: research-corrected-final-market-inputs
+          path: input
+      - name: Apply active-runner ticket gate to distortion evaluator
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/research-evaluate-market-distortion-roi.py');s=p.read_text()
+          old="    official,horses,pos,pop,weights,ranks=market_context(odds_row)\n    out=[]; missing=[]\n    for t in rows:\n"
+          new="    official,horses,pos,pop,weights,ranks=market_context(odds_row)\n    active=set(horses)\n    rows=[t for t in rows if all(int(h) in active for h in t['horses'])]\n    out=[]; missing=[]\n    for t in rows:\n"
+          assert old in s
+          p.write_text(s.replace(old,new,1))
+          PY
+          python -m py_compile scripts/research-evaluate-market-distortion-roi.py
+      - name: Evaluate corrected market distortion model
+        run: |
+          python scripts/research-evaluate-market-distortion-roi.py \
+            --corpus input/history/ten-year-history-corpus.jsonl \
+            --demand input/demand/demand.jsonl \
+            --odds-dir input/corrected-odds \
+            --out analysis-results/corrected-distortion.json
+      - name: Verify complete 14,410-race evaluation
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/corrected-distortion.json').read_text());b=m['bestVariant'];v=m['variants'][b]
+          assert m['missingOddsRaceCount']==0,m
+          assert not m['missingDemandRacesInCorpus'],m
+          assert v['evaluatedRaces']==14410,v['evaluatedRaces']
+          assert v['evaluationErrorCount']==0,v['evaluationErrors'][:20]
+          assert v['completeOddsAndEvaluation'] is True,v
+          print(json.dumps({'best':b,'roi':{c:x['roiPct'] for c,x in v['courses'].items()}},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-corrected-distortion-evaluation
+          path: analysis-results/corrected-distortion.json
+          retention-days: 30
+
+  summarize:
+    if: always()
+    needs: [prepare, probability, direct_roi, distortion]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: research-corrected-*-evaluation
+          path: results
+          merge-multiple: true
+      - name: Build robustness summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          paths={
+            'probability':Path('results/corrected-probability.json'),
+            'directRoi':Path('results/corrected-direct-roi.json'),
+            'distortion':Path('results/corrected-distortion.json'),
+          }
+          out={'models':{},'productionDatabaseWritten':False,'productionModelChanged':False}
+          for name,p in paths.items():
+            if not p.exists():continue
+            m=json.loads(p.read_text());b=m['bestVariant'];v=m['variants'][b];courses={}
+            for c,x in v['courses'].items():
+              largest=int(x['returnConcentration']['largestRaceReturnYen'])
+              stake=int(x['stakeYen']);ret=int(x['returnYen'])
+              budget={'ライト':2000,'スタンダード':5000,'プレミアム':10000}[c]
+              excl=round(100*(ret-largest)/(stake-budget),4) if stake>budget else None
+              courses[c]={'roiPct':x['roiPct'],'largestRaceReturnYen':largest,'largestRaceId':x['returnConcentration']['largestRaceId'],'top1ReturnSharePct':x['returnConcentration']['top1ReturnSharePct'],'excludeLargestRaceRoiPct':excl,'byYear':{y:s['roiPct'] for y,s in x['byYear'].items()},'byPeriod':{q:s['roiPct'] for q,s in x['byPeriod'].items()}}
+            surface=all((courses[c]['roiPct'] or 0)>=200 for c in courses)
+            robust=surface and all((courses[c]['excludeLargestRaceRoiPct'] or 0)>=100 for c in courses)
+            out['models'][name]={'bestVariant':b,'evaluatedRaces':v['evaluatedRaces'],'evaluationErrorCount':v['evaluationErrorCount'],'courses':courses,'allThreeSurfaceAtLeast200Pct':surface,'largestRaceExclusionGatePassed':robust}
+          Path('summary').mkdir(exist_ok=True)
+          Path('summary/research-corrected-market-model-summary.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({n:{'roi':{c:x['roiPct'] for c,x in d['courses'].items()},'excludeLargest':{c:x['excludeLargestRaceRoiPct'] for c,x in d['courses'].items()},'robust':d['largestRaceExclusionGatePassed']} for n,d in out['models'].items()},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-corrected-market-model-summary
+          path: summary/research-corrected-market-model-summary.json
+          retention-days: 30
+      - name: Mark corrected evaluation success
+        if: ${{ needs.prepare.result == 'success' && needs.probability.result == 'success' && needs.direct_roi.result == 'success' && needs.distortion.result == 'success' }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='research/final-corrected-market-evaluation' \
+            -f description='Source-clean 14,410-race three-model evaluation completed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark corrected evaluation failure
+        if: ${{ needs.prepare.result != 'success' || needs.probability.result != 'success' || needs.direct_roi.result != 'success' || needs.distortion.result != 'success' }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='research/final-corrected-market-evaluation' \
+            -f description='Corrected market evaluation requires targeted repair' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+          exit 1
