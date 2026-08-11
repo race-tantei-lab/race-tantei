@@ -1,0 +1,91 @@
+name: Research market-aware race selection 2016
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-market-aware-race-selection-2016.yml"
+      - "scripts/research-market-aware-race-selection.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  WIN_ODDS_RUN_ID: '31448876317'
+  HISTORY_ARTIFACT_ID: '9056288221'
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Mark pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='research/market-aware-race-selection-2016' \
+            -f description='Waiting for 2016 all-race win market then testing online five-race selection' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - name: Compile selector
+        run: python -m py_compile scripts/research-market-aware-race-selection.py
+      - name: Wait for all-race win odds artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 500); do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${WIN_ODDS_RUN_ID}/artifacts?per_page=100" > a.json
+            id=$(jq -r '.artifacts[] | select(.name=="research-all-race-win-odds-2016" and .expired==false) | .id' a.json | head -n1)
+            if [ -n "$id" ] && [ "$id" != null ]; then echo "$id" > artifact-id.txt; exit 0; fi
+            sleep 20
+          done
+          exit 1
+      - name: Download frozen corpus and all-race win odds
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p history odds analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip ten-year-history-corpus.jsonl -d history
+          id=$(cat artifact-id.txt)
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > odds.zip
+          unzip -q odds.zip -d odds
+          test -s odds/research-all-race-win-odds-2016.jsonl
+      - name: Run online market-aware selector
+        run: |
+          python scripts/research-market-aware-race-selection.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --win-odds odds/research-all-race-win-odds-2016.jsonl \
+            --out analysis-results/market-aware-race-selection-2016.json
+      - name: Verify provenance and compare against zero-market control
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          m=json.loads(Path('analysis-results/market-aware-race-selection-2016.json').read_text())
+          assert m['targetDayResultsUsedForSelection'] is False,m
+          assert m['raceMarketStatsUpdatedOnlyAfterDateFreeze'] is True,m
+          assert m['ticketStatsUpdatedOnlyAfterDateFreeze'] is True,m
+          assert m['syntheticOddsUsed'] is False,m
+          assert m['productionDatabaseWritten'] is False,m
+          assert '0.0' in m['variants'],m
+          print(json.dumps({'controlRoi':m['variants']['0.0']['proxyTicketRoiPct'],'best':m['bestVariant'],'bestRoi':m['variants'][m['bestVariant']]['proxyTicketRoiPct'],'allVariants':{k:v['proxyTicketRoiPct'] for k,v in m['variants'].items()},'marketErrors':len(m['marketFeatureErrors'])},ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: research-market-aware-race-selection-2016
+          path: analysis-results/market-aware-race-selection-2016.json
+          retention-days: 14
+      - name: Mark success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success \
+            -f context='research/market-aware-race-selection-2016' -f description='2016 online market-aware race selection evaluated' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure \
+            -f context='research/market-aware-race-selection-2016' -f description='Market-aware race selector requires targeted repair' -f target_url="$STATUS_TARGET_URL" >/dev/null
