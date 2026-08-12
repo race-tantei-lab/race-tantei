@@ -22,10 +22,12 @@ jobs:
         run: |
           set -euo pipefail
           code=$(curl -sS --retry 4 --retry-delay 2 -o home.html -w '%{http_code}' "$BASE_URL/")
-          echo "home_http=$code bytes=$(wc -c < home.html)"
+          roi_count=$(grep -c '431.7%' home.html || true)
+          history_count=$(grep -c '2016-08-10' home.html || true)
+          echo "home_http=$code bytes=$(wc -c < home.html) roi_count=$roi_count history_count=$history_count"
           test "$code" = "200"
-          grep -q '431.7%' home.html
-          grep -q '2016-08-10' home.html
+          test "$roi_count" -gt 0
+          test "$history_count" -gt 0
 
       - name: Verify ten-year calendar API
         shell: bash
