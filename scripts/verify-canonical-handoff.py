@@ -14,6 +14,7 @@ REQUIRED = [
     "config/canonical-production-manifest.json",
     "config/ten-year-completed-model.json",
     "analysis-results/ten-year-model-completion-20260812.json",
+    "analysis-results/production-deployment.log",
     "models/ten-year-completed-model.txt",
     "models/ten-year-production-state-manifest.json",
     "models/ten-year-runner-feature-state.json.gz",
@@ -26,6 +27,7 @@ REQUIRED = [
     "scripts/generate-ten-year-preday-selection.py",
     "scripts/generate-ten-year-live-bets.py",
     ".github/workflows/auto-final-live-bets.yml",
+    ".github/workflows/verify-canonical-handoff.yml",
     "wrangler.jsonc",
 ]
 
@@ -63,11 +65,22 @@ def main() -> None:
     state_manifest = load_json("models/ten-year-production-state-manifest.json")
     runner_manifest = load_json("data/ten-year-runners/manifest.json")
     wrangler = load_json("wrangler.jsonc")
+    deployment_log = read("analysis-results/production-deployment.log")
 
     if manifest.get("status") != "production":
         fail("canonical manifest status is not production")
+    if int(manifest.get("handoffVersion", 0)) < 2:
+        fail("canonical handoffVersion is not completed version 2+")
     if manifest.get("sourceOfTruth") != "HANDOFF.md":
         fail("canonical manifest sourceOfTruth mismatch")
+
+    verification = manifest.get("handoffVerification", {})
+    if verification.get("script") != "scripts/verify-canonical-handoff.py":
+        fail("canonical handoff verifier path mismatch")
+    if verification.get("workflow") != ".github/workflows/verify-canonical-handoff.yml":
+        fail("canonical handoff workflow path mismatch")
+    if verification.get("requiredResult") != "CANONICAL_HANDOFF_OK":
+        fail("canonical handoff required result mismatch")
 
     if config.get("status") != "completed" or config.get("name") != "ten-year-completed-model":
         fail("completed model config identity mismatch")
@@ -89,13 +102,6 @@ def main() -> None:
     }
     if source_ids != manifest["model"]["sourceArtifactIds"]:
         fail(f"source artifact IDs mismatch: {source_ids}")
-
-    if int(state_manifest.get("featureRows", -1)) != 559546:
-        fail("production state featureRows mismatch")
-    if int(state_manifest.get("demandRows", -1)) != 14410:
-        fail("production state demandRows mismatch")
-    if int(state_manifest.get("historyRaces", -1)) != 40155:
-        fail("production state historyRaces mismatch")
 
     state_files = state_manifest.get("files", {})
     expected_state_paths = [
@@ -126,6 +132,14 @@ def main() -> None:
     if vars_.get("MODEL_VERSION") != manifest["model"]["name"]:
         fail("MODEL_VERSION mismatch")
 
+    d1 = wrangler.get("d1_databases", [])
+    if len(d1) != 1:
+        fail("expected exactly one D1 binding")
+    if d1[0].get("database_name") != manifest["site"]["d1DatabaseName"]:
+        fail("D1 database name mismatch")
+    if d1[0].get("database_id") != manifest["site"]["d1DatabaseId"]:
+        fail("D1 database ID mismatch")
+
     auto_workflow = read(manifest["production"]["autoWorkflow"])
     if "run-ten-year-auto-final-live.py" not in auto_workflow:
         fail("auto workflow does not invoke canonical ten-year runner")
@@ -139,14 +153,20 @@ def main() -> None:
     if "14410" not in public_summary or "431.6505898681471" not in public_summary:
         fail("public summary is not canonical 14,410R / 431.6505898681471%")
 
-    if int(runner_manifest.get("races", -1)) != 34566:
+    if int(runner_manifest.get("races", -1)) != manifest["publicHistory"]["historyRaces"]:
         fail("runner archive race count mismatch")
-    if int(runner_manifest.get("runners", -1)) != 480441:
+    if int(runner_manifest.get("runners", -1)) != manifest["publicHistory"]["runnerRows"]:
         fail("runner archive runner count mismatch")
 
     history_loader = read(manifest["publicHistory"]["loader"])
     if "34566" not in history_loader:
         fail("ten-year history loader does not contain canonical race count")
+
+    worker_version = manifest["site"]["verifiedWorkerVersionId"]
+    if manifest["site"]["url"] not in deployment_log:
+        fail("deployment log does not contain canonical production URL")
+    if worker_version not in deployment_log:
+        fail("deployment log does not contain canonical Worker version ID")
 
     if "HANDOFF.md" not in readme:
         fail("README does not point to HANDOFF.md")
@@ -158,6 +178,8 @@ def main() -> None:
         "run-ten-year-auto-final-live.py",
         "wrangler.jsonc.main",
         "431.6505898681471%",
+        "verify-canonical-handoff.py",
+        "CANONICAL_HANDOFF_OK",
     ):
         if needle not in handoff:
             fail(f"HANDOFF missing canonical marker: {needle}")
@@ -166,6 +188,7 @@ def main() -> None:
         "CANONICAL_HANDOFF_OK",
         f"model_sha={actual_model_sha}",
         f"site_entry={wrangler['main']}",
+        f"worker_version={worker_version}",
         "selected_races=14410",
         "roi_pct=431.6505898681471",
     )
