@@ -196,14 +196,40 @@ def current_fetch(row, historical, current):
     }
 
 
-def market_has_value(result, market):
+def market_is_complete(result, market, historical):
+    horses = []
+    for horse in result.get("horses") or ():
+        try:
+            number = int(horse)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= number <= 18:
+            horses.append(number)
+    horses = sorted(set(horses))
+    if len(horses) < 2:
+        return False
+
+    expected = int(historical.expected_count(market, horses) or 0)
     values = ((result.get("officialOdds") or {}).get(market) or {})
-    return any(value is not None for value in values.values())
+    present = sum(1 for value in values.values() if value is not None)
+    if expected <= 0 or present != expected:
+        return False
+
+    coverage = ((result.get("officialOddsCoverage") or {}).get(market) or {})
+    if coverage:
+        try:
+            reported_expected = int(coverage.get("expected"))
+            reported_present = int(coverage.get("present"))
+        except (TypeError, ValueError):
+            return False
+        if reported_expected != expected or reported_present != expected:
+            return False
+    return True
 
 
-def required_markets_without_values(row, result, historical):
+def required_markets_incomplete(row, result, historical):
     required = tuple(m for m in historical.MARKETS if m in set(row.get("requiredMarkets") or ()))
-    return [market for market in required if not market_has_value(result, market)]
+    return [market for market in required if not market_is_complete(result, market, historical)]
 
 
 def main():
@@ -220,21 +246,27 @@ def main():
 
     def dispatch(row):
         if row.get("resultUrlResolutionMethod") == "validated_current_direct_desktop":
-            return current_fetch(row, historical, current)
+            result = current_fetch(row, historical, current)
+            incomplete = required_markets_incomplete(row, result, historical)
+            if incomplete:
+                raise RuntimeError(
+                    f"OFFICIAL_MARKET_INCOMPLETE_CURRENT:{','.join(incomplete)}"
+                )
+            return result
 
         result = original_fetch(row)
-        missing = required_markets_without_values(row, result, historical)
-        if not missing:
+        incomplete = required_markets_incomplete(row, result, historical)
+        if not incomplete:
             return result
 
         fallback = current_fetch(row, historical, current)
-        still_missing = required_markets_without_values(row, fallback, historical)
-        if still_missing:
+        still_incomplete = required_markets_incomplete(row, fallback, historical)
+        if still_incomplete:
             raise RuntimeError(
-                f"OFFICIAL_MARKET_EMPTY_AFTER_RUNTIME_FALLBACK:{','.join(still_missing)}"
+                f"OFFICIAL_MARKET_INCOMPLETE_AFTER_RUNTIME_FALLBACK:{','.join(still_incomplete)}"
             )
-        fallback.setdefault("provenance", {})["runtimeParserFallbackMarkets"] = missing
-        fallback["provenance"]["runtimeParserFallbackReason"] = "legacy_parser_returned_zero_values"
+        fallback.setdefault("provenance", {})["runtimeParserFallbackMarkets"] = incomplete
+        fallback["provenance"]["runtimeParserFallbackReason"] = "legacy_parser_incomplete_market_coverage"
         return fallback
 
     historical.fetch_race = dispatch
