@@ -62,8 +62,6 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          # Feature model state: inject a state-out argument and serialize the exact
-          # local dictionaries after the final date has updated them.
           p=Path('/tmp/canonical/scripts/research-export-runner-ml-features.py')
           s=p.read_text(encoding='utf-8')
           old="ap=argparse.ArgumentParser();ap.add_argument('--corpus',required=True);ap.add_argument('--out',required=True);ap.add_argument('--meta',required=True);a=ap.parse_args()"
@@ -71,13 +69,10 @@ jobs:
           if old not in s: raise SystemExit('FEATURE_ARG_PATCH_TARGET_MISSING')
           s=s.replace(old,new,1)
           old="if current:process(current,day)\n    fo.close();meta="
-          new="""if current:process(current,day)\n    import gzip\n    state_payload={'throughDate':'2026-08-09','horseHist':{k:list(v) for k,v in sorted(horse_hist.items())},'horseTotal':dict(sorted(horse_total.items())),'horseSurface':[[k[0],k[1],*v] for k,v in sorted(horse_surface.items())],'horseDist':[[k[0],k[1],*v] for k,v in sorted(horse_dist.items())],'horseVenue':[[k[0],k[1],*v] for k,v in sorted(horse_venue.items())],'jockey':dict(sorted(jockey.items())),'trainer':dict(sorted(trainer.items())),'pair':[[k[0],k[1],*v] for k,v in sorted(pair.items())]}\n    state_raw=json.dumps(state_payload,ensure_ascii=False,separators=(',',':')).encode('utf-8')\n    with open(a.state_out,'wb') as sf:\n        with gzip.GzipFile(filename='',mode='wb',fileobj=sf,compresslevel=9,mtime=0) as gz:gz.write(state_raw)\n    fo.close();meta="""
+          new="""if current:process(current,day)\n    import gzip\n    state_payload={'throughDate':'2026-08-09','horseHist':{k:[{**x,'date':x['date'].isoformat()} for x in v] for k,v in sorted(horse_hist.items())},'horseTotal':dict(sorted(horse_total.items())),'horseSurface':[[k[0],k[1],*v] for k,v in sorted(horse_surface.items())],'horseDist':[[k[0],k[1],*v] for k,v in sorted(horse_dist.items())],'horseVenue':[[k[0],k[1],*v] for k,v in sorted(horse_venue.items())],'jockey':dict(sorted(jockey.items())),'trainer':dict(sorted(trainer.items())),'pair':[[k[0],k[1],*v] for k,v in sorted(pair.items())]}\n    state_raw=json.dumps(state_payload,ensure_ascii=False,separators=(',',':')).encode('utf-8')\n    with open(a.state_out,'wb') as sf:\n        with gzip.GzipFile(filename='',mode='wb',fileobj=sf,compresslevel=9,mtime=0) as gz:gz.write(state_raw)\n    fo.close();meta="""
           if old not in s: raise SystemExit('FEATURE_STATE_PATCH_TARGET_MISSING')
           p.write_text(s.replace(old,new,1),encoding='utf-8')
 
-          # Race-selection state: inject state-out and serialize the exact walk-forward
-          # state after the last date is processed. The blend wrapper still supplies
-          # the canonical local_weight=0.60 ticket_score implementation.
           p=Path('/tmp/canonical/scripts/research-continuous-walkforward-demand.py')
           s=p.read_text(encoding='utf-8')
           old="ap=argparse.ArgumentParser();ap.add_argument('--corpus',required=True);ap.add_argument('--out',required=True);ap.add_argument('--meta',required=True);a=ap.parse_args()"
