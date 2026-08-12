@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import copy
 import importlib.util
 import os
 import re
@@ -166,7 +167,7 @@ def current_fetch(row, historical, current):
     for market in required:
         values = {str(combo): odds_value(low, high) for combo, low, high in parsed_by_market[market]}
         expected = historical.expected_count(market, horses)
-        present = len(values)
+        present = sum(1 for value in values.values() if value is not None)
         official[market] = values
         coverage[market] = {
             "expected": expected,
@@ -196,7 +197,7 @@ def current_fetch(row, historical, current):
     }
 
 
-def market_is_complete(result, market, historical):
+def active_horses(result):
     horses = []
     for horse in result.get("horses") or ():
         try:
@@ -205,31 +206,102 @@ def market_is_complete(result, market, historical):
             continue
         if 1 <= number <= 18:
             horses.append(number)
-    horses = sorted(set(horses))
-    if len(horses) < 2:
-        return False
-
-    expected = int(historical.expected_count(market, horses) or 0)
-    values = ((result.get("officialOdds") or {}).get(market) or {})
-    present = sum(1 for value in values.values() if value is not None)
-    if expected <= 0 or present != expected:
-        return False
-
-    coverage = ((result.get("officialOddsCoverage") or {}).get(market) or {})
-    if coverage:
-        try:
-            reported_expected = int(coverage.get("expected"))
-            reported_present = int(coverage.get("present"))
-        except (TypeError, ValueError):
-            return False
-        if reported_expected != expected or reported_present != expected:
-            return False
-    return True
+    return sorted(set(horses))
 
 
-def required_markets_incomplete(row, result, historical):
+def required_markets_partial(row, result, historical):
+    horses = active_horses(result)
     required = tuple(m for m in historical.MARKETS if m in set(row.get("requiredMarkets") or ()))
-    return [market for market in required if not market_is_complete(result, market, historical)]
+    partial = []
+    for market in required:
+        expected = int(historical.expected_count(market, horses) or 0) if len(horses) >= 2 else 0
+        values = ((result.get("officialOdds") or {}).get(market) or {})
+        present = sum(1 for value in values.values() if value is not None)
+        if expected <= 0 or present < expected:
+            partial.append(market)
+    return partial
+
+
+def normalized_odds(value):
+    if value is None:
+        return None
+    if isinstance(value, (list, tuple)):
+        return tuple(float(item) for item in value)
+    return (float(value),)
+
+
+def assert_same_race(primary, fallback, row):
+    expected = (str(row.get("raceId") or ""), str(row.get("raceDate") or ""), str(row.get("venue") or ""), int(row.get("raceNo") or 0))
+    for label, result in (("PRIMARY", primary), ("FALLBACK", fallback)):
+        actual = (
+            str(result.get("raceId") or ""),
+            str(result.get("raceDate") or ""),
+            str(result.get("venue") or ""),
+            int(result.get("raceNo") or 0),
+        )
+        if actual != expected:
+            raise RuntimeError(f"OFFICIAL_ODDS_RACE_IDENTITY_MISMATCH:{label}:{actual}:{expected}")
+
+
+def merge_official_results(primary, fallback, row, historical, supplemented_markets):
+    assert_same_race(primary, fallback, row)
+    required = tuple(m for m in historical.MARKETS if m in set(row.get("requiredMarkets") or ()))
+    merged = copy.deepcopy(primary)
+    horses = sorted(set(active_horses(primary)) | set(active_horses(fallback)))
+    if len(horses) < 2:
+        raise RuntimeError("OFFICIAL_ODDS_MERGE_HORSES_TOO_FEW")
+    merged["horses"] = horses
+
+    merged_official = {}
+    added_by_market = {}
+    for market in required:
+        primary_values = dict(((primary.get("officialOdds") or {}).get(market) or {}))
+        fallback_values = dict(((fallback.get("officialOdds") or {}).get(market) or {}))
+        added = 0
+        for combo, value in fallback_values.items():
+            if value is None:
+                continue
+            key = str(combo)
+            if key in primary_values and primary_values[key] is not None:
+                if normalized_odds(primary_values[key]) != normalized_odds(value):
+                    raise RuntimeError(
+                        f"OFFICIAL_ODDS_CONFLICT:{row.get('raceId')}:{market}:{key}:"
+                        f"{primary_values[key]}:{value}"
+                    )
+            else:
+                primary_values[key] = value
+                added += 1
+        merged_official[market] = primary_values
+        added_by_market[market] = added
+    merged["officialOdds"] = merged_official
+
+    coverage = {}
+    for market in required:
+        expected = int(historical.expected_count(market, horses) or 0)
+        present = sum(1 for value in merged_official[market].values() if value is not None)
+        coverage[market] = {
+            "expected": expected,
+            "present": present,
+            "ratio": present / expected if expected else 0.0,
+        }
+    merged["officialOddsCoverage"] = coverage
+
+    provenance = dict(merged.get("provenance") or {})
+    primary_provenance = dict(primary.get("provenance") or {})
+    fallback_provenance = dict(fallback.get("provenance") or {})
+    provenance.update({
+        "officialOddsSource": "jra_official_final_odds_parser_union",
+        "parserUnionUsed": True,
+        "parserUnionSupplementedMarkets": list(supplemented_markets),
+        "parserUnionAddedCombinations": added_by_market,
+        "primaryOfficialOddsSource": primary_provenance.get("officialOddsSource"),
+        "fallbackOfficialOddsSource": fallback_provenance.get("officialOddsSource"),
+        "fallbackSourceCnames": fallback_provenance.get("sourceCnames"),
+        "syntheticOddsUsed": False,
+        "productionDatabaseWritten": False,
+    })
+    merged["provenance"] = provenance
+    return merged
 
 
 def main():
@@ -246,28 +318,15 @@ def main():
 
     def dispatch(row):
         if row.get("resultUrlResolutionMethod") == "validated_current_direct_desktop":
-            result = current_fetch(row, historical, current)
-            incomplete = required_markets_incomplete(row, result, historical)
-            if incomplete:
-                raise RuntimeError(
-                    f"OFFICIAL_MARKET_INCOMPLETE_CURRENT:{','.join(incomplete)}"
-                )
-            return result
+            return current_fetch(row, historical, current)
 
-        result = original_fetch(row)
-        incomplete = required_markets_incomplete(row, result, historical)
-        if not incomplete:
-            return result
+        primary = original_fetch(row)
+        partial = required_markets_partial(row, primary, historical)
+        if not partial:
+            return primary
 
         fallback = current_fetch(row, historical, current)
-        still_incomplete = required_markets_incomplete(row, fallback, historical)
-        if still_incomplete:
-            raise RuntimeError(
-                f"OFFICIAL_MARKET_INCOMPLETE_AFTER_RUNTIME_FALLBACK:{','.join(still_incomplete)}"
-            )
-        fallback.setdefault("provenance", {})["runtimeParserFallbackMarkets"] = incomplete
-        fallback["provenance"]["runtimeParserFallbackReason"] = "legacy_parser_incomplete_market_coverage"
-        return fallback
+        return merge_official_results(primary, fallback, row, historical, partial)
 
     historical.fetch_race = dispatch
     historical.main()
