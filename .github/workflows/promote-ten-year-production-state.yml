@@ -1,0 +1,152 @@
+name: Promote completed ten-year production state
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/promote-ten-year-production-state.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: promote-ten-year-production-state
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: "9056288221"
+  FEATURE_ARTIFACT_ID: "9087261097"
+  DEMAND_ARTIFACT_ID: "9074033903"
+  FEATURE_EXPORTER_COMMIT: "b45f472b404a3944d1e8c9919e36daf62b5db16d"
+  SELECTION_COMMIT: "acf44ad91c83e30f3a3e0363b43bbc8fb4a51a2c"
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download frozen canonical inputs
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/input /tmp/reference /tmp/canonical/scripts models
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > /tmp/history.zip
+          unzip -q /tmp/history.zip ten-year-history-corpus.jsonl -d /tmp/input
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${FEATURE_ARTIFACT_ID}/zip" > /tmp/features.zip
+          unzip -q /tmp/features.zip -d /tmp/reference/features
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${DEMAND_ARTIFACT_ID}/zip" > /tmp/demand.zip
+          unzip -q /tmp/demand.zip demand.jsonl -d /tmp/reference/demand
+          test -s /tmp/input/ten-year-history-corpus.jsonl
+          test -s /tmp/reference/features/runner-ml-features.csv
+          test -s /tmp/reference/demand/demand.jsonl
+
+      - name: Materialize exact frozen research implementations
+        run: |
+          set -euo pipefail
+          for sha in "$FEATURE_EXPORTER_COMMIT" "$SELECTION_COMMIT"; do
+            git cat-file -e "${sha}^{commit}" || git fetch --depth=1 origin "$sha"
+          done
+          git show "${FEATURE_EXPORTER_COMMIT}:scripts/research-export-runner-ml-features.py" > /tmp/canonical/scripts/research-export-runner-ml-features.py
+          for file in research-continuous-blend-run.py research-continuous-walkforward-demand.py research-sparse-walkforward-demand.py generate-final-preday-selection.py research-ten-year-canonical-demand.py; do
+            git show "${SELECTION_COMMIT}:scripts/${file}" > "/tmp/canonical/scripts/${file}"
+          done
+
+      - name: Patch frozen implementations to emit state only
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # Feature model state: inject a state-out argument and serialize the exact
+          # local dictionaries after the final date has updated them.
+          p=Path('/tmp/canonical/scripts/research-export-runner-ml-features.py')
+          s=p.read_text(encoding='utf-8')
+          old="ap=argparse.ArgumentParser();ap.add_argument('--corpus',required=True);ap.add_argument('--out',required=True);ap.add_argument('--meta',required=True);a=ap.parse_args()"
+          new="ap=argparse.ArgumentParser();ap.add_argument('--corpus',required=True);ap.add_argument('--out',required=True);ap.add_argument('--meta',required=True);ap.add_argument('--state-out',required=True);a=ap.parse_args()"
+          if old not in s: raise SystemExit('FEATURE_ARG_PATCH_TARGET_MISSING')
+          s=s.replace(old,new,1)
+          old="if current:process(current,day)\n    fo.close();meta="
+          new="""if current:process(current,day)\n    import gzip\n    state_payload={'throughDate':'2026-08-09','horseHist':{k:list(v) for k,v in sorted(horse_hist.items())},'horseTotal':dict(sorted(horse_total.items())),'horseSurface':[[k[0],k[1],*v] for k,v in sorted(horse_surface.items())],'horseDist':[[k[0],k[1],*v] for k,v in sorted(horse_dist.items())],'horseVenue':[[k[0],k[1],*v] for k,v in sorted(horse_venue.items())],'jockey':dict(sorted(jockey.items())),'trainer':dict(sorted(trainer.items())),'pair':[[k[0],k[1],*v] for k,v in sorted(pair.items())]}\n    state_raw=json.dumps(state_payload,ensure_ascii=False,separators=(',',':')).encode('utf-8')\n    with open(a.state_out,'wb') as sf:\n        with gzip.GzipFile(filename='',mode='wb',fileobj=sf,compresslevel=9,mtime=0) as gz:gz.write(state_raw)\n    fo.close();meta="""
+          if old not in s: raise SystemExit('FEATURE_STATE_PATCH_TARGET_MISSING')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+
+          # Race-selection state: inject state-out and serialize the exact walk-forward
+          # state after the last date is processed. The blend wrapper still supplies
+          # the canonical local_weight=0.60 ticket_score implementation.
+          p=Path('/tmp/canonical/scripts/research-continuous-walkforward-demand.py')
+          s=p.read_text(encoding='utf-8')
+          old="ap=argparse.ArgumentParser();ap.add_argument('--corpus',required=True);ap.add_argument('--out',required=True);ap.add_argument('--meta',required=True);a=ap.parse_args()"
+          new="ap=argparse.ArgumentParser();ap.add_argument('--corpus',required=True);ap.add_argument('--out',required=True);ap.add_argument('--meta',required=True);ap.add_argument('--state-out',required=True);a=ap.parse_args()"
+          if old not in s: raise SystemExit('SELECTION_ARG_PATCH_TARGET_MISSING')
+          s=s.replace(old,new,1)
+          old="if current_date:process(current_date,day)\n\n    selected.sort"
+          new="""if current_date:process(current_date,day)\n\n    import gzip\n    state_payload={'throughDate':'2026-08-09','currentQuarter':current_quarter,'horseHist':{k:list(v) for k,v in sorted(state['horse_hist'].items())},'horseStarts':dict(sorted(state['horse_starts'].items())),'jstats':dict(sorted(state['jstats'].items())),'tstats':dict(sorted(state['tstats'].items())),'stats':[[k[0],list(k[1]),list(k[2]),v[0],v[1]] for k,v in sorted(stats.items())],'betStats':[[int(k),v[0],v[1]] for k,v in sorted(bet_stats.items())]}\n    state_raw=json.dumps(state_payload,ensure_ascii=False,separators=(',',':')).encode('utf-8')\n    with open(a.state_out,'wb') as sf:\n        with gzip.GzipFile(filename='',mode='wb',fileobj=sf,compresslevel=9,mtime=0) as gz:gz.write(state_raw)\n\n    selected.sort"""
+          if old not in s: raise SystemExit('SELECTION_STATE_PATCH_TARGET_MISSING')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
+          python -m py_compile /tmp/canonical/scripts/research-export-runner-ml-features.py /tmp/canonical/scripts/research-continuous-walkforward-demand.py
+
+      - name: Rebuild and verify exact runner feature history
+        run: |
+          set -euo pipefail
+          python /tmp/canonical/scripts/research-export-runner-ml-features.py \
+            --corpus /tmp/input/ten-year-history-corpus.jsonl \
+            --out /tmp/runner-ml-features.csv \
+            --meta /tmp/runner-ml-features-meta.json \
+            --state-out models/ten-year-runner-feature-state.json.gz
+          cmp /tmp/runner-ml-features.csv /tmp/reference/features/runner-ml-features.csv
+          echo "runner feature corpus: byte-identical"
+          ls -lh models/ten-year-runner-feature-state.json.gz
+
+      - name: Rebuild and verify exact canonical race demand
+        env:
+          CONT_MIN_N: "500"
+          CONT_KEY_PRIOR: "2000"
+          CONT_BET_PRIOR: "5000"
+          CONT_PRIOR_ROI: "0.80"
+          CONT_TOP_COMPONENTS: "8"
+          CONT_TICKETS_PER_RACE: "3"
+          CONT_QUARTER_DECAY: "1.0"
+          CONT_LOCAL_WEIGHT: "0.60"
+        run: |
+          set -euo pipefail
+          cd /tmp/canonical
+          python scripts/research-continuous-blend-run.py \
+            --corpus /tmp/input/ten-year-history-corpus.jsonl \
+            --out /tmp/canonical-demand.jsonl \
+            --meta /tmp/canonical-demand-meta.json \
+            --state-out "${GITHUB_WORKSPACE}/models/ten-year-race-selection-state.json.gz"
+          cmp /tmp/canonical-demand.jsonl /tmp/reference/demand/demand.jsonl
+          echo "race demand: byte-identical"
+          ls -lh "${GITHUB_WORKSPACE}/models/ten-year-race-selection-state.json.gz"
+
+      - name: Write production state manifest
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          files=['models/ten-year-runner-feature-state.json.gz','models/ten-year-race-selection-state.json.gz']
+          out={'throughDate':'2026-08-09','sourceHistoryArtifactId':9056288221,'canonicalFeatureArtifactId':9087261097,'canonicalDemandArtifactId':9074033903,'files':{}}
+          for f in files:
+            p=Path(f);out['files'][f]={'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+          Path('models/ten-year-production-state-manifest.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+          print(json.dumps(out,ensure_ascii=False))
+          PY
+
+      - name: Commit verified production state
+        run: |
+          set -euo pipefail
+          git add models/ten-year-runner-feature-state.json.gz models/ten-year-race-selection-state.json.gz models/ten-year-production-state-manifest.json
+          if git diff --cached --quiet; then
+            echo "Production state already matches main."
+            exit 0
+          fi
+          git config user.name "race-tantei-bot"
+          git config user.email "race-tantei-bot@users.noreply.github.com"
+          git commit -m "Promote completed ten-year production state"
+          git push origin HEAD:main
