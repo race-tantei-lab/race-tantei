@@ -2,99 +2,129 @@
 
 > **次スレッドで「引き継いで」と言われたら、最初にこのファイルと `config/canonical-production-manifest.json` を読むこと。**
 >
-> 保存会話・古いREADME・研究ブランチ・旧 `public-site-entry-v*`・旧 `run-auto-final-live.py` から現行仕様を推測しない。現行仕様はこのファイル、canonical manifest、`config/ten-year-completed-model.json`、`wrangler.jsonc`、`scripts/run-ten-year-auto-final-live.py` を正本とする。
+> 保存会話・古いREADME・研究ブランチ・旧 `public-site-entry-v*`・旧 `run-auto-final-live.py` から現行仕様を推測しない。
 
 ## 0. 現在地
 
-- リポジトリ: `race-tantei-lab/race-tantei`
-- 本番ブランチ: `main`
-- 完成モデル: `ten-year-completed-model`
-- モデル状態: **completed / production active**
-- 公開サイト: `https://race-tantei-phase0.race-tantei.workers.dev`
-- 本番Worker: `race-tantei-phase0`
-- 現在のUI入口: **`wrangler.jsonc` の `main` を必ず見ること**
-  - 引継ぎ完成時点: `src/public-site-entry-v18.ts`
-  - revision: `ten-year-completed-public-v18-20260812`
-- 予想ロジックの検証済み本番ベースラインcommit: `8f07a9eca0c7494d902aa6873a9149121896ccde`
-- Worker version ID: **固定しない**。最新値は `analysis-results/production-deployment.log` の `Current Version ID:` を読む
+- repository: `race-tantei-lab/race-tantei`
+- production branch: `main`
+- completed model: `ten-year-completed-model`
+- status: **completed / production active**
+- production site: `https://race-tantei-phase0.race-tantei.workers.dev`
+- Worker: `race-tantei-phase0`
+- current UI entry: **必ず `wrangler.jsonc.main` を読む**
+  - 現時点: `src/public-site-entry-v18.ts`
+  - deploy revision: `ten-year-completed-public-v18-20260812`
 - D1: `race-tantei-phase0`
 - D1 database ID: `949b5e8b-d1a4-4c4e-80d1-d031afdc03de`
-- 引継ぎ機械検証: `scripts/verify-canonical-handoff.py`
-- 引継ぎ検証workflow: `.github/workflows/verify-canonical-handoff.yml`
-- 引継ぎ完成判定文字列: **`CANONICAL_HANDOFF_OK`**
+- Worker version IDは固定しない。`analysis-results/production-deployment.log` の `Current Version ID:` を読む。
+- canonical verifier: `scripts/verify-canonical-handoff.py`
+- workflow: `.github/workflows/verify-canonical-handoff.yml`
+- success marker: **`CANONICAL_HANDOFF_OK`**
 
-このHANDOFF/manifest/audit/README/検証基盤の整理は引継ぎ用であり、完成済み予想ロジックを変更するものではない。
+この引継ぎ文書の更新はモデル変更ではない。完成済みモデル・state・過去公開買い目は固定する。
 
----
+## 1. 次スレッドの開始順
 
-## 1. 次スレッドの開始手順
-
-「引き継いで」と言われたら、順番を変えずに以下を行う。
-
-1. `HANDOFF.md` を読む。
-2. `config/canonical-production-manifest.json` を読む。
-3. `config/ten-year-completed-model.json` を読む。
-4. `wrangler.jsonc` を読み、**その時点の `main` が本番UI入口であることを確認**する。
-5. `scripts/run-ten-year-auto-final-live.py` を読み、現在の本番自動予想入口を確認する。
-6. `scripts/verify-canonical-handoff.py` と `.github/workflows/verify-canonical-handoff.yml` を確認し、current `main` の引継ぎ検証が成功する状態か確認する。
-7. 必要な作業にだけ進む。モデル探索・再学習・再検証から始めない。
-
-**引継ぎは、文書が存在するだけでは完成扱いにしない。current `main` に対する正本検証が成功し、`CANONICAL_HANDOFF_OK` が出る状態を完成条件とする。**
-
-### 会話上の進め方
-
-このユーザーとのツール作業では、**ツールを1回使ったら必ず画面に進捗を返す**。長時間無言で複数ツールを連続実行しない。「細かく区切る」はタスクを分割する意味ではなく、**同じタスクの途中でも返信を細かく挟む**という意味。
-
----
+1. `HANDOFF.md`
+2. `config/canonical-production-manifest.json`
+3. `config/ten-year-completed-model.json`
+4. `analysis-results/ten-year-model-completion-20260812.json`
+5. **`analysis-results/completed-model-methodology-audit-20260813.md`**
+6. `wrangler.jsonc` でcurrent entry確認
+7. `scripts/run-ten-year-auto-final-live.py` でproduction runner確認
+8. `scripts/verify-canonical-handoff.py` / workflowのcurrent main成功確認
+9. 依頼された具体作業へ進む。モデル探索からやり直さない。
 
 ## 2. 完成モデルの正本
 
-### 正本ファイル
+### ファイル
 
-- 仕様: `config/ten-year-completed-model.json`
-- 学習済み重み: `models/ten-year-completed-model.txt`
-- 完成監査: `analysis-results/ten-year-model-completion-20260812.json`
+- config: `config/ten-year-completed-model.json`
+- weights: `models/ten-year-completed-model.txt`
+- completion audit: `analysis-results/ten-year-model-completion-20260812.json`
+- methodology audit: `analysis-results/completed-model-methodology-audit-20260813.md`
 - state manifest: `models/ten-year-production-state-manifest.json`
-- runner feature state: `models/ten-year-runner-feature-state.json.gz`
-- race selection state: `models/ten-year-race-selection-state.json.gz`
+- runner state: `models/ten-year-runner-feature-state.json.gz`
+- selection state: `models/ten-year-race-selection-state.json.gz`
 
-### モデル重み
+### weights
 
 SHA256:
 
 `63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5`
 
-LightGBM 4.6.0 binary classifier。feature countは56。
+LightGBM 4.6.0 binary classifier、56 features、target `labelWin`。
 
-### 対象期間とレース選定
+### archive
 
-- frozen archive: 2016-08-10 ～ 2026-08-09
-- universe: 34,566R
-- selected: 14,410R
-- venue-days: 2,882
-- **各会場・各開催日ちょうど5R**
-- 選定は予想時点の過去履歴から作る `raceScore`
-- 対象日の結果は選定に使わない
-- レース選定にhistorical final oddsを使わない
-- synthetic oddsは禁止
+- 2016-08-10 ～ 2026-08-09
+- universe 34,566R
+- selected 14,410R
+- venue-days 2,882
+- 各会場・各開催日ちょうど5R
 
-### 馬別勝率モデル
+### probability model
 
-- target: `labelWin`
-- 56特徴量
-- `marketPopularity` は勝率モデルから除外
-- post-result field、raw raceId/date、教師ラベル等を入力に使わない
-- canonical params:
-  - n_estimators: 500
-  - learning_rate: 0.04
-  - num_leaves: 127
-  - min_child_samples: 30
-  - reg_lambda: 4
-  - reg_alpha: 0.2
-  - colsample_bytree: 0.9
-  - random_state: 20260812
+除外:
 
-### 買い目
+- raw `raceId`
+- raw `raceDate`
+- `finishPosition`
+- `labelWin`
+- `labelTop3`
+- `marketPopularity`
+
+canonical params:
+
+- n_estimators 500
+- learning_rate 0.04
+- num_leaves 127
+- min_child_samples 30
+- reg_lambda 4
+- reg_alpha 0.2
+- colsample_bytree 0.9
+- random_state 20260812
+
+### race selection — 実処理
+
+レース選定はLightGBMで12Rを直接順位付けする方式ではない。`scripts/ten-year-production-core.py` のprior-only selection stateを使う。
+
+1. 対象日より前の確定履歴だけでselection stateを更新。
+2. 各レースの出走馬を、近走form/speed、騎手・調教師3着内率、経験、直近3走top3回数等から順位付け。
+3. proxy ticket用に上位5頭を残す。
+4. 単勝 / 馬連 / ワイド / 馬単 / 3連複 / 3連単のproxy候補を生成。
+5. 対象日より前の券種・条件別払戻ROI統計をpriorで平滑化してscore化。
+6. score上位3 proxy ticketsを取り、最低2券種を含ませる。
+7. 3点の平均scoreをraceScoreとする。
+8. 会場ごとraceScore上位5Rを選ぶ。
+
+canonical selection constants:
+
+- TOP_HORSES 5
+- MIN_N 500
+- KEY_PRIOR 2000
+- BET_PRIOR 5000
+- PRIOR_ROI 0.80
+- TOP_COMPONENTS 8
+- TICKETS_PER_RACE 3
+- LOCAL_WEIGHT 0.60
+
+完成監査:
+
+- targetDayResultsUsedForSelection false
+- historicalFinalOddsUsedForSelection false
+- syntheticOddsUsed false
+
+### final tickets — 実処理
+
+1. 56 features → runner raw probability
+2. race内で合計1へ正規化
+3. Plackett-Luceで全6券種の全組合せ確率を計算
+4. 各券種を `predictedProbability × officialJraOdds` で順位付けし上位5候補
+5. 上位5を `ln(predictedProbability) + 0.4 × ln(officialJraOdds)` で再評価
+6. 各券種の1位を残す
+7. 異なる2券種の上位を1点ずつ選び、合計2点固定
 
 対象券種:
 
@@ -105,83 +135,69 @@ LightGBM 4.6.0 binary classifier。feature countは56。
 - 3連複
 - 3連単
 
-組合せ確率は馬別勝率を正規化し、Plackett-Luceで計算。
+stakes:
 
-各券種で `predictedProbability × officialJraOdds` の上位5候補を残し、最終評価は:
+- ライト 1,000 + 1,000 = 2,000円
+- スタンダード 2,500 + 2,500 = 5,000円
+- プレミアム 5,000 + 5,000 = 10,000円
 
-`ln(predictedProbability) + 0.4 × ln(officialJraOdds)`
+JRA公式オッズのみ。synthetic oddsは禁止。
 
-最終的に**異なる2券種から1点ずつ、合計2点固定**。
+## 3. 過去成績の読み方 — 2026-08-13監査で固定
 
-### コース購入額
+完成監査の14,410R:
 
-- ライト: 1,000円 + 1,000円 = 2,000円
-- スタンダード: 2,500円 + 2,500円 = 5,000円
-- プレミアム: 5,000円 + 5,000円 = 10,000円
+- ROI **431.6505898681471%**（表示通常431.7%）
+- hitRacePct 54.406662040249834%
+- top1% race return除外・stake維持 ROI 342.88272021835996%
+- top1% ticket payout除外・stake維持 ROI 316.2602358973746%
 
-公式JRAオッズのみ使用する。
+**重要:** completion auditは probability model を `trainingMode: full frozen archive uniform discovery` と記録している。したがって公開431.6505898681471%は、完成ルールを凍結10年アーカイブ全体へ適用したfull-period retrospective aggregateとして扱う。
 
-### 完成成績
+以下の表現は禁止:
 
-完成監査の14,410Rで3コースともROI:
+- 「431.7%は完全OOF」
+- 「431.7%は未使用期間だけの成績」
+- 「431.7%がそのまま将来期待回収率」
+- 「過去14,410Rは現在のlive lockと完全同条件」と、timestamp証跡なしに断定すること
 
-**431.6505898681471%**
+完成までに日付分割・スライス等のロバスト性検証はあるが、公開full aggregateと混同しない。
 
-表示上は通常 `431.7%`。
+研究commit `acf44ad91c83e30f3a3e0363b43bbc8fb4a51a2c` はrace-selection local weightを 0.15 / 0.30 / 0.45 / 0.60 でsweepしている。少なくともレース選定側には研究選択が存在するので、full archive成績を無偏なforward estimateと扱わない。
 
-### 完成監査JSONの注意
+final ticket coefficient 0.4はcanonical completed ruleとして確定している。一方、0.4が事前固定・nested OOF選定だったことを独立に証明する正本成果物は2026-08-13監査では確認できていない。未確認部分を都合よく補完しない。
 
-`analysis-results/ten-year-model-completion-20260812.json` 内の
+historical oddsはcompletion audit上、JRA公式source identity / horse-set整合が取れ、synthetic/estimated oddsは0。ただし各過去レースのodds snapshot timestampが現在live lockと完全同等である証跡はcompletion audit JSON単体にはない。これもfull-period ROIをlive-equivalentと断定しない理由。
 
-- `productionModelChanged:false`
-- `productionDatabaseWritten:false`
+詳細: `analysis-results/completed-model-methodology-audit-20260813.md`
 
-は**完成監査を記録した時点の歴史的事実**。その後本番昇格が完了しているため、現在のproduction statusをこの2フィールドから判定してはいけない。
+## 4. production stateと来歴
 
-現在の本番状態は以下で判断する:
+`models/ten-year-production-state-manifest.json` が正本。
 
-- `config/ten-year-completed-model.json` の `productionChanged:true`
-- canonical production code
-- `wrangler.jsonc`
-- deployment log
+- throughDate 2026-08-09
+- sourceHistoryArtifactId 9056288221
+- canonicalFeatureArtifactId 9087261097
+- canonicalDemandArtifactId 9074033903
 
----
+SHA256:
 
-## 3. 正本stateとデータ来歴
+- runner feature state: `86f8fdf6ee82d4465efec50ff36198010a20044bc1187f4b8c8ded912f640f3f`
+- race selection state: `b27775dbc645ce326348cf60c6f139f8689db779a7fbd86c19d1b26eb5691ca8`
 
-`models/ten-year-production-state-manifest.json` を正本とする。
+state manifestに存在しない `featureRows` / `demandRows` / `historyRaces` をchecker都合で追加しない。
 
-- throughDate: 2026-08-09
-- source history artifact ID: `9056288221`
-- canonical runner feature artifact ID: `9087261097`
-- canonical demand artifact ID: `9074033903`
+## 5. 本番自動予想
 
-state SHA256:
-
-- `models/ten-year-runner-feature-state.json.gz`
-  - `86f8fdf6ee82d4465efec50ff36198010a20044bc1187f4b8c8ded912f640f3f`
-- `models/ten-year-race-selection-state.json.gz`
-  - `b27775dbc645ce326348cf60c6f139f8689db779a7fbd86c19d1b26eb5691ca8`
-
-stateは2026-08-09終了時点までの履歴状態。未来日の本番では、それ以降に確定した過去結果だけを順次反映して使う。
-
-**重要:** state manifestに存在しない `featureRows` / `demandRows` / `historyRaces` 等を、検証を通す目的で後付けしてはいけない。検証器は正本stateの実在フィールドと実ファイルSHAに合わせる。正本の意味を変えてcheckerだけgreenにする修正は禁止。
-
----
-
-## 4. 本番自動予想の正本
-
-### 本番workflow
+workflow:
 
 `.github/workflows/auto-final-live-bets.yml`
 
-### 本番ランナー
+production entry:
 
 **`scripts/run-ten-year-auto-final-live.py`**
 
-これが現行production entry。
-
-関連正本:
+関連:
 
 - `scripts/ten-year-production-core.py`
 - `scripts/generate-ten-year-preday-selection.py`
@@ -189,252 +205,141 @@ stateは2026-08-09終了時点までの履歴状態。未来日の本番では�
 - `scripts/collect-current-jra-official-odds-live.py`
 - `scripts/collect-current-jra-official-odds-fast.py`
 
-### 重要: 旧ランナーの扱い
+旧 `scripts/run-auto-final-live.py` 単体はcurrent modelではない。時間管理等のshellとしてimportされても、選定・買い目生成・checkはten-year wrapperへ差し替わる。旧316ルールをcurrent truthにしない。
 
-`scripts/run-auto-final-live.py` は直接実行してはいけない。
+D1重要table:
 
-現在の `run-ten-year-auto-final-live.py` は、旧ランナーを**時間管理・ロック・既存運用シェルとして内部importする場合がある**が、以下を完成モデル実装へ差し替える:
+- rt_races
+- rt_runners
+- rt_results
+- rt_payouts
+- rt_public_bets
+- rt_system_state
 
-- レース選定
-- 買い目生成
-- 検証/check-only
+## 6. 公開サイト
 
-したがって旧 `run-auto-final-live.py` の316ルール等を見て「今の本番モデル」と判断してはいけない。
+**current entry判定は `wrangler.jsonc.main`。**
 
-### 本番D1の重要テーブル
+現時点 `src/public-site-entry-v18.ts`。
 
-- `rt_races`
-- `rt_runners`
-- `rt_results`
-- `rt_payouts`
-- `rt_public_bets`
-- `rt_system_state`
+公開条件詳細は、次を具体的に表示する。
 
-canonical check-onlyではモデルSHA、56特徴量、state SHA/date、必要テーブル等を検証する。
+- 12R→selection-side上位5頭→6券種proxy→上位3→raceScore→会場5R
+- 56 features→normalized runner probabilities
+- Plackett-Luce combination probabilities
+- 各券種EV上位5→`ln(p)+0.4ln(odds)`→券種代表1点
+- 異なる2券種から2点
+- 431.7% / 54.4%はfull-period retrospective aggregateで、完全OOFではない
+- historical odds timestampのlive-lock同等性は未証明なら断定しない
+- 公開済み買い目は不変
 
-確定買い目は1Rにつき2点、異なる2券種、コース予算をちょうど使い切る。
+その他UI要件:
 
----
+- home累計/月別/会場別は10年canonical metrics
+- 14,410R表示
+- 年は2026→…→2016
+- 終了済み: 的中 / 不的中 / 見送り
+- 不的中は赤、見送りと区別
+- 「公開後の扱い」は通常の紺panel、黄色notice禁止
+- 過去詳細: 着順、枠、馬番、馬名、性齢、斤量、騎手、調教師、馬体重、人気
+- 過去確定買い目を横スライド中心にしない
+- ライト / スタンダード / プレミアム縦表示
+- mobileは1券ずつcard型
 
-## 5. 公開サイトの正本
+public summary:
 
-### 本番入口
+- `src/v1/ten-year-public-summary.ts`
+- selected 14,410
+- ROI 431.6505898681471%
+- 121 months
+- 10 venues
 
-**`wrangler.jsonc.main` が唯一の正しい判定方法。**
+history:
 
-引継ぎ完成時点:
+- loader `src/v1/ten-year-history.ts`
+- assets `src/v1/ten-year-history-data/`
+- 34,566R / canonical tickets 14,410R
 
-`src/public-site-entry-v18.ts`
+runner archive:
 
-下位の `v17`, `v16`, `v15` 等はv18からtransitiveに利用される場合がある。**古いから削除してよい、あるいは個別に現行仕様だと判断してはいけない。**
+- `data/ten-year-runners/manifest.json`
+- 34,566R / 480,441 runner rows / 121 months
 
-### 現行UI要件
+## 7. 再生成の正本
 
-以下はユーザー確定要件として維持する。
+- public history builder: `scripts/build-ten-year-public-history-assets.py`
+- public history workflow: `.github/workflows/promote-ten-year-public-history.yml`
+- runner builder: `scripts/build-ten-year-runner-assets.py`
+- runner workflow: `.github/workflows/promote-ten-year-runner-assets.yml`
+- production state: `.github/workflows/promote-ten-year-production-state.yml`
+- completed model assets: `.github/workflows/promote-ten-year-completed-model-assets.yml`
 
-- ホームの累計・月別・会場別は10年完成モデルの正本集計を表示する。
-- 14,410Rを正本成績として表示する。
-- 年は**新しい順: 2026 → … → 2016**。
-- 月・日付は現在の順序を維持。
-- 終了済みレースは `的中 / 不的中 / 見送り`。
-- **不的中は赤色**。
-- 見送りは不的中と混同しない。
-- 条件詳細ページは完成モデルの説明を表示する。
-- **条件詳細ページの「公開後の扱い」に黄色いnoticeを使わない。通常の紺パネルにする。**
-- 過去レース詳細に出走馬・結果を表示する。
-- 表示項目: 着順、枠、馬番、馬名、性齢、斤量、騎手、調教師、馬体重、人気。
-- 過去レースの確定買い目は横スライド形式にしない。
-- ライト・スタンダード・プレミアムを縦に表示する。
-- スマホでは買い目を1券ずつカード型で読める形にする。
-- 過去の公開買い目と成績を後から書き換えない。
-
-### 公開集計
-
-`src/v1/ten-year-public-summary.ts`
-
-- selected races: 14,410
-- ROI: 431.6505898681471%
-- monthly: 121か月
-- venue: 10会場
-
-### 10年レース履歴
-
-loader:
-
-`src/v1/ten-year-history.ts`
-
-generated data:
-
-`src/v1/ten-year-history-data/`
-
-- 2016-08-10 ～ 2026-08-09
-- 34,566R
-- canonical買い目付き: 14,410R
-
-### 馬情報archive
-
-`data/ten-year-runners/`
-
-manifest:
-
-`data/ten-year-runners/manifest.json`
-
-- 34,566R
-- 480,441 runner rows
-- 2016-08 ～ 2026-08
-- 121か月
-
-過去レース詳細では月別gzipを必要時に読み込む。
-
----
-
-## 6. データ再生成の正本
-
-### 公開10年履歴
-
-- builder: `scripts/build-ten-year-public-history-assets.py`
-- workflow: `.github/workflows/promote-ten-year-public-history.yml`
-
-### 過去馬情報
-
-- builder: `scripts/build-ten-year-runner-assets.py`
-- workflow: `.github/workflows/promote-ten-year-runner-assets.yml`
-
-### production state
-
-`.github/workflows/promote-ten-year-production-state.yml`
-
-### completed model assets
-
-`.github/workflows/promote-ten-year-completed-model-assets.yml`
-
-再生成するときも、canonical artifact IDs / SHA / completion auditと一致することを前提にする。新しいモデル探索として扱わない。
-
----
-
-## 7. 旧物・研究物の扱い
-
-リポジトリには大量の過去研究workflow、旧本番workflow、旧UI versionが残っている。**存在することと現行正本であることは別。**
-
-### 正本ではないもの
-
-- research branch全般
-- `research-*` scripts / workflows
-- 旧rule-based / ROI200 / v3 / v4 / v5等の過去production実験
-- `approved-production-model*` 等の旧production config
-- `scripts/run-auto-final-live.py` 単体
-- `src/public-site-entry-v17.ts` 以下を単独で「現行UI」とみなすこと
-- 古いREADME記述
-
-これらは削除禁止とは限らないが、**現行仕様の判断根拠には使わない**。
-
-### UI versionの判断
-
-ファイル名の数字で推測しない。必ず `wrangler.jsonc.main` を読む。
-
-### production runnerの判断
-
-workflow `.github/workflows/auto-final-live-bets.yml` が呼ぶ正本ラッパーを読む。旧スクリプトの名前だけで判断しない。
-
----
+再生成はcanonical artifact IDs / SHA / completion auditと一致させ、新モデル探索として扱わない。
 
 ## 8. 絶対にしないこと
 
 - 完成モデルを勝手に再探索・再選定しない。
-- 完成モデルを「候補」に戻さない。
-- ユーザーから明示的にモデル変更指示がない限り、再学習・再検証を新モデル探索として始めない。
+- completed modelをcandidateへ戻さない。
+- 明示指示なしに新モデル再学習・再検証を始めない。
 - 過去結果から買い目を後付け変更しない。
 - synthetic oddsを使わない。
-- 過去の公開買い目を変更しない。
-- D1へ10年全履歴を大量writeして無料枠を消費する方式へ戻さない。公開10年履歴はrepo内圧縮archiveを利用する。
-- 条件詳細に黄色いnoticeを戻さない。
-- 不的中を見送りと同色に戻さない。
-- レース詳細の確定買い目を横スライド中心のUIへ戻さない。
-- 引継ぎ検証を通すために、正本データへ存在しないメタデータを捏造・追加しない。
-- Worker version IDをHANDOFF/manifestへ固定しない。docs/handoff push自体で再デプロイされ得るため、deployment logを読む。
-- 検証workflowが失敗しているのに「引継ぎ完成」と言わない。
+- 過去公開買い目を変更しない。
+- 10年全履歴をD1へmass writeする方式へ戻さない。
+- 黄色noticeを戻さない。
+- 不的中を見送りと同色にしない。
+- 買い目UIを横スライド中心へ戻さない。
+- 正本にないmetadataをchecker通過目的で捏造しない。
+- Worker version IDをHANDOFF/manifestへ固定しない。
+- validationの種類を根拠なくOOFと呼ばない。
+- exact odds timestampを証拠なしにlive-equivalentと呼ばない。
+- workflow失敗中に「完成」と言わない。
 
----
+## 9. 検証
 
-## 9. 変更するときの確認順
+script:
 
-### モデル/予想ロジック
+`scripts/verify-canonical-handoff.py`
 
-1. `config/ten-year-completed-model.json`
-2. `config/canonical-production-manifest.json`
-3. `scripts/run-ten-year-auto-final-live.py`
-4. production core/generator
-5. check-only
-6. workflow run
-7. `scripts/verify-canonical-handoff.py`
+workflow:
 
-### サイト/UI
+`.github/workflows/verify-canonical-handoff.yml`
 
-1. `wrangler.jsonc`
-2. `wrangler.jsonc.main` のentry
-3. 必要な下位wrapper
-4. Typecheck
-5. Cloudflare deploy
-6. 実サイト確認workflow/HTTP確認
-7. canonical handoff verify
+success:
 
-### 10年公開履歴
+**`CANONICAL_HANDOFF_OK`**
 
-1. `src/v1/ten-year-history.ts`
-2. `src/v1/ten-year-history-data/`
-3. `src/v1/ten-year-public-summary.ts`
-4. `data/ten-year-runners/manifest.json`
-5. canonical handoff verify
+検証は少なくとも:
 
----
+- completed identity / productionChanged
+- model SHA
+- state date / artifact IDs / state SHA
+- completion audit gates / 34,566 / 14,410
+- methodology auditの存在とperformance interpretation
+- `wrangler.jsonc.main` / revision / model / D1
+- live workflow / canonical runner接続
+- public summary / runner archive
+- conditions pageの具体的selection/ticket説明とOOF注意
+- deployment log URL/revision/model/D1/current Worker version
+- README/HANDOFF入口
 
-## 10. 一番短い引継ぎ回答
+を確認する。
 
-次スレッドでユーザーが「レース探偵を引き継いで」とだけ言った場合、まずrepo正本を確認した上で、最低限こう認識すること:
+過去の `production state featureRows mismatch` はchecker側が実在しないfieldを要求したことが原因。checkerを正本へ合わせ、正本に架空fieldを足さない。
 
-- 10年完成モデルは完成済み・本番active。
-- 14,410R、ROI 431.65%、各会場5R、2券固定、異なる2券種。
-- LightGBM重みSHAは `63e359...453a5`。
-- 本番予想入口は `run-ten-year-auto-final-live.py`。
-- UI入口は `wrangler.jsonc.main`。
-- 現在はv18系UI、10年履歴・runner archiveまで本番表示済み。
-- 旧研究・旧316ルール・古いUI固定値を拾って現行仕様を上書きしない。
-- 具体作業を始める前にこのHANDOFFとmanifestを読み込む。
-- 引継ぎの健全性は `verify-canonical-handoff.py` / `Verify canonical handoff` workflowで確認し、成功時は `CANONICAL_HANDOFF_OK` が出る。
-- Worker version IDが必要なら `analysis-results/production-deployment.log` の `Current Version ID:` を読む。
+## 10. 会話上の進め方
 
-このファイル自体に矛盾が疑われた場合は、**機械判定は `config/canonical-production-manifest.json` と `scripts/verify-canonical-handoff.py`、実際のcurrent entryは `wrangler.jsonc` とproduction workflowを優先して確認する。**
+ツール作業では進捗を細かく表示する。「細かく区切る」は承認待ちを増やす意味ではない。同一タスク内で、実行可能な次工程へ進みながら進捗を返す。ユーザーが「完成させて」と言った作業は、実装・検証・本番確認まで進める。
 
----
+## 11. 一番短い引継ぎ認識
 
-## 11. 引継ぎ完成判定
-
-### 機械検証の正本
-
-- script: `scripts/verify-canonical-handoff.py`
-- workflow: `.github/workflows/verify-canonical-handoff.yml`
-- 成功条件: exit code 0 かつ出力に **`CANONICAL_HANDOFF_OK`**
-
-検証対象は少なくとも以下:
-
-- 完成モデルidentity / `productionChanged:true`
-- LightGBM weights SHA256
-- production stateのthroughDate / artifact IDs / 2つのstate実ファイルSHA256
-- completion auditの全ゲートと34,566R / 14,410R
-- `wrangler.jsonc.main` / deploy revision / model version / D1 identity
-- canonical live workflowと`run-ten-year-auto-final-live.py`の接続
-- 10年公開summary / runner archive件数
-- production deployment logの本番URL / revision / model / D1 / 有効な `Current Version ID:` の存在
-- README / HANDOFFの正本入口
-
-### 既知の旧失敗と再発防止
-
-過去の `Verify canonical handoff` は `CANONICAL_HANDOFF_FAIL: production state featureRows mismatch` で失敗した。原因は、state manifestに存在しない `featureRows / demandRows / historyRaces` をverifier側が要求していたこと。
-
-また、Worker version IDをmanifestへ固定すると、HANDOFF更新push自体が本番再デプロイを起こした場合にIDが直後に変わり、正本が即座に古くなる。したがってWorker versionは固定せず、deployment logの `Current Version ID:` を動的正本とする。
-
-**正しい対応はverifierを実在する正本へ合わせることであり、state manifestへ架空の項目を足したり、動的なWorker IDを固定したりすることではない。**
-
-今後も検証が失敗した場合は、まず「正本同士のどこが不一致か」を調べる。モデル・state・過去公開買い目をchecker都合で変更してはいけない。
-
-この機械検証がcurrent `main` で成功して初めて、**「引継ぎ用の正本は完成」**と扱う。
+- 完成モデルはproduction active。
+- 14,410R / ROI 431.6505898681471% / hit 54.4%。ただしfull-period retrospective aggregateで完全OOFとは呼ばない。
+- 各会場5R、1R2点、異なる2券種。
+- race selectionはLightGBM直選択ではなくproxy-ticket raceScore。
+- final ticketsは56-feature LightGBM + Plackett-Luce + official odds。
+- weights SHA `63e359...453a5`。
+- production runner `run-ten-year-auto-final-live.py`。
+- UIは `wrangler.jsonc.main`。
+- methodology auditを読む。
+- old research/316 rule/old UIをcurrent truthにしない。
+- current mainで `verify-canonical-handoff.py` が `CANONICAL_HANDOFF_OK` になるまで完成扱いしない。

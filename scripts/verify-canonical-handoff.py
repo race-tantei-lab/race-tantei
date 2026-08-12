@@ -15,6 +15,7 @@ REQUIRED = [
     "config/canonical-production-manifest.json",
     "config/ten-year-completed-model.json",
     "analysis-results/ten-year-model-completion-20260812.json",
+    "analysis-results/completed-model-methodology-audit-20260813.md",
     "analysis-results/production-deployment.log",
     "models/ten-year-completed-model.txt",
     "models/ten-year-production-state-manifest.json",
@@ -60,6 +61,7 @@ def main() -> None:
 
     handoff = read("HANDOFF.md")
     readme = read("README.md")
+    methodology_audit = read("analysis-results/completed-model-methodology-audit-20260813.md")
     manifest = load_json("config/canonical-production-manifest.json")
     config = load_json("config/ten-year-completed-model.json")
     audit = load_json("analysis-results/ten-year-model-completion-20260812.json")
@@ -120,6 +122,25 @@ def main() -> None:
         fail("completion audit universe race count mismatch")
     if int(audit.get("archive", {}).get("selectedRaces", -1)) != 14410:
         fail("completion audit selected race count mismatch")
+    if audit.get("probabilityModel", {}).get("trainingMode") != "full frozen archive uniform discovery":
+        fail("completion audit trainingMode changed unexpectedly")
+    if audit.get("raceSelectionAudit", {}).get("targetDayResultsUsedForSelection") is not False:
+        fail("target-day result leakage flag is not false")
+    if audit.get("raceSelectionAudit", {}).get("historicalFinalOddsUsedForSelection") is not False:
+        fail("race selection unexpectedly uses historical final odds")
+    if audit.get("raceSelectionAudit", {}).get("syntheticOddsUsed") is not False:
+        fail("race selection synthetic odds flag is not false")
+
+    for needle in (
+        "431.6505898681471%",
+        "full frozen archive uniform discovery",
+        "完全OOF成績",
+        "acf44ad91c83e30f3a3e0363b43bbc8fb4a51a2c",
+        "timestamp",
+        "0.4",
+    ):
+        if needle not in methodology_audit:
+            fail(f"methodology audit missing transparency marker: {needle}")
 
     if wrangler.get("main") != manifest["site"]["entry"]:
         fail(f"wrangler main mismatch: {wrangler.get('main')} != {manifest['site']['entry']}")
@@ -136,6 +157,19 @@ def main() -> None:
         fail("D1 database name mismatch")
     if d1[0].get("database_id") != manifest["site"]["d1DatabaseId"]:
         fail("D1 database ID mismatch")
+
+    conditions_entry = read(manifest["site"]["entry"])
+    for needle in (
+        "上位5頭",
+        "仮想買い目",
+        "ln(予測確率) + 0.4 × ln(JRA公式オッズ)",
+        "431.7%",
+        "54.4%",
+        "完全なOOF成績ではありません",
+        "取得時刻",
+    ):
+        if needle not in conditions_entry:
+            fail(f"conditions page missing methodology marker: {needle}")
 
     auto_workflow = read(manifest["production"]["autoWorkflow"])
     if "run-ten-year-auto-final-live.py" not in auto_workflow:
@@ -177,6 +211,8 @@ def main() -> None:
         fail("README does not point to HANDOFF.md")
     if "canonical-production-manifest.json" not in readme:
         fail("README does not point to canonical production manifest")
+    if "completed-model-methodology-audit-20260813.md" not in readme:
+        fail("README does not point to methodology audit")
 
     for needle in (
         "63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5",
@@ -185,6 +221,8 @@ def main() -> None:
         "431.6505898681471%",
         "verify-canonical-handoff.py",
         "CANONICAL_HANDOFF_OK",
+        "completed-model-methodology-audit-20260813.md",
+        "完全OOF",
     ):
         if needle not in handoff:
             fail(f"HANDOFF missing canonical marker: {needle}")
@@ -196,6 +234,7 @@ def main() -> None:
         f"worker_version={worker_version}",
         "selected_races=14410",
         "roi_pct=431.6505898681471",
+        "methodology_audit=20260813",
     )
 
 

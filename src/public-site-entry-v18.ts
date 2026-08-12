@@ -16,34 +16,76 @@ function currentConditionsPage():string{
   const body=`
   <section class="hero">
     <h1>条件詳細</h1>
-    <p>現在の予想は、対象レースの結果を使わず、発走前までに取得できる履歴・出走馬情報・JRA公式オッズだけでレース選定から買い目まで一貫して決めます。過去に公開した買い目はあとから変更しません。</p>
+    <p>「どのレースを買うか」と「そのレースで何を買うか」は別々の段階で決めています。対象レースの結果を見てから選び直すことはせず、発走前までに利用する履歴・出走馬情報・JRA公式オッズから固定します。</p>
   </section>
   <section class="rule-summary">
-    <article class="rule-box"><b>対象レース</b><span>JRA開催を対象に、各会場・各開催日から5レースを選びます。選定は過去履歴から作るレーススコアで行い、その日の結果は使いません。</span></article>
-    <article class="rule-box"><b>馬ごとの勝率</b><span>馬・騎手・調教師・コース適性・近走など、発走前に確定している56項目から勝率を推定します。人気順位そのものは勝率モデルへ入れません。</span></article>
-    <article class="rule-box"><b>買い目は2点固定</b><span>1レースにつき必ず2点。しかも同じ券種から2点ではなく、異なる2券種から1点ずつ選びます。</span></article>
-    <article class="rule-box"><b>購入額</b><span>ライトは1点1,000円、スタンダードは1点2,500円、プレミアムは1点5,000円。どのコースも2点を50%ずつ購入します。</span></article>
-    <article class="rule-box"><b>公式オッズのみ</b><span>買い目の評価にはJRA公式オッズだけを使用します。合成オッズや推定オッズで代用しません。</span></article>
-    <article class="rule-box"><b>時系列を厳守</b><span>対象レースの着順・払戻・対象日後の情報は予想に使いません。確定後の結果は、次回以降に使う履歴へだけ追加します。</span></article>
+    <article class="rule-box"><b>各会場5レース</b><span>12レースをそのまま勝率順に並べるのではなく、過去履歴から各レースの「買い目を作りやすい度合い」を計算し、上位5レースを選びます。</span></article>
+    <article class="rule-box"><b>馬別勝率は56項目</b><span>馬・騎手・調教師・コース適性・近走など、発走前に確定している56項目から各馬の勝率を推定します。人気順位そのものは勝率モデルへ入れません。</span></article>
+    <article class="rule-box"><b>買い目は2点固定</b><span>単勝・ワイド・馬連・馬単・3連複・3連単を全部評価し、異なる2券種から1点ずつ、合計2点に絞ります。</span></article>
+    <article class="rule-box"><b>公式オッズのみ</b><span>最終買い目の評価にはJRA公式オッズだけを使用します。合成オッズ・推定オッズでは代用しません。</span></article>
+    <article class="rule-box"><b>対象日の結果は不使用</b><span>対象日の着順・払戻はレース選定にも買い目作成にも入れません。確定後に、将来日の履歴へ追加します。</span></article>
+    <article class="rule-box"><b>過去成績の意味を分離</b><span>431.7%・的中レース率54.4%は完成ルールを過去10年全体へ適用した後方集計です。完全OOF成績や将来の保証としては扱いません。</span></article>
   </section>
-  <div class="section-title"><h2>レース選定</h2><span class="muted">各会場5R</span></div>
-  <section class="card panel">
-    <p>過去のレース結果から更新した馬・騎手・調教師などの履歴状態を使ってレーススコアを計算し、各会場・各開催日の上位5レースを買い目候補にします。対象日の結果を見てからレースを選び直すことはありません。</p>
+
+  <div class="section-title"><h2>① 5レースをどう選ぶか</h2><span class="muted">12R → 5R</span></div>
+  <section class="card panel condition-flow">
+    <ol>
+      <li><b>対象日より前の履歴だけで状態を更新</b><br>馬の近走、騎手・調教師成績、過去の券種別・条件別払戻統計などを、前日までの確定履歴から持ちます。対象日の結果はここへ入れません。</li>
+      <li><b>各レースで出走馬を履歴評価</b><br>近走着順、速度傾向、騎手・調教師の3着内率、出走経験、直近3走の3着内回数などから順位付けし、レース選定用に上位5頭を残します。</li>
+      <li><b>上位5頭から「仮想買い目」を作る</b><br>単勝・ワイド・馬連・馬単・3連複・3連単の組合せを作ります。これは最終公開買い目ではなく、そのレースが過去傾向上どれだけ買いやすいかを測るためのproxyです。</li>
+      <li><b>過去ROIを平滑化して仮想買い目を採点</b><br>券種・会場・芝ダート・距離帯・頭数・クラス・馬の履歴特徴などに対応する過去払戻統計を使います。件数の少ない条件だけが偶然高くならないよう、券種全体の基準値を混ぜて平滑化します。</li>
+      <li><b>上位3つの仮想買い目からraceScoreを作る</b><br>少なくとも2券種を含む上位3候補のscore平均を、そのレースのraceScoreにします。</li>
+      <li><b>会場ごとにraceScore上位5R</b><br>各会場のレースをraceScoreの高い順に並べて5レースを選びます。同点ならレース番号の若い方を先にします。</li>
+    </ol>
+    <p class="muted"><b>重要:</b> 56項目の勝率モデルが12レースから5レースを直接選んでいるわけではありません。レース選定は、前日までの履歴を使った上記の仮想買い目評価で行います。またレース選定には対象日の最終オッズを使いません。</p>
   </section>
-  <div class="section-title"><h2>勝率推定に使う主な情報</h2><span class="muted">発走前情報のみ</span></div>
+
+  <div class="section-title"><h2>② 馬ごとの勝率をどう出すか</h2><span class="muted">56項目</span></div>
   <section class="grid2">
     <article class="panel"><h3>レース・コース</h3><p>会場、レース番号、芝・ダート、距離、回り、頭数、月、クラス、天候、馬場状態など。</p></article>
-    <article class="panel"><h3>馬</h3><p>馬番・枠番、性齢、馬体重、増減、斤量、出走数、勝率・3着内率、休養日数、直近1・3・5走の着順・上がり・速度など。</p></article>
+    <article class="panel"><h3>馬</h3><p>馬番・枠番、性齢、馬体重、増減、斤量、出走数、過去勝率・3着内率、休養日数、直近1・3・5走の着順・上がり・速度など。</p></article>
     <article class="panel"><h3>適性</h3><p>同じ芝・ダート、距離帯、会場での出走数・勝率・3着内率、距離変更、芝ダート変更など。</p></article>
     <article class="panel"><h3>人・組み合わせ</h3><p>騎手、調教師、馬×騎手の過去出走数・勝率・3着内率を使用します。</p></article>
   </section>
-  <div class="section-title"><h2>買い目の決め方</h2><span class="muted">6券種から2点</span></div>
   <section class="card panel">
-    <p>対象券種は <b>単勝・ワイド・馬連・馬単・3連複・3連単</b> の6種類です。馬ごとの勝率から着順組み合わせの確率を計算し、各券種で「予測確率 × JRA公式オッズ」が高い上位5候補を残します。</p>
-    <p>その後、各候補を <b>ln(予測確率) + 0.4 × ln(JRA公式オッズ)</b> で評価し、最終的にスコアが高い <b>異なる2券種</b> から1点ずつ選びます。</p>
+    <p>各馬の予測値を出したあと、同じレースの全馬で合計が1になるように正規化して、そのレース内の勝率として扱います。着順・払戻・教師ラベル・人気順位そのものは勝率モデルの入力に含めません。</p>
   </section>
+
+  <div class="section-title"><h2>③ 連系も含めて1点までどう絞るか</h2><span class="muted">全組合せ → 2点</span></div>
+  <section class="card panel condition-flow">
+    <ol>
+      <li><b>6券種の全組合せを作る</b><br>単勝・ワイド・馬連・馬単・3連複・3連単を対象に、取得できたJRA公式オッズの全組合せを候補にします。</li>
+      <li><b>着順組合せの確率を計算</b><br>正規化した馬別勝率からPlackett-Luce方式で計算します。馬単・3連単は順序付き、馬連は2順序、3連複は6順序を合算。ワイドはその2頭がともに3着以内へ入る全順序を合算します。</li>
+      <li><b>券種ごとにEV上位5候補へ絞る</b><br><b>予測確率 × JRA公式オッズ</b> が高い順に並べ、各券種で上位5候補だけを残します。</li>
+      <li><b>上位5候補を再採点して1点へ</b><br><b>ln(予測確率) + 0.4 × ln(JRA公式オッズ)</b> で再評価し、その券種で最も高い1点を残します。</li>
+      <li><b>6券種の代表から異なる2券種を選ぶ</b><br>券種ごとの代表1点をscore順に並べ、異なる2券種から1点ずつ選択します。これが公開する2点です。</li>
+    </ol>
+    <p>連系馬券が1点だけでも、的中組合せを結果から逆算して直接選んでいるのではありません。全組合せを同じ計算で評価したあと、上記の固定ルールで1点まで圧縮しています。</p>
+  </section>
+
+  <div class="section-title"><h2>④ 購入額</h2><span class="muted">選ぶ2点は共通</span></div>
+  <section class="rule-summary">
+    <article class="rule-box"><b>ライト</b><span>1,000円 + 1,000円 = 2,000円</span></article>
+    <article class="rule-box"><b>スタンダード</b><span>2,500円 + 2,500円 = 5,000円</span></article>
+    <article class="rule-box"><b>プレミアム</b><span>5,000円 + 5,000円 = 10,000円</span></article>
+  </section>
+
+  <div class="section-title"><h2>⑤ 431.7%・54.4%はどう読むか</h2><span class="muted">監査上の注意</span></div>
+  <section class="card panel condition-flow">
+    <p><b>431.7%の回収率と約54.4%の的中レース率は、凍結した過去10年の14,410レースへ完成ルールを適用した全期間の後方集計です。</b></p>
+    <p>対象日結果の直接利用、合成オッズ、結果項目を勝率モデルへ入れる処理は監査で確認されていません。一方、この431.7%自体は<b>完全なOOF成績ではありません</b>。完成までの研究ではルール候補の比較も行われているため、「まったく未使用のデータだけで431.7%だった」「将来も431.7%が期待できる」という意味にはしません。</p>
+    <p>また、過去買い目のオッズはJRA公式値との整合を監査していますが、14,410レースすべてについて、そのオッズの<b>取得時刻が現在のlive運用の買い目lock時刻と完全に同じ条件だったこと</b>までは、現在の正本記録だけでは独立に証明できません。この点も、過去成績をlive同条件の将来期待値とみなさない理由です。</p>
+  </section>
+
+  <div class="section-title"><h2>⑥ 漏洩チェック</h2></div>
+  <section class="grid2">
+    <article class="panel"><h3>確認済み</h3><p>レース選定で対象日の結果を使わない、レース選定で対象日の最終オッズを使わない、勝率モデルから着順・教師ラベル・人気順位そのものを除外、JRA公式オッズのみ、合成・推定オッズなし。</p></article>
+    <article class="panel"><h3>分けて考えること</h3><p>直接的な結果リークが見つからないことと、過去431.7%が無偏な将来期待値であることは別です。研究時のルール選択や過去オッズの取得時刻の同等性は、別の検証上の注意として扱います。</p></article>
+  </section>
+
   <div class="section-title"><h2>公開後の扱い</h2></div>
-  <section class="card panel"><p>公開済みの過去買い目は固定します。新しいレース結果は将来日の履歴更新にだけ利用し、過去の買い目や過去成績を後から有利に書き換えることはありません。</p></section>`;
+  <section class="card panel"><p>公開済みの過去買い目は固定します。新しいレース結果は将来日の履歴更新にだけ利用し、過去の買い目や過去成績を後から有利に書き換えることはありません。</p></section>
+  <style>.condition-flow ol{margin:0;padding-left:22px}.condition-flow li{margin:0 0 14px;line-height:1.75}.condition-flow li:last-child{margin-bottom:0}.condition-flow p{line-height:1.75}</style>`;
   return shell("条件詳細",body);
 }
 
