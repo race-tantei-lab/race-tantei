@@ -17,16 +17,17 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify production home metrics
+      - name: Verify production home
         shell: bash
         run: |
           set -euo pipefail
           code=$(curl -sS --retry 4 --retry-delay 2 -o home.html -w '%{http_code}' "$BASE_URL/")
           roi_count=$(grep -c '431.7%' home.html || true)
-          history_count=$(grep -c '2016-08-10' home.html || true)
+          history_count=$(grep -c '2016-08-13' home.html || true)
           echo "home_http=$code bytes=$(wc -c < home.html) roi_count=$roi_count history_count=$history_count"
           test "$code" = "200"
           test "$roi_count" -gt 0
+          test "$history_count" -gt 0
 
       - name: Verify ten-year calendar API
         shell: bash
@@ -50,7 +51,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          code=$(curl -sS --retry 4 --retry-delay 2 -o day.json -w '%{http_code}' "$BASE_URL/api/public/day?date=2016-08-10")
+          code=$(curl -sS --retry 4 --retry-delay 2 -o day.json -w '%{http_code}' "$BASE_URL/api/public/day?date=2016-08-13")
           echo "day_http=$code bytes=$(wc -c < day.json)"
           test "$code" = "200"
           rid=$(python - <<'PY'
@@ -58,7 +59,7 @@ jobs:
           x=json.load(open('day.json'))
           assert x.get('ok') is True
           rows=x.get('races',[])
-          assert rows, '2016-08-10 races missing'
+          assert rows, '2016-08-13 races missing'
           assert all('publicState' in r for r in rows)
           print(rows[0]['raceId'])
           PY
