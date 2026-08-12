@@ -67,12 +67,13 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import textwrap
           p=Path('/tmp/research-src/scripts/research-continuous-walkforward-demand.py')
           text=p.read_text(encoding='utf-8')
           needle="    selected.sort(key=lambda x:(x['raceDate'],x['venue'],int(x['raceNo'] or 0)))"
           if text.count(needle) != 1:
               raise SystemExit('STATE_EXPORT_INSERTION_POINT_INVALID')
-          hook=r'''    if os.environ.get('CONT_STATE_OUT'):
+          body=r'''if os.environ.get('CONT_STATE_OUT'):
               import gzip
               snap={
                   'throughDate': EVAL_END,
@@ -101,6 +102,7 @@ jobs:
                   with gzip.GzipFile(fileobj=base,mode='wb',mtime=0) as gz:
                       gz.write(raw)
           '''
+          hook=textwrap.indent(textwrap.dedent(body).strip('\n'),'    ')
           p.write_text(text.replace(needle,hook+'\n'+needle),encoding='utf-8')
           PY
 
