@@ -70,18 +70,8 @@ jobs:
           new="wr.writerow(row);runner_count+=1;valid_labels+=int(valid);by_year[date[:4]]+=1"
           if old not in s: raise SystemExit('STARTER_COMPLETE_PATCH_TARGET_MISSING')
           s=s.replace(old,new,1)
-          oldc="""    if '3勝クラス' in x:return 4
-    if 'オープン' in x or 'OPEN' in x.upper():return 5
-    if 'G3' in x or 'Ｇ３' in x:return 6
-    if 'G2' in x or 'Ｇ２' in x:return 7
-    if 'G1' in x or 'Ｇ１' in x:return 8
-"""
-          newc="""    if '3勝クラス' in x:return 4
-    if 'G1' in x or 'Ｇ１' in x or 'ＧⅠ' in x:return 8
-    if 'G2' in x or 'Ｇ２' in x or 'ＧⅡ' in x:return 7
-    if 'G3' in x or 'Ｇ３' in x or 'ＧⅢ' in x:return 6
-    if 'オープン' in x or 'OPEN' in x.upper():return 5
-"""
+          oldc="    if '3勝クラス' in x:return 4\n    if 'オープン' in x or 'OPEN' in x.upper():return 5\n    if 'G3' in x or 'Ｇ３' in x:return 6\n    if 'G2' in x or 'Ｇ２' in x:return 7\n    if 'G1' in x or 'Ｇ１' in x:return 8\n"
+          newc="    if '3勝クラス' in x:return 4\n    if 'G1' in x or 'Ｇ１' in x or 'ＧⅠ' in x:return 8\n    if 'G2' in x or 'Ｇ２' in x or 'ＧⅡ' in x:return 7\n    if 'G3' in x or 'Ｇ３' in x or 'ＧⅢ' in x:return 6\n    if 'オープン' in x or 'OPEN' in x.upper():return 5\n"
           if oldc not in s: raise SystemExit('GRADED_CLASS_PATCH_TARGET_MISSING')
           s=s.replace(oldc,newc,1)
 
