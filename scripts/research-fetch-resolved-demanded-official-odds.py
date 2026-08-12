@@ -246,6 +246,7 @@ def assert_same_race(primary, fallback, row):
 def merge_official_results(primary, fallback, row, historical, supplemented_markets):
     assert_same_race(primary, fallback, row)
     required = tuple(m for m in historical.MARKETS if m in set(row.get("requiredMarkets") or ()))
+    supplement_set = set(supplemented_markets)
     merged = copy.deepcopy(primary)
     horses = sorted(set(active_horses(primary)) | set(active_horses(fallback)))
     if len(horses) < 2:
@@ -256,21 +257,22 @@ def merge_official_results(primary, fallback, row, historical, supplemented_mark
     added_by_market = {}
     for market in required:
         primary_values = dict(((primary.get("officialOdds") or {}).get(market) or {}))
-        fallback_values = dict(((fallback.get("officialOdds") or {}).get(market) or {}))
         added = 0
-        for combo, value in fallback_values.items():
-            if value is None:
-                continue
-            key = str(combo)
-            if key in primary_values and primary_values[key] is not None:
-                if normalized_odds(primary_values[key]) != normalized_odds(value):
-                    raise RuntimeError(
-                        f"OFFICIAL_ODDS_CONFLICT:{row.get('raceId')}:{market}:{key}:"
-                        f"{primary_values[key]}:{value}"
-                    )
-            else:
-                primary_values[key] = value
-                added += 1
+        if market in supplement_set:
+            fallback_values = dict(((fallback.get("officialOdds") or {}).get(market) or {}))
+            for combo, value in fallback_values.items():
+                if value is None:
+                    continue
+                key = str(combo)
+                if key in primary_values and primary_values[key] is not None:
+                    if normalized_odds(primary_values[key]) != normalized_odds(value):
+                        raise RuntimeError(
+                            f"OFFICIAL_ODDS_CONFLICT:{row.get('raceId')}:{market}:{key}:"
+                            f"{primary_values[key]}:{value}"
+                        )
+                else:
+                    primary_values[key] = value
+                    added += 1
         merged_official[market] = primary_values
         added_by_market[market] = added
     merged["officialOdds"] = merged_official
