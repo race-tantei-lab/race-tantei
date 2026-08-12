@@ -30,9 +30,9 @@ jobs:
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-          curl --silent --show-error --fail --max-time 30 "${base}/" >/tmp/home.html
-          curl --silent --show-error --fail --max-time 30 "${base}/conditions" >/tmp/conditions.html
-          curl --silent --show-error --fail --max-time 30 "${base}/guide" >/tmp/guide.html
+          curl --silent --show-error --fail --connect-timeout 3 --max-time 10 "${base}/" >/tmp/home.html
+          curl --silent --show-error --fail --connect-timeout 3 --max-time 10 "${base}/conditions" >/tmp/conditions.html
+          curl --silent --show-error --fail --connect-timeout 3 --max-time 10 "${base}/guide" >/tmp/guide.html
           grep -q 'レース探偵' /tmp/home.html
           grep -q '5レースをどう選ぶか' /tmp/conditions.html
           grep -q 'レース探偵の見方' /tmp/guide.html
@@ -42,11 +42,27 @@ jobs:
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-          for attempt in $(seq 1 36); do
-            home_code="$(curl --silent --show-error --max-time 25 -o /tmp/home.html -w '%{http_code}' "${base}/" || true)"
-            conditions_code="$(curl --silent --show-error --max-time 25 -o /tmp/conditions.html -w '%{http_code}' "${base}/conditions" || true)"
-            c8="$(curl --silent --show-error --max-time 25 -o /tmp/day8.json -w '%{http_code}' "${base}/api/public/day?date=2026-08-08" || true)"
-            c9="$(curl --silent --show-error --max-time 25 -o /tmp/day9.json -w '%{http_code}' "${base}/api/public/day?date=2026-08-09" || true)"
+
+          fetch_url() {
+            local url="$1" body="$2" codefile="$3"
+            local code
+            code="$(curl --silent --show-error --connect-timeout 3 --max-time 8 -o "$body" -w '%{http_code}' "$url" || true)"
+            printf '%s' "$code" >"$codefile"
+          }
+
+          for attempt in $(seq 1 12); do
+            fetch_url "${base}/" /tmp/home.html /tmp/home.code & p1=$!
+            fetch_url "${base}/conditions" /tmp/conditions.html /tmp/conditions.code & p2=$!
+            fetch_url "${base}/api/public/day?date=2026-08-08" /tmp/day8.json /tmp/day8.code & p3=$!
+            fetch_url "${base}/api/public/day?date=2026-08-09" /tmp/day9.json /tmp/day9.code & p4=$!
+            wait "$p1"; wait "$p2"; wait "$p3"; wait "$p4"
+
+            home_code="$(cat /tmp/home.code)"
+            conditions_code="$(cat /tmp/conditions.code)"
+            c8="$(cat /tmp/day8.code)"
+            c9="$(cat /tmp/day9.code)"
+            echo "attempt=${attempt} home=${home_code} conditions=${conditions_code} day8=${c8} day9=${c9}"
+
             if [ "$home_code" = "200" ] && [ "$conditions_code" = "200" ] && [ "$c8" = "200" ] && [ "$c9" = "200" ]; then
               if python - <<'PY'
           import json,sys
@@ -68,27 +84,27 @@ jobs:
             '取得時刻',
             '公開後の扱い',
           )
-          valid=(
-            'レース探偵' in home
-            and 'ライト' in home and 'スタンダード' in home and 'プレミアム' in home
-            and all(marker in conditions for marker in condition_markers)
-            and len(aug8)==15 and len(aug9)==15
-            and all((r.get('publicState') or {}).get('code')!='skip' for r in aug9)
-          )
-          print(json.dumps({
+          checks={
             'homeAlive':'レース探偵' in home,
+            'courses':all(x in home for x in ('ライト','スタンダード','プレミアム')),
             'conditionsMethodology':all(marker in conditions for marker in condition_markers),
-            'aug8Locked':len(aug8),
-            'aug9Targets':[(r.get('venue'),r.get('raceNo'),(r.get('publicState') or {}).get('code')) for r in aug9],
-            'valid':valid,
+            'aug8Locked':len(aug8)==15,
+            'aug9Targets':len(aug9)==15,
+            'aug9NoSkip':all((r.get('publicState') or {}).get('code')!='skip' for r in aug9),
+          }
+          print(json.dumps({
+            'checks':checks,
+            'aug8Count':len(aug8),
+            'aug9Count':len(aug9),
+            'aug9States':[(r.get('venue'),r.get('raceNo'),(r.get('publicState') or {}).get('code')) for r in aug9],
           },ensure_ascii=False))
-          sys.exit(0 if valid else 1)
+          sys.exit(0 if all(checks.values()) else 1)
           PY
               then exit 0; fi
             fi
-            echo "Waiting for canonical public deployment (${attempt}/36)"; sleep 5
+            sleep 5
           done
-          echo 'Canonical public site did not become visible in time.'; exit 1
+          echo 'Canonical public site did not satisfy production smoke within the bounded wait.'; exit 1
 
       - name: Publish production verification
         if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
