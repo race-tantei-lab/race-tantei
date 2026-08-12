@@ -16,7 +16,7 @@
   - 引継ぎ完成時点: `src/public-site-entry-v18.ts`
   - revision: `ten-year-completed-public-v18-20260812`
 - 予想ロジックの検証済み本番ベースラインcommit: `8f07a9eca0c7494d902aa6873a9149121896ccde`
-- 最新検証済みWorker version ID: `58dbe61c-4be8-4c33-97d5-6ad17ceeaf7d`
+- Worker version ID: **固定しない**。最新値は `analysis-results/production-deployment.log` の `Current Version ID:` を読む
 - D1: `race-tantei-phase0`
 - D1 database ID: `949b5e8b-d1a4-4c4e-80d1-d031afdc03de`
 - 引継ぎ機械検証: `scripts/verify-canonical-handoff.py`
@@ -351,6 +351,7 @@ workflow `.github/workflows/auto-final-live-bets.yml` が呼ぶ正本ラッパ�
 - 不的中を見送りと同色に戻さない。
 - レース詳細の確定買い目を横スライド中心のUIへ戻さない。
 - 引継ぎ検証を通すために、正本データへ存在しないメタデータを捏造・追加しない。
+- Worker version IDをHANDOFF/manifestへ固定しない。docs/handoff push自体で再デプロイされ得るため、deployment logを読む。
 - 検証workflowが失敗しているのに「引継ぎ完成」と言わない。
 
 ---
@@ -400,6 +401,7 @@ workflow `.github/workflows/auto-final-live-bets.yml` が呼ぶ正本ラッパ�
 - 旧研究・旧316ルール・古いUI固定値を拾って現行仕様を上書きしない。
 - 具体作業を始める前にこのHANDOFFとmanifestを読み込む。
 - 引継ぎの健全性は `verify-canonical-handoff.py` / `Verify canonical handoff` workflowで確認し、成功時は `CANONICAL_HANDOFF_OK` が出る。
+- Worker version IDが必要なら `analysis-results/production-deployment.log` の `Current Version ID:` を読む。
 
 このファイル自体に矛盾が疑われた場合は、**機械判定は `config/canonical-production-manifest.json` と `scripts/verify-canonical-handoff.py`、実際のcurrent entryは `wrangler.jsonc` とproduction workflowを優先して確認する。**
 
@@ -422,14 +424,16 @@ workflow `.github/workflows/auto-final-live-bets.yml` が呼ぶ正本ラッパ�
 - `wrangler.jsonc.main` / deploy revision / model version / D1 identity
 - canonical live workflowと`run-ten-year-auto-final-live.py`の接続
 - 10年公開summary / runner archive件数
-- production deployment logの本番URL / Worker version ID
+- production deployment logの本番URL / revision / model / D1 / 有効な `Current Version ID:` の存在
 - README / HANDOFFの正本入口
 
 ### 既知の旧失敗と再発防止
 
 過去の `Verify canonical handoff` は `CANONICAL_HANDOFF_FAIL: production state featureRows mismatch` で失敗した。原因は、state manifestに存在しない `featureRows / demandRows / historyRaces` をverifier側が要求していたこと。
 
-**正しい対応はverifierを正本stateへ合わせることであり、state manifestへ架空の項目を足すことではない。**
+また、Worker version IDをmanifestへ固定すると、HANDOFF更新push自体が本番再デプロイを起こした場合にIDが直後に変わり、正本が即座に古くなる。したがってWorker versionは固定せず、deployment logの `Current Version ID:` を動的正本とする。
+
+**正しい対応はverifierを実在する正本へ合わせることであり、state manifestへ架空の項目を足したり、動的なWorker IDを固定したりすることではない。**
 
 今後も検証が失敗した場合は、まず「正本同士のどこが不一致か」を調べる。モデル・state・過去公開買い目をchecker都合で変更してはいけない。
 
