@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+import hashlib
+import importlib.util
+import json
+import pathlib
+import sys
+
+ROOT=pathlib.Path(__file__).resolve().parents[1]
+BASE_PATH=ROOT/'scripts'/'run-auto-final-live.py'
+SELECTION_PATH=ROOT/'scripts'/'generate-ten-year-preday-selection.py'
+GENERATOR_PATH=ROOT/'scripts'/'generate-ten-year-live-bets.py'
+CONFIG_PATH=ROOT/'config'/'ten-year-completed-model.json'
+MODEL_PATH=ROOT/'models'/'ten-year-completed-model.txt'
+STATE_MANIFEST_PATH=ROOT/'models'/'ten-year-production-state-manifest.json'
+COURSE_BUDGETS={'ライト':2000,'スタンダード':5000,'プレミアム':10000}
+
+
+def load(path,name):
+    spec=importlib.util.spec_from_file_location(name,path)
+    if spec is None or spec.loader is None: raise RuntimeError(f'MODULE_LOAD_FAILED:{path}')
+    m=importlib.util.module_from_spec(spec);sys.modules[name]=m;spec.loader.exec_module(m);return m
+
+
+def validate_selection(payload):
+    selected=payload.get('selected')
+    if not isinstance(selected,list) or not selected: raise RuntimeError('AUTO_SELECTION_EMPTY')
+    if payload.get('sourceModel')!='ten-year-completed-model': raise RuntimeError(f"AUTO_SELECTION_MODEL_INVALID:{payload.get('sourceModel')}")
+    if payload.get('resultDataUsedForTargetDay') is not False: raise RuntimeError('AUTO_SELECTION_USED_TARGET_RESULTS')
+    counts={}
+    for row in selected:
+        venue=str(row.get('venue') or '');counts[venue]=counts.get(venue,0)+1
+    if '' in counts or any(v!=5 for v in counts.values()): raise RuntimeError(f'AUTO_SELECTION_NOT_FIVE_PER_VENUE:{counts}')
+    ids=[str(row.get('raceId') or '') for row in selected]
+    if any(not x for x in ids) or len(ids)!=len(set(ids)): raise RuntimeError('AUTO_SELECTION_RACE_IDS_INVALID')
+    return ids,list(counts)
+
+
+def generate_selection(date,out_path):
+    mod=load(SELECTION_PATH,'ten_year_auto_selection')
+    old=sys.argv[:]
+    try:
+        sys.argv=[str(SELECTION_PATH),'--date',date,'--out',str(out_path)]
+        mod.main()
+    finally: sys.argv=old
+    payload=json.loads(out_path.read_text(encoding='utf-8'));validate_selection(payload);return payload
+
+
+def run_generator(date,selection_path,out_path):
+    mod=load(GENERATOR_PATH,'ten_year_auto_generator')
+    old=sys.argv[:]
+    try:
+        sys.argv=[str(GENERATOR_PATH),'--repo',str(ROOT),'--date',date,'--selection',str(selection_path),'--odds-file',str(ROOT/'current-selected-official-odds.json.gz'),'--out',str(out_path),'--insert']
+        mod.main()
+    finally: sys.argv=old
+
+
+def verify_locked(collector,ids):
+    for race_id in ids:
+        rows=collector.d1_query('''SELECT course,COUNT(*) AS tickets,COUNT(DISTINCT bet_type) AS betTypes,SUM(stake_yen) AS stakeYen,MAX(CASE WHEN source_prediction_id=-2 THEN 1 ELSE 0 END) AS finalSource FROM rt_public_bets WHERE race_id=? GROUP BY course''',[race_id])
+        by={str(r['course']):r for r in rows}
+        if set(by)!=set(COURSE_BUDGETS): raise RuntimeError(f'AUTO_PUBLIC_COURSES_MISSING:{race_id}:{sorted(by)}')
+        for course,budget in COURSE_BUDGETS.items():
+            row=by[course]
+            if int(row.get('tickets') or 0)!=2 or int(row.get('betTypes') or 0)!=2 or int(row.get('stakeYen') or 0)!=budget or int(row.get('finalSource') or 0)!=1:
+                raise RuntimeError(f"AUTO_CANONICAL_BET_GATE_FAILED:{race_id}:{course}:tickets={row.get('tickets')}:types={row.get('betTypes')}:stake={row.get('stakeYen')}:source={row.get('finalSource')}")
+
+
+def sha256(path):
+    h=hashlib.sha256()
+    with open(path,'rb') as fh:
+        for chunk in iter(lambda:fh.read(1024*1024),b''):h.update(chunk)
+    return h.hexdigest()
+
+
+def check_only(collector):
+    import lightgbm as lgb
+    cfg=json.loads(CONFIG_PATH.read_text(encoding='utf-8'))
+    if cfg.get('status')!='completed' or cfg.get('name')!='ten-year-completed-model': raise RuntimeError('CANONICAL_CONFIG_INVALID')
+    expected=str(cfg['runnerProbabilityModel']['modelWeightsSha256']);actual=sha256(MODEL_PATH)
+    if actual!=expected: raise RuntimeError(f'CANONICAL_MODEL_SHA_MISMATCH:{actual}:{expected}')
+    booster=lgb.Booster(model_file=str(MODEL_PATH))
+    features=cfg['runnerProbabilityModel']['features']
+    if booster.num_feature()!=len(features) or len(features)!=56: raise RuntimeError(f'CANONICAL_MODEL_FEATURE_COUNT_INVALID:{booster.num_feature()}:{len(features)}')
+    manifest=json.loads(STATE_MANIFEST_PATH.read_text(encoding='utf-8'))
+    if manifest.get('throughDate')!='2026-08-09': raise RuntimeError(f"CANONICAL_STATE_DATE_INVALID:{manifest.get('throughDate')}")
+    for rel,meta in manifest.get('files',{}).items():
+        p=ROOT/rel
+        if not p.exists() or sha256(p)!=str(meta.get('sha256')): raise RuntimeError(f'CANONICAL_STATE_SHA_INVALID:{rel}')
+    tables=collector.d1_query("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('rt_races','rt_runners','rt_results','rt_payouts','rt_public_bets','rt_system_state')")
+    names={str(r.get('name')) for r in tables};required={'rt_races','rt_runners','rt_results','rt_payouts','rt_public_bets','rt_system_state'}
+    if names!=required: raise RuntimeError(f'AUTO_D1_TABLES_MISSING:{sorted(required-names)}')
+    print(json.dumps({'status':'check_ok','sourceModel':'ten-year-completed-model','modelSha256':actual,'features':len(features),'stateThroughDate':manifest['throughDate'],'tables':sorted(names)},ensure_ascii=False))
+
+
+def main():
+    base=load(BASE_PATH,'legacy_auto_final_live_runtime')
+    base.validate_selection=validate_selection
+    base.generate_dynamic_selection=generate_selection
+    base.run_learned_generator=run_generator
+    base.verify_locked=verify_locked
+    base.check_only=check_only
+    base.COURSE_BUDGETS=COURSE_BUDGETS
+    base.main()
+
+
+if __name__=='__main__':main()
