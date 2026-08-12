@@ -34,10 +34,29 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
-      - name: Install canonical model dependencies
-        run: python -m pip install --disable-pip-version-check pandas scikit-learn lightgbm==4.6.0
+      - name: Install byte-identical canonical environment
+        run: |
+          python -m pip install --disable-pip-version-check \
+            numpy==2.3.5 \
+            pandas==2.2.3 \
+            scipy==1.17.0 \
+            scikit-learn==1.8.0 \
+            joblib==1.5.3 \
+            threadpoolctl==3.6.0 \
+            lightgbm==4.6.0
+          python - <<'PY'
+          import sys, lightgbm, numpy, pandas, scipy, sklearn
+          print(sys.version)
+          print({
+              'lightgbm': lightgbm.__version__,
+              'numpy': numpy.__version__,
+              'pandas': pandas.__version__,
+              'scipy': scipy.__version__,
+              'sklearn': sklearn.__version__,
+          })
+          PY
 
       - name: Download frozen canonical runner feature corpus
         run: |
