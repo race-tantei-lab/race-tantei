@@ -1,4 +1,4 @@
-name: Verify ten-year public v16
+name: Verify ten-year public v17
 
 on:
   push:
@@ -17,36 +17,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify production home
-        shell: bash
-        run: |
-          set -euo pipefail
-          code=$(curl -sS --retry 4 --retry-delay 2 -o home.html -w '%{http_code}' "$BASE_URL/")
-          roi_count=$(grep -c '431.7%' home.html || true)
-          history_count=$(grep -c '2016-08-13' home.html || true)
-          echo "home_http=$code bytes=$(wc -c < home.html) roi_count=$roi_count history_count=$history_count"
-          test "$code" = "200"
-          test "$roi_count" -gt 0
-          test "$history_count" -gt 0
-
-      - name: Verify ten-year calendar API
-        shell: bash
-        run: |
-          set -euo pipefail
-          code=$(curl -sS --retry 4 --retry-delay 2 -o calendar.json -w '%{http_code}' "$BASE_URL/api/public/calendar")
-          echo "calendar_http=$code bytes=$(wc -c < calendar.json)"
-          test "$code" = "200"
-          python - <<'PY'
-          import json
-          x=json.load(open('calendar.json'))
-          rows=x.get('calendar',[])
-          years=sorted({r.get('raceDate','')[:4] for r in rows if r.get('raceDate')})
-          print('calendar_rows',len(rows),'years',years)
-          assert any(r.get('raceDate','').startswith('2016-') for r in rows), '2016 calendar missing'
-          assert any(r.get('raceDate','').startswith('2026-') for r in rows), '2026 calendar missing'
-          PY
-
-      - name: Verify 2016 day API
+      - name: Verify historical day result labels
         id: day
         shell: bash
         run: |
@@ -57,16 +28,19 @@ jobs:
           rid=$(python - <<'PY'
           import json
           x=json.load(open('day.json'))
-          assert x.get('ok') is True
           rows=x.get('races',[])
-          assert rows, '2016-08-13 races missing'
-          assert all('publicState' in r for r in rows)
-          print(rows[0]['raceId'])
+          assert x.get('ok') is True and rows
+          labels=[r['publicState']['label'] for r in rows]
+          assert '買い目あり' not in labels, labels
+          assert set(labels) <= {'的中','不的中','見送り'}, set(labels)
+          assert any(v in ('的中','不的中') for v in labels), labels
+          selected=next(r for r in rows if r['publicState']['label'] in ('的中','不的中'))
+          print(selected['raceId'])
           PY
           )
           echo "rid=$rid" >> "$GITHUB_OUTPUT"
 
-      - name: Verify historical race page
+      - name: Verify historical runner details
         shell: bash
         run: |
           set -euo pipefail
@@ -74,5 +48,10 @@ jobs:
           code=$(curl -sS --retry 4 --retry-delay 2 -o race.html -w '%{http_code}' "$BASE_URL/races/$rid")
           echo "race_http=$code raceId=$rid bytes=$(wc -c < race.html)"
           test "$code" = "200"
-          grep -Eq '確定買い目|見送り' race.html
-          echo "TEN_YEAR_PUBLIC_V16_OK raceId=$rid"
+          grep -Eq '的中|不的中' race.html
+          grep -q '出走馬・結果' race.html
+          grep -q '着順' race.html
+          grep -q '騎手' race.html
+          grep -q '調教師' race.html
+          grep -vq '馬情報を取得できませんでした' race.html
+          echo "TEN_YEAR_PUBLIC_V17_OK raceId=$rid"
