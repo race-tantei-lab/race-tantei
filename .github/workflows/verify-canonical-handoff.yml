@@ -1,0 +1,39 @@
+name: Verify canonical handoff
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'HANDOFF.md'
+      - 'README.md'
+      - 'config/canonical-production-manifest.json'
+      - 'config/ten-year-completed-model.json'
+      - 'analysis-results/ten-year-model-completion-20260812.json'
+      - 'models/**'
+      - 'scripts/run-ten-year-auto-final-live.py'
+      - 'scripts/ten-year-production-core.py'
+      - 'scripts/generate-ten-year-*'
+      - 'scripts/verify-canonical-handoff.py'
+      - 'wrangler.jsonc'
+      - 'src/public-site-entry-v*.ts'
+      - 'src/v1/ten-year-*'
+      - 'data/ten-year-runners/manifest.json'
+      - '.github/workflows/auto-final-live-bets.yml'
+      - '.github/workflows/verify-canonical-handoff.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verify canonical handoff
+        run: python scripts/verify-canonical-handoff.py
