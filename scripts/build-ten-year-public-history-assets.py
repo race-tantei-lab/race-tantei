@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 BET_ORDER=('単勝','ワイド','馬連','馬単','3連複','3連単')
+MARKET_KEY={'単勝':'win','ワイド':'wide','馬連':'umaren','馬単':'umatan','3連複':'trio','3連単':'trifecta'}
 EXPECTED={2016:562.6545451120897,2017:519.423611300687,2018:431.43749991638794,2019:409.7847236237592,2020:482.7534727048543,2021:424.72569381611214,2022:386.7812493195137,2023:393.93750012748774,2024:392.0520831603143,2025:401.96875070532167,2026:418.77777779764597}
 FEATURES=['horseNoRaw','venue','raceNo','surface','distanceM','direction','fieldSize','monthSin','monthCos','raceClass','weather','trackCondition','horseNo','frameNo','drawPct','sex','age','horseWeight','weightChange','assignedWeight','horseStarts','horseWinRate','horseTop3Rate','daysSinceLast','debutFlag','lastFinishPct','avg3FinishPct','avg5FinishPct','lastTop3','top3Last3','lastFinal3fPct','avg3Final3fPct','avg5Final3fPct','lastSpeedMps','avg3SpeedMps','avg5SpeedMps','sameSurfaceStarts','sameSurfaceWinRate','sameSurfaceTop3Rate','sameDistStarts','sameDistWinRate','sameDistTop3Rate','sameVenueStarts','sameVenueWinRate','sameVenueTop3Rate','distanceChange','surfaceSwitch','jockeyStarts','jockeyWinRate','jockeyTop3Rate','trainerStarts','trainerWinRate','trainerTop3Rate','pairStarts','pairWinRate','pairTop3Rate']
 
@@ -39,38 +40,38 @@ def combo(k,p,h):
     if k in ('ワイド','馬連','3連複'):v=sorted(v)
     return '-'.join(map(str,v))
 def odd(v):
-    if isinstance(v,(int,float)):return float(v) if v>0 else None
-    if isinstance(v,list):
-        xs=[float(x) for x in v if isinstance(x,(int,float)) and x>0]
+    if isinstance(v,(list,tuple)):
+        xs=[float(x) for x in v if x is not None]
         return sum(xs)/len(xs) if xs else None
-    if isinstance(v,dict):
-        for keys in (('oddsMin','oddsMax'),('min','max')):
-            xs=[v.get(x) for x in keys];xs=[float(x) for x in xs if isinstance(x,(int,float)) and x>0]
-            if xs:return sum(xs)/len(xs)
-        for key in ('odds','value'):
-            x=v.get(key)
-            if isinstance(x,(int,float)) and x>0:return float(x)
-    return None
+    try:return float(v)
+    except:return None
 def canon(k,s):
     nums=[int(x) for x in str(s).replace('→','-').replace('–','-').replace('—','-').split('-') if str(x).isdigit()]
     if k in ('ワイド','馬連','3連複'):nums.sort()
     return '-'.join(map(str,nums))
 
 def choose(pred,od):
-    hp={int(x[0]):float(x[1]) for x in pred};oh={int(x) for x in od.get('horseNos',[]) if str(x).isdigit()};common=sorted(set(hp)&oh)
-    if len(common)<3:raise RuntimeError('COMMON_HORSES_LT3')
-    w=np.array([hp[h] for h in common],dtype=float);w=w/w.sum();best=[]
+    hp={int(x[0]):float(x[1]) for x in pred}
+    horses=[int(x) for x in od.get('horses',[]) if int(x) in hp]
+    if len(horses)<3:raise RuntimeError(f'COMMON_HORSES_LT3:{od.get("raceId","")}')
+    raw=[hp[h] for h in horses];total=sum(raw);w=[x/total for x in raw]
+    official=od.get('officialOdds',{}) or {};best=[]
     for bt in BET_ORDER:
-        src=od.get('oddsByBetType',{}).get(bt,{}) or {};cand=[]
-        for p in positions(bt,len(common)):
-            c=combo(bt,p,common);ov=odd(src.get(c))
-            if ov is None:continue
+        market=official.get(MARKET_KEY[bt],{}) or {};candidates=[]
+        for p in positions(bt,len(horses)):
+            c=combo(bt,p,horses);v=market.get(c)
+            if v is None and bt=='単勝':v=market.get(str(horses[p[0]]))
+            ov=odd(v)
+            if ov is None or ov<=0:continue
             pr=float(cp(bt,p,w))
             if pr<=0:continue
-            cand.append((pr*ov,math.log(pr)+0.4*math.log(ov),bt,c,pr,ov))
-        if not cand:raise RuntimeError(f'ODDS_MISSING:{bt}')
-        cand.sort(key=lambda x:(-x[0],x[5],x[3]));top=cand[:5];top.sort(key=lambda x:(-x[1],-x[4],x[3]));best.append(top[0])
-    best.sort(key=lambda x:(-x[1],BET_ORDER.index(x[2]),x[3]));return best[:2]
+            candidates.append((pr*ov,c,ov,pr))
+        candidates.sort(key=lambda x:(-x[0],x[2],x[1]));top=candidates[:5]
+        scored=[(math.log(pr)+0.4*math.log(ov),c,ov,pr) for _,c,ov,pr in top]
+        scored.sort(key=lambda x:(-x[0],-x[3],x[1]))
+        if not scored:raise RuntimeError(f'NO_CANDIDATE:{od.get("raceId","")}:{bt}')
+        q=scored[0];best.append((q[0],bt,q[1],q[2],q[3]))
+    best.sort(key=lambda x:(-x[0],BET_ORDER.index(x[1]),x[2]));return best[:2]
 
 def load_selected(path):
     out={}
@@ -118,8 +119,8 @@ def calculate(pred,hist,odds_dir,calendar_rows):
         stake=ret=hits=0
         for rid in sorted(ids):
             chosen=choose(pred[rid],od[rid]);b=hist[rid];pays={(str(x['betType']),canon(str(x['betType']),x['combination'])):int(x['payoutYen']) for x in b.get('payouts',[])};refunds={int(x) for x in b.get('race',{}).get('refundHorseNos',[]) or []};tickets=[];race_ret=0
-            for t in chosen:
-                _,_,bt,c,_,ov=t;horses=[int(x) for x in c.split('-')];py=1000 if any(h in refunds for h in horses) else pays.get((bt,canon(bt,c)),0)*10;race_ret+=py;tickets.append([bt,c,round(float(ov),6),int(py)])
+            for _,bt,c,ov,_ in chosen:
+                horses=[int(x) for x in c.split('-')];py=1000 if any(h in refunds for h in horses) else pays.get((bt,canon(bt,c)),0)*10;race_ret+=py;tickets.append([bt,c,round(float(ov),6),int(py)])
             byrow[rid][8]=tickets;stake+=2000;ret+=race_ret;hits+=race_ret>0
         value=ret/stake*100
         if abs(value-EXPECTED[year])>1e-5:raise RuntimeError(f'YEAR_ROI_MISMATCH:{year}:{value}/{EXPECTED[year]}')
