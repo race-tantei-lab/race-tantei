@@ -1,0 +1,105 @@
+name: Promote completed ten-year model
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/promote-ten-year-completed-model.yml"
+      - "config/ten-year-completed-model.json"
+      - "scripts/build-ten-year-completed-model.py"
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: promote-ten-year-completed-model
+  cancel-in-progress: false
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  HISTORY_ARTIFACT_ID: "9056288221"
+  DEMAND_ARTIFACT_ID: "9074033903"
+  EXPORTER_COMMIT: "c25c76a0b2d9488835d0caa57268201b1b563f9e"
+  EXPECTED_MODEL_SHA256: "63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5"
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install canonical model dependencies
+        run: python -m pip install --disable-pip-version-check pandas lightgbm==4.6.0
+
+      - name: Download frozen ten-year history
+        run: |
+          set -euo pipefail
+          mkdir -p history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > /tmp/history.zip
+          unzip -q /tmp/history.zip -d history
+          test -s history/ten-year-history-corpus.jsonl
+
+      - name: Download frozen 14,410-race demand
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${DEMAND_ARTIFACT_ID}/zip" > /tmp/demand.zip
+          unzip -l /tmp/demand.zip | grep -q "demand.jsonl"
+
+      - name: Materialize frozen 56-feature exporter
+        run: |
+          set -euo pipefail
+          git cat-file -e "${EXPORTER_COMMIT}^{commit}" || git fetch --depth=1 origin "${EXPORTER_COMMIT}"
+          git show "${EXPORTER_COMMIT}:scripts/research-export-runner-ml-features.py" > /tmp/research-export-runner-ml-features.py
+          python -m py_compile /tmp/research-export-runner-ml-features.py
+
+      - name: Rebuild frozen runner feature corpus
+        run: |
+          set -euo pipefail
+          python /tmp/research-export-runner-ml-features.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --out /tmp/runner-ml-features.csv \
+            --meta /tmp/runner-ml-features-meta.json
+          python - <<'PY'
+          import json
+          m=json.load(open('/tmp/runner-ml-features-meta.json',encoding='utf-8'))
+          assert m['featureCount']==56,m
+          assert m['sameDayResultsUsedForFeatures'] is False,m
+          assert m['currentRaceFinishOrPayoutUsedForFeatures'] is False,m
+          assert m['syntheticDataUsed'] is False,m
+          print(json.dumps({'racesProcessed':m['racesProcessed'],'runnerRows':m['runnerRows'],'featureCount':m['featureCount']},ensure_ascii=False))
+          PY
+
+      - name: Build byte-identical completed model
+        run: |
+          set -euo pipefail
+          mkdir -p models
+          python scripts/build-ten-year-completed-model.py \
+            --features /tmp/runner-ml-features.csv \
+            --demand /tmp/demand.zip \
+            --config config/ten-year-completed-model.json \
+            --output models/ten-year-completed-model.txt
+          actual="$(sha256sum models/ten-year-completed-model.txt | awk '{print $1}')"
+          test "$actual" = "$EXPECTED_MODEL_SHA256"
+          echo "canonical model sha256=$actual"
+
+      - name: Commit completed model asset
+        run: |
+          set -euo pipefail
+          git add models/ten-year-completed-model.txt
+          if git diff --cached --quiet; then
+            echo "Completed model asset already matches main."
+            exit 0
+          fi
+          git config user.name "race-tantei-bot"
+          git config user.email "race-tantei-bot@users.noreply.github.com"
+          git commit -m "Promote completed ten-year model asset"
+          git push origin HEAD:main
