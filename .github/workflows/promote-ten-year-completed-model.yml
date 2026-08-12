@@ -19,15 +19,14 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ github.token }}
-  HISTORY_ARTIFACT_ID: "9056288221"
+  FEATURE_ARTIFACT_ID: "9087261097"
   DEMAND_ARTIFACT_ID: "9074033903"
-  EXPORTER_COMMIT: "c25c76a0b2d9488835d0caa57268201b1b563f9e"
   EXPECTED_MODEL_SHA256: "63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5"
 
 jobs:
   promote:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,39 +37,22 @@ jobs:
           python-version: "3.12"
 
       - name: Install canonical model dependencies
-        run: python -m pip install --disable-pip-version-check pandas lightgbm==4.6.0
+        run: python -m pip install --disable-pip-version-check pandas scikit-learn lightgbm==4.6.0
 
-      - name: Download frozen ten-year history
+      - name: Download frozen canonical runner feature corpus
         run: |
           set -euo pipefail
-          mkdir -p history
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > /tmp/history.zip
-          unzip -q /tmp/history.zip -d history
-          test -s history/ten-year-history-corpus.jsonl
-
-      - name: Download frozen 14,410-race demand
-        run: |
-          set -euo pipefail
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${DEMAND_ARTIFACT_ID}/zip" > /tmp/demand.zip
-          unzip -l /tmp/demand.zip | grep -q "demand.jsonl"
-
-      - name: Materialize frozen 56-feature exporter
-        run: |
-          set -euo pipefail
-          git cat-file -e "${EXPORTER_COMMIT}^{commit}" || git fetch --depth=1 origin "${EXPORTER_COMMIT}"
-          git show "${EXPORTER_COMMIT}:scripts/research-export-runner-ml-features.py" > /tmp/research-export-runner-ml-features.py
-          python -m py_compile /tmp/research-export-runner-ml-features.py
-
-      - name: Rebuild frozen runner feature corpus
-        run: |
-          set -euo pipefail
-          python /tmp/research-export-runner-ml-features.py \
-            --corpus history/ten-year-history-corpus.jsonl \
-            --out /tmp/runner-ml-features.csv \
-            --meta /tmp/runner-ml-features-meta.json
+          mkdir -p /tmp/features
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${FEATURE_ARTIFACT_ID}/zip" > /tmp/features.zip
+          unzip -q /tmp/features.zip -d /tmp/features
+          test -s /tmp/features/runner-ml-features.csv
+          test -s /tmp/features/runner-ml-features-meta.json
           python - <<'PY'
           import json
-          m=json.load(open('/tmp/runner-ml-features-meta.json',encoding='utf-8'))
+          from pathlib import Path
+          m=json.loads(Path('/tmp/features/runner-ml-features-meta.json').read_text(encoding='utf-8'))
+          assert m['racesProcessed']==40155,m
+          assert m['runnerRows']==559546,m
           assert m['featureCount']==56,m
           assert m['sameDayResultsUsedForFeatures'] is False,m
           assert m['currentRaceFinishOrPayoutUsedForFeatures'] is False,m
@@ -78,12 +60,18 @@ jobs:
           print(json.dumps({'racesProcessed':m['racesProcessed'],'runnerRows':m['runnerRows'],'featureCount':m['featureCount']},ensure_ascii=False))
           PY
 
+      - name: Download frozen 14,410-race demand
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${DEMAND_ARTIFACT_ID}/zip" > /tmp/demand.zip
+          unzip -l /tmp/demand.zip | grep -q "demand.jsonl"
+
       - name: Build byte-identical completed model
         run: |
           set -euo pipefail
           mkdir -p models
           python scripts/build-ten-year-completed-model.py \
-            --features /tmp/runner-ml-features.csv \
+            --features /tmp/features/runner-ml-features.csv \
             --demand /tmp/demand.zip \
             --config config/ten-year-completed-model.json \
             --output models/ten-year-completed-model.txt
