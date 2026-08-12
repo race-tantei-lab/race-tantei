@@ -10,6 +10,7 @@ on:
       - 'config/canonical-production-manifest.json'
       - 'config/ten-year-completed-model.json'
       - 'analysis-results/ten-year-model-completion-20260812.json'
+      - 'analysis-results/completed-model-methodology-audit-20260813.md'
       - 'models/**'
       - 'scripts/run-ten-year-auto-final-live.py'
       - 'scripts/ten-year-production-core.py'
@@ -20,6 +21,7 @@ on:
       - 'src/v1/ten-year-*'
       - 'data/ten-year-runners/manifest.json'
       - '.github/workflows/auto-final-live-bets.yml'
+      - '.github/workflows/production-smoke.yml'
       - '.github/workflows/verify-canonical-handoff.yml'
 
 permissions:

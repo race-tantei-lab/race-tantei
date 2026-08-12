@@ -29,6 +29,7 @@ REQUIRED = [
     "scripts/generate-ten-year-preday-selection.py",
     "scripts/generate-ten-year-live-bets.py",
     ".github/workflows/auto-final-live-bets.yml",
+    ".github/workflows/production-smoke.yml",
     ".github/workflows/verify-canonical-handoff.yml",
     "wrangler.jsonc",
 ]
@@ -62,6 +63,8 @@ def main() -> None:
     handoff = read("HANDOFF.md")
     readme = read("README.md")
     methodology_audit = read("analysis-results/completed-model-methodology-audit-20260813.md")
+    production_smoke = read(".github/workflows/production-smoke.yml")
+    verify_workflow = read(".github/workflows/verify-canonical-handoff.yml")
     manifest = load_json("config/canonical-production-manifest.json")
     config = load_json("config/ten-year-completed-model.json")
     audit = load_json("analysis-results/ten-year-model-completion-20260812.json")
@@ -171,6 +174,21 @@ def main() -> None:
         if needle not in conditions_entry:
             fail(f"conditions page missing methodology marker: {needle}")
 
+    for needle in (
+        "conditionsMethodology",
+        "day8ApiShape",
+        "day9ApiShape",
+        "完全なOOF成績ではありません",
+        "ln(予測確率) + 0.4 × ln(JRA公式オッズ)",
+    ):
+        if needle not in production_smoke:
+            fail(f"production smoke missing canonical marker: {needle}")
+    for stale in ("296.8%", "297.6%", "297.0%", "3225R", "len(aug8)==15", "len(aug9)==15"):
+        if stale in production_smoke:
+            fail(f"production smoke contains stale assertion: {stale}")
+    if ".github/workflows/production-smoke.yml" not in verify_workflow:
+        fail("canonical verifier workflow does not watch production smoke")
+
     auto_workflow = read(manifest["production"]["autoWorkflow"])
     if "run-ten-year-auto-final-live.py" not in auto_workflow:
         fail("auto workflow does not invoke canonical ten-year runner")
@@ -235,6 +253,7 @@ def main() -> None:
         "selected_races=14410",
         "roi_pct=431.6505898681471",
         "methodology_audit=20260813",
+        "production_smoke=canonical",
     )
 
 
