@@ -43,7 +43,7 @@ function currentConditionsPage():string{
     <p>その後、各候補を <b>ln(予測確率) + 0.4 × ln(JRA公式オッズ)</b> で評価し、最終的にスコアが高い <b>異なる2券種</b> から1点ずつ選びます。</p>
   </section>
   <div class="section-title"><h2>公開後の扱い</h2></div>
-  <section class="notice">公開済みの過去買い目は固定します。新しいレース結果は将来日の履歴更新にだけ利用し、過去の買い目や過去成績を後から有利に書き換えることはありません。</section>`;
+  <section class="card panel"><p>公開済みの過去買い目は固定します。新しいレース結果は将来日の履歴更新にだけ利用し、過去の買い目や過去成績を後から有利に書き換えることはありません。</p></section>`;
   return shell("条件詳細",body);
 }
 
