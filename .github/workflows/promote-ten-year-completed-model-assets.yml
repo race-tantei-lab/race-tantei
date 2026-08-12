@@ -157,7 +157,7 @@ jobs:
           if text.count(needle) != 1:
               raise SystemExit('RUNNER_STATE_INSERTION_POINT_INVALID')
           body=r'''if os.environ.get('RUNNER_STATE_OUT'):
-              import gzip,os
+              import gzip
               snap={
                   'throughDate': str(current or ''),
                   'sourceResearchSha': os.environ.get('RUNNER_FEATURE_SHA'),
