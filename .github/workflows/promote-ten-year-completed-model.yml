@@ -93,10 +93,20 @@ jobs:
             --features /tmp/features/runner-ml-features.csv \
             --demand /tmp/demand.zip \
             --config config/ten-year-completed-model.json \
-            --output models/ten-year-completed-model.txt
+            --output models/ten-year-completed-model.txt \
+            --diagnostic-output-on-mismatch
           actual="$(sha256sum models/ten-year-completed-model.txt | awk '{print $1}')"
           test "$actual" = "$EXPECTED_MODEL_SHA256"
           echo "canonical model sha256=$actual"
+
+      - name: Preserve diagnostic model candidate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ten-year-model-actions-candidate
+          path: models/ten-year-completed-model.txt
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Commit completed model asset
         run: |
