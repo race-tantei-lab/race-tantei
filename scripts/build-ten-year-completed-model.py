@@ -51,9 +51,10 @@ def main():
         raise RuntimeError(f"TRAIN_RACE_COUNT_INVALID:{train['raceId'].nunique()}")
 
     params = dict(model_cfg["params"])
-    # The completed canonical model was serialized with LightGBM verbosity=-1.
-    # This does not change the fitted trees; it is required for byte-identical weights.
+    # Canonical serialization metadata is part of the frozen weight SHA.
+    # The completed asset records verbosity=-1 and num_threads=4.
     params["verbosity"] = -1
+    params["n_jobs"] = 4
     model = LGBMClassifier(**params)
     model.fit(train[features], train["labelWin"].astype(int))
     text = model.booster_.model_to_string()
