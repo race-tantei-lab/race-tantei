@@ -1,70 +1,83 @@
 # レース探偵
 
-JRA中央競馬のレース情報を自動取得し、発走前の推定確率・買い目を固定して、結果・払戻・公開予想回収率まで記録する友人共有用サイトです。
+> **現行仕様・引継ぎは最初に [`HANDOFF.md`](HANDOFF.md) と [`config/canonical-production-manifest.json`](config/canonical-production-manifest.json) を参照してください。**
+>
+> 旧研究・旧UI・旧 `scripts/run-auto-final-live.py` から現行仕様を推測しないでください。
 
-## 現在の実装
+JRA中央競馬を対象に、発走前情報だけで完成済み10年モデルからレース選定と2点の買い目を固定し、公開成績を継続記録する Cloudflare Workers / D1 サイトです。
 
-MVPとしてPhase 0〜4を一体化しています。
+## 現在のproduction
 
-- Phase 0：JRAページの到達性、拒否画面、構造異常の検知
-- Phase 1：開催レースの発見、出馬表・結果・払戻の取得、D1保存
-- Phase 2：各馬の勝率・複勝率・適正オッズ・予想着順の算出
-- Phase 3：推定期待値による買い目選定、100円単位の金額配分、発走前ロック
-- Phase 4：的中判定、払戻・収支・回収率、券種別・条件別・モデル別集計
+- model: `ten-year-completed-model`
+- config: `config/ten-year-completed-model.json`
+- weights: `models/ten-year-completed-model.txt`
+- model SHA256: `63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5`
+- completion audit: `analysis-results/ten-year-model-completion-20260812.json`
+- historical completion: 34,566 universe / 14,410 selected / ROI 431.6506%
+- live runner: `scripts/run-ten-year-auto-final-live.py`
+- workflow: `.github/workflows/auto-final-live-bets.yml`
+- public site entry: **`wrangler.jsonc.main`**
+  - 引継ぎ作成時点: `src/public-site-entry-v18.ts`
+- site: `https://race-tantei-phase0.race-tantei.workers.dev`
 
-## 自動処理
+## 完成モデル
 
-Cloudflare Cronが15分ごとに起動し、日本時間の開催準備・開催時間帯にだけ次を実行します。
+- 各会場・各開催日5R
+- 56特徴量 LightGBM 勝率モデル
+- JRA公式オッズのみ
+- 対象6券種: 単勝 / ワイド / 馬連 / 馬単 / 3連複 / 3連単
+- 1R 2点固定、異なる2券種
+- ライト 2,000円 / スタンダード 5,000円 / プレミアム 10,000円
+- 各コース50/50
+- synthetic oddsなし
+- 対象日の結果を予想に使わない
+- 過去公開買い目は後から変更しない
 
-1. JRAの公開ページから当週の対象レースURLを発見
-2. 出馬表、馬体重、単勝オッズ、出走状態を更新
-3. 発走3時間前から暫定予想を計算
-4. 発走15分前以内に最終予想・買い目をロック
-5. レース後に確定着順・払戻を取得
-6. ロック済み買い目だけを使って収支・回収率を更新
+## 公開10年履歴
 
-初期版の推奨券種は、発走前に安定して取得しやすい単勝だけです。馬連・ワイド・3連系は、組合せ別の時系列オッズを安全に取得・検証できるようになってから追加します。
+- loader: `src/v1/ten-year-history.ts`
+- generated data: `src/v1/ten-year-history-data/`
+- runner archive: `data/ten-year-runners/`
+- 34,566 races
+- 14,410 selected races
+- 480,441 runner rows
+- 121 months
 
-## 主な画面
-
-- `/`：本日のレース、公開予想、累計成績
-- `/races/:raceId`：レース詳細、各馬の推定値、買い目、結果
-- `/performance`：累計・条件別・モデル別成績
-- `/methodology`：予想方法と資金配分方針
-- `/system`：取得・同期・エラー状況
-- `/health`：JSON形式の自己診断
-
-## API
-
-- `GET /api/health`
-- `GET /api/status`
-- `GET /api/races`
-- `GET /api/races/:raceId`
-- `POST /api/admin/sync`：`ADMIN_TOKEN`設定時のみ利用可能
-
-通常運用では管理APIを使わず、Cronだけで完結します。
-
-## 技術構成
-
-- Cloudflare Workers
-- Cloudflare D1
-- TypeScript
-- Wrangler
-- GitHub Actions
-
-独自ドメイン、有料API、JRA-VAN、Windows環境は使用しません。Cloudflare・GitHub・D1・Worker URL・秘密情報は「決算探偵」と分離しています。
-
-## ローカル確認
+## 開発・確認
 
 ```bash
 npm install
 npm run check
-npm run dev
+python scripts/verify-canonical-handoff.py
 ```
 
-## 重要な制約
+### サイト変更
 
-- JRAは自動取得用の公開APIを提供していないため、公開ページの構造変更で取得が停止する可能性があります。
-- 署名チェックに通らないページやデータ不足時は、推測で補完せず保存・予想を停止します。
-- 予想は的中や利益を保証しません。回収率100%以上は運用目標です。
-- 本サイトは非公式・非収益の記録共有サイトで、JRAおよび関係団体とは関係ありません。
+1. `wrangler.jsonc.main` で現在のentryを確認
+2. 必要なentry / 下位wrapperを変更
+3. Typecheck
+4. Cloudflare deploy
+5. production HTTP / workflow verify
+
+### モデル・運用変更
+
+1. canonical config / manifestを確認
+2. `scripts/run-ten-year-auto-final-live.py` を確認
+3. `--check-only`
+4. workflow run確認
+
+## Legacy warning
+
+以下は現行production source-of-truthではありません。
+
+- `scripts/run-auto-final-live.py` 単体
+- 下位 `public-site-entry-v*` を単独で現行UIとみなすこと
+- research branches / `research-*`
+- old `approved-production-model` / ROI200 / rule-based production experiments
+- 古い保存会話の途中経過をrepo正本より優先すること
+
+継続作業は必ず [`HANDOFF.md`](HANDOFF.md) から開始してください。
+
+## Disclaimer
+
+公開・学習用途です。結果・利益を保証しません。
