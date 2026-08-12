@@ -57,13 +57,34 @@ jobs:
             git show "${SELECTION_COMMIT}:scripts/${file}" > "/tmp/canonical/scripts/${file}"
           done
 
-      - name: Patch frozen implementations to emit state only
+      - name: Patch frozen implementations exactly and emit state
         run: |
           python - <<'PY'
           from pathlib import Path
 
           p=Path('/tmp/canonical/scripts/research-export-runner-ml-features.py')
           s=p.read_text(encoding='utf-8')
+
+          # Reproduce the two exact runtime patches from the canonical feature-export workflow.
+          old="if valid:wr.writerow(row);runner_count+=1;valid_labels+=1;by_year[date[:4]]+=1"
+          new="wr.writerow(row);runner_count+=1;valid_labels+=int(valid);by_year[date[:4]]+=1"
+          if old not in s: raise SystemExit('STARTER_COMPLETE_PATCH_TARGET_MISSING')
+          s=s.replace(old,new,1)
+          oldc="""    if '3勝クラス' in x:return 4
+    if 'オープン' in x or 'OPEN' in x.upper():return 5
+    if 'G3' in x or 'Ｇ３' in x:return 6
+    if 'G2' in x or 'Ｇ２' in x:return 7
+    if 'G1' in x or 'Ｇ１' in x:return 8
+"""
+          newc="""    if '3勝クラス' in x:return 4
+    if 'G1' in x or 'Ｇ１' in x or 'ＧⅠ' in x:return 8
+    if 'G2' in x or 'Ｇ２' in x or 'ＧⅡ' in x:return 7
+    if 'G3' in x or 'Ｇ３' in x or 'ＧⅢ' in x:return 6
+    if 'オープン' in x or 'OPEN' in x.upper():return 5
+"""
+          if oldc not in s: raise SystemExit('GRADED_CLASS_PATCH_TARGET_MISSING')
+          s=s.replace(oldc,newc,1)
+
           old="ap=argparse.ArgumentParser();ap.add_argument('--corpus',required=True);ap.add_argument('--out',required=True);ap.add_argument('--meta',required=True);a=ap.parse_args()"
           new="ap=argparse.ArgumentParser();ap.add_argument('--corpus',required=True);ap.add_argument('--out',required=True);ap.add_argument('--meta',required=True);ap.add_argument('--state-out',required=True);a=ap.parse_args()"
           if old not in s: raise SystemExit('FEATURE_ARG_PATCH_TARGET_MISSING')
