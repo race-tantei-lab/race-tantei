@@ -30,6 +30,7 @@ def main():
     ap.add_argument("--demand", required=True)
     ap.add_argument("--config", default="config/ten-year-completed-model.json")
     ap.add_argument("--output", required=True)
+    ap.add_argument("--diagnostic-output-on-mismatch", action="store_true")
     args = ap.parse_args()
 
     cfg = json.loads(Path(args.config).read_text(encoding="utf-8"))
@@ -58,10 +59,13 @@ def main():
     text = model.booster_.model_to_string()
     sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
 
+    out = Path(args.output)
     if sha != expected:
+        if args.diagnostic_output_on_mismatch:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(text, encoding="utf-8")
         raise RuntimeError(f"MODEL_SHA_MISMATCH:{sha}:{expected}")
 
-    out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8")
     print(json.dumps({
