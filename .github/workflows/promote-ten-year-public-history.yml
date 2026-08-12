@@ -1,0 +1,103 @@
+name: Promote ten-year public history
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/promote-ten-year-public-history.yml"
+      - "scripts/build-ten-year-public-history-assets.py"
+
+concurrency:
+  group: promote-ten-year-public-history
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  FEATURE_ARTIFACT_ID: "9087261097"
+  DEMAND_ARTIFACT_ID: "9074033903"
+  HISTORY_ARTIFACT_ID: "9056288221"
+  ODDS_ARTIFACT_ID: "9086766461"
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install canonical runtime
+        run: |
+          python -m pip install --disable-pip-version-check \
+            "lightgbm==4.6.0" \
+            "numpy==2.3.5" \
+            "pandas==2.2.3" \
+            "scipy==1.17.0" \
+            "scikit-learn==1.8.0"
+
+      - name: Download canonical inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p input/feature input/demand input/history input/odds
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${FEATURE_ARTIFACT_ID}/zip" > feature.zip
+          unzip -q feature.zip 'runner-ml-features.csv' -d input/feature
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${DEMAND_ARTIFACT_ID}/zip" > demand.zip
+          unzip -q demand.zip 'demand.jsonl' -d input/demand
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > history.zip
+          unzip -q history.zip 'ten-year-history-corpus.jsonl' -d input/history
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${ODDS_ARTIFACT_ID}/zip" > odds.zip
+          unzip -q odds.zip 'corrected-odds/*.jsonl' -d input/odds
+
+      - name: Build byte-audited public history archive
+        run: |
+          python scripts/build-ten-year-public-history-assets.py \
+            --feature-csv input/feature/runner-ml-features.csv \
+            --demand input/demand/demand.jsonl \
+            --history input/history/ten-year-history-corpus.jsonl \
+            --odds-dir input/odds/corrected-odds \
+            --model models/ten-year-completed-model.txt \
+            --out-dir src/v1/ten-year-history-data
+
+      - name: Enforce completed-model archive gates
+        run: |
+          python - <<'PY'
+          import json
+          p='src/v1/ten-year-history-data/audit.json'
+          d=json.load(open(p,encoding='utf-8'))
+          assert d['races']==14410,d
+          assert abs(d['roiPct']-431.6505898681471)<1e-7,d
+          assert d['stakeYen']==28820000,d
+          assert d['returnYen']==124401700,d
+          assert d['chunks']>0,d
+          print(json.dumps(d,ensure_ascii=False))
+          PY
+          grep -q 'TEN_YEAR_HISTORY_RACES=34566' src/v1/ten-year-history-data/meta.ts
+          grep -q 'TEN_YEAR_HISTORY_SELECTED=14410' src/v1/ten-year-history-data/meta.ts
+          test -s src/v1/ten-year-history-data/index.ts
+
+      - name: Commit canonical public history archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "kessantantei-gif"
+          git config user.email "kessan.tantei@gmail.com"
+          git add src/v1/ten-year-history-data
+          if git diff --cached --quiet; then
+            echo "No archive changes"
+            exit 0
+          fi
+          git commit -m "Promote ten-year completed-model public history"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
