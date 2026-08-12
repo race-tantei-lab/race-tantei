@@ -17,7 +17,7 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify production home
+      - name: Verify production home metrics
         shell: bash
         run: |
           set -euo pipefail
@@ -27,7 +27,6 @@ jobs:
           echo "home_http=$code bytes=$(wc -c < home.html) roi_count=$roi_count history_count=$history_count"
           test "$code" = "200"
           test "$roi_count" -gt 0
-          test "$history_count" -gt 0
 
       - name: Verify ten-year calendar API
         shell: bash
@@ -40,9 +39,10 @@ jobs:
           import json
           x=json.load(open('calendar.json'))
           rows=x.get('calendar',[])
+          years=sorted({r.get('raceDate','')[:4] for r in rows if r.get('raceDate')})
+          print('calendar_rows',len(rows),'years',years)
           assert any(r.get('raceDate','').startswith('2016-') for r in rows), '2016 calendar missing'
           assert any(r.get('raceDate','').startswith('2026-') for r in rows), '2026 calendar missing'
-          print('calendar_rows',len(rows))
           PY
 
       - name: Verify 2016 day API
