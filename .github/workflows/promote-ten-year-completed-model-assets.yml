@@ -1,0 +1,161 @@
+name: Promote completed ten-year model assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/promote-ten-year-completed-model-assets.yml"
+      - "scripts/build-ten-year-completed-model.py"
+      - "config/ten-year-completed-model.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  FEATURE_ARTIFACT_ID: "9087261097"
+  DEMAND_ARTIFACT_ID: "9074033903"
+  HISTORY_ARTIFACT_ID: "9056288221"
+  RESEARCH_SHA: "acf44ad91c83e30f3a3e0363b43bbc8fb4a51a2c"
+  EXPECTED_MODEL_SHA: "63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5"
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install canonical runtime
+        run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0" pandas
+
+      - name: Download frozen canonical artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/promo/features /tmp/promo/demand /tmp/promo/history /tmp/research-src/scripts /tmp/research-src/history /tmp/research-src/analysis-results
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${FEATURE_ARTIFACT_ID}/zip" > /tmp/features.zip
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${DEMAND_ARTIFACT_ID}/zip" > /tmp/demand.zip
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${HISTORY_ARTIFACT_ID}/zip" > /tmp/history.zip
+          unzip -q /tmp/features.zip -d /tmp/promo/features
+          unzip -q /tmp/demand.zip -d /tmp/promo/demand
+          unzip -q /tmp/history.zip ten-year-history-corpus.jsonl -d /tmp/promo/history
+          cp /tmp/promo/history/ten-year-history-corpus.jsonl /tmp/research-src/history/ten-year-history-corpus.jsonl
+
+      - name: Restore exact completed race-selection source
+        run: |
+          set -euo pipefail
+          for file in \
+            scripts/research-continuous-blend-run.py \
+            scripts/research-continuous-walkforward-demand.py \
+            scripts/research-sparse-walkforward-demand.py \
+            scripts/research-ten-year-canonical-demand.py \
+            scripts/generate-final-preday-selection.py
+          do
+            git show "${RESEARCH_SHA}:${file}" > "/tmp/research-src/${file}"
+          done
+
+      - name: Add state export hook without changing selection logic
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/research-src/scripts/research-continuous-walkforward-demand.py')
+          text=p.read_text(encoding='utf-8')
+          needle="    selected.sort(key=lambda x:(x['raceDate'],x['venue'],int(x['raceNo'] or 0)))"
+          if text.count(needle) != 1:
+              raise SystemExit('STATE_EXPORT_INSERTION_POINT_INVALID')
+          hook=r'''    if os.environ.get('CONT_STATE_OUT'):
+              import gzip
+              snap={
+                  'throughDate': EVAL_END,
+                  'sourceResearchSha': os.environ.get('RESEARCH_SHA'),
+                  'params': {
+                      'minN': MIN_N,
+                      'keyPrior': KEY_PRIOR,
+                      'betPrior': BET_PRIOR,
+                      'priorRoi': PRIOR_ROI,
+                      'topComponents': TOP_COMPONENTS,
+                      'quarterDecay': QUARTER_DECAY,
+                      'localWeight': float(os.environ.get('CONT_LOCAL_WEIGHT','0.75')),
+                      'ticketsPerRace': TICKETS_PER_RACE,
+                  },
+                  'horseHist': {k:list(v) for k,v in state['horse_hist'].items()},
+                  'horseStarts': dict(state['horse_starts']),
+                  'jstats': {k:list(v) for k,v in state['jstats'].items()},
+                  'tstats': {k:list(v) for k,v in state['tstats'].items()},
+                  'stats': [[bt,list(axes),list(vals),v[0],v[1]] for (bt,axes,vals),v in stats.items()],
+                  'betStats': {str(k):list(v) for k,v in bet_stats.items()},
+              }
+              raw=json.dumps(snap,ensure_ascii=False,separators=(',',':')).encode('utf-8')
+              target=Path(os.environ['CONT_STATE_OUT'])
+              target.parent.mkdir(parents=True,exist_ok=True)
+              with target.open('wb') as base:
+                  with gzip.GzipFile(fileobj=base,mode='wb',mtime=0) as gz:
+                      gz.write(raw)
+          '''
+          p.write_text(text.replace(needle,hook+'\n'+needle),encoding='utf-8')
+          PY
+
+      - name: Reproduce frozen 14,410-race demand and export state
+        env:
+          CONT_MIN_N: "500"
+          CONT_KEY_PRIOR: "2000"
+          CONT_BET_PRIOR: "5000"
+          CONT_PRIOR_ROI: "0.80"
+          CONT_TOP_COMPONENTS: "8"
+          CONT_TICKETS_PER_RACE: "3"
+          CONT_QUARTER_DECAY: "1.0"
+          CONT_LOCAL_WEIGHT: "0.60"
+          CONT_STATE_OUT: ${{ github.workspace }}/models/ten-year-selection-state-20260809.json.gz
+        run: |
+          set -euo pipefail
+          mkdir -p models
+          cd /tmp/research-src
+          python scripts/research-continuous-blend-run.py \
+            --corpus history/ten-year-history-corpus.jsonl \
+            --out analysis-results/demand.jsonl \
+            --meta analysis-results/meta.json
+          cmp analysis-results/demand.jsonl /tmp/promo/demand/demand.jsonl
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          meta=json.loads(Path('/tmp/research-src/analysis-results/meta.json').read_text())
+          assert meta['selectedRaces']==14410,meta
+          assert meta['targetDayResultsUsedForSelection'] is False,meta
+          assert meta['historicalFinalOddsUsedForDiscovery'] is False,meta
+          assert meta['syntheticOddsUsed'] is False,meta
+          print(json.dumps({'demandExactMatch':True,'selectedRaces':meta['selectedRaces']},ensure_ascii=False))
+          PY
+
+      - name: Rebuild byte-identical completed LightGBM model
+        run: |
+          set -euo pipefail
+          python scripts/build-ten-year-completed-model.py \
+            --features /tmp/promo/features/runner-ml-features.csv \
+            --demand /tmp/promo/demand/demand.jsonl \
+            --config config/ten-year-completed-model.json \
+            --output models/ten-year-completed-model.txt
+          actual="$(sha256sum models/ten-year-completed-model.txt | awk '{print $1}')"
+          test "$actual" = "$EXPECTED_MODEL_SHA"
+          echo "canonical model sha256=$actual"
+
+      - name: Commit canonical production assets
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/ten-year-completed-model.txt models/ten-year-selection-state-20260809.json.gz
+          if git diff --cached --quiet; then
+            echo "Canonical assets already promoted."
+            exit 0
+          fi
+          git commit -m "Promote completed ten-year model assets"
+          git push origin HEAD:main
