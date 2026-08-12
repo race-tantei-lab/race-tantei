@@ -11,12 +11,18 @@ on:
     paths:
       - ".github/workflows/auto-final-live-bets.yml"
       - "scripts/run-auto-final-live.py"
-      - "scripts/generate-final-live-bets.py"
-      - "scripts/generate-final-live-bets-batched.py"
-      - "scripts/generate-final-preday-selection-remote.py"
+      - "scripts/run-ten-year-auto-final-live.py"
+      - "scripts/ten-year-production-core.py"
+      - "scripts/generate-ten-year-preday-selection.py"
+      - "scripts/generate-ten-year-live-bets.py"
+      - "scripts/collect-jra-official-odds.py"
       - "scripts/collect-current-jra-official-odds-live.py"
       - "scripts/collect-current-jra-official-odds-fast.py"
-      - "scripts/final-rules-payload.py"
+      - "config/ten-year-completed-model.json"
+      - "models/ten-year-completed-model.txt"
+      - "models/ten-year-production-state-manifest.json"
+      - "models/ten-year-runner-feature-state.json.gz"
+      - "models/ten-year-race-selection-state.json.gz"
 
 concurrency:
   group: automatic-final-live-bets
@@ -44,7 +50,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='production/auto-final-live' \
-            -f description='事前予想の自動固定を確認中' \
+            -f description='10年完成モデルの自動固定を確認中' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - uses: actions/checkout@v4
@@ -52,19 +58,23 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install completed-model runtime
+        run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0"
+
       - name: Compile automatic live runner
         run: |
           python -m py_compile \
             scripts/run-auto-final-live.py \
-            scripts/generate-final-live-bets.py \
-            scripts/generate-final-live-bets-batched.py \
-            scripts/generate-final-preday-selection-remote.py \
+            scripts/run-ten-year-auto-final-live.py \
+            scripts/ten-year-production-core.py \
+            scripts/generate-ten-year-preday-selection.py \
+            scripts/generate-ten-year-live-bets.py \
             scripts/collect-current-jra-official-odds-live.py \
             scripts/collect-current-jra-official-odds-fast.py
 
       - name: Check integration on code changes
         if: github.event_name == 'push'
-        run: python scripts/run-auto-final-live.py --check-only
+        run: python scripts/run-ten-year-auto-final-live.py --check-only
 
       - name: Wake current-day data sync
         if: github.event_name != 'push'
@@ -81,7 +91,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python scripts/run-auto-final-live.py | tee automatic-final-live.log
+          python scripts/run-ten-year-auto-final-live.py | tee automatic-final-live.log
 
       - name: Upload automatic live audit
         if: always() && github.event_name != 'push'
@@ -102,7 +112,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/auto-final-live' \
-            -f description='事前予想の自動固定経路は正常' \
+            -f description='10年完成モデルの自動固定経路は正常' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Mark automatic live lock failure
@@ -111,5 +121,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/auto-final-live' \
-            -f description='事前予想の自動固定に失敗' \
+            -f description='10年完成モデルの自動固定に失敗' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
