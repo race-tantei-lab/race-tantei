@@ -10,20 +10,30 @@ on:
 permissions:
   contents: read
 
+env:
+  BASE_URL: https://race-tantei-phase0.race-tantei.workers.dev
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify production home and history APIs
+      - name: Verify production home
         shell: bash
         run: |
           set -euo pipefail
-          base='https://race-tantei-phase0.race-tantei.workers.dev'
-          curl -fsS --retry 4 --retry-delay 2 "$base/" -o home.html
+          code=$(curl -sS --retry 4 --retry-delay 2 -o home.html -w '%{http_code}' "$BASE_URL/")
+          echo "home_http=$code bytes=$(wc -c < home.html)"
+          test "$code" = "200"
           grep -q '431.7%' home.html
           grep -q '2016-08-10' home.html
 
-          curl -fsS --retry 4 --retry-delay 2 "$base/api/public/calendar" -o calendar.json
+      - name: Verify ten-year calendar API
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 4 --retry-delay 2 -o calendar.json -w '%{http_code}' "$BASE_URL/api/public/calendar")
+          echo "calendar_http=$code bytes=$(wc -c < calendar.json)"
+          test "$code" = "200"
           python - <<'PY'
           import json
           x=json.load(open('calendar.json'))
@@ -33,7 +43,14 @@ jobs:
           print('calendar_rows',len(rows))
           PY
 
-          curl -fsS --retry 4 --retry-delay 2 "$base/api/public/day?date=2016-08-10" -o day.json
+      - name: Verify 2016 day API
+        id: day
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --retry 4 --retry-delay 2 -o day.json -w '%{http_code}' "$BASE_URL/api/public/day?date=2016-08-10")
+          echo "day_http=$code bytes=$(wc -c < day.json)"
+          test "$code" = "200"
           rid=$(python - <<'PY'
           import json
           x=json.load(open('day.json'))
@@ -44,6 +61,15 @@ jobs:
           print(rows[0]['raceId'])
           PY
           )
-          curl -fsS --retry 4 --retry-delay 2 "$base/races/$rid" -o race.html
+          echo "rid=$rid" >> "$GITHUB_OUTPUT"
+
+      - name: Verify historical race page
+        shell: bash
+        run: |
+          set -euo pipefail
+          rid='${{ steps.day.outputs.rid }}'
+          code=$(curl -sS --retry 4 --retry-delay 2 -o race.html -w '%{http_code}' "$BASE_URL/races/$rid")
+          echo "race_http=$code raceId=$rid bytes=$(wc -c < race.html)"
+          test "$code" = "200"
           grep -Eq '確定買い目|見送り' race.html
           echo "TEN_YEAR_PUBLIC_V16_OK raceId=$rid"
