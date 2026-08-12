@@ -54,6 +54,10 @@ function fixHomeYearOrder(html:string):string{
   );
 }
 
+function fixLoseStatusColor(html:string):string{
+  return html.replace("</head>",'<style>.status.lose{background:#4a2328!important;color:#ff817c!important}</style></head>');
+}
+
 function fixRaceBetLayout(html:string):string{
   let out=html.replace(/<div class="course-tabs">[\s\S]*?<\/div>/g,"");
   out=out.replace(/style="display:none"/g,'style=""');
@@ -79,6 +83,7 @@ export default {
     const upstream=await publicSite.fetch(request,env,ctx);
     if(!upstream.ok||!upstream.headers.get("content-type")?.includes("text/html"))return upstream;
     let html=await upstream.text();
+    html=fixLoseStatusColor(html);
     if(path==="/")html=fixHomeYearOrder(html);
     if(path.startsWith("/races/"))html=fixRaceBetLayout(html);
     const headers=new Headers(upstream.headers);headers.delete("content-length");headers.set("cache-control","no-store, max-age=0");headers.set("x-race-ui-version","ten-year-completed-v18");
