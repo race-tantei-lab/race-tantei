@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/research-evaluate-ml-five-discovery.yml"
       - "scripts/research-build-ml-discovery-odds-demand.py"
+      - "scripts/research-fetch-resolved-demanded-official-odds.py"
       - "scripts/research-evaluate-ml-five-discovery.py"
       - "scripts/research-freeze-practical-ml-discovery-winner.py"
 
@@ -27,7 +28,7 @@ env:
   COMPLETED_2016_ARTIFACT_ID: '9088548944'
   META_ODDS_RUN_ID: '31456971683'
   ALL_RACE_RUN_ID: '31455874661'
-  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository}/actions/runs/${{ github.run_id }}
 
 jobs:
   evaluate:
