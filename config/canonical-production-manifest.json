@@ -1,0 +1,127 @@
+{
+  "status": "production",
+  "handoffVersion": 1,
+  "asOfJst": "2026-08-13T00:02:00+09:00",
+  "repository": "race-tantei-lab/race-tantei",
+  "branch": "main",
+  "verifiedProductionBaselineCommit": "8f07a9eca0c7494d902aa6873a9149121896ccde",
+  "sourceOfTruth": "HANDOFF.md",
+  "model": {
+    "name": "ten-year-completed-model",
+    "config": "config/ten-year-completed-model.json",
+    "weights": "models/ten-year-completed-model.txt",
+    "weightsSha256": "63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5",
+    "featureCount": 56,
+    "completionAudit": "analysis-results/ten-year-model-completion-20260812.json",
+    "completionAuditHistoricalStatusNote": "The audit was recorded before production promotion, so productionModelChanged=false and productionDatabaseWritten=false inside that historical audit are not current production-status fields.",
+    "stateManifest": "models/ten-year-production-state-manifest.json",
+    "runnerFeatureState": "models/ten-year-runner-feature-state.json.gz",
+    "raceSelectionState": "models/ten-year-race-selection-state.json.gz",
+    "stateThroughDate": "2026-08-09",
+    "sourceArtifactIds": {
+      "history": 9056288221,
+      "runnerFeatures": 9087261097,
+      "demand": 9074033903
+    }
+  },
+  "completedModelRules": {
+    "archiveStart": "2016-08-10",
+    "archiveEnd": "2026-08-09",
+    "universeRaces": 34566,
+    "selectedRaces": 14410,
+    "venueDays": 2882,
+    "racesPerVenueDay": 5,
+    "ticketsPerSelectedRace": 2,
+    "distinctBetTypesPerRace": 2,
+    "betTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"],
+    "ticketScore": "ln(predictedProbability) + 0.4 * ln(officialJraOdds)",
+    "officialOddsOnly": true,
+    "syntheticOddsForbidden": true,
+    "courses": {
+      "ライト": [1000, 1000],
+      "スタンダード": [2500, 2500],
+      "プレミアム": [5000, 5000]
+    },
+    "historicalRoiPct": 431.6505898681471
+  },
+  "production": {
+    "autoWorkflow": ".github/workflows/auto-final-live-bets.yml",
+    "runner": "scripts/run-ten-year-auto-final-live.py",
+    "core": "scripts/ten-year-production-core.py",
+    "selection": "scripts/generate-ten-year-preday-selection.py",
+    "bets": "scripts/generate-ten-year-live-bets.py",
+    "legacyShellDependency": "scripts/run-auto-final-live.py",
+    "legacyShellRule": "Do not run scripts/run-auto-final-live.py directly as the current production model. The canonical wrapper imports it only as a runtime shell and replaces selection/generator/validation with ten-year-completed implementations."
+  },
+  "site": {
+    "workerConfig": "wrangler.jsonc",
+    "authoritativeEntryRule": "The current UI entry is always wrangler.jsonc.main. Do not infer the current UI from public-site-entry version filenames.",
+    "entry": "src/public-site-entry-v18.ts",
+    "revision": "ten-year-completed-public-v18-20260812",
+    "url": "https://race-tantei-phase0.race-tantei.workers.dev",
+    "workerName": "race-tantei-phase0",
+    "d1DatabaseName": "race-tantei-phase0",
+    "d1DatabaseId": "949b5e8b-d1a4-4c4e-80d1-d031afdc03de",
+    "deploymentLog": "analysis-results/production-deployment.log",
+    "verifiedWorkerVersionId": "3e2e4c51-056d-4dfe-812b-4c4b8245792d"
+  },
+  "publicHistory": {
+    "loader": "src/v1/ten-year-history.ts",
+    "generatedData": "src/v1/ten-year-history-data/",
+    "summary": "src/v1/ten-year-public-summary.ts",
+    "runnerArchive": "data/ten-year-runners/",
+    "runnerManifest": "data/ten-year-runners/manifest.json",
+    "historyRaces": 34566,
+    "selectedRacesWithCanonicalTickets": 14410,
+    "runnerRows": 480441,
+    "runnerMonths": 121,
+    "regeneration": {
+      "historyBuilder": "scripts/build-ten-year-public-history-assets.py",
+      "historyWorkflow": ".github/workflows/promote-ten-year-public-history.yml",
+      "runnerBuilder": "scripts/build-ten-year-runner-assets.py",
+      "runnerWorkflow": ".github/workflows/promote-ten-year-runner-assets.yml",
+      "stateWorkflow": ".github/workflows/promote-ten-year-production-state.yml",
+      "modelAssetWorkflow": ".github/workflows/promote-ten-year-completed-model-assets.yml"
+    }
+  },
+  "currentUiRequirements": [
+    "Home cumulative and venue metrics use the ten-year completed model, not legacy frozen metrics.",
+    "Home years are newest-first; months and dates remain chronological as currently implemented.",
+    "Finished historical races are labeled 的中, 不的中, or 見送り; 不的中 is red.",
+    "Conditions page describes the ten-year completed model and must not use the yellow notice style for the final public-after-release explanation.",
+    "Historical race pages show runner/result details.",
+    "Confirmed bets are not presented as a horizontal swipe; courses are shown vertically and mobile ticket rows are card-like.",
+    "Past published picks and results are immutable."
+  ],
+  "authoritativeRules": [
+    "Read HANDOFF.md and this manifest before any continuation work.",
+    "Treat config/ten-year-completed-model.json as the canonical model specification.",
+    "Treat scripts/run-ten-year-auto-final-live.py as the canonical production betting entry.",
+    "Treat wrangler.jsonc.main as the canonical public-site entry.",
+    "Do not re-select, retrain, revalidate, or replace the completed model unless the user explicitly asks to change the model.",
+    "Do not rewrite historical picks after publication.",
+    "Do not use synthetic odds."
+  ],
+  "notAuthoritative": [
+    {
+      "path": "scripts/run-auto-final-live.py",
+      "classification": "legacy-shell-dependency",
+      "note": "May be imported by the canonical wrapper, but is not the current production model entry."
+    },
+    {
+      "path": "src/public-site-entry-v17.ts and lower public-site-entry versions",
+      "classification": "transitive-ui-dependencies",
+      "note": "May still execute through v18 layering. They are not the source of truth for current UI selection."
+    },
+    {
+      "path": "research branches and research-* scripts/workflows",
+      "classification": "research-history",
+      "note": "Do not infer current production behavior from research artifacts or old experiments."
+    },
+    {
+      "path": "legacy production configs/workflows such as approved-production-model or old rule-based/ROI200 flows",
+      "classification": "legacy-production-history",
+      "note": "Not the current ten-year-completed production model."
+    }
+  ]
+}
