@@ -1,0 +1,76 @@
+name: Research regression official-odds parser
+
+on:
+  push:
+    branches: [research/ten-year-minimal-rules]
+    paths:
+      - ".github/workflows/research-regression-official-odds-parser.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check --quiet beautifulsoup4==4.13.4
+      - name: Verify partial-market parser union on known official race
+        run: |
+          python - <<'PY'
+          import importlib.util
+          import os
+          import sys
+          from pathlib import Path
+
+          root = Path.cwd()
+          resolver_path = root / 'scripts' / 'research-fetch-resolved-demanded-official-odds.py'
+          spec = importlib.util.spec_from_file_location('resolver_regression', resolver_path)
+          resolver = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = resolver
+          spec.loader.exec_module(resolver)
+
+          historical = resolver.load_module(root / 'scripts' / 'research-fetch-demanded-official-odds.py', 'historical_regression')
+          historical.result_marker = resolver.flexible_result_marker
+          os.environ.setdefault('CLOUDFLARE_ACCOUNT_ID', 'research-unused')
+          os.environ.setdefault('CLOUDFLARE_D1_DATABASE_ID', 'research-unused')
+          os.environ.setdefault('CLOUDFLARE_API_TOKEN', 'research-unused')
+          current = resolver.load_module(root / 'scripts' / 'collect-current-jra-official-odds.py', 'current_regression')
+          current.self_test()
+          resolver.result_derivation_self_test()
+
+          row = {
+              'raceId': '2021-03-27-chukyo-03',
+              'raceDate': '2021-03-27',
+              'venue': '中京',
+              'raceNo': 3,
+              'resultUrl': 'https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0107202102050320210327%2F45',
+              'requiredMarkets': ['win','umaren','wide','umatan','trio','trifecta'],
+              'targetDayResultsUsedForSelection': False,
+              'historicalFinalOddsUsedForSelection': False,
+              'syntheticOddsUsed': False,
+              'productionDatabaseWritten': False,
+          }
+          primary = historical.fetch_race(row)
+          partial = resolver.required_markets_partial(row, primary, historical)
+          fallback = resolver.current_fetch(row, historical, current)
+          merged = resolver.merge_official_results(primary, fallback, row, historical, partial)
+          value = merged['officialOdds']['umatan'].get('14-15')
+          assert value is not None, merged['officialOddsCoverage']['umatan']
+          assert merged['provenance']['syntheticOddsUsed'] is False
+          assert merged['provenance']['productionDatabaseWritten'] is False
+          print({
+              'raceId': row['raceId'],
+              'primary14to15': primary.get('officialOdds',{}).get('umatan',{}).get('14-15'),
+              'fallback14to15': fallback.get('officialOdds',{}).get('umatan',{}).get('14-15'),
+              'merged14to15': value,
+              'partialMarkets': partial,
+              'added': merged['provenance']['parserUnionAddedCombinations'],
+              'syntheticOddsUsed': merged['provenance']['syntheticOddsUsed'],
+          })
+          PY
