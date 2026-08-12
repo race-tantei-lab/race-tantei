@@ -19,7 +19,7 @@
       "wrangler.jsonc.main, deploy revision, model version, and D1 identity",
       "canonical live workflow and ten-year production runner wiring",
       "public 10-year summary and runner archive counts",
-      "deployment log URL and current Worker version ID",
+      "deployment log production URL, deploy revision, model version, D1 binding, and presence of a Current Version ID",
       "README and HANDOFF canonical markers"
     ]
   },
@@ -80,7 +80,7 @@
     "d1DatabaseName": "race-tantei-phase0",
     "d1DatabaseId": "949b5e8b-d1a4-4c4e-80d1-d031afdc03de",
     "deploymentLog": "analysis-results/production-deployment.log",
-    "verifiedWorkerVersionId": "58dbe61c-4be8-4c33-97d5-6ad17ceeaf7d"
+    "workerVersionRule": "Do not pin a Worker version ID in this manifest. Read the current value from the deployment log line 'Current Version ID:' because a handoff/docs push can itself trigger a new verified deployment."
   },
   "publicHistory": {
     "loader": "src/v1/ten-year-history.ts",
