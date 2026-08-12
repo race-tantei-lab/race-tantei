@@ -1,0 +1,49 @@
+name: Verify ten-year public v16
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-ten-year-public-v16.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify production home and history APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          curl -fsS --retry 4 --retry-delay 2 "$base/" -o home.html
+          grep -q '431.7%' home.html
+          grep -q '2016-08-10' home.html
+
+          curl -fsS --retry 4 --retry-delay 2 "$base/api/public/calendar" -o calendar.json
+          python - <<'PY'
+          import json
+          x=json.load(open('calendar.json'))
+          rows=x.get('calendar',[])
+          assert any(r.get('raceDate','').startswith('2016-') for r in rows), '2016 calendar missing'
+          assert any(r.get('raceDate','').startswith('2026-') for r in rows), '2026 calendar missing'
+          print('calendar_rows',len(rows))
+          PY
+
+          curl -fsS --retry 4 --retry-delay 2 "$base/api/public/day?date=2016-08-10" -o day.json
+          rid=$(python - <<'PY'
+          import json
+          x=json.load(open('day.json'))
+          assert x.get('ok') is True
+          rows=x.get('races',[])
+          assert rows, '2016-08-10 races missing'
+          assert all('publicState' in r for r in rows)
+          print(rows[0]['raceId'])
+          PY
+          )
+          curl -fsS --retry 4 --retry-delay 2 "$base/races/$rid" -o race.html
+          grep -Eq '確定買い目|見送り' race.html
+          echo "TEN_YEAR_PUBLIC_V16_OK raceId=$rid"
