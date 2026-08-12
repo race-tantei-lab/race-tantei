@@ -21,10 +21,10 @@ type RawMonth=[raceId:string,runners:RawRunner[]][];
 const monthCache=new Map<string,Promise<Map<string,RawRunner[]>>>();
 function json(value:unknown,status=200):Response{return new Response(JSON.stringify(value),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store, max-age=0"}});}
 
-function resultState(r:TenYearRace):{code:"buy"|"skip";label:"的中"|"不的中"|"見送り"}{
+function resultState(r:TenYearRace):{code:"buy"|"lose"|"skip";label:"的中"|"不的中"|"見送り"}{
   if(!Array.isArray(r.tickets)||r.tickets.length!==2)return {code:"skip",label:"見送り"};
   const ret=r.tickets.reduce((s,t)=>s+Number(t.returnLightYen||0),0);
-  return ret>0?{code:"buy",label:"的中"}:{code:"skip",label:"不的中"};
+  return ret>0?{code:"buy",label:"的中"}:{code:"lose",label:"不的中"};
 }
 
 async function monthRunners(month:string):Promise<Map<string,RawRunner[]>>{
