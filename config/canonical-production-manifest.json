@@ -1,11 +1,28 @@
 {
   "status": "production",
-  "handoffVersion": 1,
-  "asOfJst": "2026-08-13T00:02:00+09:00",
+  "handoffVersion": 2,
+  "asOfJst": "2026-08-13T00:58:00+09:00",
   "repository": "race-tantei-lab/race-tantei",
   "branch": "main",
   "verifiedProductionBaselineCommit": "8f07a9eca0c7494d902aa6873a9149121896ccde",
   "sourceOfTruth": "HANDOFF.md",
+  "handoffVerification": {
+    "script": "scripts/verify-canonical-handoff.py",
+    "workflow": ".github/workflows/verify-canonical-handoff.yml",
+    "requiredResult": "CANONICAL_HANDOFF_OK",
+    "completionRule": "The handoff is complete only when the verifier succeeds against current main.",
+    "verifies": [
+      "canonical model identity and productionChanged status",
+      "model weights SHA256",
+      "production state throughDate, artifact IDs, and both state-file SHA256 values",
+      "completion audit gates and canonical 34,566 / 14,410 race counts",
+      "wrangler.jsonc.main, deploy revision, model version, and D1 identity",
+      "canonical live workflow and ten-year production runner wiring",
+      "public 10-year summary and runner archive counts",
+      "deployment log URL and current Worker version ID",
+      "README and HANDOFF canonical markers"
+    ]
+  },
   "model": {
     "name": "ten-year-completed-model",
     "config": "config/ten-year-completed-model.json",
@@ -63,7 +80,7 @@
     "d1DatabaseName": "race-tantei-phase0",
     "d1DatabaseId": "949b5e8b-d1a4-4c4e-80d1-d031afdc03de",
     "deploymentLog": "analysis-results/production-deployment.log",
-    "verifiedWorkerVersionId": "3e2e4c51-056d-4dfe-812b-4c4b8245792d"
+    "verifiedWorkerVersionId": "58dbe61c-4be8-4c33-97d5-6ad17ceeaf7d"
   },
   "publicHistory": {
     "loader": "src/v1/ten-year-history.ts",
@@ -100,7 +117,8 @@
     "Treat wrangler.jsonc.main as the canonical public-site entry.",
     "Do not re-select, retrain, revalidate, or replace the completed model unless the user explicitly asks to change the model.",
     "Do not rewrite historical picks after publication.",
-    "Do not use synthetic odds."
+    "Do not use synthetic odds.",
+    "Do not declare the handoff complete unless scripts/verify-canonical-handoff.py succeeds and emits CANONICAL_HANDOFF_OK on current main."
   ],
   "notAuthoritative": [
     {
