@@ -5,6 +5,7 @@ on:
     branches: [research/ten-year-minimal-rules]
     paths:
       - ".github/workflows/research-regression-official-odds-parser.yml"
+      - "scripts/research-fetch-resolved-demanded-official-odds.py"
   workflow_dispatch:
 
 permissions:
