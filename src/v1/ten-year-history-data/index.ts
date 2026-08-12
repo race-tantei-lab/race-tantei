@@ -1,0 +1,10 @@
+import b0 from "./bin-00.js";
+import b1 from "./bin-01.js";
+import b2 from "./bin-02.js";
+import b3 from "./bin-03.js";
+import b4 from "./bin-04.js";
+import b5 from "./bin-05.js";
+import b6 from "./bin-06.js";
+import b7 from "./bin-07.js";
+import b8 from "./bin-08.js";
+export default b0+b1+b2+b3+b4+b5+b6+b7+b8;
