@@ -80,7 +80,7 @@ jobs:
             gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "meta-${y}.zip"
             unzip -q "meta-${y}.zip" "research-meta-fetched-odds-${y}.jsonl" -d input/existing-odds
           done
-      - name: Build exact minimized 3451-race demand
+      - name: Build minimized discovery official-odds demand
         run: |
           set -euo pipefail
           python scripts/research-build-ml-discovery-odds-demand.py \
@@ -95,54 +95,71 @@ jobs:
           m=json.load(open('analysis-results/ml-discovery-odds-demand-meta.json'))
           assert m['discoveryBoundaryLocked'] is True,m
           assert m['unionSelectedRaces']==16224,m
-          assert m['reusedRaces']==12773,m
-          assert m['missingRaces']==3451,m
-          assert m['missingByYear']=={'2017':476,'2018':582,'2019':576,'2020':576,'2021':591,'2022':650},m
+          assert m['reusedRaces']+m['missingRaces']==m['unionSelectedRaces'],m
+          assert sum(m['missingByYear'].values())==m['missingRaces'],m
+          assert all(2016<=int(y)<=2022 for y in m['missingByYear']),m
           assert m['reuseRequiresAllSixMarkets'] is True,m
+          assert m['reuseRequiresAtLeastOneOfficialValuePerMarket'] is True,m
           assert m['targetRaceResultUsedForDemand'] is False,m
           assert m['syntheticOddsUsed'] is False,m
           assert m['productionDatabaseWritten'] is False,m
           print(json.dumps(m,ensure_ascii=False))
           PY
-      - name: Fetch 2017-2019 missing official odds in parallel
+      - name: Fetch 2016-2019 missing official odds in parallel
         run: |
           set -euo pipefail
-          for y in 2017 2018 2019; do
-            python scripts/research-fetch-resolved-demanded-official-odds.py \
-              --input analysis-results/ml-discovery-odds-demand.jsonl \
-              --year "$y" --workers 4 \
-              --out "input/new-odds/ml-discovery-odds-${y}.jsonl" \
-              --meta "analysis-results/ml-discovery-odds-${y}-meta.json" &
+          for y in 2016 2017 2018 2019; do
+            n=$(jq -r --arg y "$y" '.missingByYear[$y] // 0' analysis-results/ml-discovery-odds-demand-meta.json)
+            if [ "$n" -gt 0 ]; then
+              python scripts/research-fetch-resolved-demanded-official-odds.py \
+                --input analysis-results/ml-discovery-odds-demand.jsonl \
+                --year "$y" --workers 4 \
+                --out "input/new-odds/ml-discovery-odds-${y}.jsonl" \
+                --meta "analysis-results/ml-discovery-odds-${y}-meta.json" &
+            fi
           done
           wait
       - name: Fetch 2020-2022 missing official odds in parallel
         run: |
           set -euo pipefail
           for y in 2020 2021 2022; do
-            python scripts/research-fetch-resolved-demanded-official-odds.py \
-              --input analysis-results/ml-discovery-odds-demand.jsonl \
-              --year "$y" --workers 4 \
-              --out "input/new-odds/ml-discovery-odds-${y}.jsonl" \
-              --meta "analysis-results/ml-discovery-odds-${y}-meta.json" &
+            n=$(jq -r --arg y "$y" '.missingByYear[$y] // 0' analysis-results/ml-discovery-odds-demand-meta.json)
+            if [ "$n" -gt 0 ]; then
+              python scripts/research-fetch-resolved-demanded-official-odds.py \
+                --input analysis-results/ml-discovery-odds-demand.jsonl \
+                --year "$y" --workers 4 \
+                --out "input/new-odds/ml-discovery-odds-${y}.jsonl" \
+                --meta "analysis-results/ml-discovery-odds-${y}-meta.json" &
+            fi
           done
           wait
-      - name: Require exact 3451 official-odds rows and zero failures
+      - name: Require every demanded official-odds row and zero failures
         run: |
           python - <<'PY'
           import json
-          expected={'2017':476,'2018':582,'2019':576,'2020':576,'2021':591,'2022':650}
+          from pathlib import Path
+          demand=json.load(open('analysis-results/ml-discovery-odds-demand-meta.json'))
           total=0
-          for y,n in expected.items():
-              p=f'input/new-odds/ml-discovery-odds-{y}.jsonl'
-              actual=sum(1 for line in open(p,encoding='utf-8') if line.strip())
-              assert actual==n,(y,actual,n)
-              m=json.load(open(f'analysis-results/ml-discovery-odds-{y}-meta.json'))
-              assert not m.get('failures'),(y,m.get('failures'))
+          for y in range(2016,2023):
+              ys=str(y); expected=int(demand['missingByYear'].get(ys,0))
+              p=Path(f'input/new-odds/ml-discovery-odds-{ys}.jsonl')
+              mp=Path(f'analysis-results/ml-discovery-odds-{ys}-meta.json')
+              if expected==0:
+                  assert not p.exists() or not p.read_text(encoding='utf-8').strip(),(ys,'unexpected rows')
+                  continue
+              assert p.exists() and mp.exists(),(ys,'missing output')
+              actual=sum(1 for line in p.open(encoding='utf-8') if line.strip())
+              assert actual==expected,(ys,actual,expected)
+              m=json.load(mp.open(encoding='utf-8'))
+              assert m.get('inputDemandRaces')==expected,(ys,m.get('inputDemandRaces'),expected)
+              assert m.get('completedRaces')==expected,(ys,m.get('completedRaces'),expected)
+              assert not m.get('failures'),(ys,m.get('failures'))
               assert m.get('syntheticOddsUsed') is False,m
               assert m.get('productionDatabaseWritten') is False,m
               total+=actual
-          assert total==3451,total
-          print(json.dumps({'newOfficialOddsRaces':total,'reusedOfficialOddsRaces':12773,'syntheticOddsUsed':False,'productionDatabaseWritten':False},ensure_ascii=False))
+          assert total==demand['missingRaces'],(total,demand['missingRaces'])
+          assert total+demand['reusedRaces']==demand['unionSelectedRaces'],demand
+          print(json.dumps({'newOfficialOddsRaces':total,'reusedOfficialOddsRaces':demand['reusedRaces'],'unionSelectedRaces':demand['unionSelectedRaces'],'missingByYear':demand['missingByYear'],'syntheticOddsUsed':False,'productionDatabaseWritten':False},ensure_ascii=False))
           PY
       - name: Download all-race OOS predictions
         run: |
@@ -176,6 +193,7 @@ jobs:
           assert d['holdoutPeriodUntouched']=={'start':'2023-01-01','end':'2026-08-09'},d
           assert d['candidateCombinations']==16 and d['selectedRacesPerCombination']==9190,d
           assert d['inactiveHorsesFilteredBeforeRanking'] is True,d
+          assert d['existingOddsReuseRequiresAtLeastOneOfficialValuePerMarket'] is True,d
           assert d['completionHardGate']['allCoursesTop50ReturnAndProfitExcludedRoiPctAtLeast']==200.0,d
           assert p['practicalDiscoveryWinner']['selector'] in ('confidence','concentration'),p
           assert p['practicalDiscoveryWinner']['historicalFinalPopularityUsedForSelection'] is False,p
