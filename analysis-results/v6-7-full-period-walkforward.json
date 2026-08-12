@@ -1,0 +1,5784 @@
+{
+  "generatedAt": "2026-08-06",
+  "modelVersion": "v6.7-full-period-walkforward",
+  "productionChanged": false,
+  "method": "Expanding monthly walk-forward from 2024-08 through 2026-08. Every target month is predicted using only earlier races. Five races per venue/day are always selected. Course policies and race mode are chosen only from earlier out-of-sample months. Evaluation uses actual JRA payouts only.",
+  "constraints": {
+    "startMonth": "2024-08",
+    "endMonth": "2026-08",
+    "minimumPriorOosMonths": 3,
+    "courseBudgets": {
+      "ライト": 1600,
+      "スタンダード": 4200,
+      "プレミアム": 8800
+    },
+    "targetRacesPerVenueDay": 5,
+    "usesAssumedOddsForEvaluation": false
+  },
+  "diagnostics": [
+    {
+      "month": "2024-08",
+      "status": "evaluated",
+      "trainRaces": 816,
+      "targetRaces": 287,
+      "selectedRaces": 120,
+      "mode": "balanced",
+      "priorOosMonths": 0
+    },
+    {
+      "month": "2024-09",
+      "status": "evaluated",
+      "trainRaces": 1103,
+      "targetRaces": 252,
+      "selectedRaces": 105,
+      "mode": "balanced",
+      "priorOosMonths": 1
+    },
+    {
+      "month": "2024-10",
+      "status": "evaluated",
+      "trainRaces": 1355,
+      "targetRaces": 288,
+      "selectedRaces": 120,
+      "mode": "balanced",
+      "priorOosMonths": 2
+    },
+    {
+      "month": "2024-11",
+      "status": "evaluated",
+      "trainRaces": 1643,
+      "targetRaces": 299,
+      "selectedRaces": 125,
+      "mode": "edge",
+      "priorOosMonths": 3
+    },
+    {
+      "month": "2024-12",
+      "status": "evaluated",
+      "trainRaces": 1942,
+      "targetRaces": 252,
+      "selectedRaces": 105,
+      "mode": "disagreement",
+      "priorOosMonths": 4
+    },
+    {
+      "month": "2025-01",
+      "status": "evaluated",
+      "trainRaces": 2194,
+      "targetRaces": 228,
+      "selectedRaces": 95,
+      "mode": "edge",
+      "priorOosMonths": 5
+    },
+    {
+      "month": "2025-02",
+      "status": "evaluated",
+      "trainRaces": 2422,
+      "targetRaces": 288,
+      "selectedRaces": 120,
+      "mode": "edge",
+      "priorOosMonths": 6
+    },
+    {
+      "month": "2025-03",
+      "status": "evaluated",
+      "trainRaces": 2710,
+      "targetRaces": 336,
+      "selectedRaces": 140,
+      "mode": "edge",
+      "priorOosMonths": 7
+    },
+    {
+      "month": "2025-04",
+      "status": "evaluated",
+      "trainRaces": 3046,
+      "targetRaces": 264,
+      "selectedRaces": 110,
+      "mode": "edge",
+      "priorOosMonths": 8
+    },
+    {
+      "month": "2025-05",
+      "status": "evaluated",
+      "trainRaces": 3310,
+      "targetRaces": 311,
+      "selectedRaces": 130,
+      "mode": "edge",
+      "priorOosMonths": 9
+    },
+    {
+      "month": "2025-06",
+      "status": "evaluated",
+      "trainRaces": 3621,
+      "targetRaces": 288,
+      "selectedRaces": 120,
+      "mode": "edge",
+      "priorOosMonths": 10
+    },
+    {
+      "month": "2025-07",
+      "status": "evaluated",
+      "trainRaces": 3909,
+      "targetRaces": 288,
+      "selectedRaces": 120,
+      "mode": "edge",
+      "priorOosMonths": 11
+    },
+    {
+      "month": "2025-08",
+      "status": "evaluated",
+      "trainRaces": 4197,
+      "targetRaces": 360,
+      "selectedRaces": 150,
+      "mode": "edge",
+      "priorOosMonths": 12
+    },
+    {
+      "month": "2025-09",
+      "status": "evaluated",
+      "trainRaces": 4557,
+      "targetRaces": 240,
+      "selectedRaces": 100,
+      "mode": "edge",
+      "priorOosMonths": 13
+    },
+    {
+      "month": "2025-10",
+      "status": "evaluated",
+      "trainRaces": 4797,
+      "targetRaces": 252,
+      "selectedRaces": 105,
+      "mode": "edge",
+      "priorOosMonths": 14
+    },
+    {
+      "month": "2025-11",
+      "status": "evaluated",
+      "trainRaces": 5049,
+      "targetRaces": 312,
+      "selectedRaces": 130,
+      "mode": "edge",
+      "priorOosMonths": 15
+    },
+    {
+      "month": "2025-12",
+      "status": "evaluated",
+      "trainRaces": 5361,
+      "targetRaces": 264,
+      "selectedRaces": 110,
+      "mode": "edge",
+      "priorOosMonths": 16
+    },
+    {
+      "month": "2026-01",
+      "status": "evaluated",
+      "trainRaces": 5625,
+      "targetRaces": 276,
+      "selectedRaces": 115,
+      "mode": "edge",
+      "priorOosMonths": 17
+    },
+    {
+      "month": "2026-02",
+      "status": "evaluated",
+      "trainRaces": 5901,
+      "targetRaces": 270,
+      "selectedRaces": 115,
+      "mode": "edge",
+      "priorOosMonths": 18
+    },
+    {
+      "month": "2026-03",
+      "status": "evaluated",
+      "trainRaces": 6171,
+      "targetRaces": 300,
+      "selectedRaces": 125,
+      "mode": "edge",
+      "priorOosMonths": 19
+    },
+    {
+      "month": "2026-04",
+      "status": "evaluated",
+      "trainRaces": 6471,
+      "targetRaces": 264,
+      "selectedRaces": 110,
+      "mode": "edge",
+      "priorOosMonths": 20
+    },
+    {
+      "month": "2026-05",
+      "status": "evaluated",
+      "trainRaces": 6735,
+      "targetRaces": 336,
+      "selectedRaces": 140,
+      "mode": "edge",
+      "priorOosMonths": 21
+    },
+    {
+      "month": "2026-06",
+      "status": "evaluated",
+      "trainRaces": 7071,
+      "targetRaces": 264,
+      "selectedRaces": 110,
+      "mode": "edge",
+      "priorOosMonths": 22
+    },
+    {
+      "month": "2026-07",
+      "status": "evaluated",
+      "trainRaces": 7335,
+      "targetRaces": 288,
+      "selectedRaces": 120,
+      "mode": "edge",
+      "priorOosMonths": 23
+    },
+    {
+      "month": "2026-08",
+      "status": "evaluated",
+      "trainRaces": 7623,
+      "targetRaces": 72,
+      "selectedRaces": 30,
+      "mode": "edge",
+      "priorOosMonths": 24
+    }
+  ],
+  "monthly": [
+    {
+      "month": "2024-08",
+      "mode": "balanced",
+      "selectedRaces": 120,
+      "courses": {
+        "ライト": {
+          "races": 120,
+          "stakeYen": 192000,
+          "returnYen": 172380,
+          "profitYen": -19620,
+          "roiPct": 89.78125,
+          "hitRatePct": 66.66666666666666,
+          "byDay": {
+            "2024-08-03": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 19490,
+              "roiPct": 121.81249999999999,
+              "hitRatePct": 90.0
+            },
+            "2024-08-04": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 20460,
+              "roiPct": 127.875,
+              "hitRatePct": 90.0
+            },
+            "2024-08-10": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 22730,
+              "roiPct": 94.70833333333334,
+              "hitRatePct": 73.33333333333333
+            },
+            "2024-08-11": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 25300,
+              "roiPct": 105.41666666666667,
+              "hitRatePct": 73.33333333333333
+            },
+            "2024-08-17": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 7630,
+              "roiPct": 47.6875,
+              "hitRatePct": 60.0
+            },
+            "2024-08-18": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 18900,
+              "roiPct": 78.75,
+              "hitRatePct": 53.333333333333336
+            },
+            "2024-08-24": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 26880,
+              "roiPct": 112.00000000000001,
+              "hitRatePct": 80.0
+            },
+            "2024-08-25": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 16520,
+              "roiPct": 68.83333333333333,
+              "hitRatePct": 46.666666666666664
+            },
+            "2024-08-31": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 14470,
+              "roiPct": 60.291666666666664,
+              "hitRatePct": 46.666666666666664
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 120,
+          "stakeYen": 504000,
+          "returnYen": 425900,
+          "profitYen": -78100,
+          "roiPct": 84.50396825396825,
+          "hitRatePct": 65.0,
+          "byDay": {
+            "2024-08-03": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 64450,
+              "roiPct": 153.45238095238096,
+              "hitRatePct": 90.0
+            },
+            "2024-08-04": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 47780,
+              "roiPct": 113.76190476190476,
+              "hitRatePct": 80.0
+            },
+            "2024-08-10": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 39590,
+              "roiPct": 62.84126984126984,
+              "hitRatePct": 53.333333333333336
+            },
+            "2024-08-11": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 61010,
+              "roiPct": 96.84126984126983,
+              "hitRatePct": 86.66666666666667
+            },
+            "2024-08-17": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 31910,
+              "roiPct": 75.97619047619048,
+              "hitRatePct": 70.0
+            },
+            "2024-08-18": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 49410,
+              "roiPct": 78.42857142857143,
+              "hitRatePct": 53.333333333333336
+            },
+            "2024-08-24": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 72470,
+              "roiPct": 115.03174603174604,
+              "hitRatePct": 73.33333333333333
+            },
+            "2024-08-25": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 31990,
+              "roiPct": 50.77777777777778,
+              "hitRatePct": 46.666666666666664
+            },
+            "2024-08-31": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 27290,
+              "roiPct": 43.317460317460316,
+              "hitRatePct": 46.666666666666664
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 120,
+          "stakeYen": 1056000,
+          "returnYen": 917330,
+          "profitYen": -138670,
+          "roiPct": 86.8683712121212,
+          "hitRatePct": 57.49999999999999,
+          "byDay": {
+            "2024-08-03": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 127750,
+              "roiPct": 145.17045454545453,
+              "hitRatePct": 80.0
+            },
+            "2024-08-04": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 113620,
+              "roiPct": 129.11363636363635,
+              "hitRatePct": 80.0
+            },
+            "2024-08-10": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 67670,
+              "roiPct": 51.265151515151516,
+              "hitRatePct": 53.333333333333336
+            },
+            "2024-08-11": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 133210,
+              "roiPct": 100.91666666666667,
+              "hitRatePct": 73.33333333333333
+            },
+            "2024-08-17": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 48910,
+              "roiPct": 55.57954545454545,
+              "hitRatePct": 50.0
+            },
+            "2024-08-18": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 104410,
+              "roiPct": 79.09848484848484,
+              "hitRatePct": 46.666666666666664
+            },
+            "2024-08-24": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 187960,
+              "roiPct": 142.39393939393938,
+              "hitRatePct": 66.66666666666666
+            },
+            "2024-08-25": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 70480,
+              "roiPct": 53.39393939393939,
+              "hitRatePct": 40.0
+            },
+            "2024-08-31": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 63320,
+              "roiPct": 47.96969696969697,
+              "hitRatePct": 40.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2024-09",
+      "mode": "balanced",
+      "selectedRaces": 105,
+      "courses": {
+        "ライト": {
+          "races": 105,
+          "stakeYen": 168000,
+          "returnYen": 140790,
+          "profitYen": -27210,
+          "roiPct": 83.80357142857143,
+          "hitRatePct": 71.42857142857143,
+          "byDay": {
+            "2024-09-01": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 13620,
+              "roiPct": 56.75,
+              "hitRatePct": 53.333333333333336
+            },
+            "2024-09-07": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 10920,
+              "roiPct": 68.25,
+              "hitRatePct": 90.0
+            },
+            "2024-09-08": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 10970,
+              "roiPct": 68.5625,
+              "hitRatePct": 80.0
+            },
+            "2024-09-14": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 18570,
+              "roiPct": 116.0625,
+              "hitRatePct": 70.0
+            },
+            "2024-09-15": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 9810,
+              "roiPct": 61.3125,
+              "hitRatePct": 60.0
+            },
+            "2024-09-16": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 14060,
+              "roiPct": 87.875,
+              "hitRatePct": 70.0
+            },
+            "2024-09-21": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 14270,
+              "roiPct": 89.1875,
+              "hitRatePct": 80.0
+            },
+            "2024-09-22": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 18920,
+              "roiPct": 118.25000000000001,
+              "hitRatePct": 80.0
+            },
+            "2024-09-28": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 12640,
+              "roiPct": 79.0,
+              "hitRatePct": 70.0
+            },
+            "2024-09-29": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 17010,
+              "roiPct": 106.31250000000001,
+              "hitRatePct": 70.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 105,
+          "stakeYen": 441000,
+          "returnYen": 406870,
+          "profitYen": -34130,
+          "roiPct": 92.26077097505669,
+          "hitRatePct": 67.61904761904762,
+          "byDay": {
+            "2024-09-01": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 31840,
+              "roiPct": 50.53968253968254,
+              "hitRatePct": 46.666666666666664
+            },
+            "2024-09-07": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 19230,
+              "roiPct": 45.785714285714285,
+              "hitRatePct": 80.0
+            },
+            "2024-09-08": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 30260,
+              "roiPct": 72.04761904761905,
+              "hitRatePct": 80.0
+            },
+            "2024-09-14": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 101970,
+              "roiPct": 242.7857142857143,
+              "hitRatePct": 70.0
+            },
+            "2024-09-15": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 29660,
+              "roiPct": 70.61904761904762,
+              "hitRatePct": 60.0
+            },
+            "2024-09-16": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 53790,
+              "roiPct": 128.07142857142856,
+              "hitRatePct": 90.0
+            },
+            "2024-09-21": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 40630,
+              "roiPct": 96.73809523809524,
+              "hitRatePct": 60.0
+            },
+            "2024-09-22": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 40050,
+              "roiPct": 95.35714285714286,
+              "hitRatePct": 80.0
+            },
+            "2024-09-28": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 22030,
+              "roiPct": 52.45238095238095,
+              "hitRatePct": 50.0
+            },
+            "2024-09-29": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 37410,
+              "roiPct": 89.07142857142857,
+              "hitRatePct": 70.0
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 105,
+          "stakeYen": 924000,
+          "returnYen": 859980,
+          "profitYen": -64020,
+          "roiPct": 93.07142857142857,
+          "hitRatePct": 61.904761904761905,
+          "byDay": {
+            "2024-09-01": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 49640,
+              "roiPct": 37.6060606060606,
+              "hitRatePct": 40.0
+            },
+            "2024-09-07": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 53490,
+              "roiPct": 60.78409090909091,
+              "hitRatePct": 80.0
+            },
+            "2024-09-08": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 56270,
+              "roiPct": 63.94318181818181,
+              "hitRatePct": 70.0
+            },
+            "2024-09-14": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 228630,
+              "roiPct": 259.8068181818182,
+              "hitRatePct": 70.0
+            },
+            "2024-09-15": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 54280,
+              "roiPct": 61.68181818181818,
+              "hitRatePct": 50.0
+            },
+            "2024-09-16": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 111910,
+              "roiPct": 127.17045454545455,
+              "hitRatePct": 70.0
+            },
+            "2024-09-21": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 75950,
+              "roiPct": 86.30681818181817,
+              "hitRatePct": 60.0
+            },
+            "2024-09-22": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 72240,
+              "roiPct": 82.0909090909091,
+              "hitRatePct": 70.0
+            },
+            "2024-09-28": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 62700,
+              "roiPct": 71.25,
+              "hitRatePct": 50.0
+            },
+            "2024-09-29": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 94870,
+              "roiPct": 107.80681818181819,
+              "hitRatePct": 70.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2024-10",
+      "mode": "balanced",
+      "selectedRaces": 120,
+      "courses": {
+        "ライト": {
+          "races": 120,
+          "stakeYen": 192000,
+          "returnYen": 150690,
+          "profitYen": -41310,
+          "roiPct": 78.484375,
+          "hitRatePct": 70.83333333333334,
+          "byDay": {
+            "2024-10-05": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 25840,
+              "roiPct": 107.66666666666667,
+              "hitRatePct": 93.33333333333333
+            },
+            "2024-10-06": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 13130,
+              "roiPct": 54.708333333333336,
+              "hitRatePct": 53.333333333333336
+            },
+            "2024-10-12": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 5540,
+              "roiPct": 34.625,
+              "hitRatePct": 50.0
+            },
+            "2024-10-13": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 10860,
+              "roiPct": 67.875,
+              "hitRatePct": 70.0
+            },
+            "2024-10-14": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 10550,
+              "roiPct": 65.9375,
+              "hitRatePct": 60.0
+            },
+            "2024-10-19": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 18170,
+              "roiPct": 75.70833333333333,
+              "hitRatePct": 73.33333333333333
+            },
+            "2024-10-20": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 17140,
+              "roiPct": 71.41666666666666,
+              "hitRatePct": 66.66666666666666
+            },
+            "2024-10-26": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 28500,
+              "roiPct": 118.75,
+              "hitRatePct": 86.66666666666667
+            },
+            "2024-10-27": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 20960,
+              "roiPct": 87.33333333333333,
+              "hitRatePct": 73.33333333333333
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 120,
+          "stakeYen": 504000,
+          "returnYen": 408540,
+          "profitYen": -95460,
+          "roiPct": 81.05952380952381,
+          "hitRatePct": 71.66666666666667,
+          "byDay": {
+            "2024-10-05": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 65280,
+              "roiPct": 103.6190476190476,
+              "hitRatePct": 86.66666666666667
+            },
+            "2024-10-06": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 53690,
+              "roiPct": 85.22222222222223,
+              "hitRatePct": 66.66666666666666
+            },
+            "2024-10-12": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 22300,
+              "roiPct": 53.095238095238095,
+              "hitRatePct": 70.0
+            },
+            "2024-10-13": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 31940,
+              "roiPct": 76.04761904761905,
+              "hitRatePct": 50.0
+            },
+            "2024-10-14": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 26530,
+              "roiPct": 63.16666666666667,
+              "hitRatePct": 60.0
+            },
+            "2024-10-19": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 39780,
+              "roiPct": 63.142857142857146,
+              "hitRatePct": 80.0
+            },
+            "2024-10-20": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 36560,
+              "roiPct": 58.03174603174603,
+              "hitRatePct": 66.66666666666666
+            },
+            "2024-10-26": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 69180,
+              "roiPct": 109.8095238095238,
+              "hitRatePct": 80.0
+            },
+            "2024-10-27": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 63280,
+              "roiPct": 100.44444444444444,
+              "hitRatePct": 73.33333333333333
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 120,
+          "stakeYen": 1056000,
+          "returnYen": 769410,
+          "profitYen": -286590,
+          "roiPct": 72.86079545454545,
+          "hitRatePct": 60.0,
+          "byDay": {
+            "2024-10-05": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 142310,
+              "roiPct": 107.81060606060606,
+              "hitRatePct": 80.0
+            },
+            "2024-10-06": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 72840,
+              "roiPct": 55.18181818181817,
+              "hitRatePct": 40.0
+            },
+            "2024-10-12": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 28860,
+              "roiPct": 32.79545454545455,
+              "hitRatePct": 40.0
+            },
+            "2024-10-13": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 56550,
+              "roiPct": 64.26136363636363,
+              "hitRatePct": 50.0
+            },
+            "2024-10-14": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 33820,
+              "roiPct": 38.43181818181819,
+              "hitRatePct": 40.0
+            },
+            "2024-10-19": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 88940,
+              "roiPct": 67.37878787878788,
+              "hitRatePct": 73.33333333333333
+            },
+            "2024-10-20": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 60400,
+              "roiPct": 45.75757575757576,
+              "hitRatePct": 60.0
+            },
+            "2024-10-26": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 147210,
+              "roiPct": 111.52272727272728,
+              "hitRatePct": 66.66666666666666
+            },
+            "2024-10-27": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 138480,
+              "roiPct": 104.9090909090909,
+              "hitRatePct": 73.33333333333333
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2024-11",
+      "mode": "edge",
+      "selectedRaces": 125,
+      "courses": {
+        "ライト": {
+          "races": 125,
+          "stakeYen": 200000,
+          "returnYen": 885160,
+          "profitYen": 685160,
+          "roiPct": 442.58,
+          "hitRatePct": 53.6,
+          "byDay": {
+            "2024-11-02": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 81140,
+              "roiPct": 338.0833333333333,
+              "hitRatePct": 53.333333333333336
+            },
+            "2024-11-03": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 181010,
+              "roiPct": 754.2083333333334,
+              "hitRatePct": 53.333333333333336
+            },
+            "2024-11-09": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 51780,
+              "roiPct": 215.75000000000003,
+              "hitRatePct": 60.0
+            },
+            "2024-11-10": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 139200,
+              "roiPct": 580.0,
+              "hitRatePct": 33.33333333333333
+            },
+            "2024-11-16": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 55060,
+              "roiPct": 229.41666666666666,
+              "hitRatePct": 53.333333333333336
+            },
+            "2024-11-17": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 42320,
+              "roiPct": 176.33333333333334,
+              "hitRatePct": 66.66666666666666
+            },
+            "2024-11-23": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 30710,
+              "roiPct": 191.9375,
+              "hitRatePct": 50.0
+            },
+            "2024-11-24": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 85760,
+              "roiPct": 536.0,
+              "hitRatePct": 50.0
+            },
+            "2024-11-30": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 218180,
+              "roiPct": 909.0833333333334,
+              "hitRatePct": 60.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 125,
+          "stakeYen": 525000,
+          "returnYen": 3889680,
+          "profitYen": 3364680,
+          "roiPct": 740.8914285714285,
+          "hitRatePct": 55.2,
+          "byDay": {
+            "2024-11-02": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 386970,
+              "roiPct": 614.2380952380952,
+              "hitRatePct": 60.0
+            },
+            "2024-11-03": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 952040,
+              "roiPct": 1511.1746031746031,
+              "hitRatePct": 60.0
+            },
+            "2024-11-09": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 230210,
+              "roiPct": 365.41269841269843,
+              "hitRatePct": 60.0
+            },
+            "2024-11-10": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 202340,
+              "roiPct": 321.1746031746032,
+              "hitRatePct": 40.0
+            },
+            "2024-11-16": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 123140,
+              "roiPct": 195.46031746031747,
+              "hitRatePct": 46.666666666666664
+            },
+            "2024-11-17": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 202240,
+              "roiPct": 321.015873015873,
+              "hitRatePct": 53.333333333333336
+            },
+            "2024-11-23": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 149840,
+              "roiPct": 356.76190476190476,
+              "hitRatePct": 70.0
+            },
+            "2024-11-24": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 276030,
+              "roiPct": 657.2142857142858,
+              "hitRatePct": 60.0
+            },
+            "2024-11-30": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 1366870,
+              "roiPct": 2169.634920634921,
+              "hitRatePct": 53.333333333333336
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 125,
+          "stakeYen": 1100000,
+          "returnYen": 9753530,
+          "profitYen": 8653530,
+          "roiPct": 886.6845454545455,
+          "hitRatePct": 52.0,
+          "byDay": {
+            "2024-11-02": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1197900,
+              "roiPct": 907.4999999999999,
+              "hitRatePct": 33.33333333333333
+            },
+            "2024-11-03": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 2233950,
+              "roiPct": 1692.3863636363637,
+              "hitRatePct": 46.666666666666664
+            },
+            "2024-11-09": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 474780,
+              "roiPct": 359.6818181818182,
+              "hitRatePct": 40.0
+            },
+            "2024-11-10": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 960820,
+              "roiPct": 727.8939393939394,
+              "hitRatePct": 46.666666666666664
+            },
+            "2024-11-16": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 435110,
+              "roiPct": 329.6287878787879,
+              "hitRatePct": 66.66666666666666
+            },
+            "2024-11-17": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 361550,
+              "roiPct": 273.9015151515152,
+              "hitRatePct": 46.666666666666664
+            },
+            "2024-11-23": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 323010,
+              "roiPct": 367.0568181818182,
+              "hitRatePct": 70.0
+            },
+            "2024-11-24": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 723480,
+              "roiPct": 822.1363636363636,
+              "hitRatePct": 70.0
+            },
+            "2024-11-30": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 3042930,
+              "roiPct": 2305.25,
+              "hitRatePct": 60.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2024-12",
+      "mode": "disagreement",
+      "selectedRaces": 105,
+      "courses": {
+        "ライト": {
+          "races": 105,
+          "stakeYen": 168000,
+          "returnYen": 417640,
+          "profitYen": 249640,
+          "roiPct": 248.5952380952381,
+          "hitRatePct": 58.0952380952381,
+          "byDay": {
+            "2024-12-01": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 50390,
+              "roiPct": 209.95833333333334,
+              "hitRatePct": 60.0
+            },
+            "2024-12-07": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 40700,
+              "roiPct": 169.58333333333334,
+              "hitRatePct": 66.66666666666666
+            },
+            "2024-12-08": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 73310,
+              "roiPct": 305.45833333333337,
+              "hitRatePct": 66.66666666666666
+            },
+            "2024-12-14": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 19930,
+              "roiPct": 83.04166666666667,
+              "hitRatePct": 46.666666666666664
+            },
+            "2024-12-15": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 58880,
+              "roiPct": 245.33333333333331,
+              "hitRatePct": 46.666666666666664
+            },
+            "2024-12-21": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 4810,
+              "roiPct": 30.062499999999996,
+              "hitRatePct": 40.0
+            },
+            "2024-12-22": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 36080,
+              "roiPct": 225.5,
+              "hitRatePct": 60.0
+            },
+            "2024-12-28": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 133540,
+              "roiPct": 834.625,
+              "hitRatePct": 80.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 105,
+          "stakeYen": 441000,
+          "returnYen": 3831000,
+          "profitYen": 3390000,
+          "roiPct": 868.7074829931973,
+          "hitRatePct": 53.333333333333336,
+          "byDay": {
+            "2024-12-01": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 195680,
+              "roiPct": 310.6031746031746,
+              "hitRatePct": 60.0
+            },
+            "2024-12-07": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 169360,
+              "roiPct": 268.8253968253968,
+              "hitRatePct": 60.0
+            },
+            "2024-12-08": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 272560,
+              "roiPct": 432.63492063492066,
+              "hitRatePct": 53.333333333333336
+            },
+            "2024-12-14": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 62320,
+              "roiPct": 98.92063492063492,
+              "hitRatePct": 46.666666666666664
+            },
+            "2024-12-15": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 239660,
+              "roiPct": 380.4126984126984,
+              "hitRatePct": 46.666666666666664
+            },
+            "2024-12-21": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 20750,
+              "roiPct": 49.404761904761905,
+              "hitRatePct": 50.0
+            },
+            "2024-12-22": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 198080,
+              "roiPct": 471.61904761904765,
+              "hitRatePct": 60.0
+            },
+            "2024-12-28": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 2672590,
+              "roiPct": 6363.309523809524,
+              "hitRatePct": 50.0
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 105,
+          "stakeYen": 924000,
+          "returnYen": 15202360,
+          "profitYen": 14278360,
+          "roiPct": 1645.2770562770563,
+          "hitRatePct": 66.66666666666666,
+          "byDay": {
+            "2024-12-01": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 486570,
+              "roiPct": 368.6136363636364,
+              "hitRatePct": 73.33333333333333
+            },
+            "2024-12-07": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 431290,
+              "roiPct": 326.7348484848485,
+              "hitRatePct": 73.33333333333333
+            },
+            "2024-12-08": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 386720,
+              "roiPct": 292.969696969697,
+              "hitRatePct": 66.66666666666666
+            },
+            "2024-12-14": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 167910,
+              "roiPct": 127.20454545454545,
+              "hitRatePct": 73.33333333333333
+            },
+            "2024-12-15": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 850360,
+              "roiPct": 644.2121212121212,
+              "hitRatePct": 60.0
+            },
+            "2024-12-21": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 53480,
+              "roiPct": 60.77272727272728,
+              "hitRatePct": 60.0
+            },
+            "2024-12-22": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 322550,
+              "roiPct": 366.53409090909093,
+              "hitRatePct": 60.0
+            },
+            "2024-12-28": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 12503480,
+              "roiPct": 14208.5,
+              "hitRatePct": 60.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2025-01",
+      "mode": "edge",
+      "selectedRaces": 95,
+      "courses": {
+        "ライト": {
+          "races": 95,
+          "stakeYen": 152000,
+          "returnYen": 744330,
+          "profitYen": 592330,
+          "roiPct": 489.6907894736843,
+          "hitRatePct": 55.78947368421052,
+          "byDay": {
+            "2025-01-05": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 48110,
+              "roiPct": 300.6875,
+              "hitRatePct": 60.0
+            },
+            "2025-01-06": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 16810,
+              "roiPct": 105.06249999999999,
+              "hitRatePct": 30.0
+            },
+            "2025-01-11": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 7630,
+              "roiPct": 47.6875,
+              "hitRatePct": 40.0
+            },
+            "2025-01-12": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 34100,
+              "roiPct": 213.125,
+              "hitRatePct": 80.0
+            },
+            "2025-01-13": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 28150,
+              "roiPct": 175.9375,
+              "hitRatePct": 40.0
+            },
+            "2025-01-18": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 50150,
+              "roiPct": 313.4375,
+              "hitRatePct": 60.0
+            },
+            "2025-01-19": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 476380,
+              "roiPct": 2977.375,
+              "hitRatePct": 60.0
+            },
+            "2025-01-25": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 36410,
+              "roiPct": 151.70833333333334,
+              "hitRatePct": 60.0
+            },
+            "2025-01-26": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 46590,
+              "roiPct": 291.1875,
+              "hitRatePct": 70.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 95,
+          "stakeYen": 399000,
+          "returnYen": 2595420,
+          "profitYen": 2196420,
+          "roiPct": 650.4812030075188,
+          "hitRatePct": 63.1578947368421,
+          "byDay": {
+            "2025-01-05": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 175630,
+              "roiPct": 418.1666666666667,
+              "hitRatePct": 60.0
+            },
+            "2025-01-06": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 23170,
+              "roiPct": 55.166666666666664,
+              "hitRatePct": 40.0
+            },
+            "2025-01-11": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 22680,
+              "roiPct": 54.0,
+              "hitRatePct": 40.0
+            },
+            "2025-01-12": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 77050,
+              "roiPct": 183.45238095238093,
+              "hitRatePct": 90.0
+            },
+            "2025-01-13": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 77210,
+              "roiPct": 183.83333333333334,
+              "hitRatePct": 60.0
+            },
+            "2025-01-18": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 87680,
+              "roiPct": 208.76190476190476,
+              "hitRatePct": 60.0
+            },
+            "2025-01-19": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 1939150,
+              "roiPct": 4617.02380952381,
+              "hitRatePct": 60.0
+            },
+            "2025-01-25": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 84090,
+              "roiPct": 133.47619047619048,
+              "hitRatePct": 80.0
+            },
+            "2025-01-26": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 108760,
+              "roiPct": 258.95238095238096,
+              "hitRatePct": 70.0
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 95,
+          "stakeYen": 836000,
+          "returnYen": 56942350,
+          "profitYen": 56106350,
+          "roiPct": 6811.285885167465,
+          "hitRatePct": 64.21052631578948,
+          "byDay": {
+            "2025-01-05": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 696570,
+              "roiPct": 791.5568181818182,
+              "hitRatePct": 60.0
+            },
+            "2025-01-06": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 27570,
+              "roiPct": 31.329545454545453,
+              "hitRatePct": 50.0
+            },
+            "2025-01-11": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 63290,
+              "roiPct": 71.92045454545455,
+              "hitRatePct": 70.0
+            },
+            "2025-01-12": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 143670,
+              "roiPct": 163.26136363636363,
+              "hitRatePct": 60.0
+            },
+            "2025-01-13": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 313310,
+              "roiPct": 356.03409090909093,
+              "hitRatePct": 40.0
+            },
+            "2025-01-18": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 47980,
+              "roiPct": 54.52272727272728,
+              "hitRatePct": 50.0
+            },
+            "2025-01-19": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 55330790,
+              "roiPct": 62875.89772727273,
+              "hitRatePct": 60.0
+            },
+            "2025-01-25": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 131020,
+              "roiPct": 99.25757575757575,
+              "hitRatePct": 86.66666666666667
+            },
+            "2025-01-26": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 188150,
+              "roiPct": 213.8068181818182,
+              "hitRatePct": 90.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2025-02",
+      "mode": "edge",
+      "selectedRaces": 120,
+      "courses": {
+        "ライト": {
+          "races": 120,
+          "stakeYen": 192000,
+          "returnYen": 780790,
+          "profitYen": 588790,
+          "roiPct": 406.6614583333333,
+          "hitRatePct": 50.0,
+          "byDay": {
+            "2025-02-01": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 17720,
+              "roiPct": 73.83333333333333,
+              "hitRatePct": 33.33333333333333
+            },
+            "2025-02-02": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 91780,
+              "roiPct": 382.4166666666667,
+              "hitRatePct": 60.0
+            },
+            "2025-02-08": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 8340,
+              "roiPct": 52.125,
+              "hitRatePct": 20.0
+            },
+            "2025-02-09": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 219010,
+              "roiPct": 912.5416666666666,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-02-10": {
+              "races": 5,
+              "stakeYen": 8000,
+              "returnYen": 33950,
+              "roiPct": 424.37500000000006,
+              "hitRatePct": 60.0
+            },
+            "2025-02-15": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 121680,
+              "roiPct": 507.0,
+              "hitRatePct": 60.0
+            },
+            "2025-02-16": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 137910,
+              "roiPct": 574.625,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-02-22": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 39630,
+              "roiPct": 165.125,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-02-23": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 110770,
+              "roiPct": 461.54166666666663,
+              "hitRatePct": 40.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 120,
+          "stakeYen": 504000,
+          "returnYen": 2159660,
+          "profitYen": 1655660,
+          "roiPct": 428.5039682539683,
+          "hitRatePct": 60.0,
+          "byDay": {
+            "2025-02-01": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 43580,
+              "roiPct": 69.17460317460318,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-02-02": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 591000,
+              "roiPct": 938.0952380952382,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-02-08": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 22270,
+              "roiPct": 53.023809523809526,
+              "hitRatePct": 30.0
+            },
+            "2025-02-09": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 316990,
+              "roiPct": 503.1587301587302,
+              "hitRatePct": 60.0
+            },
+            "2025-02-10": {
+              "races": 5,
+              "stakeYen": 21000,
+              "returnYen": 100320,
+              "roiPct": 477.7142857142858,
+              "hitRatePct": 80.0
+            },
+            "2025-02-15": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 334210,
+              "roiPct": 530.4920634920635,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-02-16": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 416350,
+              "roiPct": 660.8730158730158,
+              "hitRatePct": 60.0
+            },
+            "2025-02-22": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 57570,
+              "roiPct": 91.38095238095238,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-02-23": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 277370,
+              "roiPct": 440.2698412698412,
+              "hitRatePct": 73.33333333333333
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 120,
+          "stakeYen": 1056000,
+          "returnYen": 6864390,
+          "profitYen": 5808390,
+          "roiPct": 650.0369318181818,
+          "hitRatePct": 69.16666666666667,
+          "byDay": {
+            "2025-02-01": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 85270,
+              "roiPct": 64.59848484848484,
+              "hitRatePct": 60.0
+            },
+            "2025-02-02": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 2465700,
+              "roiPct": 1867.9545454545455,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-02-08": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 64550,
+              "roiPct": 73.35227272727273,
+              "hitRatePct": 40.0
+            },
+            "2025-02-09": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 652200,
+              "roiPct": 494.09090909090907,
+              "hitRatePct": 60.0
+            },
+            "2025-02-10": {
+              "races": 5,
+              "stakeYen": 44000,
+              "returnYen": 402710,
+              "roiPct": 915.25,
+              "hitRatePct": 100.0
+            },
+            "2025-02-15": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 788880,
+              "roiPct": 597.6363636363636,
+              "hitRatePct": 80.0
+            },
+            "2025-02-16": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1652840,
+              "roiPct": 1252.1515151515152,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-02-22": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 137290,
+              "roiPct": 104.00757575757575,
+              "hitRatePct": 80.0
+            },
+            "2025-02-23": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 614950,
+              "roiPct": 465.8712121212122,
+              "hitRatePct": 86.66666666666667
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2025-03",
+      "mode": "edge",
+      "selectedRaces": 140,
+      "courses": {
+        "ライト": {
+          "races": 140,
+          "stakeYen": 224000,
+          "returnYen": 1517140,
+          "profitYen": 1293140,
+          "roiPct": 677.2946428571428,
+          "hitRatePct": 53.57142857142857,
+          "byDay": {
+            "2025-03-01": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 227190,
+              "roiPct": 946.625,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-03-02": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 192130,
+              "roiPct": 800.5416666666667,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-03-08": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 364210,
+              "roiPct": 2276.3125,
+              "hitRatePct": 80.0
+            },
+            "2025-03-09": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 86520,
+              "roiPct": 540.75,
+              "hitRatePct": 80.0
+            },
+            "2025-03-15": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 27760,
+              "roiPct": 115.66666666666667,
+              "hitRatePct": 20.0
+            },
+            "2025-03-16": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 184510,
+              "roiPct": 768.7916666666666,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-03-22": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 62680,
+              "roiPct": 261.1666666666667,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-03-23": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 113020,
+              "roiPct": 470.91666666666663,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-03-29": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 93820,
+              "roiPct": 390.9166666666667,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-03-30": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 165300,
+              "roiPct": 688.75,
+              "hitRatePct": 60.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 140,
+          "stakeYen": 588000,
+          "returnYen": 3818890,
+          "profitYen": 3230890,
+          "roiPct": 649.4710884353742,
+          "hitRatePct": 57.14285714285714,
+          "byDay": {
+            "2025-03-01": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 465540,
+              "roiPct": 738.952380952381,
+              "hitRatePct": 60.0
+            },
+            "2025-03-02": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 479430,
+              "roiPct": 761.0,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-03-08": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 872340,
+              "roiPct": 2077.0,
+              "hitRatePct": 60.0
+            },
+            "2025-03-09": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 232790,
+              "roiPct": 554.2619047619047,
+              "hitRatePct": 70.0
+            },
+            "2025-03-15": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 100610,
+              "roiPct": 159.69841269841268,
+              "hitRatePct": 20.0
+            },
+            "2025-03-16": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 462370,
+              "roiPct": 733.9206349206349,
+              "hitRatePct": 60.0
+            },
+            "2025-03-22": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 158700,
+              "roiPct": 251.9047619047619,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-03-23": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 355910,
+              "roiPct": 564.936507936508,
+              "hitRatePct": 60.0
+            },
+            "2025-03-29": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 225950,
+              "roiPct": 358.6507936507937,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-03-30": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 465250,
+              "roiPct": 738.4920634920635,
+              "hitRatePct": 73.33333333333333
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 140,
+          "stakeYen": 1232000,
+          "returnYen": 9763460,
+          "profitYen": 8531460,
+          "roiPct": 792.4886363636364,
+          "hitRatePct": 67.14285714285714,
+          "byDay": {
+            "2025-03-01": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 725170,
+              "roiPct": 549.3712121212121,
+              "hitRatePct": 60.0
+            },
+            "2025-03-02": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1323200,
+              "roiPct": 1002.4242424242424,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-03-08": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 2660880,
+              "roiPct": 3023.727272727273,
+              "hitRatePct": 80.0
+            },
+            "2025-03-09": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 720030,
+              "roiPct": 818.215909090909,
+              "hitRatePct": 80.0
+            },
+            "2025-03-15": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 227150,
+              "roiPct": 172.08333333333334,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-03-16": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 709080,
+              "roiPct": 537.1818181818182,
+              "hitRatePct": 60.0
+            },
+            "2025-03-22": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 407250,
+              "roiPct": 308.5227272727273,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-03-23": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1261150,
+              "roiPct": 955.4166666666667,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-03-29": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 578770,
+              "roiPct": 438.46212121212125,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-03-30": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1150780,
+              "roiPct": 871.8030303030304,
+              "hitRatePct": 80.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2025-04",
+      "mode": "edge",
+      "selectedRaces": 110,
+      "courses": {
+        "ライト": {
+          "races": 110,
+          "stakeYen": 176000,
+          "returnYen": 876110,
+          "profitYen": 700110,
+          "roiPct": 497.7897727272727,
+          "hitRatePct": 50.90909090909091,
+          "byDay": {
+            "2025-04-05": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 15180,
+              "roiPct": 94.875,
+              "hitRatePct": 50.0
+            },
+            "2025-04-06": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 183570,
+              "roiPct": 1147.3125,
+              "hitRatePct": 80.0
+            },
+            "2025-04-12": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 97400,
+              "roiPct": 405.83333333333337,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-04-13": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 50320,
+              "roiPct": 209.66666666666666,
+              "hitRatePct": 33.33333333333333
+            },
+            "2025-04-19": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 215710,
+              "roiPct": 898.7916666666667,
+              "hitRatePct": 40.0
+            },
+            "2025-04-20": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 69280,
+              "roiPct": 288.6666666666667,
+              "hitRatePct": 60.0
+            },
+            "2025-04-26": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 16430,
+              "roiPct": 68.45833333333333,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-04-27": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 228220,
+              "roiPct": 950.9166666666667,
+              "hitRatePct": 53.333333333333336
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 110,
+          "stakeYen": 462000,
+          "returnYen": 3706880,
+          "profitYen": 3244880,
+          "roiPct": 802.3549783549785,
+          "hitRatePct": 60.909090909090914,
+          "byDay": {
+            "2025-04-05": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 53220,
+              "roiPct": 126.71428571428571,
+              "hitRatePct": 60.0
+            },
+            "2025-04-06": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 529520,
+              "roiPct": 1260.7619047619048,
+              "hitRatePct": 90.0
+            },
+            "2025-04-12": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 365700,
+              "roiPct": 580.4761904761905,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-04-13": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 204060,
+              "roiPct": 323.9047619047619,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-04-19": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 690300,
+              "roiPct": 1095.7142857142858,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-04-20": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 210050,
+              "roiPct": 333.41269841269843,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-04-26": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 57050,
+              "roiPct": 90.55555555555556,
+              "hitRatePct": 60.0
+            },
+            "2025-04-27": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 1596980,
+              "roiPct": 2534.888888888889,
+              "hitRatePct": 73.33333333333333
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 110,
+          "stakeYen": 968000,
+          "returnYen": 20459180,
+          "profitYen": 19491180,
+          "roiPct": 2113.551652892562,
+          "hitRatePct": 49.09090909090909,
+          "byDay": {
+            "2025-04-05": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 135390,
+              "roiPct": 153.85227272727272,
+              "hitRatePct": 60.0
+            },
+            "2025-04-06": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 3025350,
+              "roiPct": 3437.8977272727275,
+              "hitRatePct": 60.0
+            },
+            "2025-04-12": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 2599080,
+              "roiPct": 1969.0000000000002,
+              "hitRatePct": 33.33333333333333
+            },
+            "2025-04-13": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 547050,
+              "roiPct": 414.4318181818182,
+              "hitRatePct": 40.0
+            },
+            "2025-04-19": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 2725310,
+              "roiPct": 2064.6287878787875,
+              "hitRatePct": 33.33333333333333
+            },
+            "2025-04-20": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 698380,
+              "roiPct": 529.0757575757576,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-04-26": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 229960,
+              "roiPct": 174.21212121212122,
+              "hitRatePct": 60.0
+            },
+            "2025-04-27": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 10498660,
+              "roiPct": 7953.530303030303,
+              "hitRatePct": 66.66666666666666
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2025-05",
+      "mode": "edge",
+      "selectedRaces": 130,
+      "courses": {
+        "ライト": {
+          "races": 130,
+          "stakeYen": 208000,
+          "returnYen": 1284910,
+          "profitYen": 1076910,
+          "roiPct": 617.7451923076923,
+          "hitRatePct": 62.30769230769231,
+          "byDay": {
+            "2025-05-03": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 66920,
+              "roiPct": 278.83333333333337,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-05-04": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 484520,
+              "roiPct": 2018.8333333333333,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-05-10": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 73510,
+              "roiPct": 306.2916666666667,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-05-11": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 239320,
+              "roiPct": 997.1666666666666,
+              "hitRatePct": 60.0
+            },
+            "2025-05-17": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 127480,
+              "roiPct": 531.1666666666666,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-05-18": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 42000,
+              "roiPct": 175.0,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-05-24": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 47300,
+              "roiPct": 197.08333333333334,
+              "hitRatePct": 60.0
+            },
+            "2025-05-25": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 100470,
+              "roiPct": 418.625,
+              "hitRatePct": 40.0
+            },
+            "2025-05-31": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 103390,
+              "roiPct": 646.1875,
+              "hitRatePct": 40.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 130,
+          "stakeYen": 546000,
+          "returnYen": 5752890,
+          "profitYen": 5206890,
+          "roiPct": 1053.642857142857,
+          "hitRatePct": 70.0,
+          "byDay": {
+            "2025-05-03": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 182750,
+              "roiPct": 290.07936507936506,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-05-04": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 2216120,
+              "roiPct": 3517.6507936507937,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-05-10": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 264210,
+              "roiPct": 419.38095238095235,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-05-11": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 1420340,
+              "roiPct": 2254.5079365079364,
+              "hitRatePct": 80.0
+            },
+            "2025-05-17": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 616130,
+              "roiPct": 977.984126984127,
+              "hitRatePct": 80.0
+            },
+            "2025-05-18": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 73820,
+              "roiPct": 117.17460317460318,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-05-24": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 208400,
+              "roiPct": 330.7936507936508,
+              "hitRatePct": 60.0
+            },
+            "2025-05-25": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 550850,
+              "roiPct": 874.3650793650794,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-05-31": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 220270,
+              "roiPct": 524.452380952381,
+              "hitRatePct": 50.0
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 130,
+          "stakeYen": 1144000,
+          "returnYen": 28174030,
+          "profitYen": 27030030,
+          "roiPct": 2462.76486013986,
+          "hitRatePct": 61.53846153846154,
+          "byDay": {
+            "2025-05-03": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 635560,
+              "roiPct": 481.48484848484844,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-05-04": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 14524110,
+              "roiPct": 11003.113636363636,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-05-10": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 808820,
+              "roiPct": 612.7424242424242,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-05-11": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 3063210,
+              "roiPct": 2320.6136363636365,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-05-17": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 4294750,
+              "roiPct": 3253.598484848485,
+              "hitRatePct": 80.0
+            },
+            "2025-05-18": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 144970,
+              "roiPct": 109.82575757575756,
+              "hitRatePct": 60.0
+            },
+            "2025-05-24": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 807890,
+              "roiPct": 612.0378787878788,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-05-25": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 3179480,
+              "roiPct": 2408.6969696969695,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-05-31": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 715240,
+              "roiPct": 812.7727272727273,
+              "hitRatePct": 40.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2025-06",
+      "mode": "edge",
+      "selectedRaces": 120,
+      "courses": {
+        "ライト": {
+          "races": 120,
+          "stakeYen": 192000,
+          "returnYen": 815390,
+          "profitYen": 623390,
+          "roiPct": 424.6822916666667,
+          "hitRatePct": 51.66666666666667,
+          "byDay": {
+            "2025-06-01": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 82160,
+              "roiPct": 513.5,
+              "hitRatePct": 70.0
+            },
+            "2025-06-07": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 10630,
+              "roiPct": 66.4375,
+              "hitRatePct": 40.0
+            },
+            "2025-06-08": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 142020,
+              "roiPct": 887.6250000000001,
+              "hitRatePct": 50.0
+            },
+            "2025-06-14": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 171170,
+              "roiPct": 713.2083333333333,
+              "hitRatePct": 60.0
+            },
+            "2025-06-15": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 205810,
+              "roiPct": 857.5416666666667,
+              "hitRatePct": 40.0
+            },
+            "2025-06-21": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 70110,
+              "roiPct": 292.125,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-06-22": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 22760,
+              "roiPct": 94.83333333333334,
+              "hitRatePct": 40.0
+            },
+            "2025-06-28": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 61400,
+              "roiPct": 255.83333333333331,
+              "hitRatePct": 60.0
+            },
+            "2025-06-29": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 49330,
+              "roiPct": 205.54166666666666,
+              "hitRatePct": 53.333333333333336
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 120,
+          "stakeYen": 504000,
+          "returnYen": 2839880,
+          "profitYen": 2335880,
+          "roiPct": 563.468253968254,
+          "hitRatePct": 65.0,
+          "byDay": {
+            "2025-06-01": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 222780,
+              "roiPct": 530.4285714285714,
+              "hitRatePct": 90.0
+            },
+            "2025-06-07": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 28140,
+              "roiPct": 67.0,
+              "hitRatePct": 40.0
+            },
+            "2025-06-08": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 224500,
+              "roiPct": 534.5238095238095,
+              "hitRatePct": 80.0
+            },
+            "2025-06-14": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 403110,
+              "roiPct": 639.8571428571429,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-06-15": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 869530,
+              "roiPct": 1380.2063492063492,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-06-21": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 151750,
+              "roiPct": 240.87301587301587,
+              "hitRatePct": 60.0
+            },
+            "2025-06-22": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 518170,
+              "roiPct": 822.4920634920634,
+              "hitRatePct": 60.0
+            },
+            "2025-06-28": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 298060,
+              "roiPct": 473.1111111111111,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-06-29": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 123840,
+              "roiPct": 196.57142857142858,
+              "hitRatePct": 66.66666666666666
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 120,
+          "stakeYen": 1056000,
+          "returnYen": 10795360,
+          "profitYen": 9739360,
+          "roiPct": 1022.2878787878788,
+          "hitRatePct": 59.166666666666664,
+          "byDay": {
+            "2025-06-01": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 730930,
+              "roiPct": 830.6022727272727,
+              "hitRatePct": 80.0
+            },
+            "2025-06-07": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 63320,
+              "roiPct": 71.95454545454545,
+              "hitRatePct": 40.0
+            },
+            "2025-06-08": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 725810,
+              "roiPct": 824.7840909090909,
+              "hitRatePct": 70.0
+            },
+            "2025-06-14": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 868620,
+              "roiPct": 658.0454545454545,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-06-15": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 3950410,
+              "roiPct": 2992.7348484848485,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-06-21": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 402570,
+              "roiPct": 304.97727272727275,
+              "hitRatePct": 60.0
+            },
+            "2025-06-22": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1031590,
+              "roiPct": 781.5075757575758,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-06-28": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1824700,
+              "roiPct": 1382.348484848485,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-06-29": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1197410,
+              "roiPct": 907.1287878787878,
+              "hitRatePct": 60.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2025-07",
+      "mode": "edge",
+      "selectedRaces": 120,
+      "courses": {
+        "ライト": {
+          "races": 120,
+          "stakeYen": 192000,
+          "returnYen": 436150,
+          "profitYen": 244150,
+          "roiPct": 227.16145833333331,
+          "hitRatePct": 48.333333333333336,
+          "byDay": {
+            "2025-07-05": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 11860,
+              "roiPct": 49.416666666666664,
+              "hitRatePct": 40.0
+            },
+            "2025-07-06": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 108600,
+              "roiPct": 452.50000000000006,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-07-12": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 92410,
+              "roiPct": 385.0416666666667,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-07-13": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 24680,
+              "roiPct": 102.83333333333333,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-07-19": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 57010,
+              "roiPct": 237.54166666666669,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-07-20": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 74440,
+              "roiPct": 310.16666666666663,
+              "hitRatePct": 33.33333333333333
+            },
+            "2025-07-26": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 11100,
+              "roiPct": 46.25,
+              "hitRatePct": 33.33333333333333
+            },
+            "2025-07-27": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 56050,
+              "roiPct": 233.54166666666666,
+              "hitRatePct": 60.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 120,
+          "stakeYen": 504000,
+          "returnYen": 1706980,
+          "profitYen": 1202980,
+          "roiPct": 338.6865079365079,
+          "hitRatePct": 63.33333333333333,
+          "byDay": {
+            "2025-07-05": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 27900,
+              "roiPct": 44.285714285714285,
+              "hitRatePct": 60.0
+            },
+            "2025-07-06": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 327850,
+              "roiPct": 520.3968253968254,
+              "hitRatePct": 80.0
+            },
+            "2025-07-12": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 264960,
+              "roiPct": 420.57142857142856,
+              "hitRatePct": 80.0
+            },
+            "2025-07-13": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 102400,
+              "roiPct": 162.53968253968253,
+              "hitRatePct": 60.0
+            },
+            "2025-07-19": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 160570,
+              "roiPct": 254.87301587301587,
+              "hitRatePct": 60.0
+            },
+            "2025-07-20": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 571090,
+              "roiPct": 906.4920634920634,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-07-26": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 27320,
+              "roiPct": 43.36507936507937,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-07-27": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 224890,
+              "roiPct": 356.968253968254,
+              "hitRatePct": 53.333333333333336
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 120,
+          "stakeYen": 1056000,
+          "returnYen": 4796860,
+          "profitYen": 3740860,
+          "roiPct": 454.2481060606061,
+          "hitRatePct": 50.83333333333333,
+          "byDay": {
+            "2025-07-05": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 51440,
+              "roiPct": 38.96969696969697,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-07-06": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 868810,
+              "roiPct": 658.189393939394,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-07-12": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1038040,
+              "roiPct": 786.3939393939394,
+              "hitRatePct": 60.0
+            },
+            "2025-07-13": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 182400,
+              "roiPct": 138.1818181818182,
+              "hitRatePct": 40.0
+            },
+            "2025-07-19": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 521410,
+              "roiPct": 395.00757575757575,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-07-20": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1505830,
+              "roiPct": 1140.780303030303,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-07-26": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 47410,
+              "roiPct": 35.91666666666667,
+              "hitRatePct": 40.0
+            },
+            "2025-07-27": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 581520,
+              "roiPct": 440.5454545454545,
+              "hitRatePct": 46.666666666666664
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2025-08",
+      "mode": "edge",
+      "selectedRaces": 150,
+      "courses": {
+        "ライト": {
+          "races": 150,
+          "stakeYen": 240000,
+          "returnYen": 732120,
+          "profitYen": 492120,
+          "roiPct": 305.05,
+          "hitRatePct": 53.333333333333336,
+          "byDay": {
+            "2025-08-02": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 38160,
+              "roiPct": 159.0,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-08-03": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 70310,
+              "roiPct": 292.95833333333337,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-08-09": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 82930,
+              "roiPct": 345.5416666666667,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-08-10": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 124110,
+              "roiPct": 517.125,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-08-16": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 46370,
+              "roiPct": 193.20833333333334,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-08-17": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 79080,
+              "roiPct": 329.5,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-08-23": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 156300,
+              "roiPct": 651.25,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-08-24": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 69870,
+              "roiPct": 291.125,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-08-30": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 47680,
+              "roiPct": 198.66666666666666,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-08-31": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 17310,
+              "roiPct": 72.125,
+              "hitRatePct": 40.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 150,
+          "stakeYen": 630000,
+          "returnYen": 2839210,
+          "profitYen": 2209210,
+          "roiPct": 450.668253968254,
+          "hitRatePct": 66.0,
+          "byDay": {
+            "2025-08-02": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 65410,
+              "roiPct": 103.82539682539682,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-08-03": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 246050,
+              "roiPct": 390.55555555555554,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-08-09": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 441160,
+              "roiPct": 700.2539682539682,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-08-10": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 704310,
+              "roiPct": 1117.952380952381,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-08-16": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 109580,
+              "roiPct": 173.93650793650795,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-08-17": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 296340,
+              "roiPct": 470.38095238095235,
+              "hitRatePct": 60.0
+            },
+            "2025-08-23": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 499290,
+              "roiPct": 792.5238095238095,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-08-24": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 203060,
+              "roiPct": 322.31746031746036,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-08-30": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 187900,
+              "roiPct": 298.25396825396825,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-08-31": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 86110,
+              "roiPct": 136.68253968253967,
+              "hitRatePct": 60.0
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 150,
+          "stakeYen": 1320000,
+          "returnYen": 10231010,
+          "profitYen": 8911010,
+          "roiPct": 775.0765151515152,
+          "hitRatePct": 57.99999999999999,
+          "byDay": {
+            "2025-08-02": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 127840,
+              "roiPct": 96.84848484848484,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-08-03": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 808900,
+              "roiPct": 612.8030303030303,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-08-09": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1062540,
+              "roiPct": 804.9545454545454,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-08-10": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 3358850,
+              "roiPct": 2544.5833333333335,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-08-16": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 243140,
+              "roiPct": 184.19696969696972,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-08-17": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 637770,
+              "roiPct": 483.15909090909093,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-08-23": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 2283040,
+              "roiPct": 1729.5757575757577,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-08-24": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 770820,
+              "roiPct": 583.9545454545455,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-08-30": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 662470,
+              "roiPct": 501.8712121212121,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-08-31": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 275640,
+              "roiPct": 208.81818181818184,
+              "hitRatePct": 60.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2025-09",
+      "mode": "edge",
+      "selectedRaces": 100,
+      "courses": {
+        "ライト": {
+          "races": 100,
+          "stakeYen": 160000,
+          "returnYen": 1367220,
+          "profitYen": 1207220,
+          "roiPct": 854.5125,
+          "hitRatePct": 67.0,
+          "byDay": {
+            "2025-09-06": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 84510,
+              "roiPct": 352.125,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-09-07": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 105330,
+              "roiPct": 438.875,
+              "hitRatePct": 80.0
+            },
+            "2025-09-13": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 14860,
+              "roiPct": 92.875,
+              "hitRatePct": 60.0
+            },
+            "2025-09-14": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 500620,
+              "roiPct": 3128.875,
+              "hitRatePct": 50.0
+            },
+            "2025-09-15": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 50430,
+              "roiPct": 315.1875,
+              "hitRatePct": 80.0
+            },
+            "2025-09-20": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 86470,
+              "roiPct": 540.4375,
+              "hitRatePct": 50.0
+            },
+            "2025-09-21": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 32180,
+              "roiPct": 201.125,
+              "hitRatePct": 80.0
+            },
+            "2025-09-27": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 25980,
+              "roiPct": 162.375,
+              "hitRatePct": 80.0
+            },
+            "2025-09-28": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 466840,
+              "roiPct": 2917.75,
+              "hitRatePct": 40.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 100,
+          "stakeYen": 420000,
+          "returnYen": 3797210,
+          "profitYen": 3377210,
+          "roiPct": 904.097619047619,
+          "hitRatePct": 69.0,
+          "byDay": {
+            "2025-09-06": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 166300,
+              "roiPct": 263.968253968254,
+              "hitRatePct": 80.0
+            },
+            "2025-09-07": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 325040,
+              "roiPct": 515.936507936508,
+              "hitRatePct": 80.0
+            },
+            "2025-09-13": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 49600,
+              "roiPct": 118.0952380952381,
+              "hitRatePct": 60.0
+            },
+            "2025-09-14": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 1778170,
+              "roiPct": 4233.738095238095,
+              "hitRatePct": 40.0
+            },
+            "2025-09-15": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 95150,
+              "roiPct": 226.54761904761904,
+              "hitRatePct": 80.0
+            },
+            "2025-09-20": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 332480,
+              "roiPct": 791.6190476190476,
+              "hitRatePct": 50.0
+            },
+            "2025-09-21": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 72640,
+              "roiPct": 172.95238095238093,
+              "hitRatePct": 90.0
+            },
+            "2025-09-27": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 83500,
+              "roiPct": 198.80952380952382,
+              "hitRatePct": 80.0
+            },
+            "2025-09-28": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 894330,
+              "roiPct": 2129.357142857143,
+              "hitRatePct": 50.0
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 100,
+          "stakeYen": 880000,
+          "returnYen": 16177670,
+          "profitYen": 15297670,
+          "roiPct": 1838.371590909091,
+          "hitRatePct": 56.99999999999999,
+          "byDay": {
+            "2025-09-06": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 466340,
+              "roiPct": 353.28787878787875,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-09-07": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1328900,
+              "roiPct": 1006.7424242424244,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-09-13": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 101470,
+              "roiPct": 115.30681818181819,
+              "hitRatePct": 60.0
+            },
+            "2025-09-14": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 9682960,
+              "roiPct": 11003.363636363636,
+              "hitRatePct": 30.0
+            },
+            "2025-09-15": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 261420,
+              "roiPct": 297.0681818181818,
+              "hitRatePct": 60.0
+            },
+            "2025-09-20": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 1689390,
+              "roiPct": 1919.7613636363637,
+              "hitRatePct": 40.0
+            },
+            "2025-09-21": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 174070,
+              "roiPct": 197.8068181818182,
+              "hitRatePct": 70.0
+            },
+            "2025-09-27": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 280250,
+              "roiPct": 318.46590909090907,
+              "hitRatePct": 60.0
+            },
+            "2025-09-28": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 2192870,
+              "roiPct": 2491.897727272727,
+              "hitRatePct": 40.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2025-10",
+      "mode": "edge",
+      "selectedRaces": 105,
+      "courses": {
+        "ライト": {
+          "races": 105,
+          "stakeYen": 168000,
+          "returnYen": 585610,
+          "profitYen": 417610,
+          "roiPct": 348.5773809523809,
+          "hitRatePct": 66.66666666666666,
+          "byDay": {
+            "2025-10-04": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 42270,
+              "roiPct": 264.1875,
+              "hitRatePct": 50.0
+            },
+            "2025-10-05": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 31030,
+              "roiPct": 193.9375,
+              "hitRatePct": 80.0
+            },
+            "2025-10-11": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 12070,
+              "roiPct": 75.4375,
+              "hitRatePct": 80.0
+            },
+            "2025-10-12": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 145010,
+              "roiPct": 906.3125,
+              "hitRatePct": 70.0
+            },
+            "2025-10-13": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 187470,
+              "roiPct": 1171.6875,
+              "hitRatePct": 70.0
+            },
+            "2025-10-18": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 29890,
+              "roiPct": 124.54166666666666,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-10-19": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 28400,
+              "roiPct": 118.33333333333333,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-10-25": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 49420,
+              "roiPct": 308.875,
+              "hitRatePct": 80.0
+            },
+            "2025-10-26": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 60050,
+              "roiPct": 250.20833333333331,
+              "hitRatePct": 73.33333333333333
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 105,
+          "stakeYen": 441000,
+          "returnYen": 1965620,
+          "profitYen": 1524620,
+          "roiPct": 445.718820861678,
+          "hitRatePct": 67.61904761904762,
+          "byDay": {
+            "2025-10-04": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 199750,
+              "roiPct": 475.59523809523813,
+              "hitRatePct": 60.0
+            },
+            "2025-10-05": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 106780,
+              "roiPct": 254.23809523809524,
+              "hitRatePct": 80.0
+            },
+            "2025-10-11": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 109350,
+              "roiPct": 260.3571428571429,
+              "hitRatePct": 80.0
+            },
+            "2025-10-12": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 298490,
+              "roiPct": 710.6904761904761,
+              "hitRatePct": 70.0
+            },
+            "2025-10-13": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 487040,
+              "roiPct": 1159.6190476190475,
+              "hitRatePct": 70.0
+            },
+            "2025-10-18": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 68140,
+              "roiPct": 108.15873015873017,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-10-19": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 106910,
+              "roiPct": 169.6984126984127,
+              "hitRatePct": 60.0
+            },
+            "2025-10-25": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 230160,
+              "roiPct": 548.0,
+              "hitRatePct": 60.0
+            },
+            "2025-10-26": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 359000,
+              "roiPct": 569.8412698412699,
+              "hitRatePct": 66.66666666666666
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 105,
+          "stakeYen": 924000,
+          "returnYen": 6155470,
+          "profitYen": 5231470,
+          "roiPct": 666.1764069264069,
+          "hitRatePct": 57.14285714285714,
+          "byDay": {
+            "2025-10-04": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 475490,
+              "roiPct": 540.3295454545455,
+              "hitRatePct": 50.0
+            },
+            "2025-10-05": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 250880,
+              "roiPct": 285.0909090909091,
+              "hitRatePct": 80.0
+            },
+            "2025-10-11": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 317690,
+              "roiPct": 361.0113636363637,
+              "hitRatePct": 70.0
+            },
+            "2025-10-12": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 1103950,
+              "roiPct": 1254.4886363636363,
+              "hitRatePct": 60.0
+            },
+            "2025-10-13": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 2472630,
+              "roiPct": 2809.806818181818,
+              "hitRatePct": 70.0
+            },
+            "2025-10-18": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 130680,
+              "roiPct": 99.0,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-10-19": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 171300,
+              "roiPct": 129.77272727272725,
+              "hitRatePct": 40.0
+            },
+            "2025-10-25": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 373790,
+              "roiPct": 424.7613636363637,
+              "hitRatePct": 50.0
+            },
+            "2025-10-26": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 859060,
+              "roiPct": 650.8030303030303,
+              "hitRatePct": 60.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2025-11",
+      "mode": "edge",
+      "selectedRaces": 130,
+      "courses": {
+        "ライト": {
+          "races": 130,
+          "stakeYen": 208000,
+          "returnYen": 884640,
+          "profitYen": 676640,
+          "roiPct": 425.3076923076923,
+          "hitRatePct": 69.23076923076923,
+          "byDay": {
+            "2025-11-01": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 36850,
+              "roiPct": 230.3125,
+              "hitRatePct": 60.0
+            },
+            "2025-11-02": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 102240,
+              "roiPct": 639.0,
+              "hitRatePct": 60.0
+            },
+            "2025-11-08": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 274850,
+              "roiPct": 1145.2083333333333,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-11-09": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 37350,
+              "roiPct": 155.625,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-11-15": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 60580,
+              "roiPct": 252.41666666666666,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-11-16": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 103180,
+              "roiPct": 429.91666666666663,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-11-22": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 46650,
+              "roiPct": 291.5625,
+              "hitRatePct": 70.0
+            },
+            "2025-11-23": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 26520,
+              "roiPct": 165.75,
+              "hitRatePct": 50.0
+            },
+            "2025-11-24": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 36980,
+              "roiPct": 231.12499999999997,
+              "hitRatePct": 70.0
+            },
+            "2025-11-29": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 69420,
+              "roiPct": 433.875,
+              "hitRatePct": 70.0
+            },
+            "2025-11-30": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 90020,
+              "roiPct": 562.625,
+              "hitRatePct": 90.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 130,
+          "stakeYen": 546000,
+          "returnYen": 3574310,
+          "profitYen": 3028310,
+          "roiPct": 654.6355311355311,
+          "hitRatePct": 71.53846153846153,
+          "byDay": {
+            "2025-11-01": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 493700,
+              "roiPct": 1175.4761904761904,
+              "hitRatePct": 60.0
+            },
+            "2025-11-02": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 306580,
+              "roiPct": 729.952380952381,
+              "hitRatePct": 80.0
+            },
+            "2025-11-08": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 622750,
+              "roiPct": 988.4920634920635,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-11-09": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 135660,
+              "roiPct": 215.33333333333334,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-11-15": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 235490,
+              "roiPct": 373.7936507936508,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-11-16": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 421400,
+              "roiPct": 668.8888888888889,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-11-22": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 106510,
+              "roiPct": 253.59523809523807,
+              "hitRatePct": 70.0
+            },
+            "2025-11-23": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 244810,
+              "roiPct": 582.8809523809523,
+              "hitRatePct": 60.0
+            },
+            "2025-11-24": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 99130,
+              "roiPct": 236.0238095238095,
+              "hitRatePct": 80.0
+            },
+            "2025-11-29": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 664650,
+              "roiPct": 1582.5,
+              "hitRatePct": 80.0
+            },
+            "2025-11-30": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 243630,
+              "roiPct": 580.0714285714287,
+              "hitRatePct": 90.0
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 130,
+          "stakeYen": 1144000,
+          "returnYen": 17652680,
+          "profitYen": 16508680,
+          "roiPct": 1543.0664335664335,
+          "hitRatePct": 67.6923076923077,
+          "byDay": {
+            "2025-11-01": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 3149500,
+              "roiPct": 3578.9772727272725,
+              "hitRatePct": 60.0
+            },
+            "2025-11-02": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 1615530,
+              "roiPct": 1835.8295454545455,
+              "hitRatePct": 80.0
+            },
+            "2025-11-08": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 2392420,
+              "roiPct": 1812.439393939394,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-11-09": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 447250,
+              "roiPct": 338.82575757575756,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-11-15": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1145090,
+              "roiPct": 867.4924242424244,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-11-16": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1691150,
+              "roiPct": 1281.1742424242425,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-11-22": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 224170,
+              "roiPct": 254.73863636363637,
+              "hitRatePct": 70.0
+            },
+            "2025-11-23": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 752610,
+              "roiPct": 855.2386363636364,
+              "hitRatePct": 50.0
+            },
+            "2025-11-24": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 387960,
+              "roiPct": 440.8636363636363,
+              "hitRatePct": 80.0
+            },
+            "2025-11-29": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 5015560,
+              "roiPct": 5699.5,
+              "hitRatePct": 80.0
+            },
+            "2025-11-30": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 831440,
+              "roiPct": 944.8181818181818,
+              "hitRatePct": 80.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2025-12",
+      "mode": "edge",
+      "selectedRaces": 110,
+      "courses": {
+        "ライト": {
+          "races": 110,
+          "stakeYen": 176000,
+          "returnYen": 728260,
+          "profitYen": 552260,
+          "roiPct": 413.7840909090909,
+          "hitRatePct": 67.27272727272727,
+          "byDay": {
+            "2025-12-06": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 46310,
+              "roiPct": 192.95833333333334,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-12-07": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 76070,
+              "roiPct": 316.9583333333333,
+              "hitRatePct": 60.0
+            },
+            "2025-12-13": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 26140,
+              "roiPct": 108.91666666666666,
+              "hitRatePct": 80.0
+            },
+            "2025-12-14": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 70720,
+              "roiPct": 294.6666666666667,
+              "hitRatePct": 73.33333333333333
+            },
+            "2025-12-20": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 256490,
+              "roiPct": 1068.7083333333335,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-12-21": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 124470,
+              "roiPct": 518.625,
+              "hitRatePct": 60.0
+            },
+            "2025-12-27": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 100590,
+              "roiPct": 628.6875,
+              "hitRatePct": 60.0
+            },
+            "2025-12-28": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 27470,
+              "roiPct": 171.6875,
+              "hitRatePct": 70.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 110,
+          "stakeYen": 462000,
+          "returnYen": 2643680,
+          "profitYen": 2181680,
+          "roiPct": 572.2251082251082,
+          "hitRatePct": 70.9090909090909,
+          "byDay": {
+            "2025-12-06": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 155230,
+              "roiPct": 246.3968253968254,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-12-07": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 212340,
+              "roiPct": 337.04761904761904,
+              "hitRatePct": 80.0
+            },
+            "2025-12-13": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 143730,
+              "roiPct": 228.14285714285717,
+              "hitRatePct": 60.0
+            },
+            "2025-12-14": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 212730,
+              "roiPct": 337.66666666666663,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-12-20": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 733550,
+              "roiPct": 1164.3650793650795,
+              "hitRatePct": 60.0
+            },
+            "2025-12-21": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 456240,
+              "roiPct": 724.1904761904763,
+              "hitRatePct": 86.66666666666667
+            },
+            "2025-12-27": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 431040,
+              "roiPct": 1026.2857142857142,
+              "hitRatePct": 70.0
+            },
+            "2025-12-28": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 298820,
+              "roiPct": 711.4761904761905,
+              "hitRatePct": 80.0
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 110,
+          "stakeYen": 968000,
+          "returnYen": 10836560,
+          "profitYen": 9868560,
+          "roiPct": 1119.479338842975,
+          "hitRatePct": 59.09090909090909,
+          "byDay": {
+            "2025-12-06": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 556870,
+              "roiPct": 421.8712121212121,
+              "hitRatePct": 53.333333333333336
+            },
+            "2025-12-07": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 504400,
+              "roiPct": 382.1212121212121,
+              "hitRatePct": 66.66666666666666
+            },
+            "2025-12-13": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 596450,
+              "roiPct": 451.8560606060606,
+              "hitRatePct": 60.0
+            },
+            "2025-12-14": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 639920,
+              "roiPct": 484.78787878787875,
+              "hitRatePct": 60.0
+            },
+            "2025-12-20": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 2585600,
+              "roiPct": 1958.7878787878785,
+              "hitRatePct": 46.666666666666664
+            },
+            "2025-12-21": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1897670,
+              "roiPct": 1437.628787878788,
+              "hitRatePct": 60.0
+            },
+            "2025-12-27": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 2802530,
+              "roiPct": 3184.693181818182,
+              "hitRatePct": 70.0
+            },
+            "2025-12-28": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 1253120,
+              "roiPct": 1424.0,
+              "hitRatePct": 60.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2026-01",
+      "mode": "edge",
+      "selectedRaces": 115,
+      "courses": {
+        "ライト": {
+          "races": 115,
+          "stakeYen": 184000,
+          "returnYen": 759850,
+          "profitYen": 575850,
+          "roiPct": 412.9619565217391,
+          "hitRatePct": 67.82608695652173,
+          "byDay": {
+            "2026-01-04": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 25470,
+              "roiPct": 159.1875,
+              "hitRatePct": 70.0
+            },
+            "2026-01-05": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 6950,
+              "roiPct": 43.4375,
+              "hitRatePct": 50.0
+            },
+            "2026-01-10": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 25520,
+              "roiPct": 159.5,
+              "hitRatePct": 70.0
+            },
+            "2026-01-11": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 163410,
+              "roiPct": 1021.3125,
+              "hitRatePct": 90.0
+            },
+            "2026-01-12": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 73440,
+              "roiPct": 459.0,
+              "hitRatePct": 70.0
+            },
+            "2026-01-17": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 46740,
+              "roiPct": 292.125,
+              "hitRatePct": 70.0
+            },
+            "2026-01-18": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 74510,
+              "roiPct": 465.68750000000006,
+              "hitRatePct": 70.0
+            },
+            "2026-01-24": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 206430,
+              "roiPct": 860.125,
+              "hitRatePct": 60.0
+            },
+            "2026-01-25": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 108850,
+              "roiPct": 453.54166666666663,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-01-31": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 28530,
+              "roiPct": 118.875,
+              "hitRatePct": 66.66666666666666
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 115,
+          "stakeYen": 483000,
+          "returnYen": 3527040,
+          "profitYen": 3044040,
+          "roiPct": 730.2360248447205,
+          "hitRatePct": 65.21739130434783,
+          "byDay": {
+            "2026-01-04": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 100990,
+              "roiPct": 240.45238095238096,
+              "hitRatePct": 60.0
+            },
+            "2026-01-05": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 34490,
+              "roiPct": 82.11904761904762,
+              "hitRatePct": 60.0
+            },
+            "2026-01-10": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 175450,
+              "roiPct": 417.73809523809524,
+              "hitRatePct": 80.0
+            },
+            "2026-01-11": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 1179220,
+              "roiPct": 2807.666666666667,
+              "hitRatePct": 90.0
+            },
+            "2026-01-12": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 242480,
+              "roiPct": 577.3333333333334,
+              "hitRatePct": 60.0
+            },
+            "2026-01-17": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 91570,
+              "roiPct": 218.02380952380952,
+              "hitRatePct": 60.0
+            },
+            "2026-01-18": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 307250,
+              "roiPct": 731.547619047619,
+              "hitRatePct": 80.0
+            },
+            "2026-01-24": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 568560,
+              "roiPct": 902.4761904761905,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-01-25": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 757090,
+              "roiPct": 1201.7301587301586,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-01-31": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 69940,
+              "roiPct": 111.01587301587301,
+              "hitRatePct": 66.66666666666666
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 115,
+          "stakeYen": 1012000,
+          "returnYen": 12717590,
+          "profitYen": 11705590,
+          "roiPct": 1256.6788537549407,
+          "hitRatePct": 72.17391304347827,
+          "byDay": {
+            "2026-01-04": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 328500,
+              "roiPct": 373.29545454545456,
+              "hitRatePct": 80.0
+            },
+            "2026-01-05": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 44980,
+              "roiPct": 51.11363636363636,
+              "hitRatePct": 60.0
+            },
+            "2026-01-10": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 552580,
+              "roiPct": 627.9318181818181,
+              "hitRatePct": 80.0
+            },
+            "2026-01-11": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 5018590,
+              "roiPct": 5702.943181818182,
+              "hitRatePct": 90.0
+            },
+            "2026-01-12": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 867240,
+              "roiPct": 985.5,
+              "hitRatePct": 70.0
+            },
+            "2026-01-17": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 185290,
+              "roiPct": 210.5568181818182,
+              "hitRatePct": 70.0
+            },
+            "2026-01-18": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 1126440,
+              "roiPct": 1280.0454545454545,
+              "hitRatePct": 80.0
+            },
+            "2026-01-24": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 2172930,
+              "roiPct": 1646.1590909090908,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-01-25": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 2260280,
+              "roiPct": 1712.3333333333335,
+              "hitRatePct": 60.0
+            },
+            "2026-01-31": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 160760,
+              "roiPct": 121.78787878787878,
+              "hitRatePct": 73.33333333333333
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2026-02",
+      "mode": "edge",
+      "selectedRaces": 115,
+      "courses": {
+        "ライト": {
+          "races": 115,
+          "stakeYen": 184000,
+          "returnYen": 681010,
+          "profitYen": 497010,
+          "roiPct": 370.1141304347826,
+          "hitRatePct": 61.73913043478261,
+          "byDay": {
+            "2026-02-01": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 47940,
+              "roiPct": 199.75,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-02-07": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 81090,
+              "roiPct": 337.875,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-02-08": {
+              "races": 5,
+              "stakeYen": 8000,
+              "returnYen": 23640,
+              "roiPct": 295.5,
+              "hitRatePct": 60.0
+            },
+            "2026-02-10": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 59820,
+              "roiPct": 373.875,
+              "hitRatePct": 80.0
+            },
+            "2026-02-14": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 109940,
+              "roiPct": 458.08333333333337,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-02-15": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 89270,
+              "roiPct": 371.95833333333337,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-02-21": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 135450,
+              "roiPct": 564.375,
+              "hitRatePct": 46.666666666666664
+            },
+            "2026-02-22": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 128730,
+              "roiPct": 536.375,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-02-28": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 5130,
+              "roiPct": 32.0625,
+              "hitRatePct": 40.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 115,
+          "stakeYen": 483000,
+          "returnYen": 4395540,
+          "profitYen": 3912540,
+          "roiPct": 910.0496894409938,
+          "hitRatePct": 63.47826086956522,
+          "byDay": {
+            "2026-02-01": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 1274050,
+              "roiPct": 2022.3015873015872,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-02-07": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 1210500,
+              "roiPct": 1921.4285714285716,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-02-08": {
+              "races": 5,
+              "stakeYen": 21000,
+              "returnYen": 56750,
+              "roiPct": 270.23809523809524,
+              "hitRatePct": 60.0
+            },
+            "2026-02-10": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 256200,
+              "roiPct": 610.0,
+              "hitRatePct": 70.0
+            },
+            "2026-02-14": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 231070,
+              "roiPct": 366.77777777777777,
+              "hitRatePct": 46.666666666666664
+            },
+            "2026-02-15": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 690450,
+              "roiPct": 1095.952380952381,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-02-21": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 315850,
+              "roiPct": 501.3492063492063,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-02-22": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 339190,
+              "roiPct": 538.3968253968254,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-02-28": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 21480,
+              "roiPct": 51.142857142857146,
+              "hitRatePct": 60.0
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 115,
+          "stakeYen": 1012000,
+          "returnYen": 17901090,
+          "profitYen": 16889090,
+          "roiPct": 1768.8824110671937,
+          "hitRatePct": 75.65217391304347,
+          "byDay": {
+            "2026-02-01": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 7014900,
+              "roiPct": 5314.318181818182,
+              "hitRatePct": 80.0
+            },
+            "2026-02-07": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 5426930,
+              "roiPct": 4111.310606060606,
+              "hitRatePct": 80.0
+            },
+            "2026-02-08": {
+              "races": 5,
+              "stakeYen": 44000,
+              "returnYen": 195210,
+              "roiPct": 443.6590909090909,
+              "hitRatePct": 60.0
+            },
+            "2026-02-10": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 805730,
+              "roiPct": 915.6022727272727,
+              "hitRatePct": 100.0
+            },
+            "2026-02-14": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 348300,
+              "roiPct": 263.8636363636364,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-02-15": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 2444210,
+              "roiPct": 1851.6742424242423,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-02-21": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 629570,
+              "roiPct": 476.9469696969697,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-02-22": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 979780,
+              "roiPct": 742.2575757575758,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-02-28": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 56460,
+              "roiPct": 64.1590909090909,
+              "hitRatePct": 70.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2026-03",
+      "mode": "edge",
+      "selectedRaces": 125,
+      "courses": {
+        "ライト": {
+          "races": 125,
+          "stakeYen": 200000,
+          "returnYen": 1110690,
+          "profitYen": 910690,
+          "roiPct": 555.345,
+          "hitRatePct": 48.0,
+          "byDay": {
+            "2026-03-01": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 49770,
+              "roiPct": 207.375,
+              "hitRatePct": 46.666666666666664
+            },
+            "2026-03-07": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 6200,
+              "roiPct": 38.75,
+              "hitRatePct": 20.0
+            },
+            "2026-03-08": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 75020,
+              "roiPct": 468.875,
+              "hitRatePct": 70.0
+            },
+            "2026-03-14": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 234160,
+              "roiPct": 975.6666666666666,
+              "hitRatePct": 46.666666666666664
+            },
+            "2026-03-15": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 351180,
+              "roiPct": 1463.25,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-03-21": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 39220,
+              "roiPct": 163.41666666666669,
+              "hitRatePct": 40.0
+            },
+            "2026-03-22": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 217630,
+              "roiPct": 906.7916666666667,
+              "hitRatePct": 40.0
+            },
+            "2026-03-28": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 54990,
+              "roiPct": 229.12499999999997,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-03-29": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 82520,
+              "roiPct": 343.83333333333337,
+              "hitRatePct": 33.33333333333333
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 125,
+          "stakeYen": 525000,
+          "returnYen": 3282530,
+          "profitYen": 2757530,
+          "roiPct": 625.2438095238095,
+          "hitRatePct": 65.60000000000001,
+          "byDay": {
+            "2026-03-01": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 123090,
+              "roiPct": 195.38095238095238,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-03-07": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 132490,
+              "roiPct": 315.45238095238096,
+              "hitRatePct": 40.0
+            },
+            "2026-03-08": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 234730,
+              "roiPct": 558.8809523809524,
+              "hitRatePct": 80.0
+            },
+            "2026-03-14": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 462920,
+              "roiPct": 734.7936507936507,
+              "hitRatePct": 60.0
+            },
+            "2026-03-15": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 1028620,
+              "roiPct": 1632.7301587301588,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-03-21": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 117080,
+              "roiPct": 185.84126984126985,
+              "hitRatePct": 80.0
+            },
+            "2026-03-22": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 579680,
+              "roiPct": 920.1269841269841,
+              "hitRatePct": 60.0
+            },
+            "2026-03-28": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 136930,
+              "roiPct": 217.34920634920636,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-03-29": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 466990,
+              "roiPct": 741.2539682539682,
+              "hitRatePct": 60.0
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 125,
+          "stakeYen": 1100000,
+          "returnYen": 8957230,
+          "profitYen": 7857230,
+          "roiPct": 814.2936363636364,
+          "hitRatePct": 72.0,
+          "byDay": {
+            "2026-03-01": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 231140,
+              "roiPct": 175.1060606060606,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-03-07": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 229960,
+              "roiPct": 261.3181818181818,
+              "hitRatePct": 50.0
+            },
+            "2026-03-08": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 760860,
+              "roiPct": 864.6136363636364,
+              "hitRatePct": 80.0
+            },
+            "2026-03-14": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1130800,
+              "roiPct": 856.6666666666666,
+              "hitRatePct": 60.0
+            },
+            "2026-03-15": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 3934760,
+              "roiPct": 2980.878787878788,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-03-21": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 294450,
+              "roiPct": 223.0681818181818,
+              "hitRatePct": 93.33333333333333
+            },
+            "2026-03-22": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 985230,
+              "roiPct": 746.3863636363636,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-03-28": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 307860,
+              "roiPct": 233.2272727272727,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-03-29": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1082170,
+              "roiPct": 819.8257575757576,
+              "hitRatePct": 66.66666666666666
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2026-04",
+      "mode": "edge",
+      "selectedRaces": 110,
+      "courses": {
+        "ライト": {
+          "races": 110,
+          "stakeYen": 176000,
+          "returnYen": 1694120,
+          "profitYen": 1518120,
+          "roiPct": 962.5681818181818,
+          "hitRatePct": 70.0,
+          "byDay": {
+            "2026-04-04": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 1033670,
+              "roiPct": 6460.4375,
+              "hitRatePct": 80.0
+            },
+            "2026-04-05": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 73450,
+              "roiPct": 459.0625,
+              "hitRatePct": 70.0
+            },
+            "2026-04-11": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 99580,
+              "roiPct": 414.9166666666667,
+              "hitRatePct": 86.66666666666667
+            },
+            "2026-04-12": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 276650,
+              "roiPct": 1152.7083333333333,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-04-18": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 47330,
+              "roiPct": 197.20833333333334,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-04-19": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 59970,
+              "roiPct": 249.87499999999997,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-04-25": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 46080,
+              "roiPct": 192.0,
+              "hitRatePct": 80.0
+            },
+            "2026-04-26": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 57390,
+              "roiPct": 239.125,
+              "hitRatePct": 60.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 110,
+          "stakeYen": 462000,
+          "returnYen": 5465860,
+          "profitYen": 5003860,
+          "roiPct": 1183.0865800865802,
+          "hitRatePct": 62.727272727272734,
+          "byDay": {
+            "2026-04-04": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 2757620,
+              "roiPct": 6565.761904761905,
+              "hitRatePct": 90.0
+            },
+            "2026-04-05": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 143240,
+              "roiPct": 341.04761904761904,
+              "hitRatePct": 50.0
+            },
+            "2026-04-11": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 276460,
+              "roiPct": 438.8253968253968,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-04-12": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 1105280,
+              "roiPct": 1754.4126984126983,
+              "hitRatePct": 60.0
+            },
+            "2026-04-18": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 351700,
+              "roiPct": 558.2539682539682,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-04-19": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 198460,
+              "roiPct": 315.015873015873,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-04-25": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 308240,
+              "roiPct": 489.26984126984127,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-04-26": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 324860,
+              "roiPct": 515.6507936507936,
+              "hitRatePct": 46.666666666666664
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 110,
+          "stakeYen": 968000,
+          "returnYen": 16034160,
+          "profitYen": 15066160,
+          "roiPct": 1656.4214876033059,
+          "hitRatePct": 70.9090909090909,
+          "byDay": {
+            "2026-04-04": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 8853400,
+              "roiPct": 10060.681818181818,
+              "hitRatePct": 90.0
+            },
+            "2026-04-05": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 362490,
+              "roiPct": 411.92045454545456,
+              "hitRatePct": 60.0
+            },
+            "2026-04-11": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 782030,
+              "roiPct": 592.4469696969697,
+              "hitRatePct": 80.0
+            },
+            "2026-04-12": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 4048670,
+              "roiPct": 3067.1742424242425,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-04-18": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 476980,
+              "roiPct": 361.3484848484848,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-04-19": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 514490,
+              "roiPct": 389.7651515151515,
+              "hitRatePct": 60.0
+            },
+            "2026-04-25": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 520200,
+              "roiPct": 394.09090909090907,
+              "hitRatePct": 86.66666666666667
+            },
+            "2026-04-26": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 475900,
+              "roiPct": 360.53030303030306,
+              "hitRatePct": 60.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2026-05",
+      "mode": "edge",
+      "selectedRaces": 140,
+      "courses": {
+        "ライト": {
+          "races": 140,
+          "stakeYen": 224000,
+          "returnYen": 1025700,
+          "profitYen": 801700,
+          "roiPct": 457.9017857142857,
+          "hitRatePct": 52.142857142857146,
+          "byDay": {
+            "2026-05-02": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 240560,
+              "roiPct": 1002.3333333333334,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-05-03": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 282780,
+              "roiPct": 1178.25,
+              "hitRatePct": 40.0
+            },
+            "2026-05-09": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 71280,
+              "roiPct": 297.0,
+              "hitRatePct": 46.666666666666664
+            },
+            "2026-05-10": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 163200,
+              "roiPct": 680.0,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-05-16": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 22020,
+              "roiPct": 91.75,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-05-17": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 31280,
+              "roiPct": 130.33333333333331,
+              "hitRatePct": 46.666666666666664
+            },
+            "2026-05-23": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 52880,
+              "roiPct": 220.33333333333331,
+              "hitRatePct": 33.33333333333333
+            },
+            "2026-05-24": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 41160,
+              "roiPct": 171.5,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-05-30": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 79460,
+              "roiPct": 496.62499999999994,
+              "hitRatePct": 80.0
+            },
+            "2026-05-31": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 41080,
+              "roiPct": 256.75,
+              "hitRatePct": 60.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 140,
+          "stakeYen": 588000,
+          "returnYen": 2779630,
+          "profitYen": 2191630,
+          "roiPct": 472.7261904761905,
+          "hitRatePct": 68.57142857142857,
+          "byDay": {
+            "2026-05-02": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 542990,
+              "roiPct": 861.8888888888889,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-05-03": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 690450,
+              "roiPct": 1095.952380952381,
+              "hitRatePct": 60.0
+            },
+            "2026-05-09": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 313570,
+              "roiPct": 497.73015873015873,
+              "hitRatePct": 60.0
+            },
+            "2026-05-10": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 252130,
+              "roiPct": 400.20634920634916,
+              "hitRatePct": 86.66666666666667
+            },
+            "2026-05-16": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 241780,
+              "roiPct": 383.77777777777777,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-05-17": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 62180,
+              "roiPct": 98.6984126984127,
+              "hitRatePct": 46.666666666666664
+            },
+            "2026-05-23": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 130460,
+              "roiPct": 207.07936507936506,
+              "hitRatePct": 60.0
+            },
+            "2026-05-24": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 125210,
+              "roiPct": 198.74603174603175,
+              "hitRatePct": 80.0
+            },
+            "2026-05-30": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 239220,
+              "roiPct": 569.5714285714286,
+              "hitRatePct": 80.0
+            },
+            "2026-05-31": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 181640,
+              "roiPct": 432.4761904761905,
+              "hitRatePct": 70.0
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 140,
+          "stakeYen": 1232000,
+          "returnYen": 7078240,
+          "profitYen": 5846240,
+          "roiPct": 574.5324675324675,
+          "hitRatePct": 77.14285714285715,
+          "byDay": {
+            "2026-05-02": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1565950,
+              "roiPct": 1186.3257575757575,
+              "hitRatePct": 80.0
+            },
+            "2026-05-03": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 2153480,
+              "roiPct": 1631.4242424242423,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-05-09": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 713790,
+              "roiPct": 540.75,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-05-10": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 504340,
+              "roiPct": 382.07575757575756,
+              "hitRatePct": 86.66666666666667
+            },
+            "2026-05-16": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 430210,
+              "roiPct": 325.9166666666667,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-05-17": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 133920,
+              "roiPct": 101.45454545454547,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-05-23": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 329310,
+              "roiPct": 249.47727272727272,
+              "hitRatePct": 80.0
+            },
+            "2026-05-24": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 344080,
+              "roiPct": 260.66666666666663,
+              "hitRatePct": 80.0
+            },
+            "2026-05-30": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 436600,
+              "roiPct": 496.1363636363636,
+              "hitRatePct": 80.0
+            },
+            "2026-05-31": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 466560,
+              "roiPct": 530.1818181818181,
+              "hitRatePct": 90.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2026-06",
+      "mode": "edge",
+      "selectedRaces": 110,
+      "courses": {
+        "ライト": {
+          "races": 110,
+          "stakeYen": 176000,
+          "returnYen": 433430,
+          "profitYen": 257430,
+          "roiPct": 246.26704545454547,
+          "hitRatePct": 41.81818181818181,
+          "byDay": {
+            "2026-06-06": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 17560,
+              "roiPct": 109.74999999999999,
+              "hitRatePct": 60.0
+            },
+            "2026-06-07": {
+              "races": 10,
+              "stakeYen": 16000,
+              "returnYen": 64930,
+              "roiPct": 405.81250000000006,
+              "hitRatePct": 40.0
+            },
+            "2026-06-13": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 43890,
+              "roiPct": 182.875,
+              "hitRatePct": 40.0
+            },
+            "2026-06-14": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 72750,
+              "roiPct": 303.125,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-06-20": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 146470,
+              "roiPct": 610.2916666666666,
+              "hitRatePct": 40.0
+            },
+            "2026-06-21": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 23420,
+              "roiPct": 97.58333333333333,
+              "hitRatePct": 26.666666666666668
+            },
+            "2026-06-27": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 20480,
+              "roiPct": 85.33333333333334,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-06-28": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 43930,
+              "roiPct": 183.04166666666666,
+              "hitRatePct": 26.666666666666668
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 110,
+          "stakeYen": 462000,
+          "returnYen": 2429040,
+          "profitYen": 1967040,
+          "roiPct": 525.7662337662338,
+          "hitRatePct": 53.63636363636364,
+          "byDay": {
+            "2026-06-06": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 33070,
+              "roiPct": 78.73809523809524,
+              "hitRatePct": 70.0
+            },
+            "2026-06-07": {
+              "races": 10,
+              "stakeYen": 42000,
+              "returnYen": 378260,
+              "roiPct": 900.6190476190476,
+              "hitRatePct": 50.0
+            },
+            "2026-06-13": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 101770,
+              "roiPct": 161.53968253968253,
+              "hitRatePct": 60.0
+            },
+            "2026-06-14": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 209930,
+              "roiPct": 333.22222222222223,
+              "hitRatePct": 60.0
+            },
+            "2026-06-20": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 551680,
+              "roiPct": 875.6825396825396,
+              "hitRatePct": 46.666666666666664
+            },
+            "2026-06-21": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 960920,
+              "roiPct": 1525.2698412698412,
+              "hitRatePct": 40.0
+            },
+            "2026-06-27": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 56210,
+              "roiPct": 89.22222222222223,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-06-28": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 137200,
+              "roiPct": 217.77777777777777,
+              "hitRatePct": 53.333333333333336
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 110,
+          "stakeYen": 968000,
+          "returnYen": 5655130,
+          "profitYen": 4687130,
+          "roiPct": 584.2076446280992,
+          "hitRatePct": 64.54545454545455,
+          "byDay": {
+            "2026-06-06": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 53680,
+              "roiPct": 61.0,
+              "hitRatePct": 80.0
+            },
+            "2026-06-07": {
+              "races": 10,
+              "stakeYen": 88000,
+              "returnYen": 968680,
+              "roiPct": 1100.7727272727273,
+              "hitRatePct": 60.0
+            },
+            "2026-06-13": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 163580,
+              "roiPct": 123.92424242424242,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-06-14": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 290280,
+              "roiPct": 219.90909090909093,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-06-20": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 2280120,
+              "roiPct": 1727.3636363636363,
+              "hitRatePct": 60.0
+            },
+            "2026-06-21": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 1569320,
+              "roiPct": 1188.8787878787878,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-06-27": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 106090,
+              "roiPct": 80.37121212121212,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-06-28": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 223380,
+              "roiPct": 169.22727272727275,
+              "hitRatePct": 66.66666666666666
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2026-07",
+      "mode": "edge",
+      "selectedRaces": 120,
+      "courses": {
+        "ライト": {
+          "races": 120,
+          "stakeYen": 192000,
+          "returnYen": 559030,
+          "profitYen": 367030,
+          "roiPct": 291.1614583333333,
+          "hitRatePct": 66.66666666666666,
+          "byDay": {
+            "2026-07-04": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 18620,
+              "roiPct": 77.58333333333334,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-07-05": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 84870,
+              "roiPct": 353.625,
+              "hitRatePct": 60.0
+            },
+            "2026-07-11": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 87360,
+              "roiPct": 364.0,
+              "hitRatePct": 80.0
+            },
+            "2026-07-12": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 94480,
+              "roiPct": 393.66666666666663,
+              "hitRatePct": 60.0
+            },
+            "2026-07-18": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 54560,
+              "roiPct": 227.33333333333334,
+              "hitRatePct": 60.0
+            },
+            "2026-07-19": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 128670,
+              "roiPct": 536.125,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-07-25": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 27350,
+              "roiPct": 113.95833333333334,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-07-26": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 63120,
+              "roiPct": 263.0,
+              "hitRatePct": 60.0
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 120,
+          "stakeYen": 504000,
+          "returnYen": 1456870,
+          "profitYen": 952870,
+          "roiPct": 289.06150793650795,
+          "hitRatePct": 60.0,
+          "byDay": {
+            "2026-07-04": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 47350,
+              "roiPct": 75.15873015873015,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-07-05": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 240900,
+              "roiPct": 382.3809523809524,
+              "hitRatePct": 60.0
+            },
+            "2026-07-11": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 181400,
+              "roiPct": 287.93650793650795,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-07-12": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 208650,
+              "roiPct": 331.19047619047615,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-07-18": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 183560,
+              "roiPct": 291.36507936507934,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-07-19": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 369710,
+              "roiPct": 586.8412698412699,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-07-25": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 53380,
+              "roiPct": 84.73015873015873,
+              "hitRatePct": 60.0
+            },
+            "2026-07-26": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 171920,
+              "roiPct": 272.88888888888886,
+              "hitRatePct": 66.66666666666666
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 120,
+          "stakeYen": 1056000,
+          "returnYen": 3107110,
+          "profitYen": 2051110,
+          "roiPct": 294.2339015151515,
+          "hitRatePct": 67.5,
+          "byDay": {
+            "2026-07-04": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 84470,
+              "roiPct": 63.99242424242424,
+              "hitRatePct": 80.0
+            },
+            "2026-07-05": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 485750,
+              "roiPct": 367.99242424242425,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-07-11": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 271780,
+              "roiPct": 205.8939393939394,
+              "hitRatePct": 73.33333333333333
+            },
+            "2026-07-12": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 493680,
+              "roiPct": 374.0,
+              "hitRatePct": 53.333333333333336
+            },
+            "2026-07-18": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 402280,
+              "roiPct": 304.75757575757575,
+              "hitRatePct": 60.0
+            },
+            "2026-07-19": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 848820,
+              "roiPct": 643.0454545454546,
+              "hitRatePct": 66.66666666666666
+            },
+            "2026-07-25": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 116510,
+              "roiPct": 88.26515151515152,
+              "hitRatePct": 60.0
+            },
+            "2026-07-26": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 403820,
+              "roiPct": 305.92424242424244,
+              "hitRatePct": 73.33333333333333
+            }
+          }
+        }
+      }
+    },
+    {
+      "month": "2026-08",
+      "mode": "edge",
+      "selectedRaces": 30,
+      "courses": {
+        "ライト": {
+          "races": 30,
+          "stakeYen": 48000,
+          "returnYen": 38170,
+          "profitYen": -9830,
+          "roiPct": 79.52083333333333,
+          "hitRatePct": 76.66666666666667,
+          "byDay": {
+            "2026-08-01": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 20530,
+              "roiPct": 85.54166666666667,
+              "hitRatePct": 80.0
+            },
+            "2026-08-02": {
+              "races": 15,
+              "stakeYen": 24000,
+              "returnYen": 17640,
+              "roiPct": 73.5,
+              "hitRatePct": 73.33333333333333
+            }
+          }
+        },
+        "スタンダード": {
+          "races": 30,
+          "stakeYen": 126000,
+          "returnYen": 112590,
+          "profitYen": -13410,
+          "roiPct": 89.35714285714286,
+          "hitRatePct": 76.66666666666667,
+          "byDay": {
+            "2026-08-01": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 48810,
+              "roiPct": 77.47619047619048,
+              "hitRatePct": 80.0
+            },
+            "2026-08-02": {
+              "races": 15,
+              "stakeYen": 63000,
+              "returnYen": 63780,
+              "roiPct": 101.23809523809524,
+              "hitRatePct": 73.33333333333333
+            }
+          }
+        },
+        "プレミアム": {
+          "races": 30,
+          "stakeYen": 264000,
+          "returnYen": 209010,
+          "profitYen": -54990,
+          "roiPct": 79.17045454545455,
+          "hitRatePct": 90.0,
+          "byDay": {
+            "2026-08-01": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 93960,
+              "roiPct": 71.18181818181817,
+              "hitRatePct": 93.33333333333333
+            },
+            "2026-08-02": {
+              "races": 15,
+              "stakeYen": 132000,
+              "returnYen": 115050,
+              "roiPct": 87.1590909090909,
+              "hitRatePct": 86.66666666666667
+            }
+          }
+        }
+      }
+    }
+  ],
+  "totals": {
+    "ライト": {
+      "races": 2870,
+      "stakeYen": 4592000,
+      "returnYen": 18821330,
+      "profitYen": 14229330,
+      "roiPct": 409.8721689895471,
+      "hitRatePct": 59.30313588850174,
+      "monthsOver100": 21,
+      "monthsOver200": 21
+    },
+    "スタンダード": {
+      "races": 2870,
+      "stakeYen": 12054000,
+      "returnYen": 69811720,
+      "profitYen": 57757720,
+      "roiPct": 579.1581217852995,
+      "hitRatePct": 64.21602787456446,
+      "monthsOver100": 21,
+      "monthsOver200": 21
+    },
+    "プレミアム": {
+      "races": 2870,
+      "stakeYen": 25256000,
+      "returnYen": 298011190,
+      "profitYen": 272755190,
+      "roiPct": 1179.9619496357302,
+      "hitRatePct": 63.65853658536585,
+      "monthsOver100": 21,
+      "monthsOver200": 21
+    }
+  },
+  "allCoursesOver200": true,
+  "promotionEligible": true
+}
