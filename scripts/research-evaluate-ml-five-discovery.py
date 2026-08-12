@@ -75,8 +75,18 @@ def robust(rows):
       'hardGateTop50AtLeast200':bool(ret50 is not None and profit50 is not None and ret50>=200.0 and profit50>=200.0),
     }
 
+def market_has_official_value(official,market):
+    values=official.get(market)
+    return isinstance(values,dict) and any(value is not None for value in values.values())
+
 def complete_six_market(row):
-    return MARKETS.issubset(set(row.get('requiredMarkets') or [])) and MARKETS.issubset(set((row.get('officialOdds') or {}).keys()))
+    req=set(row.get('requiredMarkets') or [])
+    official=row.get('officialOdds') or {}
+    return (
+        MARKETS.issubset(req)
+        and MARKETS.issubset(set(official))
+        and all(market_has_official_value(official,market) for market in MARKETS)
+    )
 
 def read_odds_dir(root,union,odds,existing=False):
     files=list(Path(root).glob('*.jsonl'))
@@ -168,6 +178,6 @@ def main():
     best_key=max(combos,key=lambda k:(combos[k]['minTop50RobustRoiPct'],combos[k]['minTop100ExcludedRoiPct'],combos[k]['minOverallRoiPct'],k))
     best=combos[best_key];passed=bool(best['passesDiscoveryGate'])
     frozen={'key':best_key,'selector':best['selector'],'template':best['template'],'minTop50RobustRoiPct':best['minTop50RobustRoiPct'],'minTop100ExcludedRoiPct':best['minTop100ExcludedRoiPct'],'minOverallRoiPct':best['minOverallRoiPct'],'selectorUsesHistoricalFinalPopularity':best['selectorUsesHistoricalFinalPopularity']} if passed else None
-    summary={'purpose':'research_only_2016_2022_discovery_for_result_blind_ml_five_race_selection','discoveryPeriod':{'start':'2016-08-10','end':'2022-12-31'},'holdoutPeriodUntouched':{'start':'2023-01-01','end':'2026-08-09'},'selectionVariants':list(VARIANTS),'ticketTemplates':list(TEMPLATES),'candidateCombinations':len(combos),'selectedRacesPerCombination':9190,'completionHardGate':{'allCoursesTop50ReturnAndProfitExcludedRoiPctAtLeast':200.0},'historicalFinalOddsUsed':True,'prestartOddsTimingValidationPerformed':False,'targetRaceResultUsedForRaceSelection':False,'targetRaceResultUsedForHorseRanking':False,'inactiveHorsesFilteredBeforeRanking':True,'inactivePredictionRowsFiltered':inactive_filtered,'existingOddsPrecedence':'new_fetch_over_complete_current_or_meta_over_complete_canonical297','existingOddsReuseRequiresAllSixMarkets':True,'discoveryResultsUsedOnlyToChooseOneFrozenCombinationForHistoricalHoldout':True,'productionDatabaseWritten':False,'productionModelChanged':False,'combinations':combos,'discoveryBestCandidate':{'key':best_key,'selector':best['selector'],'template':best['template'],'minTop50RobustRoiPct':best['minTop50RobustRoiPct'],'minTop100ExcludedRoiPct':best['minTop100ExcludedRoiPct'],'minOverallRoiPct':best['minOverallRoiPct'],'passesDiscoveryGate':best['passesDiscoveryGate'],'selectorUsesHistoricalFinalPopularity':best['selectorUsesHistoricalFinalPopularity']},'discoveryPassed':passed,'frozenCombination':frozen}
+    summary={'purpose':'research_only_2016_2022_discovery_for_result_blind_ml_five_race_selection','discoveryPeriod':{'start':'2016-08-10','end':'2022-12-31'},'holdoutPeriodUntouched':{'start':'2023-01-01','end':'2026-08-09'},'selectionVariants':list(VARIANTS),'ticketTemplates':list(TEMPLATES),'candidateCombinations':len(combos),'selectedRacesPerCombination':9190,'completionHardGate':{'allCoursesTop50ReturnAndProfitExcludedRoiPctAtLeast':200.0},'historicalFinalOddsUsed':True,'prestartOddsTimingValidationPerformed':False,'targetRaceResultUsedForRaceSelection':False,'targetRaceResultUsedForHorseRanking':False,'inactiveHorsesFilteredBeforeRanking':True,'inactivePredictionRowsFiltered':inactive_filtered,'existingOddsPrecedence':'new_fetch_over_complete_current_or_meta_over_complete_canonical297','existingOddsReuseRequiresAllSixMarkets':True,'existingOddsReuseRequiresAtLeastOneOfficialValuePerMarket':True,'discoveryResultsUsedOnlyToChooseOneFrozenCombinationForHistoricalHoldout':True,'productionDatabaseWritten':False,'productionModelChanged':False,'combinations':combos,'discoveryBestCandidate':{'key':best_key,'selector':best['selector'],'template':best['template'],'minTop50RobustRoiPct':best['minTop50RobustRoiPct'],'minTop100ExcludedRoiPct':best['minTop100ExcludedRoiPct'],'minOverallRoiPct':best['minOverallRoiPct'],'passesDiscoveryGate':best['passesDiscoveryGate'],'selectorUsesHistoricalFinalPopularity':best['selectorUsesHistoricalFinalPopularity']},'discoveryPassed':passed,'frozenCombination':frozen}
     Path(a.out).parent.mkdir(parents=True,exist_ok=True);Path(a.out).write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print(json.dumps({'discoveryPassed':passed,'best':summary['discoveryBestCandidate'],'frozenCombination':frozen,'inactivePredictionRowsFiltered':inactive_filtered},ensure_ascii=False),flush=True)
 if __name__=='__main__':main()
