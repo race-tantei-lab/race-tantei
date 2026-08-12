@@ -1,24 +1,25 @@
 
  ⛅️ wrangler 4.118.0
 ────────────────────
-Total Upload: 449.73 KiB / gzip: 127.48 KiB
-Worker Startup Time: 2 ms
-Your Worker has access to the following bindings:
-Binding                                                                   Resource                  
-env.DB (race-tantei-phase0)                                               D1 Database               
-env.ENVIRONMENT ("production")                                            Environment Variable      
-env.DEPLOY_REVISION ("public-site-reasons-daily-summary-202...")          Environment Variable      
-env.MODEL_VERSION ("v5.0.0-nonlinear-course-policy")                      Environment Variable      
-env.JRA_HOME_URL ("https://sp.jra.jp/")                                   Environment Variable      
-env.JRA_SEED_ENTRY_URLS ("https://sp.jra.jp/JRADB/accessD.html?...")      Environment Variable      
-env.MIN_EXPECTED_VALUE ("108")                                            Environment Variable      
-env.MAX_RACE_BUDGET_YEN ("10000")                                         Environment Variable      
-env.SYNC_BATCH_SIZE ("12")                                                Environment Variable      
-
-Uploaded race-tantei-phase0 (6.00 sec)
-Deployed race-tantei-phase0 triggers (3.46 sec)
-  https://race-tantei-phase0.race-tantei.workers.dev
-  schedule: */5 * * * *
-Current Version ID: c3d2ab49-c0a1-49af-bd8a-185166ede9c5
 
 Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mBuild failed with 2 errors:[0m
+
+  [31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mNo matching export in "src/v1/frozen-public-data.ts" for import "isFrozenSelectedRace"[0m
+  
+      src/public-site-entry.ts:6:2:
+  [37m      6 │   [32misFrozenSelectedRace[37m,
+          ╵   [32m~~~~~~~~~~~~~~~~~~~~[0m
+  
+  
+  [31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mNo matching export in "src/v1/frozen-public-data.ts" for import "isFrozenSelectedRace"[0m
+  
+      src/v1/canonical-history-seed.ts:1:9:
+  [37m      1 │ import { [32misFrozenSelectedRace[37m } from "./frozen-public-data.js";
+          ╵          [32m~~~~~~~~~~~~~~~~~~~~[0m
+  
+  
+
+
+🪵  Logs were written to "/home/runner/.config/.wrangler/logs/wrangler-2026-08-12_13-32-32_908.log"
