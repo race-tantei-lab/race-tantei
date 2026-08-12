@@ -1,0 +1,71 @@
+name: Promote ten-year runner assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build-ten-year-runner-assets.py'
+      - '.github/workflows/promote-ten-year-runner-assets.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: promote-ten-year-runner-assets
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Download canonical ten-year history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p .runner-input
+          curl -LfsS \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9056288221/zip \
+            -o .runner-input/history.zip
+          unzip -q .runner-input/history.zip -d .runner-input/history
+          HISTORY=$(find .runner-input/history -name 'ten-year-history-corpus.jsonl' -print -quit)
+          test -n "$HISTORY"
+          echo "HISTORY=$HISTORY" >> "$GITHUB_ENV"
+      - name: Build monthly runner history assets
+        run: |
+          set -euo pipefail
+          python scripts/build-ten-year-runner-assets.py \
+            --history "$HISTORY" \
+            --out-dir data/ten-year-runners
+          python - <<'PY'
+          import json
+          x=json.load(open('data/ten-year-runners/manifest.json'))
+          assert x['races']==34566, x
+          assert x['runners']==480441, x
+          assert len(x['months'])==121, x
+          print(x['races'],x['runners'],len(x['months']))
+          PY
+      - name: Commit runner assets
+        run: |
+          set -euo pipefail
+          git config user.name 'race-tantei-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add data/ten-year-runners
+          if git diff --cached --quiet; then
+            echo 'runner assets unchanged'
+            exit 0
+          fi
+          git commit -m 'Promote ten-year runner history assets'
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
