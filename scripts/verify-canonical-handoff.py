@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import gzip
 import hashlib
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -83,12 +81,32 @@ def main() -> None:
 
     if state_manifest.get("throughDate") != manifest["model"]["stateThroughDate"]:
         fail("production state throughDate mismatch")
-    source_ids = state_manifest.get("sourceArtifactIds", {})
+
+    source_ids = {
+        "history": int(state_manifest.get("sourceHistoryArtifactId", -1)),
+        "runnerFeatures": int(state_manifest.get("canonicalFeatureArtifactId", -1)),
+        "demand": int(state_manifest.get("canonicalDemandArtifactId", -1)),
+    }
     if source_ids != manifest["model"]["sourceArtifactIds"]:
         fail(f"source artifact IDs mismatch: {source_ids}")
 
-    state_shas = state_manifest.get("stateSha256", {})
-    for path, expected in state_shas.items():
+    if int(state_manifest.get("featureRows", -1)) != 559546:
+        fail("production state featureRows mismatch")
+    if int(state_manifest.get("demandRows", -1)) != 14410:
+        fail("production state demandRows mismatch")
+    if int(state_manifest.get("historyRaces", -1)) != 40155:
+        fail("production state historyRaces mismatch")
+
+    state_files = state_manifest.get("files", {})
+    expected_state_paths = [
+        manifest["model"]["runnerFeatureState"],
+        manifest["model"]["raceSelectionState"],
+    ]
+    for path in expected_state_paths:
+        info = state_files.get(path)
+        if not isinstance(info, dict):
+            fail(f"state manifest missing file entry: {path}")
+        expected = str(info.get("sha256", ""))
         actual = sha256_file(path)
         if actual != expected:
             fail(f"state sha mismatch for {path}: {actual} != {expected}")
