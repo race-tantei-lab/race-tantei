@@ -13,14 +13,17 @@
 - 公開サイト: `https://race-tantei-phase0.race-tantei.workers.dev`
 - 本番Worker: `race-tantei-phase0`
 - 現在のUI入口: **`wrangler.jsonc` の `main` を必ず見ること**
-  - 引継ぎ作成時点: `src/public-site-entry-v18.ts`
+  - 引継ぎ完成時点: `src/public-site-entry-v18.ts`
   - revision: `ten-year-completed-public-v18-20260812`
-- 検証済み本番ベースラインcommit: `8f07a9eca0c7494d902aa6873a9149121896ccde`
-- 検証済みWorker version ID: `3e2e4c51-056d-4dfe-812b-4c4b8245792d`
+- 予想ロジックの検証済み本番ベースラインcommit: `8f07a9eca0c7494d902aa6873a9149121896ccde`
+- 最新検証済みWorker version ID: `58dbe61c-4be8-4c33-97d5-6ad17ceeaf7d`
 - D1: `race-tantei-phase0`
 - D1 database ID: `949b5e8b-d1a4-4c4e-80d1-d031afdc03de`
+- 引継ぎ機械検証: `scripts/verify-canonical-handoff.py`
+- 引継ぎ検証workflow: `.github/workflows/verify-canonical-handoff.yml`
+- 引継ぎ完成判定文字列: **`CANONICAL_HANDOFF_OK`**
 
-このHANDOFF/manifest/audit/README追加は引継ぎ整理であり、上記ベースラインの予想ロジックを変更するものではない。
+このHANDOFF/manifest/audit/README/検証基盤の整理は引継ぎ用であり、完成済み予想ロジックを変更するものではない。
 
 ---
 
@@ -33,7 +36,10 @@
 3. `config/ten-year-completed-model.json` を読む。
 4. `wrangler.jsonc` を読み、**その時点の `main` が本番UI入口であることを確認**する。
 5. `scripts/run-ten-year-auto-final-live.py` を読み、現在の本番自動予想入口を確認する。
-6. 必要な作業にだけ進む。モデル探索・再学習・再検証から始めない。
+6. `scripts/verify-canonical-handoff.py` と `.github/workflows/verify-canonical-handoff.yml` を確認し、current `main` の引継ぎ検証が成功する状態か確認する。
+7. 必要な作業にだけ進む。モデル探索・再学習・再検証から始めない。
+
+**引継ぎは、文書が存在するだけでは完成扱いにしない。current `main` に対する正本検証が成功し、`CANONICAL_HANDOFF_OK` が出る状態を完成条件とする。**
 
 ### 会話上の進め方
 
@@ -159,6 +165,8 @@ state SHA256:
 
 stateは2026-08-09終了時点までの履歴状態。未来日の本番では、それ以降に確定した過去結果だけを順次反映して使う。
 
+**重要:** state manifestに存在しない `featureRows` / `demandRows` / `historyRaces` 等を、検証を通す目的で後付けしてはいけない。検証器は正本stateの実在フィールドと実ファイルSHAに合わせる。正本の意味を変えてcheckerだけgreenにする修正は禁止。
+
 ---
 
 ## 4. 本番自動予想の正本
@@ -214,7 +222,7 @@ canonical check-onlyではモデルSHA、56特徴量、state SHA/date、必要�
 
 **`wrangler.jsonc.main` が唯一の正しい判定方法。**
 
-引継ぎ作成時点:
+引継ぎ完成時点:
 
 `src/public-site-entry-v18.ts`
 
@@ -342,6 +350,8 @@ workflow `.github/workflows/auto-final-live-bets.yml` が呼ぶ正本ラッパ�
 - 条件詳細に黄色いnoticeを戻さない。
 - 不的中を見送りと同色に戻さない。
 - レース詳細の確定買い目を横スライド中心のUIへ戻さない。
+- 引継ぎ検証を通すために、正本データへ存在しないメタデータを捏造・追加しない。
+- 検証workflowが失敗しているのに「引継ぎ完成」と言わない。
 
 ---
 
@@ -355,6 +365,7 @@ workflow `.github/workflows/auto-final-live-bets.yml` が呼ぶ正本ラッパ�
 4. production core/generator
 5. check-only
 6. workflow run
+7. `scripts/verify-canonical-handoff.py`
 
 ### サイト/UI
 
@@ -364,6 +375,7 @@ workflow `.github/workflows/auto-final-live-bets.yml` が呼ぶ正本ラッパ�
 4. Typecheck
 5. Cloudflare deploy
 6. 実サイト確認workflow/HTTP確認
+7. canonical handoff verify
 
 ### 10年公開履歴
 
@@ -371,6 +383,7 @@ workflow `.github/workflows/auto-final-live-bets.yml` が呼ぶ正本ラッパ�
 2. `src/v1/ten-year-history-data/`
 3. `src/v1/ten-year-public-summary.ts`
 4. `data/ten-year-runners/manifest.json`
+5. canonical handoff verify
 
 ---
 
@@ -386,5 +399,38 @@ workflow `.github/workflows/auto-final-live-bets.yml` が呼ぶ正本ラッパ�
 - 現在はv18系UI、10年履歴・runner archiveまで本番表示済み。
 - 旧研究・旧316ルール・古いUI固定値を拾って現行仕様を上書きしない。
 - 具体作業を始める前にこのHANDOFFとmanifestを読み込む。
+- 引継ぎの健全性は `verify-canonical-handoff.py` / `Verify canonical handoff` workflowで確認し、成功時は `CANONICAL_HANDOFF_OK` が出る。
 
-このファイル自体に矛盾が疑われた場合は、**機械判定は `config/canonical-production-manifest.json`、実際のcurrent entryは `wrangler.jsonc` とproduction workflowを優先して確認する。**
+このファイル自体に矛盾が疑われた場合は、**機械判定は `config/canonical-production-manifest.json` と `scripts/verify-canonical-handoff.py`、実際のcurrent entryは `wrangler.jsonc` とproduction workflowを優先して確認する。**
+
+---
+
+## 11. 引継ぎ完成判定
+
+### 機械検証の正本
+
+- script: `scripts/verify-canonical-handoff.py`
+- workflow: `.github/workflows/verify-canonical-handoff.yml`
+- 成功条件: exit code 0 かつ出力に **`CANONICAL_HANDOFF_OK`**
+
+検証対象は少なくとも以下:
+
+- 完成モデルidentity / `productionChanged:true`
+- LightGBM weights SHA256
+- production stateのthroughDate / artifact IDs / 2つのstate実ファイルSHA256
+- completion auditの全ゲートと34,566R / 14,410R
+- `wrangler.jsonc.main` / deploy revision / model version / D1 identity
+- canonical live workflowと`run-ten-year-auto-final-live.py`の接続
+- 10年公開summary / runner archive件数
+- production deployment logの本番URL / Worker version ID
+- README / HANDOFFの正本入口
+
+### 既知の旧失敗と再発防止
+
+過去の `Verify canonical handoff` は `CANONICAL_HANDOFF_FAIL: production state featureRows mismatch` で失敗した。原因は、state manifestに存在しない `featureRows / demandRows / historyRaces` をverifier側が要求していたこと。
+
+**正しい対応はverifierを正本stateへ合わせることであり、state manifestへ架空の項目を足すことではない。**
+
+今後も検証が失敗した場合は、まず「正本同士のどこが不一致か」を調べる。モデル・state・過去公開買い目をchecker都合で変更してはいけない。
+
+この機械検証がcurrent `main` で成功して初めて、**「引継ぎ用の正本は完成」**と扱う。
