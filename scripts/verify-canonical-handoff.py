@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -104,11 +105,7 @@ def main() -> None:
         fail(f"source artifact IDs mismatch: {source_ids}")
 
     state_files = state_manifest.get("files", {})
-    expected_state_paths = [
-        manifest["model"]["runnerFeatureState"],
-        manifest["model"]["raceSelectionState"],
-    ]
-    for path in expected_state_paths:
+    for path in (manifest["model"]["runnerFeatureState"], manifest["model"]["raceSelectionState"]):
         info = state_files.get(path)
         if not isinstance(info, dict):
             fail(f"state manifest missing file entry: {path}")
@@ -162,11 +159,19 @@ def main() -> None:
     if "34566" not in history_loader:
         fail("ten-year history loader does not contain canonical race count")
 
-    worker_version = manifest["site"]["verifiedWorkerVersionId"]
     if manifest["site"]["url"] not in deployment_log:
         fail("deployment log does not contain canonical production URL")
-    if worker_version not in deployment_log:
-        fail("deployment log does not contain canonical Worker version ID")
+    for needle in (
+        manifest["site"]["revision"],
+        manifest["model"]["name"],
+        manifest["site"]["d1DatabaseName"],
+    ):
+        if needle not in deployment_log:
+            fail(f"deployment log missing canonical marker: {needle}")
+    version_match = re.search(r"Current Version ID:\s*([0-9a-fA-F-]{36})", deployment_log)
+    if not version_match:
+        fail("deployment log does not contain a valid Current Version ID")
+    worker_version = version_match.group(1)
 
     if "HANDOFF.md" not in readme:
         fail("README does not point to HANDOFF.md")
