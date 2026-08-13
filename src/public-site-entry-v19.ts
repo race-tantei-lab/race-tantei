@@ -152,8 +152,21 @@ function productPage(title: string, body: string): Response {
   return new Response(base.body, { status: base.status, headers });
 }
 
-async function polishResponse(response: Response): Promise<Response> {
+function streamingNavCopy(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  headers.set("cache-control", "no-store, max-age=0");
+  headers.set("x-race-ui-version", UI_VERSION);
+  const source = new Response(response.body, { status: response.status, headers });
+  return new HTMLRewriter()
+    .on('.nav a[href="/conditions"]', { element(element) { element.setInnerContent("予想ロジック"); } })
+    .on('.nav a[href="/guide"]', { element(element) { element.setInnerContent("使い方"); } })
+    .transform(source);
+}
+
+async function polishResponse(response: Response, path: string): Promise<Response> {
   if (!response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
+  if (!path.startsWith("/races/")) return streamingNavCopy(response);
   try {
     const headers = new Headers(response.headers);
     headers.delete("content-length");
@@ -171,7 +184,7 @@ export default {
     if (path === "/conditions") return productPage("予想ロジック", conditionsBody());
     if (path === "/guide") return productPage("使い方", guideBody());
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
-    return polishResponse(await publicSite.fetch(request, env, ctx));
+    return polishResponse(await publicSite.fetch(request, env, ctx), path);
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
