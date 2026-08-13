@@ -34,8 +34,8 @@ jobs:
           curl --silent --show-error --fail --connect-timeout 3 --max-time 10 "${base}/conditions" >/tmp/conditions.html
           curl --silent --show-error --fail --connect-timeout 3 --max-time 10 "${base}/guide" >/tmp/guide.html
           grep -q 'レース探偵' /tmp/home.html
-          grep -q '5レースをどう選ぶか' /tmp/conditions.html
-          grep -q 'レース探偵の見方' /tmp/guide.html
+          grep -q '予想ロジック' /tmp/conditions.html
+          grep -q 'レース探偵の使い方' /tmp/guide.html
 
       - name: Wait for canonical deployment and public API
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -73,14 +73,14 @@ jobs:
           r8=d8.get('races')
           r9=d9.get('races')
           condition_markers=(
-            '5レースをどう選ぶか',
+            '予想ロジック',
             '上位5頭',
-            '仮想買い目',
+            '選定用の仮買い目',
             'Plackett-Luce',
             'ln(予測確率) + 0.4 × ln(JRA公式オッズ)',
-            '完全なOOF成績ではありません',
-            '取得時刻',
-            '公開後の扱い',
+            '未使用データだけで検証した成績ではありません',
+            'データ更新のタイミング',
+            '公開した買い目と結果は後から変更しません',
           )
           checks={
             'homeAlive':'レース探偵' in home,
@@ -106,7 +106,7 @@ jobs:
         if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          gh api --method POST -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/phase-d' -f description='Canonical public API and conditions methodology verified' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          gh api --method POST -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/phase-d' -f description='Canonical public API and product copy verified' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Publish production verification failure
         if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
