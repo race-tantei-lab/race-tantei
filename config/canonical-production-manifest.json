@@ -1,7 +1,7 @@
 {
   "status": "production",
   "handoffVersion": 2,
-  "asOfJst": "2026-08-13T00:58:00+09:00",
+  "asOfJst": "2026-08-13T17:43:00+09:00",
   "repository": "race-tantei-lab/race-tantei",
   "branch": "main",
   "verifiedProductionBaselineCommit": "8f07a9eca0c7494d902aa6873a9149121896ccde",
@@ -73,8 +73,8 @@
   "site": {
     "workerConfig": "wrangler.jsonc",
     "authoritativeEntryRule": "The current UI entry is always wrangler.jsonc.main. Do not infer the current UI from public-site-entry version filenames.",
-    "entry": "src/public-site-entry-v18.ts",
-    "revision": "ten-year-completed-public-v18-20260812",
+    "entry": "src/public-site-entry-v19.ts",
+    "revision": "ten-year-completed-public-v19-product-copy-20260813",
     "url": "https://race-tantei-phase0.race-tantei.workers.dev",
     "workerName": "race-tantei-phase0",
     "d1DatabaseName": "race-tantei-phase0",
@@ -105,7 +105,8 @@
     "Home cumulative and venue metrics use the ten-year completed model, not legacy frozen metrics.",
     "Home years are newest-first; months and dates remain chronological as currently implemented.",
     "Finished historical races are labeled 的中, 不的中, or 見送り; 不的中 is red.",
-    "Conditions page describes the ten-year completed model and must not use the yellow notice style for the final public-after-release explanation.",
+    "The public prediction-logic page explains the completed model in product-ready Japanese while preserving methodology transparency.",
+    "The data update timing panel remains compact and collapsed by default.",
     "Historical race pages show runner/result details.",
     "Confirmed bets are not presented as a horizontal swipe; courses are shown vertically and mobile ticket rows are card-like.",
     "Past published picks and results are immutable."
@@ -127,9 +128,9 @@
       "note": "May be imported by the canonical wrapper, but is not the current production model entry."
     },
     {
-      "path": "src/public-site-entry-v17.ts and lower public-site-entry versions",
+      "path": "src/public-site-entry-v18.ts and lower public-site-entry versions",
       "classification": "transitive-ui-dependencies",
-      "note": "May still execute through v18 layering. They are not the source of truth for current UI selection."
+      "note": "May still execute through v19 layering. They are not the source of truth for current UI selection."
     },
     {
       "path": "research branches and research-* scripts/workflows",
