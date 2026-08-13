@@ -13,8 +13,8 @@
 - production site: `https://race-tantei-phase0.race-tantei.workers.dev`
 - Worker: `race-tantei-phase0`
 - current UI entry: **必ず `wrangler.jsonc.main` を読む**
-  - 現時点: `src/public-site-entry-v18.ts`
-  - deploy revision: `ten-year-completed-public-v18-20260812`
+  - 現時点: `src/public-site-entry-v19.ts`
+  - deploy revision: `ten-year-completed-public-v19-product-copy-20260813`
 - D1: `race-tantei-phase0`
 - D1 database ID: `949b5e8b-d1a4-4c4e-80d1-d031afdc03de`
 - Worker version IDは固定しない。`analysis-results/production-deployment.log` の `Current Version ID:` を読む。
@@ -220,17 +220,18 @@ D1重要table:
 
 **current entry判定は `wrangler.jsonc.main`。**
 
-現時点 `src/public-site-entry-v18.ts`。
+現時点 `src/public-site-entry-v19.ts`。
 
-公開条件詳細は、次を具体的に表示する。
+公開「予想ロジック」は、一般ユーザー向けの日本語を優先しつつ、次の内容を省略しない。
 
-- 12R→selection-side上位5頭→6券種proxy→上位3→raceScore→会場5R
-- 56 features→normalized runner probabilities
+- 12R→選定用の上位5頭→6券種の仮買い目→会場5R
+- 56 features→runner probabilities
 - Plackett-Luce combination probabilities
 - 各券種EV上位5→`ln(p)+0.4ln(odds)`→券種代表1点
 - 異なる2券種から2点
 - 431.7% / 54.4%はfull-period retrospective aggregateで、完全OOFではない
 - historical odds timestampのlive-lock同等性は未証明なら断定しない
+- データ更新タイミングを折りたたみで表示
 - 公開済み買い目は不変
 
 その他UI要件:
@@ -240,11 +241,12 @@ D1重要table:
 - 年は2026→…→2016
 - 終了済み: 的中 / 不的中 / 見送り
 - 不的中は赤、見送りと区別
-- 「公開後の扱い」は通常の紺panel、黄色notice禁止
+- 「予想履歴について」は通常の紺panelで表示し、黄色noticeにしない
 - 過去詳細: 着順、枠、馬番、馬名、性齢、斤量、騎手、調教師、馬体重、人気
 - 過去確定買い目を横スライド中心にしない
 - ライト / スタンダード / プレミアム縦表示
 - mobileは1券ずつcard型
+- 公開文言は内部監査メモの直訳ではなく、製品として自然な日本語にする
 
 public summary:
 
@@ -318,7 +320,7 @@ success:
 - `wrangler.jsonc.main` / revision / model / D1
 - live workflow / canonical runner接続
 - public summary / runner archive
-- conditions pageの具体的selection/ticket説明とOOF注意
+- 予想ロジックページの具体的selection/ticket説明、過去成績の注意、製品向け文言
 - deployment log URL/revision/model/D1/current Worker version
 - README/HANDOFF入口
 
