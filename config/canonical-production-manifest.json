@@ -16,10 +16,10 @@
       "model weights SHA256",
       "production state throughDate, artifact IDs, and both state-file SHA256 values",
       "completion audit gates and canonical 34,566 / 14,410 race counts",
-      "wrangler.jsonc.main, deploy revision, model version, and D1 identity",
+      "wrangler.jsonc.main, exact deploy revision, model version, and D1 identity",
       "canonical live workflow and ten-year production runner wiring",
       "public 10-year summary and runner archive counts",
-      "deployment log production URL, deploy revision, model version, D1 binding, and presence of a Current Version ID",
+      "deployment log production URL, model version, D1 binding, and presence of a Current Version ID; Wrangler may truncate long environment values in its printed binding table",
       "README and HANDOFF canonical markers"
     ]
   },
