@@ -163,22 +163,25 @@ def main() -> None:
 
     conditions_entry = read(manifest["site"]["entry"])
     for needle in (
+        "予想ロジック",
         "上位5頭",
-        "仮想買い目",
+        "選定用の仮買い目",
+        "Plackett-Luce",
         "ln(予測確率) + 0.4 × ln(JRA公式オッズ)",
         "431.7%",
         "54.4%",
-        "完全なOOF成績ではありません",
-        "取得時刻",
+        "未使用データだけで検証した成績ではありません",
+        "データ更新のタイミング",
+        "公開した買い目と結果は後から変更しません",
     ):
         if needle not in conditions_entry:
-            fail(f"conditions page missing methodology marker: {needle}")
+            fail(f"conditions page missing product/methodology marker: {needle}")
 
     for needle in (
         "conditionsMethodology",
         "day8ApiShape",
         "day9ApiShape",
-        "完全なOOF成績ではありません",
+        "未使用データだけで検証した成績ではありません",
         "ln(予測確率) + 0.4 × ln(JRA公式オッズ)",
     ):
         if needle not in production_smoke:
