@@ -1,10 +1,104 @@
 {
-  "generatedAtUtc": "2026-08-14T09:39:02.805395+00:00",
-  "totalStoredFutureRaces": 38,
-  "racesWithAtLeastThreeEntries": 38,
-  "racesWithAtLeastThreeOfficialWinOdds": 0,
-  "minimumFiveEntryReadyByVenueDay": false,
-  "minimumFiveOddsReadyByVenueDay": false,
+  "generatedAtUtc": "2026-08-14T09:57:14.483864+00:00",
+  "generatedAtJst": "2026-08-14T18:57:13.926745+09:00",
+  "weekendReady": true,
+  "scheduleComplete": true,
+  "requiredEntriesComplete": true,
+  "targetDates": [
+    "2026-08-15",
+    "2026-08-16"
+  ],
+  "requiredEntryDatesNow": [
+    "2026-08-15"
+  ],
+  "expectedVenueDays": 6,
+  "expectedRaces": 72,
+  "checks": [
+    {
+      "raceDate": "2026-08-15",
+      "venue": "中京",
+      "scheduleComplete": true,
+      "entryRequiredNow": true,
+      "entryComplete": true,
+      "storedRaces": 12,
+      "racesWithEntries": 12,
+      "racesWithWinOdds": 0,
+      "minimumRaceNo": 1,
+      "maximumRaceNo": 12,
+      "racesWithStartTime": 12,
+      "minimumActiveRunners": 7
+    },
+    {
+      "raceDate": "2026-08-15",
+      "venue": "新潟",
+      "scheduleComplete": true,
+      "entryRequiredNow": true,
+      "entryComplete": true,
+      "storedRaces": 12,
+      "racesWithEntries": 12,
+      "racesWithWinOdds": 0,
+      "minimumRaceNo": 1,
+      "maximumRaceNo": 12,
+      "racesWithStartTime": 12,
+      "minimumActiveRunners": 9
+    },
+    {
+      "raceDate": "2026-08-15",
+      "venue": "札幌",
+      "scheduleComplete": true,
+      "entryRequiredNow": true,
+      "entryComplete": true,
+      "storedRaces": 12,
+      "racesWithEntries": 12,
+      "racesWithWinOdds": 0,
+      "minimumRaceNo": 1,
+      "maximumRaceNo": 12,
+      "racesWithStartTime": 12,
+      "minimumActiveRunners": 8
+    },
+    {
+      "raceDate": "2026-08-16",
+      "venue": "中京",
+      "scheduleComplete": true,
+      "entryRequiredNow": false,
+      "entryComplete": false,
+      "storedRaces": 12,
+      "racesWithEntries": 1,
+      "racesWithWinOdds": 0,
+      "minimumRaceNo": 1,
+      "maximumRaceNo": 12,
+      "racesWithStartTime": 12,
+      "minimumActiveRunners": 0
+    },
+    {
+      "raceDate": "2026-08-16",
+      "venue": "新潟",
+      "scheduleComplete": true,
+      "entryRequiredNow": false,
+      "entryComplete": false,
+      "storedRaces": 12,
+      "racesWithEntries": 0,
+      "racesWithWinOdds": 0,
+      "minimumRaceNo": 1,
+      "maximumRaceNo": 12,
+      "racesWithStartTime": 12,
+      "minimumActiveRunners": 0
+    },
+    {
+      "raceDate": "2026-08-16",
+      "venue": "札幌",
+      "scheduleComplete": true,
+      "entryRequiredNow": false,
+      "entryComplete": false,
+      "storedRaces": 12,
+      "racesWithEntries": 1,
+      "racesWithWinOdds": 0,
+      "minimumRaceNo": 1,
+      "maximumRaceNo": 12,
+      "racesWithStartTime": 12,
+      "minimumActiveRunners": 0
+    }
+  ],
   "groups": [
     {
       "raceDate": "2026-08-15",
@@ -15,7 +109,8 @@
       "minimumActiveRunners": 7,
       "maximumActiveRunners": 16,
       "minimumRaceNo": 1,
-      "maximumRaceNo": 12
+      "maximumRaceNo": 12,
+      "racesWithStartTime": 12
     },
     {
       "raceDate": "2026-08-15",
@@ -26,7 +121,8 @@
       "minimumActiveRunners": 9,
       "maximumActiveRunners": 18,
       "minimumRaceNo": 1,
-      "maximumRaceNo": 12
+      "maximumRaceNo": 12,
+      "racesWithStartTime": 12
     },
     {
       "raceDate": "2026-08-15",
@@ -37,29 +133,44 @@
       "minimumActiveRunners": 8,
       "maximumActiveRunners": 16,
       "minimumRaceNo": 1,
-      "maximumRaceNo": 12
+      "maximumRaceNo": 12,
+      "racesWithStartTime": 12
     },
     {
       "raceDate": "2026-08-16",
       "venue": "中京",
-      "storedRaces": 1,
+      "storedRaces": 12,
       "racesWithEntries": 1,
       "racesWithWinOdds": 0,
-      "minimumActiveRunners": 16,
+      "minimumActiveRunners": 0,
       "maximumActiveRunners": 16,
-      "minimumRaceNo": 7,
-      "maximumRaceNo": 7
+      "minimumRaceNo": 1,
+      "maximumRaceNo": 12,
+      "racesWithStartTime": 12
+    },
+    {
+      "raceDate": "2026-08-16",
+      "venue": "新潟",
+      "storedRaces": 12,
+      "racesWithEntries": 0,
+      "racesWithWinOdds": 0,
+      "minimumActiveRunners": 0,
+      "maximumActiveRunners": 0,
+      "minimumRaceNo": 1,
+      "maximumRaceNo": 12,
+      "racesWithStartTime": 12
     },
     {
       "raceDate": "2026-08-16",
       "venue": "札幌",
-      "storedRaces": 1,
+      "storedRaces": 12,
       "racesWithEntries": 1,
       "racesWithWinOdds": 0,
-      "minimumActiveRunners": 16,
+      "minimumActiveRunners": 0,
       "maximumActiveRunners": 16,
-      "minimumRaceNo": 11,
-      "maximumRaceNo": 11
+      "minimumRaceNo": 1,
+      "maximumRaceNo": 12,
+      "racesWithStartTime": 12
     }
   ]
 }
