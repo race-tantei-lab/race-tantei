@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "upcoming-entry-readiness.json"
+DISCOVERY = ROOT / "jra-entry-anchor-discovery.json"
 ACCOUNT_ID = os.environ["CLOUDFLARE_ACCOUNT_ID"]
 DATABASE_ID = os.environ["CLOUDFLARE_D1_DATABASE_ID"]
 TOKEN = os.environ["CLOUDFLARE_API_TOKEN"]
@@ -30,7 +31,19 @@ def query(sql: str) -> list[dict]:
     return (result[0].get("results") or []) if result else []
 
 
+def expected_groups() -> list[tuple[str, str]]:
+    if not DISCOVERY.exists():
+        raise RuntimeError("JRA_ENTRY_DISCOVERY_REPORT_MISSING")
+    payload = json.loads(DISCOVERY.read_text(encoding="utf-8"))
+    meetings = payload.get("calendarMeetings") or []
+    groups = sorted({(str(row.get("date") or ""), str(row.get("venue") or "")) for row in meetings if row.get("date") and row.get("venue")})
+    if not groups:
+        raise RuntimeError("JRA_EXPECTED_WEEKEND_GROUPS_EMPTY")
+    return groups
+
+
 def main() -> None:
+    expected = expected_groups()
     rows = query(
         """
         WITH per_race AS (
@@ -58,20 +71,48 @@ def main() -> None:
         ORDER BY raceDate,venue
         """
     )
+    by_group = {(str(row.get("raceDate")), str(row.get("venue"))): row for row in rows}
+    checks = []
+    for race_date, venue in expected:
+        row = by_group.get((race_date, venue))
+        complete = bool(
+            row
+            and int(row.get("storedRaces") or 0) == 12
+            and int(row.get("racesWithEntries") or 0) == 12
+            and int(row.get("minimumRaceNo") or 0) == 1
+            and int(row.get("maximumRaceNo") or 0) == 12
+            and int(row.get("minimumActiveRunners") or 0) >= 3
+        )
+        checks.append({
+            "raceDate": race_date,
+            "venue": venue,
+            "complete": complete,
+            "storedRaces": int((row or {}).get("storedRaces") or 0),
+            "racesWithEntries": int((row or {}).get("racesWithEntries") or 0),
+            "minimumRaceNo": int((row or {}).get("minimumRaceNo") or 0),
+            "maximumRaceNo": int((row or {}).get("maximumRaceNo") or 0),
+            "minimumActiveRunners": int((row or {}).get("minimumActiveRunners") or 0),
+        })
+
     total_races = sum(int(row.get("storedRaces") or 0) for row in rows)
     entry_ready = sum(int(row.get("racesWithEntries") or 0) for row in rows)
     odds_ready = sum(int(row.get("racesWithWinOdds") or 0) for row in rows)
+    weekend_complete = bool(checks) and all(item["complete"] for item in checks)
     report = {
         "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
+        "weekendComplete": weekend_complete,
+        "expectedVenueDays": len(expected),
+        "expectedRaces": len(expected) * 12,
         "totalStoredFutureRaces": total_races,
         "racesWithAtLeastThreeEntries": entry_ready,
         "racesWithAtLeastThreeOfficialWinOdds": odds_ready,
-        "minimumFiveEntryReadyByVenueDay": all(int(row.get("racesWithEntries") or 0) >= 5 for row in rows) if rows else False,
-        "minimumFiveOddsReadyByVenueDay": all(int(row.get("racesWithWinOdds") or 0) >= 5 for row in rows) if rows else False,
+        "checks": checks,
         "groups": rows,
     }
     OUTPUT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    if not weekend_complete:
+        raise SystemExit("UPCOMING_WEEKEND_INCOMPLETE")
 
 
 if __name__ == "__main__":
