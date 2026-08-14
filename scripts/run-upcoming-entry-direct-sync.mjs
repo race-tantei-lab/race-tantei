@@ -9,12 +9,17 @@ globalThis.Bun = {
 
 const discovery = await findCurrentEntryAnchor();
 await writeFile("jra-entry-anchor-discovery.json", `${JSON.stringify(discovery, null, 2)}\n`, "utf8");
-if (!discovery.found) {
-  throw new Error(`JRA_CURRENT_WEEKEND_ANCHORS_INCOMPLETE:${JSON.stringify({ targetDates: discovery.targetDates, anchors: discovery.anchors?.map((a) => a.targetDate) || [] })}`);
+
+if (!Array.isArray(discovery.targetDates) || !discovery.targetDates.length) {
+  throw new Error("JRA_CURRENT_WEEKEND_DATES_NOT_FOUND");
+}
+if (!Array.isArray(discovery.calendarMeetings) || !discovery.calendarMeetings.length) {
+  throw new Error("JRA_CURRENT_WEEKEND_MEETINGS_NOT_FOUND");
 }
 
-const anchors = Array.isArray(discovery.anchors) && discovery.anchors.length ? discovery.anchors : [discovery];
+process.env.JRA_TARGET_RACE_DATES = discovery.targetDates.join(",");
+const anchors = Array.isArray(discovery.anchors) ? discovery.anchors : [];
 const seeds = [...new Set(anchors.flatMap((anchor) => [anchor.anchorUrl, ...(anchor.discoveredLinks || [])]).filter(Boolean))];
-if (!seeds.length) throw new Error("JRA_CURRENT_ENTRY_SEEDS_EMPTY");
 process.env.JRA_SEED_ENTRY_URLS = seeds.join(",");
+
 await import("./sync-upcoming-entries-direct.mjs");
