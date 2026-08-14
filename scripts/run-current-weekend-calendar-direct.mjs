@@ -8,4 +8,5 @@ globalThis.Bun = {
 };
 
 const report = await syncCurrentWeekendCalendarDirect();
+console.log("WEEKEND_CALENDAR_SYNC_OK");
 console.log(JSON.stringify(report, null, 2));
