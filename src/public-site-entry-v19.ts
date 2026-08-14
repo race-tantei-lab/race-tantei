@@ -2,7 +2,7 @@ import publicSite from "./public-site-entry-v18.js";
 import { response as baseResponse, shell } from "./v1/public-ui.js";
 import type { Env } from "./v1/types.js";
 
-const UI_VERSION = "ten-year-completed-public-v19-product-copy-20260813";
+const UI_VERSION = "ten-year-completed-public-v19-product-copy-home-timing-20260814";
 
 function timingBlock(): string {
   return `
@@ -11,10 +11,35 @@ function timingBlock(): string {
     <div class="data-timing-body">
       <p><b>開催情報</b><span>バックグラウンド同期は5分ごと。新しい開催の探索は木〜日曜は90分ごと、土日の8:00〜20:59は20分ごとに行います。</span></p>
       <p><b>出馬情報</b><span>発走24時間より前は3時間ごと、24〜3時間前は1時間ごと、3時間〜45分前は15分ごと、45分前以降は5分ごとに更新します。</span></p>
+      <p><b>対象レース</b><span>開催日当日の8:00以降、各会場12Rの出馬情報が揃った最初の確認で5Rを決定します。決定後はその日の途中で変更しません。</span></p>
       <p><b>買い目</b><span>土・日・月の8:00〜19:00に10分ごとに確認。対象レースは発走45〜15分前のJRA公式オッズで買い目を確定します。</span></p>
       <p><b>結果・払戻</b><span>発走約4分後から結果を確認します。未確定の場合は再取得し、払戻が出たら公開済みの買い目と自動で照合します。</span></p>
     </div>
   </details>`;
+}
+
+function homeTimingBlock(): string {
+  return `
+  <section class="home-publish-flow" aria-label="予想の公開タイミング">
+    <div class="home-publish-head"><b>予想の公開タイミング</b><span>日本時間</span></div>
+    <div class="home-publish-steps">
+      <div class="home-publish-step"><strong>当日 8:00以降</strong><b>対象レースを決定</b><span>出馬情報が揃い次第、各会場12Rから5Rを選びます。決定後は変更しません。</span></div>
+      <div class="home-publish-step"><strong>発走45〜15分前</strong><b>買い目を確定</b><span>JRA公式オッズを取得し、対象レースの買い目を公開します。</span></div>
+      <div class="home-publish-step"><strong>レース後</strong><b>結果・払戻を反映</b><span>JRAの結果と払戻を取得し、公開済みの買い目と自動で照合します。</span></div>
+    </div>
+  </section>`;
+}
+
+function homeTimingStyle(): string {
+  return `
+  .home-publish-flow{margin:-4px 0 18px;border:1px solid var(--line);border-radius:16px;background:var(--panel);overflow:hidden}
+  .home-publish-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .home-publish-head b{font-size:14px}.home-publish-head span{font-size:10px;color:var(--muted)}
+  .home-publish-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+  .home-publish-step{padding:12px 14px;border-right:1px solid var(--line)}.home-publish-step:last-child{border-right:0}
+  .home-publish-step strong{display:block;margin-bottom:5px;color:var(--green);font-size:12px}.home-publish-step b{display:block;margin-bottom:5px;font-size:13px}.home-publish-step span{display:block;color:var(--muted);font-size:11px;line-height:1.6}
+  @media(max-width:760px){.home-publish-flow{margin-top:-3px}.home-publish-steps{grid-template-columns:1fr}.home-publish-step{border-right:0;border-bottom:1px solid var(--line);padding:10px 12px}.home-publish-step:last-child{border-bottom:0}.home-publish-head{padding:10px 12px}}
+  `;
 }
 
 function conditionsBody(): string {
@@ -152,21 +177,26 @@ function productPage(title: string, body: string): Response {
   return new Response(base.body, { status: base.status, headers });
 }
 
-function streamingNavCopy(response: Response): Response {
+function streamingNavCopy(response: Response, path: string): Response {
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   headers.set("cache-control", "no-store, max-age=0");
   headers.set("x-race-ui-version", UI_VERSION);
   const source = new Response(response.body, { status: response.status, headers });
-  return new HTMLRewriter()
+  const rewriter = new HTMLRewriter()
     .on('.nav a[href="/conditions"]', { element(element) { element.setInnerContent("予想ロジック"); } })
-    .on('.nav a[href="/guide"]', { element(element) { element.setInnerContent("使い方"); } })
-    .transform(source);
+    .on('.nav a[href="/guide"]', { element(element) { element.setInnerContent("使い方"); } });
+  if (path === "/") {
+    rewriter
+      .on("head", { element(element) { element.append(`<style>${homeTimingStyle()}</style>`, { html: true }); } })
+      .on(".hero", { element(element) { element.after(homeTimingBlock(), { html: true }); } });
+  }
+  return rewriter.transform(source);
 }
 
 async function polishResponse(response: Response, path: string): Promise<Response> {
   if (!response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
-  if (!path.startsWith("/races/")) return streamingNavCopy(response);
+  if (!path.startsWith("/races/")) return streamingNavCopy(response, path);
   try {
     const headers = new Headers(response.headers);
     headers.delete("content-length");
