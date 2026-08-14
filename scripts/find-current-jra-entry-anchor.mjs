@@ -79,6 +79,10 @@ async function probeCandidate(meeting, family, prefix, value, errors) {
     if (bundle.race.raceDate !== meeting.date || bundle.race.venue !== meeting.venue || bundle.race.raceNo !== 1) return null;
     return {
       found: true,
+      targetDate: meeting.date,
+      venue: meeting.venue,
+      meetingNo: meeting.meetingNo,
+      meetingDay: meeting.meetingDay,
       suffix,
       family,
       prefix,
@@ -88,7 +92,7 @@ async function probeCandidate(meeting, family, prefix, value, errors) {
       discoveredLinks: extractEntryLinks(page.html, page.url),
     };
   } catch (error) {
-    if (errors.length < 40) errors.push(`${meeting.date}:${meeting.venue}:${family}:${suffix}:${error?.name || "Error"}:${error?.message || String(error)}`);
+    if (errors.length < 60) errors.push(`${meeting.date}:${meeting.venue}:${family}:${suffix}:${error?.name || "Error"}:${error?.message || String(error)}`);
     return null;
   }
 }
@@ -119,37 +123,37 @@ export async function findCurrentEntryAnchor(now = new Date()) {
     }
   }
 
-  for (const meeting of meetings) {
-    const anchor = await probeMeeting(meeting, errors);
-    if (!anchor) continue;
-    return {
-      ...anchor,
-      targetDate: meeting.date,
-      venue: meeting.venue,
-      meetingNo: meeting.meetingNo,
-      meetingDay: meeting.meetingDay,
-      targetDates,
-      calendarMeetings: meetings,
-      errors,
-    };
+  const anchors = [];
+  for (const date of targetDates) {
+    const dateMeetings = meetings.filter((meeting) => meeting.date === date);
+    let dateAnchor = null;
+    for (const meeting of dateMeetings) {
+      dateAnchor = await probeMeeting(meeting, errors);
+      if (dateAnchor) break;
+    }
+    if (dateAnchor) anchors.push(dateAnchor);
+    else errors.push(`${date}:ENTRY_ANCHOR_NOT_FOUND`);
   }
 
+  const discoveredLinks = [...new Set(anchors.flatMap((anchor) => anchor.discoveredLinks || []))];
+  const first = anchors[0] || null;
   return {
-    found: false,
-    suffix: null,
-    family: null,
-    prefix: null,
-    anchorUrl: null,
-    raceId: null,
-    runnerCount: 0,
-    discoveredLinks: [],
-    probes: 0,
-    targetDate: null,
-    venue: null,
-    meetingNo: null,
-    meetingDay: null,
+    found: anchors.length === targetDates.length && targetDates.length > 0,
     targetDates,
     calendarMeetings: meetings,
+    anchors,
+    anchorUrl: first?.anchorUrl ?? null,
+    raceId: first?.raceId ?? null,
+    targetDate: first?.targetDate ?? null,
+    venue: first?.venue ?? null,
+    meetingNo: first?.meetingNo ?? null,
+    meetingDay: first?.meetingDay ?? null,
+    family: first?.family ?? null,
+    prefix: first?.prefix ?? null,
+    suffix: first?.suffix ?? null,
+    runnerCount: first?.runnerCount ?? 0,
+    probes: anchors.reduce((sum, anchor) => sum + Number(anchor.probes || 0), 0),
+    discoveredLinks,
     errors,
   };
 }
