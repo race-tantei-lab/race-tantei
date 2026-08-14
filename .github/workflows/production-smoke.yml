@@ -55,18 +55,35 @@ jobs:
             fetch_url "${base}/conditions" /tmp/conditions.html /tmp/conditions.code & p2=$!
             fetch_url "${base}/api/public/day?date=2026-08-08" /tmp/day8.json /tmp/day8.code & p3=$!
             fetch_url "${base}/api/public/day?date=2026-08-09" /tmp/day9.json /tmp/day9.code & p4=$!
-            fetch_url "${base}/races/2026-08-09-chukyo-01" /tmp/race.html /tmp/race.code & p5=$!
-            wait "$p1"; wait "$p2"; wait "$p3"; wait "$p4"; wait "$p5"
+            wait "$p1"; wait "$p2"; wait "$p3"; wait "$p4"
 
             home_code="$(cat /tmp/home.code)"
             conditions_code="$(cat /tmp/conditions.code)"
             c8="$(cat /tmp/day8.code)"
             c9="$(cat /tmp/day9.code)"
-            race_code="$(cat /tmp/race.code)"
-            echo "attempt=${attempt} home=${home_code} conditions=${conditions_code} day8=${c8} day9=${c9} race=${race_code}"
+            echo "attempt=${attempt} home=${home_code} conditions=${conditions_code} day8=${c8} day9=${c9}"
 
-            if [ "$home_code" = "200" ] && [ "$conditions_code" = "200" ] && [ "$c8" = "200" ] && [ "$c9" = "200" ] && [ "$race_code" = "200" ]; then
-              if python - <<'PY'
+            if [ "$home_code" = "200" ] && [ "$conditions_code" = "200" ] && [ "$c8" = "200" ] && [ "$c9" = "200" ]; then
+              race_id="$(python - <<'PY'
+          import json
+          try:
+              rows=json.load(open('/tmp/day9.json',encoding='utf-8')).get('races') or []
+              selected=next((r for r in rows if (r.get('publicState') or {}).get('code')=='buy' and r.get('raceId')),None)
+              if selected: print(selected['raceId'])
+          except Exception:
+              pass
+          PY
+              )"
+              if [ -n "$race_id" ]; then
+                fetch_url "${base}/races/${race_id}" /tmp/race.html /tmp/race.code
+              else
+                printf '000' >/tmp/race.code
+                : >/tmp/race.html
+              fi
+              race_code="$(cat /tmp/race.code)"
+              echo "selected_race=${race_id:-none} race=${race_code}"
+
+              if [ "$race_code" = "200" ] && python - <<'PY'
           import json,sys
           home=open('/tmp/home.html',encoding='utf-8').read()
           conditions=open('/tmp/conditions.html',encoding='utf-8').read()
