@@ -55,19 +55,22 @@ jobs:
             fetch_url "${base}/conditions" /tmp/conditions.html /tmp/conditions.code & p2=$!
             fetch_url "${base}/api/public/day?date=2026-08-08" /tmp/day8.json /tmp/day8.code & p3=$!
             fetch_url "${base}/api/public/day?date=2026-08-09" /tmp/day9.json /tmp/day9.code & p4=$!
-            wait "$p1"; wait "$p2"; wait "$p3"; wait "$p4"
+            fetch_url "${base}/races/2026-08-09-chukyo-01" /tmp/race.html /tmp/race.code & p5=$!
+            wait "$p1"; wait "$p2"; wait "$p3"; wait "$p4"; wait "$p5"
 
             home_code="$(cat /tmp/home.code)"
             conditions_code="$(cat /tmp/conditions.code)"
             c8="$(cat /tmp/day8.code)"
             c9="$(cat /tmp/day9.code)"
-            echo "attempt=${attempt} home=${home_code} conditions=${conditions_code} day8=${c8} day9=${c9}"
+            race_code="$(cat /tmp/race.code)"
+            echo "attempt=${attempt} home=${home_code} conditions=${conditions_code} day8=${c8} day9=${c9} race=${race_code}"
 
-            if [ "$home_code" = "200" ] && [ "$conditions_code" = "200" ] && [ "$c8" = "200" ] && [ "$c9" = "200" ]; then
+            if [ "$home_code" = "200" ] && [ "$conditions_code" = "200" ] && [ "$c8" = "200" ] && [ "$c9" = "200" ] && [ "$race_code" = "200" ]; then
               if python - <<'PY'
           import json,sys
           home=open('/tmp/home.html',encoding='utf-8').read()
           conditions=open('/tmp/conditions.html',encoding='utf-8').read()
+          race=open('/tmp/race.html',encoding='utf-8').read()
           d8=json.load(open('/tmp/day8.json',encoding='utf-8'))
           d9=json.load(open('/tmp/day9.json',encoding='utf-8'))
           r8=d8.get('races')
@@ -84,7 +87,9 @@ jobs:
           )
           checks={
             'homeAlive':'レース探偵' in home,
-            'courses':all(x in home for x in ('ライト','スタンダード','プレミアム')),
+            'homeSharedRoi':'<summary><b>全体</b>' in home and '会場別回収率' in home,
+            'homeNoDuplicateCourseRoi':all(f'<summary><b>{x}</b>' not in home for x in ('ライト','スタンダード','プレミアム')),
+            'raceDetailCourses':all(x in race for x in ('ライト','スタンダード','プレミアム')),
             'conditionsMethodology':all(marker in conditions for marker in condition_markers),
             'day8ApiShape':isinstance(r8,list) and len(r8)>0,
             'day9ApiShape':isinstance(r9,list) and len(r9)>0,
