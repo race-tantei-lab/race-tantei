@@ -3,6 +3,7 @@ import { stripHtml } from "../dist-test/src/v1/utils.js";
 
 const ACCESS_D = "https://www.jra.go.jp/JRADB/accessD.html";
 const PAUSE_MS = Number(process.env.JRA_ANCHOR_PROBE_PAUSE_MS || 120);
+const PROBE_CONCURRENCY = Math.max(1, Math.min(12, Number(process.env.JRA_ANCHOR_PROBE_CONCURRENCY || 8)));
 const VENUE_CODES = {
   "札幌": "01",
   "函館": "02",
@@ -67,39 +68,40 @@ function anchorPrefix(meeting, family = "pw01dde") {
   return `${family}01${meeting.venueCode}${year}${String(meeting.meetingNo).padStart(2, "0")}${String(meeting.meetingDay).padStart(2, "0")}01${compactDate}`;
 }
 
+async function probeCandidate(meeting, family, prefix, value, errors) {
+  const suffix = value.toString(16).toUpperCase().padStart(2, "0");
+  const cname = `${prefix}/${suffix}`;
+  const url = `${ACCESS_D}?CNAME=${encodeURIComponent(cname)}`;
+  try {
+    const page = await fetchJraPage(url);
+    if (!pageLooksLikeEntry(page.html)) return null;
+    const bundle = parseEntryPage(page.html, page.url);
+    if (bundle.race.raceDate !== meeting.date || bundle.race.venue !== meeting.venue || bundle.race.raceNo !== 1) return null;
+    return {
+      found: true,
+      suffix,
+      family,
+      prefix,
+      anchorUrl: page.url,
+      raceId: bundle.race.raceId,
+      runnerCount: bundle.runners.length,
+      discoveredLinks: extractEntryLinks(page.html, page.url),
+    };
+  } catch (error) {
+    if (errors.length < 40) errors.push(`${meeting.date}:${meeting.venue}:${family}:${suffix}:${error?.name || "Error"}:${error?.message || String(error)}`);
+    return null;
+  }
+}
+
 async function probeMeeting(meeting, errors) {
   for (const family of ["pw01dde", "sw01dde"]) {
     const prefix = anchorPrefix(meeting, family);
-    for (let value = 0; value <= 255; value += 1) {
-      const suffix = value.toString(16).toUpperCase().padStart(2, "0");
-      const cname = `${prefix}/${suffix}`;
-      const url = `${ACCESS_D}?CNAME=${encodeURIComponent(cname)}`;
-      try {
-        const page = await fetchJraPage(url);
-        if (!pageLooksLikeEntry(page.html)) {
-          await sleep(PAUSE_MS);
-          continue;
-        }
-        const bundle = parseEntryPage(page.html, page.url);
-        if (bundle.race.raceDate !== meeting.date || bundle.race.venue !== meeting.venue || bundle.race.raceNo !== 1) {
-          await sleep(PAUSE_MS);
-          continue;
-        }
-        return {
-          found: true,
-          suffix,
-          family,
-          prefix,
-          anchorUrl: page.url,
-          raceId: bundle.race.raceId,
-          runnerCount: bundle.runners.length,
-          discoveredLinks: extractEntryLinks(page.html, page.url),
-          probes: value + 1,
-        };
-      } catch (error) {
-        if (errors.length < 40) errors.push(`${meeting.date}:${meeting.venue}:${family}:${suffix}:${error?.name || "Error"}:${error?.message || String(error)}`);
-      }
-      await sleep(PAUSE_MS);
+    for (let start = 0; start <= 255; start += PROBE_CONCURRENCY) {
+      const values = Array.from({ length: Math.min(PROBE_CONCURRENCY, 256 - start) }, (_, index) => start + index);
+      const results = await Promise.all(values.map((value) => probeCandidate(meeting, family, prefix, value, errors)));
+      const found = results.find(Boolean);
+      if (found) return { ...found, probes: start + values.length };
+      if (PAUSE_MS > 0) await sleep(PAUSE_MS);
     }
   }
   return null;
