@@ -62,13 +62,13 @@ async function calendarMeetings(date) {
   return meetings;
 }
 
-function anchorPrefix(meeting, family = "pw01dde") {
+function anchorPrefix(meeting, family = "pw01dde", viewMode = "01") {
   const compactDate = meeting.date.replaceAll("-", "");
   const year = meeting.date.slice(0, 4);
-  return `${family}01${meeting.venueCode}${year}${String(meeting.meetingNo).padStart(2, "0")}${String(meeting.meetingDay).padStart(2, "0")}01${compactDate}`;
+  return `${family}${viewMode}${meeting.venueCode}${year}${String(meeting.meetingNo).padStart(2, "0")}${String(meeting.meetingDay).padStart(2, "0")}01${compactDate}`;
 }
 
-async function probeCandidate(meeting, family, prefix, value, errors) {
+async function probeCandidate(meeting, family, viewMode, prefix, value, errors) {
   const suffix = value.toString(16).toUpperCase().padStart(2, "0");
   const cname = `${prefix}/${suffix}`;
   const url = `${ACCESS_D}?CNAME=${encodeURIComponent(cname)}`;
@@ -85,6 +85,7 @@ async function probeCandidate(meeting, family, prefix, value, errors) {
       meetingDay: meeting.meetingDay,
       suffix,
       family,
+      viewMode,
       prefix,
       anchorUrl: page.url,
       raceId: bundle.race.raceId,
@@ -92,17 +93,25 @@ async function probeCandidate(meeting, family, prefix, value, errors) {
       discoveredLinks: extractEntryLinks(page.html, page.url),
     };
   } catch (error) {
-    if (errors.length < 60) errors.push(`${meeting.date}:${meeting.venue}:${family}:${suffix}:${error?.name || "Error"}:${error?.message || String(error)}`);
+    if (errors.length < 80) errors.push(`${meeting.date}:${meeting.venue}:${family}:${viewMode}:${suffix}:${error?.name || "Error"}:${error?.message || String(error)}`);
     return null;
   }
 }
 
 async function probeMeeting(meeting, errors) {
-  for (const family of ["pw01dde", "sw01dde"]) {
-    const prefix = anchorPrefix(meeting, family);
+  // JRA uses multiple display modes for the same race. The 01 mode is common for
+  // Saturday/current-day tables, while Sunday detailed tables can be exposed as 10.
+  // Try both dynamically instead of assuming the day from a hard-coded URL.
+  for (const { family, viewMode } of [
+    { family: "pw01dde", viewMode: "01" },
+    { family: "pw01dde", viewMode: "10" },
+    { family: "sw01dde", viewMode: "01" },
+    { family: "sw01dde", viewMode: "10" },
+  ]) {
+    const prefix = anchorPrefix(meeting, family, viewMode);
     for (let start = 0; start <= 255; start += PROBE_CONCURRENCY) {
       const values = Array.from({ length: Math.min(PROBE_CONCURRENCY, 256 - start) }, (_, index) => start + index);
-      const results = await Promise.all(values.map((value) => probeCandidate(meeting, family, prefix, value, errors)));
+      const results = await Promise.all(values.map((value) => probeCandidate(meeting, family, viewMode, prefix, value, errors)));
       const found = results.find(Boolean);
       if (found) return { ...found, probes: start + values.length };
       if (PAUSE_MS > 0) await sleep(PAUSE_MS);
@@ -149,6 +158,7 @@ export async function findCurrentEntryAnchor(now = new Date()) {
     meetingNo: first?.meetingNo ?? null,
     meetingDay: first?.meetingDay ?? null,
     family: first?.family ?? null,
+    viewMode: first?.viewMode ?? null,
     prefix: first?.prefix ?? null,
     suffix: first?.suffix ?? null,
     runnerCount: first?.runnerCount ?? 0,
