@@ -2,11 +2,18 @@ name: Sync upcoming JRA entries directly
 run-name: Sync upcoming JRA entries directly · ${{ github.sha }}
 
 on:
+  schedule:
+    - cron: "30 7 * * 4"   # Thu 16:30 JST: first published weekend entries
+    - cron: "30 1 * * 5"   # Fri 10:30 JST: Saturday frame/number refresh
+    - cron: "30 1 * * 6"   # Sat 10:30 JST: Sunday frame/number refresh
+    - cron: "0 22 * * 6"   # Sun 07:00 JST: same-day safety refresh
   push:
     branches: [main]
     paths:
+      - "scripts/find-current-jra-entry-anchor.mjs"
       - "scripts/sync-upcoming-entries-direct.mjs"
       - "scripts/run-upcoming-entry-direct-sync.mjs"
+      - "scripts/audit-upcoming-entry-readiness.py"
       - ".github/workflows/sync-upcoming-entries-direct.yml"
   workflow_dispatch:
 
@@ -26,7 +33,6 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
       JRA_HOME_URL: https://sp.jra.jp/
-      JRA_SEED_ENTRY_URLS: https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050120260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050220260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050320260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050420260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050520260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050620260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050720260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050820260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601050920260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601051020260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601051120260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202601051220260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050120260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050220260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050320260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050420260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050520260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050620260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050720260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050820260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602050920260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602051020260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602051120260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202602051220260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050120260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050220260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050320260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050420260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050520260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050620260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050720260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050820260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602050920260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602051020260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602051120260808%2F00,https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202602051220260808%2F00
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,7 +46,7 @@ jobs:
         run: |
           npm ci
           npm run build:test
-      - name: Discover, parse and save upcoming entries
+      - name: Discover current weekend anchor and save entries
         run: node scripts/run-upcoming-entry-direct-sync.mjs
       - name: Audit saved races
         run: python scripts/audit-upcoming-entry-readiness.py
@@ -48,12 +54,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p analysis-results
+          cp jra-entry-anchor-discovery.json analysis-results/jra-entry-anchor-discovery.json
           cp upcoming-entry-direct-sync.json analysis-results/upcoming-entry-direct-sync.json
           cp upcoming-entry-readiness.json analysis-results/upcoming-entry-readiness.json
-          git add -f analysis-results/upcoming-entry-direct-sync.json analysis-results/upcoming-entry-readiness.json
+          git add -f analysis-results/jra-entry-anchor-discovery.json analysis-results/upcoming-entry-direct-sync.json analysis-results/upcoming-entry-readiness.json
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Save upcoming JRA entry direct sync result"
+          git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Save upcoming JRA entry direct sync result" || true
           git pull --rebase origin main
           git push origin HEAD:main
       - uses: actions/upload-artifact@v4
@@ -61,6 +68,7 @@ jobs:
         with:
           name: upcoming-entry-direct-sync
           path: |
+            jra-entry-anchor-discovery.json
             upcoming-entry-direct-sync.json
             upcoming-entry-readiness.json
           if-no-files-found: warn
