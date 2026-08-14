@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { findCurrentEntryAnchor } from "./find-current-jra-entry-anchor.mjs";
+import { syncCurrentWeekendCalendarDirect } from "./sync-current-weekend-calendar-direct.mjs";
 
 globalThis.Bun = {
   write(path, data) {
@@ -7,8 +8,9 @@ globalThis.Bun = {
   }
 };
 
+const calendarReport = await syncCurrentWeekendCalendarDirect();
 const discovery = await findCurrentEntryAnchor();
-await writeFile("jra-entry-anchor-discovery.json", `${JSON.stringify(discovery, null, 2)}\n`, "utf8");
+await writeFile("jra-entry-anchor-discovery.json", `${JSON.stringify({ ...discovery, calendarReport }, null, 2)}\n`, "utf8");
 
 if (!Array.isArray(discovery.targetDates) || !discovery.targetDates.length) {
   throw new Error("JRA_CURRENT_WEEKEND_DATES_NOT_FOUND");
