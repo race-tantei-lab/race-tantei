@@ -3,17 +3,12 @@ import { TEN_YEAR_MONTHLY, TEN_YEAR_PUBLIC_LIGHT_RETURN_YEN, TEN_YEAR_PUBLIC_RAC
 import type { Env } from "./v1/types.js";
 
 const CUTOFF="2026-08-09";
-const COURSES=[
-  {course:"ライト",budget:2000,scale:1},
-  {course:"スタンダード",budget:5000,scale:2.5},
-  {course:"プレミアム",budget:10000,scale:5}
-] as const;
-type Course=typeof COURSES[number]["course"];
+const HOME_COURSE="ライト";
+const HOME_BUDGET=2000;
 type CourseRow={course:string;settledRaces:number;stakeYen:number;returnYen:number};
 type MonthlyRow=CourseRow&{month:string};
 type VenueRow=CourseRow&{venue:string};
 
-function yen(value:number):string{return `¥${Math.round(value).toLocaleString("ja-JP")}`;}
 function roi(stake:number,ret:number):number{return stake>0?ret/stake*100:0;}
 
 async function liveCourseRows(db:D1Database):Promise<CourseRow[]>{
@@ -45,32 +40,43 @@ async function liveVenueRows(db:D1Database):Promise<VenueRow[]>{
 }
 
 function metricHtml(live:CourseRow[],monthlyLive:MonthlyRow[]):string{
-  const liveBy=new Map(live.map(x=>[x.course,x]));
+  const add=live.find(x=>x.course===HOME_COURSE);
+  const races=TEN_YEAR_PUBLIC_RACES+(add?.settledRaces??0);
+  const stake=TEN_YEAR_PUBLIC_RACES*HOME_BUDGET+(add?.stakeYen??0);
+  const ret=TEN_YEAR_PUBLIC_LIGHT_RETURN_YEN+(add?.returnYen??0);
   const monthlyMap=new Map<string,{races:number;stake:number;ret:number}>();
-  for(const row of TEN_YEAR_MONTHLY){for(const c of COURSES){monthlyMap.set(`${row.month}|${c.course}`,{races:row.races,stake:row.races*c.budget,ret:Math.round(row.returnLightYen*c.scale)});}}
-  for(const x of monthlyLive){const key=`${x.month}|${x.course}`;const prev=monthlyMap.get(key)??{races:0,stake:0,ret:0};monthlyMap.set(key,{races:prev.races+x.settledRaces,stake:prev.stake+x.stakeYen,ret:prev.ret+x.returnYen});}
-  const months=[...new Set([...TEN_YEAR_MONTHLY.map(x=>x.month),...monthlyLive.map(x=>x.month)])].sort().reverse();
-  return `<section class="metrics">${COURSES.map(c=>{
-    const add=liveBy.get(c.course);const races=TEN_YEAR_PUBLIC_RACES+(add?.settledRaces??0);const stake=TEN_YEAR_PUBLIC_RACES*c.budget+(add?.stakeYen??0);const ret=Math.round(TEN_YEAR_PUBLIC_LIGHT_RETURN_YEN*c.scale)+(add?.returnYen??0);
-    const monthRows=months.map(month=>{const x=monthlyMap.get(`${month}|${c.course}`);if(!x)return "";return `<div class="monthly-row"><b>${month.replace("-","/")}</b><span>${x.races}R　${yen(x.stake)} → ${yen(x.ret)}</span><strong class="${roi(x.stake,x.ret)>=100?"plus":"minus"}">${roi(x.stake,x.ret).toFixed(1)}%</strong></div>`;}).join("");
-    return `<details class="card metric"><summary><b>${c.course}</b><strong>${roi(stake,ret).toFixed(1)}%</strong><small>${races}R　購入 ${yen(stake)}　払戻 ${yen(ret)}</small></summary><div class="monthly">${monthRows}</div></details>`;
-  }).join("")}</section>`;
+  for(const row of TEN_YEAR_MONTHLY)monthlyMap.set(row.month,{races:row.races,stake:row.races*HOME_BUDGET,ret:row.returnLightYen});
+  for(const x of monthlyLive.filter(x=>x.course===HOME_COURSE)){
+    const prev=monthlyMap.get(x.month)??{races:0,stake:0,ret:0};
+    monthlyMap.set(x.month,{races:prev.races+x.settledRaces,stake:prev.stake+x.stakeYen,ret:prev.ret+x.returnYen});
+  }
+  const months=[...monthlyMap.keys()].sort().reverse();
+  const monthRows=months.map(month=>{const x=monthlyMap.get(month)!;return `<div class="monthly-row"><b>${month.replace("-","/")}</b><span>${x.races.toLocaleString("ja-JP")}R</span><strong class="${roi(x.stake,x.ret)>=100?"plus":"minus"}">${roi(x.stake,x.ret).toFixed(1)}%</strong></div>`;}).join("");
+  return `<section class="metrics shared-roi"><details class="card metric"><summary><b>全体</b><strong>${roi(stake,ret).toFixed(1)}%</strong><small>${races.toLocaleString("ja-JP")}R</small></summary><div class="monthly">${monthRows}</div></details></section>`;
 }
 
 function venueHtml(live:VenueRow[]):string{
-  const liveMap=new Map(live.map(x=>[`${x.venue}|${x.course}`,x]));
-  const totalLiveRaces=Math.max(0,...COURSES.map(c=>live.filter(x=>x.course===c.course).reduce((s,x)=>s+x.settledRaces,0)));
+  const liveMap=new Map(live.filter(x=>x.course===HOME_COURSE).map(x=>[x.venue,x]));
+  const totalLiveRaces=[...liveMap.values()].reduce((s,x)=>s+x.settledRaces,0);
   const cards=TEN_YEAR_VENUES.map(v=>{
-    const rows=COURSES.map(c=>{const add=liveMap.get(`${v.venue}|${c.course}`);const races=v.races+(add?.settledRaces??0);const stake=v.races*c.budget+(add?.stakeYen??0);const ret=Math.round(v.returnLightYen*c.scale)+(add?.returnYen??0);return {course:c.course,races,value:roi(stake,ret)};});
-    return `<article class="venue-roi-card"><div class="venue-roi-head"><b>${v.venue}</b><span>${rows[0].races}R</span></div>${rows.map(x=>`<div class="venue-roi-row"><span>${x.course}</span><strong class="${x.value>=100?"venue-roi-plus":"venue-roi-minus"}">${x.value.toFixed(1)}%</strong></div>`).join("")}</article>`;
+    const add=liveMap.get(v.venue);const races=v.races+(add?.settledRaces??0);const stake=v.races*HOME_BUDGET+(add?.stakeYen??0);const ret=v.returnLightYen+(add?.returnYen??0);const value=roi(stake,ret);
+    return `<article class="venue-roi-card"><div class="venue-roi-head"><b>${v.venue}</b><span>${races.toLocaleString("ja-JP")}R</span></div><strong class="venue-roi-value ${value>=100?"venue-roi-plus":"venue-roi-minus"}">${value.toFixed(1)}%</strong></article>`;
   }).join("");
-  return `<div class="section-title venue-roi-title"><h2>会場別回収率</h2><span class="muted">全期間・${(TEN_YEAR_PUBLIC_RACES+totalLiveRaces).toLocaleString("ja-JP")}R</span></div><div class="venue-roi-rail">${cards}</div>`;
+  return `<div class="section-title venue-roi-title"><h2>会場別回収率</h2><span class="muted">全期間・${(TEN_YEAR_PUBLIC_RACES+totalLiveRaces).toLocaleString("ja-JP")}R</span></div><div class="venue-roi-rail shared-venue-roi">${cards}</div>`;
+}
+
+function homeStyle():string{
+  return `<style>
+    .shared-roi{grid-template-columns:minmax(0,1fr)!important}.shared-roi .metric{max-width:none}.shared-roi .metric summary{display:grid;grid-template-columns:1fr auto;align-items:end;gap:4px 16px}.shared-roi .metric summary>b{grid-column:1}.shared-roi .metric summary>strong{grid-column:1;font-size:40px}.shared-roi .metric summary>small{grid-column:2;grid-row:1 / span 2;align-self:center;font-size:13px}.shared-venue-roi .venue-roi-card{min-height:112px}.shared-venue-roi .venue-roi-value{display:block;margin-top:14px;font-size:27px;font-weight:900}.shared-venue-roi .venue-roi-head{align-items:center}
+    @media(max-width:760px){.shared-roi .metric summary>strong{font-size:36px}.shared-venue-roi .venue-roi-card{min-height:104px}.shared-venue-roi .venue-roi-value{font-size:25px}}
+  </style>`;
 }
 
 async function canonicalHome(db:D1Database,html:string):Promise<string>{
   const [courses,months,venues]=await Promise.all([liveCourseRows(db),liveMonthlyRows(db),liveVenueRows(db)]);
   let out=html.replace(/<section class="metrics">[\s\S]*?<\/section>/,metricHtml(courses,months));
   out=out.replace(/<div class="section-title venue-roi-title">[\s\S]*?<\/div><div class="venue-roi-rail">[\s\S]*?<\/div>(?=<div class="section-title"><h2 id="selected-date">)/,venueHtml(venues));
+  out=out.replace("</head>",`${homeStyle()}</head>`);
   return out;
 }
 
@@ -79,7 +85,7 @@ export default {
     if(!publicSite.fetch)return new Response("NOT_FOUND",{status:404});
     const response=await publicSite.fetch(request,env,ctx);
     if(new URL(request.url).pathname!=="/"||!response.ok||!response.headers.get("content-type")?.includes("text/html"))return response;
-    try{const headers=new Headers(response.headers);headers.delete("content-length");headers.set("cache-control","no-store, max-age=0");headers.set("x-race-ui-version","ten-year-completed-v15");return new Response(await canonicalHome(env.DB,await response.text()),{status:response.status,headers});}catch{return response;}
+    try{const headers=new Headers(response.headers);headers.delete("content-length");headers.set("cache-control","no-store, max-age=0");headers.set("x-race-ui-version","ten-year-completed-v15-shared-roi");return new Response(await canonicalHome(env.DB,await response.text()),{status:response.status,headers});}catch{return response;}
   },
   async scheduled(controller:ScheduledController,env:Env,ctx:ExecutionContext):Promise<void>{if(publicSite.scheduled)await publicSite.scheduled(controller,env,ctx);}
 } satisfies ExportedHandler<Env>;
