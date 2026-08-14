@@ -68,6 +68,7 @@ function venueHtml(live:VenueRow[]):string{
 function homeStyle():string{
   return `<style>
     .shared-roi{grid-template-columns:minmax(0,1fr)!important}.shared-roi .metric{max-width:none}.shared-roi .metric summary{display:grid;grid-template-columns:1fr auto;align-items:end;gap:4px 16px}.shared-roi .metric summary>b{grid-column:1}.shared-roi .metric summary>strong{grid-column:1;font-size:40px}.shared-roi .metric summary>small{grid-column:2;grid-row:1 / span 2;align-self:center;font-size:13px}.shared-venue-roi .venue-roi-card{min-height:112px}.shared-venue-roi .venue-roi-value{display:block;margin-top:14px;font-size:27px;font-weight:900}.shared-venue-roi .venue-roi-head{align-items:center}
+    .today-result .today-result-row:nth-of-type(n+3){display:none}.today-result .today-result-row>div:first-child>b{display:none}.today-result .today-result-money>span{display:none}.today-result .today-result-row>div:first-child{display:block}.today-result .today-result-row>div:first-child>span{font-size:12px}.today-result .today-result-money strong{font-size:20px}
     @media(max-width:760px){.shared-roi .metric summary>strong{font-size:36px}.shared-venue-roi .venue-roi-card{min-height:104px}.shared-venue-roi .venue-roi-value{font-size:25px}}
   </style>`;
 }
