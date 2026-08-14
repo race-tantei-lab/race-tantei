@@ -30,6 +30,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      PRODUCTION_URL: https://race-tantei-phase0.race-tantei.workers.dev
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -47,6 +48,33 @@ jobs:
         run: node scripts/run-current-weekend-calendar-direct.mjs
       - name: Verify weekend calendar in D1
         run: python scripts/audit-current-weekend-calendar.py
+      - name: Verify production weekend APIs
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from pathlib import Path
+          base = os.environ['PRODUCTION_URL'].rstrip('/')
+          report = json.loads(Path('current-weekend-calendar-sync.json').read_text())
+          for day in report['days']:
+              date = day['raceDate']
+              with urllib.request.urlopen(f"{base}/api/public/day?date={date}", timeout=30) as response:
+                  payload = json.load(response)
+              races = payload.get('races') or []
+              if len(races) != day['races']:
+                  raise SystemExit(f"PRODUCTION_DAY_COUNT_MISMATCH:{date}:{len(races)}:{day['races']}")
+              venues = sorted({str(r.get('venue')) for r in races})
+              if len(venues) != day['venues']:
+                  raise SystemExit(f"PRODUCTION_VENUE_COUNT_MISMATCH:{date}:{len(venues)}:{day['venues']}")
+              print(f"PRODUCTION_DAY_OK {date} races={len(races)} venues={','.join(venues)}")
+          with urllib.request.urlopen(f"{base}/api/public/calendar", timeout=30) as response:
+              calendar = json.load(response).get('calendar') or []
+          dates = {str(row.get('raceDate')) for row in calendar}
+          missing = [day['raceDate'] for day in report['days'] if day['raceDate'] not in dates]
+          if missing:
+              raise SystemExit('PRODUCTION_CALENDAR_MISSING:' + ','.join(missing))
+          print('PRODUCTION_CALENDAR_OK')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
