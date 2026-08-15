@@ -104,14 +104,13 @@ def main():
     base.check_only=check_only
     base.COURSE_BUDGETS=COURSE_BUDGETS
 
-    # The explanation trace is strictly observational. It is written under its
-    # own rt_system_state keys only after the frozen selection is re-computed
-    # and raceId/raceScore parity is proven. Any explanation failure is logged
-    # but must never block or alter live betting.
+    # Evidence is captured only when this fallback actually creates the frozen
+    # selection. A later "loaded" run must never reconstruct/overwrite the
+    # selection reason from mutable current-day runner/race rows.
     original_freeze_or_load_selection=base.freeze_or_load_selection
     def freeze_or_load_with_explanation(collector,date,out_path):
         payload,status=original_freeze_or_load_selection(collector,date,out_path)
-        if payload is not None:
+        if payload is not None and status=='frozen':
             try:
                 rows=explanation.ensure_selection_explanations(collector,date,payload)
                 print(json.dumps({'selectionExplanation':'ok','date':date,'rows':len(rows),'selectionStatus':status},ensure_ascii=False))
