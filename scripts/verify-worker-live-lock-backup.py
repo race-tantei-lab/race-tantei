@@ -10,26 +10,26 @@ import time
 from zoneinfo import ZoneInfo
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-COLLECTOR = ROOT / "scripts" / "collect-jra-official-odds.py"
+D1_CLIENT = ROOT / "scripts" / "seed-worker-feature-state.py"
 
 
-def load_collector():
-    spec = importlib.util.spec_from_file_location("worker_backup_verify_collector", COLLECTOR)
+def load_d1_client():
+    spec = importlib.util.spec_from_file_location("worker_backup_verify_d1", D1_CLIENT)
     if spec is None or spec.loader is None:
-        raise RuntimeError("COLLECTOR_LOAD_FAILED")
+        raise RuntimeError("D1_CLIENT_LOAD_FAILED")
     module = importlib.util.module_from_spec(spec)
-    sys.modules["worker_backup_verify_collector"] = module
+    sys.modules["worker_backup_verify_d1"] = module
     spec.loader.exec_module(module)
     return module
 
 
 def main() -> int:
-    collector = load_collector()
+    d1 = load_d1_client()
     started = dt.datetime.now(dt.timezone.utc)
     today = dt.datetime.now(ZoneInfo("Asia/Tokyo")).date().isoformat()
     audit = None
     for attempt in range(36):
-        rows = collector.d1_query("SELECT value FROM rt_system_state WHERE key='worker_completed_backup:last' LIMIT 1", [])
+        rows = d1.d1_query("SELECT value FROM rt_system_state WHERE key=? LIMIT 1", ["worker_completed_backup:last"])
         if rows:
             try:
                 candidate = json.loads(rows[0]["value"])
@@ -53,13 +53,13 @@ def main() -> int:
     assert audit.get("deadlineMissedRaceIds") == [], audit
     assert len(set(audit.get("alreadyLockedRaceIds") or [])) == 15, audit
 
-    selection_rows = collector.d1_query("SELECT value FROM rt_system_state WHERE key=?", [f"final_daily_selection:{today}"])
+    selection_rows = d1.d1_query("SELECT value FROM rt_system_state WHERE key=?", [f"final_daily_selection:{today}"])
     assert selection_rows, today
     selection = json.loads(selection_rows[0]["value"])
     selected = [str(row["raceId"]) for row in selection.get("selected") or []]
     assert len(selected) == 15 and len(set(selected)) == 15, selected
 
-    bet_rows = collector.d1_query(
+    bet_rows = d1.d1_query(
         "SELECT race_id AS raceId,course,bet_type AS betType,combination,stake_yen AS stakeYen,source_prediction_id AS sourcePredictionId FROM rt_public_bets WHERE race_id IN (SELECT value FROM json_each(?)) ORDER BY race_id,course,bet_type,combination",
         [json.dumps(selected, separators=(",", ":"))],
     )
