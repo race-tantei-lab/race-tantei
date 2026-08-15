@@ -1,0 +1,65 @@
+name: Verify Worker Completed Model
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/verify-worker-completed-model.yml
+      - scripts/build-worker-completed-model-assets.py
+      - scripts/verify-worker-model-parity.ts
+      - src/v1/completed-model-runtime.ts
+      - scripts/ten-year-production-core.py
+      - config/ten-year-completed-model.json
+      - models/ten-year-completed-model.txt
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-worker-completed-model-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install canonical LightGBM runtime
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3'
+
+      - name: Build compact completed-model asset
+        run: python scripts/build-worker-completed-model-assets.py
+
+      - name: Verify TypeScript prediction parity
+        run: npx tsx scripts/verify-worker-model-parity.ts
+
+      - name: Show generated model metadata
+        run: |
+          cat worker-assets/_internal/completed-model/metadata.json
+          du -h worker-assets/_internal/completed-model/model.bin
+
+      - name: Upload parity audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-completed-model-parity
+          path: |
+            worker-assets/_internal/completed-model/metadata.json
+            worker-assets/_internal/completed-model/parity.json
+          retention-days: 7
