@@ -9,6 +9,10 @@ function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch] ?? ch));
 }
 
+function errorText(error: unknown): string {
+  return error instanceof Error ? `${error.name}:${error.message}` : String(error);
+}
+
 function roi(value: number | null | undefined): string {
   return Number.isFinite(value) ? `${(Number(value) * 100).toFixed(1)}%` : "—";
 }
@@ -115,8 +119,11 @@ export default {
       headers.set("cache-control", "no-store, max-age=0");
       headers.set("x-race-ui-version", "ten-year-completed-public-v23-exact-selection-evidence");
       return new Response(replaceSelectionEvidence(await response.text(), exactSelectionHtml(explanation)), { status: response.status, headers });
-    } catch {
-      return response;
+    } catch (error) {
+      const headers = new Headers(response.headers);
+      headers.delete("content-length");
+      headers.set("x-selection-evidence-error", errorText(error).slice(0, 180));
+      return new Response(response.body, { status: response.status, headers });
     }
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
