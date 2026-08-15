@@ -55,9 +55,43 @@ def main():
     if len(starts) != len(ids):
         raise RuntimeError(f"CRITICAL_SELECTED_START_TIMES_MISSING:{len(starts)}/{len(ids)}")
 
+    def collect_exact_race_official_odds(rid: str) -> dict:
+        # Explicit selected-race recovery must not depend on rt_races.status. A stale/incorrect
+        # result sync must never be able to suppress pre-race ticket generation.
+        race_rows = collector.d1_query(
+            """
+            SELECT race_id AS raceId,race_date AS raceDate,venue,race_no AS raceNo,
+                   start_time_utc AS startTimeUtc,entry_url AS entryUrl
+            FROM rt_races WHERE race_id=? LIMIT 1
+            """,
+            [rid],
+        )
+        if not race_rows:
+            raise RuntimeError(f"CRITICAL_RACE_ROW_MISSING:{rid}")
+        live = base.load_module(f"critical_live_odds_{rid.replace('-', '_')}", base.ODDS_LIVE_SOURCE)
+        fast = live.base
+        fast.selected_ids = lambda: {rid}
+        fast.base.upcoming_races = lambda: race_rows
+        fast.main()
+        report = json.loads((ROOT / "official-odds-collection-report.json").read_text(encoding="utf-8"))
+        if int(report.get("eligibleFixedTargetCount") or 0) != 1:
+            raise RuntimeError(f"CRITICAL_ODDS_TARGET_MISSING:{rid}:{report.get('eligibleFixedTargetCount')}")
+        if int(report.get("errorCount") or 0) != 0:
+            raise RuntimeError(f"CRITICAL_ODDS_ERRORS:{rid}:{report.get('errors')}")
+        covered = report.get("racesByBetType") or {}
+        for bet_type in ("単勝", "馬連", "ワイド", "馬単", "3連複", "3連単"):
+            if int(covered.get(bet_type) or 0) != 1:
+                raise RuntimeError(f"CRITICAL_ODDS_TYPE_MISSING:{rid}:{bet_type}:{covered.get(bet_type)}")
+        return report
+
     already = base.locked_races(collector, ids)
     future = [rid for rid in ids if starts[rid] > now]
-    pending = [rid for rid in future if rid not in already]
+    # Normal lock timing remains the published <=45 minute window. The five-minute
+    # fail-safe keeps retrying every missing due race right up until the start.
+    pending = [
+        rid for rid in future
+        if rid not in already and (starts[rid] - now).total_seconds() <= base.MAX_LOCK_SECONDS
+    ]
     pending.sort(key=lambda rid: starts[rid])
 
     generated = []
@@ -67,7 +101,7 @@ def main():
         if seconds_to_start <= 0:
             continue
         try:
-            odds_report = base.collect_official_odds([rid])
+            odds_report = collect_exact_race_official_odds(rid)
             out_path = ROOT / "analysis-results" / f"critical-auto-bet-{date}-{rid}.json"
             out_path.parent.mkdir(exist_ok=True)
             canonical.run_generator(date, selection_path, out_path)
@@ -129,7 +163,7 @@ def main():
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False), flush=True)
 
-    # Never allow a selected race to enter the old 45-minute lock window without tickets.
+    # Never allow a selected race to remain without tickets once it enters the 45-minute window.
     if urgent_missing:
         raise RuntimeError("CRITICAL_PRE_RACE_BETS_MISSING:" + ",".join(urgent_missing))
 
