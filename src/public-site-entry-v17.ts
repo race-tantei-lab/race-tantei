@@ -1,5 +1,5 @@
 import publicSite from "./public-site-entry-v16.js";
-import { tenYearRaceMap, tenYearRacesOnDate, type TenYearRace } from "./v1/ten-year-history.js";
+import { TEN_YEAR_HISTORY_END, tenYearRaceMap, tenYearRacesOnDate, type TenYearRace } from "./v1/ten-year-history.js";
 import { shell } from "./v1/public-ui.js";
 import { escapeHtml, formatYen } from "./v1/utils.js";
 import type { Env } from "./v1/types.js";
@@ -83,11 +83,15 @@ export default {
     const url=new URL(request.url);const path=url.pathname;
     if(path==="/api/public/day"){
       const date=url.searchParams.get("date")??"";
-      if(/^20\d{2}-\d{2}-\d{2}$/.test(date)&&date>="2016-08-10"&&date<="2026-08-09")return json({ok:true,date,races:(await tenYearRacesOnDate(date)).map(archiveDayRow)});
+      if(/^20\d{2}-\d{2}-\d{2}$/.test(date)&&date>="2016-08-10"&&date<=TEN_YEAR_HISTORY_END)return json({ok:true,date,races:(await tenYearRacesOnDate(date)).map(archiveDayRow)});
     }
     if(path.startsWith("/races/")){
-      const rid=decodeURIComponent(path.slice("/races/".length));const race=(await tenYearRaceMap()).get(rid);
-      if(race)return new Response(await historicalRacePage(race),{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store, max-age=0","x-race-ui-version":"ten-year-completed-v17"}});
+      const rid=decodeURIComponent(path.slice("/races/".length));
+      const raceDate=rid.slice(0,10);
+      if(/^20\d{2}-\d{2}-\d{2}$/.test(raceDate)&&raceDate<=TEN_YEAR_HISTORY_END){
+        const race=(await tenYearRaceMap()).get(rid);
+        if(race)return new Response(await historicalRacePage(race),{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store, max-age=0","x-race-ui-version":"ten-year-completed-v17"}});
+      }
     }
     if(!publicSite.fetch)return new Response("NOT_FOUND",{status:404});
     const response=await publicSite.fetch(request,env,ctx);
