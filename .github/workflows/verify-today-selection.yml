@@ -1,0 +1,67 @@
+name: Verify today public selection
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - ".github/workflows/verify-today-selection.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "5 0 * * 6,0" # Sat/Sun 09:05 JST
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify today's frozen selection is public
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          today="$(TZ=Asia/Tokyo date +%F)"
+          ok=0
+          for attempt in $(seq 1 4); do
+            code="$(curl --retry 2 --retry-delay 2 --retry-all-errors --silent --show-error --connect-timeout 5 --max-time 40 -o /tmp/today.json -w '%{http_code}' "${base}/api/public/day?date=${today}" || true)"
+            echo "attempt=${attempt} date=${today} http=${code}"
+            if [ "$code" = "200" ] && python - <<'PY'
+          import collections,json,sys
+          data=json.load(open('/tmp/today.json',encoding='utf-8'))
+          rows=data.get('races') if isinstance(data,dict) else None
+          if not isinstance(rows,list):
+              print('TODAY_SELECTION_INVALID: races missing')
+              sys.exit(1)
+          venues=collections.Counter(str(r.get('venue') or '') for r in rows if r.get('venue'))
+          states=collections.Counter(str((r.get('publicState') or {}).get('code') or '') for r in rows)
+          structured=len(venues)>=2 and all(n==12 for n in venues.values())
+          selected_codes={'target','buy','hit','miss','overdue','missing'}
+          selected=[r for r in rows if str((r.get('publicState') or {}).get('code') or '') in selected_codes]
+          selected_by_venue=collections.Counter(str(r.get('venue') or '') for r in selected)
+          skip_by_venue=collections.Counter(str(r.get('venue') or '') for r in rows if (r.get('publicState') or {}).get('code')=='skip')
+          detail={
+              'raceCount':len(rows),
+              'venues':dict(venues),
+              'states':dict(states),
+              'selectedByVenue':dict(selected_by_venue),
+              'skipByVenue':dict(skip_by_venue),
+              'selectedRaceIds':[r.get('raceId') for r in selected],
+          }
+          print(json.dumps(detail,ensure_ascii=False))
+          good=(
+              structured
+              and states.get('pending',0)==0
+              and all(selected_by_venue.get(v,0)==5 for v in venues)
+              and all(skip_by_venue.get(v,0)==7 for v in venues)
+          )
+          if not good:
+              print('TODAY_SELECTION_PUBLIC_PROJECTION_INVALID')
+              sys.exit(1)
+          print('TODAY_SELECTION_PUBLIC_PROJECTION_OK')
+          PY
+            then ok=1; break; fi
+            sleep 5
+          done
+          test "$ok" = 1
