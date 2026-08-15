@@ -1,5 +1,7 @@
 import publicSite from "./public-site-entry-v21.js";
+import backgroundSyncSite from "./public-site-entry-v19.js";
 import { loadFixedTicketEvidence, type FixedTicketEvidence } from "./v1/completed-fixed-ticket-explanation.js";
+import { verifyPriorDayLearningReady, type PriorLearningReadiness } from "./v1/prior-day-learning-gate.js";
 import type { Env } from "./v1/types.js";
 
 const CUTOFF = "2026-08-09";
@@ -10,6 +12,28 @@ function esc(value: unknown): string {
 }
 function pct(value: number): string { return `${(Number(value) * 100).toFixed(2)}%`; }
 function num(value: number, digits = 4): string { return Number(value).toFixed(digits); }
+function jstIso(now: Date): string { return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString(); }
+function jstDate(now: Date): string { return jstIso(now).slice(0, 10); }
+function jstHour(now: Date): number { return Number(jstIso(now).slice(11, 13)); }
+
+async function selectionAlreadyFrozen(db: D1Database, date: string): Promise<boolean> {
+  const row = await db.prepare("SELECT 1 AS found FROM rt_system_state WHERE state_key=? LIMIT 1")
+    .bind(`final_daily_selection:${date}`)
+    .first<{ found: number }>();
+  return Number(row?.found || 0) === 1;
+}
+
+async function savePriorLearningAudit(db: D1Database, readiness: PriorLearningReadiness): Promise<void> {
+  const payload = {
+    ...readiness,
+    checkedAt: new Date().toISOString(),
+    status: readiness.ready ? "ready" : "waiting_prior_results",
+  };
+  await db.prepare(`
+    INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
+  `).bind(`worker_prior_learning:${readiness.targetDate}`, JSON.stringify(payload)).run();
+}
 
 function ticketReasonHtml(ticket: FixedTicketEvidence): string {
   const names = ticket.horses.map((horseNo, index) => `${horseNo}番 ${ticket.horseNames[index] || ""}`.trim()).join(" / ");
@@ -131,6 +155,26 @@ export default {
     }
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    const now = new Date(controller.scheduledTime || Date.now());
+    const date = jstDate(now);
+    if (jstHour(now) >= 8 && !(await selectionAlreadyFrozen(env.DB, date))) {
+      try {
+        const readiness = await verifyPriorDayLearningReady(env.DB, date);
+        await savePriorLearningAudit(env.DB, readiness);
+        if (!readiness.ready) {
+          console.error("PRIOR_DAY_LEARNING_NOT_READY", JSON.stringify(readiness));
+          // Keep the generic JRA synchronizer running so missing results/payouts
+          // can recover on the next one-minute tick, but do not allow the
+          // canonical selection freezer to consume partial prior-day data.
+          if (backgroundSyncSite.scheduled) await backgroundSyncSite.scheduled(controller, env, ctx);
+          return;
+        }
+      } catch (error) {
+        console.error("PRIOR_DAY_LEARNING_GATE_FAILED", error);
+        if (backgroundSyncSite.scheduled) await backgroundSyncSite.scheduled(controller, env, ctx);
+        return;
+      }
+    }
     if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
