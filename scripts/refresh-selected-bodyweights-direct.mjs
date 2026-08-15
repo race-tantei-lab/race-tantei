@@ -12,6 +12,7 @@ const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/da
 const SELECTION_PREFIX = "final_daily_selection:";
 const SNAPSHOT_PREFIX = "worker_bodyweight_snapshot:";
 const REFRESH_OPEN_MS = 80 * 60 * 1000;
+const FINALIZE_OPEN_MS = 16 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
 
 if (!accountId || !databaseId || !token) throw new Error("CLOUDFLARE_D1_ENV_MISSING");
@@ -184,7 +185,7 @@ async function main() {
       refreshedRaceIds.push(raceId);
     } catch (error) {
       pendingRaceIds.push({ raceId, error: `${error?.name || "Error"}:${error?.message || String(error)}` });
-      if (remaining <= 17 * 60 * 1000) finalWindowPendingRaceIds.push(raceId);
+      if (remaining <= FINALIZE_OPEN_MS) finalWindowPendingRaceIds.push(raceId);
     }
   }
 
@@ -197,6 +198,9 @@ async function main() {
     finalWindowPendingRaceIds,
   };
   console.log(JSON.stringify(report));
+  // Signal the acquisition miss for observability only. The workflow deliberately
+  // keeps running the canonical finalizer so a transient bodyweight problem never
+  // becomes a missing pre-race prediction.
   if (finalWindowPendingRaceIds.length) process.exitCode = 2;
 }
 
