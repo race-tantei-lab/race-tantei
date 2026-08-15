@@ -13,29 +13,47 @@ function roi(stake:number,ret:number):number{return stake>0?ret/stake*100:0;}
 
 async function liveCourseRows(db:D1Database):Promise<CourseRow[]>{
   try{return (await db.prepare(`
-    SELECT b.course AS course,COUNT(DISTINCT b.race_id) AS settledRaces,
-           COALESCE(SUM(b.stake_yen),0) AS stakeYen,COALESCE(SUM(b.return_yen),0) AS returnYen
-    FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
-    WHERE r.race_date>? AND b.settlement_status='settled'
-    GROUP BY b.course
+    WITH complete AS (
+      SELECT b.race_id AS raceId,b.course AS course,
+             SUM(b.stake_yen) AS stakeYen,SUM(COALESCE(b.return_yen,0)) AS returnYen
+      FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
+      WHERE r.race_date>?
+      GROUP BY b.race_id,b.course
+      HAVING COUNT(*)=2 AND SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END)=2
+    )
+    SELECT course,COUNT(*) AS settledRaces,COALESCE(SUM(stakeYen),0) AS stakeYen,
+           COALESCE(SUM(returnYen),0) AS returnYen
+    FROM complete GROUP BY course
   `).bind(CUTOFF).all<CourseRow>()).results.map(x=>({...x,settledRaces:Number(x.settledRaces),stakeYen:Number(x.stakeYen),returnYen:Number(x.returnYen)}));}catch{return [];}
 }
 async function liveMonthlyRows(db:D1Database):Promise<MonthlyRow[]>{
   try{return (await db.prepare(`
-    SELECT substr(r.race_date,1,7) AS month,b.course AS course,COUNT(DISTINCT b.race_id) AS settledRaces,
-           COALESCE(SUM(b.stake_yen),0) AS stakeYen,COALESCE(SUM(b.return_yen),0) AS returnYen
-    FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
-    WHERE r.race_date>? AND b.settlement_status='settled'
-    GROUP BY substr(r.race_date,1,7),b.course
+    WITH complete AS (
+      SELECT b.race_id AS raceId,r.race_date AS raceDate,b.course AS course,
+             SUM(b.stake_yen) AS stakeYen,SUM(COALESCE(b.return_yen,0)) AS returnYen
+      FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
+      WHERE r.race_date>?
+      GROUP BY b.race_id,r.race_date,b.course
+      HAVING COUNT(*)=2 AND SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END)=2
+    )
+    SELECT substr(raceDate,1,7) AS month,course,COUNT(*) AS settledRaces,
+           COALESCE(SUM(stakeYen),0) AS stakeYen,COALESCE(SUM(returnYen),0) AS returnYen
+    FROM complete GROUP BY substr(raceDate,1,7),course
   `).bind(CUTOFF).all<MonthlyRow>()).results.map(x=>({...x,settledRaces:Number(x.settledRaces),stakeYen:Number(x.stakeYen),returnYen:Number(x.returnYen)}));}catch{return [];}
 }
 async function liveVenueRows(db:D1Database):Promise<VenueRow[]>{
   try{return (await db.prepare(`
-    SELECT r.venue AS venue,b.course AS course,COUNT(DISTINCT b.race_id) AS settledRaces,
-           COALESCE(SUM(b.stake_yen),0) AS stakeYen,COALESCE(SUM(b.return_yen),0) AS returnYen
-    FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
-    WHERE r.race_date>? AND b.settlement_status='settled'
-    GROUP BY r.venue,b.course
+    WITH complete AS (
+      SELECT b.race_id AS raceId,r.venue AS venue,b.course AS course,
+             SUM(b.stake_yen) AS stakeYen,SUM(COALESCE(b.return_yen,0)) AS returnYen
+      FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
+      WHERE r.race_date>?
+      GROUP BY b.race_id,r.venue,b.course
+      HAVING COUNT(*)=2 AND SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END)=2
+    )
+    SELECT venue,course,COUNT(*) AS settledRaces,COALESCE(SUM(stakeYen),0) AS stakeYen,
+           COALESCE(SUM(returnYen),0) AS returnYen
+    FROM complete GROUP BY venue,course
   `).bind(CUTOFF).all<VenueRow>()).results.map(x=>({...x,settledRaces:Number(x.settledRaces),stakeYen:Number(x.stakeYen),returnYen:Number(x.returnYen)}));}catch{return [];}
 }
 

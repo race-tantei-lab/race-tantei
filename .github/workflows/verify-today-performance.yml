@@ -1,0 +1,44 @@
+name: Verify today performance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/public-site-entry-v14.ts"
+      - "src/public-site-entry-v15.ts"
+      - "src/v1/today-performance.ts"
+      - "scripts/verify-today-performance-response.mjs"
+      - ".github/workflows/verify-today-performance.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "30 9 * * 6,0" # Sat/Sun 18:30 JST; partial settlement is intentionally valid to verify.
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:test
+      - name: Compare public today summary with authoritative D1 rows
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          today="$(TZ=Asia/Tokyo date +%F)"
+          curl --retry 4 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 40 -fsS \
+            "$base/api/public/today-summary" > /tmp/today-summary.json
+          query="SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,b.stake_yen AS stakeYen,b.return_yen AS returnYen,b.settlement_status AS settlementStatus,r.refund_horse_nos_json AS refundsJson FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date='$today' ORDER BY b.race_id,b.course,b.id;"
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$query" > /tmp/today-d1.json
+          node scripts/verify-today-performance-response.mjs /tmp/today-summary.json /tmp/today-d1.json
