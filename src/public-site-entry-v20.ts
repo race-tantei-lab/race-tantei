@@ -1,4 +1,5 @@
 import publicSite from "./public-site-entry-v19.js";
+import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v20-refund-aware-20260815";
@@ -144,6 +145,16 @@ export default {
     return response;
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
+    try {
+      if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
+    } catch (error) {
+      console.error("BASE_SCHEDULED_SYNC_FAILED", error);
+    }
+    try {
+      const audit = await runCompletedWorkerLiveLock(env);
+      console.log("COMPLETED_WORKER_LIVE_LOCK", JSON.stringify(audit));
+    } catch (error) {
+      console.error("COMPLETED_WORKER_LIVE_LOCK_FAILED", error);
+    }
   }
 } satisfies ExportedHandler<Env>;
