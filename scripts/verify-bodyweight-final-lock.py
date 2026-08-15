@@ -39,7 +39,7 @@ def main():
 
     require('const BODY_WEIGHT_REFRESH_OPEN_MS = 80 * 60 * 1000;' in live,'BODYWEIGHT_T80_REFRESH_WINDOW_MISSING')
     require('const PREVIEW_OPEN_MS = 45 * 60 * 1000;' in live,'BODYWEIGHT_PREVIEW_WINDOW_MISSING')
-    require('const FINALIZE_OPEN_MS = 16 * 60 * 1000;' in live,'BODYWEIGHT_T16_FINALIZE_WINDOW_MISSING')
+    require('const FINALIZE_OPEN_MS = DEADLINE_MS;' in live,'BODYWEIGHT_T15_FINALIZE_WINDOW_MISSING')
     require('const DEADLINE_MS = 15 * 60 * 1000;' in live,'BODYWEIGHT_T15_DEADLINE_MISSING')
     require('bodyWeightApplied?: boolean' in live and 'bodyWeightSnapshot?: OfficialBodyWeightSnapshot | null' in live,'BODYWEIGHT_PREVIEW_MUST_ALLOW_PROVISIONAL_FALLBACK')
     require('bodyWeightError = errorText(error)' in live,'BODYWEIGHT_FETCH_FAILURE_NOT_CAPTURED')
@@ -67,10 +67,10 @@ def main():
     finalize_pos=workflow.find('python scripts/run-ten-year-auto-final-live.py',acquire_pos)
     require(0 <= acquire_pos < finalize_pos,'GITHUB_FINALIZER_RUNS_BEFORE_BODYWEIGHT_ACQUISITION')
     require('worker_bodyweight_snapshot:' in backup and 'parseEntryPage' in backup,'GITHUB_BODYWEIGHT_OFFICIAL_ACQUISITION_INVALID')
-    require('const FINALIZE_OPEN_MS = 16 * 60 * 1000;' in backup,'GITHUB_BODYWEIGHT_T16_WINDOW_MISSING')
+    require('const FINALIZE_OPEN_MS = 16 * 60 * 1000;' in backup,'GITHUB_BODYWEIGHT_T16_ACQUISITION_WINDOW_MISSING')
     require('verify_official_bodyweights' in wrapper,'GITHUB_BODYWEIGHT_PROVENANCE_AUDIT_MISSING')
     require('fallback_without_verified_snapshot' in wrapper,'GITHUB_BODYWEIGHT_FAILURE_STILL_BLOCKS_FINALIZER')
-    require('base.MAX_LOCK_SECONDS=16*60' in wrapper,'GITHUB_FINALIZER_NOT_T16')
+    require('base.MIN_LOCK_SECONDS=14*60' in wrapper and 'base.MAX_LOCK_SECONDS=15*60' in wrapper,'GITHUB_FINALIZER_NOT_T15_TO_T14_FALLBACK')
     verify_pos=wrapper.find('verified=verify_official_bodyweights')
     except_pos=wrapper.find('except Exception as exc:',verify_pos)
     odds_pos=wrapper.find('return original_collect_official_odds',except_pos)
@@ -87,8 +87,10 @@ def main():
         'featureCount':56,
         'refreshOpenMinutes':80,
         'previewOpenMinutes':45,
-        'finalizeOpenMinutes':16,
+        'finalizeOpenMinutes':15,
         'deadlineMinutes':15,
+        'githubFallbackWindowMinutes':'15_to_14_post_boundary',
+        'githubBodyweightAcquisitionOpenMinutes':16,
         'bodyweightAppliedWhenAvailable':True,
         'bodyweightFailureDoesNotSuppressPrediction':True,
         'workerAndGithubAcquisition':True,
