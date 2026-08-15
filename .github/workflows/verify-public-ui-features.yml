@@ -81,7 +81,6 @@ jobs:
           const html=fs.readFileSync('/tmp/detail.html','utf8');
           const headers=fs.readFileSync('/tmp/detail.headers','utf8');
           const required=[
-            ['ui-version','ten-year-completed-public-v25-race-detail-tabs-20260815'],
             ['tabs','data-race-tabs'],
             ['bets-tab','予想買い目'],
             ['reason-tab','>根拠<'],
@@ -92,8 +91,10 @@ jobs:
             ['ticket-final-score','最終スコア'],
             ['selection-explanation','選ばれた理由：'],
             ['runner-list','出走馬'],
+            ['tab-activation','function activate(name)'],
           ];
           const missing=required.filter(([,needle])=>!html.includes(needle)).map(([name])=>name);
+          if(!/x-race-ui-version:\s*ten-year-completed-public-v25-race-detail-tabs-20260815/i.test(headers)) missing.push('ui-version-header');
           const reasonCount=(html.match(/data-ticket-reason=/g)||[]).length;
           if(reasonCount!==2) missing.push(`ticket-reason-count=${reasonCount}`);
           for(const forbidden of ['なぜこのレースを選んだか','レース選定用 仮買い目','raceScore','この条件の過去サンプル','補正後ROI']){
