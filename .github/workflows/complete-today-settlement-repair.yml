@@ -16,57 +16,57 @@ env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-  CANONICAL_RESULT_CODE_SHA: 67cb5536627d4bd3538e5e9f63ecd1c9794f0d1c
+  CANONICAL_RESULT_CODE_SHA: 96788e232c22de05c5cf6e392c0ddb808f63570c
 
 jobs:
   repair:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 7
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Wait for canonical-result Worker deployment
+      - name: Wait for same-race result Worker deployment
         shell: bash
         run: |
           set -euo pipefail
-          for i in $(seq 1 60); do
+          for i in $(seq 1 30); do
             json=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-worker.yml/runs?head_sha=${CANONICAL_RESULT_CODE_SHA}&per_page=5")
             state=$(printf '%s' "$json" | python -c 'import json,sys; d=json.load(sys.stdin); r=d.get("workflow_runs",[]); print((r[0].get("status")+":"+str(r[0].get("conclusion"))) if r else "missing")')
-            echo "canonical-result deploy=$state"
+            echo "same-race-result deploy=$state"
             if [ "$state" = "completed:success" ]; then exit 0; fi
             if [[ "$state" == completed:* ]]; then exit 1; fi
-            sleep 5
+            sleep 4
           done
           exit 1
-      - name: Trigger identity-safe official reconciliation
+      - name: Trigger official reconciliation
         shell: bash
         run: |
-          set -euo pipefail
+          set -u
           today=$(TZ=Asia/Tokyo date +%F)
           base='https://race-tantei-phase0.race-tantei.workers.dev'
           for i in 1 2 3; do
-            curl --retry 1 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 70 -fsS \
-              "$base/api/public/day?date=$today&canonical_repair=$i" -o /tmp/today.json || true
+            echo "reconcile attempt $i"
+            curl --retry 1 --retry-delay 1 --retry-all-errors --connect-timeout 5 --max-time 100 -fsS \
+              "$base/api/public/day?date=$today&same_race_repair=$i" -o /tmp/reconcile.json || true
             sleep 2
           done
-          test -s /tmp/today.json
-      - name: Verify official payouts and public labels
+      - name: Verify D1 rebuilt from official same-race results
         shell: bash
         run: |
           python - <<'PY'
-          import collections,datetime as dt,importlib.util,json,pathlib,sys
+          import collections,datetime as dt,importlib.util,json,pathlib,re,sys,urllib.parse
           p=pathlib.Path('scripts/collect-jra-official-odds.py')
           s=importlib.util.spec_from_file_location('repair_verify',p);m=importlib.util.module_from_spec(s);sys.modules['repair_verify']=m;s.loader.exec_module(m)
           date=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
-          races=m.d1_query('''SELECT DISTINCT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.result_url AS resultUrl
+          races=m.d1_query('''SELECT DISTINCT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.entry_url AS entryUrl,r.result_url AS resultUrl
                               FROM rt_races r JOIN rt_public_bets b ON b.race_id=r.race_id
                               WHERE r.race_date=? AND r.status='finished' ORDER BY r.start_time_utc''',[date])
           ids=[str(x['raceId']) for x in races]
           if not ids: raise RuntimeError('NO_FINISHED_PUBLIC_RACES')
           ph=','.join('?' for _ in ids)
-          bets=m.d1_query(f'''SELECT race_id AS raceId,course,bet_type AS betType,combination,stake_yen AS stakeYen,
+          bets=m.d1_query(f'''SELECT id,race_id AS raceId,course,bet_type AS betType,combination,stake_yen AS stakeYen,
                                      settlement_status AS settlementStatus,return_yen AS returnYen
                               FROM rt_public_bets WHERE race_id IN ({ph}) ORDER BY race_id,id''',ids)
           payouts=m.d1_query(f'''SELECT race_id AS raceId,bet_type AS betType,combination,payout_yen AS payoutYen,popularity
@@ -76,25 +76,55 @@ jobs:
           payout_races={str(p['raceId']) for p in payouts}
           missing=[rid for rid in ids if rid not in payout_races]
           if missing: raise RuntimeError('REPAIR_PAYOUTS_MISSING:'+','.join(missing))
+          def cname(url):
+              return (urllib.parse.parse_qs(urllib.parse.urlsplit(str(url or '')).query).get('CNAME') or [''])[0]
+          def race_key(url):
+              c=cname(url)
+              mm=re.search(r'(?:pw|sw)01(?:dde01|sde01)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})/',c,re.I)
+              return mm.groups() if mm else None
+          bad=[]
+          for race in races:
+              entry_key=race_key(race.get('entryUrl'))
+              result_key=race_key(race.get('resultUrl'))
+              result_cname=cname(race.get('resultUrl'))
+              if not entry_key or result_key!=entry_key or 'sde01' not in result_cname:
+                  bad.append({'raceId':race['raceId'],'entryUrl':race.get('entryUrl'),'resultUrl':race.get('resultUrl'),'entryKey':entry_key,'resultKey':result_key})
+          if bad: raise RuntimeError('NON_MATCHING_RESULT_URL:'+json.dumps(bad,ensure_ascii=False))
           by=collections.defaultdict(list)
           for b in bets: by[str(b['raceId'])].append(b)
           expected={rid:('hit' if any(int(x.get('returnYen') or 0)>0 for x in rows) else 'miss') for rid,rows in by.items()}
-          payload=json.loads(pathlib.Path('/tmp/today.json').read_text(encoding='utf-8'))
-          api={str(r.get('raceId')):str((r.get('publicState') or {}).get('code') or '') for r in payload.get('races',[])}
-          mismatch=[{'raceId':rid,'expected':code,'actual':api.get(rid)} for rid,code in expected.items() if api.get(rid)!=code]
-          if mismatch: raise RuntimeError('PUBLIC_LABEL_MISMATCH:'+json.dumps(mismatch,ensure_ascii=False))
-          bad_urls=[r for r in races if 'sde10' not in str(r.get('resultUrl') or '')]
-          if bad_urls: raise RuntimeError('NON_CANONICAL_RESULT_URL:'+json.dumps(bad_urls,ensure_ascii=False))
-          result={'status':'TODAY_SETTLEMENT_REPAIR_OK','date':date,'races':races,
+          result={'status':'D1_SETTLEMENT_REBUILT','date':date,'races':races,
                   'hitRaceIds':sorted(rid for rid,code in expected.items() if code=='hit'),
                   'expectedPublicState':expected,'bets':bets,'payouts':payouts}
           print(json.dumps(result,ensure_ascii=False))
-          pathlib.Path('/tmp/repair_result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
+          pathlib.Path('/tmp/d1_repair_result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
+          PY
+      - name: Verify corrected public labels
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          curl --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 45 -fsS \
+            "$base/api/public/day?date=$today&verify_repair=1" -o /tmp/today.json
+          python - <<'PY'
+          import json,pathlib
+          truth=json.loads(pathlib.Path('/tmp/d1_repair_result.json').read_text(encoding='utf-8'))
+          payload=json.loads(pathlib.Path('/tmp/today.json').read_text(encoding='utf-8'))
+          api={str(r.get('raceId')):str((r.get('publicState') or {}).get('code') or '') for r in payload.get('races',[])}
+          mismatches=[{'raceId':rid,'expected':code,'actual':api.get(rid)} for rid,code in truth['expectedPublicState'].items() if api.get(rid)!=code]
+          if mismatches: raise RuntimeError('PUBLIC_LABEL_MISMATCH:'+json.dumps(mismatches,ensure_ascii=False))
+          truth['publicStateVerified']=True
+          truth['publicStates']={rid:api.get(rid) for rid in truth['expectedPublicState']}
+          print(json.dumps(truth,ensure_ascii=False))
+          pathlib.Path('/tmp/repair_result.json').write_text(json.dumps(truth,ensure_ascii=False,indent=2),encoding='utf-8')
           PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: today-settlement-repair-final
-          path: /tmp/repair_result.json
+          path: |
+            /tmp/d1_repair_result.json
+            /tmp/repair_result.json
           if-no-files-found: warn
           retention-days: 30
