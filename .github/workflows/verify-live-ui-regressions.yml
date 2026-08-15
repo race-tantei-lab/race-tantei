@@ -1,0 +1,69 @@
+name: Verify live UI regressions
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/public-site-entry.ts"
+      - "src/public-site-entry-v15.ts"
+      - ".github/workflows/verify-live-ui-regressions.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify production home and locked race details
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          today=$(TZ=Asia/Tokyo date +%F)
+          curl --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 4 --max-time 20 -fsS "$base/" -o /tmp/home.html
+          curl --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 4 --max-time 20 -fsS "$base/api/public/day?date=$today" -o /tmp/today.json
+          python - <<'PY'
+          import json,re
+          from pathlib import Path
+          home=Path('/tmp/home.html').read_text(encoding='utf-8')
+          if 'shared-venue-roi' not in home:
+              raise SystemExit('LIVE_UI_SHARED_VENUE_ROI_MISSING')
+          if '<div class="venue-roi-row">' in home:
+              raise SystemExit('LIVE_UI_OLD_THREE_COURSE_VENUE_ROWS_PRESENT')
+          if '<summary><b>全体</b>' not in home:
+              raise SystemExit('LIVE_UI_SHARED_TOTAL_ROI_MISSING')
+          if re.search(r'<summary><b>(ライト|スタンダード|プレミアム)</b>',home):
+              raise SystemExit('LIVE_UI_OLD_COURSE_TOTAL_ROI_PRESENT')
+          data=json.loads(Path('/tmp/today.json').read_text(encoding='utf-8'))
+          buys=[str(r.get('raceId') or '') for r in data.get('races',[]) if (r.get('publicState') or {}).get('code')=='buy']
+          buys=[x for x in buys if x]
+          Path('/tmp/buy_ids.txt').write_text('\n'.join(buys)+'\n',encoding='utf-8')
+          print(json.dumps({'homeSharedVenueRoi':True,'homeOldVenueRows':False,'buyRaceCount':len(buys),'buyRaceIds':buys},ensure_ascii=False))
+          PY
+          while IFS= read -r race_id; do
+            [ -n "$race_id" ] || continue
+            curl --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 4 --max-time 20 -fsS "$base/races/$race_id" -o "/tmp/${race_id}.html"
+            RACE_ID="$race_id" python - <<'PY'
+          import os,re
+          from pathlib import Path
+          race_id=os.environ['RACE_ID']
+          html=Path('/tmp/'+race_id+'.html').read_text(encoding='utf-8')
+          if '<h2>確定買い目</h2>' not in html:
+              raise SystemExit('LIVE_UI_CONFIRMED_BET_HEADING_MISSING:'+race_id)
+          if 'class="course-tabs"' not in html:
+              raise SystemExit('LIVE_UI_COURSE_TABS_MISSING:'+race_id)
+          for name in ('ライト','スタンダード','プレミアム'):
+              if name not in html:
+                  raise SystemExit('LIVE_UI_COURSE_NAME_MISSING:'+race_id+':'+name)
+          blocks=re.findall(r'<div class="course-view" data-course="([012])"[^>]*>(.*?)</div></div>',html,re.S)
+          if len(blocks)!=3:
+              raise SystemExit(f'LIVE_UI_COURSE_BLOCK_COUNT:{race_id}:{len(blocks)}')
+          counts={idx:block.count('<tr><td>') for idx,block in blocks}
+          if set(counts)!={'0','1','2'} or any(n!=2 for n in counts.values()):
+              raise SystemExit(f'LIVE_UI_TICKET_COUNT_INVALID:{race_id}:{counts}')
+          print('LIVE_DETAIL_OK',race_id,counts)
+          PY
+          done < /tmp/buy_ids.txt
