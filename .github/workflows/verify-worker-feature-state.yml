@@ -1,0 +1,43 @@
+name: Verify Worker Feature State
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/verify-worker-feature-state.yml
+      - scripts/seed-worker-feature-state.py
+      - models/ten-year-runner-feature-state.json.gz
+      - config/ten-year-completed-model.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-worker-feature-state-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate canonical feature-state payload
+        run: python scripts/seed-worker-feature-state.py
+
+      - name: Show audit
+        run: cat worker-feature-state-seed-audit.json
+
+      - name: Upload audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-feature-state-audit
+          path: worker-feature-state-seed-audit.json
+          retention-days: 7
