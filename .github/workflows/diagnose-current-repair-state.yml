@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Print current finished public settlement
+      - name: Print current finished public settlement after same-race repair
         run: |
           python - <<'PY'
           import datetime as dt,importlib.util,json,pathlib,sys
