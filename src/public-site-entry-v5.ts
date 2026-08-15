@@ -23,6 +23,21 @@ function clock(total: number): string {
   return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(normalized % 60).padStart(2, "0")}`;
 }
 
+async function frozenSelection(db: D1Database, raceDate: string): Promise<Set<string> | null> {
+  try {
+    const row = await db.prepare(`SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1`)
+      .bind(`final_daily_selection:${raceDate}`)
+      .first<{ value: string | null }>();
+    if (!row?.value) return null;
+    const payload = JSON.parse(String(row.value)) as { selected?: Array<{ raceId?: unknown }> };
+    if (!Array.isArray(payload.selected) || !payload.selected.length) return null;
+    const ids = payload.selected.map((entry) => String(entry?.raceId ?? "")).filter(Boolean);
+    return ids.length ? new Set(ids) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function liveSettlements(db: D1Database, raceIds: string[]): Promise<Map<string, LiveSettlement>> {
   const out = new Map<string, LiveSettlement>();
   if (!raceIds.length) return out;
@@ -58,6 +73,7 @@ async function truthfulTodayApi(db: D1Database, response: Response): Promise<Res
     const now = jstNowParts();
     const todays = races.filter((race) => String(race.raceDate ?? "") === now.date);
     const settlements = await liveSettlements(db, todays.map((race) => String(race.raceId ?? "")).filter(Boolean));
+    const selected = await frozenSelection(db, now.date);
 
     data.races = races.map((race) => {
       if (String(race.raceDate ?? "") !== now.date) return race;
@@ -78,10 +94,40 @@ async function truthfulTodayApi(db: D1Database, response: Response): Promise<Res
       }
 
       const start = timeMinutes(race.startTimeJst);
+      if (selected) {
+        if (!selected.has(raceId)) {
+          publicState.code = "skip";
+          publicState.label = "見送り";
+          publicState.deadline = null;
+          return { ...race, publicState };
+        }
+        if (start === null) {
+          publicState.code = "target";
+          publicState.label = "買い目対象";
+          publicState.deadline = "発走45〜15分前に買い目確定";
+          return { ...race, publicState };
+        }
+        const deadline = start - 15;
+        if (now.minutes < deadline) {
+          publicState.code = "target";
+          publicState.label = "買い目対象";
+          publicState.deadline = `${clock(deadline)}までに買い目確定`;
+        } else if (now.minutes < start) {
+          publicState.code = "overdue";
+          publicState.label = "買い目未確定";
+          publicState.deadline = `${clock(deadline)}までに確定予定（未反映）`;
+        } else {
+          publicState.code = "missing";
+          publicState.label = "買い目未生成";
+          publicState.deadline = null;
+        }
+        return { ...race, publicState };
+      }
+
       if (start === null) {
         publicState.code = "pending";
         publicState.label = "判定中";
-        publicState.deadline = "発走15分前までに買い目を確定";
+        publicState.deadline = "対象レース判定後、発走45〜15分前に買い目確定";
         return { ...race, publicState };
       }
 
@@ -89,7 +135,7 @@ async function truthfulTodayApi(db: D1Database, response: Response): Promise<Res
       if (now.minutes < deadline) {
         publicState.code = "pending";
         publicState.label = "判定中";
-        publicState.deadline = `${clock(deadline)}までに買い目確定`;
+        publicState.deadline = "対象レースを判定中";
       } else if (now.minutes < start) {
         publicState.code = "overdue";
         publicState.label = "買い目未確定";
@@ -113,6 +159,7 @@ async function truthfulTodayApi(db: D1Database, response: Response): Promise<Res
 
 function improveHome(html: string): string {
   const css = `<style>
+    .status.target{background:#15483a!important;color:#baf4dd!important;border:1px solid #2d806c!important}
     .status.overdue{background:#4a3b1d!important;color:#f6dda0!important;border:1px solid #725b28!important}
     .status.missing{background:#4a2528!important;color:#ffc3c3!important;border:1px solid #784047!important}
     .monthly-drawer{margin-top:8px;border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:12px;overflow:hidden}
