@@ -6,7 +6,7 @@
 ✨ Read 5 files from the assets directory /home/runner/work/race-tantei/race-tantei/worker-assets
 🌀 Starting asset upload...
 No updated asset files to upload. Proceeding with deployment...
-Total Upload: 1396.89 KiB / gzip: 749.27 KiB
+Total Upload: 1404.96 KiB / gzip: 750.70 KiB
 Worker Startup Time: 2 ms
 Your Worker has access to the following bindings:
 Binding                                                                   Resource                  
@@ -21,10 +21,10 @@ env.MIN_EXPECTED_VALUE ("108")                                            Enviro
 env.MAX_RACE_BUDGET_YEN ("10000")                                         Environment Variable      
 env.SYNC_BATCH_SIZE ("12")                                                Environment Variable      
 
-Uploaded race-tantei-phase0 (3.14 sec)
-Deployed race-tantei-phase0 triggers (0.64 sec)
+Uploaded race-tantei-phase0 (2.54 sec)
+Deployed race-tantei-phase0 triggers (0.52 sec)
   https://race-tantei-phase0.race-tantei.workers.dev
-  schedule: */5 * * * *
-Current Version ID: 1be2b885-5ff7-4a5a-9746-a32cdfeaced4
+  schedule: * * * * *
+Current Version ID: 26fed2f2-5fcc-4738-8af4-4bdad2c58fcc
 
 Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
