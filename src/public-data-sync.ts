@@ -22,6 +22,7 @@ import {
   parseResultPage,
   toResultUrl
 } from "./v1/jra.js";
+import { parseJraPayoutsFromHtml } from "./v1/jra-payout-fallback.js";
 import { isJstEntryWindow, isJstRaceWindow, nowIso, positiveInt } from "./v1/utils.js";
 
 const DISCOVERY_REVISION = "2026-08-09-public-data-only-v2";
@@ -104,6 +105,15 @@ function withInferredRefunds(result: ParsedResult): ParsedResult {
     ...result,
     refundHorseNos: [...refunds].filter((value) => Number.isInteger(value) && value >= 1 && value <= 18).sort((a, b) => a - b)
   };
+}
+
+function withFallbackPayouts(result: ParsedResult, html: string): ParsedResult {
+  const merged = new Map<string, ParsedResult["payouts"][number]>();
+  for (const payout of [...result.payouts, ...parseJraPayoutsFromHtml(html)]) {
+    const key = `${payout.betType}:${canonicalCombination(payout.betType, payout.combination)}`;
+    merged.set(key, { ...payout, combination: canonicalCombination(payout.betType, payout.combination) });
+  }
+  return { ...result, payouts: [...merged.values()] };
 }
 
 async function settlePublicBetsFromResult(env: Env, result: ParsedResult): Promise<PublicSettlementSummary> {
@@ -246,7 +256,7 @@ async function processSource(
         if (!pageLooksLikeResult(resultPage.html)) throw new Error("RESULT_PAGE_SIGNATURE_MISSING");
         const parsed = parseResultPage(resultPage.html, resultPage.url);
         if (parsed.race.raceId !== race.raceId) throw new Error(`RACE_ID_MISMATCH:${parsed.race.raceId}`);
-        const result = withInferredRefunds(parsed);
+        const result = withInferredRefunds(withFallbackPayouts(parsed, resultPage.html));
         await env.DB.prepare(`UPDATE rt_races SET result_url=?,updated_at=CURRENT_TIMESTAMP WHERE race_id=?`).bind(resultPage.url, race.raceId).run();
         await saveResultBundle(env.DB, result);
         const settlement = await settlePublicBetsFromResult(env, result);
