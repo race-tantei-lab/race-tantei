@@ -6,7 +6,7 @@ import { htmlToLines } from "./v1/utils.js";
 const UNORDERED = new Set(["ワイド","馬連","3連複"]);
 
 type PendingRace = {raceId:string;resultUrl:string|null};
-type PendingBet = {id:number;raceId:string;betType:string;combination:string;stakeYen:number;refunds:string|null};
+type PendingBet = {id:number;raceId:string;betType:string;combination:string;stakeYen:number;refunds:string|null;settlementStatus:string;currentReturnYen:number|null};
 type Payout = {betType:string;combination:string;payoutYen:number;popularity:number|null};
 
 function normalizeCombination(value:string):string|null{
@@ -35,8 +35,13 @@ function canonical(betType:string,combination:string):string{
   const nums=(combination.match(/\d{1,2}/g)??[]).map(Number);if(UNORDERED.has(betType))nums.sort((a,b)=>a-b);return nums.join("-");
 }
 
-async function pendingBetTypes(db:D1Database,raceId:string):Promise<string[]>{
-  const rows=await db.prepare(`SELECT DISTINCT bet_type AS betType FROM rt_public_bets WHERE race_id=? AND settlement_status='pending'`).bind(raceId).all<{betType:string}>();
+async function neededBetTypes(db:D1Database,raceId:string):Promise<string[]>{
+  const rows=await db.prepare(`
+    SELECT DISTINCT bet_type AS betType
+    FROM rt_public_bets
+    WHERE race_id=?
+      AND (settlement_status='pending' OR (settlement_status='settled' AND COALESCE(return_yen,0)=0))
+  `).bind(raceId).all<{betType:string}>();
   return rows.results.map(row=>row.betType).filter(Boolean);
 }
 
@@ -50,12 +55,16 @@ async function syncFinishedPayouts(db:D1Database):Promise<void>{
     const q=await db.prepare(`
       SELECT DISTINCT r.race_id AS raceId,r.result_url AS resultUrl
       FROM rt_races r JOIN rt_public_bets b ON b.race_id=r.race_id
-      WHERE r.race_date>='2026-08-09' AND r.status='finished' AND b.settlement_status='pending' AND r.result_url IS NOT NULL
+      WHERE r.race_date>='2026-08-09'
+        AND r.race_date>=date('now','-14 days')
+        AND r.status='finished'
+        AND r.result_url IS NOT NULL
+        AND (b.settlement_status='pending' OR (b.settlement_status='settled' AND COALESCE(b.return_yen,0)=0))
       ORDER BY r.race_date,r.venue,r.race_no
     `).all<PendingRace>();
     for(const race of q.results){
       if(!race.resultUrl)continue;
-      const needed=await pendingBetTypes(db,race.raceId);if(!needed.length)continue;
+      const needed=await neededBetTypes(db,race.raceId);if(!needed.length)continue;
       const existing=await existingPayoutTypes(db,race.raceId);
       if(needed.every(type=>existing.has(type)))continue;
       try{
@@ -75,9 +84,13 @@ async function syncFinishedPayouts(db:D1Database):Promise<void>{
 async function settleFinishedBets(db:D1Database):Promise<void>{
   try{
     const q=await db.prepare(`
-      SELECT b.id,b.race_id AS raceId,b.bet_type AS betType,b.combination,b.stake_yen AS stakeYen,r.refund_horse_nos_json AS refunds
+      SELECT b.id,b.race_id AS raceId,b.bet_type AS betType,b.combination,b.stake_yen AS stakeYen,
+             r.refund_horse_nos_json AS refunds,b.settlement_status AS settlementStatus,b.return_yen AS currentReturnYen
       FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
-      WHERE r.race_date>='2026-08-09' AND r.status='finished' AND b.settlement_status='pending'
+      WHERE r.race_date>='2026-08-09'
+        AND r.race_date>=date('now','-14 days')
+        AND r.status='finished'
+        AND (b.settlement_status='pending' OR (b.settlement_status='settled' AND COALESCE(b.return_yen,0)=0))
       ORDER BY b.race_id,b.id
     `).all<PendingBet>();
     const byRace=new Map<string,PendingBet[]>();for(const b of q.results){const rows=byRace.get(b.raceId)??[];rows.push(b);byRace.set(b.raceId,rows);}
@@ -91,9 +104,23 @@ async function settleFinishedBets(db:D1Database):Promise<void>{
       for(const b of bets){
         const horses=(b.combination.match(/\d{1,2}/g)??[]).map(Number);
         let returned:number|null=null;
-        if(horses.some(h=>refunds.has(h)))returned=Number(b.stakeYen);
-        else if(payoutTypes.has(b.betType))returned=Math.round(Number(b.stakeYen)/100*(payoutMap.get(`${b.betType}:${canonical(b.betType,b.combination)}`)??0));
-        if(returned!==null)updates.push(db.prepare(`UPDATE rt_public_bets SET settlement_status='settled',return_yen=? WHERE id=? AND settlement_status='pending'`).bind(returned,b.id));
+        if(horses.some(h=>refunds.has(h))){
+          returned=Number(b.stakeYen);
+        }else{
+          const key=`${b.betType}:${canonical(b.betType,b.combination)}`;
+          if(b.settlementStatus==='pending'){
+            if(!payoutTypes.has(b.betType))continue;
+            returned=Math.round(Number(b.stakeYen)/100*(payoutMap.get(key)??0));
+          }else if(payoutMap.has(key)){
+            returned=Math.round(Number(b.stakeYen)/100*Number(payoutMap.get(key)));
+          }else{
+            continue;
+          }
+        }
+        if(returned===null)continue;
+        const current=b.currentReturnYen===null?null:Number(b.currentReturnYen);
+        if(b.settlementStatus==='settled'&&current===returned)continue;
+        updates.push(db.prepare(`UPDATE rt_public_bets SET settlement_status='settled',return_yen=? WHERE id=?`).bind(returned,b.id));
       }
       if(updates.length)await db.batch(updates);
     }
