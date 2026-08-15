@@ -1,0 +1,58 @@
+name: Apply canonical recency integration
+
+on:
+  push:
+    branches:
+      - fix/canonical-online-recency-learning-20260815
+    paths:
+      - ".github/workflows/apply-canonical-recency-patch.yml"
+
+permissions:
+  contents: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+
+jobs:
+  integrate-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Apply exact integration patch
+        run: python scripts/apply-canonical-recency-patch.py
+      - name: Compile and test Python recency path
+        run: |
+          python -m py_compile scripts/live-recency-learning.py scripts/test-live-recency-learning.py scripts/audit-canonical-recency-learning.py scripts/generate-ten-year-live-bets.py scripts/run-ten-year-auto-final-live.py
+          python scripts/test-live-recency-learning.py
+      - name: Build and run TypeScript unit suite
+        run: |
+          npm ci
+          npm run build:test
+          npm run test:unit
+          npm run build
+      - name: Audit production D1 recency inputs
+        run: python scripts/audit-canonical-recency-learning.py
+      - name: Verify patch cleanliness
+        run: git diff --check
+      - name: Commit verified integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/apply-canonical-recency-patch.py .github/workflows/apply-canonical-recency-patch.yml
+          git add -A
+          git commit -m "Complete canonical same-day recency learning"
+          git push origin HEAD:fix/canonical-online-recency-learning-20260815
