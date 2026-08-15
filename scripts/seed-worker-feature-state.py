@@ -181,6 +181,14 @@ def local_counts(state: dict[str, Any]) -> dict[str, int]:
     }
 
 
+def generation_counts(generation: str) -> dict[str, int]:
+    actual: dict[str, int] = {}
+    for table in TABLES:
+        rows = d1_query(f"SELECT COUNT(*) AS n FROM {table} WHERE generation=?", [generation])
+        actual[table] = int(rows[0]["n"]) if rows else 0
+    return actual
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="write the canonical state to production D1")
@@ -210,31 +218,25 @@ def main() -> int:
             d1_query(sql)
         existing = {row["key"]: row["value"] for row in d1_query("SELECT key,value FROM rt_ml_feature_meta")}
         if existing.get("ready") == "1" and existing.get("stateSha256") == state_sha and existing.get("currentGeneration") == generation:
-            audit["status"] = "ALREADY_CURRENT"
-            audit["applied"] = True
+            actual = generation_counts(generation)
+            if actual != expected:
+                raise RuntimeError(f"FEATURE_STATE_READY_COUNT_MISMATCH:{actual}:{expected}")
+            audit.update({"status": "ALREADY_CURRENT", "applied": True, "d1Counts": actual})
         else:
+            actual = generation_counts(generation)
             rows_by_table = state_rows(state, generation)
-            uploaded: dict[str, int] = {}
             for table in TABLES:
+                if actual.get(table) == expected[table]:
+                    print(json.dumps({"status": "FEATURE_STATE_TABLE_REUSED", "table": table, "rows": actual[table]}), flush=True)
+                    continue
                 d1_query(f"DELETE FROM {table} WHERE generation=?", [generation])
                 columns, rows = rows_by_table[table]
-                uploaded[table] = upload_rows(table, columns, rows)
-                print(json.dumps({"status": "FEATURE_STATE_TABLE_UPLOADED", "table": table, "rows": uploaded[table], "expected": expected[table]}), flush=True)
-                if uploaded[table] != expected[table]:
-                    raise RuntimeError(f"FEATURE_STATE_UPLOAD_COUNT_MISMATCH:{table}:{uploaded[table]}:{expected[table]}")
+                uploaded = upload_rows(table, columns, rows)
+                print(json.dumps({"status": "FEATURE_STATE_TABLE_UPLOADED", "table": table, "rows": uploaded, "expected": expected[table]}), flush=True)
+                if uploaded != expected[table]:
+                    raise RuntimeError(f"FEATURE_STATE_UPLOAD_COUNT_MISMATCH:{table}:{uploaded}:{expected[table]}")
 
-            checks = d1_query(
-                "SELECT 'rt_ml_horse_hist' AS name,COUNT(*) AS n FROM rt_ml_horse_hist WHERE generation=? UNION ALL "
-                "SELECT 'rt_ml_horse_total',COUNT(*) FROM rt_ml_horse_total WHERE generation=? UNION ALL "
-                "SELECT 'rt_ml_horse_surface',COUNT(*) FROM rt_ml_horse_surface WHERE generation=? UNION ALL "
-                "SELECT 'rt_ml_horse_dist',COUNT(*) FROM rt_ml_horse_dist WHERE generation=? UNION ALL "
-                "SELECT 'rt_ml_horse_venue',COUNT(*) FROM rt_ml_horse_venue WHERE generation=? UNION ALL "
-                "SELECT 'rt_ml_jockey',COUNT(*) FROM rt_ml_jockey WHERE generation=? UNION ALL "
-                "SELECT 'rt_ml_trainer',COUNT(*) FROM rt_ml_trainer WHERE generation=? UNION ALL "
-                "SELECT 'rt_ml_pair',COUNT(*) FROM rt_ml_pair WHERE generation=?",
-                [generation] * 8,
-            )
-            actual = {str(row["name"]): int(row["n"]) for row in checks}
+            actual = generation_counts(generation)
             if actual != expected:
                 raise RuntimeError(f"FEATURE_STATE_D1_COUNT_MISMATCH:{actual}:{expected}")
 
