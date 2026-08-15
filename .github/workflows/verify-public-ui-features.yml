@@ -65,16 +65,17 @@ jobs:
             exit 0
           fi
           today=$(TZ=Asia/Tokyo date +%F)
-          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS "$BASE_URL/api/public/day?date=$today" -o /tmp/today.json
-          race_id=$(node - <<'NODE'
-          const p=require('/tmp/today.json');
-          const r=(p.races||[]).find(x=>['buy','pending','hit','miss'].includes(x.publicState?.code));
-          if(!r) process.exit(2);
-          process.stdout.write(String(r.raceId));
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS "$BASE_URL/api/public/today-prediction-sample" -o /tmp/sample.json
+          race_id=$(TODAY="$today" node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync('/tmp/sample.json','utf8'));
+          if(p.date!==process.env.TODAY) throw new Error('prediction sample date mismatch');
+          if(!p.hasPredictions || !p.raceId) process.exit(2);
+          process.stdout.write(String(p.raceId));
           NODE
           )
           test -n "$race_id"
-          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS "$BASE_URL/races/$race_id" -o /tmp/detail.html
+          curl --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 3 --max-time 15 -fsS "$BASE_URL/races/$race_id" -o /tmp/detail.html
           grep -q '予想根拠' /tmp/detail.html
           grep -q 'prediction-reasons' /tmp/detail.html
           echo "prediction reasons=ok race=$race_id"
