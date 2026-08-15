@@ -14,13 +14,7 @@ const SELECTION_PREFIX = "final_daily_selection:";
 const FINAL_PREFIX = "worker_live_final:";
 const PREVIEW_PREFIX = "worker_live_preview:";
 
-type SelectionRow = {
-  raceId?: string;
-  venue?: string;
-  raceNo?: number;
-  raceScore?: number;
-};
-
+type SelectionRow = { raceId?: string; venue?: string; raceNo?: number; raceScore?: number };
 type SelectionPayload = { selected?: SelectionRow[] };
 type FinalPayload = { tickets?: CompletedTicket[] };
 type PreviewPayload = { snapshots?: Array<{ tickets?: CompletedTicket[] }> };
@@ -71,15 +65,11 @@ async function loadWorkerModel(db: D1Database): Promise<CompletedModelRuntime> {
     const metaResult = await db.prepare("SELECT key,value FROM rt_ml_model_meta").all<ModelMetaRow>();
     const meta = new Map((metaResult.results ?? []).map((row) => [row.key, row.value]));
     if (meta.get("ready") !== "1") throw new Error("decision evidence model is not ready");
-    if (meta.get("modelVersion") !== COMPLETED_MODEL_VERSION || meta.get("sourceSha256") !== COMPLETED_MODEL_SHA256) {
-      throw new Error("decision evidence model identity mismatch");
-    }
+    if (meta.get("modelVersion") !== COMPLETED_MODEL_VERSION || meta.get("sourceSha256") !== COMPLETED_MODEL_SHA256) throw new Error("decision evidence model identity mismatch");
     const generation = meta.get("generation") || "";
     const chunkCount = Number(meta.get("chunkCount") || 0);
     const byteLength = Number(meta.get("byteLength") || 0);
-    if (!generation || !Number.isInteger(chunkCount) || chunkCount <= 0 || !Number.isInteger(byteLength) || byteLength <= 0) {
-      throw new Error("decision evidence model metadata invalid");
-    }
+    if (!generation || !Number.isInteger(chunkCount) || chunkCount <= 0 || !Number.isInteger(byteLength) || byteLength <= 0) throw new Error("decision evidence model metadata invalid");
     const chunkResult = await db.prepare("SELECT seq,data_b64 AS dataB64 FROM rt_ml_model_chunk WHERE generation=? ORDER BY seq").bind(generation).all<ModelChunkRow>();
     const chunks = chunkResult.results ?? [];
     if (chunks.length !== chunkCount || chunks.some((row, index) => Number(row.seq) !== index)) throw new Error("decision evidence model chunks incomplete");
@@ -119,9 +109,7 @@ function parseTickets(value: string | undefined, kind: "final" | "preview"): Tic
   if (!value) return [];
   try {
     const parsed = JSON.parse(value) as FinalPayload | PreviewPayload;
-    const rows = kind === "final"
-      ? (parsed as FinalPayload).tickets
-      : (parsed as PreviewPayload).snapshots?.[0]?.tickets;
+    const rows = kind === "final" ? (parsed as FinalPayload).tickets : (parsed as PreviewPayload).snapshots?.[0]?.tickets;
     if (!Array.isArray(rows) || rows.length !== 2) return [];
     return rows.map((row) => ({
       betType: String(row.betType || ""),
@@ -142,9 +130,9 @@ async function loadTicketEvidence(db: D1Database, raceId: string): Promise<{ tic
     .bind(`${FINAL_PREFIX}${raceId}`, `${PREVIEW_PREFIX}${raceId}`).all<{ stateKey: string; value: string }>();
   const byKey = new Map((states.results ?? []).map((row) => [row.stateKey, row.value]));
   const finalTickets = parseTickets(byKey.get(`${FINAL_PREFIX}${raceId}`), "final");
-  if (finalTickets.length === 2) return { tickets: finalTickets, source: "fixed-snapshot" };
+  if (finalTickets.length === 2) return { tickets: finalTickets, source: "固定スナップショット" };
   const previewTickets = parseTickets(byKey.get(`${PREVIEW_PREFIX}${raceId}`), "preview");
-  if (previewTickets.length === 2) return { tickets: previewTickets, source: "preview-snapshot" };
+  if (previewTickets.length === 2) return { tickets: previewTickets, source: "固定前スナップショット" };
 
   const rows = await db.prepare(`
     SELECT bet_type AS betType,combination,AVG(assumed_odds) AS assumedOdds
@@ -156,10 +144,10 @@ async function loadTicketEvidence(db: D1Database, raceId: string): Promise<{ tic
     horses: String(row.combination || "").split("-").map(Number).filter(Number.isFinite),
     officialOdds: Number(row.assumedOdds),
   })).filter((row) => row.betType && row.combination);
-  return { tickets: tickets.slice(0, 2), source: "public-bets" };
+  return { tickets: tickets.slice(0, 2), source: "公開買い目" };
 }
 
-async function selectionEvidence(db: D1Database, race: RaceRecord): Promise<{ score?: number; rank?: number; selectedCount?: number }> {
+async function selectionEvidence(db: D1Database, race: RaceRecord): Promise<{ score?: number; rank?: number }> {
   const row = await db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
     .bind(`${SELECTION_PREFIX}${race.raceDate}`).first<{ value: string }>();
   if (!row?.value) return {};
@@ -172,7 +160,6 @@ async function selectionEvidence(db: D1Database, race: RaceRecord): Promise<{ sc
     return {
       score: current && Number.isFinite(Number(current.raceScore)) ? Number(current.raceScore) : undefined,
       rank: index >= 0 ? index + 1 : undefined,
-      selectedCount: selected.length || undefined,
     };
   } catch {
     return {};
@@ -205,9 +192,9 @@ function raceNoBucket(raceNo: number): string {
 
 function classBucket(race: RaceRecord): string {
   const text = `${race.raceName || ""} ${race.conditions || ""}`.replace(/\s/g, "");
-  if (/(GI|GⅠ|ＧⅠ)/.test(text)) return "G1";
-  if (/(GII|GⅡ|ＧⅡ)/.test(text)) return "G2";
   if (/(GIII|GⅢ|ＧⅢ)/.test(text)) return "G3";
+  if (/(GII|GⅡ|ＧⅡ)/.test(text)) return "G2";
+  if (/(GI|GⅠ|ＧⅠ)/.test(text)) return "G1";
   if (text.includes("新馬")) return "新馬";
   if (text.includes("未勝利")) return "未勝利";
   if (text.includes("1勝") || text.includes("500万下")) return "1勝クラス";
@@ -236,12 +223,12 @@ function horseHtml(item: HorseEvidence): string {
   const chips = [
     `近3走3着内 ${Math.round(r.top3Last3)}/3`,
     `馬3着内率 ${pct(r.horseTop3Rate)}`,
-    `${String(runner.horseName || "")}×${String(runner.jockey || "騎手")} ${pct(r.pairTop3Rate)} (${Math.round(r.pairStarts)}走)`,
+    `${String(runner.horseName || "")}×${String(runner.jockey || "騎手")} 3着内 ${pct(r.pairTop3Rate)} (${Math.round(r.pairStarts)}走)`,
     `${String(runner.jockey || "騎手")} 3着内 ${pct(r.jockeyTop3Rate)} (${Math.round(r.jockeyStarts)}走)`,
     `${String(runner.trainer || "調教師")} 3着内 ${pct(r.trainerTop3Rate)} (${Math.round(r.trainerStarts)}走)`,
-    `同${String(runner.runnerStatus || "")}ではなく同馬場 ${pct(r.sameSurfaceTop3Rate)} (${Math.round(r.sameSurfaceStarts)}走)`,
-    `同距離帯 ${pct(r.sameDistTop3Rate)} (${Math.round(r.sameDistStarts)}走)`,
-    `同会場 ${pct(r.sameVenueTop3Rate)} (${Math.round(r.sameVenueStarts)}走)`,
+    `同芝・ダート条件 3着内 ${pct(r.sameSurfaceTop3Rate)} (${Math.round(r.sameSurfaceStarts)}走)`,
+    `同距離帯 3着内 ${pct(r.sameDistTop3Rate)} (${Math.round(r.sameDistStarts)}走)`,
+    `同会場 3着内 ${pct(r.sameVenueTop3Rate)} (${Math.round(r.sameVenueStarts)}走)`,
     `近3走着順指数 ${(r.avg3FinishPct * 100).toFixed(1)}/100`,
     `近3走上がり指数 ${(r.avg3Final3fPct * 100).toFixed(1)}/100`,
     r.avg3SpeedMps > 0 ? `近3走平均速度 ${r.avg3SpeedMps.toFixed(2)}m/s` : "",
@@ -274,22 +261,13 @@ async function buildDecisionEvidence(db: D1Database, raceId: string): Promise<st
   for (const horseNo of ticketHorseNos) {
     const runner = runners.find((row) => Number(row.horseNo) === horseNo);
     if (!runner) continue;
-    horseRows.push({
-      runner,
-      probability: probabilityByHorse.get(horseNo) ?? 0,
-      record: completedFeatureRecord(featureState, race, runner, runners.length),
-    });
+    horseRows.push({ runner, probability: probabilityByHorse.get(horseNo) ?? 0, record: completedFeatureRecord(featureState, race, runner, runners.length) });
   }
 
   const raceConditions = [
-    String(race.venue || ""),
-    String(race.surface || "障害"),
-    distanceBucket(Number(race.distanceM || 0)),
-    fieldBucket(runners.length),
-    raceNoBucket(Number(race.raceNo || 0)),
-    classBucket(race),
+    String(race.venue || ""), String(race.surface || "障害"), distanceBucket(Number(race.distanceM || 0)), fieldBucket(runners.length), raceNoBucket(Number(race.raceNo || 0)), classBucket(race),
   ];
-  const rankText = selection.rank ? `${esc(race.venue)}12R中 ${selection.rank}位 → 上位5Rとして採用` : "上位5Rとして採用";
+  const rankText = selection.rank ? `${esc(race.venue)} 12R中 ${selection.rank}位 → 上位5Rとして採用` : "上位5Rとして採用";
   const scoreText = Number.isFinite(selection.score) ? num(selection.score, 6) : "—";
   const ticketRows = ticketEvidence.tickets.map((ticket) => ticketHtml(ticket, horseNames)).join("");
   const horses = horseRows.map(horseHtml).join("");
@@ -297,7 +275,7 @@ async function buildDecisionEvidence(db: D1Database, raceId: string): Promise<st
   return `<section class="prediction-reasons live-prediction-reasons decision-evidence" data-decision-evidence="canonical-live-v1"><div class="decision-title"><div><h2>予想根拠</h2><p>実際に選定・予測・買い目決定で使った値</p></div><span>${esc(ticketEvidence.source)}</span></div>
     <div class="decision-section"><h3>1. なぜこのレースを選んだか</h3><div class="decision-race-grid"><div><span>会場内順位</span><b>${rankText}</b></div><div><span>レース選定スコア</span><b>${scoreText}</b></div></div><div class="decision-chip-list race-condition-list">${raceConditions.map((condition) => `<span>${esc(condition)}</span>`).join("")}</div><p>レース選定では、候補馬上位5頭から仮買い目を作り、上のレース条件に加えて「近走の着順傾向・速度傾向・騎手3着内率・調教師3着内率・経験数・直近3着内」を組み合わせた過去ROIを平滑化して採点します。3つの仮買い目の平均がレース選定スコアで、このレースは会場12Rの上位5Rに入りました。</p></div>
     <div class="decision-section"><h3>2. なぜこの2点になったか</h3>${ticketRows}</div>
-    <div class="decision-section"><h3>3. 買い目に入った馬の実データ</h3><p class="decision-note">下はLightGBMに実際に入った56項目のうち、意味が読み取りやすい主要値です。単一条件で馬を採用しているわけではないため、架空の「○○条件に合致」とは表示しません。</p>${horses}</div>
+    <div class="decision-section"><h3>3. 買い目に入った馬の実データ</h3><p class="decision-note">下はLightGBMに実際に入った56項目のうち、意味が読み取りやすい主要値です。LightGBMは複数特徴の非線形な組合せで勝率を出すため、存在しない単一ルールを「○○条件に合致」とは表示しません。</p>${horses}</div>
   </section>`;
 }
 
@@ -315,12 +293,7 @@ function enhanceHtml(html: string, block: string): string {
     @media(max-width:760px){.decision-evidence{padding:13px}.decision-race-grid{grid-template-columns:1fr}.decision-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.decision-ticket-head,.decision-horse-head{display:grid}.decision-ticket-head span{text-align:left}.decision-horse-head>b{white-space:normal}}
   </style>`;
   out = out.replace("</head>", `${css}</head>`);
-  const anchors = [
-    `<div class="section-title"><h2>出走馬`,
-    `<section class="card"><h2>出走馬`,
-    `<section class="runner-table`,
-    `</main>`,
-  ];
+  const anchors = [`<div class="section-title"><h2>出走馬`, `<section class="card"><h2>出走馬`, `<section class="runner-table`, `</main>`];
   for (const anchor of anchors) {
     if (!out.includes(anchor)) continue;
     return out.replace(anchor, `${block}${anchor}`);
