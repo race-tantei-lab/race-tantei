@@ -118,9 +118,12 @@ jobs:
               starts.append(pos)
               if f'<h3 class="course-heading">{name}</h3>' not in html[pos:pos+500]:
                   raise SystemExit(f'LIVE_PUBLIC_COURSE_HEADING_MISSING:{race_id}:{name}')
+          runner_start=html.find('<div class="section-title"><h2>出走馬</h2>',starts[-1])
+          if runner_start<0:
+              raise SystemExit('LIVE_PUBLIC_RUNNER_BOUNDARY_MISSING:'+race_id)
           counts={}
           for i,name in enumerate(names):
-              end=starts[i+1] if i+1<len(starts) else len(html)
+              end=starts[i+1] if i+1<len(starts) else runner_start
               counts[name]=html[starts[i]:end].count('<tr><td>')
           if any(n!=2 for n in counts.values()):
               raise SystemExit(f'LIVE_PUBLIC_TICKET_COUNT_INVALID:{race_id}:{counts}')
