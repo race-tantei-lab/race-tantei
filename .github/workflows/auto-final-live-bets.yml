@@ -25,8 +25,8 @@ on:
       - "models/ten-year-race-selection-state.json.gz"
 
 concurrency:
-  group: automatic-final-live-bets
-  cancel-in-progress: true
+  group: automatic-final-live-bets-${{ github.event_name == 'push' && 'check' || 'live' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -82,9 +82,10 @@ jobs:
         run: |
           set -euo pipefail
           today=$(TZ=Asia/Tokyo date +%F)
-          curl --retry 3 --retry-delay 2 --retry-all-errors -fsS \
+          curl --retry 1 --retry-delay 1 --retry-all-errors \
+            --connect-timeout 3 --max-time 8 -fsS \
             "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$today" >/dev/null || true
-          sleep 7
+          sleep 3
 
       - name: Freeze selection and lock due live bets
         if: github.event_name != 'push'
