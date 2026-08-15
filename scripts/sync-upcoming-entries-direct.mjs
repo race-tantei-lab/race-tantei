@@ -153,7 +153,9 @@ async function saveRace(bundle) {
       ) VALUES ${placeholders}
       ON CONFLICT(race_id,horse_no) DO UPDATE SET
         frame_no=excluded.frame_no,horse_name=excluded.horse_name,sex_age=excluded.sex_age,
-        coat_color=excluded.coat_color,horse_weight=excluded.horse_weight,weight_change=excluded.weight_change,
+        coat_color=excluded.coat_color,
+        horse_weight=COALESCE(excluded.horse_weight,rt_runners.horse_weight),
+        weight_change=CASE WHEN excluded.horse_weight IS NOT NULL THEN excluded.weight_change ELSE rt_runners.weight_change END,
         jockey=excluded.jockey,assigned_weight=excluded.assigned_weight,trainer=excluded.trainer,
         stable=excluded.stable,win_odds=excluded.win_odds,popularity=excluded.popularity,
         runner_status=excluded.runner_status,updated_at=CURRENT_TIMESTAMP`,

@@ -1,3 +1,9 @@
+import {
+  bodyWeightSnapshotMatchesRunners,
+  refreshOfficialBodyWeights,
+  resolveOfficialBodyWeights,
+  type OfficialBodyWeightSnapshot,
+} from "./bodyweight-refresh";
 import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION, completedFeatureVector, loadCompletedFeatureStateForRace } from "./completed-feature-runtime";
 import { loadCompletedModelRuntime, type CompletedModelRuntime } from "./completed-model-runtime";
 import {
@@ -15,11 +21,12 @@ const SELECTION_PREFIX = "final_daily_selection:";
 const AUDIT_PREFIX = "worker_live_lock:";
 const PREVIEW_PREFIX = "worker_live_preview:";
 const FINAL_PREFIX = "worker_live_final:";
+const BODY_WEIGHT_REFRESH_OPEN_MS = 80 * 60 * 1000;
 const PREVIEW_OPEN_MS = 45 * 60 * 1000;
 const FINALIZE_OPEN_MS = 17 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
 const PREVIEW_HISTORY = 3;
-const PREVIEW_VERSION = 1;
+const PREVIEW_VERSION = 2;
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
 
 type SelectionRow = { raceId?: string; venue?: string; raceNo?: number };
@@ -42,11 +49,12 @@ type ModelMetaRow = { key: string; value: string };
 type ModelChunkRow = { seq: number; dataB64: string };
 
 type PreviewSnapshot = {
-  version: 1;
+  version: 2;
   raceId: string;
   sourceModel: string;
   modelSha256: string;
   generatedAt: string;
+  bodyWeightSnapshot: OfficialBodyWeightSnapshot;
   oddsFetchedAt: string;
   oddsSource: string;
   oddsSnapshotSha256: string;
@@ -55,7 +63,7 @@ type PreviewSnapshot = {
 };
 
 type PreviewEnvelope = {
-  version: 1;
+  version: 2;
   raceId: string;
   snapshots: PreviewSnapshot[];
 };
@@ -69,6 +77,8 @@ type Audit = {
   completeBefore: number;
   completeAfter: number;
   lockedByWorker: string[];
+  refreshedBodyWeightRaceIds: string[];
+  bodyWeightPendingRaceIds: string[];
   refreshedPreviewRaceIds: string[];
   previewAvailableRaceIds: string[];
   finalizedFromFreshRaceIds: string[];
@@ -205,10 +215,26 @@ function isStrictComplete(rows: PublicBetRow[]): boolean {
   return new Set(signatures).size === 1;
 }
 
+function validBodyWeightSnapshot(snapshot: OfficialBodyWeightSnapshot, raceId: string): boolean {
+  if (!snapshot || snapshot.version !== 1 || snapshot.raceId !== raceId) return false;
+  if (!Number.isFinite(Date.parse(snapshot.fetchedAt)) || !snapshot.sourceUrl || !/^[0-9a-f]{64}$/.test(snapshot.snapshotSha256)) return false;
+  if (!Array.isArray(snapshot.activeRunners) || snapshot.activeRunners.length < 3) return false;
+  const ids = new Set<number>();
+  for (const row of snapshot.activeRunners) {
+    const horseNo = Number(row.horseNo);
+    const weight = Number(row.horseWeight);
+    if (!Number.isInteger(horseNo) || horseNo <= 0 || ids.has(horseNo) || !Number.isInteger(weight) || weight < 250 || weight > 700) return false;
+    if (row.weightChange != null && (!Number.isInteger(Number(row.weightChange)) || Math.abs(Number(row.weightChange)) > 100)) return false;
+    ids.add(horseNo);
+  }
+  return true;
+}
+
 function validSnapshot(snapshot: PreviewSnapshot, raceId: string): boolean {
   if (snapshot.version !== PREVIEW_VERSION || snapshot.raceId !== raceId) return false;
   if (snapshot.sourceModel !== COMPLETED_MODEL_VERSION || snapshot.modelSha256 !== COMPLETED_MODEL_SHA256) return false;
   if (!Number.isFinite(Date.parse(snapshot.generatedAt)) || !Number.isFinite(Date.parse(snapshot.oddsFetchedAt))) return false;
+  if (!validBodyWeightSnapshot(snapshot.bodyWeightSnapshot, raceId)) return false;
   if (!snapshot.oddsSource || !/^[0-9a-f]{64}$/.test(snapshot.oddsSnapshotSha256)) return false;
   if (!Array.isArray(snapshot.tickets) || snapshot.tickets.length !== 2 || new Set(snapshot.tickets.map((ticket) => ticket.betType)).size !== 2) return false;
   if (snapshot.tickets.some((ticket) => !ticket.combination || !Number.isFinite(ticket.officialOdds) || ticket.officialOdds <= 0 || !Number.isFinite(ticket.predictedProbability) || ticket.predictedProbability <= 0)) return false;
@@ -253,25 +279,35 @@ async function savePreview(db: D1Database, snapshot: PreviewSnapshot): Promise<v
     ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
   `).bind(`${PREVIEW_PREFIX}${snapshot.raceId}`, JSON.stringify(envelope)).run();
   const saved = await latestPreview(db, snapshot.raceId);
-  if (!saved || saved.generatedAt !== snapshot.generatedAt || saved.oddsSnapshotSha256 !== snapshot.oddsSnapshotSha256) {
+  if (!saved || saved.generatedAt !== snapshot.generatedAt || saved.oddsSnapshotSha256 !== snapshot.oddsSnapshotSha256 || saved.bodyWeightSnapshot.snapshotSha256 !== snapshot.bodyWeightSnapshot.snapshotSha256) {
     throw new Error(`WORKER_PREVIEW_SAVE_VERIFY_FAILED:${snapshot.raceId}`);
   }
 }
 
 async function generatePreview(db: D1Database, model: CompletedModelRuntime, raceId: string, now: Date): Promise<PreviewSnapshot> {
-  const { race, runners } = await loadRace(db, raceId);
+  const initial = await loadRace(db, raceId);
+  const race = initial.race;
   if (!race.startTimeUtc) throw new Error(`WORKER_START_TIME_MISSING:${raceId}`);
   const startMs = Date.parse(race.startTimeUtc);
   if (!Number.isFinite(startMs) || startMs <= now.getTime()) throw new Error(`WORKER_REFUSES_POST_START_PREVIEW:${raceId}`);
   if (!race.entryUrl) throw new Error(`WORKER_ENTRY_URL_MISSING:${raceId}`);
 
-  const state = await loadCompletedFeatureStateForRace(db, race, runners);
-  const vectors = runners.map((runner) => completedFeatureVector(state, race, runner, runners.length));
+  // Bodyweight acquisition is part of input preparation, not a display gate.
+  // Refresh the official JRA entry page first, persist it, then re-read the
+  // runners so the frozen 56-feature model necessarily receives those values.
+  const bodyWeightSnapshot = await resolveOfficialBodyWeights(db, race, initial.runners, now);
+  const refreshed = await loadRace(db, raceId);
+  if (!bodyWeightSnapshotMatchesRunners(bodyWeightSnapshot, refreshed.runners)) {
+    throw new Error(`WORKER_BODYWEIGHT_FEATURE_INPUT_MISMATCH:${raceId}`);
+  }
+
+  const state = await loadCompletedFeatureStateForRace(db, refreshed.race, refreshed.runners);
+  const vectors = refreshed.runners.map((runner) => completedFeatureVector(state, refreshed.race, runner, refreshed.runners.length));
   const raw = vectors.map((vector) => model.predict(vector));
   const weights = normalizeCompletedWeights(raw);
-  const fetched = await fetchFastJraOfficialOddsForRace(race.entryUrl, { raceDate: race.raceDate, venue: race.venue, raceNo: race.raceNo });
+  const fetched = await fetchFastJraOfficialOddsForRace(refreshed.race.entryUrl, { raceDate: refreshed.race.raceDate, venue: refreshed.race.venue, raceNo: refreshed.race.raceNo });
   const oddsFetchedAt = iso();
-  const tickets = chooseCompletedTwoTickets(runners.map((runner) => Number(runner.horseNo)), weights, fetched.rows);
+  const tickets = chooseCompletedTwoTickets(refreshed.runners.map((runner) => Number(runner.horseNo)), weights, fetched.rows);
   const courseBets = completedCourseBets(tickets);
   const snapshot: PreviewSnapshot = {
     version: PREVIEW_VERSION,
@@ -279,6 +315,7 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     sourceModel: COMPLETED_MODEL_VERSION,
     modelSha256: COMPLETED_MODEL_SHA256,
     generatedAt: iso(),
+    bodyWeightSnapshot,
     oddsFetchedAt,
     oddsSource: fetched.source,
     oddsSnapshotSha256: await sha256Hex(canonicalOddsRows(fetched.rows)),
@@ -292,7 +329,10 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
 
 async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewSnapshot, now: Date, finalizedFrom: "fresh" | "last_good" | "deadline_watchdog"): Promise<void> {
   if (!validSnapshot(snapshot, raceId)) throw new Error(`WORKER_FINAL_SNAPSHOT_INVALID:${raceId}`);
-  const { race } = await loadRace(db, raceId);
+  const { race, runners } = await loadRace(db, raceId);
+  if (!bodyWeightSnapshotMatchesRunners(snapshot.bodyWeightSnapshot, runners)) {
+    throw new Error(`WORKER_FINAL_BODYWEIGHT_MISMATCH:${raceId}`);
+  }
   if (!race.startTimeUtc) throw new Error(`WORKER_START_TIME_MISSING:${raceId}`);
   const startMs = Date.parse(race.startTimeUtc);
   if (!Number.isFinite(startMs) || startMs <= now.getTime()) throw new Error(`WORKER_REFUSES_POST_START_LOCK:${raceId}`);
@@ -323,6 +363,10 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
     sourceModel: COMPLETED_MODEL_VERSION,
     modelSha256: COMPLETED_MODEL_SHA256,
     previewGeneratedAt: snapshot.generatedAt,
+    bodyWeightFetchedAt: snapshot.bodyWeightSnapshot.fetchedAt,
+    bodyWeightSource: snapshot.bodyWeightSnapshot.sourceUrl,
+    bodyWeightSnapshotSha256: snapshot.bodyWeightSnapshot.snapshotSha256,
+    bodyWeights: snapshot.bodyWeightSnapshot.activeRunners,
     oddsFetchedAt: snapshot.oddsFetchedAt,
     oddsSource: snapshot.oddsSource,
     oddsSnapshotSha256: snapshot.oddsSnapshotSha256,
@@ -350,6 +394,8 @@ function emptyAudit(date: string, status: string): Audit {
     completeBefore: 0,
     completeAfter: 0,
     lockedByWorker: [],
+    refreshedBodyWeightRaceIds: [],
+    bodyWeightPendingRaceIds: [],
     refreshedPreviewRaceIds: [],
     previewAvailableRaceIds: [],
     finalizedFromFreshRaceIds: [],
@@ -377,6 +423,8 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
   const beforeStates = await Promise.all(ids.map(async (raceId) => isStrictComplete(await publicBetRows(env.DB, raceId))));
   const completeBefore = beforeStates.filter(Boolean).length;
   const lockedByWorker: string[] = [];
+  const refreshedBodyWeightRaceIds: string[] = [];
+  const bodyWeightPendingRaceIds: string[] = [];
   const refreshedPreviewRaceIds: string[] = [];
   const finalizedFromFreshRaceIds: string[] = [];
   const finalizedFromFallbackRaceIds: string[] = [];
@@ -394,7 +442,20 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       if (!race.startTimeUtc) throw new Error(`WORKER_START_TIME_MISSING:${raceId}`);
       const remaining = Date.parse(race.startTimeUtc) - now.getTime();
       if (remaining <= 0) { alreadyStartedIncompleteRaceIds.push(raceId); continue; }
-      if (remaining > PREVIEW_OPEN_MS) { notYetInWindowRaceIds.push(raceId); continue; }
+      if (remaining > BODY_WEIGHT_REFRESH_OPEN_MS) { notYetInWindowRaceIds.push(raceId); continue; }
+
+      // Start polling the exact official entry page well before final scoring.
+      // Before T-45 this is acquisition-only: ordinary pre-race UI remains
+      // available and the cron simply retries until JRA publishes bodyweight.
+      if (remaining > PREVIEW_OPEN_MS) {
+        try {
+          await refreshOfficialBodyWeights(env.DB, race, now);
+          refreshedBodyWeightRaceIds.push(raceId);
+        } catch {
+          bodyWeightPendingRaceIds.push(raceId);
+        }
+        continue;
+      }
 
       if (remaining <= DEADLINE_MS) {
         const fallback = await latestPreview(env.DB, raceId);
@@ -410,6 +471,7 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       try {
         model ??= await loadWorkerModel(env.DB);
         fresh = await generatePreview(env.DB, model, raceId, now);
+        refreshedBodyWeightRaceIds.push(raceId);
         refreshedPreviewRaceIds.push(raceId);
       } catch (error) {
         errors.push({ raceId, error: errorText(error) });
@@ -465,6 +527,8 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
     completeBefore,
     completeAfter,
     lockedByWorker,
+    refreshedBodyWeightRaceIds,
+    bodyWeightPendingRaceIds,
     refreshedPreviewRaceIds,
     previewAvailableRaceIds,
     finalizedFromFreshRaceIds,

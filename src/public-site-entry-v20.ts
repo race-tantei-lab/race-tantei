@@ -105,9 +105,6 @@ async function fixDayApi(db: D1Database, response: Response, requestedDate: stri
     const views = await settlementViews(db, ids);
     const frozenHistoricalDate = /^20\d{2}-\d{2}-\d{2}$/.test(requestedDate) && requestedDate <= FROZEN_ARCHIVE_END;
     data.races = races.map((race) => {
-      // The frozen 10-year archive already encodes the canonical 5R/venue selection.
-      // Settlement/refund data may refine a selected race's outcome, but legacy D1 rows
-      // must never promote an archived canonical skip into a selected race.
       if (frozenHistoricalDate && String(race.publicState?.code ?? "") === "skip") return race;
       const view = views.get(String(race.raceId ?? ""));
       const state = view ? publicCode(view) : null;
@@ -214,14 +211,16 @@ export default {
     return response;
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    const baseSync = (async () => {
+    // The critical path refreshes the selected race's exact JRA entry page and
+    // bodyweight before model scoring. Start it first so the generic background
+    // sync cannot race the final feature read with an older/null runner row.
+    await runCriticalPreRacePath(env);
+    ctx.waitUntil((async () => {
       try {
         if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
       } catch (error) {
         console.error("BASE_SCHEDULED_SYNC_FAILED", error);
       }
-    })();
-    ctx.waitUntil(baseSync);
-    await runCriticalPreRacePath(env);
+    })());
   }
 } satisfies ExportedHandler<Env>;
