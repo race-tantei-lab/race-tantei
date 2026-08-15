@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import pathlib
+import urllib.error
 import urllib.request
 from collections.abc import Iterable, Iterator
 from typing import Any
@@ -16,8 +17,8 @@ STATE_PATH = ROOT / "models" / "ten-year-runner-feature-state.json.gz"
 CONFIG_PATH = ROOT / "config" / "ten-year-completed-model.json"
 AUDIT_PATH = ROOT / "worker-feature-state-seed-audit.json"
 MODEL_VERSION = "ten-year-completed-model"
-ROW_CHUNK = 200
-STATEMENTS_PER_BATCH = 10
+ROW_CHUNK = 500
+STATEMENTS_PER_BATCH = 5
 
 SCHEMA = [
     "CREATE TABLE IF NOT EXISTS rt_ml_feature_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)",
@@ -75,8 +76,12 @@ def d1_request(body: dict[str, Any]) -> list[dict[str, Any]]:
         method="POST",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=180) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=180) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"D1_HTTP_{error.code}:{detail[:4000]}") from error
     if not payload.get("success"):
         raise RuntimeError(f"D1_REQUEST_FAILED:{payload}")
     result = payload.get("result") or []
@@ -108,10 +113,10 @@ def chunks(rows: Iterable[tuple[Any, ...]], size: int) -> Iterator[list[tuple[An
 
 
 def insert_statement(table: str, columns: tuple[str, ...], rows: list[tuple[Any, ...]]) -> dict[str, Any]:
-    one = "(" + ",".join("?" for _ in columns) + ")"
-    sql = f"INSERT OR REPLACE INTO {table} ({','.join(columns)}) VALUES " + ",".join(one for _ in rows)
-    params = [value for row in rows for value in row]
-    return {"sql": sql, "params": params}
+    extracts = ",".join(f"json_extract(value,'$[{index}]')" for index in range(len(columns)))
+    sql = f"INSERT OR REPLACE INTO {table} ({','.join(columns)}) SELECT {extracts} FROM json_each(?)"
+    payload = json.dumps(rows, ensure_ascii=False, separators=(",", ":"))
+    return {"sql": sql, "params": [payload]}
 
 
 def upload_rows(table: str, columns: tuple[str, ...], rows: Iterable[tuple[Any, ...]]) -> int:
