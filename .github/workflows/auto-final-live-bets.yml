@@ -9,11 +9,6 @@ on:
         default: "false"
         type: string
   schedule:
-    # GitHub schedule is only a seed/recovery mechanism. Scheduled events may be
-    # delayed or dropped, so a successful seed keeps its own one-minute monitor
-    # alive for five hours and hands off to a workflow_dispatch continuation.
-    # Use many morning seeds to maximize startup probability, then half-hourly
-    # recovery seeds. All times below are JST and avoid the top of the hour.
     - cron: "2-57/5 8 * * 6,0,1"
       timezone: "Asia/Tokyo"
     - cron: "7,37 9-19 * * 6,0,1"
@@ -24,12 +19,15 @@ on:
       - ".github/workflows/auto-final-live-bets.yml"
       - "scripts/run-auto-final-live.py"
       - "scripts/run-ten-year-auto-final-live.py"
+      - "scripts/refresh-selected-bodyweights-direct.mjs"
       - "scripts/ten-year-production-core.py"
       - "scripts/generate-ten-year-preday-selection.py"
       - "scripts/generate-ten-year-live-bets.py"
       - "scripts/collect-jra-official-odds.py"
       - "scripts/collect-current-jra-official-odds-live.py"
       - "scripts/collect-current-jra-official-odds-fast.py"
+      - "src/v1/bodyweight-refresh.ts"
+      - "src/v1/completed-worker-live-lock.ts"
       - "config/ten-year-completed-model.json"
       - "models/ten-year-completed-model.txt"
       - "models/ten-year-production-state-manifest.json"
@@ -89,6 +87,19 @@ jobs:
 
       - uses: actions/checkout@v4
         if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
+
+      - uses: actions/setup-node@v4
+        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Build canonical JRA parser for bodyweight refresh
+        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
+        run: |
+          npm ci
+          npm run build:test
+          node --check scripts/refresh-selected-bodyweights-direct.mjs
 
       - uses: actions/setup-python@v5
         if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
@@ -155,9 +166,6 @@ jobs:
             now_jst=$(TZ=Asia/Tokyo date '+%F %T %Z')
             echo "=== live backup cycle ${cycle} at ${now_jst} ===" | tee -a automatic-final-live.log
 
-            # Wake the public sync every five monitor cycles. The canonical fallback
-            # itself runs every minute so the narrow T-17..T-15 safety window cannot
-            # be skipped merely because GitHub cron is only five-minute capable.
             if (( (cycle - 1) % 5 == 0 )); then
               today=$(TZ=Asia/Tokyo date +%F)
               curl --retry 1 --retry-delay 1 --retry-all-errors \
@@ -165,6 +173,17 @@ jobs:
                 "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$today" \
                 >/dev/null || echo "WARN public day wake failed; D1 fallback still runs" | tee -a automatic-final-live.log
               sleep 3
+            fi
+
+            # Acquisition first: target the selected race's exact official JRA
+            # entry page every minute from T-80. A transient refresh failure is
+            # nonfatal here because a previously verified official snapshot can
+            # still be used; the Python finalizer independently verifies the D1
+            # values against that provenance before it is allowed to write bets.
+            if node scripts/refresh-selected-bodyweights-direct.mjs 2>&1 | tee -a automatic-final-live.log; then
+              :
+            else
+              echo "WARN bodyweight refresh did not complete this cycle; finalizer provenance gate decides whether retry is required" | tee -a automatic-final-live.log
             fi
 
             if python scripts/run-ten-year-auto-final-live.py 2>&1 | tee -a automatic-final-live.log; then
