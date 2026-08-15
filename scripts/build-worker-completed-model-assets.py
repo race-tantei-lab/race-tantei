@@ -51,35 +51,29 @@ def flatten_model(dump: dict[str, Any]) -> tuple[list[int], list[tuple[int, int,
             nodes[index] = (1, 0, 0, 0, -1, -1, value, 0)
             stats["leaf"] += 1
             return index
-
         decision_type = str(node.get("decision_type", ""))
         if decision_type != "<=":
             raise RuntimeError(f"unsupported LightGBM decision_type={decision_type!r} at node {index}")
         feature = int(node["split_feature"])
-        if not 0 <= feature <= 255:
-            raise RuntimeError(f"feature index out of binary range: {feature}")
         threshold = node["threshold"]
-        if isinstance(threshold, str):
-            raise RuntimeError(f"categorical/string threshold is unsupported at node {index}: {threshold!r}")
+        if not 0 <= feature <= 255 or isinstance(threshold, str):
+            raise RuntimeError(f"unsupported LightGBM split at node {index}")
         threshold_value = float(threshold)
         if not math.isfinite(threshold_value):
             raise RuntimeError(f"non-finite threshold at node {index}")
-
         missing_name = str(node.get("missing_type", "None"))
         if missing_name not in MISSING_TYPES:
             raise RuntimeError(f"unsupported LightGBM missing_type={missing_name!r} at node {index}")
-        missing_code = MISSING_TYPES[missing_name]
         flags = 1 if bool(node.get("default_left", False)) else 0
         left = visit(node["left_child"])
         right = visit(node["right_child"])
-        nodes[index] = (0, feature, flags, missing_code, left, right, threshold_value, 0)
+        nodes[index] = (0, feature, flags, MISSING_TYPES[missing_name], left, right, threshold_value, 0)
         stats["split"] += 1
         stats[f"missing{missing_name}"] += 1
         return index
 
     for tree in dump.get("tree_info", []):
         roots.append(visit(tree["tree_structure"]))
-
     if any(node is None for node in nodes):
         raise RuntimeError("internal error: unfilled model node")
     return roots, [node for node in nodes if node is not None], stats
@@ -93,25 +87,16 @@ def build_vectors(feature_count: int) -> list[list[float]]:
         np.linspace(0.0, 1.0, feature_count, dtype=np.float64),
         np.linspace(1.0, 100.0, feature_count, dtype=np.float64),
     ]
-    rows.extend(rng.normal(0.0, 3.0, size=(128, feature_count)))
-    rows.extend(rng.uniform(-2.0, 8.0, size=(128, feature_count)))
-    rows.extend(rng.exponential(4.0, size=(64, feature_count)))
-    for feature in range(min(feature_count, 56)):
-        row = np.zeros(feature_count, dtype=np.float64)
-        row[feature] = np.nan
-        rows.append(row)
+    rows.extend(rng.normal(0.0, 3.0, size=(256, feature_count)))
+    rows.extend(rng.uniform(-2.0, 8.0, size=(256, feature_count)))
+    rows.extend(rng.exponential(4.0, size=(128, feature_count)))
     return [[float(value) for value in row] for row in rows]
-
-
-def json_safe_vector(row: list[float]) -> list[float | None]:
-    return [None if math.isnan(value) else value for value in row]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", default=str(ROOT / "worker-assets" / "_internal" / "completed-model"))
     args = parser.parse_args()
-
     output_dir = pathlib.Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -126,14 +111,12 @@ def main() -> int:
 
     feature_names = probability_model.get("features")
     if not isinstance(feature_names, list) or len(feature_names) != 56 or not all(isinstance(x, str) for x in feature_names):
-        raise RuntimeError(f"completed model config must expose exactly 56 string features, got {feature_names!r}")
+        raise RuntimeError("completed model config must expose exactly 56 string features")
     feature_names = list(feature_names)
 
     booster = lgb.Booster(model_file=str(MODEL_PATH))
-    booster_names = list(booster.feature_name())
-    if booster_names != feature_names:
+    if list(booster.feature_name()) != feature_names:
         raise RuntimeError("LightGBM model feature order does not match completed config features")
-
     dump = booster.dump_model()
     objective = str(dump.get("objective", "binary"))
     if not objective.startswith("binary"):
@@ -143,51 +126,33 @@ def main() -> int:
     roots, nodes, stats = flatten_model(dump)
     if not roots:
         raise RuntimeError("completed model has no trees")
+    if stats["missingNaN"] or stats["missingZero"] or stats["missingNone"] != stats["split"]:
+        raise RuntimeError(f"completed model unexpectedly contains missing-value splits: {stats}")
 
     model_bin = output_dir / "model.bin"
     with model_bin.open("wb") as handle:
-        handle.write(
-            HEADER_STRUCT.pack(
-                MAGIC,
-                VERSION,
-                len(feature_names),
-                len(roots),
-                len(nodes),
-                sigmoid_scale,
-                1 if average_output else 0,
-                0,
-            )
-        )
+        handle.write(HEADER_STRUCT.pack(MAGIC, VERSION, len(feature_names), len(roots), len(nodes), sigmoid_scale, 1 if average_output else 0, 0))
         for root in roots:
             handle.write(struct.pack("<I", root))
         for node in nodes:
             handle.write(NODE_STRUCT.pack(*node))
 
     vectors = build_vectors(len(feature_names))
-    matrix = np.asarray(vectors, dtype=np.float64)
-    predictions = np.asarray(booster.predict(matrix), dtype=np.float64)
+    predictions = np.asarray(booster.predict(np.asarray(vectors, dtype=np.float64)), dtype=np.float64)
     predictions = np.clip(predictions, 1e-6, 1.0 - 1e-6)
     parity = {
         "modelVersion": "ten-year-completed-model",
         "modelSha256": actual_sha,
         "featureNames": feature_names,
-        "vectors": [json_safe_vector(row) for row in vectors],
+        "vectors": vectors,
         "expected": [float(value) for value in predictions],
     }
     (output_dir / "parity.json").write_text(json.dumps(parity, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     metadata = {
-        "format": MAGIC.decode("ascii"),
-        "version": VERSION,
-        "modelVersion": "ten-year-completed-model",
-        "sourceSha256": actual_sha,
-        "featureCount": len(feature_names),
-        "treeCount": len(roots),
-        "nodeCount": len(nodes),
-        "sigmoid": sigmoid_scale,
-        "averageOutput": average_output,
-        "binaryBytes": model_bin.stat().st_size,
-        "nodeStats": stats,
+        "format": MAGIC.decode("ascii"), "version": VERSION, "modelVersion": "ten-year-completed-model",
+        "sourceSha256": actual_sha, "featureCount": len(feature_names), "treeCount": len(roots), "nodeCount": len(nodes),
+        "sigmoid": sigmoid_scale, "averageOutput": average_output, "binaryBytes": model_bin.stat().st_size, "nodeStats": stats,
     }
     (output_dir / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(metadata, ensure_ascii=False))
