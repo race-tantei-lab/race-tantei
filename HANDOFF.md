@@ -10,11 +10,12 @@
 - production branch: `main`
 - completed model: `ten-year-completed-model`
 - status: **completed / production active**
+- handoff version: **3**
 - production site: `https://race-tantei-phase0.race-tantei.workers.dev`
 - Worker: `race-tantei-phase0`
 - current UI entry: **必ず `wrangler.jsonc.main` を読む**
-  - 現時点: `src/public-site-entry-v19.ts`
-  - deploy revision: `ten-year-completed-public-v19-product-copy-20260813`
+  - 現時点: `src/public-site-entry-v21.ts`
+  - deploy revision: `ten-year-completed-public-v21-worker-live-lock-20260815`
 - D1: `race-tantei-phase0`
 - D1 database ID: `949b5e8b-d1a4-4c4e-80d1-d031afdc03de`
 - Worker version IDは固定しない。`analysis-results/production-deployment.log` の `Current Version ID:` を読む。
@@ -31,10 +32,15 @@
 3. `config/ten-year-completed-model.json`
 4. `analysis-results/ten-year-model-completion-20260812.json`
 5. **`analysis-results/completed-model-methodology-audit-20260813.md`**
-6. `wrangler.jsonc` でcurrent entry確認
+6. `wrangler.jsonc` でcurrent entry / build command確認
 7. `scripts/run-ten-year-auto-final-live.py` でproduction runner確認
-8. `scripts/verify-canonical-handoff.py` / workflowのcurrent main成功確認
-9. 依頼された具体作業へ進む。モデル探索からやり直さない。
+8. Worker runtime確認
+   - `scripts/build-worker-completed-model-assets.py`
+   - `scripts/verify-worker-model-parity.ts`
+   - `.github/workflows/verify-worker-selection-parity.yml`
+   - `src/v1/completed-worker-live-lock.ts`
+9. `scripts/verify-canonical-handoff.py` / workflowのcurrent main成功確認
+10. 依頼された具体作業へ進む。モデル探索からやり直さない。
 
 ## 2. 完成モデルの正本
 
@@ -207,6 +213,33 @@ production entry:
 
 旧 `scripts/run-auto-final-live.py` 単体はcurrent modelではない。時間管理等のshellとしてimportされても、選定・買い目生成・checkはten-year wrapperへ差し替わる。旧316ルールをcurrent truthにしない。
 
+### Worker production runtime — v21
+
+Worker側はcompleted modelを別物へ置き換えない。canonical modelをWorkerで実行できるassetへ変換し、parityを確認してからdeployする。
+
+- asset builder: `scripts/build-worker-completed-model-assets.py`
+- model parity: `scripts/verify-worker-model-parity.ts`
+- generated runtime asset: `worker-assets/_internal/completed-model/`
+- selection parity workflow: `.github/workflows/verify-worker-selection-parity.yml`
+- live lock: `src/v1/completed-worker-live-lock.ts`
+- production deploy: `.github/workflows/deploy.yml`
+
+`worker-assets` は正本モデルそのものではなく生成物。正本は `models/ten-year-completed-model.txt` とSHA256であり、Worker assetはそこから再生成する。
+
+`wrangler.jsonc.build.command` はassetが無い環境でもcanonical modelから生成してからdeployする。GitHub Actions経路でもdeploy前にasset生成とmodel parityを必須にする。
+
+Worker model parityはcanonical modelと同じ入力に対する出力差を検証する。2026-08-15の本番検証では644行、最大絶対誤差 `1.1102230246251565e-16` で `WORKER_MODEL_PARITY_OK` を確認した。
+
+レース選定もWorker実装とcanonical Pythonを別物にしない。`.github/workflows/verify-worker-selection-parity.yml` でcanonical Python selectionとWorker selectionの一致を検証する。
+
+### live lock / 締切
+
+- 対象レースは当日出馬情報が揃った後に固定し、固定後は変更しない。
+- 買い目は発走前のJRA公式オッズから生成する。
+- 1レースは3コース×2点、各コース予算一致、異なる2券種、completed model由来、locked済みまで揃って初めてcomplete。
+- 発走15分前で不完全な対象レースがあれば黙って通さず異常扱いにする。
+- v21はWorker側でも `WORKER_COMPLETED_15_MINUTE_SLA_BREACH` を検出して失敗させる。
+
 D1重要table:
 
 - rt_races
@@ -220,7 +253,9 @@ D1重要table:
 
 **current entry判定は `wrangler.jsonc.main`。**
 
-現時点 `src/public-site-entry-v19.ts`。
+現時点 `src/public-site-entry-v21.ts`。
+
+v21はv20→v19以下をlayerとしてimportする。**current identityは常に `wrangler.jsonc.main`** で決める一方、実際の表示・API挙動を監査するときはactive import chain全体を見る。ファイル番号だけ見て「v19が現行」「v20が現行」と推測しない。
 
 公開「予想ロジック」は、一般ユーザー向けの日本語を優先しつつ、次の内容を省略しない。
 
@@ -234,13 +269,32 @@ D1重要table:
 - データ更新タイミングを折りたたみで表示
 - 公開済み買い目は不変
 
+### 凍結10年履歴の表示ルール
+
+2016-08-10〜2026-08-09の凍結アーカイブでは、canonical history assetがその会場日の5R選定の身分を決める。
+
+- canonical ticketあり → 選定済み
+- canonical ticketなし / `skip` → 見送り
+
+D1に旧公開買い目が残っていても、**canonical `skip` を選定済みに昇格させてはいけない**。D1のsettlement/refund overlayは、canonicalで既に選定されているレースの結果状態を「的中 / 不的中 / 返還」へ補足する用途だけに使う。
+
+2026-08-15の本番検証で以下を確認済み:
+
+- 2024-05-26: 2会場 / 10R選定 / 14R見送り
+- 2025-05-25: 3会場 / 15R選定 / 21R見送り
+- 2026-08-02: 3会場 / 15R選定 / 21R見送り
+
+### 返還
+
+除外・取消を含む公開済み買い目は購入額を返還として精算する。返還は不的中・見送りと混同せず `返還` として区別する。後から返還情報が確定した場合も再精算する。
+
 その他UI要件:
 
 - home累計/月別/会場別は10年canonical metrics
 - 14,410R表示
 - 年は2026→…→2016
-- 終了済み: 的中 / 不的中 / 見送り
-- 不的中は赤、見送りと区別
+- 終了済み: 的中 / 不的中 / 見送り / 必要に応じて返還
+- 不的中は赤、見送り・返還と区別
 - 「予想履歴について」は通常の紺panelで表示し、黄色noticeにしない
 - 過去詳細: 着順、枠、馬番、馬名、性齢、斤量、騎手、調教師、馬体重、人気
 - 過去確定買い目を横スライド中心にしない
@@ -275,6 +329,7 @@ runner archive:
 - runner workflow: `.github/workflows/promote-ten-year-runner-assets.yml`
 - production state: `.github/workflows/promote-ten-year-production-state.yml`
 - completed model assets: `.github/workflows/promote-ten-year-completed-model-assets.yml`
+- Worker model asset: `scripts/build-worker-completed-model-assets.py`
 
 再生成はcanonical artifact IDs / SHA / completion auditと一致させ、新モデル探索として扱わない。
 
@@ -286,9 +341,13 @@ runner archive:
 - 過去結果から買い目を後付け変更しない。
 - synthetic oddsを使わない。
 - 過去公開買い目を変更しない。
+- 凍結10年履歴のcanonical `skip` を旧D1買い目の存在だけで選定済みに変えない。
+- Worker用assetをcanonical model本体扱いしない。
+- model parity / selection parityを通さずWorker実装を独自モデルとして進めない。
+- 発走15分前の不完全買い目を黙ってcomplete扱いしない。
 - 10年全履歴をD1へmass writeする方式へ戻さない。
 - 黄色noticeを戻さない。
-- 不的中を見送りと同色にしない。
+- 不的中を見送り・返還と同色同義にしない。
 - 買い目UIを横スライド中心へ戻さない。
 - 正本にないmetadataをchecker通過目的で捏造しない。
 - Worker version IDをHANDOFF/manifestへ固定しない。
@@ -317,14 +376,22 @@ success:
 - state date / artifact IDs / state SHA
 - completion audit gates / 34,566 / 14,410
 - methodology auditの存在とperformance interpretation
-- `wrangler.jsonc.main` / revision / model / D1
+- `wrangler.jsonc.main` / revision / model / D1 / Worker asset build
+- active public-site import chain
 - live workflow / canonical runner接続
+- Worker model parity
+- Worker/Python race-selection parity workflow
+- Worker live-lock / 15分SLA
+- frozen historical selection identity / canonical skip保護
+- production deploy内の過去API・詳細・当日結果・払戻精算監査
 - public summary / runner archive
 - 予想ロジックページの具体的selection/ticket説明、過去成績の注意、製品向け文言
-- deployment log URL/revision/model/D1/current Worker version
+- deployment log URL/model/D1/current Worker version
 - README/HANDOFF入口
 
 を確認する。
+
+2026-08-15のproduction deployでは、canonical Worker model parity、過去代表日の5R/会場、過去詳細、当日終了済み9Rの結果取得・払戻・`pending=0` までsuccessを確認した。
 
 過去の `production state featureRows mismatch` はchecker側が実在しないfieldを要求したことが原因。checkerを正本へ合わせ、正本に架空fieldを足さない。
 
@@ -341,7 +408,11 @@ success:
 - final ticketsは56-feature LightGBM + Plackett-Luce + official odds。
 - weights SHA `63e359...453a5`。
 - production runner `run-ten-year-auto-final-live.py`。
-- UIは `wrangler.jsonc.main`。
+- UIは `wrangler.jsonc.main`。現時点v21。
+- Worker assetはcanonical modelから生成し、model parityを通す。
+- Worker selectionはcanonical Pythonとparityを確認する。
+- Worker live-lockは15分SLA違反を失敗扱いにする。
+- frozen archiveのcanonical skipは旧D1で選定済みに変えない。
 - methodology auditを読む。
 - old research/316 rule/old UIをcurrent truthにしない。
 - current mainで `verify-canonical-handoff.py` が `CANONICAL_HANDOFF_OK` になるまで完成扱いしない。
