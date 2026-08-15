@@ -75,10 +75,11 @@ jobs:
           NODE
           )
           test -n "$race_id"
-          curl --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 3 --max-time 25 -fsS "$BASE_URL/races/$race_id" -o /tmp/detail.html
+          curl --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 3 --max-time 25 -fsS -D /tmp/detail.headers "$BASE_URL/races/$race_id" -o /tmp/detail.html
           RACE_ID="$race_id" node - <<'NODE'
           const fs=require('fs');
           const html=fs.readFileSync('/tmp/detail.html','utf8');
+          const headers=fs.readFileSync('/tmp/detail.headers','utf8');
           const required=[
             ['decision-marker','data-decision-evidence="canonical-live-v1"'],
             ['selection-trace-marker','data-selection-trace="canonical-selection-trace-v1"'],
@@ -99,8 +100,9 @@ jobs:
           if(proxyCount!==3) missing.push(`proxy-ticket-count=${proxyCount}`);
           if(html.includes('条件に合致')) missing.push('generic-condition-match-copy');
           if(missing.length){
+            const errorHeader=(headers.match(/^x-selection-evidence-error:\s*(.+)$/mi)||[])[1]||'none';
             console.error('PREDICTION_EVIDENCE_MISSING race='+process.env.RACE_ID+' markers='+missing.join(','));
-            console.error('PREDICTION_EVIDENCE_DEBUG selectionTrace='+html.includes('data-selection-trace=')+' decisionMarker='+html.includes('data-decision-evidence=')+' proxyCount='+proxyCount+' bytes='+Buffer.byteLength(html));
+            console.error('PREDICTION_EVIDENCE_DEBUG selectionTrace='+html.includes('data-selection-trace=')+' decisionMarker='+html.includes('data-decision-evidence=')+' proxyCount='+proxyCount+' bytes='+Buffer.byteLength(html)+' selectionError='+errorHeader);
             process.exit(1);
           }
           console.log('EXACT_PREDICTION_EVIDENCE_OK race='+process.env.RACE_ID+' proxyTickets='+proxyCount);
