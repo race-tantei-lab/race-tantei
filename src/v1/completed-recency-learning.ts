@@ -148,10 +148,10 @@ async function loadRunnerRows(db: D1Database, race: RaceRecord, runners: RunnerR
       horseName IN (SELECT value FROM json_each(?))
       OR COALESCE(jockey,'') IN (SELECT value FROM json_each(?))
       OR COALESCE(trainer,'') IN (SELECT value FROM json_each(?))
-      OR (raceDate=? AND venue=? AND COALESCE(surface,'')=?)
+      OR (venue=? AND COALESCE(surface,'')=?)
     )
     ORDER BY startTimeUtc,raceId,horseNo
-  `).bind(startDate(race.raceDate), race.raceDate, cutoffUtc, JSON.stringify(horses), JSON.stringify(jockeys), JSON.stringify(trainers), race.raceDate, race.venue, String(race.surface || "")).all<RunnerHistoryRow>();
+  `).bind(startDate(race.raceDate), race.raceDate, cutoffUtc, JSON.stringify(horses), JSON.stringify(jockeys), JSON.stringify(trainers), race.venue, String(race.surface || "")).all<RunnerHistoryRow>();
   return result.results ?? [];
 }
 
