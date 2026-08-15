@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import zlib from 'node:zlib';
-import { hydrateCompletedSelectionState, selectCompletedTargetRaces } from '../dist-test/src/v1/completed-selection-runtime.js';
+import { hydrateCompletedSelectionState, selectCompletedTargetRaces } from '../src/v1/completed-selection-runtime.ts';
 
 const stateRaw=JSON.parse(zlib.gunzipSync(fs.readFileSync('models/ten-year-race-selection-state.json.gz')).toString('utf8'));
 const bundles=JSON.parse(fs.readFileSync('/tmp/selection-target-bundles.json','utf8'));
