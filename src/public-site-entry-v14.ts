@@ -133,7 +133,11 @@ async function enhanceRaceReasons(request: Request, response: Response, db: D1Da
     const reasons = await ticketReasons(db, raceId);
     if (!reasons.length) return response;
     let html = await response.text();
-    if (html.includes('class="prediction-reasons"')) return response;
+    const headers = new Headers(response.headers);
+    headers.delete("content-length");
+    if (html.includes('class="prediction-reasons"')) {
+      return new Response(html, { status: response.status, headers });
+    }
     const block = `<section class="prediction-reasons"><div class="prediction-reasons-head"><h2>予想根拠</h2><span>簡易表示</span></div><div class="prediction-reason-list">${reasons.map((reason) => `<span>${esc(reason)}</span>`).join("")}</div></section>`;
     const css = `<style>
       .prediction-reasons{margin:12px 0 16px;padding:13px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
@@ -141,10 +145,23 @@ async function enhanceRaceReasons(request: Request, response: Response, db: D1Da
       .prediction-reason-list{display:flex;flex-wrap:wrap;gap:7px}.prediction-reason-list span{display:inline-flex;padding:6px 9px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);font-size:11px;font-weight:700}
     </style>`;
     html = html.replace("</head>", `${css}</head>`);
-    const anchor = `<div class="section-title"><h2>出走馬`;
-    html = html.includes(anchor) ? html.replace(anchor, `${block}${anchor}`) : html;
-    const headers = new Headers(response.headers);
-    headers.delete("content-length");
+    const anchors = [
+      `<div class="section-title"><h2>出走馬`,
+      `<section class="card"><h2>出走馬`,
+      `<section class="runner-table` 
+    ];
+    let inserted = false;
+    for (const anchor of anchors) {
+      if (!html.includes(anchor)) continue;
+      html = html.replace(anchor, `${block}${anchor}`);
+      inserted = true;
+      break;
+    }
+    if (!inserted && html.includes("</main>")) {
+      html = html.replace("</main>", `${block}</main>`);
+      inserted = true;
+    }
+    if (!inserted) html += block;
     return new Response(html, { status: response.status, headers });
   } catch {
     return response;
