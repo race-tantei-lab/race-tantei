@@ -6,6 +6,9 @@ on:
     branches: [main]
     paths:
       - .github/workflows/seed-worker-feature-state.yml
+      - scripts/seed-worker-feature-state.py
+      - models/ten-year-runner-feature-state.json.gz
+      - config/ten-year-completed-model.json
 
 permissions:
   contents: read
@@ -45,6 +48,7 @@ jobs:
           assert audit.get('modelVersion')=='ten-year-completed-model', audit
           assert audit.get('modelSha256')=='63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5', audit
           assert audit.get('throughDate')=='2026-08-09', audit
+          assert audit.get('d1Counts')==audit.get('counts'), audit
           print(json.dumps({'status':'FEATURE_STATE_D1_SEED_VERIFIED','seedStatus':audit['status'],'generation':audit['generation'],'throughDate':audit['throughDate'],'counts':audit['counts']},ensure_ascii=False))
           PY
 
@@ -52,7 +56,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: worker-feature-state-production-seed-v2
+          name: worker-feature-state-production-seed-v3
           path: worker-feature-state-seed-audit.json
           if-no-files-found: warn
           retention-days: 30
