@@ -7,6 +7,8 @@ const COURSES = ["ライト","スタンダード","プレミアム"] as const;
 type Course = typeof COURSES[number];
 type RaceSettlement = { hasBets:boolean; settled:boolean; payouts:CanonicalCoursePayouts };
 type CurrentMetric = { course:Course; settledRaces:number; stakeYen:number; returnYen:number };
+type LiveSettlementBet = { id:number; raceId:string; betType:string; combination:string; stakeYen:number; refunds:string; settlementStatus:string; currentReturnYen:number|null };
+type LivePayoutInfo = { map:Map<string,number>; types:Set<string> };
 
 function yen(value:number):string{return `¥${Math.round(value).toLocaleString("ja-JP")}`;}
 function esc(value:unknown):string{return String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]??ch));}
@@ -18,28 +20,52 @@ function canonicalCombination(betType:string,combination:string):string{
 
 async function settlePublicBets(db:D1Database):Promise<void>{
   try{
-    const pending=await db.prepare(`
+    const rows=await db.prepare(`
       SELECT b.id,b.race_id AS raceId,b.bet_type AS betType,b.combination,b.stake_yen AS stakeYen,
-             r.refund_horse_nos_json AS refunds
+             r.refund_horse_nos_json AS refunds,b.settlement_status AS settlementStatus,b.return_yen AS currentReturnYen
       FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
-      WHERE b.settlement_status='pending' AND r.status='finished' AND r.race_date>='2026-08-09'
+      WHERE r.status='finished'
+        AND r.race_date>='2026-08-09'
+        AND r.race_date>=date('now','-14 days')
+        AND b.settlement_status IN ('pending','settled')
       ORDER BY b.race_id,b.id
-    `).all<{id:number;raceId:string;betType:string;combination:string;stakeYen:number;refunds:string}>();
-    if(!pending.results.length)return;
-    const raceIds=[...new Set(pending.results.map(x=>x.raceId))];
-    const payoutMaps=new Map<string,Map<string,number>>();
+    `).all<LiveSettlementBet>();
+    if(!rows.results.length)return;
+    const raceIds=[...new Set(rows.results.map(x=>x.raceId))];
+    const payoutInfo=new Map<string,LivePayoutInfo>();
     for(const raceId of raceIds){
       const q=await db.prepare(`SELECT bet_type AS betType,combination,payout_yen AS payoutYen FROM rt_payouts WHERE race_id=?`).bind(raceId).all<{betType:string;combination:string;payoutYen:number}>();
       if(!q.results.length)continue;
-      payoutMaps.set(raceId,new Map(q.results.map(x=>[`${x.betType}:${canonicalCombination(x.betType,x.combination)}`,Number(x.payoutYen)])));
+      payoutInfo.set(raceId,{
+        map:new Map(q.results.map(x=>[`${x.betType}:${canonicalCombination(x.betType,x.combination)}`,Number(x.payoutYen)])),
+        types:new Set(q.results.map(x=>x.betType))
+      });
     }
     const statements=[];
-    for(const bet of pending.results){
-      const payoutMap=payoutMaps.get(bet.raceId);if(!payoutMap)continue;
+    for(const bet of rows.results){
       let refunds=new Set<number>();try{refunds=new Set((JSON.parse(bet.refunds||"[]") as number[]).map(Number));}catch{/* empty */}
       const horses=(bet.combination.match(/\d{1,2}/g)??[]).map(Number);
-      const returned=horses.some(h=>refunds.has(h))?Number(bet.stakeYen):Math.round(Number(bet.stakeYen)/100*(payoutMap.get(`${bet.betType}:${canonicalCombination(bet.betType,bet.combination)}`)??0));
-      statements.push(db.prepare(`UPDATE rt_public_bets SET settlement_status='settled',return_yen=? WHERE id=? AND settlement_status='pending'`).bind(returned,bet.id));
+      let returned:number|null=null;
+      if(horses.some(h=>refunds.has(h))){
+        returned=Number(bet.stakeYen);
+      }else{
+        const info=payoutInfo.get(bet.raceId);if(!info)continue;
+        const key=`${bet.betType}:${canonicalCombination(bet.betType,bet.combination)}`;
+        if(bet.settlementStatus==='pending'){
+          // A different payout type arriving first must never turn a not-yet-published type into a false loss.
+          if(!info.types.has(bet.betType))continue;
+          returned=Math.round(Number(bet.stakeYen)/100*(info.map.get(key)??0));
+        }else if(info.map.has(key)){
+          // Self-heal a row that an older settlement path incorrectly fixed at zero before this winning payout arrived.
+          returned=Math.round(Number(bet.stakeYen)/100*Number(info.map.get(key)));
+        }else{
+          continue;
+        }
+      }
+      if(returned===null)continue;
+      const current=bet.currentReturnYen===null?null:Number(bet.currentReturnYen);
+      if(bet.settlementStatus==='settled'&&current===returned)continue;
+      statements.push(db.prepare(`UPDATE rt_public_bets SET settlement_status='settled',return_yen=? WHERE id=?`).bind(returned,bet.id));
     }
     if(statements.length)await db.batch(statements);
   }catch{/* next cron/request retries */}
