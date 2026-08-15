@@ -76,7 +76,11 @@ export function loadCompletedModelRuntime(buffer: ArrayBuffer): CompletedModelRu
         if (featureIndex >= featureCount) throw new Error(`completed model feature index out of range: ${featureIndex}`);
 
         const featureValue = features[featureIndex] ?? Number.NaN;
-        const isMissing = Number.isNaN(featureValue) || (missingType === 2 && featureValue === 0);
+        const isMissing = missingType === 1
+          ? Number.isNaN(featureValue)
+          : missingType === 2
+            ? Number.isNaN(featureValue) || featureValue === 0
+            : false;
         const defaultLeft = (nodeFlags & 1) !== 0;
         const goLeft = isMissing ? defaultLeft : featureValue <= value;
         node = goLeft ? left : right;
