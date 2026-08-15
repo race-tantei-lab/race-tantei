@@ -1,6 +1,6 @@
 name: Apply canonical recency integration
 
-# retry with result-presence and missing-odds fallback
+# publish only verified runtime files; workflow edits are handled separately
 on:
   push:
     branches:
@@ -50,13 +50,20 @@ jobs:
         run: python scripts/audit-canonical-recency-learning.py
       - name: Verify patch cleanliness
         run: git diff --check
-      - name: Commit verified integration
+      - name: Commit verified runtime integration
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm scripts/apply-canonical-recency-patch.py scripts/apply-canonical-recency-fixup.py scripts/apply-canonical-market-fallback.py .github/workflows/apply-canonical-recency-patch.yml
-          git add -A
+          git add \
+            src/v1/completed-ticket-runtime.ts \
+            src/v1/completed-feature-runtime.ts \
+            src/v1/completed-worker-live-lock.ts \
+            src/v1/completed-recency-learning.ts \
+            scripts/generate-ten-year-live-bets.py \
+            scripts/live-recency-learning.py \
+            scripts/audit-canonical-recency-learning.py \
+            package.json
           git commit -m "Complete canonical same-day recency learning"
           git push origin HEAD:fix/canonical-online-recency-learning-20260815
