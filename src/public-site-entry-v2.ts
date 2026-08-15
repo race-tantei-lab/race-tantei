@@ -69,7 +69,10 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const pathname = new URL(request.url).pathname;
     if (pathname === "/" || pathname === "/api/public/calendar" || pathname === "/api/public/day" || pathname.startsWith("/races/")) {
-      await syncCalendarWindow(env);
+      // Calendar refresh is a cache/discovery maintenance task. The public response
+      // already comes from D1, so stale-calendar refresh must never hold the live
+      // prediction API open while it waits on JRA network I/O.
+      ctx.waitUntil(syncCalendarWindow(env));
       ctx.waitUntil(expandRecentDiscovery(env));
     }
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
