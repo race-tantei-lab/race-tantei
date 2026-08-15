@@ -42,6 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
+          today="$(TZ=Asia/Tokyo date +%F)"
 
           fetch_url() {
             local url="$1" body="$2" codefile="$3"
@@ -55,15 +56,17 @@ jobs:
             fetch_url "${base}/conditions" /tmp/conditions.html /tmp/conditions.code & p2=$!
             fetch_url "${base}/api/public/day?date=2026-08-08" /tmp/day8.json /tmp/day8.code & p3=$!
             fetch_url "${base}/api/public/day?date=2026-08-09" /tmp/day9.json /tmp/day9.code & p4=$!
-            wait "$p1"; wait "$p2"; wait "$p3"; wait "$p4"
+            fetch_url "${base}/api/public/day?date=${today}" /tmp/today.json /tmp/today.code & p5=$!
+            wait "$p1"; wait "$p2"; wait "$p3"; wait "$p4"; wait "$p5"
 
             home_code="$(cat /tmp/home.code)"
             conditions_code="$(cat /tmp/conditions.code)"
             c8="$(cat /tmp/day8.code)"
             c9="$(cat /tmp/day9.code)"
-            echo "attempt=${attempt} home=${home_code} conditions=${conditions_code} day8=${c8} day9=${c9}"
+            ctoday="$(cat /tmp/today.code)"
+            echo "attempt=${attempt} home=${home_code} conditions=${conditions_code} day8=${c8} day9=${c9} today=${today}:${ctoday}"
 
-            if [ "$home_code" = "200" ] && [ "$conditions_code" = "200" ] && [ "$c8" = "200" ] && [ "$c9" = "200" ]; then
+            if [ "$home_code" = "200" ] && [ "$conditions_code" = "200" ] && [ "$c8" = "200" ] && [ "$c9" = "200" ] && [ "$ctoday" = "200" ]; then
               race_id="$(python - <<'PY'
           import json
           try:
@@ -84,14 +87,18 @@ jobs:
               echo "selected_race=${race_id:-none} race=${race_code}"
 
               if [ "$race_code" = "200" ] && python - <<'PY'
-          import json,sys
+          import collections,json,sys
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
           home=open('/tmp/home.html',encoding='utf-8').read()
           conditions=open('/tmp/conditions.html',encoding='utf-8').read()
           race=open('/tmp/race.html',encoding='utf-8').read()
           d8=json.load(open('/tmp/day8.json',encoding='utf-8'))
           d9=json.load(open('/tmp/day9.json',encoding='utf-8'))
+          today=json.load(open('/tmp/today.json',encoding='utf-8'))
           r8=d8.get('races')
           r9=d9.get('races')
+          rt=today.get('races') if isinstance(today,dict) else None
           condition_markers=(
             '予想ロジック',
             '上位5頭',
@@ -102,6 +109,19 @@ jobs:
             'データ更新のタイミング',
             '公開した買い目と結果は後から変更しません',
           )
+          frozen_projection=True
+          projection={}
+          if isinstance(rt,list):
+              venue_counts=collections.Counter(str(r.get('venue') or '') for r in rt if r.get('venue'))
+              states=collections.Counter(str((r.get('publicState') or {}).get('code') or '') for r in rt)
+              structured=len(venue_counts)>=2 and all(v==12 for v in venue_counts.values())
+              now=datetime.now(ZoneInfo('Asia/Tokyo'))
+              if structured and now.hour>=9:
+                  expected_selected=5*len(venue_counts)
+                  selected_like=sum(states.get(x,0) for x in ('target','buy','hit','miss','overdue','missing'))
+                  expected_skip=7*len(venue_counts)
+                  frozen_projection=states.get('pending',0)==0 and selected_like==expected_selected and states.get('skip',0)==expected_skip
+              projection={'venues':dict(venue_counts),'states':dict(states),'structured':structured,'jstHour':now.hour}
           checks={
             'homeAlive':'レース探偵' in home,
             'homeSharedRoi':'<summary><b>全体</b>' in home and '会場別回収率' in home,
@@ -110,11 +130,14 @@ jobs:
             'conditionsMethodology':all(marker in conditions for marker in condition_markers),
             'day8ApiShape':isinstance(r8,list) and len(r8)>0,
             'day9ApiShape':isinstance(r9,list) and len(r9)>0,
+            'todayFrozenSelectionProjection':frozen_projection,
           }
           print(json.dumps({
             'checks':checks,
             'day8RaceCount':len(r8) if isinstance(r8,list) else None,
             'day9RaceCount':len(r9) if isinstance(r9,list) else None,
+            'todayRaceCount':len(rt) if isinstance(rt,list) else None,
+            'todayProjection':projection,
           },ensure_ascii=False))
           sys.exit(0 if all(checks.values()) else 1)
           PY
