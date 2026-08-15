@@ -47,22 +47,32 @@ jobs:
             [ -n "$race_id" ] || continue
             curl --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 4 --max-time 20 -fsS "$base/races/$race_id" -o "/tmp/${race_id}.html"
             RACE_ID="$race_id" python - <<'PY'
-          import os,re
+          import os
           from pathlib import Path
           race_id=os.environ['RACE_ID']
           html=Path('/tmp/'+race_id+'.html').read_text(encoding='utf-8')
           if '<h2>確定買い目</h2>' not in html:
               raise SystemExit('LIVE_UI_CONFIRMED_BET_HEADING_MISSING:'+race_id)
-          if 'class="course-tabs"' not in html:
-              raise SystemExit('LIVE_UI_COURSE_TABS_MISSING:'+race_id)
-          for name in ('ライト','スタンダード','プレミアム'):
-              if name not in html:
-                  raise SystemExit('LIVE_UI_COURSE_NAME_MISSING:'+race_id+':'+name)
-          blocks=re.findall(r'<div class="course-view" data-course="([012])"[^>]*>(.*?)</div></div>',html,re.S)
-          if len(blocks)!=3:
-              raise SystemExit(f'LIVE_UI_COURSE_BLOCK_COUNT:{race_id}:{len(blocks)}')
-          counts={idx:block.count('<tr><td>') for idx,block in blocks}
-          if set(counts)!={'0','1','2'} or any(n!=2 for n in counts.values()):
+          names=('ライト','スタンダード','プレミアム')
+          starts=[]
+          for i,name in enumerate(names):
+              marker=f'<div class="course-view" data-course="{i}"'
+              pos=html.find(marker)
+              if pos<0:
+                  raise SystemExit(f'LIVE_UI_COURSE_BLOCK_MISSING:{race_id}:{name}')
+              starts.append(pos)
+              if f'<h3 class="course-heading">{name}</h3>' not in html[pos:pos+500]:
+                  raise SystemExit(f'LIVE_UI_COURSE_HEADING_MISSING:{race_id}:{name}')
+          if starts != sorted(starts):
+              raise SystemExit('LIVE_UI_COURSE_ORDER_INVALID:'+race_id)
+          counts={}
+          for i,name in enumerate(names):
+              end=starts[i+1] if i+1<len(starts) else html.find('<div class="section-title"><h2>出走馬',starts[i])
+              if end<0:
+                  end=len(html)
+              block=html[starts[i]:end]
+              counts[name]=block.count('<tr><td>')
+          if any(n!=2 for n in counts.values()):
               raise SystemExit(f'LIVE_UI_TICKET_COUNT_INVALID:{race_id}:{counts}')
           print('LIVE_DETAIL_OK',race_id,counts)
           PY
