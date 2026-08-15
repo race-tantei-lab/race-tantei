@@ -46,4 +46,4 @@ jobs:
             exit 0
           fi
           echo "AUTO_FINAL_STALE_OR_FAILED_DISPATCH age_seconds=$age status=$status conclusion=$conclusion updated=$updated"
-          gh workflow run auto-final-live-bets.yml --ref main
+          gh workflow run auto-final-live-bets.yml -R "$repo" --ref main
