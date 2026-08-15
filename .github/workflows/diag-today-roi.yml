@@ -1,0 +1,70 @@
+name: Diagnose today ROI
+
+on:
+  push:
+    branches: [diag/today-roi-20260815]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Fetch public summary and raw D1 betting rows
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        shell: bash
+        run: |
+          set -euo pipefail
+          date=2026-08-15
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          echo '--- PUBLIC TODAY SUMMARY ---'
+          curl --retry 3 --retry-delay 1 --retry-all-errors -fsS "$base/api/public/today-summary" | tee /tmp/today-summary.json
+          echo
+          query="SELECT b.id,b.race_id AS raceId,r.venue,r.race_no AS raceNo,b.course,b.bet_type AS betType,b.combination,b.stake_yen AS stakeYen,b.return_yen AS returnYen,b.settlement_status AS settlementStatus,r.refund_horse_nos_json AS refundsJson FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date='$date' ORDER BY r.start_time_utc,r.venue,r.race_no,b.course,b.id;"
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$query" > /tmp/rows.json
+          echo '--- RAW ROWS ---'
+          cat /tmp/rows.json
+          echo
+          echo '--- RECOMPUTED ---'
+          node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('/tmp/rows.json','utf8'));
+          const blocks=Array.isArray(raw)?raw:[raw];
+          const rows=blocks.flatMap(x=>Array.isArray(x?.results)?x.results:[]);
+          const summary=JSON.parse(fs.readFileSync('/tmp/today-summary.json','utf8'));
+          const courses=['ライト','スタンダード','プレミアム'];
+          const horseNos=s=>[...String(s||'').matchAll(/\d{1,2}/g)].map(x=>Number(x[0])).filter(x=>x>=1&&x<=18);
+          const refunds=s=>{try{return new Set(JSON.parse(String(s||'[]')).map(Number))}catch{return new Set()}};
+          for(const course of courses){
+            const cr=rows.filter(r=>r.course===course);
+            const byRace=new Map();
+            for(const r of cr){const a=byRace.get(r.raceId)||[];a.push(r);byRace.set(r.raceId,a)}
+            let canonicalStake=0,canonicalReturn=0,completeRaces=0,genuineHits=0,refundRaces=0;
+            const bad=[];
+            for(const [raceId,a] of byRace){
+              const complete=a.length===2 && a.every(x=>x.settlementStatus==='settled');
+              if(!complete){bad.push({raceId,rows:a.map(x=>({id:x.id,status:x.settlementStatus,stake:x.stakeYen,ret:x.returnYen}))});continue}
+              completeRaces++;
+              canonicalStake+=a.reduce((s,x)=>s+Number(x.stakeYen||0),0);
+              canonicalReturn+=a.reduce((s,x)=>s+Number(x.returnYen||0),0);
+              let hit=false,refund=false;
+              for(const x of a){const rf=refunds(x.refundsJson);const isRefund=horseNos(x.combination).some(n=>rf.has(n));if(isRefund)refund=true;else if(Number(x.returnYen||0)>0)hit=true}
+              if(hit)genuineHits++; if(refund)refundRaces++;
+            }
+            const oldStake=cr.filter(x=>x.settlementStatus==='settled').reduce((s,x)=>s+Number(x.stakeYen||0),0);
+            const oldReturn=cr.filter(x=>x.settlementStatus==='settled').reduce((s,x)=>s+Number(x.returnYen||0),0);
+            const oldSettled=new Set(cr.filter(x=>x.settlementStatus==='settled').map(x=>x.raceId)).size;
+            const api=(summary.courses||[]).find(x=>x.course===course)||{};
+            console.log(JSON.stringify({course,totalRows:cr.length,totalRaces:byRace.size,oldFormula:{settledRaces:oldSettled,stakeYen:oldStake,returnYen:oldReturn,roiPct:oldStake?oldReturn/oldStake*100:null},canonicalCompleteRaces:{settledRaces:completeRaces,stakeYen:canonicalStake,returnYen:canonicalReturn,roiPct:canonicalStake?canonicalReturn/canonicalStake*100:null,genuineHits,refundRaces},api,bad},null,2));
+          }
+NODE
