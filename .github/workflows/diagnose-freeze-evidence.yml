@@ -1,0 +1,64 @@
+name: Diagnose frozen selection evidence
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-freeze-evidence.yml"
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inspect D1 evidence retention
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          endpoint=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
+          def q(sql,params=None):
+              body=json.dumps({'sql':sql,'params':params or []}).encode()
+              req=urllib.request.Request(endpoint,data=body,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},method='POST')
+              with urllib.request.urlopen(req,timeout=60) as r: payload=json.loads(r.read().decode())
+              if not payload.get('success'): raise RuntimeError(payload.get('errors'))
+              return payload.get('result',[{}])[0].get('results',[])
+          def show(label,rows): print(label+'='+json.dumps(rows,ensure_ascii=False,separators=(',',':')))
+
+          tables=q("SELECT name,sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+          show('TABLES',[{'name':r.get('name'),'sql':r.get('sql')} for r in tables if any(x in str(r.get('name','')).lower() for x in ['race','runner','result','payout','system','history','snapshot','audit'])])
+          triggers=q("SELECT name,tbl_name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")
+          show('TRIGGERS',triggers)
+          for table in ['rt_races','rt_runners','rt_results','rt_payouts','rt_system_state']:
+              try: show('COLUMNS_'+table,q(f'PRAGMA table_info({table})'))
+              except Exception as e: print('COLUMNS_ERROR_'+table+'='+repr(e))
+
+          show('SYSTEM_FREEZE_ROWS',q("SELECT state_key,state_value,updated_at FROM rt_system_state WHERE state_key IN (?,?) OR state_key LIKE ? ORDER BY state_key",['final_daily_selection:2026-08-15','worker_selection:2026-08-15','worker_selection_explanation:2026-08-15:%']))
+
+          cols={}
+          for table in ['rt_races','rt_runners','rt_results','rt_payouts']:
+              cols[table]={str(r.get('name')) for r in q(f'PRAGMA table_info({table})')}
+          for table in ['rt_races','rt_runners','rt_results','rt_payouts']:
+              timecols=[c for c in ['updated_at','created_at','synced_at','fetched_at','observed_at','collected_at'] if c in cols[table]]
+              if timecols:
+                  select=', '.join(timecols)
+                  try:
+                      if table=='rt_races': rows=q(f"SELECT race_id,{select} FROM {table} WHERE race_date=? ORDER BY race_id",['2026-08-15'])
+                      else: rows=q(f"SELECT t.race_id,{select} FROM {table} t JOIN rt_races r ON r.race_id=t.race_id WHERE r.race_date=? ORDER BY t.race_id LIMIT 500",['2026-08-15'])
+                      show('TIMES_'+table,rows)
+                  except Exception as e: print('TIMES_ERROR_'+table+'='+repr(e))
+          PY
