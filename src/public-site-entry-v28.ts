@@ -1,7 +1,7 @@
 import publicSite from "./public-site-entry-v27.js";
 import type { Env } from "./v1/types.js";
 
-const UI_VERSION = "ten-year-completed-public-v28-win5-view-switch-20260816";
+const UI_VERSION = "ten-year-completed-public-v28-win5-clean-ui-20260816";
 
 function switcherStyles(): string {
   return `<style>
@@ -13,7 +13,8 @@ function switcherStyles(): string {
     .win5-other-heading{margin-top:18px}
     .win5-other-heading h2{margin:0;font-size:19px}
     .win5-other-heading p{margin:4px 0 0;color:var(--muted);font-size:10px}
-    .win5-view-panel[data-win5-view="other"] .win5-quick{margin-top:10px}
+    .win5-view-panel[data-win5-view="other"] .win5-quick{margin-top:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+    .win5-tech-static-title{padding:13px 14px;font-weight:800;border-bottom:1px solid var(--line)}
     @media(max-width:760px){.win5-view-switch{position:sticky;top:8px;z-index:20;margin:12px 0 4px;background:rgba(15,23,32,.96);backdrop-filter:blur(8px)}.win5-view-button{min-height:44px;font-size:13px}.win5-other-heading h2{font-size:17px}}
   </style>`;
 }
@@ -52,17 +53,40 @@ function switcherScript(): string {
     otherPanel.setAttribute('role', 'tabpanel');
     otherPanel.hidden = true;
 
-    for (const section of [targetSection, plansSection, ticketsSection]) {
+    if (plansSection) plansSection.remove();
+    for (const section of [targetSection, ticketsSection]) {
       if (section) ticketsPanel.append(section);
     }
 
     const heading = document.createElement('div');
     heading.className = 'win5-other-heading';
-    heading.innerHTML = '<h2>その他</h2><p>更新時刻・ルール・1着確率・直近学習の詳細</p>';
+    heading.innerHTML = '<h2>その他</h2><p>更新時刻・1着確率・直近学習の詳細</p>';
     otherPanel.append(heading);
-    if (quick) otherPanel.append(quick);
-    if (diagnosticsSection) otherPanel.append(diagnosticsSection);
-    if (note) otherPanel.append(note);
+
+    if (quick) {
+      for (const card of Array.from(quick.children)) {
+        const label = (card.querySelector('span')?.textContent || '').trim();
+        if (label === 'ルール') card.remove();
+      }
+      otherPanel.append(quick);
+    }
+
+    if (diagnosticsSection) {
+      const tech = diagnosticsSection.querySelector('.win5-tech');
+      if (tech) {
+        tech.setAttribute('open', '');
+        const summary = Array.from(tech.children).find((child) => child.tagName === 'SUMMARY');
+        if (summary) {
+          const staticTitle = document.createElement('div');
+          staticTitle.className = 'win5-tech-static-title';
+          staticTitle.textContent = '各レースの1着確率・学習情報';
+          summary.replaceWith(staticTitle);
+        }
+      }
+      otherPanel.append(diagnosticsSection);
+    }
+
+    if (note) note.remove();
 
     hero.insertAdjacentElement('afterend', switcher);
     switcher.insertAdjacentElement('afterend', ticketsPanel);
