@@ -9,6 +9,7 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 BASE_PATH=ROOT/'scripts'/'run-auto-final-live.py'
 SELECTION_PATH=ROOT/'scripts'/'generate-ten-year-preday-selection.py'
 GENERATOR_PATH=ROOT/'scripts'/'generate-ten-year-live-bets.py'
+EXPLANATION_PATH=ROOT/'scripts'/'write-ten-year-selection-explanations.py'
 CONFIG_PATH=ROOT/'config'/'ten-year-completed-model.json'
 MODEL_PATH=ROOT/'models'/'ten-year-completed-model.txt'
 STATE_MANIFEST_PATH=ROOT/'models'/'ten-year-production-state-manifest.json'
@@ -89,17 +90,36 @@ def check_only(collector):
     tables=collector.d1_query("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('rt_races','rt_runners','rt_results','rt_payouts','rt_public_bets','rt_system_state')")
     names={str(r.get('name')) for r in tables};required={'rt_races','rt_runners','rt_results','rt_payouts','rt_public_bets','rt_system_state'}
     if names!=required: raise RuntimeError(f'AUTO_D1_TABLES_MISSING:{sorted(required-names)}')
-    print(json.dumps({'status':'check_ok','sourceModel':'ten-year-completed-model','modelSha256':actual,'features':len(features),'stateThroughDate':manifest['throughDate'],'tables':sorted(names)},ensure_ascii=False))
+    if not EXPLANATION_PATH.exists(): raise RuntimeError('SELECTION_EXPLANATION_SCRIPT_MISSING')
+    print(json.dumps({'status':'check_ok','sourceModel':'ten-year-completed-model','modelSha256':actual,'features':len(features),'stateThroughDate':manifest['throughDate'],'tables':sorted(names),'selectionExplanationScript':str(EXPLANATION_PATH.relative_to(ROOT))},ensure_ascii=False))
 
 
 def main():
     base=load(BASE_PATH,'legacy_auto_final_live_runtime')
+    explanation=load(EXPLANATION_PATH,'ten_year_auto_selection_explanation')
     base.validate_selection=validate_selection
     base.generate_dynamic_selection=generate_selection
     base.run_learned_generator=run_generator
     base.verify_locked=verify_locked
     base.check_only=check_only
     base.COURSE_BUDGETS=COURSE_BUDGETS
+
+    # The explanation trace is strictly observational. It is written under its
+    # own rt_system_state keys only after the frozen selection is re-computed
+    # and raceId/raceScore parity is proven. Any explanation failure is logged
+    # but must never block or alter live betting.
+    original_freeze_or_load_selection=base.freeze_or_load_selection
+    def freeze_or_load_with_explanation(collector,date,out_path):
+        payload,status=original_freeze_or_load_selection(collector,date,out_path)
+        if payload is not None:
+            try:
+                rows=explanation.ensure_selection_explanations(collector,date,payload)
+                print(json.dumps({'selectionExplanation':'ok','date':date,'rows':len(rows),'selectionStatus':status},ensure_ascii=False))
+            except Exception as exc:
+                print(json.dumps({'selectionExplanation':'error','date':date,'error':str(exc),'selectionStatus':status},ensure_ascii=False),file=sys.stderr)
+        return payload,status
+    base.freeze_or_load_selection=freeze_or_load_with_explanation
+
     # Cloudflare Worker is the one-minute primary path. GitHub Actions remains a
     # narrow independent fallback and must not pre-empt the Worker's fresher odds.
     base.MIN_LOCK_SECONDS=15*60
