@@ -23,10 +23,10 @@ const PREVIEW_PREFIX = "worker_live_preview:";
 const FINAL_PREFIX = "worker_live_final:";
 const BODY_WEIGHT_REFRESH_OPEN_MS = 80 * 60 * 1000;
 const PREVIEW_OPEN_MS = 45 * 60 * 1000;
-const FINALIZE_OPEN_MS = 17 * 60 * 1000;
+const FINALIZE_OPEN_MS = 16 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
 const PREVIEW_HISTORY = 3;
-const PREVIEW_VERSION = 2;
+const PREVIEW_VERSION = 1;
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
 
 type SelectionRow = { raceId?: string; venue?: string; raceNo?: number };
@@ -49,12 +49,14 @@ type ModelMetaRow = { key: string; value: string };
 type ModelChunkRow = { seq: number; dataB64: string };
 
 type PreviewSnapshot = {
-  version: 2;
+  version: 1;
   raceId: string;
   sourceModel: string;
   modelSha256: string;
   generatedAt: string;
-  bodyWeightSnapshot: OfficialBodyWeightSnapshot;
+  bodyWeightApplied?: boolean;
+  bodyWeightSnapshot?: OfficialBodyWeightSnapshot | null;
+  bodyWeightError?: string | null;
   oddsFetchedAt: string;
   oddsSource: string;
   oddsSnapshotSha256: string;
@@ -63,7 +65,7 @@ type PreviewSnapshot = {
 };
 
 type PreviewEnvelope = {
-  version: 2;
+  version: 1;
   raceId: string;
   snapshots: PreviewSnapshot[];
 };
@@ -79,6 +81,7 @@ type Audit = {
   lockedByWorker: string[];
   refreshedBodyWeightRaceIds: string[];
   bodyWeightPendingRaceIds: string[];
+  bodyWeightBreachRaceIds: string[];
   refreshedPreviewRaceIds: string[];
   previewAvailableRaceIds: string[];
   finalizedFromFreshRaceIds: string[];
@@ -215,7 +218,7 @@ function isStrictComplete(rows: PublicBetRow[]): boolean {
   return new Set(signatures).size === 1;
 }
 
-function validBodyWeightSnapshot(snapshot: OfficialBodyWeightSnapshot, raceId: string): boolean {
+function validBodyWeightSnapshot(snapshot: OfficialBodyWeightSnapshot | null | undefined, raceId: string): boolean {
   if (!snapshot || snapshot.version !== 1 || snapshot.raceId !== raceId) return false;
   if (!Number.isFinite(Date.parse(snapshot.fetchedAt)) || !snapshot.sourceUrl || !/^[0-9a-f]{64}$/.test(snapshot.snapshotSha256)) return false;
   if (!Array.isArray(snapshot.activeRunners) || snapshot.activeRunners.length < 3) return false;
@@ -230,11 +233,15 @@ function validBodyWeightSnapshot(snapshot: OfficialBodyWeightSnapshot, raceId: s
   return true;
 }
 
+function snapshotHasOfficialBodyWeight(snapshot: PreviewSnapshot): boolean {
+  return snapshot.bodyWeightApplied === true && validBodyWeightSnapshot(snapshot.bodyWeightSnapshot, snapshot.raceId);
+}
+
 function validSnapshot(snapshot: PreviewSnapshot, raceId: string): boolean {
   if (snapshot.version !== PREVIEW_VERSION || snapshot.raceId !== raceId) return false;
   if (snapshot.sourceModel !== COMPLETED_MODEL_VERSION || snapshot.modelSha256 !== COMPLETED_MODEL_SHA256) return false;
   if (!Number.isFinite(Date.parse(snapshot.generatedAt)) || !Number.isFinite(Date.parse(snapshot.oddsFetchedAt))) return false;
-  if (!validBodyWeightSnapshot(snapshot.bodyWeightSnapshot, raceId)) return false;
+  if (snapshot.bodyWeightApplied === true && !validBodyWeightSnapshot(snapshot.bodyWeightSnapshot, raceId)) return false;
   if (!snapshot.oddsSource || !/^[0-9a-f]{64}$/.test(snapshot.oddsSnapshotSha256)) return false;
   if (!Array.isArray(snapshot.tickets) || snapshot.tickets.length !== 2 || new Set(snapshot.tickets.map((ticket) => ticket.betType)).size !== 2) return false;
   if (snapshot.tickets.some((ticket) => !ticket.combination || !Number.isFinite(ticket.officialOdds) || ticket.officialOdds <= 0 || !Number.isFinite(ticket.predictedProbability) || ticket.predictedProbability <= 0)) return false;
@@ -269,17 +276,25 @@ async function latestPreview(db: D1Database, raceId: string): Promise<PreviewSna
   return (await loadPreviewEnvelope(db, raceId))?.snapshots[0] ?? null;
 }
 
+async function latestOfficialBodyWeightPreview(db: D1Database, raceId: string): Promise<PreviewSnapshot | null> {
+  return (await loadPreviewEnvelope(db, raceId))?.snapshots.find(snapshotHasOfficialBodyWeight) ?? null;
+}
+
 async function savePreview(db: D1Database, snapshot: PreviewSnapshot): Promise<void> {
   if (!validSnapshot(snapshot, snapshot.raceId)) throw new Error(`WORKER_PREVIEW_INVALID:${snapshot.raceId}`);
   const existing = await loadPreviewEnvelope(db, snapshot.raceId);
   const prior = existing?.snapshots.filter((row) => row.oddsSnapshotSha256 !== snapshot.oddsSnapshotSha256 || row.generatedAt !== snapshot.generatedAt) ?? [];
-  const envelope: PreviewEnvelope = { version: PREVIEW_VERSION, raceId: snapshot.raceId, snapshots: [snapshot, ...prior].slice(0, PREVIEW_HISTORY) };
+  const candidates = [snapshot, ...prior];
+  let snapshots = candidates.slice(0, PREVIEW_HISTORY);
+  const official = candidates.find(snapshotHasOfficialBodyWeight);
+  if (official && !snapshots.includes(official)) snapshots = [...snapshots.slice(0, PREVIEW_HISTORY - 1), official];
+  const envelope: PreviewEnvelope = { version: PREVIEW_VERSION, raceId: snapshot.raceId, snapshots };
   await db.prepare(`
     INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
     ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
   `).bind(`${PREVIEW_PREFIX}${snapshot.raceId}`, JSON.stringify(envelope)).run();
   const saved = await latestPreview(db, snapshot.raceId);
-  if (!saved || saved.generatedAt !== snapshot.generatedAt || saved.oddsSnapshotSha256 !== snapshot.oddsSnapshotSha256 || saved.bodyWeightSnapshot.snapshotSha256 !== snapshot.bodyWeightSnapshot.snapshotSha256) {
+  if (!saved || saved.generatedAt !== snapshot.generatedAt || saved.oddsSnapshotSha256 !== snapshot.oddsSnapshotSha256) {
     throw new Error(`WORKER_PREVIEW_SAVE_VERIFY_FAILED:${snapshot.raceId}`);
   }
 }
@@ -292,13 +307,18 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
   if (!Number.isFinite(startMs) || startMs <= now.getTime()) throw new Error(`WORKER_REFUSES_POST_START_PREVIEW:${raceId}`);
   if (!race.entryUrl) throw new Error(`WORKER_ENTRY_URL_MISSING:${raceId}`);
 
-  // Bodyweight acquisition is part of input preparation, not a display gate.
-  // Refresh the official JRA entry page first, persist it, then re-read the
-  // runners so the frozen 56-feature model necessarily receives those values.
-  const bodyWeightSnapshot = await resolveOfficialBodyWeights(db, race, initial.runners, now);
+  let bodyWeightSnapshot: OfficialBodyWeightSnapshot | null = null;
+  let bodyWeightError: string | null = null;
+  try {
+    bodyWeightSnapshot = await resolveOfficialBodyWeights(db, race, initial.runners, now);
+  } catch (error) {
+    bodyWeightError = errorText(error);
+  }
+
   const refreshed = await loadRace(db, raceId);
-  if (!bodyWeightSnapshotMatchesRunners(bodyWeightSnapshot, refreshed.runners)) {
-    throw new Error(`WORKER_BODYWEIGHT_FEATURE_INPUT_MISMATCH:${raceId}`);
+  if (bodyWeightSnapshot && !bodyWeightSnapshotMatchesRunners(bodyWeightSnapshot, refreshed.runners)) {
+    bodyWeightError = `WORKER_BODYWEIGHT_FEATURE_INPUT_MISMATCH:${raceId}`;
+    bodyWeightSnapshot = null;
   }
 
   const state = await loadCompletedFeatureStateForRace(db, refreshed.race, refreshed.runners);
@@ -315,7 +335,9 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     sourceModel: COMPLETED_MODEL_VERSION,
     modelSha256: COMPLETED_MODEL_SHA256,
     generatedAt: iso(),
+    bodyWeightApplied: Boolean(bodyWeightSnapshot),
     bodyWeightSnapshot,
+    bodyWeightError,
     oddsFetchedAt,
     oddsSource: fetched.source,
     oddsSnapshotSha256: await sha256Hex(canonicalOddsRows(fetched.rows)),
@@ -329,10 +351,7 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
 
 async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewSnapshot, now: Date, finalizedFrom: "fresh" | "last_good" | "deadline_watchdog"): Promise<void> {
   if (!validSnapshot(snapshot, raceId)) throw new Error(`WORKER_FINAL_SNAPSHOT_INVALID:${raceId}`);
-  const { race, runners } = await loadRace(db, raceId);
-  if (!bodyWeightSnapshotMatchesRunners(snapshot.bodyWeightSnapshot, runners)) {
-    throw new Error(`WORKER_FINAL_BODYWEIGHT_MISMATCH:${raceId}`);
-  }
+  const { race } = await loadRace(db, raceId);
   if (!race.startTimeUtc) throw new Error(`WORKER_START_TIME_MISSING:${raceId}`);
   const startMs = Date.parse(race.startTimeUtc);
   if (!Number.isFinite(startMs) || startMs <= now.getTime()) throw new Error(`WORKER_REFUSES_POST_START_LOCK:${raceId}`);
@@ -344,6 +363,8 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
   }
 
   const lockedAt = iso(now);
+  const hasBodyWeight = snapshotHasOfficialBodyWeight(snapshot);
+  const bodyWeightSnapshot = hasBodyWeight ? snapshot.bodyWeightSnapshot as OfficialBodyWeightSnapshot : null;
   const statements: D1PreparedStatement[] = [];
   if (existing.length) statements.push(db.prepare("DELETE FROM rt_public_bets WHERE race_id=? AND source_prediction_id=-2 AND settlement_status='pending'").bind(raceId));
   for (const bet of snapshot.courseBets) {
@@ -363,10 +384,12 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
     sourceModel: COMPLETED_MODEL_VERSION,
     modelSha256: COMPLETED_MODEL_SHA256,
     previewGeneratedAt: snapshot.generatedAt,
-    bodyWeightFetchedAt: snapshot.bodyWeightSnapshot.fetchedAt,
-    bodyWeightSource: snapshot.bodyWeightSnapshot.sourceUrl,
-    bodyWeightSnapshotSha256: snapshot.bodyWeightSnapshot.snapshotSha256,
-    bodyWeights: snapshot.bodyWeightSnapshot.activeRunners,
+    bodyWeightApplied: hasBodyWeight,
+    bodyWeightFetchedAt: bodyWeightSnapshot?.fetchedAt ?? null,
+    bodyWeightSource: bodyWeightSnapshot?.sourceUrl ?? null,
+    bodyWeightSnapshotSha256: bodyWeightSnapshot?.snapshotSha256 ?? null,
+    bodyWeights: bodyWeightSnapshot?.activeRunners ?? null,
+    bodyWeightError: snapshot.bodyWeightError ?? null,
     oddsFetchedAt: snapshot.oddsFetchedAt,
     oddsSource: snapshot.oddsSource,
     oddsSnapshotSha256: snapshot.oddsSnapshotSha256,
@@ -396,6 +419,7 @@ function emptyAudit(date: string, status: string): Audit {
     lockedByWorker: [],
     refreshedBodyWeightRaceIds: [],
     bodyWeightPendingRaceIds: [],
+    bodyWeightBreachRaceIds: [],
     refreshedPreviewRaceIds: [],
     previewAvailableRaceIds: [],
     finalizedFromFreshRaceIds: [],
@@ -423,8 +447,9 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
   const beforeStates = await Promise.all(ids.map(async (raceId) => isStrictComplete(await publicBetRows(env.DB, raceId))));
   const completeBefore = beforeStates.filter(Boolean).length;
   const lockedByWorker: string[] = [];
-  const refreshedBodyWeightRaceIds: string[] = [];
-  const bodyWeightPendingRaceIds: string[] = [];
+  const refreshedBodyWeightRaceIds = new Set<string>();
+  const bodyWeightPendingRaceIds = new Set<string>();
+  const bodyWeightBreachRaceIds = new Set<string>();
   const refreshedPreviewRaceIds: string[] = [];
   const finalizedFromFreshRaceIds: string[] = [];
   const finalizedFromFallbackRaceIds: string[] = [];
@@ -444,22 +469,24 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       if (remaining <= 0) { alreadyStartedIncompleteRaceIds.push(raceId); continue; }
       if (remaining > BODY_WEIGHT_REFRESH_OPEN_MS) { notYetInWindowRaceIds.push(raceId); continue; }
 
-      // Start polling the exact official entry page well before final scoring.
-      // Before T-45 this is acquisition-only: ordinary pre-race UI remains
-      // available and the cron simply retries until JRA publishes bodyweight.
+      // Acquisition starts well before final scoring. Failure here never removes
+      // the prediction path; it only keeps the race in the retry set.
       if (remaining > PREVIEW_OPEN_MS) {
         try {
           await refreshOfficialBodyWeights(env.DB, race, now);
-          refreshedBodyWeightRaceIds.push(raceId);
+          refreshedBodyWeightRaceIds.add(raceId);
         } catch {
-          bodyWeightPendingRaceIds.push(raceId);
+          bodyWeightPendingRaceIds.add(raceId);
         }
         continue;
       }
 
+      // At/after T-15 there is no new network dependency. Promote the best
+      // already-generated candidate, preferring one that used official bodyweight.
       if (remaining <= DEADLINE_MS) {
-        const fallback = await latestPreview(env.DB, raceId);
+        const fallback = await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId);
         if (!fallback) throw new Error(`WORKER_DEADLINE_PREVIEW_MISSING:${raceId}`);
+        if (!snapshotHasOfficialBodyWeight(fallback)) bodyWeightBreachRaceIds.add(raceId);
         await commitSnapshot(env.DB, raceId, fallback, now, "deadline_watchdog");
         lockedByWorker.push(raceId);
         finalizedFromFallbackRaceIds.push(raceId);
@@ -471,18 +498,21 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       try {
         model ??= await loadWorkerModel(env.DB);
         fresh = await generatePreview(env.DB, model, raceId, now);
-        refreshedBodyWeightRaceIds.push(raceId);
         refreshedPreviewRaceIds.push(raceId);
+        if (snapshotHasOfficialBodyWeight(fresh)) refreshedBodyWeightRaceIds.add(raceId);
+        else bodyWeightPendingRaceIds.add(raceId);
       } catch (error) {
         errors.push({ raceId, error: errorText(error) });
       }
 
       if (remaining <= FINALIZE_OPEN_MS) {
-        const chosen = fresh ?? await latestPreview(env.DB, raceId);
+        const official = fresh && snapshotHasOfficialBodyWeight(fresh) ? fresh : await latestOfficialBodyWeightPreview(env.DB, raceId);
+        const chosen = official ?? fresh ?? await latestPreview(env.DB, raceId);
         if (!chosen) throw new Error(`WORKER_FINALIZE_PREVIEW_MISSING:${raceId}`);
-        await commitSnapshot(env.DB, raceId, chosen, now, fresh ? "fresh" : "last_good");
+        if (!snapshotHasOfficialBodyWeight(chosen)) bodyWeightBreachRaceIds.add(raceId);
+        await commitSnapshot(env.DB, raceId, chosen, now, fresh === chosen ? "fresh" : "last_good");
         lockedByWorker.push(raceId);
-        if (fresh) finalizedFromFreshRaceIds.push(raceId);
+        if (fresh === chosen) finalizedFromFreshRaceIds.push(raceId);
         else finalizedFromFallbackRaceIds.push(raceId);
       }
     } catch (error) {
@@ -518,8 +548,9 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
   }
   const completeAfter = ids.length - incompleteRaceIds.length;
   const breaches = [...deadlineBreachRaceIds];
+  const bodyWeightBreaches = [...bodyWeightBreachRaceIds];
   const audit: Audit = {
-    status: breaches.length ? "deadline_breach" : errors.length ? "retrying" : "ok",
+    status: breaches.length ? "deadline_breach" : bodyWeightBreaches.length ? "body_weight_breach" : errors.length ? "retrying" : "ok",
     checkedAt: iso(now),
     date,
     sourceModel: COMPLETED_MODEL_VERSION,
@@ -527,8 +558,9 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
     completeBefore,
     completeAfter,
     lockedByWorker,
-    refreshedBodyWeightRaceIds,
-    bodyWeightPendingRaceIds,
+    refreshedBodyWeightRaceIds: [...refreshedBodyWeightRaceIds],
+    bodyWeightPendingRaceIds: [...bodyWeightPendingRaceIds],
+    bodyWeightBreachRaceIds: bodyWeightBreaches,
     refreshedPreviewRaceIds,
     previewAvailableRaceIds,
     finalizedFromFreshRaceIds,

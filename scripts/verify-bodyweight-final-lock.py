@@ -38,15 +38,24 @@ def main():
     require('BODYWEIGHT_D1_VERIFY_FAILED' in body,'BODYWEIGHT_D1_REREAD_VERIFY_MISSING')
 
     require('const BODY_WEIGHT_REFRESH_OPEN_MS = 80 * 60 * 1000;' in live,'BODYWEIGHT_T80_REFRESH_WINDOW_MISSING')
-    require('const PREVIEW_VERSION = 2;' in live,'BODYWEIGHT_PREVIEW_VERSION_NOT_BUMPED')
-    require('bodyWeightSnapshot: OfficialBodyWeightSnapshot' in live,'BODYWEIGHT_PREVIEW_PROVENANCE_MISSING')
+    require('const PREVIEW_OPEN_MS = 45 * 60 * 1000;' in live,'BODYWEIGHT_PREVIEW_WINDOW_MISSING')
+    require('const FINALIZE_OPEN_MS = 16 * 60 * 1000;' in live,'BODYWEIGHT_T16_FINALIZE_WINDOW_MISSING')
+    require('const DEADLINE_MS = 15 * 60 * 1000;' in live,'BODYWEIGHT_T15_DEADLINE_MISSING')
+    require('bodyWeightApplied?: boolean' in live and 'bodyWeightSnapshot?: OfficialBodyWeightSnapshot | null' in live,'BODYWEIGHT_PREVIEW_MUST_ALLOW_PROVISIONAL_FALLBACK')
+    require('bodyWeightError = errorText(error)' in live,'BODYWEIGHT_FETCH_FAILURE_NOT_CAPTURED')
+    require('latestOfficialBodyWeightPreview' in live,'BODYWEIGHT_LAST_GOOD_WEIGHTED_PREVIEW_MISSING')
+    require('official ?? fresh ?? await latestPreview(env.DB, raceId)' in live,'BODYWEIGHT_FINAL_FALLBACK_ORDER_INVALID')
+    require('await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId)' in live,'BODYWEIGHT_DEADLINE_LOCAL_FALLBACK_MISSING')
+    require('bodyWeightBreachRaceIds' in live,'BODYWEIGHT_BREACH_AUDIT_MISSING')
     require('bodyWeightFetchedAt' in live and 'bodyWeightSnapshotSha256' in live and 'bodyWeights:' in live,'BODYWEIGHT_FINAL_AUDIT_PROVENANCE_MISSING')
-    refresh_pos=live.find('const bodyWeightSnapshot = await resolveOfficialBodyWeights')
-    reread_pos=live.find('const refreshed = await loadRace',refresh_pos)
-    feature_pos=live.find('loadCompletedFeatureStateForRace',reread_pos)
-    vector_pos=live.find('completedFeatureVector',feature_pos)
-    require(0 <= refresh_pos < reread_pos < feature_pos < vector_pos,'BODYWEIGHT_NOT_RESOLVED_BEFORE_FEATURE_VECTOR')
-    require('bodyWeightSnapshotMatchesRunners(snapshot.bodyWeightSnapshot, runners)' in live,'BODYWEIGHT_FINAL_COMMIT_MATCH_GATE_MISSING')
+    require('WORKER_FINAL_BODYWEIGHT_MISMATCH' not in live,'BODYWEIGHT_MISSING_STILL_BLOCKS_FINAL_BETS')
+
+    body_try=live.find('bodyWeightSnapshot = await resolveOfficialBodyWeights')
+    body_catch=live.find('bodyWeightError = errorText(error)',body_try)
+    reread=live.find('const refreshed = await loadRace',body_catch)
+    feature=live.find('loadCompletedFeatureStateForRace',reread)
+    vector=live.find('completedFeatureVector',feature)
+    require(0 <= body_try < body_catch < reread < feature < vector,'BODYWEIGHT_REFRESH_NOT_ATTEMPTED_BEFORE_FEATURE_VECTOR')
 
     critical_pos=v20.find('await runCriticalPreRacePath(env);')
     generic_pos=v20.find('if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);',critical_pos)
@@ -58,10 +67,14 @@ def main():
     finalize_pos=workflow.find('python scripts/run-ten-year-auto-final-live.py',acquire_pos)
     require(0 <= acquire_pos < finalize_pos,'GITHUB_FINALIZER_RUNS_BEFORE_BODYWEIGHT_ACQUISITION')
     require('worker_bodyweight_snapshot:' in backup and 'parseEntryPage' in backup,'GITHUB_BODYWEIGHT_OFFICIAL_ACQUISITION_INVALID')
-    require('verify_official_bodyweights' in wrapper,'GITHUB_FINALIZER_BODYWEIGHT_PROVENANCE_GATE_MISSING')
+    require('const FINALIZE_OPEN_MS = 16 * 60 * 1000;' in backup,'GITHUB_BODYWEIGHT_T16_WINDOW_MISSING')
+    require('verify_official_bodyweights' in wrapper,'GITHUB_BODYWEIGHT_PROVENANCE_AUDIT_MISSING')
+    require('fallback_without_verified_snapshot' in wrapper,'GITHUB_BODYWEIGHT_FAILURE_STILL_BLOCKS_FINALIZER')
+    require('base.MAX_LOCK_SECONDS=16*60' in wrapper,'GITHUB_FINALIZER_NOT_T16')
     verify_pos=wrapper.find('verified=verify_official_bodyweights')
-    odds_pos=wrapper.find('return original_collect_official_odds',verify_pos)
-    require(0 <= verify_pos < odds_pos,'GITHUB_ODDS_FINALIZATION_PRECEDES_BODYWEIGHT_GATE')
+    except_pos=wrapper.find('except Exception as exc:',verify_pos)
+    odds_pos=wrapper.find('return original_collect_official_odds',except_pos)
+    require(0 <= verify_pos < except_pos < odds_pos,'GITHUB_BODYWEIGHT_AUDIT_NOT_NONBLOCKING')
 
     cfg=json.loads(text('config/ten-year-completed-model.json'))
     require(str(cfg['runnerProbabilityModel']['modelWeightsSha256'])==EXPECTED_MODEL_SHA,'MODEL_CONFIG_SHA_CHANGED')
@@ -69,13 +82,16 @@ def main():
     require(len(cfg['runnerProbabilityModel']['features'])==56,'MODEL_FEATURE_COUNT_CHANGED')
 
     print(json.dumps({
-        'status':'BODYWEIGHT_FINAL_LOCK_OK',
+        'status':'BODYWEIGHT_NONBLOCKING_FINAL_LOCK_OK',
         'modelSha256':EXPECTED_MODEL_SHA,
         'featureCount':56,
         'refreshOpenMinutes':80,
-        'previewVersion':2,
-        'workerAcquisitionBeforeFeatures':True,
-        'githubBackupAcquisitionBeforeFinalizer':True,
+        'previewOpenMinutes':45,
+        'finalizeOpenMinutes':16,
+        'deadlineMinutes':15,
+        'bodyweightAppliedWhenAvailable':True,
+        'bodyweightFailureDoesNotSuppressPrediction':True,
+        'workerAndGithubAcquisition':True,
     },ensure_ascii=False))
 
 
