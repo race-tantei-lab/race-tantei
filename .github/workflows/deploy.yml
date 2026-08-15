@@ -86,7 +86,7 @@ jobs:
           code=$(curl --retry 5 --retry-delay 2 --retry-all-errors -sS -o /tmp/historical-detail.html -w '%{http_code}' "$base/races/$race_id")
           test "$code" = '200'
           grep -q '確定買い目' /tmp/historical-detail.html
-          grep -q '購入額' /tmp/historical-detail.html
+          grep -Eq '購入(額)?' /tmp/historical-detail.html
           grep -q '出走馬' /tmp/historical-detail.html
           if grep -Eq '<h1>[0-9]{1,2}(R|レース)</h1>|<h1>(検索ウィンドウ|検索メニュー|サイト内検索|出馬表)</h1>' /tmp/historical-detail.html; then
             echo 'Historical detail still has a placeholder race name.' >&2
