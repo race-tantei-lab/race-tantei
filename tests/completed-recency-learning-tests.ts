@@ -3,7 +3,7 @@ import {
   buildCompletedRunnerRecency,
   completedRecencyBetFactor,
   completedRecencyWeight,
-} from "../src/v1/completed-recency-learning";
+} from "../src/v1/completed-recency-learning.js";
 
 function expect(condition: unknown, message: string): void {
   if (!condition) throw new Error(message);
