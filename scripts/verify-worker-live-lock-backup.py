@@ -14,11 +14,11 @@ D1_CLIENT = ROOT / "scripts" / "seed-worker-feature-state.py"
 
 
 def load_d1_client():
-    spec = importlib.util.spec_from_file_location("worker_backup_verify_d1", D1_CLIENT)
+    spec = importlib.util.spec_from_file_location("worker_live_lock_verify_d1", D1_CLIENT)
     if spec is None or spec.loader is None:
         raise RuntimeError("D1_CLIENT_LOAD_FAILED")
     module = importlib.util.module_from_spec(spec)
-    sys.modules["worker_backup_verify_d1"] = module
+    sys.modules["worker_live_lock_verify_d1"] = module
     spec.loader.exec_module(module)
     return module
 
@@ -28,8 +28,9 @@ def main() -> int:
     started = dt.datetime.now(dt.timezone.utc)
     today = dt.datetime.now(ZoneInfo("Asia/Tokyo")).date().isoformat()
     audit = None
+    audit_key = f"worker_live_lock:{today}"
     for attempt in range(36):
-        rows = d1.d1_query("SELECT value FROM rt_system_state WHERE key=? LIMIT 1", ["worker_completed_backup:last"])
+        rows = d1.d1_query("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1", [audit_key])
         if rows:
             try:
                 candidate = json.loads(rows[0]["value"])
@@ -46,16 +47,19 @@ def main() -> int:
 
     assert audit is not None
     assert audit.get("status") == "ok", audit
-    assert audit.get("modelVersion") == "ten-year-completed-model", audit
-    assert audit.get("targetDate") == today, audit
+    assert audit.get("sourceModel") == "ten-year-completed-model", audit
+    assert audit.get("date") == today, audit
     assert int(audit.get("selectedRaceCount") or 0) == 15, audit
+    assert int(audit.get("completeAfter") or 0) == 15, audit
     assert audit.get("errors") == [], audit
-    assert audit.get("deadlineMissedRaceIds") == [], audit
-    assert len(set(audit.get("alreadyLockedRaceIds") or [])) == 15, audit
+    assert audit.get("deadlineBreachRaceIds") == [], audit
+    assert audit.get("incompleteRaceIds") == [], audit
 
-    selection_rows = d1.d1_query("SELECT value FROM rt_system_state WHERE key=?", [f"final_daily_selection:{today}"])
+    selection_rows = d1.d1_query("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1", [f"final_daily_selection:{today}"])
     assert selection_rows, today
     selection = json.loads(selection_rows[0]["value"])
+    assert selection.get("sourceModel") == "ten-year-completed-model", selection
+    assert selection.get("resultDataUsedForTargetDay") is False, selection
     selected = [str(row["raceId"]) for row in selection.get("selected") or []]
     assert len(selected) == 15 and len(set(selected)) == 15, selected
 
@@ -74,19 +78,25 @@ def main() -> int:
             assert int(row["sourcePredictionId"]) == -2, row
             by_course.setdefault(str(row["course"]), []).append(row)
         assert set(by_course) == {"ライト", "スタンダード", "プレミアム"}, (race_id, by_course.keys())
+        identity = None
         for course, total in {"ライト": 2000, "スタンダード": 5000, "プレミアム": 10000}.items():
             course_rows = by_course[course]
             assert len(course_rows) == 2, (race_id, course, course_rows)
             assert len({row["betType"] for row in course_rows}) == 2, (race_id, course, course_rows)
             assert sum(int(row["stakeYen"]) for row in course_rows) == total, (race_id, course, course_rows)
+            signature = sorted((str(row["betType"]), str(row["combination"])) for row in course_rows)
+            if identity is None:
+                identity = signature
+            else:
+                assert signature == identity, (race_id, course, signature, identity)
 
     print(json.dumps({
-        "status": "WORKER_LIVE_LOCK_BACKUP_CRON_OK",
+        "status": "WORKER_LIVE_LOCK_CRON_OK",
         "checkedAt": audit["checkedAt"],
         "targetDate": today,
         "selectedRaceCount": audit["selectedRaceCount"],
-        "alreadyLockedRaceCount": len(audit["alreadyLockedRaceIds"]),
-        "deadlineMissed": audit["deadlineMissedRaceIds"],
+        "completeAfter": audit["completeAfter"],
+        "deadlineBreachRaceIds": audit["deadlineBreachRaceIds"],
         "errors": audit["errors"],
         "canonicalBetRows": len(bet_rows),
     }, ensure_ascii=False))
