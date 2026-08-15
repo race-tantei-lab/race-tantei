@@ -135,10 +135,10 @@ async function enhanceRaceReasons(request: Request, response: Response, db: D1Da
     let html = await response.text();
     const headers = new Headers(response.headers);
     headers.delete("content-length");
-    if (html.includes('class="prediction-reasons"')) {
+    if (html.includes('prediction-reasons')) {
       return new Response(html, { status: response.status, headers });
     }
-    const block = `<section class="prediction-reasons"><div class="prediction-reasons-head"><h2>予想根拠</h2><span>簡易表示</span></div><div class="prediction-reason-list">${reasons.map((reason) => `<span>${esc(reason)}</span>`).join("")}</div></section>`;
+    const block = `<section class="prediction-reasons live-prediction-reasons"><div class="prediction-reasons-head"><h2>予想根拠</h2><span>簡易表示</span></div><div class="prediction-reason-list">${reasons.map((reason) => `<span>${esc(reason)}</span>`).join("")}</div></section>`;
     const css = `<style>
       .prediction-reasons{margin:12px 0 16px;padding:13px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
       .prediction-reasons-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}.prediction-reasons-head h2{margin:0;font-size:16px}.prediction-reasons-head span{font-size:10px;color:var(--muted)}
@@ -148,7 +148,7 @@ async function enhanceRaceReasons(request: Request, response: Response, db: D1Da
     const anchors = [
       `<div class="section-title"><h2>出走馬`,
       `<section class="card"><h2>出走馬`,
-      `<section class="runner-table` 
+      `<section class="runner-table`
     ];
     let inserted = false;
     for (const anchor of anchors) {
