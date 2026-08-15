@@ -52,7 +52,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: worker-feature-state-production-seed
+          name: worker-feature-state-production-seed-v2
           path: worker-feature-state-seed-audit.json
           if-no-files-found: warn
           retention-days: 30
