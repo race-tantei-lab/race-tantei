@@ -34,7 +34,6 @@ export function loadCompletedModelRuntime(buffer: ArrayBuffer): CompletedModelRu
   const view = new DataView(buffer);
   const version = view.getUint32(8, true);
   if (version !== VERSION) throw new Error(`unsupported completed model asset version: ${version}`);
-
   const featureCount = view.getUint32(12, true);
   const treeCount = view.getUint32(16, true);
   const nodeCount = view.getUint32(20, true);
@@ -52,6 +51,9 @@ export function loadCompletedModelRuntime(buffer: ArrayBuffer): CompletedModelRu
     if (features.length !== featureCount) {
       throw new Error(`completed model feature count mismatch: expected ${featureCount}, got ${features.length}`);
     }
+    for (let i = 0; i < features.length; i += 1) {
+      if (!Number.isFinite(features[i])) throw new Error(`completed model feature ${i} is non-finite`);
+    }
 
     let total = 0;
     for (let tree = 0; tree < treeCount; tree += 1) {
@@ -62,34 +64,20 @@ export function loadCompletedModelRuntime(buffer: ArrayBuffer): CompletedModelRu
         const offset = nodesOffset + node * NODE_BYTES;
         const type = view.getUint8(offset);
         const featureIndex = view.getUint8(offset + 1);
-        const nodeFlags = view.getUint8(offset + 2);
-        const missingType = view.getUint8(offset + 3);
         const left = view.getInt32(offset + 4, true);
         const right = view.getInt32(offset + 8, true);
         const value = view.getFloat64(offset + 12, true);
-
         if (type === 1) {
           total += value;
           break;
         }
         if (type !== 0) throw new Error(`unsupported completed model node type: ${type}`);
         if (featureIndex >= featureCount) throw new Error(`completed model feature index out of range: ${featureIndex}`);
-
-        const featureValue = features[featureIndex] ?? Number.NaN;
-        const isMissing = missingType === 1
-          ? Number.isNaN(featureValue)
-          : missingType === 2
-            ? Number.isNaN(featureValue) || featureValue === 0
-            : false;
-        const defaultLeft = (nodeFlags & 1) !== 0;
-        const goLeft = isMissing ? defaultLeft : featureValue <= value;
-        node = goLeft ? left : right;
-
+        node = features[featureIndex] <= value ? left : right;
         safety += 1;
         if (safety > 4096) throw new Error("completed model tree traversal exceeded safety bound");
       }
     }
-
     return averageOutput && treeCount > 0 ? total / treeCount : total;
   };
 
