@@ -1,0 +1,46 @@
+name: Verify T-15 all paths safety
+
+on:
+  push:
+    branches:
+      - fix/t15-all-paths-safety-20260815
+    paths:
+      - ".github/workflows/verify-t15-all-paths-safety.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Apply T-15 safety alignment
+        run: python scripts/apply-t15-all-paths-safety.py
+      - name: Verify T-15 safety and build
+        run: |
+          python scripts/verify-live-lock-safety.py
+          python -m py_compile scripts/run-ten-year-auto-final-live.py scripts/run-emergency-earliest-missing-bet.py scripts/run-critical-auto-bet-generation.py scripts/verify-live-lock-safety.py
+          npm ci
+          npm run build:test
+          npm run test:unit
+          npm run build
+          npx wrangler deploy --dry-run
+          git diff --check
+      - name: Commit verified T-15 safety fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/run-ten-year-auto-final-live.py scripts/run-emergency-earliest-missing-bet.py scripts/run-critical-auto-bet-generation.py scripts/verify-live-lock-safety.py
+          git commit -m "Enforce T-15 across all finalization paths"
+          git push origin HEAD:fix/t15-all-paths-safety-20260815
