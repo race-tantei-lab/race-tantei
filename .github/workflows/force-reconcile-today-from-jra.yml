@@ -18,7 +18,7 @@ env:
 jobs:
   repair:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -86,7 +86,9 @@ jobs:
             const result=parseResultPage(html,t.resultUrl);
             if(result.race.raceId!==t.raceId) throw new Error(`PARSED_RACE_ID_MISMATCH:${t.raceId}:${result.race.raceId}`);
             if(!Array.isArray(result.payouts)||result.payouts.length===0) throw new Error(`OFFICIAL_PAYOUTS_EMPTY:${t.raceId}`);
-            parsed.push({raceId:t.raceId,resultUrl:t.resultUrl,refundHorseNos:result.refundHorseNos??[],finishers:result.finishers??[],payouts:result.payouts});
+            const inferred=(result.results??[]).filter(x=>x.resultStatus==='excluded'||x.resultStatus==='scratched').map(x=>Number(x.horseNo));
+            const refunds=[...new Set([...(result.refundHorseNos??[]).map(Number),...inferred])].filter(x=>Number.isInteger(x)&&x>=1&&x<=18).sort((a,b)=>a-b);
+            parsed.push({raceId:t.raceId,resultUrl:t.resultUrl,refundHorseNos:refunds,results:result.results??[],payouts:result.payouts});
           }
           fs.writeFileSync('/tmp/official_parsed.json',JSON.stringify(parsed,null,2));
           console.log('OFFICIAL_PARSED='+JSON.stringify(parsed));
@@ -110,7 +112,10 @@ jobs:
               pmap={(str(x['betType']),canonical(str(x['betType']),str(x['combination']))):int(x['payoutYen']) for x in payouts}
               ptypes={str(x['betType']) for x in payouts}
               bets=m.d1_query('''SELECT id,course,bet_type AS betType,combination,stake_yen AS stakeYen FROM rt_public_bets WHERE race_id=? ORDER BY id''',[rid])
-              needed={str(b['betType']) for b in bets}
+              needed=set()
+              for b in bets:
+                  horses=[int(x) for x in re.findall(r'\d{1,2}',str(b['combination']))]
+                  if not any(h in refunds for h in horses): needed.add(str(b['betType']))
               missing=needed-ptypes
               if missing: raise RuntimeError('NEEDED_PAYOUT_TYPE_MISSING:'+rid+':'+','.join(sorted(missing)))
               m.d1_query('DELETE FROM rt_payouts WHERE race_id=?',[rid])
@@ -118,17 +123,18 @@ jobs:
                   m.d1_query('''INSERT INTO rt_payouts(race_id,bet_type,combination,payout_yen,popularity,updated_at)
                                 VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)''',[rid,x['betType'],x['combination'],int(x['payoutYen']),x.get('popularity')])
               m.d1_query('''UPDATE rt_races SET result_url=?,refund_horse_nos_json=?,result_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE race_id=?''',[item['resultUrl'],json.dumps(sorted(refunds)),rid])
-              m.d1_query('''UPDATE rt_race_sources SET result_url=?,updated_at=CURRENT_TIMESTAMP WHERE race_id=?''',[item['resultUrl'],rid])
+              m.d1_query('''UPDATE rt_race_sources SET result_url=?,status='complete',last_error=NULL,updated_at=CURRENT_TIMESTAMP WHERE race_id=?''',[item['resultUrl'],rid])
               settled=[]
               for b in bets:
                   horses=[int(x) for x in re.findall(r'\d{1,2}',str(b['combination']))]
-                  if any(h in refunds for h in horses): returned=int(b['stakeYen'])
+                  is_refund=any(h in refunds for h in horses)
+                  if is_refund: returned=int(b['stakeYen'])
                   else:
                       official=pmap.get((str(b['betType']),canonical(str(b['betType']),str(b['combination']))),0)
                       returned=round(int(b['stakeYen'])/100*official)
                   m.d1_query("UPDATE rt_public_bets SET settlement_status='settled',return_yen=? WHERE id=?",[returned,int(b['id'])])
-                  settled.append({**b,'returnYen':returned})
-              repaired.append({'raceId':rid,'resultUrl':item['resultUrl'],'refundHorseNos':sorted(refunds),'bets':settled,'payouts':payouts,'finishers':item.get('finishers',[])})
+                  settled.append({**b,'returnYen':returned,'isRefund':is_refund})
+              repaired.append({'raceId':rid,'resultUrl':item['resultUrl'],'refundHorseNos':sorted(refunds),'bets':settled,'payouts':payouts,'results':item.get('results',[])})
           pathlib.Path('/tmp/repaired.json').write_text(json.dumps(repaired,ensure_ascii=False,indent=2),encoding='utf-8')
           print('REPAIRED='+json.dumps(repaired,ensure_ascii=False))
           PY
@@ -140,7 +146,7 @@ jobs:
           curl --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 45 -fsS \
             "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$today&post_repair=1" -o /tmp/today.json
           python - <<'PY'
-          import collections,importlib.util,json,pathlib,sys
+          import collections,importlib.util,json,pathlib,re,sys
           p=pathlib.Path('scripts/collect-jra-official-odds.py')
           s=importlib.util.spec_from_file_location('repair_final',p);m=importlib.util.module_from_spec(s);sys.modules['repair_final']=m;s.loader.exec_module(m)
           repaired=json.loads(pathlib.Path('/tmp/repaired.json').read_text(encoding='utf-8'))
@@ -149,7 +155,17 @@ jobs:
           if any(str(x['settlementStatus'])!='settled' for x in bets): raise RuntimeError('POST_REPAIR_PENDING')
           by=collections.defaultdict(list)
           for b in bets: by[str(b['raceId'])].append(b)
-          expected={rid:('hit' if any(int(x.get('returnYen') or 0)>0 for x in rows) else 'miss') for rid,rows in by.items()}
+          repaired_by={str(x['raceId']):x for x in repaired}
+          expected={}
+          for rid,rows in by.items():
+              refunds={int(x) for x in repaired_by[rid].get('refundHorseNos',[]) or []}
+              genuine_hit=False; has_refund=False
+              for row in rows:
+                  horses=[int(x) for x in re.findall(r'\d{1,2}',str(row.get('combination') or ''))]
+                  is_refund=any(h in refunds for h in horses)
+                  has_refund=has_refund or is_refund
+                  if not is_refund and int(row.get('returnYen') or 0)>0: genuine_hit=True
+              expected[rid]='hit' if genuine_hit else ('refund' if has_refund else 'miss')
           payload=json.loads(pathlib.Path('/tmp/today.json').read_text(encoding='utf-8'))
           api={str(r.get('raceId')):str((r.get('publicState') or {}).get('code') or '') for r in payload.get('races',[])}
           mismatch=[{'raceId':rid,'expected':code,'actual':api.get(rid)} for rid,code in expected.items() if api.get(rid)!=code]
@@ -159,7 +175,7 @@ jobs:
               agg=collections.defaultdict(int)
               for r in rows: agg[str(r['course'])]+=int(r.get('returnYen') or 0)
               course_returns[rid]=dict(agg)
-          out={'status':'OFFICIAL_JRA_REPAIR_OK','expectedPublicState':expected,'publicStates':{rid:api.get(rid) for rid in expected},'hitRaceIds':sorted(rid for rid,c in expected.items() if c=='hit'),'courseReturns':course_returns,'repaired':repaired}
+          out={'status':'OFFICIAL_JRA_REPAIR_OK','expectedPublicState':expected,'publicStates':{rid:api.get(rid) for rid in expected},'hitRaceIds':sorted(rid for rid,c in expected.items() if c=='hit'),'refundOnlyRaceIds':sorted(rid for rid,c in expected.items() if c=='refund'),'courseReturns':course_returns,'repaired':repaired}
           pathlib.Path('/tmp/final.json').write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding='utf-8')
           print('FINAL='+json.dumps(out,ensure_ascii=False))
           PY
