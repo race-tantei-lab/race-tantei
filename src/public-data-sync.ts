@@ -26,9 +26,20 @@ import { isJstEntryWindow, isJstRaceWindow, nowIso, positiveInt } from "./v1/uti
 
 const DISCOVERY_REVISION = "2026-08-09-public-data-only-v2";
 const SYNC_LOCK_KEY = "public_data_sync_lock_until";
+const RESULT_RECHECK_MINUTES = 120;
 let schemaReady: Promise<void> | null = null;
 let inMemorySync: Promise<unknown> | null = null;
 type RaceSource = Awaited<ReturnType<typeof getDueRaceSources>>[number];
+type ParsedResult = Awaited<ReturnType<typeof parseResultPage>>;
+
+type PublicSettlementSummary = {
+  betCount: number;
+  resolvedBetCount: number;
+  refundBetCount: number;
+  payoutBetCount: number;
+  unresolvedBetCount: number;
+  allResolved: boolean;
+};
 
 function ready(db: D1Database): Promise<void> {
   schemaReady ??= ensureSchema(db).catch((error) => {
@@ -84,45 +95,73 @@ function canonicalCombination(betType: string, combination: string): string {
   return numbers.join("-");
 }
 
-async function settlePublicBetsFromResult(env: Env, result: Awaited<ReturnType<typeof parseResultPage>>): Promise<void> {
-  try {
-    const pending = await env.DB.prepare(`
-      SELECT id,bet_type AS betType,combination,stake_yen AS stakeYen
-      FROM rt_public_bets
-      WHERE race_id=? AND settlement_status='pending'
-      ORDER BY id
-    `).bind(result.race.raceId).all<{ id: number; betType: string; combination: string; stakeYen: number }>();
-    if (!pending.results.length) return;
-
-    const payoutTypes = new Set(result.payouts.map((payout) => payout.betType));
-    const payoutMap = new Map(result.payouts.map((payout) => [
-      `${payout.betType}:${canonicalCombination(payout.betType, payout.combination)}`,
-      Number(payout.payoutYen)
-    ]));
-    const refunds = new Set(result.refundHorseNos.map(Number));
-    const updates = [];
-
-    for (const bet of pending.results) {
-      const horses = (bet.combination.match(/\d{1,2}/g) ?? []).map(Number);
-      let returnYen: number | null = null;
-      if (horses.some((horseNo) => refunds.has(horseNo))) {
-        returnYen = Number(bet.stakeYen);
-      } else if (payoutTypes.has(bet.betType)) {
-        const payout = payoutMap.get(`${bet.betType}:${canonicalCombination(bet.betType, bet.combination)}`) ?? 0;
-        returnYen = Math.round((Number(bet.stakeYen) / 100) * payout);
-      }
-      if (returnYen !== null) {
-        updates.push(env.DB.prepare(`
-          UPDATE rt_public_bets
-          SET settlement_status='settled',return_yen=?
-          WHERE id=? AND settlement_status='pending'
-        `).bind(returnYen, bet.id));
-      }
-    }
-    if (updates.length) await env.DB.batch(updates);
-  } catch {
-    // Public history may not be initialized yet. The normal settlement layer will retry later.
+function withInferredRefunds(result: ParsedResult): ParsedResult {
+  const refunds = new Set<number>((result.refundHorseNos ?? []).map(Number));
+  for (const row of result.results) {
+    if (row.resultStatus === "excluded" || row.resultStatus === "scratched") refunds.add(Number(row.horseNo));
   }
+  return {
+    ...result,
+    refundHorseNos: [...refunds].filter((value) => Number.isInteger(value) && value >= 1 && value <= 18).sort((a, b) => a - b)
+  };
+}
+
+async function settlePublicBetsFromResult(env: Env, result: ParsedResult): Promise<PublicSettlementSummary> {
+  const bets = await env.DB.prepare(`
+    SELECT id,bet_type AS betType,combination,stake_yen AS stakeYen
+    FROM rt_public_bets
+    WHERE race_id=?
+    ORDER BY id
+  `).bind(result.race.raceId).all<{ id: number; betType: string; combination: string; stakeYen: number }>();
+
+  if (!bets.results.length) {
+    return { betCount: 0, resolvedBetCount: 0, refundBetCount: 0, payoutBetCount: 0, unresolvedBetCount: 0, allResolved: true };
+  }
+
+  const payoutTypes = new Set(result.payouts.map((payout) => payout.betType));
+  const payoutMap = new Map(result.payouts.map((payout) => [
+    `${payout.betType}:${canonicalCombination(payout.betType, payout.combination)}`,
+    Number(payout.payoutYen)
+  ]));
+  const refunds = new Set(result.refundHorseNos.map(Number));
+  const updates: D1PreparedStatement[] = [];
+  let refundBetCount = 0;
+  let payoutBetCount = 0;
+  let unresolvedBetCount = 0;
+
+  for (const bet of bets.results) {
+    const horses = (bet.combination.match(/\d{1,2}/g) ?? []).map(Number);
+    let returnYen: number | null = null;
+    if (horses.some((horseNo) => refunds.has(horseNo))) {
+      returnYen = Number(bet.stakeYen);
+      refundBetCount += 1;
+    } else if (payoutTypes.has(bet.betType)) {
+      const payout = payoutMap.get(`${bet.betType}:${canonicalCombination(bet.betType, bet.combination)}`) ?? 0;
+      returnYen = Math.round((Number(bet.stakeYen) / 100) * payout);
+      payoutBetCount += 1;
+    } else {
+      unresolvedBetCount += 1;
+    }
+
+    if (returnYen !== null) {
+      updates.push(env.DB.prepare(`
+        UPDATE rt_public_bets
+        SET settlement_status='settled',return_yen=?
+        WHERE id=?
+      `).bind(returnYen, bet.id));
+    }
+  }
+  if (updates.length) await env.DB.batch(updates);
+
+  const resolvedBetCount = bets.results.length - unresolvedBetCount;
+  return {
+    betCount: bets.results.length,
+    resolvedBetCount,
+    refundBetCount,
+    payoutBetCount,
+    unresolvedBetCount,
+    allResolved: unresolvedBetCount === 0
+  };
 }
 
 async function getUrgentResultSources(db: D1Database, limit: number): Promise<RaceSource[]> {
@@ -132,16 +171,19 @@ async function getUrgentResultSources(db: D1Database, limit: number): Promise<Ra
            s.status,s.next_fetch_at AS nextFetchAt,s.failure_count AS failureCount
     FROM rt_race_sources s
     JOIN rt_races r ON r.race_id=s.race_id
-    WHERE r.status!='finished'
-      AND r.start_time_utc IS NOT NULL
+    WHERE r.start_time_utc IS NOT NULL
       AND julianday(r.start_time_utc)<=julianday('now','-4 minutes')
-      AND EXISTS (
-        SELECT 1 FROM rt_public_bets b
-        WHERE b.race_id=r.race_id AND b.settlement_status='pending'
+      AND EXISTS (SELECT 1 FROM rt_public_bets b WHERE b.race_id=r.race_id)
+      AND (
+        EXISTS (SELECT 1 FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.settlement_status!='settled')
+        OR s.status!='complete'
+        OR julianday(r.start_time_utc)>=julianday('now', ?)
       )
-    ORDER BY r.start_time_utc ASC,s.updated_at DESC
+    ORDER BY
+      CASE WHEN EXISTS (SELECT 1 FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.settlement_status!='settled') THEN 0 ELSE 1 END,
+      r.start_time_utc DESC,s.updated_at DESC
     LIMIT ?
-  `).bind(safeLimit * 3).all<RaceSource>();
+  `).bind(`-${RESULT_RECHECK_MINUTES} minutes`, safeLimit * 3).all<RaceSource>();
 
   const deduped: RaceSource[] = [];
   const seen = new Set<string>();
@@ -202,10 +244,15 @@ async function processSource(
       try {
         const resultPage = await fetchJraPage(candidate);
         if (!pageLooksLikeResult(resultPage.html)) throw new Error("RESULT_PAGE_SIGNATURE_MISSING");
-        const result = parseResultPage(resultPage.html, resultPage.url);
-        if (result.race.raceId !== race.raceId) throw new Error(`RACE_ID_MISMATCH:${result.race.raceId}`);
+        const parsed = parseResultPage(resultPage.html, resultPage.url);
+        if (parsed.race.raceId !== race.raceId) throw new Error(`RACE_ID_MISMATCH:${parsed.race.raceId}`);
+        const result = withInferredRefunds(parsed);
+        await env.DB.prepare(`UPDATE rt_races SET result_url=?,updated_at=CURRENT_TIMESTAMP WHERE race_id=?`).bind(resultPage.url, race.raceId).run();
         await saveResultBundle(env.DB, result);
-        await settlePublicBetsFromResult(env, result);
+        const settlement = await settlePublicBetsFromResult(env, result);
+        if (!settlement.allResolved) {
+          throw new Error(`PUBLIC_SETTLEMENT_INCOMPLETE:${settlement.resolvedBetCount}/${settlement.betCount}`);
+        }
         await updateRaceSource(env.DB, source.entryUrl, {
           raceId: race.raceId,
           status: "complete",
