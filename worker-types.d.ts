@@ -22,8 +22,12 @@ interface D1Database {
   exec(query: string): Promise<D1ExecResult>;
 }
 
+interface FetcherResponse extends Response {
+  json<T = unknown>(): Promise<T>;
+}
+
 interface Fetcher {
-  fetch(request: Request): Promise<Response>;
+  fetch(request: Request): Promise<FetcherResponse>;
 }
 
 interface ExecutionContext {
