@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { detectJraBetType, jraActionLinks } from "../src/v1/jra-official-odds";
 import {
-  detectJraBetType,
-  jraActionLinks,
-  parseJraOddsIdentity,
-  parseJraOfficialOddsRows,
-} from "../src/v1/jra-official-odds";
+  currentJraRaceNoFromCname,
+  parseFastJraOddsIdentity,
+  parseFastJraOfficialOddsRows,
+} from "../src/v1/jra-official-odds-fast";
 import type { CompletedBetType, OfficialOddsRow } from "../src/v1/completed-ticket-runtime";
 
 type FixturePage = {
@@ -26,6 +26,16 @@ type Fixture = {
   pages: FixturePage[];
 };
 
+for (const [cname, expected] of Object.entries({
+  "pw15oren0101202601051120260808/AA": 11,
+  "pw151ouS301202601061120260809Z/EA": 11,
+  "pw151ouS301202601060920260809Z/40": 9,
+  "pw157ouS301202601061120260809Z99/64": 11,
+})) {
+  const actual = currentJraRaceNoFromCname(cname);
+  if (actual !== expected) throw new Error(`CURRENT_CNAME_RACE_NUMBER:${cname}:${actual}:${expected}`);
+}
+
 const fixture = JSON.parse(readFileSync(resolve(process.argv[2] ?? "worker-odds-parity.json"), "utf8")) as Fixture;
 const expectedEntryCnames = fixture.entryActionLinks.map((row) => row.cname);
 const actualEntryCnames = jraActionLinks(fixture.entryHtml).map((row) => row.cname);
@@ -36,13 +46,13 @@ if (JSON.stringify(actualEntryCnames) !== JSON.stringify(expectedEntryCnames)) {
 let rowsChecked = 0;
 let maxOddsError = 0;
 for (const page of fixture.pages) {
-  const identity = parseJraOddsIdentity(page.html);
+  const identity = parseFastJraOddsIdentity(page.html, page.cname);
   if (JSON.stringify(identity) !== JSON.stringify(page.identity)) {
     throw new Error(`${page.betType}: identity mismatch expected=${JSON.stringify(page.identity)} actual=${JSON.stringify(identity)}`);
   }
   const betType = detectJraBetType(page.html, page.hint);
   if (betType !== page.betType) throw new Error(`${page.betType}: detected bet type mismatch actual=${betType}`);
-  const actual = parseJraOfficialOddsRows(page.html, page.betType);
+  const actual = parseFastJraOfficialOddsRows(page.html, page.betType);
   if (actual.length !== page.rows.length) {
     throw new Error(`${page.betType}: row count mismatch expected=${page.rows.length} actual=${actual.length}`);
   }
@@ -64,7 +74,7 @@ for (const page of fixture.pages) {
 
 if (fixture.pages.length !== 6) throw new Error(`expected six JRA odds pages, got ${fixture.pages.length}`);
 console.log(JSON.stringify({
-  status: "WORKER_JRA_ODDS_PARSER_PARITY_OK",
+  status: "WORKER_JRA_ODDS_FAST_PARSER_PARITY_OK",
   raceId: fixture.race.raceId,
   identity: [fixture.race.raceDate, fixture.race.venue, fixture.race.raceNo],
   entryActionLinks: actualEntryCnames.length,
