@@ -55,9 +55,11 @@ jobs:
         run: npm run typecheck
       - name: Build tests
         run: npm run build:test
-      - name: Unit tests
+      - name: Existing unit tests
         run: npm run test:unit
+      - name: WIN5 unit tests
+        run: npx tsx tests/completed-win5-tests.ts
       - name: Verify live JRA WIN5 targets
-        run: node dist-test/tests/live-win5-official.js
+        run: npx tsx tests/live-win5-official.ts
       - name: Wrangler dry run
         run: npm run build
