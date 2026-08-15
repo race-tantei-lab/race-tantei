@@ -8,14 +8,8 @@ const UI_VERSION = "ten-year-completed-public-v25-race-detail-tabs-20260815";
 function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch] ?? ch));
 }
-
-function pct(value: number): string {
-  return `${(Number(value) * 100).toFixed(2)}%`;
-}
-
-function num(value: number, digits = 4): string {
-  return Number(value).toFixed(digits);
-}
+function pct(value: number): string { return `${(Number(value) * 100).toFixed(2)}%`; }
+function num(value: number, digits = 4): string { return Number(value).toFixed(digits); }
 
 function ticketReasonHtml(ticket: FixedTicketEvidence): string {
   const names = ticket.horses.map((horseNo, index) => `${horseNo}番 ${ticket.horseNames[index] || ""}`.trim()).join(" / ");
@@ -52,45 +46,50 @@ function injectReasonBeforeRunners(html: string, block: string): string {
     `<section class="runner-table`,
     `</main>`,
   ];
-  for (const anchor of anchors) {
-    if (html.includes(anchor)) return html.replace(anchor, `${block}${anchor}`);
-  }
+  for (const anchor of anchors) if (html.includes(anchor)) return html.replace(anchor, `${block}${anchor}`);
   return `${html}${block}`;
 }
 
 function addTabsUi(html: string): string {
   const css = `<style>
     .race-detail-tabs{position:sticky;top:8px;z-index:30;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:12px 0;padding:5px;border:1px solid var(--line);border-radius:14px;background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(12px)}
-    .race-detail-tab{appearance:none;border:0;border-radius:10px;padding:10px 6px;background:transparent;color:var(--muted);font:inherit;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap}
-    .race-detail-tab[aria-selected="true"]{background:var(--text);color:var(--bg)}
-    .ticket-reasons{margin:12px 0 18px}.ticket-reasons-title{margin-bottom:8px}.ticket-reasons-title>span{font-size:10px;color:var(--muted)}
+    .race-detail-tab{appearance:none;border:0;border-radius:10px;padding:10px 6px;background:transparent;color:var(--muted);font:inherit;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap}.race-detail-tab[aria-selected="true"]{background:var(--text);color:var(--bg)}
+    .ticket-reasons{margin:12px 0 18px;padding:14px}.ticket-reasons .section-title{margin:0 0 8px}.ticket-reasons-title>span{font-size:10px;color:var(--muted)}
     .ticket-reason-rule{margin:0 0 9px;color:var(--muted);font-size:10px;line-height:1.6}.ticket-reason-list{display:grid;gap:8px}
-    .ticket-reason-card{padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}
-    .ticket-reason-head>div{display:grid;gap:2px}.ticket-reason-head strong{font-size:14px}.ticket-reason-head span{font-size:10px;color:var(--muted)}
+    .ticket-reason-card{padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}.ticket-reason-head>div{display:grid;gap:2px}.ticket-reason-head strong{font-size:14px}.ticket-reason-head span{font-size:10px;color:var(--muted)}
     .ticket-reason-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:9px}.ticket-reason-metrics>div{display:grid;gap:2px;padding:8px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}.ticket-reason-metrics span{font-size:9px;color:var(--muted)}.ticket-reason-metrics b{font-size:12px}
-    .ticket-reason-card p{margin:9px 0 0;font-size:10px;line-height:1.65;color:var(--muted)}.ticket-reason-card p b{color:var(--text)}
-    [data-race-panel][hidden]{display:none!important}
+    .ticket-reason-card p{margin:9px 0 0;font-size:10px;line-height:1.65;color:var(--muted)}.ticket-reason-card p b{color:var(--text)}[data-race-panel][hidden]{display:none!important}
     @media(max-width:760px){.race-detail-tabs{top:6px;margin:10px 0}.race-detail-tab{padding:9px 3px;font-size:11px}.ticket-reason-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.ticket-reason-card{padding:10px}}
   </style>`;
   const nav = `<nav class="race-detail-tabs" data-race-tabs aria-label="レース詳細表示"><button type="button" class="race-detail-tab" data-race-tab="bets" aria-selected="true">予想買い目</button><button type="button" class="race-detail-tab" data-race-tab="reason" aria-selected="false">根拠</button><button type="button" class="race-detail-tab" data-race-tab="horses" aria-selected="false">馬一覧</button></nav>`;
   const script = `<script>(function(){
-    function text(el){return (el&&el.textContent||'').trim();}
-    function panelForHeading(h){
+    function label(el){return (el&&el.textContent||'').trim();}
+    function wrapHeadingRange(h,name){
       if(!h)return null;
-      if(h.parentElement&&h.parentElement.classList.contains('section-title')&&h.parentElement.parentElement)return h.parentElement.parentElement;
-      return h.closest('.card')||h.closest('section')||h.parentElement;
+      var title=h.closest('.section-title');
+      if(title&&title.parentNode){
+        var parent=title.parentNode,wrap=document.createElement('div');
+        wrap.setAttribute('data-race-panel',name);
+        parent.insertBefore(wrap,title);
+        var node=title;
+        while(node){
+          if(node!==title&&node.nodeType===1&&(node.matches('.section-title')||node.matches('[data-race-panel="reason"]')))break;
+          var next=node.nextSibling;wrap.appendChild(node);node=next;
+        }
+        return wrap;
+      }
+      var panel=h.closest('.card')||h.closest('section')||h.parentElement;
+      if(panel)panel.setAttribute('data-race-panel',name);
+      return panel;
     }
     function init(){
-      var reason=document.getElementById('race-panel-reason');
-      var nav=document.querySelector('[data-race-tabs]');
+      var reason=document.getElementById('race-panel-reason'),nav=document.querySelector('[data-race-tabs]');
       if(!reason||!nav)return;
       var headings=Array.from(document.querySelectorAll('h2'));
-      var betHeading=headings.find(function(h){var t=text(h);return !h.closest('#race-panel-reason')&&(t==='確定買い目'||t==='買い目'||t==='予想買い目');});
-      var horseHeading=headings.find(function(h){return /^出走馬/.test(text(h));});
-      var bets=panelForHeading(betHeading),horses=panelForHeading(horseHeading);
+      var betHeading=headings.find(function(h){var t=label(h);return !h.closest('#race-panel-reason')&&(t==='確定買い目'||t==='買い目'||t==='予想買い目');});
+      var horseHeading=headings.find(function(h){return /^出走馬/.test(label(h));});
+      var bets=wrapHeadingRange(betHeading,'bets'),horses=wrapHeadingRange(horseHeading,'horses');
       if(!bets||!horses||bets===horses)return;
-      bets.setAttribute('data-race-panel','bets');
-      horses.setAttribute('data-race-panel','horses');
       if(bets.parentNode)bets.parentNode.insertBefore(nav,bets);
       var panels={bets:bets,reason:reason,horses:horses};
       function activate(name){
@@ -98,15 +97,13 @@ function addTabsUi(html: string): string {
         Object.keys(panels).forEach(function(key){panels[key].hidden=key!==name;});
         nav.querySelectorAll('[data-race-tab]').forEach(function(button){button.setAttribute('aria-selected',button.getAttribute('data-race-tab')===name?'true':'false');});
       }
-      nav.addEventListener('click',function(event){var button=event.target.closest('[data-race-tab]');if(!button)return;activate(button.getAttribute('data-race-tab'));});
-      var hash=(location.hash||'').replace('#','');
-      activate(hash==='reason'||hash==='horses'||hash==='bets'?hash:'bets');
+      nav.addEventListener('click',function(event){var target=event.target;var button=target&&target.closest?target.closest('[data-race-tab]'):null;if(button)activate(button.getAttribute('data-race-tab'));});
+      var hash=(location.hash||'').replace('#','');activate(hash==='reason'||hash==='horses'||hash==='bets'?hash:'bets');
     }
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
   })();</script>`;
   let out = html.replace("</head>", `${css}</head>`);
-  out = out.replace("</body>", `${nav}${script}</body>`);
-  return out;
+  return out.replace("</body>", `${nav}${script}</body>`);
 }
 
 export default {
@@ -133,7 +130,6 @@ export default {
       return response;
     }
   },
-
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
   },
