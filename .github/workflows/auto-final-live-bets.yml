@@ -3,10 +3,12 @@ name: Automatic final live bets
 on:
   workflow_dispatch:
   schedule:
-    # Simple cron syntax is deliberate: this form has already fired reliably in production.
-    # JST Saturday/Sunday/Monday 08:00-19:59, every 5 minutes.
-    - cron: "*/5 23 * * 5,6,0"
-    - cron: "*/5 0-10 * * 6,0,1"
+    # GitHub documents that scheduled events can be delayed or dropped during high load,
+    # especially at the start of each hour. Keep the five-minute cadence but stagger it
+    # away from :00, and express the schedule directly in JST to avoid UTC weekday drift.
+    # JST Saturday/Sunday/Monday 08:02-19:57, every 5 minutes.
+    - cron: "2-57/5 8-19 * * 6,0,1"
+      timezone: "Asia/Tokyo"
   push:
     branches: [main]
     paths:
