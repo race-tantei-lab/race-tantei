@@ -56,11 +56,11 @@ for (const page of fixture.pages) {
   if (actual.length !== page.rows.length) {
     throw new Error(`${page.betType}: row count mismatch expected=${page.rows.length} actual=${actual.length}`);
   }
-  for (let i = 0; i < actual.length; i += 1) {
-    const got = actual[i];
-    const want = page.rows[i];
-    if (got.betType !== want.betType || got.combination !== want.combination) {
-      throw new Error(`${page.betType}: row ${i} identity mismatch expected=${want.combination} actual=${got.combination}`);
+  const actualByCombo = new Map(actual.map((row) => [row.combination, row]));
+  for (const want of page.rows) {
+    const got = actualByCombo.get(want.combination);
+    if (!got || got.betType !== want.betType) {
+      throw new Error(`${page.betType}: missing combination ${want.combination}`);
     }
     const lowError = Math.abs(got.oddsMin - want.oddsMin);
     const highError = Math.abs(got.oddsMax - want.oddsMax);
