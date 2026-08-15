@@ -16,15 +16,15 @@ function canonical(betType:string,combination:string):string{
 function jraRaceKey(url:string):string|null{
   try{
     const cname=decodeURIComponent(new URL(url).searchParams.get("CNAME")??"");
-    const m=cname.match(/(?:pw|sw)01(?:dde01|sde10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})\//i);
+    const m=cname.match(/(?:pw|sw)01(?:dde01|sde01|sde10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})\//i);
     return m?m.slice(1,7).join(":"):null;
   }catch{return null;}
 }
 
-function isCanonicalResultUrl(url:string,targetKey:string):boolean{
+function isSameRaceResultUrl(url:string,targetKey:string):boolean{
   try{
     const cname=decodeURIComponent(new URL(url).searchParams.get("CNAME")??"");
-    return /(?:pw|sw)01sde10/i.test(cname)&&jraRaceKey(url)===targetKey;
+    return /(?:pw|sw)01sde(?:01|10)/i.test(cname)&&jraRaceKey(url)===targetKey;
   }catch{return false;}
 }
 
@@ -34,20 +34,22 @@ function decodeHref(value:string):string{
 
 function matchingResultUrl(entryHtml:string,entryUrl:string):string|null{
   const targetKey=jraRaceKey(entryUrl);if(!targetKey)return null;
+  const matches:string[]=[];
   for(const match of entryHtml.matchAll(/href=["']([^"']*accessS\.html[^"']*)["']/gi)){
     try{
       const href=new URL(decodeHref(match[1]??""),entryUrl).href;
-      if(isCanonicalResultUrl(href,targetKey))return href;
+      if(isSameRaceResultUrl(href,targetKey))matches.push(href);
     }catch{/* next link */}
   }
-  return null;
+  if(!matches.length)return null;
+  // Current-day JRA result pages are exposed as sde01 and already contain result rows and payouts.
+  // Prefer the exact same-race sde01 link discovered from the live entry page; never synthesize its checksum.
+  return matches.find(url=>/(?:pw|sw)01sde01/i.test(decodeURIComponent(new URL(url).searchParams.get("CNAME")??"")))??matches[0]??null;
 }
 
-async function resolveCanonicalResultUrl(race:PendingRace):Promise<string|null>{
-  const targetKey=jraRaceKey(race.entryUrl);if(!targetKey)return null;
-  for(const candidate of [race.resultUrl,race.sourceResultUrl]){
-    if(candidate&&isCanonicalResultUrl(candidate,targetKey))return candidate;
-  }
+async function resolveOfficialResultUrl(race:PendingRace):Promise<string|null>{
+  // Always rediscover the result link from the target race's current entry page. Stored URLs may carry a stale
+  // checksum or, historically, may have been an unrelated result link discovered elsewhere in the entry HTML.
   const entry=await fetchJraPage(race.entryUrl);
   return matchingResultUrl(entry.html,entry.url);
 }
@@ -86,7 +88,7 @@ async function syncFinishedPayouts(db:D1Database):Promise<void>{
       const existing=await existingPayoutTypes(db,race.raceId);
       if(needed.every(type=>existing.has(type)))continue;
       try{
-        const resultUrl=await resolveCanonicalResultUrl(race);if(!resultUrl)continue;
+        const resultUrl=await resolveOfficialResultUrl(race);if(!resultUrl)continue;
         const page=await fetchJraPage(resultUrl);
         const result=parseResultPage(page.html,page.url);
         if(result.race.raceId!==race.raceId)continue;
