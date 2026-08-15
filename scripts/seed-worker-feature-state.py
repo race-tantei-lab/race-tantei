@@ -16,7 +16,7 @@ STATE_PATH = ROOT / "models" / "ten-year-runner-feature-state.json.gz"
 CONFIG_PATH = ROOT / "config" / "ten-year-completed-model.json"
 AUDIT_PATH = ROOT / "worker-feature-state-seed-audit.json"
 MODEL_VERSION = "ten-year-completed-model"
-ROW_CHUNK = 100
+ROW_CHUNK = 200
 STATEMENTS_PER_BATCH = 10
 
 SCHEMA = [
@@ -200,6 +200,7 @@ def main() -> int:
     }
 
     if args.apply:
+        print(json.dumps({"status": "FEATURE_STATE_SEED_START", "generation": generation, "throughDate": through_date, "totalRows": sum(expected.values())}), flush=True)
         for sql in SCHEMA:
             d1_query(sql)
         existing = {row["key"]: row["value"] for row in d1_query("SELECT key,value FROM rt_ml_feature_meta")}
@@ -213,6 +214,7 @@ def main() -> int:
                 d1_query(f"DELETE FROM {table} WHERE generation=?", [generation])
                 columns, rows = rows_by_table[table]
                 uploaded[table] = upload_rows(table, columns, rows)
+                print(json.dumps({"status": "FEATURE_STATE_TABLE_UPLOADED", "table": table, "rows": uploaded[table], "expected": expected[table]}), flush=True)
                 if uploaded[table] != expected[table]:
                     raise RuntimeError(f"FEATURE_STATE_UPLOAD_COUNT_MISMATCH:{table}:{uploaded[table]}:{expected[table]}")
 
@@ -252,7 +254,7 @@ def main() -> int:
             audit.update({"status": "SEEDED_D1_OK", "applied": True, "d1Counts": actual})
 
     AUDIT_PATH.write_text(json.dumps(audit, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps(audit, ensure_ascii=False))
+    print(json.dumps(audit, ensure_ascii=False), flush=True)
     return 0
 
 
