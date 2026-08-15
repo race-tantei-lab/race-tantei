@@ -1,0 +1,76 @@
+name: Apply live UI regression hotfix
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/apply-live-ui-regression-hotfix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch live bet rendering and venue ROI replacement
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          base = Path('src/public-site-entry.ts')
+          text = base.read_text(encoding='utf-8')
+          old = '  const publicBets = race.raceDate === "2026-08-08" ? await getPublicBets(db, raceId) : [];'
+          new = '  const publicBets = await getPublicBets(db, raceId);'
+          if old not in text:
+              raise SystemExit('BASE_LIVE_BET_LINE_NOT_FOUND')
+          base.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          v15 = Path('src/public-site-entry-v15.ts')
+          text = v15.read_text(encoding='utf-8')
+          old = '''async function canonicalHome(db:D1Database,html:string):Promise<string>{
+            const [courses,months,venues]=await Promise.all([liveCourseRows(db),liveMonthlyRows(db),liveVenueRows(db)]);
+            let out=html.replace(/<section class="metrics">[\\s\\S]*?<\\/section>/,metricHtml(courses,months));
+            out=out.replace(/<div class="section-title venue-roi-title">[\\s\\S]*?<\\/div><div class="venue-roi-rail">[\\s\\S]*?<\\/div>(?=<div class="section-title"><h2 id="selected-date">)/,venueHtml(venues));
+            out=out.replace("</head>",`${homeStyle()}</head>`);
+            return out;
+          }'''
+          new = '''function replaceVenueRoi(html:string,replacement:string):string{
+            const start=html.indexOf('<div class="section-title venue-roi-title">');
+            if(start<0)return html;
+            const candidates=[
+              html.indexOf('<section class="today-result"',start),
+              html.indexOf('<div class="section-title"><h2 id="selected-date">',start)
+            ].filter((value)=>value>start);
+            if(!candidates.length)return html;
+            const end=Math.min(...candidates);
+            return html.slice(0,start)+replacement+html.slice(end);
+          }
+
+          async function canonicalHome(db:D1Database,html:string):Promise<string>{
+            const [courses,months,venues]=await Promise.all([liveCourseRows(db),liveMonthlyRows(db),liveVenueRows(db)]);
+            let out=html.replace(/<section class="metrics">[\\s\\S]*?<\\/section>/,metricHtml(courses,months));
+            out=replaceVenueRoi(out,venueHtml(venues));
+            out=out.replace("</head>",`${homeStyle()}</head>`);
+            return out;
+          }'''
+          if old not in text:
+              raise SystemExit('V15_CANONICAL_HOME_BLOCK_NOT_FOUND')
+          v15.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+      - name: Commit hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/public-site-entry.ts src/public-site-entry-v15.ts
+          git diff --cached --check
+          git commit -m "Fix live bet details and shared venue ROI regression"
+          git push origin HEAD:main
