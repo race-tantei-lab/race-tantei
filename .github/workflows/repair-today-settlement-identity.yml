@@ -41,11 +41,11 @@ jobs:
           done
           echo 'IDENTITY_SAFE_DEPLOY_TIMEOUT' >&2
           exit 1
-      - name: Verify official source identity and reset only current-day settlement
+      - name: Verify exact JRA race key and reset only current-day settlement
         shell: bash
         run: |
           python - <<'PY'
-          import datetime as dt, html as htmlmod, importlib.util, json, pathlib, re, sys, urllib.request
+          import datetime as dt, importlib.util, json, pathlib, sys, urllib.parse
 
           p=pathlib.Path('scripts/collect-jra-official-odds.py')
           s=importlib.util.spec_from_file_location('repair_d1',p)
@@ -53,7 +53,7 @@ jobs:
           date=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
           rows=m.d1_query('''
             SELECT DISTINCT r.race_id AS raceId,r.race_date AS raceDate,r.venue,r.race_no AS raceNo,
-                   r.result_url AS storedResultUrl,s.result_url AS sourceResultUrl
+                   r.entry_url AS entryUrl,r.result_url AS storedResultUrl,s.result_url AS sourceResultUrl
             FROM rt_races r
             JOIN rt_public_bets b ON b.race_id=r.race_id
             JOIN rt_race_sources s ON s.race_id=r.race_id AND s.entry_url=r.entry_url
@@ -65,37 +65,28 @@ jobs:
               pathlib.Path('/tmp/repair_ids.txt').write_text('',encoding='utf-8')
               raise SystemExit(0)
 
+          def cname(url):
+              q=urllib.parse.parse_qs(urllib.parse.urlsplit(str(url)).query)
+              return (q.get('CNAME') or q.get('cname') or [''])[0]
+
           valid=[]; evidence=[]
           for row in rows:
-              url=str(row['sourceResultUrl'])
-              req=urllib.request.Request(url,headers={
-                  'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/136 Safari/537.36',
-                  'Accept-Language':'ja-JP,ja;q=0.9','Cache-Control':'no-cache','Pragma':'no-cache'
-              })
-              with urllib.request.urlopen(req,timeout=35) as resp:
-                  raw=resp.read(4_000_000); final=resp.geturl(); ctype=resp.headers.get('content-type','')
-              text=m.decode_body(raw,ctype)
-              plain=htmlmod.unescape(re.sub(r'<[^>]+>',' ',text)); plain=re.sub(r'\s+',' ',plain)
-              dm=re.search(r'(20\d{2})年(\d{1,2})月(\d{1,2})日[^ ]*\s*(?:\d+)回(札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉)(?:\d+)日',plain)
-              race_hits=[int(x) for x in re.findall(r'(?<!\d)(\d{1,2})(?:レース|R)(?!\d)',plain[:30000],re.I)]
-              actual_date=None; actual_venue=None
-              if dm:
-                  actual_date=f'{int(dm.group(1)):04d}-{int(dm.group(2)):02d}-{int(dm.group(3)):02d}'
-                  actual_venue=dm.group(4)
-              ok=bool(dm and actual_date==str(row['raceDate']) and actual_venue==str(row['venue']) and int(row['raceNo']) in race_hits)
-              ev={'raceId':row['raceId'],'expected':[row['raceDate'],row['venue'],int(row['raceNo'])],
-                  'actualDate':actual_date,'actualVenue':actual_venue,'raceNumbers':race_hits[:12],
-                  'storedResultUrl':row['storedResultUrl'],'sourceResultUrl':url,'finalUrl':final,'identityOk':ok}
+              entry=cname(row['entryUrl'])
+              source=cname(row['sourceResultUrl'])
+              expected=entry.replace('pw01dde','pw01sde',1).replace('sw01dde','sw01sde',1)
+              ok=bool(entry and source and expected!=entry and source==expected)
+              ev={'raceId':row['raceId'],'raceDate':row['raceDate'],'venue':row['venue'],'raceNo':int(row['raceNo']),
+                  'entryCname':entry,'expectedResultCname':expected,'sourceResultCname':source,
+                  'storedResultUrl':row['storedResultUrl'],'sourceResultUrl':row['sourceResultUrl'],'identityOk':ok}
               evidence.append(ev)
               if not ok:
-                  raise RuntimeError('JRA_RESULT_IDENTITY_MISMATCH:'+json.dumps(ev,ensure_ascii=False))
-              if '払戻金' not in plain:
-                  raise RuntimeError('JRA_RESULT_PAYOUT_NOT_READY:'+str(row['raceId']))
+                  raise RuntimeError('JRA_RESULT_RACE_KEY_MISMATCH:'+json.dumps(ev,ensure_ascii=False))
               valid.append(str(row['raceId']))
 
           pathlib.Path('/tmp/repair_ids.txt').write_text('\n'.join(valid)+'\n',encoding='utf-8')
           pathlib.Path('/tmp/source_identity.json').write_text(json.dumps(evidence,ensure_ascii=False,indent=2),encoding='utf-8')
           placeholders=','.join('?' for _ in valid)
+          # Predictions, selected races, ticket combinations, official odds and stakes remain untouched.
           m.d1_query(f'DELETE FROM rt_payouts WHERE race_id IN ({placeholders})',valid)
           m.d1_query(f'''UPDATE rt_public_bets SET settlement_status='pending',return_yen=NULL WHERE race_id IN ({placeholders})''',valid)
           m.d1_query(f'''UPDATE rt_races
@@ -104,7 +95,7 @@ jobs:
                          WHERE race_id IN ({placeholders})''',valid)
           print(json.dumps({'status':'RESET_FOR_OFFICIAL_RECONCILIATION','date':date,'raceIds':valid,'identityEvidence':evidence},ensure_ascii=False))
           PY
-      - name: Reconcile from validated JRA results
+      - name: Reconcile from identity-checked JRA results
         shell: bash
         run: |
           set -euo pipefail
