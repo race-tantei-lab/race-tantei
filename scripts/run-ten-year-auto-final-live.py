@@ -14,6 +14,7 @@ CONFIG_PATH=ROOT/'config'/'ten-year-completed-model.json'
 MODEL_PATH=ROOT/'models'/'ten-year-completed-model.txt'
 STATE_MANIFEST_PATH=ROOT/'models'/'ten-year-production-state-manifest.json'
 COURSE_BUDGETS={'ライト':2000,'スタンダード':5000,'プレミアム':10000}
+BODYWEIGHT_STATE_PREFIX='worker_bodyweight_snapshot:'
 
 
 def load(path,name):
@@ -66,6 +67,37 @@ def verify_locked(collector,ids):
                 raise RuntimeError(f"AUTO_CANONICAL_BET_GATE_FAILED:{race_id}:{course}:tickets={row.get('tickets')}:types={row.get('betTypes')}:stake={row.get('stakeYen')}:source={row.get('finalSource')}")
 
 
+def verify_official_bodyweights(collector,ids):
+    verified=[]
+    for race_id in ids:
+        state_rows=collector.d1_query(
+            'SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1',
+            [f'{BODYWEIGHT_STATE_PREFIX}{race_id}'],
+        )
+        if not state_rows: raise RuntimeError(f'AUTO_BODYWEIGHT_SNAPSHOT_MISSING:{race_id}')
+        try: snapshot=json.loads(str(state_rows[0].get('value') or '{}'))
+        except json.JSONDecodeError as exc: raise RuntimeError(f'AUTO_BODYWEIGHT_SNAPSHOT_JSON_INVALID:{race_id}') from exc
+        if snapshot.get('version')!=1 or snapshot.get('raceId')!=race_id: raise RuntimeError(f'AUTO_BODYWEIGHT_SNAPSHOT_IDENTITY_INVALID:{race_id}')
+        if not isinstance(snapshot.get('snapshotSha256'),str) or len(snapshot['snapshotSha256'])!=64: raise RuntimeError(f'AUTO_BODYWEIGHT_SNAPSHOT_HASH_INVALID:{race_id}')
+        body_rows=snapshot.get('activeRunners')
+        if not isinstance(body_rows,list) or len(body_rows)<3: raise RuntimeError(f'AUTO_BODYWEIGHT_SNAPSHOT_RUNNERS_INVALID:{race_id}')
+        official={int(row['horseNo']):(int(row['horseWeight']), None if row.get('weightChange') is None else int(row['weightChange'])) for row in body_rows}
+        current=collector.d1_query(
+            "SELECT horse_no AS horseNo,horse_weight AS horseWeight,weight_change AS weightChange FROM rt_runners WHERE race_id=? AND COALESCE(runner_status,'active')='active' ORDER BY horse_no",
+            [race_id],
+        )
+        if len(current)<3: raise RuntimeError(f'AUTO_BODYWEIGHT_ACTIVE_RUNNERS_TOO_FEW:{race_id}:{len(current)}')
+        for row in current:
+            horse_no=int(row.get('horseNo') or 0)
+            expected=official.get(horse_no)
+            actual_weight=int(row['horseWeight']) if row.get('horseWeight') is not None else None
+            actual_change=int(row['weightChange']) if row.get('weightChange') is not None else None
+            if expected is None or actual_weight!=expected[0] or actual_change!=expected[1]:
+                raise RuntimeError(f'AUTO_BODYWEIGHT_D1_MISMATCH:{race_id}:{horse_no}:{actual_weight}:{actual_change}:{expected}')
+        verified.append(race_id)
+    return verified
+
+
 def sha256(path):
     h=hashlib.sha256()
     with open(path,'rb') as fh:
@@ -104,9 +136,6 @@ def main():
     base.check_only=check_only
     base.COURSE_BUDGETS=COURSE_BUDGETS
 
-    # Evidence is captured only when this fallback actually creates the frozen
-    # selection. A later "loaded" run must never reconstruct/overwrite the
-    # selection reason from mutable current-day runner/race rows.
     original_freeze_or_load_selection=base.freeze_or_load_selection
     def freeze_or_load_with_explanation(collector,date,out_path):
         payload,status=original_freeze_or_load_selection(collector,date,out_path)
@@ -118,6 +147,16 @@ def main():
                 print(json.dumps({'selectionExplanation':'error','date':date,'error':str(exc),'selectionStatus':status},ensure_ascii=False),file=sys.stderr)
         return payload,status
     base.freeze_or_load_selection=freeze_or_load_with_explanation
+
+    # GitHub is only the fallback writer, but if it has to finalize it must use
+    # the same officially acquired bodyweight provenance as the one-minute Worker.
+    original_collect_official_odds=base.collect_official_odds
+    def collect_after_bodyweight_verification(window_ids):
+        collector=base.collector_module()
+        verified=verify_official_bodyweights(collector,window_ids)
+        print(json.dumps({'officialBodyweightVerifiedRaceIds':verified},ensure_ascii=False))
+        return original_collect_official_odds(window_ids)
+    base.collect_official_odds=collect_after_bodyweight_verification
 
     # Cloudflare Worker is the one-minute primary path. GitHub Actions remains a
     # narrow independent fallback and must not pre-empt the Worker's fresher odds.
