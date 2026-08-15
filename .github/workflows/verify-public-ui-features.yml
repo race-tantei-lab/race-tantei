@@ -76,29 +76,35 @@ jobs:
           )
           test -n "$race_id"
           curl --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 3 --max-time 25 -fsS "$BASE_URL/races/$race_id" -o /tmp/detail.html
-          grep -q 'data-decision-evidence="canonical-live-v1"' /tmp/detail.html
-          grep -q 'data-selection-trace="canonical-selection-trace-v1"' /tmp/detail.html
-          grep -q '凍結済み選定と一致' /tmp/detail.html
-          grep -q 'raceScore' /tmp/detail.html
-          grep -q '会場内順位' /tmp/detail.html
-          grep -q '選定用の上位候補5頭' /tmp/detail.html
-          grep -q 'この条件の過去サンプル' /tmp/detail.html
-          grep -q '補正後ROI' /tmp/detail.html
-          grep -q '局所条件の加重ROI' /tmp/detail.html
-          proxy_count=$(grep -o 'レース選定用 仮買い目' /tmp/detail.html | wc -l | tr -d ' ')
-          if [[ "$proxy_count" != '3' ]]; then
-            echo "Expected exactly 3 selection proxy tickets, got $proxy_count" >&2
-            exit 1
-          fi
-          grep -q '組合せ予測確率' /tmp/detail.html
-          grep -q '確率 × オッズ' /tmp/detail.html
-          grep -q 'モデル予測勝率' /tmp/detail.html
-          grep -q '近3走3着内' /tmp/detail.html
-          if grep -q '条件に合致' /tmp/detail.html; then
-            echo 'Generic condition-match copy must not remain in live prediction evidence.' >&2
-            exit 1
-          fi
-          echo "exact prediction evidence=ok race=$race_id proxyTickets=$proxy_count"
+          RACE_ID="$race_id" node - <<'NODE'
+          const fs=require('fs');
+          const html=fs.readFileSync('/tmp/detail.html','utf8');
+          const required=[
+            ['decision-marker','data-decision-evidence="canonical-live-v1"'],
+            ['selection-trace-marker','data-selection-trace="canonical-selection-trace-v1"'],
+            ['frozen-parity','凍結済み選定と一致'],
+            ['race-score','raceScore'],
+            ['venue-rank','会場内順位'],
+            ['selection-top-five','選定用の上位候補5頭'],
+            ['condition-sample','この条件の過去サンプル'],
+            ['smoothed-roi','補正後ROI'],
+            ['local-weighted-roi','局所条件の加重ROI'],
+            ['ticket-probability','組合せ予測確率'],
+            ['ticket-value-product','確率 × オッズ'],
+            ['runner-model-probability','モデル予測勝率'],
+            ['runner-recent-top3','近3走3着内'],
+          ];
+          const missing=required.filter(([,needle])=>!html.includes(needle)).map(([name])=>name);
+          const proxyCount=(html.match(/レース選定用 仮買い目/g)||[]).length;
+          if(proxyCount!==3) missing.push(`proxy-ticket-count=${proxyCount}`);
+          if(html.includes('条件に合致')) missing.push('generic-condition-match-copy');
+          if(missing.length){
+            console.error('PREDICTION_EVIDENCE_MISSING race='+process.env.RACE_ID+' markers='+missing.join(','));
+            console.error('PREDICTION_EVIDENCE_DEBUG selectionTrace='+html.includes('data-selection-trace=')+' decisionMarker='+html.includes('data-decision-evidence=')+' proxyCount='+proxyCount+' bytes='+Buffer.byteLength(html));
+            process.exit(1);
+          }
+          console.log('EXACT_PREDICTION_EVIDENCE_OK race='+process.env.RACE_ID+' proxyTickets='+proxyCount);
+          NODE
 
       - name: Mark feature verification success
         if: success()
