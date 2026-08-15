@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib.util
 import json
 import math
 import pathlib
@@ -17,24 +16,11 @@ import numpy as np
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 MODEL_PATH = ROOT / "models" / "ten-year-completed-model.txt"
 CONFIG_PATH = ROOT / "config" / "ten-year-completed-model.json"
-CORE_PATH = ROOT / "scripts" / "ten-year-production-core.py"
 MAGIC = b"RTLMOD01"
 VERSION = 1
 HEADER_STRUCT = struct.Struct("<8sIIIIdII")
 NODE_STRUCT = struct.Struct("<BBBBiidI")
 MISSING_TYPES = {"None": 0, "NaN": 1, "Zero": 2}
-
-
-def load_core_feature_names() -> list[str]:
-    spec = importlib.util.spec_from_file_location("ten_year_production_core_for_asset", CORE_PATH)
-    if spec is None or spec.loader is None:
-        raise RuntimeError("could not load ten-year production core")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    names = getattr(module, "FEATURE_NAMES", None)
-    if not isinstance(names, list) or not names or not all(isinstance(x, str) for x in names):
-        raise RuntimeError("FEATURE_NAMES is missing from ten-year production core")
-    return list(names)
 
 
 def model_sha256(path: pathlib.Path) -> str:
@@ -130,21 +116,23 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    expected_sha = str(config.get("runnerProbabilityModel", {}).get("modelWeightsSha256", ""))
+    probability_model = config.get("runnerProbabilityModel") or {}
+    expected_sha = str(probability_model.get("modelWeightsSha256", ""))
     if not expected_sha:
         raise RuntimeError("completed model config is missing runnerProbabilityModel.modelWeightsSha256")
     actual_sha = model_sha256(MODEL_PATH)
     if expected_sha != actual_sha:
         raise RuntimeError(f"completed model SHA256 mismatch: expected {expected_sha}, got {actual_sha}")
 
-    feature_names = load_core_feature_names()
-    if len(feature_names) != 56:
-        raise RuntimeError(f"completed model production core must have 56 features, got {len(feature_names)}")
+    feature_names = probability_model.get("features")
+    if not isinstance(feature_names, list) or len(feature_names) != 56 or not all(isinstance(x, str) for x in feature_names):
+        raise RuntimeError(f"completed model config must expose exactly 56 string features, got {feature_names!r}")
+    feature_names = list(feature_names)
 
     booster = lgb.Booster(model_file=str(MODEL_PATH))
     booster_names = list(booster.feature_name())
     if booster_names != feature_names:
-        raise RuntimeError("LightGBM model feature order does not match production FEATURE_NAMES")
+        raise RuntimeError("LightGBM model feature order does not match completed config features")
 
     dump = booster.dump_model()
     objective = str(dump.get("objective", "binary"))
