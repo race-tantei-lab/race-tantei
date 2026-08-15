@@ -8,6 +8,7 @@ type LiveLockAudit = {
   sourceModel?: string;
   selectedRaceCount?: number;
   deadlineBreachRaceIds?: string[];
+  bodyWeightBreachRaceIds?: string[];
 };
 
 type PredictionSampleRow = {
@@ -27,6 +28,13 @@ async function enforceLiveLockSla(db: D1Database, now: Date): Promise<void> {
   const breaches = Array.isArray(audit.deadlineBreachRaceIds) ? audit.deadlineBreachRaceIds.map(String).filter(Boolean) : [];
   if (audit.status === "deadline_breach" || breaches.length) {
     throw new Error(`WORKER_COMPLETED_15_MINUTE_SLA_BREACH:${breaches.join(",")}`);
+  }
+  const bodyWeightBreaches = Array.isArray(audit.bodyWeightBreachRaceIds) ? audit.bodyWeightBreachRaceIds.map(String).filter(Boolean) : [];
+  if (bodyWeightBreaches.length) {
+    // Bets have already been written from a pre-generated fallback. This must be
+    // observable, but it must never turn a bodyweight acquisition miss into a
+    // missing public prediction.
+    console.error("WORKER_COMPLETED_BODYWEIGHT_SLA_BREACH", JSON.stringify({ raceIds: bodyWeightBreaches }));
   }
 }
 
