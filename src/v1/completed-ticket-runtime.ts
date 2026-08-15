@@ -91,9 +91,11 @@ function* permutations(n: number, k: number, prefix: number[] = [], used = new S
   }
   for (let i = 0; i < n; i += 1) {
     if (used.has(i)) continue;
-    used.add(i); prefix.push(i);
+    used.add(i);
+    prefix.push(i);
     yield* permutations(n, k, prefix, used);
-    prefix.pop(); used.delete(i);
+    prefix.pop();
+    used.delete(i);
   }
 }
 
@@ -124,13 +126,23 @@ export function normalizeCompletedWeights(raw: readonly number[]): number[] {
   return raw.map((value) => value / total);
 }
 
+function validateCanonicalWeights(weights: readonly number[]): void {
+  if (weights.length < 3 || weights.some((value) => !Number.isFinite(value) || value <= 0)) {
+    throw new Error("completed normalized runner probabilities are invalid");
+  }
+  const total = weights.reduce((sum, value) => sum + value, 0);
+  if (!Number.isFinite(total) || Math.abs(total - 1) > 1e-9) {
+    throw new Error(`completed runner probabilities must already be normalized: total=${total}`);
+  }
+}
+
 export function chooseCompletedTwoTickets(horseNos: readonly number[], weights: readonly number[], rows: readonly OfficialOddsRow[]): CompletedTicket[] {
   if (horseNos.length !== weights.length || horseNos.length < 3) throw new Error("completed ticket runner shape is invalid");
   const unique = new Set(horseNos);
   if (unique.size !== horseNos.length || horseNos.some((value) => !Number.isInteger(value) || value < 1 || value > 18)) {
     throw new Error("completed ticket horse numbers are invalid");
   }
-  const normalized = normalizeCompletedWeights(weights);
+  validateCanonicalWeights(weights);
   const odds = new Map<string, number>();
   for (const row of rows) {
     const low = Number(row.oddsMin);
@@ -147,7 +159,7 @@ export function chooseCompletedTwoTickets(horseNos: readonly number[], weights: 
       const combination = comboText(betType, pos, horseNos);
       const odd = odds.get(`${betType}\u0001${combination}`);
       if (odd == null) continue;
-      const probability = completedCombinationProbability(betType, pos, normalized);
+      const probability = completedCombinationProbability(betType, pos, weights);
       if (!Number.isFinite(probability) || probability <= 0) continue;
       candidates.push({
         betType,
