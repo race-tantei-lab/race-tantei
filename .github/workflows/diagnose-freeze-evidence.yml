@@ -39,26 +39,22 @@ jobs:
               return payload.get('result',[{}])[0].get('results',[])
           def show(label,rows): print(label+'='+json.dumps(rows,ensure_ascii=False,separators=(',',':')))
 
-          tables=q("SELECT name,sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-          show('TABLES',[{'name':r.get('name'),'sql':r.get('sql')} for r in tables if any(x in str(r.get('name','')).lower() for x in ['race','runner','result','payout','system','history','snapshot','audit'])])
-          triggers=q("SELECT name,tbl_name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")
-          show('TRIGGERS',triggers)
-          for table in ['rt_races','rt_runners','rt_results','rt_payouts','rt_system_state']:
-              try: show('COLUMNS_'+table,q(f'PRAGMA table_info({table})'))
-              except Exception as e: print('COLUMNS_ERROR_'+table+'='+repr(e))
-
           show('SYSTEM_FREEZE_ROWS',q("SELECT state_key,state_value,updated_at FROM rt_system_state WHERE state_key IN (?,?) OR state_key LIKE ? ORDER BY state_key",['final_daily_selection:2026-08-15','worker_selection:2026-08-15','worker_selection_explanation:2026-08-15:%']))
 
-          cols={}
-          for table in ['rt_races','rt_runners','rt_results','rt_payouts']:
-              cols[table]={str(r.get('name')) for r in q(f'PRAGMA table_info({table})')}
-          for table in ['rt_races','rt_runners','rt_results','rt_payouts']:
-              timecols=[c for c in ['updated_at','created_at','synced_at','fetched_at','observed_at','collected_at'] if c in cols[table]]
-              if timecols:
-                  select=', '.join(timecols)
-                  try:
-                      if table=='rt_races': rows=q(f"SELECT race_id,{select} FROM {table} WHERE race_date=? ORDER BY race_id",['2026-08-15'])
-                      else: rows=q(f"SELECT t.race_id,{select} FROM {table} t JOIN rt_races r ON r.race_id=t.race_id WHERE r.race_date=? ORDER BY t.race_id LIMIT 500",['2026-08-15'])
-                      show('TIMES_'+table,rows)
-                  except Exception as e: print('TIMES_ERROR_'+table+'='+repr(e))
+          for table in ['rt_races','races','legacy_phase1_races']:
+              try:
+                  show('RACE_'+table,q(f"SELECT * FROM {table} WHERE race_id=?",['2026-08-15-niigata-10']))
+              except Exception as e: print('RACE_ERROR_'+table+'='+repr(e))
+
+          for table in ['rt_runners','runners','legacy_phase1_runners']:
+              try:
+                  show('RUNNERS_'+table,q(f"SELECT race_id,horse_no,frame_no,horse_name,jockey,trainer,runner_status,updated_at FROM {table} WHERE race_id=? ORDER BY horse_no",['2026-08-15-niigata-10']))
+              except Exception as e: print('RUNNERS_ERROR_'+table+'='+repr(e))
+
+          for table in ['rt_runners','rt_results','rt_payouts']:
+              try:
+                  show('TIMES_'+table,q(f"SELECT t.race_id,MIN(t.updated_at) AS minUpdatedAt,MAX(t.updated_at) AS maxUpdatedAt,COUNT(*) AS rows FROM {table} t JOIN rt_races r ON r.race_id=t.race_id WHERE r.race_date=? GROUP BY t.race_id ORDER BY t.race_id",['2026-08-15']))
+              except Exception as e: print('TIMES_ERROR_'+table+'='+repr(e))
+
+          show('RELATED_STATE_KEYS',q("SELECT state_key,updated_at,substr(state_value,1,1000) AS preview FROM rt_system_state WHERE state_key LIKE ? OR state_key LIKE ? OR state_key LIKE ? ORDER BY updated_at,state_key",['%selection%2026-08-15%','%2026-08-15%selection%','%2026-08-15-niigata-10%']))
           PY
