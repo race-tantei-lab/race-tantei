@@ -24,13 +24,18 @@ REQUIRED = [
     "data/ten-year-runners/manifest.json",
     "src/v1/ten-year-public-summary.ts",
     "src/v1/ten-year-history.ts",
+    "src/v1/completed-worker-live-lock.ts",
     "scripts/run-ten-year-auto-final-live.py",
     "scripts/ten-year-production-core.py",
     "scripts/generate-ten-year-preday-selection.py",
     "scripts/generate-ten-year-live-bets.py",
+    "scripts/build-worker-completed-model-assets.py",
+    "scripts/verify-worker-model-parity.ts",
     ".github/workflows/auto-final-live-bets.yml",
+    ".github/workflows/deploy.yml",
     ".github/workflows/production-smoke.yml",
     ".github/workflows/verify-canonical-handoff.yml",
+    ".github/workflows/verify-worker-selection-parity.yml",
     "wrangler.jsonc",
 ]
 
@@ -55,6 +60,34 @@ def sha256_file(path: str) -> str:
     return h.hexdigest()
 
 
+def collect_public_site_sources(path: str) -> str:
+    """Collect the current layered public-site entry and its publicSite parents.
+
+    v20/v21 are wrappers around the v19 product-copy layer. The current entry remains
+    wrangler.jsonc.main, while product/methodology assertions must inspect the whole
+    active chain instead of assuming every marker lives in the top wrapper file.
+    """
+    current = Path(path)
+    seen: set[str] = set()
+    sources: list[str] = []
+    pattern = re.compile(r'import\s+publicSite\s+from\s+["\'](\./public-site-entry-v\d+)\.js["\']')
+    while True:
+        key = current.as_posix()
+        if key in seen:
+            fail(f"public-site entry import cycle: {key}")
+        seen.add(key)
+        full = ROOT / current
+        if not full.exists():
+            fail(f"public-site entry dependency missing: {key}")
+        text = full.read_text(encoding="utf-8")
+        sources.append(text)
+        match = pattern.search(text)
+        if not match:
+            break
+        current = current.parent / f"{match.group(1)}.ts"
+    return "\n".join(sources)
+
+
 def main() -> None:
     missing = [p for p in REQUIRED if not (ROOT / p).exists()]
     if missing:
@@ -65,6 +98,8 @@ def main() -> None:
     methodology_audit = read("analysis-results/completed-model-methodology-audit-20260813.md")
     production_smoke = read(".github/workflows/production-smoke.yml")
     verify_workflow = read(".github/workflows/verify-canonical-handoff.yml")
+    deploy_workflow = read(".github/workflows/deploy.yml")
+    parity_workflow = read(".github/workflows/verify-worker-selection-parity.yml")
     manifest = load_json("config/canonical-production-manifest.json")
     config = load_json("config/ten-year-completed-model.json")
     audit = load_json("analysis-results/ten-year-model-completion-20260812.json")
@@ -153,6 +188,10 @@ def main() -> None:
     if vars_.get("MODEL_VERSION") != manifest["model"]["name"]:
         fail("MODEL_VERSION mismatch")
 
+    build_command = str(wrangler.get("build", {}).get("command", ""))
+    if "build-worker-completed-model-assets.py" not in build_command:
+        fail("wrangler build does not generate canonical Worker model assets")
+
     d1 = wrangler.get("d1_databases", [])
     if len(d1) != 1:
         fail("expected exactly one D1 binding")
@@ -161,7 +200,7 @@ def main() -> None:
     if d1[0].get("database_id") != manifest["site"]["d1DatabaseId"]:
         fail("D1 database ID mismatch")
 
-    conditions_entry = read(manifest["site"]["entry"])
+    active_ui_sources = collect_public_site_sources(manifest["site"]["entry"])
     for needle in (
         "予想ロジック",
         "上位5頭",
@@ -173,9 +212,23 @@ def main() -> None:
         "未使用データだけで検証した成績ではありません",
         "データ更新のタイミング",
         "公開した買い目と結果は後から変更しません",
+        "runCompletedWorkerLiveLock",
+        "WORKER_COMPLETED_15_MINUTE_SLA_BREACH",
+        "FROZEN_ARCHIVE_END",
     ):
-        if needle not in conditions_entry:
-            fail(f"conditions page missing product/methodology marker: {needle}")
+        if needle not in active_ui_sources:
+            fail(f"active public-site chain missing canonical marker: {needle}")
+
+    for needle in (
+        "build-worker-completed-model-assets.py",
+        "verify-worker-model-parity.ts",
+        "Verify historical race APIs and detail",
+        "Verify live result ingestion and settlement",
+    ):
+        if needle not in deploy_workflow:
+            fail(f"production deploy missing canonical runtime verification: {needle}")
+    if "verify-worker-selection-parity" not in parity_workflow.lower() and "Compare Worker selection with canonical Python" not in parity_workflow:
+        fail("Worker/Python selection parity workflow marker missing")
 
     for needle in (
         "conditionsMethodology",
@@ -259,6 +312,9 @@ def main() -> None:
         "roi_pct=431.6505898681471",
         "methodology_audit=20260813",
         "production_smoke=canonical",
+        "worker_model_parity=required",
+        "worker_selection_parity=required",
+        "worker_live_lock=required",
     )
 
 
