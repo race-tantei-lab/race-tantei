@@ -69,7 +69,6 @@ def load_recent_runner_rows(collector,target_date,cutoff_utc):
         JOIN rt_runners x ON x.race_id=r.race_id
         JOIN rt_results y ON y.race_id=x.race_id AND y.horse_no=x.horse_no
         WHERE r.race_date BETWEEN ? AND ?
-          AND r.status='finished'
           AND r.start_time_utc IS NOT NULL
           AND datetime(r.start_time_utc) < datetime(?)
           AND y.finish_position IS NOT NULL
@@ -125,13 +124,17 @@ def build_runner_learning(rows,target_race,current_runners,cutoff_utc,target_dat
     for race_id,race_rows in by_race.items():
         valid=[]
         for row in race_rows:
-            try: odd=float(row.get('winOdds')); pos=int(row.get('finishPosition'))
+            try: pos=int(row.get('finishPosition'))
             except (TypeError,ValueError): continue
-            if not math.isfinite(odd) or odd<=1.0 or pos<=0: continue
+            if pos<=0: continue
+            try: odd=float(row.get('winOdds'))
+            except (TypeError,ValueError): odd=None
+            if odd is not None and (not math.isfinite(odd) or odd<=1.0): odd=None
             valid.append((row,odd,pos))
         if len(valid)<3: continue
-        denom=sum(1.0/odd for _,odd,_ in valid)
-        if denom<=0: continue
+        priced=[odd for _,odd,_ in valid if odd is not None]
+        denom=sum(1.0/odd for odd in priced) if len(priced)==len(valid) else 0.0
+        use_market=denom>0.0 and len(priced)==len(valid)
         first=valid[0][0]
         weight=recency_weight(first.get('startTimeUtc'),first.get('raceDate'),cutoff_utc,target_date)
         if weight<=0: continue
@@ -143,7 +146,8 @@ def build_runner_learning(rows,target_race,current_runners,cutoff_utc,target_dat
         field=len(valid)
         venue=str(first.get('venue') or ''); surface=str(first.get('surface') or '')
         for row,odd,pos in valid:
-            expected=(1.0/odd)/denom; residual=(1.0 if pos==1 else 0.0)-expected
+            expected=((1.0/odd)/denom) if use_market else (1.0/field)
+            residual=(1.0 if pos==1 else 0.0)-expected
             is_same=day_diff==0
             name=str(row.get('horseName') or '').strip(); jockey=str(row.get('jockey') or '').strip(); trainer=str(row.get('trainer') or '').strip()
             if name: _add_signal(stats,('horse',name),weight,residual,is_same)

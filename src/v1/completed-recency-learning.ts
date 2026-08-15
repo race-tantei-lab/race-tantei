@@ -14,7 +14,7 @@ const ODDS_EDGES = [2,3,5,7,10,15,20,30,50,75,100,150,300,500,800,1200,2000] as 
 type RunnerHistoryRow = {
   raceId: string; raceDate: string; startTimeUtc: string; venue: string; surface: string | null;
   horseNo: number; horseName: string; jockey: string | null; trainer: string | null;
-  finishPosition: number; marketProbability: number; fieldSize: number;
+  finishPosition: number; marketProbability: number | null; fieldSize: number;
 };
 
 type BetHistoryRow = {
@@ -125,18 +125,23 @@ async function loadRunnerRows(db: D1Database, race: RaceRecord, runners: RunnerR
       SELECT r.race_id AS raceId,r.race_date AS raceDate,r.start_time_utc AS startTimeUtc,r.venue,r.surface,
              x.horse_no AS horseNo,x.horse_name AS horseName,x.jockey,x.trainer,
              CAST(y.finish_position AS INTEGER) AS finishPosition,
-             (1.0 / CAST(x.win_odds AS REAL)) /
-               SUM(1.0 / CAST(x.win_odds AS REAL)) OVER (PARTITION BY r.race_id) AS marketProbability,
+             CASE
+               WHEN SUM(CASE WHEN CAST(x.win_odds AS REAL)>1.0 THEN 1 ELSE 0 END) OVER (PARTITION BY r.race_id)
+                    = COUNT(*) OVER (PARTITION BY r.race_id)
+               THEN (1.0 / CAST(x.win_odds AS REAL)) /
+                    SUM(1.0 / CAST(x.win_odds AS REAL)) OVER (PARTITION BY r.race_id)
+               ELSE 1.0 / COUNT(*) OVER (PARTITION BY r.race_id)
+             END AS marketProbability,
              COUNT(*) OVER (PARTITION BY r.race_id) AS fieldSize
       FROM rt_races r
       JOIN rt_runners x ON x.race_id=r.race_id
-      LEFT JOIN rt_results y ON y.race_id=x.race_id AND y.horse_no=x.horse_no
+      JOIN rt_results y ON y.race_id=x.race_id AND y.horse_no=x.horse_no
       WHERE r.race_date BETWEEN ? AND ?
-        AND r.status='finished'
         AND r.start_time_utc IS NOT NULL
         AND datetime(r.start_time_utc) < datetime(?)
         AND COALESCE(x.runner_status,'active')='active'
-        AND CAST(x.win_odds AS REAL)>1.0
+        AND y.finish_position IS NOT NULL
+        AND CAST(y.finish_position AS INTEGER)>0
     )
     SELECT * FROM scored
     WHERE finishPosition>0 AND (

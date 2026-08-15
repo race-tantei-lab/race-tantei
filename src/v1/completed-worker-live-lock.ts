@@ -6,6 +6,7 @@ import {
 } from "./bodyweight-refresh";
 import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION, completedFeatureVector, loadCompletedFeatureStateForRace } from "./completed-feature-runtime";
 import { loadCompletedModelRuntime, type CompletedModelRuntime } from "./completed-model-runtime";
+import { completedRecencyBetFactor, loadCompletedRecencyLearning, neutralCompletedRecencyLearning, type CompletedRecencyAudit, type CompletedRunnerRecencyDetail } from "./completed-recency-learning";
 import {
   COMPLETED_COURSE_STAKES,
   chooseCompletedTwoTickets,
@@ -23,8 +24,8 @@ const PREVIEW_PREFIX = "worker_live_preview:";
 const FINAL_PREFIX = "worker_live_final:";
 const BODY_WEIGHT_REFRESH_OPEN_MS = 80 * 60 * 1000;
 const PREVIEW_OPEN_MS = 45 * 60 * 1000;
-const FINALIZE_OPEN_MS = 16 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
+const FINALIZE_OPEN_MS = DEADLINE_MS;
 const PREVIEW_HISTORY = 3;
 const PREVIEW_VERSION = 1;
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
@@ -60,6 +61,8 @@ type PreviewSnapshot = {
   oddsFetchedAt: string;
   oddsSource: string;
   oddsSnapshotSha256: string;
+  onlineLearning?: CompletedRecencyAudit;
+  runnerRecencyFactors?: CompletedRunnerRecencyDetail[];
   tickets: CompletedTicket[];
   courseBets: CompletedCourseBet[];
 };
@@ -321,13 +324,26 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     bodyWeightSnapshot = null;
   }
 
-  const state = await loadCompletedFeatureStateForRace(db, refreshed.race, refreshed.runners);
+  const learningCutoff = iso(now);
+  const state = await loadCompletedFeatureStateForRace(db, refreshed.race, refreshed.runners, learningCutoff);
   const vectors = refreshed.runners.map((runner) => completedFeatureVector(state, refreshed.race, runner, refreshed.runners.length));
   const raw = vectors.map((vector) => model.predict(vector));
-  const weights = normalizeCompletedWeights(raw);
+  const baseWeights = normalizeCompletedWeights(raw);
+  let learning;
+  try {
+    learning = await loadCompletedRecencyLearning(db, refreshed.race, refreshed.runners, learningCutoff);
+  } catch (error) {
+    learning = neutralCompletedRecencyLearning(refreshed.runners, learningCutoff, errorText(error));
+  }
+  const weights = normalizeCompletedWeights(baseWeights.map((value, index) => value * learning.runnerFactors[index]));
   const fetched = await fetchFastJraOfficialOddsForRace(refreshed.race.entryUrl, { raceDate: refreshed.race.raceDate, venue: refreshed.race.venue, raceNo: refreshed.race.raceNo });
   const oddsFetchedAt = iso();
-  const tickets = chooseCompletedTwoTickets(refreshed.runners.map((runner) => Number(runner.horseNo)), weights, fetched.rows);
+  const tickets = chooseCompletedTwoTickets(
+    refreshed.runners.map((runner) => Number(runner.horseNo)),
+    weights,
+    fetched.rows,
+    (betType, odds) => completedRecencyBetFactor(learning, betType, refreshed.race.venue, odds),
+  );
   const courseBets = completedCourseBets(tickets);
   const snapshot: PreviewSnapshot = {
     version: PREVIEW_VERSION,
@@ -341,6 +357,8 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     oddsFetchedAt,
     oddsSource: fetched.source,
     oddsSnapshotSha256: await sha256Hex(canonicalOddsRows(fetched.rows)),
+    onlineLearning: learning.audit,
+    runnerRecencyFactors: learning.runnerDetails,
     tickets,
     courseBets,
   };
@@ -393,6 +411,8 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
     oddsFetchedAt: snapshot.oddsFetchedAt,
     oddsSource: snapshot.oddsSource,
     oddsSnapshotSha256: snapshot.oddsSnapshotSha256,
+    onlineLearning: snapshot.onlineLearning ?? null,
+    runnerRecencyFactors: snapshot.runnerRecencyFactors ?? null,
     tickets: snapshot.tickets,
   })));
   await db.batch(statements);
@@ -481,16 +501,26 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
         continue;
       }
 
-      // At/after T-15 there is no new network dependency. Promote the best
-      // already-generated candidate, preferring one that used official bodyweight.
+      // T-15 is the immutable boundary. First try one last fresh score using
+      // every result settled up to this instant and the freshest official odds.
+      // If any acquisition fails, promote the last good preview so learning can
+      // never become a reason for a missing bet.
       if (remaining <= DEADLINE_MS) {
-        const fallback = await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId);
+        let deadlineFresh: PreviewSnapshot | null = null;
+        try {
+          model ??= await loadWorkerModel(env.DB);
+          deadlineFresh = await generatePreview(env.DB, model, raceId, now);
+          refreshedPreviewRaceIds.push(raceId);
+        } catch (error) {
+          errors.push({ raceId, error: `T15_FRESH_FALLBACK:${errorText(error)}` });
+        }
+        const fallback = deadlineFresh ?? await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId);
         if (!fallback) throw new Error(`WORKER_DEADLINE_PREVIEW_MISSING:${raceId}`);
         if (!snapshotHasOfficialBodyWeight(fallback)) bodyWeightBreachRaceIds.add(raceId);
-        await commitSnapshot(env.DB, raceId, fallback, now, "deadline_watchdog");
+        await commitSnapshot(env.DB, raceId, fallback, new Date(), deadlineFresh ? "fresh" : "deadline_watchdog");
         lockedByWorker.push(raceId);
-        finalizedFromFallbackRaceIds.push(raceId);
-        latePromotedRaceIds.push(raceId);
+        if (deadlineFresh) finalizedFromFreshRaceIds.push(raceId);
+        else { finalizedFromFallbackRaceIds.push(raceId); latePromotedRaceIds.push(raceId); }
         continue;
       }
 

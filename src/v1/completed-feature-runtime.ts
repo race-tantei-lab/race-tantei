@@ -303,7 +303,7 @@ function resultsOf<T>(result: D1Result<unknown>): T[] {
   return (result.results ?? []) as T[];
 }
 
-export async function loadCompletedFeatureStateForRace(db: D1Database, race: RaceRecord, runners: RunnerRecord[]): Promise<CompletedFeatureState> {
+export async function loadCompletedFeatureStateForRace(db: D1Database, race: RaceRecord, runners: RunnerRecord[], cutoffUtc?: string): Promise<CompletedFeatureState> {
   const metadataRows = await db.prepare("SELECT key,value FROM rt_ml_feature_meta").all<{ key: string; value: string }>();
   const metadata = new Map((metadataRows.results ?? []).map((row) => [row.key, row.value]));
   if (metadata.get("ready") !== "1") throw new Error("completed feature state is not ready");
@@ -348,9 +348,10 @@ export async function loadCompletedFeatureStateForRace(db: D1Database, race: Rac
 
   const state = hydrateCompletedFeatureState(payload);
   if (throughDate < race.raceDate) {
+    const effectiveCutoff = cutoffUtc ?? race.startTimeUtc ?? new Date().toISOString();
     const raceIds = await db.prepare(
-      "SELECT DISTINCT ra.race_id AS raceId FROM rt_races ra JOIN rt_runners ru ON ru.race_id=ra.race_id WHERE ra.race_date>? AND ra.race_date<? AND (ru.horse_name IN (SELECT value FROM json_each(?)) OR COALESCE(ru.jockey,'') IN (SELECT value FROM json_each(?)) OR COALESCE(ru.trainer,'') IN (SELECT value FROM json_each(?))) ORDER BY ra.race_date,ra.race_id"
-    ).bind(throughDate, race.raceDate, horseJson, jockeyJson, trainerJson).all<{ raceId: string }>();
+      "SELECT DISTINCT ra.race_id AS raceId FROM rt_races ra JOIN rt_runners ru ON ru.race_id=ra.race_id WHERE ra.race_date>? AND (ra.race_date<? OR (ra.race_date=? AND ra.start_time_utc IS NOT NULL AND datetime(ra.start_time_utc)<datetime(?) AND EXISTS (SELECT 1 FROM rt_results rr WHERE rr.race_id=ra.race_id AND rr.finish_position IS NOT NULL))) AND (ru.horse_name IN (SELECT value FROM json_each(?)) OR COALESCE(ru.jockey,'') IN (SELECT value FROM json_each(?)) OR COALESCE(ru.trainer,'') IN (SELECT value FROM json_each(?))) ORDER BY ra.race_date,ra.race_id"
+    ).bind(throughDate, race.raceDate, race.raceDate, effectiveCutoff, horseJson, jockeyJson, trainerJson).all<{ raceId: string }>();
     const ids = (raceIds.results ?? []).map((row) => row.raceId);
     if (ids.length) {
       const delta = await db.prepare(

@@ -15,7 +15,7 @@ def load(path,name):
 collector=load(ROOT/'scripts'/'collect-jra-official-odds.py','canonical_recency_audit_collector')
 learning=load(ROOT/'scripts'/'live-recency-learning.py','canonical_recency_audit_learning')
 now=dt.datetime.now(dt.timezone.utc);cutoff=now.isoformat().replace('+00:00','Z');today=(now+dt.timedelta(hours=9)).date().isoformat()
-races=collector.d1_query("SELECT race_id AS raceId,race_date AS raceDate,venue,surface,race_no AS raceNo,start_time_utc AS startTimeUtc,status FROM rt_races WHERE race_date=? AND status='finished' AND start_time_utc IS NOT NULL AND datetime(start_time_utc)<datetime(?) ORDER BY start_time_utc",[today,cutoff])
+races=collector.d1_query("SELECT race_id AS raceId,race_date AS raceDate,venue,surface,race_no AS raceNo,start_time_utc AS startTimeUtc,status FROM rt_races WHERE race_date=? AND start_time_utc IS NOT NULL AND datetime(start_time_utc)<datetime(?) AND EXISTS (SELECT 1 FROM rt_results rr WHERE rr.race_id=rt_races.race_id AND rr.finish_position IS NOT NULL) ORDER BY start_time_utc",[today,cutoff])
 if not races:
     print(json.dumps({'status':'NO_FINISHED_RACES_TODAY','date':today,'policy':learning.learning_policy()},ensure_ascii=False));raise SystemExit(0)
 target=races[-1]
