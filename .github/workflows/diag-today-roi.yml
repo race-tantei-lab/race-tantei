@@ -67,4 +67,4 @@ jobs:
             const api=(summary.courses||[]).find(x=>x.course===course)||{};
             console.log(JSON.stringify({course,totalRows:cr.length,totalRaces:byRace.size,oldFormula:{settledRaces:oldSettled,stakeYen:oldStake,returnYen:oldReturn,roiPct:oldStake?oldReturn/oldStake*100:null},canonicalCompleteRaces:{settledRaces:completeRaces,stakeYen:canonicalStake,returnYen:canonicalReturn,roiPct:canonicalStake?canonicalReturn/canonicalStake*100:null,genuineHits,refundRaces},api,bad},null,2));
           }
-NODE
+          NODE
