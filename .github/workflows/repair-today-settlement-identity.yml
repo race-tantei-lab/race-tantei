@@ -16,6 +16,7 @@ env:
   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
   GH_TOKEN: ${{ github.token }}
+  IDENTITY_SAFE_CODE_SHA: 0d7831fe2eb88b712b6eba7269e10f89c3c73c58
 
 jobs:
   repair:
@@ -31,9 +32,9 @@ jobs:
         run: |
           set -euo pipefail
           for i in $(seq 1 60); do
-            json=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-worker.yml/runs?head_sha=${GITHUB_SHA}&per_page=5")
+            json=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-worker.yml/runs?head_sha=${IDENTITY_SAFE_CODE_SHA}&per_page=5")
             state=$(printf '%s' "$json" | python -c 'import json,sys; d=json.load(sys.stdin); r=d.get("workflow_runs",[]); print((r[0].get("status")+":"+str(r[0].get("conclusion"))) if r else "missing")')
-            echo "deploy=$state"
+            echo "identity-safe deploy=$state"
             if [ "$state" = "completed:success" ]; then exit 0; fi
             if [[ "$state" == completed:* ]]; then exit 1; fi
             sleep 5
@@ -64,8 +65,7 @@ jobs:
               pathlib.Path('/tmp/repair_ids.txt').write_text('',encoding='utf-8')
               raise SystemExit(0)
 
-          valid=[]
-          evidence=[]
+          valid=[]; evidence=[]
           for row in rows:
               url=str(row['sourceResultUrl'])
               req=urllib.request.Request(url,headers={
@@ -96,10 +96,8 @@ jobs:
           pathlib.Path('/tmp/repair_ids.txt').write_text('\n'.join(valid)+'\n',encoding='utf-8')
           pathlib.Path('/tmp/source_identity.json').write_text(json.dumps(evidence,ensure_ascii=False,indent=2),encoding='utf-8')
           placeholders=','.join('?' for _ in valid)
-          # Never alter predictions, ticket combinations, odds, stakes, or selected races.
           m.d1_query(f'DELETE FROM rt_payouts WHERE race_id IN ({placeholders})',valid)
-          m.d1_query(f'''UPDATE rt_public_bets SET settlement_status='pending',return_yen=NULL
-                         WHERE race_id IN ({placeholders})''',valid)
+          m.d1_query(f'''UPDATE rt_public_bets SET settlement_status='pending',return_yen=NULL WHERE race_id IN ({placeholders})''',valid)
           m.d1_query(f'''UPDATE rt_races
                          SET result_url=(SELECT s.result_url FROM rt_race_sources s WHERE s.race_id=rt_races.race_id AND s.entry_url=rt_races.entry_url LIMIT 1),
                              refund_horse_nos_json='[]',updated_at=CURRENT_TIMESTAMP
@@ -121,7 +119,7 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
-          import importlib.util,json,pathlib,re,sys
+          import importlib.util,json,pathlib,sys
           ids=[x for x in pathlib.Path('/tmp/repair_ids.txt').read_text(encoding='utf-8').splitlines() if x]
           if not ids:
               print('NO_REPAIR_IDS'); raise SystemExit(0)
@@ -133,22 +131,18 @@ jobs:
                               FROM rt_public_bets WHERE race_id IN ({ph}) ORDER BY race_id,id''',ids)
           payouts=m.d1_query(f'''SELECT race_id AS raceId,bet_type AS betType,combination,payout_yen AS payoutYen,popularity
                                  FROM rt_payouts WHERE race_id IN ({ph}) ORDER BY race_id,bet_type,combination''',ids)
-          if not payouts:
-              raise RuntimeError('REPAIR_NO_OFFICIAL_PAYOUTS_IMPORTED')
+          if not payouts: raise RuntimeError('REPAIR_NO_OFFICIAL_PAYOUTS_IMPORTED')
           pending=[b for b in bets if str(b.get('settlementStatus'))!='settled']
-          if pending:
-              raise RuntimeError('REPAIR_BETS_STILL_PENDING:'+json.dumps(pending,ensure_ascii=False))
+          if pending: raise RuntimeError('REPAIR_BETS_STILL_PENDING:'+json.dumps(pending,ensure_ascii=False))
           by={rid:[] for rid in ids}
           for b in bets: by[str(b['raceId'])].append(b)
           expected={rid:('hit' if any(int(x.get('returnYen') or 0)>0 for x in rows) else 'miss') for rid,rows in by.items()}
           payload=json.loads(pathlib.Path('/tmp/today.json').read_text(encoding='utf-8'))
           api={str(r.get('raceId')):str((r.get('publicState') or {}).get('code') or '') for r in payload.get('races',[])}
           mismatch=[{'raceId':rid,'expected':code,'actual':api.get(rid)} for rid,code in expected.items() if api.get(rid)!=code]
-          if mismatch:
-              raise RuntimeError('REPAIR_PUBLIC_LABEL_MISMATCH:'+json.dumps(mismatch,ensure_ascii=False))
+          if mismatch: raise RuntimeError('REPAIR_PUBLIC_LABEL_MISMATCH:'+json.dumps(mismatch,ensure_ascii=False))
           result={'status':'TODAY_SETTLEMENT_REPAIRED','expectedPublicState':expected,
-                  'hitRaceIds':[rid for rid,code in expected.items() if code=='hit'],
-                  'bets':bets,'payouts':payouts}
+                  'hitRaceIds':[rid for rid,code in expected.items() if code=='hit'],'bets':bets,'payouts':payouts}
           print(json.dumps(result,ensure_ascii=False))
           pathlib.Path('/tmp/repair_result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
           PY
