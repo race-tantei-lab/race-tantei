@@ -1,0 +1,80 @@
+name: Verify Sapporo1 refund final
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-sapporo1-refund-final.yml"
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Wake production reconciliation
+        shell: bash
+        run: |
+          set +e
+          for i in 1 2 3; do
+            curl --connect-timeout 4 --max-time 15 -fsS "https://race-tantei-phase0.race-tantei.workers.dev/?refund_final=$i" >/dev/null
+            sleep 5
+          done
+          exit 0
+      - name: Poll D1 until Sapporo 1R is fully settled
+        shell: bash
+        run: |
+          python - <<'PY'
+          import datetime as dt,importlib.util,json,pathlib,sys,time
+          p=pathlib.Path('scripts/collect-jra-official-odds.py')
+          s=importlib.util.spec_from_file_location('verify_final',p);m=importlib.util.module_from_spec(s);sys.modules['verify_final']=m;s.loader.exec_module(m)
+          date=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat();rid=f'{date}-sapporo-01'
+          last=None
+          for attempt in range(24):
+              race=m.d1_query('''SELECT refund_horse_nos_json AS refunds,result_url AS resultUrl,status FROM rt_races WHERE race_id=?''',[rid])
+              bets=m.d1_query('''SELECT course,bet_type AS betType,combination,stake_yen AS stakeYen,return_yen AS returnYen,settlement_status AS settlementStatus FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type,combination''',[rid])
+              payouts=m.d1_query('''SELECT bet_type AS betType,combination,payout_yen AS payoutYen FROM rt_payouts WHERE race_id=? ORDER BY bet_type,combination''',[rid])
+              refunds=set(json.loads(str(race[0].get('refunds') or '[]'))) if race else set()
+              win=[x for x in payouts if str(x.get('betType'))=='単勝' and str(x.get('combination'))=='3']
+              refund_bets=[b for b in bets if str(b.get('betType'))=='ワイド' and str(b.get('combination')) in {'5-8','8-5'}]
+              win_bets=[b for b in bets if str(b.get('betType'))=='単勝' and str(b.get('combination'))=='3']
+              pending=[b for b in bets if str(b.get('settlementStatus'))!='settled']
+              last={'race':race,'bets':bets,'payouts':payouts,'refunds':sorted(refunds),'pending':pending}
+              ok=(race and {8,10}.issubset(refunds) and len(bets)==6 and not pending and len(refund_bets)==3 and all(int(b.get('returnYen') or -1)==int(b.get('stakeYen') or 0) for b in refund_bets) and len(win)==1 and int(win[0].get('payoutYen') or 0)==210 and len(win_bets)==3 and all(int(b.get('returnYen') or 0)==round(int(b.get('stakeYen') or 0)/100*210) for b in win_bets))
+              if ok:
+                  out={'status':'SAPPORO1_REFUND_FINAL_OK','raceId':rid,'refundHorseNos':sorted(refunds),'winPayoutPer100Yen':210,'bets':bets,'payoutCount':len(payouts),'resultUrl':race[0].get('resultUrl')}
+                  pathlib.Path('/tmp/sapporo1-final.json').write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding='utf-8')
+                  print(json.dumps(out,ensure_ascii=False));break
+              if attempt==23: raise RuntimeError('SAPPORO1_NOT_FULLY_SETTLED:'+json.dumps(last,ensure_ascii=False))
+              time.sleep(10)
+          PY
+      - name: Verify public detail shows refund and settled amounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          url="https://race-tantei-phase0.race-tantei.workers.dev/races/${today}-sapporo-01"
+          curl --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 30 -fsS "$url?refund_final=1" -o /tmp/race.html
+          grep -q '返還対象' /tmp/race.html
+          grep -q 'ワイド 5-8' /tmp/race.html || grep -q '>5-8<' /tmp/race.html
+          grep -q '2,100円' /tmp/race.html
+          echo PUBLIC_SAPPORO1_REFUND_OK
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sapporo1-refund-final
+          path: /tmp/sapporo1-final.json
+          if-no-files-found: warn
+          retention-days: 30
