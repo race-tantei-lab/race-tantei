@@ -6,14 +6,14 @@
 ✨ Read 5 files from the assets directory /home/runner/work/race-tantei/race-tantei/worker-assets
 🌀 Starting asset upload...
 No updated asset files to upload. Proceeding with deployment...
-Total Upload: 1513.25 KiB / gzip: 776.86 KiB
+Total Upload: 1423.86 KiB / gzip: 754.95 KiB
 Worker Startup Time: 2 ms
 Your Worker has access to the following bindings:
 Binding                                                                   Resource                  
 env.DB (race-tantei-phase0)                                               D1 Database               
 env.ASSETS                                                                Assets                    
 env.ENVIRONMENT ("production")                                            Environment Variable      
-env.DEPLOY_REVISION ("ten-year-completed-public-v24-verifie...")          Environment Variable      
+env.DEPLOY_REVISION ("ten-year-completed-public-v25-race-de...")          Environment Variable      
 env.MODEL_VERSION ("ten-year-completed-model")                            Environment Variable      
 env.JRA_HOME_URL ("https://sp.jra.jp/")                                   Environment Variable      
 env.JRA_SEED_ENTRY_URLS ("https://sp.jra.jp/JRADB/accessD.html?...")      Environment Variable      
@@ -21,10 +21,10 @@ env.MIN_EXPECTED_VALUE ("108")                                            Enviro
 env.MAX_RACE_BUDGET_YEN ("10000")                                         Environment Variable      
 env.SYNC_BATCH_SIZE ("12")                                                Environment Variable      
 
-Uploaded race-tantei-phase0 (3.13 sec)
-Deployed race-tantei-phase0 triggers (0.62 sec)
+Uploaded race-tantei-phase0 (3.16 sec)
+Deployed race-tantei-phase0 triggers (0.67 sec)
   https://race-tantei-phase0.race-tantei.workers.dev
   schedule: * * * * *
-Current Version ID: f6e3ed13-8951-4862-a870-a9c10aa9055e
+Current Version ID: 986bee60-b23f-49af-8697-1fcc74cb7c62
 
 Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
