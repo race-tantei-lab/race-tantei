@@ -1,29 +1,9 @@
 name: Critical automatic bet generation
 
 on:
+  # Retained as a manual recovery tool only. Production timing is owned by the
+  # one-minute Worker last-good path plus the gated emergency fallback.
   workflow_dispatch:
-  schedule:
-    # JST race days, every 5 minutes. This is the fail-safe path for pre-race tickets.
-    - cron: "*/5 23 * * 5,6,0"
-    - cron: "*/5 0-10 * * 6,0,1"
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/critical-auto-bet-generation.yml"
-      - "scripts/run-critical-auto-bet-generation.py"
-      - "scripts/run-auto-final-live.py"
-      - "scripts/run-ten-year-auto-final-live.py"
-      - "scripts/generate-ten-year-preday-selection.py"
-      - "scripts/generate-ten-year-live-bets.py"
-      - "scripts/collect-jra-official-odds.py"
-      - "scripts/collect-current-jra-official-odds-live.py"
-      - "scripts/collect-current-jra-official-odds-fast.py"
-      - "scripts/ten-year-production-core.py"
-      - "config/ten-year-completed-model.json"
-      - "models/ten-year-completed-model.txt"
-      - "models/ten-year-production-state-manifest.json"
-      - "models/ten-year-runner-feature-state.json.gz"
-      - "models/ten-year-race-selection-state.json.gz"
 
 concurrency:
   group: critical-auto-bet-generation-live

@@ -100,6 +100,10 @@ def main():
     base.verify_locked=verify_locked
     base.check_only=check_only
     base.COURSE_BUDGETS=COURSE_BUDGETS
+    # Cloudflare Worker is the one-minute primary path. GitHub Actions remains a
+    # narrow independent fallback and must not pre-empt the Worker's fresher odds.
+    base.MIN_LOCK_SECONDS=15*60
+    base.MAX_LOCK_SECONDS=17*60
     base.main()
 
 

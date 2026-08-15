@@ -57,6 +57,9 @@ jobs:
       - name: Verify canonical model parity before deploy
         run: npx tsx scripts/verify-worker-model-parity.ts
 
+      - name: Verify live-lock safety before deploy
+        run: python scripts/verify-live-lock-safety.py
+
       - name: Typecheck
         run: npm run typecheck
 

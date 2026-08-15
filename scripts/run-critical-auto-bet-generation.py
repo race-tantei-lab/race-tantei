@@ -10,6 +10,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 BASE_PATH = ROOT / "scripts" / "run-auto-final-live.py"
 CANONICAL_PATH = ROOT / "scripts" / "run-ten-year-auto-final-live.py"
 HARD_DEADLINE_SECONDS = 15 * 60
+RECOVERY_OPEN_SECONDS = 17 * 60
 EXPECTED_COURSES = {"ライト": 2000, "スタンダード": 5000, "プレミアム": 10000}
 
 
@@ -127,6 +128,9 @@ def main():
     base.run_learned_generator = canonical.run_generator
     base.verify_locked = canonical.verify_locked
     base.COURSE_BUDGETS = canonical.COURSE_BUDGETS
+    # This recovery path must never pre-empt the one-minute Worker and lock stale
+    # odds early, even when manually dispatched.
+    base.MAX_LOCK_SECONDS = RECOVERY_OPEN_SECONDS
 
     collector = base.collector_module()
     now = dt.datetime.now(dt.timezone.utc)

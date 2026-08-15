@@ -22,5 +22,7 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Verify live-lock safety
+        run: python scripts/verify-live-lock-safety.py
       - name: Typecheck and test
         run: npm run check
