@@ -3,6 +3,13 @@ name: Production smoke test
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**"
+      - "wrangler.jsonc"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy-worker.yml"
+      - ".github/workflows/production-smoke.yml"
   pull_request:
     branches: [main]
   workflow_dispatch:
