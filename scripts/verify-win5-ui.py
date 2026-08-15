@@ -16,9 +16,9 @@ def main() -> None:
     wrangler = WRANGLER.read_text(encoding="utf-8")
 
     require('"main": "src/public-site-entry-v27.ts"' in wrangler, "WIN5_V27_NOT_CANONICAL_ENTRY")
-    require('class=\\"nav-win5\\"' in source, "WIN5_TOP_NAV_TAB_MISSING")
-    require('<nav class=\\"nav\\"><a href=\\"/\\">レース</a>' in source, "WIN5_TOP_NAV_INSERTION_ANCHOR_MISSING")
-    require('aria-current=\\"page\\"' in source, "WIN5_ACTIVE_TOP_NAV_STATE_MISSING")
+    require('class="nav-win5"' in source, "WIN5_TOP_NAV_TAB_MISSING")
+    require('<nav class="nav"><a href="/">レース</a>' in source, "WIN5_TOP_NAV_INSERTION_ANCHOR_MISSING")
+    require('aria-current="page"' in source, "WIN5_ACTIVE_TOP_NAV_STATE_MISSING")
     require('position:fixed' not in source, "WIN5_FLOATING_BUTTON_STYLE_REINTRODUCED")
     require('win5-global-link' in source and '.replace(' in source, "WIN5_LEGACY_FLOAT_REMOVAL_MISSING")
     require('3パターン比較' in source and '買い目' in source, "WIN5_PRIMARY_INFORMATION_ORDER_MISSING")
