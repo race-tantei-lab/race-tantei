@@ -4,13 +4,52 @@ import { fetchJraPage, parseResultPage } from "./v1/jra.js";
 
 const UNORDERED = new Set(["ワイド","馬連","3連複"]);
 
-type PendingRace = {raceId:string;resultUrl:string|null};
+type PendingRace = {raceId:string;entryUrl:string;resultUrl:string|null;sourceResultUrl:string|null};
 type PendingBet = {id:number;raceId:string;betType:string;combination:string;stakeYen:number;refunds:string|null;settlementStatus:string;currentReturnYen:number|null};
 
 function canonical(betType:string,combination:string):string{
   const nums=(combination.match(/\d{1,2}/g)??[]).map(Number);
   if(UNORDERED.has(betType))nums.sort((a,b)=>a-b);
   return nums.join("-");
+}
+
+function jraRaceKey(url:string):string|null{
+  try{
+    const cname=decodeURIComponent(new URL(url).searchParams.get("CNAME")??"");
+    const m=cname.match(/(?:pw|sw)01(?:dde01|sde10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})\//i);
+    return m?m.slice(1,7).join(":"):null;
+  }catch{return null;}
+}
+
+function isCanonicalResultUrl(url:string,targetKey:string):boolean{
+  try{
+    const cname=decodeURIComponent(new URL(url).searchParams.get("CNAME")??"");
+    return /(?:pw|sw)01sde10/i.test(cname)&&jraRaceKey(url)===targetKey;
+  }catch{return false;}
+}
+
+function decodeHref(value:string):string{
+  return value.replace(/&amp;/g,"&").replace(/&#38;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+}
+
+function matchingResultUrl(entryHtml:string,entryUrl:string):string|null{
+  const targetKey=jraRaceKey(entryUrl);if(!targetKey)return null;
+  for(const match of entryHtml.matchAll(/href=["']([^"']*accessS\.html[^"']*)["']/gi)){
+    try{
+      const href=new URL(decodeHref(match[1]??""),entryUrl).href;
+      if(isCanonicalResultUrl(href,targetKey))return href;
+    }catch{/* next link */}
+  }
+  return null;
+}
+
+async function resolveCanonicalResultUrl(race:PendingRace):Promise<string|null>{
+  const targetKey=jraRaceKey(race.entryUrl);if(!targetKey)return null;
+  for(const candidate of [race.resultUrl,race.sourceResultUrl]){
+    if(candidate&&isCanonicalResultUrl(candidate,targetKey))return candidate;
+  }
+  const entry=await fetchJraPage(race.entryUrl);
+  return matchingResultUrl(entry.html,entry.url);
 }
 
 async function neededBetTypes(db:D1Database,raceId:string):Promise<string[]>{
@@ -31,27 +70,25 @@ async function existingPayoutTypes(db:D1Database,raceId:string):Promise<Set<stri
 async function syncFinishedPayouts(db:D1Database):Promise<void>{
   try{
     const q=await db.prepare(`
-      SELECT DISTINCT r.race_id AS raceId,
-             COALESCE(s.result_url,r.result_url) AS resultUrl
+      SELECT DISTINCT r.race_id AS raceId,r.entry_url AS entryUrl,r.result_url AS resultUrl,s.result_url AS sourceResultUrl
       FROM rt_races r
       JOIN rt_public_bets b ON b.race_id=r.race_id
       LEFT JOIN rt_race_sources s ON s.race_id=r.race_id AND s.entry_url=r.entry_url
       WHERE r.race_date>='2026-08-09'
         AND r.race_date>=date('now','-14 days')
         AND r.status='finished'
-        AND COALESCE(s.result_url,r.result_url) IS NOT NULL
+        AND r.entry_url IS NOT NULL
         AND (b.settlement_status='pending' OR (b.settlement_status='settled' AND COALESCE(b.return_yen,0)=0))
       ORDER BY r.race_date,r.venue,r.race_no
     `).all<PendingRace>();
     for(const race of q.results){
-      if(!race.resultUrl)continue;
       const needed=await neededBetTypes(db,race.raceId);if(!needed.length)continue;
       const existing=await existingPayoutTypes(db,race.raceId);
       if(needed.every(type=>existing.has(type)))continue;
       try{
-        const page=await fetchJraPage(race.resultUrl);
+        const resultUrl=await resolveCanonicalResultUrl(race);if(!resultUrl)continue;
+        const page=await fetchJraPage(resultUrl);
         const result=parseResultPage(page.html,page.url);
-        // Never attach a JRA result page to a different race, even if the page otherwise looks valid.
         if(result.race.raceId!==race.raceId)continue;
         const payouts=result.payouts;
         const parsedTypes=new Set(payouts.map(p=>p.betType));
@@ -66,7 +103,8 @@ async function syncFinishedPayouts(db:D1Database):Promise<void>{
             UPDATE rt_races
             SET result_url=?, refund_horse_nos_json=?, result_updated_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
             WHERE race_id=?
-          `).bind(page.url,JSON.stringify(result.refundHorseNos),race.raceId)
+          `).bind(page.url,JSON.stringify(result.refundHorseNos),race.raceId),
+          db.prepare(`UPDATE rt_race_sources SET result_url=?,updated_at=CURRENT_TIMESTAMP WHERE race_id=? AND entry_url=?`).bind(page.url,race.raceId,race.entryUrl)
         ];
         await db.batch(statements);
       }catch{/* identity/availability failures retry next request/cron */}
