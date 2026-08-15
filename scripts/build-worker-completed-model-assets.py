@@ -110,7 +110,6 @@ def build_vectors(feature_count: int) -> list[list[float]]:
     rows.extend(rng.normal(0.0, 3.0, size=(128, feature_count)))
     rows.extend(rng.uniform(-2.0, 8.0, size=(128, feature_count)))
     rows.extend(rng.exponential(4.0, size=(64, feature_count)))
-    # Exercise default/missing routing without depending on JSON NaN syntax.
     for feature in range(min(feature_count, 56)):
         row = np.zeros(feature_count, dtype=np.float64)
         row[feature] = np.nan
@@ -131,9 +130,11 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    expected_sha = str(config.get("modelSha256") or config.get("modelSHA256") or config.get("model_sha256") or "")
+    expected_sha = str(config.get("runnerProbabilityModel", {}).get("modelWeightsSha256", ""))
+    if not expected_sha:
+        raise RuntimeError("completed model config is missing runnerProbabilityModel.modelWeightsSha256")
     actual_sha = model_sha256(MODEL_PATH)
-    if expected_sha and expected_sha != actual_sha:
+    if expected_sha != actual_sha:
         raise RuntimeError(f"completed model SHA256 mismatch: expected {expected_sha}, got {actual_sha}")
 
     feature_names = load_core_feature_names()
