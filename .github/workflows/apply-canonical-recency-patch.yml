@@ -1,5 +1,6 @@
 name: Apply canonical recency integration
 
+# retry after ESM test import fix
 on:
   push:
     branches:
