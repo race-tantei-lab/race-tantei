@@ -1,0 +1,44 @@
+name: Diagnose current repair state
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-current-repair-state.yml"
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Print current finished public settlement
+        run: |
+          python - <<'PY'
+          import datetime as dt,importlib.util,json,pathlib,sys
+          p=pathlib.Path('scripts/collect-jra-official-odds.py')
+          s=importlib.util.spec_from_file_location('d',p);m=importlib.util.module_from_spec(s);sys.modules['d']=m;s.loader.exec_module(m)
+          date=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
+          races=m.d1_query('''SELECT DISTINCT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.entry_url AS entryUrl,r.result_url AS resultUrl
+                              FROM rt_races r JOIN rt_public_bets b ON b.race_id=r.race_id
+                              WHERE r.race_date=? AND r.status='finished' ORDER BY r.start_time_utc''',[date])
+          bets=m.d1_query('''SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,b.stake_yen AS stakeYen,b.settlement_status AS settlementStatus,b.return_yen AS returnYen
+                             FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
+                             WHERE r.race_date=? AND r.status='finished' ORDER BY b.race_id,b.id''',[date])
+          payouts=m.d1_query('''SELECT p.race_id AS raceId,p.bet_type AS betType,p.combination,p.payout_yen AS payoutYen,p.popularity
+                                FROM rt_payouts p JOIN rt_races r ON r.race_id=p.race_id
+                                WHERE r.race_date=? ORDER BY p.race_id,p.bet_type,p.combination''',[date])
+          print('CURRENT_REPAIR_STATE='+json.dumps({'races':races,'bets':bets,'payouts':payouts},ensure_ascii=False))
+          PY
