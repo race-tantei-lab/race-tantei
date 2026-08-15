@@ -1,0 +1,84 @@
+name: Verify live settlement integrity
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-live-settlement.yml"
+  schedule:
+    - cron: "4-54/10 0-10 * * 6,0,1"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reconcile production and reject false misses
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          curl --retry 2 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 60 -fsS \
+            "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$today" -o /tmp/today.json
+          python - <<'PY'
+          import collections, datetime as dt, importlib.util, json, pathlib, re, sys
+
+          root=pathlib.Path.cwd()
+          path=root/'scripts'/'collect-jra-official-odds.py'
+          spec=importlib.util.spec_from_file_location('settlement_guard_collector',path)
+          mod=importlib.util.module_from_spec(spec);sys.modules['settlement_guard_collector']=mod;spec.loader.exec_module(mod)
+          today=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
+          unordered={'ワイド','馬連','3連複'}
+          def canonical(bet_type,combination):
+              nums=[int(x) for x in re.findall(r'\d{1,2}',str(combination or ''))]
+              if bet_type in unordered: nums.sort()
+              return '-'.join(map(str,nums))
+
+          bets=mod.d1_query('''SELECT b.id,b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,
+                                      b.stake_yen AS stakeYen,b.settlement_status AS settlementStatus,
+                                      COALESCE(b.return_yen,0) AS returnYen,r.status
+                               FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
+                               WHERE r.race_date=? ORDER BY b.race_id,b.id''',[today])
+          payouts=mod.d1_query('''SELECT p.race_id AS raceId,p.bet_type AS betType,p.combination,p.payout_yen AS payoutYen
+                                  FROM rt_payouts p JOIN rt_races r ON r.race_id=p.race_id
+                                  WHERE r.race_date=?''',[today])
+          payout_map={(str(p['raceId']),str(p['betType']),canonical(str(p['betType']),str(p['combination']))):int(p.get('payoutYen') or 0) for p in payouts}
+          false_zero=[]
+          race_rows=collections.defaultdict(list)
+          for b in bets:
+              race_id=str(b['raceId']);race_rows[race_id].append(b)
+              if str(b.get('settlementStatus'))!='settled' or int(b.get('returnYen') or 0)!=0: continue
+              key=(race_id,str(b['betType']),canonical(str(b['betType']),str(b['combination'])))
+              official=payout_map.get(key)
+              if official and official>0:
+                  false_zero.append({'id':b['id'],'raceId':race_id,'course':b['course'],'betType':b['betType'],'combination':b['combination'],'officialPayoutYen':official})
+          if false_zero:
+              raise RuntimeError('LIVE_SETTLEMENT_FALSE_MISS:'+json.dumps(false_zero,ensure_ascii=False))
+
+          payload=json.loads(pathlib.Path('/tmp/today.json').read_text(encoding='utf-8'))
+          api={str(r.get('raceId')):str((r.get('publicState') or {}).get('code') or '') for r in payload.get('races',[])}
+          mismatches=[]; settled=[]; hits=[]
+          for race_id,rows in race_rows.items():
+              if not rows or any(str(x.get('settlementStatus'))!='settled' for x in rows): continue
+              expected='hit' if any(int(x.get('returnYen') or 0)>0 for x in rows) else 'miss'
+              settled.append(race_id)
+              if expected=='hit': hits.append(race_id)
+              actual=api.get(race_id,'')
+              if actual!=expected:
+                  mismatches.append({'raceId':race_id,'expected':expected,'actual':actual})
+          if mismatches:
+              raise RuntimeError('LIVE_SETTLEMENT_API_MISMATCH:'+json.dumps(mismatches,ensure_ascii=False))
+          print(json.dumps({'status':'LIVE_SETTLEMENT_OK','date':today,'settledRacesChecked':len(settled),'hitRaceIds':sorted(hits),'falseMisses':0,'apiMismatches':0},ensure_ascii=False))
+          PY
