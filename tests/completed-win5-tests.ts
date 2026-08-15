@@ -1,21 +1,21 @@
 import { strict as assert } from "node:assert";
-import { optimizeWin5Profile, parseWin5TargetsFromHtml, win5LockDeadlineMs, type Win5RacePrediction } from "../src/v1/completed-win5";
+import { optimizeWin5Profile, parseWin5TargetsFromHtml, win5LockDeadlineMs, type Win5RacePrediction } from "../src/v1/completed-win5.js";
 
 const html = `<!doctype html><html><body>
-<section><h2>8月16日（日）</h2><table>
-<tr><td>中京 6R</td><td>15時00分</td></tr>
-<tr><td>新潟 6R</td><td>15時10分</td></tr>
-<tr><td>中京 7R</td><td>15時35分</td></tr>
-<tr><td>新潟 7R</td><td>15時45分</td></tr>
-<tr><td>札幌 12R</td><td>16時00分</td></tr>
+<section><h2>8月16日（日曜）</h2><table>
+<tr><td>中京 6R</td><td>15時00分 発走</td></tr>
+<tr><td>札幌 10R</td><td>15時10分 発走</td></tr>
+<tr><td>新潟 7R</td><td>15時25分 発走</td></tr>
+<tr><td>中京 7R</td><td>15時35分 発走</td></tr>
+<tr><td>札幌 11R</td><td>15時45分 発走</td></tr>
 </table></section>
-<section><h2>8月23日（日）</h2><table><tr><td>札幌 9R</td><td>14時15分</td></tr></table></section>
+<section><h2>8月23日（日曜）</h2><table><tr><td>札幌 9R</td><td>14時15分 発走</td></tr></table></section>
 </body></html>`;
 
 const targets = parseWin5TargetsFromHtml(html, "2026-08-16");
 assert.equal(targets.length, 5);
 assert.deepEqual(targets.map((row) => [row.leg, row.venue, row.raceNo, row.startTimeJst]), [
-  [1, "中京", 6, "15:00"], [2, "新潟", 6, "15:10"], [3, "中京", 7, "15:35"], [4, "新潟", 7, "15:45"], [5, "札幌", 12, "16:00"],
+  [1, "中京", 6, "15:00"], [2, "札幌", 10, "15:10"], [3, "新潟", 7, "15:25"], [4, "中京", 7, "15:35"], [5, "札幌", 11, "15:45"],
 ]);
 assert.equal(targets[0].startTimeUtc, "2026-08-16T06:00:00.000Z");
 assert.equal(new Date(win5LockDeadlineMs(targets)).toISOString(), "2026-08-16T05:45:00.000Z");
