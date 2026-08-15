@@ -1,0 +1,40 @@
+name: Audit Sapporo1 refund settlement
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audit-sapporo1-refund.yml"
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Read Sapporo 1R settlement state
+        run: |
+          python - <<'PY'
+          import datetime as dt,importlib.util,json,pathlib,sys
+          p=pathlib.Path('scripts/collect-jra-official-odds.py')
+          s=importlib.util.spec_from_file_location('audit_d1',p);m=importlib.util.module_from_spec(s);sys.modules['audit_d1']=m;s.loader.exec_module(m)
+          date=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
+          rid=f'{date}-sapporo-01'
+          race=m.d1_query('''SELECT race_id AS raceId,status,result_url AS resultUrl,refund_horse_nos_json AS refundHorseNosJson,result_updated_at AS resultUpdatedAt FROM rt_races WHERE race_id=?''',[rid])
+          bets=m.d1_query('''SELECT id,course,bet_type AS betType,combination,stake_yen AS stakeYen,return_yen AS returnYen,settlement_status AS settlementStatus,source_prediction_id AS sourcePredictionId,locked_at AS lockedAt FROM rt_public_bets WHERE race_id=? ORDER BY course,id''',[rid])
+          payouts=m.d1_query('''SELECT bet_type AS betType,combination,payout_yen AS payoutYen,popularity FROM rt_payouts WHERE race_id=? ORDER BY bet_type,combination''',[rid])
+          result=m.d1_query('''SELECT * FROM rt_results WHERE race_id=?''',[rid])
+          out={'raceId':rid,'race':race,'bets':bets,'payouts':payouts,'result':result}
+          print('SAPPORO1_AUDIT='+json.dumps(out,ensure_ascii=False))
+          PY
