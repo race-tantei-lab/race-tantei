@@ -130,3 +130,61 @@ jobs:
           print('LIVE_PUBLIC_DETAIL_OK',race_id,counts)
           PY
           done < /tmp/locked_race_ids.txt
+      - name: Verify official payout settlement integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          # The public request also runs the production reconciliation path before returning the day payload.
+          curl --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 4 --max-time 30 -fsS "$base/api/public/day?date=$today" -o /tmp/today.json
+          python - <<'PY'
+          import collections, datetime as dt, importlib.util, json, pathlib, sys
+
+          root=pathlib.Path.cwd()
+          path=root/'scripts'/'collect-jra-official-odds.py'
+          spec=importlib.util.spec_from_file_location('settlement_verify_collector',path)
+          mod=importlib.util.module_from_spec(spec);sys.modules['settlement_verify_collector']=mod;spec.loader.exec_module(mod)
+          today=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
+          unordered={'ワイド','馬連','3連複'}
+          def canonical(bet_type,combination):
+              nums=[int(x) for x in __import__('re').findall(r'\d{1,2}',str(combination or ''))]
+              if bet_type in unordered: nums.sort()
+              return '-'.join(map(str,nums))
+
+          bets=mod.d1_query('''SELECT b.id,b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,
+                                      b.stake_yen AS stakeYen,b.settlement_status AS settlementStatus,
+                                      COALESCE(b.return_yen,0) AS returnYen,r.status
+                               FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
+                               WHERE r.race_date=? ORDER BY b.race_id,b.id''',[today])
+          payouts=mod.d1_query('''SELECT p.race_id AS raceId,p.bet_type AS betType,p.combination,p.payout_yen AS payoutYen
+                                  FROM rt_payouts p JOIN rt_races r ON r.race_id=p.race_id
+                                  WHERE r.race_date=?''',[today])
+          payout_map={(str(p['raceId']),str(p['betType']),canonical(str(p['betType']),str(p['combination']))):int(p.get('payoutYen') or 0) for p in payouts}
+          false_zero=[]
+          race_rows=collections.defaultdict(list)
+          for b in bets:
+              race_id=str(b['raceId']);race_rows[race_id].append(b)
+              if str(b.get('settlementStatus'))!='settled' or int(b.get('returnYen') or 0)!=0: continue
+              key=(race_id,str(b['betType']),canonical(str(b['betType']),str(b['combination'])))
+              official=payout_map.get(key)
+              if official and official>0:
+                  false_zero.append({'id':b['id'],'raceId':race_id,'course':b['course'],'betType':b['betType'],'combination':b['combination'],'officialPayoutYen':official})
+          if false_zero:
+              raise RuntimeError('LIVE_SETTLEMENT_FALSE_MISS:'+json.dumps(false_zero,ensure_ascii=False))
+
+          payload=json.loads(pathlib.Path('/tmp/today.json').read_text(encoding='utf-8'))
+          api={str(r.get('raceId')):str((r.get('publicState') or {}).get('code') or '') for r in payload.get('races',[])}
+          mismatches=[]
+          checked=0
+          for race_id,rows in race_rows.items():
+              if not rows or any(str(x.get('settlementStatus'))!='settled' for x in rows): continue
+              checked+=1
+              expected='hit' if any(int(x.get('returnYen') or 0)>0 for x in rows) else 'miss'
+              actual=api.get(race_id,'')
+              if actual!=expected:
+                  mismatches.append({'raceId':race_id,'expected':expected,'actual':actual})
+          if mismatches:
+              raise RuntimeError('LIVE_SETTLEMENT_API_MISMATCH:'+json.dumps(mismatches,ensure_ascii=False))
+          print(json.dumps({'status':'LIVE_SETTLEMENT_OK','date':today,'settledRacesChecked':checked,'falseMisses':0,'apiMismatches':0},ensure_ascii=False))
+          PY
