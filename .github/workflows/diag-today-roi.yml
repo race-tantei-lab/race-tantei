@@ -35,6 +35,10 @@ jobs:
           echo '--- RAW ROWS ---'
           cat /tmp/rows.json
           echo
+          echo '--- OFFICIAL SOURCE RECORDS FOR POSITIVE/LATE RACES ---'
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT * FROM rt_race_sources WHERE race_id IN ('2026-08-15-sapporo-01','2026-08-15-chukyo-05','2026-08-15-niigata-10','2026-08-15-niigata-11','2026-08-15-niigata-12') ORDER BY race_id,updated_at DESC;"
+          echo '--- PAYOUT ROWS FOR POSITIVE/LATE RACES ---'
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT * FROM rt_payouts WHERE race_id IN ('2026-08-15-sapporo-01','2026-08-15-chukyo-05','2026-08-15-niigata-10','2026-08-15-niigata-11','2026-08-15-niigata-12') ORDER BY race_id,bet_type,combination;"
           echo '--- RECOMPUTED ---'
           node <<'NODE'
           const fs=require('fs');
