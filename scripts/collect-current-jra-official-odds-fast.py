@@ -77,7 +77,6 @@ def parse_win(page: str) -> tuple[list[int], list[tuple[str, float, float]]]:
 
     by_horse: dict[int, tuple[float, float]] = {}
     for row in rows[header_index + 1:]:
-        # Stop only when a new unrelated table header starts; repeated horse/odds headers are harmless.
         if "馬番" in row and any(cell == "単勝" or cell.startswith("単勝") for cell in row):
             continue
         for horse_index, win_index in pairs:
@@ -129,7 +128,9 @@ def main() -> None:
         if race["raceId"] not in target_ids:
             continue
         seconds = base.seconds_to_start(race.get("startTimeUtc"), captured)
-        if seconds is None or seconds <= 15 * 60:
+        # Normal generation happens much earlier. This path must still be able to
+        # recover a missed ticket right up until the published start time.
+        if seconds is None or seconds <= 0:
             continue
         races.append(race)
 
