@@ -1,0 +1,68 @@
+name: Verify live lock deadline now
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-live-lock-deadline-now.yml"
+  schedule:
+    - cron: "14-54/10 23 * * 5,6,0"
+    - cron: "4-54/10 0-10 * * 6,0,1"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify no selected race crossed 15-minute deadline unlocked
+        shell: bash
+        run: |
+          python - <<'PY'
+          import collections,datetime as dt,importlib.util,json,pathlib,sys
+          p=pathlib.Path('scripts/collect-jra-official-odds.py')
+          s=importlib.util.spec_from_file_location('deadline_verify',p);m=importlib.util.module_from_spec(s);sys.modules['deadline_verify']=m;s.loader.exec_module(m)
+          now=dt.datetime.now(dt.timezone.utc);jst=now.astimezone(dt.timezone(dt.timedelta(hours=9)));date=jst.date().isoformat()
+          state=m.d1_query('SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1',[f'final_daily_selection:{date}'])
+          if not state: raise RuntimeError('SELECTION_MISSING:'+date)
+          payload=json.loads(str(state[0].get('value') or '{}'));selected=payload.get('selected') or []
+          if payload.get('sourceModel')!='ten-year-completed-model' or payload.get('resultDataUsedForTargetDay') is not False: raise RuntimeError('SELECTION_SOURCE_INVALID')
+          by=collections.Counter(str(x.get('venue') or '') for x in selected)
+          if len(selected)!=15 or any(v!=5 for v in by.values()): raise RuntimeError('SELECTION_COUNT_INVALID:'+json.dumps(dict(by),ensure_ascii=False))
+          ids=[str(x.get('raceId') or '') for x in selected];ph=','.join('?' for _ in ids)
+          races=m.d1_query(f'SELECT race_id AS raceId,start_time_utc AS startTimeUtc FROM rt_races WHERE race_id IN ({ph})',ids)
+          starts={str(x['raceId']):dt.datetime.fromisoformat(str(x['startTimeUtc']).replace('Z','+00:00')).astimezone(dt.timezone.utc) for x in races if x.get('startTimeUtc')}
+          if len(starts)!=15: raise RuntimeError(f'STARTS_MISSING:{len(starts)}/15')
+          rows=m.d1_query(f'''SELECT race_id AS raceId,course,COUNT(*) AS tickets,COUNT(DISTINCT bet_type) AS betTypes,SUM(stake_yen) AS stakeYen,MIN(source_prediction_id) AS minSource,MAX(source_prediction_id) AS maxSource FROM rt_public_bets WHERE race_id IN ({ph}) GROUP BY race_id,course''',ids)
+          grouped={}
+          for r in rows: grouped.setdefault(str(r['raceId']),{})[str(r['course'])]=r
+          budgets={'ライト':2000,'スタンダード':5000,'プレミアム':10000};complete=set();invalid=[]
+          for rid,courses in grouped.items():
+              ok=set(courses)==set(budgets)
+              if ok:
+                  for course,budget in budgets.items():
+                      r=courses[course]
+                      if int(r.get('tickets') or 0)!=2 or int(r.get('betTypes') or 0)!=2 or int(r.get('stakeYen') or 0)!=budget or int(r.get('minSource') or 0)!=-2 or int(r.get('maxSource') or 0)!=-2: ok=False;break
+              if ok: complete.add(rid)
+              else: invalid.append(rid)
+          if invalid: raise RuntimeError('PARTIAL_OR_INVALID_LOCK:'+','.join(sorted(invalid)))
+          missed=[];due_soon=[]
+          for rid in ids:
+              minutes=(starts[rid]-now).total_seconds()/60
+              if rid not in complete and minutes<=15: missed.append({'raceId':rid,'minutesToStart':round(minutes,2)})
+              if rid not in complete and minutes<=30: due_soon.append({'raceId':rid,'minutesToStart':round(minutes,2)})
+          if missed: raise RuntimeError('LOCK_DEADLINE_MISSED:'+json.dumps(missed,ensure_ascii=False))
+          out={'status':'LIVE_LOCK_DEADLINE_OK','date':date,'selectedRaceCount':15,'venues':dict(by),'completeLockedRaceCount':len(complete),'completeLockedRaceIds':sorted(complete),'deadlineMissed':[],'unlockedWithin30Minutes':due_soon,'checkedAtUtc':now.isoformat()}
+          print(json.dumps(out,ensure_ascii=False))
+          PY
