@@ -34,8 +34,6 @@ jobs:
         with:
           python-version: "3.12"
       - run: npm ci
-      - name: Build TypeScript test runtime
-        run: npm run build:test
       - name: Generate canonical Python selection and target bundles
         shell: bash
         run: |
@@ -52,4 +50,4 @@ jobs:
           pathlib.Path('/tmp/selection-target-bundles.json').write_text(json.dumps(bundles,ensure_ascii=False),encoding='utf-8')
           PY
       - name: Compare Worker selection with canonical Python
-        run: node scripts/verify-worker-selection-parity.mjs
+        run: npx tsx scripts/verify-worker-selection-parity.mjs
