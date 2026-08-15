@@ -28,7 +28,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
             -f state=pending \
             -f context='production/public-ui-features' \
-            -f description='具体的な予想根拠と今日の結果を本番確認中' \
+            -f description='実条件・実数値の予想根拠と今日の結果を本番確認中' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
 
       - name: Verify today summary API and home
@@ -55,7 +55,7 @@ jobs:
             grep -q '今日の結果' /tmp/home.html
           fi
 
-      - name: Verify concrete prediction evidence when today has bets
+      - name: Verify exact prediction evidence when today has bets
         shell: bash
         run: |
           set -euo pipefail
@@ -75,10 +75,21 @@ jobs:
           NODE
           )
           test -n "$race_id"
-          curl --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 3 --max-time 15 -fsS "$BASE_URL/races/$race_id" -o /tmp/detail.html
+          curl --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 3 --max-time 25 -fsS "$BASE_URL/races/$race_id" -o /tmp/detail.html
           grep -q 'data-decision-evidence="canonical-live-v1"' /tmp/detail.html
-          grep -q 'レース選定スコア' /tmp/detail.html
+          grep -q 'data-selection-trace="canonical-selection-trace-v1"' /tmp/detail.html
+          grep -q '凍結済み選定と一致' /tmp/detail.html
+          grep -q 'raceScore' /tmp/detail.html
           grep -q '会場内順位' /tmp/detail.html
+          grep -q '選定用の上位候補5頭' /tmp/detail.html
+          grep -q 'この条件の過去サンプル' /tmp/detail.html
+          grep -q '補正後ROI' /tmp/detail.html
+          grep -q '局所条件の加重ROI' /tmp/detail.html
+          proxy_count=$(grep -o 'レース選定用 仮買い目' /tmp/detail.html | wc -l | tr -d ' ')
+          if [[ "$proxy_count" != '3' ]]; then
+            echo "Expected exactly 3 selection proxy tickets, got $proxy_count" >&2
+            exit 1
+          fi
           grep -q '組合せ予測確率' /tmp/detail.html
           grep -q '確率 × オッズ' /tmp/detail.html
           grep -q 'モデル予測勝率' /tmp/detail.html
@@ -87,7 +98,7 @@ jobs:
             echo 'Generic condition-match copy must not remain in live prediction evidence.' >&2
             exit 1
           fi
-          echo "concrete prediction evidence=ok race=$race_id"
+          echo "exact prediction evidence=ok race=$race_id proxyTickets=$proxy_count"
 
       - name: Mark feature verification success
         if: success()
@@ -95,7 +106,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
             -f state=success \
             -f context='production/public-ui-features' \
-            -f description='具体的な予想根拠と今日の結果を本番確認済み' \
+            -f description='実条件・実数値の予想根拠と今日の結果を本番確認済み' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
 
       - name: Mark feature verification failure
@@ -104,5 +115,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
             -f state=failure \
             -f context='production/public-ui-features' \
-            -f description='具体的な予想根拠または今日の結果の本番確認に失敗' \
+            -f description='実条件の予想根拠または今日の結果の本番確認に失敗' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
