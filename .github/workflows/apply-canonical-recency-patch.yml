@@ -1,6 +1,6 @@
 name: Apply canonical recency integration
 
-# retry after ESM test import fix
+# retry with result-presence readiness
 on:
   push:
     branches:
@@ -32,7 +32,9 @@ jobs:
           node-version: "22"
           cache: npm
       - name: Apply exact integration patch
-        run: python scripts/apply-canonical-recency-patch.py
+        run: |
+          python scripts/apply-canonical-recency-patch.py
+          python scripts/apply-canonical-recency-fixup.py
       - name: Compile and test Python recency path
         run: |
           python -m py_compile scripts/live-recency-learning.py scripts/test-live-recency-learning.py scripts/audit-canonical-recency-learning.py scripts/generate-ten-year-live-bets.py scripts/run-ten-year-auto-final-live.py
@@ -53,7 +55,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm scripts/apply-canonical-recency-patch.py .github/workflows/apply-canonical-recency-patch.yml
+          git rm scripts/apply-canonical-recency-patch.py scripts/apply-canonical-recency-fixup.py .github/workflows/apply-canonical-recency-patch.yml
           git add -A
           git commit -m "Complete canonical same-day recency learning"
           git push origin HEAD:fix/canonical-online-recency-learning-20260815
