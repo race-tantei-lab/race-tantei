@@ -2,7 +2,7 @@
  ⛅️ wrangler 4.118.0
 ────────────────────
 Total Upload: 1306.43 KiB / gzip: 726.21 KiB
-Worker Startup Time: 2 ms
+Worker Startup Time: 3 ms
 Your Worker has access to the following bindings:
 Binding                                                                   Resource                  
 env.DB (race-tantei-phase0)                                               D1 Database               
@@ -15,10 +15,10 @@ env.MIN_EXPECTED_VALUE ("108")                                            Enviro
 env.MAX_RACE_BUDGET_YEN ("10000")                                         Environment Variable      
 env.SYNC_BATCH_SIZE ("12")                                                Environment Variable      
 
-Uploaded race-tantei-phase0 (1.77 sec)
-Deployed race-tantei-phase0 triggers (0.74 sec)
+Uploaded race-tantei-phase0 (1.62 sec)
+Deployed race-tantei-phase0 triggers (0.46 sec)
   https://race-tantei-phase0.race-tantei.workers.dev
   schedule: */5 * * * *
-Current Version ID: c1126be5-d7f9-4660-9561-c52c36d8241b
+Current Version ID: 64eff6cc-fd70-41e8-8a9e-8865b06d1f95
 
 Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
