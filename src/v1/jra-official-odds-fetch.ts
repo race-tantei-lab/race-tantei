@@ -8,6 +8,8 @@ import {
   sameFastJraRaceLink,
 } from "./jra-official-odds-fast";
 
+export type { OfficialOddsRow } from "./completed-ticket-runtime";
+
 const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136 Safari/537.36";
 const BET_ORDER: readonly CompletedBetType[] = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"];
 
@@ -23,6 +25,7 @@ export interface FastJraOddsResult {
   pages: FastJraOddsPage[];
   entryCnameCount: number;
   fetchedPageCount: number;
+  source: "jra-fast-official";
 }
 
 function sameIdentity(a: JraOddsIdentity | null, b: JraOddsIdentity): boolean {
@@ -119,5 +122,11 @@ export async function fetchFastJraOfficialOddsForRace(entryUrl: string, target: 
   if (pages.length !== 6 || BET_ORDER.some((betType) => !pages.some((page) => page.betType === betType))) {
     throw new Error(`JRA_SIX_TYPE_INCOMPLETE:${pages.map((page) => page.betType).join(",")}`);
   }
-  return { rows: pages.flatMap((page) => page.rows), pages, entryCnameCount: entryLinks.length, fetchedPageCount: 7 };
+  return {
+    rows: pages.flatMap((page) => page.rows),
+    pages,
+    entryCnameCount: entryLinks.length,
+    fetchedPageCount: 7,
+    source: "jra-fast-official",
+  };
 }
