@@ -15,7 +15,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 4
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
@@ -25,7 +25,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Reconcile production and reject false misses
+      - name: Reconcile production and reject false misses or bad refunds
         shell: bash
         run: |
           set -euo pipefail
@@ -41,44 +41,69 @@ jobs:
           mod=importlib.util.module_from_spec(spec);sys.modules['settlement_guard_collector']=mod;spec.loader.exec_module(mod)
           today=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
           unordered={'ワイド','馬連','3連複'}
+          def nums(combination):
+              return [int(x) for x in re.findall(r'\d{1,2}',str(combination or ''))]
           def canonical(bet_type,combination):
-              nums=[int(x) for x in re.findall(r'\d{1,2}',str(combination or ''))]
-              if bet_type in unordered: nums.sort()
-              return '-'.join(map(str,nums))
+              values=nums(combination)
+              if bet_type in unordered: values.sort()
+              return '-'.join(map(str,values))
 
           bets=mod.d1_query('''SELECT b.id,b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,
                                       b.stake_yen AS stakeYen,b.settlement_status AS settlementStatus,
-                                      COALESCE(b.return_yen,0) AS returnYen,r.status
+                                      COALESCE(b.return_yen,0) AS returnYen,r.status,
+                                      COALESCE(r.refund_horse_nos_json,'[]') AS refundsJson
                                FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
                                WHERE r.race_date=? ORDER BY b.race_id,b.id''',[today])
           payouts=mod.d1_query('''SELECT p.race_id AS raceId,p.bet_type AS betType,p.combination,p.payout_yen AS payoutYen
                                   FROM rt_payouts p JOIN rt_races r ON r.race_id=p.race_id
                                   WHERE r.race_date=?''',[today])
           payout_map={(str(p['raceId']),str(p['betType']),canonical(str(p['betType']),str(p['combination']))):int(p.get('payoutYen') or 0) for p in payouts}
-          false_zero=[]
+          false_zero=[];bad_refunds=[];bad_positive=[]
           race_rows=collections.defaultdict(list)
           for b in bets:
               race_id=str(b['raceId']);race_rows[race_id].append(b)
-              if str(b.get('settlementStatus'))!='settled' or int(b.get('returnYen') or 0)!=0: continue
+              try: refunds={int(x) for x in json.loads(str(b.get('refundsJson') or '[]'))}
+              except Exception: refunds=set()
+              is_refund=any(x in refunds for x in nums(b.get('combination')))
+              settled=str(b.get('settlementStatus'))=='settled'
+              returned=int(b.get('returnYen') or 0);stake=int(b.get('stakeYen') or 0)
               key=(race_id,str(b['betType']),canonical(str(b['betType']),str(b['combination'])))
               official=payout_map.get(key)
-              if official and official>0:
+              if settled and is_refund and returned!=stake:
+                  bad_refunds.append({'id':b['id'],'raceId':race_id,'course':b['course'],'betType':b['betType'],'combination':b['combination'],'stakeYen':stake,'returnYen':returned,'refunds':sorted(refunds)})
+              if settled and not is_refund and returned==0 and official and official>0:
                   false_zero.append({'id':b['id'],'raceId':race_id,'course':b['course'],'betType':b['betType'],'combination':b['combination'],'officialPayoutYen':official})
+              if settled and not is_refund and returned>0:
+                  expected=round(stake/100*official) if official and official>0 else 0
+                  if expected<=0 or returned!=expected:
+                      bad_positive.append({'id':b['id'],'raceId':race_id,'course':b['course'],'betType':b['betType'],'combination':b['combination'],'officialPayoutYen':official,'expectedReturnYen':expected,'returnYen':returned})
           if false_zero:
               raise RuntimeError('LIVE_SETTLEMENT_FALSE_MISS:'+json.dumps(false_zero,ensure_ascii=False))
+          if bad_refunds:
+              raise RuntimeError('LIVE_SETTLEMENT_BAD_REFUND:'+json.dumps(bad_refunds,ensure_ascii=False))
+          if bad_positive:
+              raise RuntimeError('LIVE_SETTLEMENT_BAD_POSITIVE_RETURN:'+json.dumps(bad_positive,ensure_ascii=False))
 
           payload=json.loads(pathlib.Path('/tmp/today.json').read_text(encoding='utf-8'))
           api={str(r.get('raceId')):str((r.get('publicState') or {}).get('code') or '') for r in payload.get('races',[])}
-          mismatches=[]; settled=[]; hits=[]
+          mismatches=[];settled=[];hits=[];refund_only=[]
           for race_id,rows in race_rows.items():
               if not rows or any(str(x.get('settlementStatus'))!='settled' for x in rows): continue
-              expected='hit' if any(int(x.get('returnYen') or 0)>0 for x in rows) else 'miss'
+              genuine_hit=False;has_refund=False
+              for x in rows:
+                  try: refunds={int(v) for v in json.loads(str(x.get('refundsJson') or '[]'))}
+                  except Exception: refunds=set()
+                  is_refund=any(v in refunds for v in nums(x.get('combination')))
+                  has_refund=has_refund or is_refund
+                  if not is_refund and int(x.get('returnYen') or 0)>0: genuine_hit=True
+              expected='hit' if genuine_hit else ('refund' if has_refund else 'miss')
               settled.append(race_id)
               if expected=='hit': hits.append(race_id)
+              if expected=='refund': refund_only.append(race_id)
               actual=api.get(race_id,'')
               if actual!=expected:
                   mismatches.append({'raceId':race_id,'expected':expected,'actual':actual})
           if mismatches:
               raise RuntimeError('LIVE_SETTLEMENT_API_MISMATCH:'+json.dumps(mismatches,ensure_ascii=False))
-          print(json.dumps({'status':'LIVE_SETTLEMENT_OK','date':today,'settledRacesChecked':len(settled),'hitRaceIds':sorted(hits),'falseMisses':0,'apiMismatches':0},ensure_ascii=False))
+          print(json.dumps({'status':'LIVE_SETTLEMENT_REFUND_AWARE_OK','date':today,'settledRacesChecked':len(settled),'hitRaceIds':sorted(hits),'refundOnlyRaceIds':sorted(refund_only),'falseMisses':0,'badRefunds':0,'badPositiveReturns':0,'apiMismatches':0},ensure_ascii=False))
           PY
