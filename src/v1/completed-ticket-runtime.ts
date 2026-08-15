@@ -24,6 +24,7 @@ export interface CompletedTicket {
   officialOdds: number;
   valueProduct: number;
   score: number;
+  recencyFactor?: number;
 }
 
 export interface CompletedCourseBet {
@@ -136,7 +137,12 @@ function validateCanonicalWeights(weights: readonly number[]): void {
   }
 }
 
-export function chooseCompletedTwoTickets(horseNos: readonly number[], weights: readonly number[], rows: readonly OfficialOddsRow[]): CompletedTicket[] {
+export function chooseCompletedTwoTickets(
+  horseNos: readonly number[],
+  weights: readonly number[],
+  rows: readonly OfficialOddsRow[],
+  recencyFactor?: (betType: CompletedBetType, officialOdds: number) => number,
+): CompletedTicket[] {
   if (horseNos.length !== weights.length || horseNos.length < 3) throw new Error("completed ticket runner shape is invalid");
   const unique = new Set(horseNos);
   if (unique.size !== horseNos.length || horseNos.some((value) => !Number.isInteger(value) || value < 1 || value > 18)) {
@@ -161,21 +167,25 @@ export function chooseCompletedTwoTickets(horseNos: readonly number[], weights: 
       if (odd == null) continue;
       const probability = completedCombinationProbability(betType, pos, weights);
       if (!Number.isFinite(probability) || probability <= 0) continue;
-      candidates.push({
+      const learnedFactor = recencyFactor ? recencyFactor(betType, odd) : 1;
+      if (!Number.isFinite(learnedFactor) || learnedFactor <= 0) throw new Error(`invalid completed recency factor: ${betType}:${learnedFactor}`);
+      const ticket: CompletedTicket = {
         betType,
         combination,
         horses: pos.map((index) => horseNos[index]),
         predictedProbability: probability,
         officialOdds: odd,
-        valueProduct: probability * odd,
+        valueProduct: probability * odd * learnedFactor,
         score: Number.NaN,
-      });
+      };
+      if (recencyFactor) ticket.recencyFactor = learnedFactor;
+      candidates.push(ticket);
     }
     if (!candidates.length) throw new Error(`OFFICIAL_ODDS_MISSING_BET_TYPE:${betType}`);
     candidates.sort((a, b) => (b.valueProduct - a.valueProduct) || (a.officialOdds - b.officialOdds) || compareText(a.combination, b.combination));
     const retained = candidates.slice(0, 5).map((ticket) => ({
       ...ticket,
-      score: Math.log(ticket.predictedProbability) + 0.4 * Math.log(ticket.officialOdds),
+      score: Math.log(ticket.predictedProbability) + 0.4 * Math.log(ticket.officialOdds) + Math.log(ticket.recencyFactor ?? 1),
     }));
     retained.sort((a, b) => (b.score - a.score) || (b.predictedProbability - a.predictedProbability) || compareText(a.combination, b.combination));
     bestByType.push(retained[0]);

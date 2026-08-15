@@ -14,6 +14,7 @@ import numpy as np
 ROOT=Path(__file__).resolve().parents[1]
 CORE_PATH=ROOT/'scripts'/'ten-year-production-core.py'
 COLLECTOR_PATH=ROOT/'scripts'/'collect-jra-official-odds.py'
+LEARNING_PATH=ROOT/'scripts'/'live-recency-learning.py'
 COURSE_STAKES={'ライト':[1000,1000],'スタンダード':[2500,2500],'プレミアム':[5000,5000]}
 BET_ORDER=('単勝','ワイド','馬連','馬単','3連複','3連単')
 
@@ -57,7 +58,7 @@ def load_odds(path,selected_ids):
     return out,coverage
 
 
-def choose_two(core,rid,runners,w,odds):
+def choose_two(core,learning,rid,runners,w,odds,bet_learning,venue):
     horse_nos=[int(r['horseNo']) for r in runners];n=len(runners);by_type=[]
     for bt in BET_ORDER:
         candidates=[]
@@ -66,11 +67,12 @@ def choose_two(core,rid,runners,w,odds):
             if odd is None: continue
             p=float(core.combination_probability(bt,pos,w))
             if not math.isfinite(p) or p<=0: continue
-            candidates.append({'betType':bt,'combination':combo,'horses':[horse_nos[i] for i in pos],'predictedProbability':p,'officialOdds':odd,'valueProduct':p*odd})
+            learned_factor=float(learning.bet_factor(bet_learning,bt,venue,odd))
+            candidates.append({'betType':bt,'combination':combo,'horses':[horse_nos[i] for i in pos],'predictedProbability':p,'officialOdds':odd,'recencyFactor':learned_factor,'valueProduct':p*odd*learned_factor})
         if not candidates: raise RuntimeError(f'OFFICIAL_ODDS_MISSING_BET_TYPE:{rid}:{bt}')
         candidates.sort(key=lambda x:(-x['valueProduct'],x['officialOdds'],x['combination']))
         retained=candidates[:5]
-        for x in retained:x['score']=math.log(x['predictedProbability'])+0.4*math.log(x['officialOdds'])
+        for x in retained:x['score']=math.log(x['predictedProbability'])+0.4*math.log(x['officialOdds'])+math.log(x.get('recencyFactor',1.0))
         retained.sort(key=lambda x:(-x['score'],-x['predictedProbability'],x['combination']))
         by_type.append(retained[0])
     by_type.sort(key=lambda x:(-x['score'],BET_ORDER.index(x['betType']),x['combination']))
@@ -84,7 +86,7 @@ def choose_two(core,rid,runners,w,odds):
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--repo',default='.');ap.add_argument('--date',required=True);ap.add_argument('--selection',required=True);ap.add_argument('--out',required=True);ap.add_argument('--odds-file',required=True);ap.add_argument('--insert',action='store_true');a=ap.parse_args()
-    core=load(CORE_PATH,'ten_year_production_core_bets');collector=load(COLLECTOR_PATH,'ten_year_bets_collector');cfg=core.load_config()
+    core=load(CORE_PATH,'ten_year_production_core_bets');collector=load(COLLECTOR_PATH,'ten_year_bets_collector');learning=load(LEARNING_PATH,'live_recency_learning');cfg=core.load_config()
     sel=json.loads(Path(a.selection).read_text(encoding='utf-8'))
     if sel.get('sourceModel')!='ten-year-completed-model' or sel.get('resultDataUsedForTargetDay') is not False: raise RuntimeError('CANONICAL_SELECTION_INVALID')
     ids=[str(r['raceId']) for r in sel.get('selected',[])];selected_ids=set(ids)
@@ -92,11 +94,20 @@ def main():
     target_ids=[rid for rid in ids if rid in coverage]
     if not target_ids: raise RuntimeError('NO_WINDOW_RACES_IN_OFFICIAL_ODDS')
 
+    generated_at=dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00','Z')
     state=core.load_feature_state();delta=core.delta_bundles(collector,state['throughDate'],a.date);core.advance_feature_state(state,delta)
+    same_day=core.bundles_from_d1(collector,"race_date=? AND start_time_utc IS NOT NULL AND datetime(start_time_utc)<datetime(?) AND EXISTS (SELECT 1 FROM rt_results rr WHERE rr.race_id=rt_races.race_id AND rr.finish_position IS NOT NULL)",[a.date,generated_at])
+    if same_day: core.update_feature_state_for_date(state,same_day)
     target_map={str(b['race']['raceId']):b for b in core.target_bundles(collector,a.date)}
     booster=lgb.Booster(model_file=str(core.MODEL_PATH));features=list(cfg['runnerProbabilityModel']['features'])
     if booster.num_feature()!=len(features):raise RuntimeError(f'MODEL_FEATURE_COUNT_INVALID:{booster.num_feature()}/{len(features)}')
-    generated_at=dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00','Z');out=[]
+    try:
+        runner_learning_rows,bet_learning_rows=learning.load_recent_learning_rows(collector,a.date,generated_at)
+        bet_learning=learning.build_bet_learning(bet_learning_rows,generated_at,a.date)
+        learning_error=None
+    except Exception as exc:
+        runner_learning_rows=[];bet_learning={'buckets':{},'audit':{'betHistoryRaces':0,'sameDaySettledBetRaces':0,'previousDaySettledBetRaces':0,'last7DaysSettledBetRaces':0}};learning_error=f'{type(exc).__name__}:{exc}'
+    out=[]
     for rid in target_ids:
         b=target_map.get(rid)
         if b is None: raise RuntimeError(f'TARGET_RACE_NOT_IN_D1:{rid}')
@@ -106,14 +117,18 @@ def main():
         x=np.asarray([[float(row[f]) for f in features] for row in rows],dtype=np.float64)
         raw=np.asarray(booster.predict(x),dtype=np.float64)
         if raw.shape!=(len(runners),) or not np.all(np.isfinite(raw)) or np.any(raw<=0):raise RuntimeError(f'MODEL_PREDICTION_INVALID:{rid}')
-        w=raw/raw.sum();chosen=choose_two(core,rid,runners,w,odds)
+        base_w=raw/raw.sum()
+        factors,runner_learning_detail,runner_learning_audit=learning.build_runner_learning(runner_learning_rows,b['race'],runners,generated_at,a.date) if runner_learning_rows else ([1.0]*len(runners),[{'horseNo':int(r['horseNo']),'factor':1.0} for r in runners],{'runnerHistoryRaces':0,'sameDayFinishedRaces':0,'previousDayFinishedRaces':0,'last7DaysFinishedRaces':0})
+        adjusted=np.asarray([base_w[i]*float(factors[i]) for i in range(len(runners))],dtype=np.float64);w=adjusted/adjusted.sum()
+        chosen=choose_two(core,learning,rid,runners,w,odds,bet_learning,str(b['race'].get('venue') or ''))
         course_bets=[]
         for course,stakes in COURSE_STAKES.items():
             for i,t in enumerate(chosen):
                 course_bets.append({'course':course,'betType':t['betType'],'combination':t['combination'],'stakeYen':stakes[i],'assumedOdds':t['officialOdds']})
-        out.append({'raceId':rid,'raceDate':a.date,'venue':b['race'].get('venue'),'raceNo':b['race'].get('raceNo'),'sourceModel':'ten-year-completed-model','runnerProbabilities':[{'horseNo':int(runners[i]['horseNo']),'probability':float(w[i])} for i in range(len(runners))],'tickets':chosen,'courseBets':course_bets})
+        online_learning={**learning.learning_policy(),**runner_learning_audit,**bet_learning.get('audit',{}),'cutoffUtc':generated_at,'status':'neutral_fallback' if learning_error else 'applied','error':learning_error,'sameDayFeatureStateRaces':len(same_day)}
+        out.append({'raceId':rid,'raceDate':a.date,'venue':b['race'].get('venue'),'raceNo':b['race'].get('raceNo'),'sourceModel':'ten-year-completed-model','runnerProbabilities':[{'horseNo':int(runners[i]['horseNo']),'baseProbability':float(base_w[i]),'recencyFactor':float(factors[i]),'probability':float(w[i])} for i in range(len(runners))],'runnerRecencyFactors':runner_learning_detail,'onlineLearning':online_learning,'tickets':chosen,'courseBets':course_bets})
 
-    artifact={'generatedAt':generated_at,'date':a.date,'sourceModel':'ten-year-completed-model','ticketsPerRace':2,'resultDataUsedForTargetDay':False,'officialOddsOnly':True,'races':out}
+    artifact={'generatedAt':generated_at,'date':a.date,'sourceModel':'ten-year-completed-model','ticketsPerRace':2,'resultDataUsedForTargetDay':False,'targetRaceResultUsed':False,'priorSameDayResultDataUsedForLiveLearning':any((r.get('onlineLearning') or {}).get('sameDayFinishedRaces',0)>0 for r in out),'officialOddsOnly':True,'onlineLearningPolicy':learning.learning_policy(),'races':out}
     op=Path(a.out);op.parent.mkdir(parents=True,exist_ok=True);op.write_text(json.dumps(artifact,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     if a.insert:
         collector.d1_query('''CREATE TABLE IF NOT EXISTS rt_public_bets (id INTEGER PRIMARY KEY AUTOINCREMENT,race_id TEXT NOT NULL,course TEXT NOT NULL,bet_type TEXT NOT NULL,combination TEXT NOT NULL,stake_yen INTEGER NOT NULL,assumed_odds REAL,return_yen INTEGER,settlement_status TEXT NOT NULL,locked_at TEXT,source_prediction_id INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE(race_id,course,bet_type,combination))''')
