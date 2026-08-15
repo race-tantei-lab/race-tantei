@@ -1,5 +1,6 @@
 name: Apply live UI regression hotfix
 
+# One-shot production regression repair.
 on:
   workflow_dispatch:
   push:
