@@ -1,12 +1,29 @@
 
  ⛅️ wrangler 4.118.0
 ────────────────────
+🌀 Building list of assets...
+✨ Read 5 files from the assets directory /home/runner/work/race-tantei/race-tantei/worker-assets
+🌀 Starting asset upload...
+No updated asset files to upload. Proceeding with deployment...
+Total Upload: 1396.57 KiB / gzip: 749.14 KiB
+Worker Startup Time: 2 ms
+Your Worker has access to the following bindings:
+Binding                                                                   Resource                  
+env.DB (race-tantei-phase0)                                               D1 Database               
+env.ASSETS                                                                Assets                    
+env.ENVIRONMENT ("production")                                            Environment Variable      
+env.DEPLOY_REVISION ("ten-year-completed-public-v21-worker-...")          Environment Variable      
+env.MODEL_VERSION ("ten-year-completed-model")                            Environment Variable      
+env.JRA_HOME_URL ("https://sp.jra.jp/")                                   Environment Variable      
+env.JRA_SEED_ENTRY_URLS ("https://sp.jra.jp/JRADB/accessD.html?...")      Environment Variable      
+env.MIN_EXPECTED_VALUE ("108")                                            Environment Variable      
+env.MAX_RACE_BUDGET_YEN ("10000")                                         Environment Variable      
+env.SYNC_BATCH_SIZE ("12")                                                Environment Variable      
+
+Uploaded race-tantei-phase0 (3.54 sec)
+Deployed race-tantei-phase0 triggers (0.60 sec)
+  https://race-tantei-phase0.race-tantei.workers.dev
+  schedule: */5 * * * *
+Current Version ID: 5c3a8133-f412-4f92-845c-0a91eb158724
 
 Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
-
-[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mThe directory specified by the "assets.directory" field in your configuration file does not exist:[0m
-
-  /home/runner/work/race-tantei/race-tantei/worker-assets
-
-
-🪵  Logs were written to "/home/runner/.config/.wrangler/logs/wrangler-2026-08-15_04-24-05_769.log"
