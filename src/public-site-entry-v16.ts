@@ -79,8 +79,12 @@ export default {
       if(/^20\d{2}-\d{2}-\d{2}$/.test(date)&&inArchive(date))return historicalDay(date,await tenYearRacesOnDate(date));
     }
     if(path.startsWith("/races/")){
-      const rid=decodeURIComponent(path.slice("/races/".length));const race=(await tenYearRaceMap()).get(rid);
-      if(race)return new Response(historicalRacePage(race),{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store, max-age=0","x-race-ui-version":"ten-year-completed-v16"}});
+      const rid=decodeURIComponent(path.slice("/races/".length));
+      const raceDate=rid.slice(0,10);
+      if(inArchive(raceDate)){
+        const race=(await tenYearRaceMap()).get(rid);
+        if(race)return new Response(historicalRacePage(race),{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store, max-age=0","x-race-ui-version":"ten-year-completed-v16"}});
+      }
     }
     if(!publicSite.fetch)return new Response("NOT_FOUND",{status:404});
     const upstream=await publicSite.fetch(request,env,ctx);
