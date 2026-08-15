@@ -59,13 +59,7 @@ jobs:
             scripts/generate-ten-year-live-bets.py \
             scripts/collect-current-jra-official-odds-live.py \
             scripts/collect-current-jra-official-odds-fast.py
-      - name: Wake current-day JRA sync
-        shell: bash
-        run: |
-          today=$(TZ=Asia/Tokyo date +%F)
-          curl --retry 1 --retry-delay 1 --retry-all-errors --connect-timeout 3 --max-time 8 -fsS \
-            "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$today" >/dev/null || true
-      - name: Generate every available selected race before start
+      - name: Generate and verify every due selected race
         shell: bash
         run: |
           set -o pipefail
