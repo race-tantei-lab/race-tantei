@@ -28,7 +28,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
             -f state=pending \
             -f context='production/public-ui-features' \
-            -f description='実条件・実数値の予想根拠と今日の結果を本番確認中' \
+            -f description='3タブと最終2点の具体的な根拠を本番確認中' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
 
       - name: Verify today summary API and home
@@ -55,13 +55,13 @@ jobs:
             grep -q '今日の結果' /tmp/home.html
           fi
 
-      - name: Verify exact prediction evidence when today has bets
+      - name: Verify compact race tabs and final ticket rationale
         shell: bash
         run: |
           set -euo pipefail
           has_predictions=$(node -e "const s=require('/tmp/summary.json');process.stdout.write(s.hasPredictions?'yes':'no')")
           if [[ "$has_predictions" != 'yes' ]]; then
-            echo 'No public bets today; prediction evidence verification skipped.'
+            echo 'No public bets today; race detail verification skipped.'
             exit 0
           fi
           today=$(TZ=Asia/Tokyo date +%F)
@@ -81,31 +81,30 @@ jobs:
           const html=fs.readFileSync('/tmp/detail.html','utf8');
           const headers=fs.readFileSync('/tmp/detail.headers','utf8');
           const required=[
-            ['decision-marker','data-decision-evidence="canonical-live-v1"'],
-            ['selection-trace-marker','data-selection-trace="canonical-selection-trace-v1"'],
-            ['frozen-parity','凍結済み選定と一致'],
-            ['race-score','raceScore'],
-            ['venue-rank','会場内順位'],
-            ['selection-top-five','選定用の上位候補5頭'],
-            ['condition-sample','この条件の過去サンプル'],
-            ['smoothed-roi','補正後ROI'],
-            ['local-weighted-roi','局所条件の加重ROI'],
+            ['ui-version','ten-year-completed-public-v25-race-detail-tabs-20260815'],
+            ['tabs','data-race-tabs'],
+            ['bets-tab','予想買い目'],
+            ['reason-tab','>根拠<'],
+            ['horses-tab','馬一覧'],
             ['ticket-probability','組合せ予測確率'],
+            ['official-odds','JRA公式オッズ'],
             ['ticket-value-product','確率 × オッズ'],
-            ['runner-model-probability','モデル予測勝率'],
-            ['runner-recent-top3','近3走3着内'],
+            ['ticket-final-score','最終スコア'],
+            ['selection-explanation','選ばれた理由：'],
+            ['runner-list','出走馬'],
           ];
           const missing=required.filter(([,needle])=>!html.includes(needle)).map(([name])=>name);
-          const proxyCount=(html.match(/レース選定用 仮買い目/g)||[]).length;
-          if(proxyCount!==3) missing.push(`proxy-ticket-count=${proxyCount}`);
-          if(html.includes('条件に合致')) missing.push('generic-condition-match-copy');
+          const reasonCount=(html.match(/data-ticket-reason=/g)||[]).length;
+          if(reasonCount!==2) missing.push(`ticket-reason-count=${reasonCount}`);
+          for(const forbidden of ['なぜこのレースを選んだか','レース選定用 仮買い目','raceScore','この条件の過去サンプル','補正後ROI']){
+            if(html.includes(forbidden)) missing.push('forbidden:'+forbidden);
+          }
           if(missing.length){
-            const errorHeader=(headers.match(/^x-selection-evidence-error:\s*(.+)$/mi)||[])[1]||'none';
-            console.error('PREDICTION_EVIDENCE_MISSING race='+process.env.RACE_ID+' markers='+missing.join(','));
-            console.error('PREDICTION_EVIDENCE_DEBUG selectionTrace='+html.includes('data-selection-trace=')+' decisionMarker='+html.includes('data-decision-evidence=')+' proxyCount='+proxyCount+' bytes='+Buffer.byteLength(html)+' selectionError='+errorHeader);
+            console.error('RACE_DETAIL_UI_MISSING race='+process.env.RACE_ID+' markers='+missing.join(','));
+            console.error('RACE_DETAIL_UI_DEBUG bytes='+Buffer.byteLength(html)+' headers='+headers.replace(/\r?\n/g,' | '));
             process.exit(1);
           }
-          console.log('EXACT_PREDICTION_EVIDENCE_OK race='+process.env.RACE_ID+' proxyTickets='+proxyCount);
+          console.log('RACE_DETAIL_TABS_OK race='+process.env.RACE_ID+' reasons='+reasonCount);
           NODE
 
       - name: Mark feature verification success
@@ -114,7 +113,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
             -f state=success \
             -f context='production/public-ui-features' \
-            -f description='実条件・実数値の予想根拠と今日の結果を本番確認済み' \
+            -f description='3タブと最終2点の具体的な根拠を本番確認済み' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
 
       - name: Mark feature verification failure
@@ -123,5 +122,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
             -f state=failure \
             -f context='production/public-ui-features' \
-            -f description='実条件の予想根拠または今日の結果の本番確認に失敗' \
+            -f description='3タブまたは最終2点の根拠表示の本番確認に失敗' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
