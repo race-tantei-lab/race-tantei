@@ -4,7 +4,8 @@
     "noEmit": false,
     "outDir": "dist-test",
     "rootDir": ".",
-    "moduleResolution": "Bundler"
+    "moduleResolution": "Bundler",
+    "exactOptionalPropertyTypes": false
   },
   "include": ["src/v1/**/*.ts", "tests/**/*.ts", "worker-types.d.ts", "node-shims.d.ts"]
 }
