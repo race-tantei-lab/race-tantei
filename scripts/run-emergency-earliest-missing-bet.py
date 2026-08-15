@@ -9,6 +9,7 @@ import time
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 BASE_PATH = ROOT / "scripts" / "run-auto-final-live.py"
 CANONICAL_PATH = ROOT / "scripts" / "run-ten-year-auto-final-live.py"
+RECOVERY_OPEN_SECONDS = 17 * 60
 
 
 def load(path: pathlib.Path, name: str):
@@ -47,6 +48,17 @@ def main():
         return
 
     rid = missing[0]
+    seconds_until_window = int((starts[rid] - now).total_seconds())
+    if seconds_until_window > RECOVERY_OPEN_SECONDS:
+        print(json.dumps({
+            "status":"waiting_emergency_window",
+            "date":date,
+            "raceId":rid,
+            "secondsToStart":seconds_until_window,
+            "recoveryOpenSeconds":RECOVERY_OPEN_SECONDS,
+        }, ensure_ascii=False))
+        return
+
     for attempt in range(1, 4):
         if rid in base.locked_races(collector, [rid]):
             canonical.verify_locked(collector, [rid])
