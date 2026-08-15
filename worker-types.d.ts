@@ -18,8 +18,12 @@ interface D1PreparedStatement {
 
 interface D1Database {
   prepare(query: string): D1PreparedStatement;
-  batch<T = Record<string, unknown>>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
+  batch<T = any>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]>;
   exec(query: string): Promise<D1ExecResult>;
+}
+
+interface Fetcher {
+  fetch(request: Request): Promise<Response>;
 }
 
 interface ExecutionContext {
