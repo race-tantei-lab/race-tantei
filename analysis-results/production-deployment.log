@@ -1,6 +1,7 @@
 
  ⛅️ wrangler 4.118.0
 ────────────────────
+[custom build] Running: test -f worker-assets/_internal/completed-model/model.bin || (python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' && python scripts/build-worker-completed-model-assets.py)
 🌀 Building list of assets...
 ✨ Read 5 files from the assets directory /home/runner/work/race-tantei/race-tantei/worker-assets
 🌀 Starting asset upload...
@@ -20,10 +21,10 @@ env.MIN_EXPECTED_VALUE ("108")                                            Enviro
 env.MAX_RACE_BUDGET_YEN ("10000")                                         Environment Variable      
 env.SYNC_BATCH_SIZE ("12")                                                Environment Variable      
 
-Uploaded race-tantei-phase0 (3.42 sec)
-Deployed race-tantei-phase0 triggers (0.58 sec)
+Uploaded race-tantei-phase0 (3.01 sec)
+Deployed race-tantei-phase0 triggers (0.63 sec)
   https://race-tantei-phase0.race-tantei.workers.dev
   schedule: */5 * * * *
-Current Version ID: 795b313d-356a-4066-a317-d988802b8851
+Current Version ID: 65c11476-53c9-4703-9634-65c827c3892c
 
 Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
