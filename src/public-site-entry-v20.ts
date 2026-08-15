@@ -1,8 +1,10 @@
 import publicSite from "./public-site-entry-v19.js";
+import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";
 import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v20-refund-aware-20260815";
+const COMPLETED_MODEL_VERSION = "ten-year-completed-model";
 
 type BetRow = {
   raceId: string;
@@ -20,6 +22,12 @@ type SettlementView = {
   genuineHit: boolean;
   hasRefund: boolean;
   refundTickets: string[];
+};
+
+type SelectionAuditPayload = {
+  sourceModel?: string;
+  resultDataUsedForTargetDay?: boolean;
+  selected?: Array<{ raceId?: string; venue?: string; raceNo?: number }>;
 };
 
 function horseNos(combination: string): number[] {
@@ -135,6 +143,44 @@ async function fixRaceDetail(db: D1Database, path: string, response: Response): 
   }
 }
 
+function jstDate(now = new Date()): string {
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+async function saveSelectionCronAudit(db: D1Database, result: Record<string, unknown>): Promise<void> {
+  const payload = result.payload as SelectionAuditPayload | undefined;
+  if (!payload) return;
+  if (payload.sourceModel !== COMPLETED_MODEL_VERSION || payload.resultDataUsedForTargetDay !== false || !Array.isArray(payload.selected)) {
+    throw new Error("WORKER_SELECTION_CRON_AUDIT_INVALID_PAYLOAD");
+  }
+  const counts = new Map<string, number>();
+  const ids: string[] = [];
+  for (const row of payload.selected) {
+    const venue = String(row.venue ?? "");
+    const raceId = String(row.raceId ?? "");
+    if (!venue || !raceId) throw new Error("WORKER_SELECTION_CRON_AUDIT_INVALID_ROW");
+    ids.push(raceId);
+    counts.set(venue, (counts.get(venue) ?? 0) + 1);
+  }
+  if (ids.length !== 15 || new Set(ids).size !== 15 || counts.size !== 3 || [...counts.values()].some((count) => count !== 5)) {
+    throw new Error(`WORKER_SELECTION_CRON_AUDIT_COUNTS_INVALID:${JSON.stringify(Object.fromEntries(counts))}:${ids.length}`);
+  }
+  const audit = {
+    status: String(result.status ?? "loaded"),
+    checkedAt: new Date().toISOString(),
+    date: jstDate(),
+    sourceModel: COMPLETED_MODEL_VERSION,
+    selectedRaceCount: ids.length,
+    selectedVenueCounts: Object.fromEntries(counts),
+    selectedRaceIds: ids,
+    resultDataUsedForTargetDay: false,
+  };
+  await db.prepare(`
+    INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
+  `).bind(`worker_selection:${audit.date}`, JSON.stringify(audit)).run();
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
@@ -149,6 +195,13 @@ export default {
       if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
     } catch (error) {
       console.error("BASE_SCHEDULED_SYNC_FAILED", error);
+    }
+    try {
+      const selection = await freezeCompletedWorkerSelectionIfNeeded(env);
+      await saveSelectionCronAudit(env.DB, selection);
+      console.log("COMPLETED_WORKER_SELECTION", JSON.stringify({ status: selection.status, date: selection.date }));
+    } catch (error) {
+      console.error("COMPLETED_WORKER_SELECTION_FAILED", error);
     }
     try {
       const audit = await runCompletedWorkerLiveLock(env);
