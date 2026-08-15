@@ -75,6 +75,7 @@ def crawl(collector, race: dict, max_pages: int = 28, max_depth: int = 3) -> dic
         return None
     return {
         "race": race,
+        "entryHtml": entry_html,
         "entryActionLinks": [{"cname": cname, "context": context} for cname, context in collector.action_links(entry_html)],
         "pagesFetched": len(seen),
         "maxFoundDepth": max(item["depth"] for item in found.values()),
