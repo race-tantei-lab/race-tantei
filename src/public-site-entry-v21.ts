@@ -10,6 +10,10 @@ type LiveLockAudit = {
   deadlineBreachRaceIds?: string[];
 };
 
+type PredictionSampleRow = {
+  raceId: string;
+};
+
 function jstDate(now = new Date()): string {
   return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
@@ -26,10 +30,29 @@ async function enforceLiveLockSla(db: D1Database, now: Date): Promise<void> {
   }
 }
 
+async function currentPredictionSample(db: D1Database): Promise<Response> {
+  const date = jstDate();
+  const row = await db.prepare(`
+    SELECT b.race_id AS raceId
+    FROM rt_public_bets b
+    JOIN rt_races r ON r.race_id=b.race_id
+    WHERE r.race_date=? AND b.source_prediction_id=-2
+    GROUP BY b.race_id,r.start_time_utc,r.race_no
+    ORDER BY r.start_time_utc,r.race_no,b.race_id
+    LIMIT 1
+  `).bind(date).first<PredictionSampleRow>();
+  return Response.json({
+    date,
+    hasPredictions: Boolean(row?.raceId),
+    raceId: row?.raceId ? String(row.raceId) : null,
+  }, { headers: { "cache-control": "no-store" } });
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const path = new URL(request.url).pathname;
     if (path.startsWith("/_internal/")) return new Response("NOT_FOUND", { status: 404 });
+    if (path === "/api/public/today-prediction-sample") return currentPredictionSample(env.DB);
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
     const response = await publicSite.fetch(request, env, ctx);
     if (path === "/api/internal/worker-live-lock-health") return new Response("NOT_FOUND", { status: 404 });
