@@ -165,8 +165,10 @@ def main():
 
     # Cloudflare Worker is the one-minute primary path. GitHub Actions remains a
     # narrow independent fallback and must not pre-empt the Worker's fresher odds.
-    base.MIN_LOCK_SECONDS=15*60
-    base.MAX_LOCK_SECONDS=16*60
+    # Never pre-empt T-15. Worker is primary at the boundary; this minute-loop
+    # fallback may recover only after the boundary, during T-15..T-14.
+    base.MIN_LOCK_SECONDS=14*60
+    base.MAX_LOCK_SECONDS=15*60
     base.main()
 
 

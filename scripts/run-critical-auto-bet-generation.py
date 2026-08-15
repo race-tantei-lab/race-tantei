@@ -10,7 +10,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 BASE_PATH = ROOT / "scripts" / "run-auto-final-live.py"
 CANONICAL_PATH = ROOT / "scripts" / "run-ten-year-auto-final-live.py"
 HARD_DEADLINE_SECONDS = 15 * 60
-RECOVERY_OPEN_SECONDS = 16 * 60
+RECOVERY_OPEN_SECONDS = 15 * 60
 EXPECTED_COURSES = {"ライト": 2000, "スタンダード": 5000, "プレミアム": 10000}
 
 

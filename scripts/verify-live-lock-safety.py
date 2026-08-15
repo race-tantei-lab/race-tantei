@@ -32,7 +32,7 @@ def main() -> None:
         'const PREVIEW_PREFIX = "worker_live_preview:";',
         'const FINAL_PREFIX = "worker_live_final:";',
         'const PREVIEW_OPEN_MS = 45 * 60 * 1000;',
-        'const FINALIZE_OPEN_MS = 16 * 60 * 1000;',
+        'const FINALIZE_OPEN_MS = DEADLINE_MS;',
         'const DEADLINE_MS = 15 * 60 * 1000;',
         'const PREVIEW_HISTORY = 3;',
         'oddsSnapshotSha256',
@@ -47,18 +47,19 @@ def main() -> None:
     ):
         require(worker, needle, "Worker live-lock")
     forbid(worker, 'WORKER_FINAL_BODYWEIGHT_MISMATCH', "Worker live-lock")
+    forbid(worker, "const FINALIZE_OPEN_MS = 16 * 60 * 1000;", "Worker live-lock")
 
     canonical = read("scripts/run-ten-year-auto-final-live.py")
-    require(canonical, "base.MIN_LOCK_SECONDS=15*60", "canonical GitHub fallback")
-    require(canonical, "base.MAX_LOCK_SECONDS=16*60", "canonical GitHub fallback")
+    require(canonical, "base.MIN_LOCK_SECONDS=14*60", "canonical GitHub fallback")
+    require(canonical, "base.MAX_LOCK_SECONDS=15*60", "canonical GitHub fallback")
     require(canonical, "fallback_without_verified_snapshot", "canonical GitHub fallback")
 
     emergency = read("scripts/run-emergency-earliest-missing-bet.py")
-    require(emergency, "RECOVERY_OPEN_SECONDS = 16 * 60", "emergency fallback")
+    require(emergency, "RECOVERY_OPEN_SECONDS = 15 * 60", "emergency fallback")
     require(emergency, '"status":"waiting_emergency_window"', "emergency fallback")
 
     critical_script = read("scripts/run-critical-auto-bet-generation.py")
-    require(critical_script, "RECOVERY_OPEN_SECONDS = 16 * 60", "manual critical recovery")
+    require(critical_script, "RECOVERY_OPEN_SECONDS = 15 * 60", "manual critical recovery")
     require(critical_script, "base.MAX_LOCK_SECONDS = RECOVERY_OPEN_SECONDS", "manual critical recovery")
 
     critical_workflow = read(".github/workflows/critical-auto-bet-generation.yml")
@@ -70,10 +71,10 @@ def main() -> None:
         "worker_cron=1m",
         "preview_open=45m",
         "preview_history=3",
-        "finalize_open=16m",
+        "finalize_open=15m",
         "deadline=15m",
-        "github_fallback=16m",
-        "emergency_fallback=16m",
+        "github_fallback=15m_to_14m_post_boundary",
+        "emergency_fallback=15m",
         "bodyweight_nonblocking=true",
         "critical_schedule=disabled",
     )
