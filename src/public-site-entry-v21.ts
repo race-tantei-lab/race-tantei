@@ -1,4 +1,5 @@
 import publicSite from "./public-site-entry-v20.js";
+import { fastCurrentDayResponse } from "./v1/current-day-public-api.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v21-worker-live-lock-20260815";
@@ -58,9 +59,16 @@ async function currentPredictionSample(db: D1Database): Promise<Response> {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const path = new URL(request.url).pathname;
+    const url = new URL(request.url);
+    const path = url.pathname;
     if (path.startsWith("/_internal/")) return new Response("NOT_FOUND", { status: 404 });
     if (path === "/api/public/today-prediction-sample") return currentPredictionSample(env.DB);
+    if (path === "/api/public/day" && url.searchParams.get("date") === jstDate()) {
+      // Current-day reads are latency-sensitive and must not inherit legacy
+      // settlement/discovery wrappers or any JRA network wait. The authoritative
+      // frozen selection and locked public bets already live in D1.
+      return fastCurrentDayResponse(env.DB, jstDate());
+    }
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
     const response = await publicSite.fetch(request, env, ctx);
     if (path === "/api/internal/worker-live-lock-health") return new Response("NOT_FOUND", { status: 404 });
