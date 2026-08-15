@@ -7,11 +7,12 @@ on:
     paths:
       - ".github/workflows/ensure-auto-final-live.yml"
   schedule:
-    # Watchdog runs five minutes after the primary :07/:17/... cadence.
-    # The first active UTC hour starts at :12 so it does not pre-empt the day's first :07 primary run.
-    - cron: "12-52/10 23 * * 5,6,0"
-    - cron: "2-52/10 0-10 * * 6,0,1"
-    - cron: "2 11 * * 6,0,1"
+    # Simple cron syntax only. If the primary 5-minute stream is stale or failed,
+    # dispatch it again. Running on the same 10-minute boundaries is safe because
+    # an active/recent primary run exits this watchdog without dispatching.
+    - cron: "*/10 23 * * 5,6,0"
+    - cron: "*/10 0-10 * * 6,0,1"
+    - cron: "0 11 * * 6,0,1"
 
 permissions:
   contents: read
@@ -43,7 +44,7 @@ jobs:
             ts="$(date -u -d "$updated" +%s)"
             age=$((now-ts))
           fi
-          if [ "$status" = "completed" ] && [ "$conclusion" = "success" ] && [ "$age" -le 720 ]; then
+          if [ "$status" = "completed" ] && [ "$conclusion" = "success" ] && [ "$age" -le 420 ]; then
             echo "AUTO_FINAL_RECENT_RUN_OK age_seconds=$age status=$status conclusion=$conclusion updated=$updated"
             exit 0
           fi
