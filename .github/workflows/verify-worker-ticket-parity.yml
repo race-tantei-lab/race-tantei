@@ -1,0 +1,59 @@
+name: Verify Worker Ticket Parity
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/verify-worker-ticket-parity.yml
+      - scripts/build-worker-ticket-parity.py
+      - scripts/verify-worker-ticket-parity.ts
+      - src/v1/completed-ticket-runtime.ts
+      - scripts/generate-ten-year-live-bets.py
+      - scripts/ten-year-production-core.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-worker-ticket-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install canonical Python runtime
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3'
+
+      - name: Build canonical Python ticket fixtures
+        run: python scripts/build-worker-ticket-parity.py
+
+      - name: Verify TypeScript ticket parity
+        run: npx tsx scripts/verify-worker-ticket-parity.ts
+
+      - name: Upload ticket parity fixture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-ticket-parity
+          path: worker-ticket-parity.json
+          if-no-files-found: warn
+          retention-days: 7
