@@ -1,0 +1,94 @@
+name: Verify today live bets
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/verify-today-live-bets.yml"
+  schedule:
+    # Run shortly after the primary 10-minute lock cadence.
+    - cron: "9-59/10 23 * * 5,6,0"
+    - cron: "9-59/10 0-10 * * 6,0,1"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify frozen selection, canonical bets, and deadlines
+        shell: bash
+        run: |
+          python - <<'PY'
+          import collections, datetime as dt, importlib.util, json, pathlib, sys
+
+          root=pathlib.Path.cwd()
+          path=root/'scripts'/'collect-jra-official-odds.py'
+          spec=importlib.util.spec_from_file_location('live_verify_collector',path)
+          mod=importlib.util.module_from_spec(spec);sys.modules['live_verify_collector']=mod;spec.loader.exec_module(mod)
+
+          now=dt.datetime.now(dt.timezone.utc)
+          jst=now.astimezone(dt.timezone(dt.timedelta(hours=9)))
+          date=jst.date().isoformat()
+          key=f'final_daily_selection:{date}'
+          state=mod.d1_query('SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1',[key])
+          if not state:
+              raise RuntimeError(f'LIVE_VERIFY_SELECTION_MISSING:{date}')
+          payload=json.loads(str(state[0].get('value') or '{}'))
+          selected=payload.get('selected')
+          if not isinstance(selected,list) or not selected:
+              raise RuntimeError('LIVE_VERIFY_SELECTION_EMPTY')
+          if payload.get('sourceModel')!='ten-year-completed-model' or payload.get('resultDataUsedForTargetDay') is not False:
+              raise RuntimeError('LIVE_VERIFY_SELECTION_SOURCE_INVALID')
+          by_venue=collections.Counter(str(r.get('venue') or '') for r in selected)
+          if '' in by_venue or any(n!=5 for n in by_venue.values()):
+              raise RuntimeError(f'LIVE_VERIFY_SELECTION_COUNTS_INVALID:{dict(by_venue)}')
+          ids=[str(r.get('raceId') or '') for r in selected]
+          if any(not x for x in ids) or len(ids)!=len(set(ids)):
+              raise RuntimeError('LIVE_VERIFY_SELECTION_IDS_INVALID')
+
+          placeholders=','.join('?' for _ in ids)
+          starts=mod.d1_query(f'SELECT race_id AS raceId,start_time_utc AS startTimeUtc FROM rt_races WHERE race_id IN ({placeholders})',ids)
+          start_map={str(r['raceId']):dt.datetime.fromisoformat(str(r['startTimeUtc']).replace('Z','+00:00')).astimezone(dt.timezone.utc) for r in starts if r.get('startTimeUtc')}
+          if len(start_map)!=len(ids):
+              raise RuntimeError(f'LIVE_VERIFY_STARTS_MISSING:{len(start_map)}/{len(ids)}')
+
+          rows=mod.d1_query(f'''SELECT race_id AS raceId,course,COUNT(*) AS tickets,COUNT(DISTINCT bet_type) AS betTypes,
+                                      SUM(stake_yen) AS stakeYen,MAX(CASE WHEN source_prediction_id=-2 THEN 1 ELSE 0 END) AS finalSource
+                               FROM rt_public_bets WHERE race_id IN ({placeholders}) GROUP BY race_id,course''',ids)
+          grouped={}
+          for r in rows: grouped.setdefault(str(r['raceId']),{})[str(r['course'])]=r
+          budgets={'ライト':2000,'スタンダード':5000,'プレミアム':10000}
+          locked=set(grouped)
+          for race_id,courses in grouped.items():
+              if set(courses)!=set(budgets):
+                  raise RuntimeError(f'LIVE_VERIFY_COURSES_INVALID:{race_id}:{sorted(courses)}')
+              for course,budget in budgets.items():
+                  r=courses[course]
+                  if int(r.get('tickets') or 0)!=2 or int(r.get('betTypes') or 0)!=2 or int(r.get('stakeYen') or 0)!=budget or int(r.get('finalSource') or 0)!=1:
+                      raise RuntimeError(f"LIVE_VERIFY_BETS_INVALID:{race_id}:{course}:tickets={r.get('tickets')}:types={r.get('betTypes')}:stake={r.get('stakeYen')}:source={r.get('finalSource')}")
+
+          missed=[]
+          for race_id in ids:
+              if race_id in locked: continue
+              seconds=(start_map[race_id]-now).total_seconds()
+              if seconds<=15*60: missed.append(race_id)
+          if missed:
+              raise RuntimeError('LIVE_VERIFY_LOCK_DEADLINE_MISSED:'+','.join(missed))
+
+          print(json.dumps({
+              'status':'LIVE_BETS_OK','date':date,'selectedRaceCount':len(ids),'venues':dict(by_venue),
+              'lockedRaceCount':len(locked),'lockedRaceIds':sorted(locked),'deadlineMissed':[]
+          },ensure_ascii=False))
+          PY
