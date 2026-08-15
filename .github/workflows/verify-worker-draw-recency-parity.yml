@@ -1,0 +1,44 @@
+name: Verify Worker draw recency parity
+
+on:
+  push:
+    branches:
+      - fix/recency-worker-draw-parity-20260815
+    paths:
+      - ".github/workflows/verify-worker-draw-recency-parity.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Apply parity fix
+        run: python scripts/apply-worker-draw-recency-parity.py
+      - name: Verify build and tests
+        run: |
+          npm ci
+          npm run build:test
+          npm run test:unit
+          npm run build
+          npx wrangler deploy --dry-run
+          git diff --check
+      - name: Commit verified runtime fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/v1/completed-recency-learning.ts
+          git commit -m "Align Worker 30-day draw recency scope"
+          git push origin HEAD:fix/recency-worker-draw-parity-20260815
