@@ -23,32 +23,47 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Read Sapporo 1R settlement state and official markup
+      - name: Inspect exact official Sapporo 1R payout markup
         run: |
           python - <<'PY'
-          import datetime as dt,html as htmlmod,importlib.util,json,pathlib,re,sys,urllib.request
+          import datetime as dt,html as htmlmod,importlib.util,json,pathlib,re,sys,urllib.parse,urllib.request
           p=pathlib.Path('scripts/collect-jra-official-odds.py')
           s=importlib.util.spec_from_file_location('audit_d1',p);m=importlib.util.module_from_spec(s);sys.modules['audit_d1']=m;s.loader.exec_module(m)
           date=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat(); rid=f'{date}-sapporo-01'
-          race=m.d1_query('''SELECT race_id AS raceId,status,result_url AS resultUrl,refund_horse_nos_json AS refundHorseNosJson,result_updated_at AS resultUpdatedAt FROM rt_races WHERE race_id=?''',[rid])
-          bets=m.d1_query('''SELECT id,course,bet_type AS betType,combination,stake_yen AS stakeYen,return_yen AS returnYen,settlement_status AS settlementStatus,source_prediction_id AS sourcePredictionId,locked_at AS lockedAt FROM rt_public_bets WHERE race_id=? ORDER BY course,id''',[rid])
-          payouts=m.d1_query('''SELECT bet_type AS betType,combination,payout_yen AS payoutYen,popularity FROM rt_payouts WHERE race_id=? ORDER BY bet_type,combination''',[rid])
-          result=m.d1_query('''SELECT * FROM rt_results WHERE race_id=?''',[rid])
-          out={'raceId':rid,'race':race,'bets':bets,'payouts':payouts,'result':result}
-          print('SAPPORO1_AUDIT='+json.dumps(out,ensure_ascii=False))
-          url=str(race[0]['resultUrl'])
-          req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 Chrome/136','Accept-Language':'ja-JP,ja;q=0.9','Cache-Control':'no-cache','Pragma':'no-cache'})
-          with urllib.request.urlopen(req,timeout=35) as resp: raw=resp.read(4_000_000); ctype=resp.headers.get('content-type','')
+          race=m.d1_query('''SELECT race_id AS raceId,status,entry_url AS entryUrl,result_url AS resultUrl,refund_horse_nos_json AS refundHorseNosJson FROM rt_races WHERE race_id=?''',[rid])
+          if not race: raise RuntimeError('SAPPORO1_MISSING')
+          entry=str(race[0]['entryUrl'])
+          def cname(url): return (urllib.parse.parse_qs(urllib.parse.urlsplit(str(url)).query).get('CNAME') or [''])[0]
+          def key(url):
+              mm=re.search(r'(?:pw|sw)01(?:dde01|sde01)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})/',cname(url),re.I)
+              return mm.groups() if mm else None
+          headers={'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/136 Safari/537.36','Accept-Language':'ja-JP,ja;q=0.9','Cache-Control':'no-cache','Pragma':'no-cache'}
+          req=urllib.request.Request(entry,headers=headers)
+          with urllib.request.urlopen(req,timeout=35) as resp: raw=resp.read(4_000_000); final=resp.geturl();ctype=resp.headers.get('content-type','')
+          entry_html=m.decode_body(raw,ctype); target=key(final)
+          candidates=[]
+          for href0 in re.findall(r'href=["\']([^"\']*accessS\.html[^"\']*)["\']',entry_html,re.I):
+              href=urllib.parse.urljoin(final,htmlmod.unescape(href0))
+              if 'sde01' in cname(href) and key(href)==target: candidates.append(href)
+          if not candidates: raise RuntimeError('SAME_RACE_RESULT_LINK_MISSING')
+          exact=candidates[0]
+          req=urllib.request.Request(exact,headers=headers)
+          with urllib.request.urlopen(req,timeout=35) as resp: raw=resp.read(4_000_000); exact_final=resp.geturl();ctype=resp.headers.get('content-type','')
           text=m.decode_body(raw,ctype)
+          print('EXACT_RESULT_URL='+exact_final)
+          print('BODY_BYTES='+str(len(raw)))
           def clean(x): return re.sub(r'\s+',' ',htmlmod.unescape(re.sub(r'<[^>]+>',' ',x))).strip()
-          rows=[]
-          for tr in re.findall(r'<tr\b[^>]*>[\s\S]*?</tr>',text,re.I):
-              cells=[clean(x) for x in re.findall(r'<t[dh]\b[^>]*>([\s\S]*?)</t[dh]>',tr,re.I)]
-              joined=' | '.join(cells)
-              if cells and (re.search(r'円|払戻|返還|単勝|複勝|ワイド|馬連|馬単|3連|３連',joined) or '除外' in joined): rows.append(cells)
-          print('OFFICIAL_RELEVANT_ROWS='+json.dumps(rows,ensure_ascii=False))
           normalized=clean(text)
-          for needle in ['払戻金','返還','除外']:
-              i=normalized.find(needle)
-              print(f'SNIPPET_{needle}='+json.dumps(normalized[max(0,i-300):i+1200] if i>=0 else None,ensure_ascii=False))
+          print('NORMALIZED_HAS='+json.dumps({k:(k in normalized) for k in ['単勝','複勝','ワイド','馬連','馬単','3連複','3連単','３連複','３連単','払戻','返還','除外']},ensure_ascii=False))
+          for needle in ['単勝','ワイド','払戻','返還']:
+              positions=[m0.start() for m0 in re.finditer(re.escape(needle),text,re.I)]
+              print(f'RAW_{needle}_COUNT='+str(len(positions)))
+              for n,i in enumerate(positions[:4]):
+                  print(f'RAW_{needle}_{n}='+json.dumps(text[max(0,i-1000):i+3500],ensure_ascii=False))
+          tags=[]
+          for pat in [r'<tr\b[^>]*>[\s\S]*?</tr>',r'<li\b[^>]*>[\s\S]*?</li>',r'<div\b[^>]*>[\s\S]{0,5000}?</div>']:
+              for block in re.findall(pat,text,re.I):
+                  c=clean(block)
+                  if re.search(r'(単勝|ワイド|馬連|馬単|3連|３連).*(円|返還)|円.*(単勝|ワイド|馬連|馬単|3連|３連)',c): tags.append(c[:1500])
+          print('PAYOUT_BLOCKS='+json.dumps(tags[:50],ensure_ascii=False))
           PY
