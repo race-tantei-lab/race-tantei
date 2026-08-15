@@ -106,7 +106,7 @@ async function raceDetail(db: D1Database, raceId: string): Promise<string | null
   race.raceNo = Number(race.raceNo); race.distanceM = race.distanceM === null ? null : Number(race.distanceM);
   const runners = await db.prepare(`SELECT r.horse_no AS horseNo, r.frame_no AS frameNo, r.horse_name AS horseName, r.sex_age AS sexAge, r.horse_weight AS horseWeight, r.weight_change AS weightChange, r.jockey, r.assigned_weight AS assignedWeight, r.trainer, r.stable, r.win_odds AS winOdds, r.popularity, r.runner_status AS runnerStatus, x.finish_position AS finishPosition, x.result_status AS resultStatus FROM rt_runners r LEFT JOIN rt_results x ON x.race_id=r.race_id AND x.horse_no=r.horse_no WHERE r.race_id=? ORDER BY r.horse_no`).bind(raceId).all<RunnerRow>();
   const selected = isFrozenSelectedRace(race.raceDate, race.venue, race.raceNo);
-  const publicBets = race.raceDate === "2026-08-08" ? await getPublicBets(db, raceId) : [];
+  const publicBets = await getPublicBets(db, raceId);
   const today = jstDateKey();
   const state = publicRaceState(race, today, selected);
   const meta = [race.raceDate.replaceAll("-","/"), race.venue, `${race.raceNo}R`, race.startTimeJst ? `${race.startTimeJst}発走` : null, race.surface, race.distanceM ? `${race.distanceM}m` : null, race.trackCondition].filter(Boolean).join("　");

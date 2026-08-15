@@ -73,10 +73,22 @@ function homeStyle():string{
   </style>`;
 }
 
+function replaceVenueRoi(html:string,replacement:string):string{
+  const start=html.indexOf('<div class="section-title venue-roi-title">');
+  if(start<0)return html;
+  const candidates=[
+    html.indexOf('<section class="today-result"',start),
+    html.indexOf('<div class="section-title"><h2 id="selected-date">',start)
+  ].filter((value)=>value>start);
+  if(!candidates.length)return html;
+  const end=Math.min(...candidates);
+  return html.slice(0,start)+replacement+html.slice(end);
+}
+
 async function canonicalHome(db:D1Database,html:string):Promise<string>{
   const [courses,months,venues]=await Promise.all([liveCourseRows(db),liveMonthlyRows(db),liveVenueRows(db)]);
   let out=html.replace(/<section class="metrics">[\s\S]*?<\/section>/,metricHtml(courses,months));
-  out=out.replace(/<div class="section-title venue-roi-title">[\s\S]*?<\/div><div class="venue-roi-rail">[\s\S]*?<\/div>(?=<div class="section-title"><h2 id="selected-date">)/,venueHtml(venues));
+  out=replaceVenueRoi(out,venueHtml(venues));
   out=out.replace("</head>",`${homeStyle()}</head>`);
   return out;
 }
