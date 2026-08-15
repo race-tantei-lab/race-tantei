@@ -162,7 +162,7 @@ async function saveSelectionCronAudit(db: D1Database, result: Record<string, unk
     ids.push(raceId);
     counts.set(venue, (counts.get(venue) ?? 0) + 1);
   }
-  if (ids.length !== 15 || new Set(ids).size !== 15 || counts.size !== 3 || [...counts.values()].some((count) => count !== 5)) {
+  if (counts.size < 2 || ids.length !== counts.size * 5 || new Set(ids).size !== ids.length || [...counts.values()].some((count) => count !== 5)) {
     throw new Error(`WORKER_SELECTION_CRON_AUDIT_COUNTS_INVALID:${JSON.stringify(Object.fromEntries(counts))}:${ids.length}`);
   }
   const audit = {
@@ -181,6 +181,22 @@ async function saveSelectionCronAudit(db: D1Database, result: Record<string, unk
   `).bind(`worker_selection:${audit.date}`, JSON.stringify(audit)).run();
 }
 
+async function runCriticalPreRacePath(env: Env): Promise<void> {
+  try {
+    const selection = await freezeCompletedWorkerSelectionIfNeeded(env);
+    await saveSelectionCronAudit(env.DB, selection);
+    console.log("COMPLETED_WORKER_SELECTION", JSON.stringify({ status: selection.status, date: selection.date }));
+  } catch (error) {
+    console.error("COMPLETED_WORKER_SELECTION_FAILED", error);
+  }
+  try {
+    const audit = await runCompletedWorkerLiveLock(env);
+    console.log("COMPLETED_WORKER_LIVE_LOCK", JSON.stringify(audit));
+  } catch (error) {
+    console.error("COMPLETED_WORKER_LIVE_LOCK_FAILED", error);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
@@ -191,23 +207,14 @@ export default {
     return response;
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    try {
-      if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
-    } catch (error) {
-      console.error("BASE_SCHEDULED_SYNC_FAILED", error);
-    }
-    try {
-      const selection = await freezeCompletedWorkerSelectionIfNeeded(env);
-      await saveSelectionCronAudit(env.DB, selection);
-      console.log("COMPLETED_WORKER_SELECTION", JSON.stringify({ status: selection.status, date: selection.date }));
-    } catch (error) {
-      console.error("COMPLETED_WORKER_SELECTION_FAILED", error);
-    }
-    try {
-      const audit = await runCompletedWorkerLiveLock(env);
-      console.log("COMPLETED_WORKER_LIVE_LOCK", JSON.stringify(audit));
-    } catch (error) {
-      console.error("COMPLETED_WORKER_LIVE_LOCK_FAILED", error);
-    }
+    const baseSync = (async () => {
+      try {
+        if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
+      } catch (error) {
+        console.error("BASE_SCHEDULED_SYNC_FAILED", error);
+      }
+    })();
+    ctx.waitUntil(baseSync);
+    await runCriticalPreRacePath(env);
   }
 } satisfies ExportedHandler<Env>;
