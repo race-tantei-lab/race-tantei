@@ -5,6 +5,7 @@ import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v20-refund-aware-20260815";
 const COMPLETED_MODEL_VERSION = "ten-year-completed-model";
+const FROZEN_ARCHIVE_END = "2026-08-09";
 
 type BetRow = {
   raceId: string;
@@ -95,14 +96,19 @@ function publicCode(view: SettlementView): { code: string; label: string } | nul
   return { code: "miss", label: "不的中" };
 }
 
-async function fixDayApi(db: D1Database, response: Response): Promise<Response> {
+async function fixDayApi(db: D1Database, response: Response, requestedDate: string): Promise<Response> {
   if (!response.ok) return response;
   try {
     const data = await response.clone().json() as { races?: Array<Record<string, any>>; [key: string]: any };
     const races = Array.isArray(data.races) ? data.races : [];
     const ids = races.map((race) => String(race.raceId ?? "")).filter(Boolean);
     const views = await settlementViews(db, ids);
+    const frozenHistoricalDate = /^20\d{2}-\d{2}-\d{2}$/.test(requestedDate) && requestedDate <= FROZEN_ARCHIVE_END;
     data.races = races.map((race) => {
+      // The frozen 10-year archive already encodes the canonical 5R/venue selection.
+      // Settlement/refund data may refine a selected race's outcome, but legacy D1 rows
+      // must never promote an archived canonical skip into a selected race.
+      if (frozenHistoricalDate && String(race.publicState?.code ?? "") === "skip") return race;
       const view = views.get(String(race.raceId ?? ""));
       const state = view ? publicCode(view) : null;
       if (!state) return race;
@@ -200,9 +206,10 @@ async function runCriticalPreRacePath(env: Env): Promise<void> {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
-    const path = new URL(request.url).pathname;
+    const url = new URL(request.url);
+    const path = url.pathname;
     let response = await publicSite.fetch(request, env, ctx);
-    if (path === "/api/public/day") response = await fixDayApi(env.DB, response);
+    if (path === "/api/public/day") response = await fixDayApi(env.DB, response, url.searchParams.get("date") ?? "");
     response = await fixRaceDetail(env.DB, path, response);
     return response;
   },
