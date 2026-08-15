@@ -1,24 +1,12 @@
 
  ⛅️ wrangler 4.118.0
 ────────────────────
-Total Upload: 1306.43 KiB / gzip: 726.21 KiB
-Worker Startup Time: 3 ms
-Your Worker has access to the following bindings:
-Binding                                                                   Resource                  
-env.DB (race-tantei-phase0)                                               D1 Database               
-env.ENVIRONMENT ("production")                                            Environment Variable      
-env.DEPLOY_REVISION ("ten-year-completed-public-v20-refund-...")          Environment Variable      
-env.MODEL_VERSION ("ten-year-completed-model")                            Environment Variable      
-env.JRA_HOME_URL ("https://sp.jra.jp/")                                   Environment Variable      
-env.JRA_SEED_ENTRY_URLS ("https://sp.jra.jp/JRADB/accessD.html?...")      Environment Variable      
-env.MIN_EXPECTED_VALUE ("108")                                            Environment Variable      
-env.MAX_RACE_BUDGET_YEN ("10000")                                         Environment Variable      
-env.SYNC_BATCH_SIZE ("12")                                                Environment Variable      
-
-Uploaded race-tantei-phase0 (1.80 sec)
-Deployed race-tantei-phase0 triggers (0.70 sec)
-  https://race-tantei-phase0.race-tantei.workers.dev
-  schedule: */5 * * * *
-Current Version ID: 2d833b36-dc81-4d66-b3a8-7972a9aca492
 
 Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mThe directory specified by the "assets.directory" field in your configuration file does not exist:[0m
+
+  /home/runner/work/race-tantei/race-tantei/worker-assets
+
+
+🪵  Logs were written to "/home/runner/.config/.wrangler/logs/wrangler-2026-08-15_04-04-55_522.log"
