@@ -1,0 +1,45 @@
+name: Verify WIN5 Integration
+
+on:
+  pull_request:
+    paths:
+      - "src/v1/completed-win5.ts"
+      - "src/public-site-entry-v26.ts"
+      - "tests/completed-win5-tests.ts"
+      - "package.json"
+      - "wrangler.jsonc"
+      - ".github/workflows/verify-win5.yml"
+  push:
+    branches:
+      - "feat/win5-page"
+    paths:
+      - "src/v1/completed-win5.ts"
+      - "src/public-site-entry-v26.ts"
+      - "tests/completed-win5-tests.ts"
+      - "package.json"
+      - "wrangler.jsonc"
+      - ".github/workflows/verify-win5.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build tests
+        run: npm run build:test
+      - name: Unit tests
+        run: npm run test:unit
