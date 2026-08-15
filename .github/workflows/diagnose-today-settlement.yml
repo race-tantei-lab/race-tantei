@@ -13,7 +13,7 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
@@ -26,11 +26,12 @@ jobs:
       - name: Print today settlement evidence
         run: |
           python - <<'PY'
-          import datetime as dt,importlib.util,json,pathlib,sys
+          import datetime as dt,html as htmlmod,importlib.util,json,pathlib,re,sys,urllib.request
           p=pathlib.Path('scripts/collect-jra-official-odds.py')
           s=importlib.util.spec_from_file_location('diag',p);m=importlib.util.module_from_spec(s);sys.modules['diag']=m;s.loader.exec_module(m)
           date=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
-          races=m.d1_query('''SELECT DISTINCT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.race_name AS raceName,r.status,r.result_url AS resultUrl,r.refund_horse_nos_json AS refunds
+          races=m.d1_query('''SELECT DISTINCT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.race_name AS raceName,r.status,
+                                      r.entry_url AS entryUrl,r.result_url AS resultUrl,r.refund_horse_nos_json AS refunds
                               FROM rt_races r JOIN rt_public_bets b ON b.race_id=r.race_id
                               WHERE r.race_date=? AND r.status='finished' ORDER BY r.start_time_utc''',[date])
           bets=m.d1_query('''SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,b.stake_yen AS stakeYen,b.settlement_status AS settlementStatus,b.return_yen AS returnYen
@@ -39,17 +40,29 @@ jobs:
           payouts=m.d1_query('''SELECT p.race_id AS raceId,p.bet_type AS betType,p.combination,p.payout_yen AS payoutYen,p.popularity
                                 FROM rt_payouts p JOIN rt_races r ON r.race_id=p.race_id
                                 WHERE r.race_date=? ORDER BY p.race_id,p.bet_type,p.combination''',[date])
-          schema=m.d1_query('PRAGMA table_info(rt_runners)')
+          sources=m.d1_query('''SELECT race_id AS raceId,entry_url AS entryUrl,result_url AS resultUrl,status,last_error AS lastError
+                                FROM rt_race_sources WHERE race_id IN (SELECT DISTINCT b.race_id FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date=?)
+                                ORDER BY race_id,entry_url''',[date])
           print('RACES='+json.dumps(races,ensure_ascii=False))
+          print('SOURCES='+json.dumps(sources,ensure_ascii=False))
           print('BETS='+json.dumps(bets,ensure_ascii=False))
           print('PAYOUTS='+json.dumps(payouts,ensure_ascii=False))
-          print('RUNNER_SCHEMA='+json.dumps(schema,ensure_ascii=False))
-          cols={x.get('name') for x in schema}
-          candidates=[x for x in ('finish_position','finish_order','result_rank','rank','placing','arrival_order') if x in cols]
-          if candidates:
-              col=candidates[0]
-              rows=m.d1_query(f'''SELECT rr.race_id AS raceId,rr.horse_no AS horseNo,rr.horse_name AS horseName,rr.{col} AS finishValue
-                                  FROM rt_runners rr JOIN rt_races r ON r.race_id=rr.race_id
-                                  WHERE r.race_date=? AND r.status='finished' ORDER BY rr.race_id,rr.{col}''',[date])
-              print('FINISHERS='+json.dumps(rows,ensure_ascii=False))
+          for race in races:
+              url=race.get('resultUrl')
+              if not url: continue
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept-Language':'ja-JP,ja;q=0.9'})
+                  with urllib.request.urlopen(req,timeout=30) as resp:
+                      raw=resp.read(3000000); final=resp.geturl(); ctype=resp.headers.get('content-type','')
+                  text=None
+                  for enc in ('cp932','shift_jis','utf-8'):
+                      try: text=raw.decode(enc); break
+                      except UnicodeDecodeError: pass
+                  text=text or raw.decode('utf-8','replace')
+                  plain=htmlmod.unescape(re.sub(r'<[^>]+>',' ',text)); plain=re.sub(r'\s+',' ',plain)
+                  date_hit=re.search(r'(20\d{2})年(\d{1,2})月(\d{1,2})日[^ ]*\s*(\d+)回(札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉)(\d+)日',plain)
+                  race_hits=re.findall(r'(?<!\d)(\d{1,2})レース',plain[:20000])
+                  print('REMOTE_HEADER='+json.dumps({'raceId':race['raceId'],'requested':url,'final':final,'dateVenue':date_hit.groups() if date_hit else None,'raceNumbers':race_hits[:8],'head':plain[:700]},ensure_ascii=False))
+              except Exception as e:
+                  print('REMOTE_ERROR='+json.dumps({'raceId':race['raceId'],'url':url,'error':repr(e)},ensure_ascii=False))
           PY
