@@ -32,28 +32,33 @@ def main() -> None:
         'const PREVIEW_PREFIX = "worker_live_preview:";',
         'const FINAL_PREFIX = "worker_live_final:";',
         'const PREVIEW_OPEN_MS = 45 * 60 * 1000;',
-        'const FINALIZE_OPEN_MS = 17 * 60 * 1000;',
+        'const FINALIZE_OPEN_MS = 16 * 60 * 1000;',
         'const DEADLINE_MS = 15 * 60 * 1000;',
         'const PREVIEW_HISTORY = 3;',
         'oddsSnapshotSha256',
         'await savePreview(db, snapshot)',
-        'fresh ?? await latestPreview(env.DB, raceId)',
+        'latestOfficialBodyWeightPreview',
+        'official ?? fresh ?? await latestPreview(env.DB, raceId)',
+        'await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId)',
         '"deadline_watchdog"',
         'await db.batch(statements)',
         'if (isStrictComplete(existing)) return;',
+        'bodyWeightBreachRaceIds',
     ):
         require(worker, needle, "Worker live-lock")
+    forbid(worker, 'WORKER_FINAL_BODYWEIGHT_MISMATCH', "Worker live-lock")
 
     canonical = read("scripts/run-ten-year-auto-final-live.py")
     require(canonical, "base.MIN_LOCK_SECONDS=15*60", "canonical GitHub fallback")
-    require(canonical, "base.MAX_LOCK_SECONDS=17*60", "canonical GitHub fallback")
+    require(canonical, "base.MAX_LOCK_SECONDS=16*60", "canonical GitHub fallback")
+    require(canonical, "fallback_without_verified_snapshot", "canonical GitHub fallback")
 
     emergency = read("scripts/run-emergency-earliest-missing-bet.py")
-    require(emergency, "RECOVERY_OPEN_SECONDS = 17 * 60", "emergency fallback")
+    require(emergency, "RECOVERY_OPEN_SECONDS = 16 * 60", "emergency fallback")
     require(emergency, '"status":"waiting_emergency_window"', "emergency fallback")
 
     critical_script = read("scripts/run-critical-auto-bet-generation.py")
-    require(critical_script, "RECOVERY_OPEN_SECONDS = 17 * 60", "manual critical recovery")
+    require(critical_script, "RECOVERY_OPEN_SECONDS = 16 * 60", "manual critical recovery")
     require(critical_script, "base.MAX_LOCK_SECONDS = RECOVERY_OPEN_SECONDS", "manual critical recovery")
 
     critical_workflow = read(".github/workflows/critical-auto-bet-generation.yml")
@@ -65,10 +70,11 @@ def main() -> None:
         "worker_cron=1m",
         "preview_open=45m",
         "preview_history=3",
-        "finalize_open=17m",
+        "finalize_open=16m",
         "deadline=15m",
-        "github_fallback=17m",
-        "emergency_fallback=17m",
+        "github_fallback=16m",
+        "emergency_fallback=16m",
+        "bodyweight_nonblocking=true",
         "critical_schedule=disabled",
     )
 
