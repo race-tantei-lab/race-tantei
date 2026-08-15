@@ -148,20 +148,25 @@ def main():
         return payload,status
     base.freeze_or_load_selection=freeze_or_load_with_explanation
 
-    # GitHub is only the fallback writer, but if it has to finalize it must use
-    # the same officially acquired bodyweight provenance as the one-minute Worker.
+    # Bodyweight is acquisition evidence, not a kill switch. Verify it when the
+    # independent refresher has a snapshot, but never turn a transient JRA
+    # bodyweight failure into "no prediction". The canonical fallback still
+    # generates from the latest available D1 inputs and official odds.
     original_collect_official_odds=base.collect_official_odds
-    def collect_after_bodyweight_verification(window_ids):
+    def collect_after_bodyweight_audit(window_ids):
         collector=base.collector_module()
-        verified=verify_official_bodyweights(collector,window_ids)
-        print(json.dumps({'officialBodyweightVerifiedRaceIds':verified},ensure_ascii=False))
+        try:
+            verified=verify_official_bodyweights(collector,window_ids)
+            print(json.dumps({'officialBodyweightStatus':'verified','officialBodyweightVerifiedRaceIds':verified},ensure_ascii=False))
+        except Exception as exc:
+            print(json.dumps({'officialBodyweightStatus':'fallback_without_verified_snapshot','raceIds':window_ids,'warning':f'{type(exc).__name__}:{exc}'},ensure_ascii=False),file=sys.stderr)
         return original_collect_official_odds(window_ids)
-    base.collect_official_odds=collect_after_bodyweight_verification
+    base.collect_official_odds=collect_after_bodyweight_audit
 
     # Cloudflare Worker is the one-minute primary path. GitHub Actions remains a
     # narrow independent fallback and must not pre-empt the Worker's fresher odds.
     base.MIN_LOCK_SECONDS=15*60
-    base.MAX_LOCK_SECONDS=17*60
+    base.MAX_LOCK_SECONDS=16*60
     base.main()
 
 
