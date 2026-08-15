@@ -29,7 +29,7 @@ def main() -> int:
     today = dt.datetime.now(ZoneInfo("Asia/Tokyo")).date().isoformat()
     audit = None
     for attempt in range(36):
-        rows = collector.d1_query("SELECT value FROM rt_system_state WHERE key='worker_completed_backup:last' LIMIT 1")
+        rows = collector.d1_query("SELECT value FROM rt_system_state WHERE key='worker_completed_backup:last' LIMIT 1", [])
         if rows:
             try:
                 candidate = json.loads(rows[0]["value"])
