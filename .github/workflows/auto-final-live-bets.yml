@@ -2,12 +2,21 @@ name: Automatic final live bets
 
 on:
   workflow_dispatch:
+    inputs:
+      continuation:
+        description: Continue an already-running race-day backup monitor
+        required: false
+        default: "false"
+        type: string
   schedule:
-    # GitHub documents that scheduled events can be delayed or dropped during high load,
-    # especially at the start of each hour. Keep the five-minute cadence but stagger it
-    # away from :00, and express the schedule directly in JST to avoid UTC weekday drift.
-    # JST Saturday/Sunday/Monday 08:02-19:57, every 5 minutes.
-    - cron: "2-57/5 8-19 * * 6,0,1"
+    # GitHub schedule is only a seed/recovery mechanism. Scheduled events may be
+    # delayed or dropped, so a successful seed keeps its own one-minute monitor
+    # alive for five hours and hands off to a workflow_dispatch continuation.
+    # Use many morning seeds to maximize startup probability, then half-hourly
+    # recovery seeds. All times below are JST and avoid the top of the hour.
+    - cron: "2-57/5 8 * * 6,0,1"
+      timezone: "Asia/Tokyo"
+    - cron: "7,37 9-19 * * 6,0,1"
       timezone: "Asia/Tokyo"
   push:
     branches: [main]
@@ -27,11 +36,8 @@ on:
       - "models/ten-year-runner-feature-state.json.gz"
       - "models/ten-year-race-selection-state.json.gz"
 
-concurrency:
-  group: automatic-final-live-bets-${{ github.event_name == 'push' && 'check' || 'live' }}
-  cancel-in-progress: false
-
 permissions:
+  actions: write
   contents: read
   statuses: write
 
@@ -46,9 +52,34 @@ env:
 jobs:
   lock:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 330
     steps:
+      - name: Detect an existing live backup monitor
+        id: live_gate
+        if: github.event_name != 'push'
+        shell: bash
+        env:
+          CONTINUATION: ${{ inputs.continuation || 'false' }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONTINUATION" == "true" ]]; then
+            echo "run_live=true" >> "$GITHUB_OUTPUT"
+            echo "Continuation handoff accepted."
+            exit 0
+          fi
+          other_live=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/auto-final-live-bets.yml/runs?status=in_progress&per_page=100" \
+            --jq "[.workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.event != \"push\")] | length")
+          if [[ "$other_live" -gt 0 ]]; then
+            echo "run_live=false" >> "$GITHUB_OUTPUT"
+            echo "Existing live backup monitor detected; this seed exits without interrupting it."
+          else
+            echo "run_live=true" >> "$GITHUB_OUTPUT"
+            echo "No existing live backup monitor; this run becomes the monitor."
+          fi
+
       - name: Mark automatic live lock pending
+        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
@@ -57,14 +88,19 @@ jobs:
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - uses: actions/checkout@v4
+        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
+
       - uses: actions/setup-python@v5
+        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
         with:
           python-version: "3.12"
 
       - name: Install completed-model runtime
+        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
         run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0"
 
       - name: Compile automatic live runner
+        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
         run: |
           python -m py_compile \
             scripts/run-auto-final-live.py \
@@ -79,29 +115,115 @@ jobs:
         if: github.event_name == 'push'
         run: python scripts/run-ten-year-auto-final-live.py --check-only
 
-      - name: Wake current-day data sync
-        if: github.event_name != 'push'
+      - name: Seed the resilient live monitor from this explicit repair commit
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[seed-live-backup]')
         shell: bash
         run: |
           set -euo pipefail
-          today=$(TZ=Asia/Tokyo date +%F)
-          curl --retry 1 --retry-delay 1 --retry-all-errors \
-            --connect-timeout 3 --max-time 8 -fsS \
-            "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$today" >/dev/null || true
-          sleep 3
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/auto-final-live-bets.yml/dispatches" \
+            --input - <<'JSON'
+          {"ref":"main","inputs":{"continuation":"false"}}
+          JSON
+          echo "LIVE_BACKUP_MONITOR_SEEDED"
 
-      - name: Freeze selection and lock due live bets
-        if: github.event_name != 'push'
+      - name: Run one-minute resilient live backup monitor
+        id: monitor
+        if: github.event_name != 'push' && steps.live_gate.outputs.run_live == 'true'
         shell: bash
         run: |
-          set -o pipefail
-          python scripts/run-ten-year-auto-final-live.py | tee automatic-final-live.log
+          set -uo pipefail
+          : > automatic-final-live.log
+          cycle=0
+          successful_cycles=0
+          last_cycle_failed=0
+          while [[ "$cycle" -lt 300 ]]; do
+            dow=$(TZ=Asia/Tokyo date +%u)
+            hour_raw=$(TZ=Asia/Tokyo date +%H)
+            hour=$((10#$hour_raw))
+            if [[ "$dow" != "6" && "$dow" != "7" && "$dow" != "1" ]]; then
+              echo "Outside configured race-day weekdays; monitor stops cleanly." | tee -a automatic-final-live.log
+              break
+            fi
+            if (( hour < 8 || hour >= 20 )); then
+              echo "Outside JST 08:00-19:59; monitor stops cleanly." | tee -a automatic-final-live.log
+              break
+            fi
+
+            cycle=$((cycle + 1))
+            cycle_started=$(date +%s)
+            now_jst=$(TZ=Asia/Tokyo date '+%F %T %Z')
+            echo "=== live backup cycle ${cycle} at ${now_jst} ===" | tee -a automatic-final-live.log
+
+            # Wake the public sync every five monitor cycles. The canonical fallback
+            # itself runs every minute so the narrow T-17..T-15 safety window cannot
+            # be skipped merely because GitHub cron is only five-minute capable.
+            if (( (cycle - 1) % 5 == 0 )); then
+              today=$(TZ=Asia/Tokyo date +%F)
+              curl --retry 1 --retry-delay 1 --retry-all-errors \
+                --connect-timeout 3 --max-time 8 -fsS \
+                "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$today" \
+                >/dev/null || echo "WARN public day wake failed; D1 fallback still runs" | tee -a automatic-final-live.log
+              sleep 3
+            fi
+
+            if python scripts/run-ten-year-auto-final-live.py 2>&1 | tee -a automatic-final-live.log; then
+              successful_cycles=$((successful_cycles + 1))
+              last_cycle_failed=0
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+                -f state=success \
+                -f context='production/auto-final-live' \
+                -f description='GitHubバックアップ監視は稼働中（直近1分サイクル正常）' \
+                -f target_url="$STATUS_TARGET_URL" >/dev/null || true
+            else
+              last_cycle_failed=1
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+                -f state=failure \
+                -f context='production/auto-final-live' \
+                -f description='GitHubバックアップの直近1分サイクルに失敗（次サイクルで再試行）' \
+                -f target_url="$STATUS_TARGET_URL" >/dev/null || true
+            fi
+
+            elapsed=$(( $(date +%s) - cycle_started ))
+            sleep_for=$((60 - elapsed))
+            if (( sleep_for < 5 )); then sleep_for=5; fi
+            sleep "$sleep_for"
+          done
+
+          echo "successfulCycles=$successful_cycles lastCycleFailed=$last_cycle_failed" | tee -a automatic-final-live.log
+          if (( successful_cycles == 0 )); then
+            echo "No successful live backup cycle completed." >&2
+            exit 1
+          fi
+          if (( last_cycle_failed != 0 )); then
+            echo "Last live backup cycle failed." >&2
+            exit 1
+          fi
+
+      - name: Hand off live monitor before GitHub job lifetime becomes a dependency
+        if: always() && github.event_name != 'push' && steps.live_gate.outputs.run_live == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dow=$(TZ=Asia/Tokyo date +%u)
+          hour_raw=$(TZ=Asia/Tokyo date +%H)
+          hour=$((10#$hour_raw))
+          if [[ ( "$dow" == "6" || "$dow" == "7" || "$dow" == "1" ) && "$hour" -ge 8 && "$hour" -lt 20 ]]; then
+            gh api --method POST \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/auto-final-live-bets.yml/dispatches" \
+              --input - <<'JSON'
+            {"ref":"main","inputs":{"continuation":"true"}}
+            JSON
+            echo "LIVE_BACKUP_MONITOR_HANDOFF_DISPATCHED"
+          else
+            echo "Race-day monitoring window is over; no continuation dispatched."
+          fi
 
       - name: Upload automatic live audit
-        if: always() && github.event_name != 'push'
+        if: always() && github.event_name != 'push' && steps.live_gate.outputs.run_live == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: automatic-final-live-audit
+          name: automatic-final-live-audit-${{ github.run_id }}
           path: |
             analysis-results/auto-final-live-run.json
             analysis-results/auto-final-live-*.json
@@ -111,7 +233,7 @@ jobs:
           retention-days: 30
 
       - name: Mark automatic live lock success
-        if: success()
+        if: success() && (github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true')
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
@@ -120,7 +242,7 @@ jobs:
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Mark automatic live lock failure
-        if: failure()
+        if: failure() && (github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true')
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
