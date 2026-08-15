@@ -1,0 +1,65 @@
+name: Verify WIN5 Integration
+
+on:
+  pull_request:
+    paths:
+      - "src/v1/completed-win5.ts"
+      - "src/public-site-entry-v26.ts"
+      - "tests/completed-win5-tests.ts"
+      - "tests/live-win5-official.ts"
+      - "package.json"
+      - "wrangler.jsonc"
+      - ".github/workflows/verify-win5.yml"
+  push:
+    branches:
+      - "feat/win5-page"
+    paths:
+      - "src/v1/completed-win5.ts"
+      - "src/public-site-entry-v26.ts"
+      - "tests/completed-win5-tests.ts"
+      - "tests/live-win5-official.ts"
+      - "package.json"
+      - "wrangler.jsonc"
+      - ".github/workflows/verify-win5.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: npm ci
+      - name: Install canonical model runtime
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3'
+      - name: Build canonical Worker model asset
+        run: python scripts/build-worker-completed-model-assets.py
+      - name: Verify canonical model parity
+        run: npx tsx scripts/verify-worker-model-parity.ts
+      - name: Verify live-lock safety
+        run: python scripts/verify-live-lock-safety.py
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build tests
+        run: npm run build:test
+      - name: Existing unit tests
+        run: npm run test:unit
+      - name: WIN5 unit tests
+        run: npx tsx tests/completed-win5-tests.ts
+      - name: Verify live JRA WIN5 targets
+        run: npx tsx tests/live-win5-official.ts
+      - name: Wrangler dry run
+        run: npm run build
