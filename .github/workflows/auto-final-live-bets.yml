@@ -3,9 +3,11 @@ name: Automatic final live bets
 on:
   workflow_dispatch:
   schedule:
-    # JST Saturday/Sunday/Monday 08:02-19:52, every 10 minutes. Offset from :00 to reduce GitHub scheduler congestion.
-    - cron: "2-52/10 23 * * 5,6,0"
-    - cron: "2-52/10 0-10 * * 6,0,1"
+    # JST Saturday/Sunday/Monday 08:07-19:57, every 10 minutes.
+    # GitHub documents elevated schedule delay/drop risk at the start of each hour,
+    # so the primary live-lock path deliberately avoids :00/:10 hour-boundary cadence.
+    - cron: "7-57/10 23 * * 5,6,0"
+    - cron: "7-57/10 0-10 * * 6,0,1"
   push:
     branches: [main]
     paths:
