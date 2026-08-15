@@ -2,8 +2,8 @@
 import argparse
 import collections
 import importlib.util
+import itertools
 import json
-import math
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -149,6 +149,63 @@ def horse_evidence(core, state, bundle):
     return out
 
 
+def with_active_horses(bundle, active_horse_nos):
+    active = set(int(x) for x in active_horse_nos)
+    runners = []
+    for runner in bundle.get('runners', []):
+        row = dict(runner)
+        row['runnerStatus'] = 'active' if int(row.get('horseNo') or 0) in active else 'scratched'
+        runners.append(row)
+    return {**bundle, 'runners': runners}
+
+
+def reconstruct_frozen_race(core, state, bundle, frozen_score):
+    all_horses = sorted(int(r.get('horseNo') or 0) for r in bundle.get('runners', []) if int(r.get('horseNo') or 0) > 0)
+    current_active = sorted(int(r.get('horseNo') or 0) for r in bundle.get('runners', []) if (r.get('runnerStatus') or 'active') == 'active' and int(r.get('horseNo') or 0) > 0)
+    uncertain = [h for h in all_horses if h not in set(current_active)]
+    if len(uncertain) > 10:
+        raise RuntimeError(f"EXPLANATION_TOO_MANY_MUTABLE_RUNNERS:{bundle['race']['raceId']}:{len(uncertain)}")
+
+    matches = []
+    for add_count in range(len(uncertain) + 1):
+        for added in itertools.combinations(uncertain, add_count):
+            active = sorted(set(current_active).union(added))
+            if len(active) < 3:
+                continue
+            reconstructed = with_active_horses(bundle, active)
+            rows = core.selection_candidate_rows(state, reconstructed)
+            if not rows:
+                continue
+            chosen = core.select_proxy_tickets(rows, state['stats'], state['bet_stats'])
+            score = round(sum(float(t['score']) for t in chosen) / len(chosen), 8)
+            if not same_number(score, frozen_score):
+                continue
+            horses = horse_evidence(core, state, reconstructed)
+            tickets = [ticket_evidence(core, state, ticket) for ticket in chosen]
+            signature = json.dumps({'topHorses': horses, 'proxyTickets': tickets}, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+            matches.append({
+                'bundle': reconstructed,
+                'activeHorseNos': active,
+                'addedBackHorseNos': list(added),
+                'score': score,
+                'horses': horses,
+                'tickets': tickets,
+                'signature': signature,
+            })
+
+    if not matches:
+        race_id = str(bundle['race']['raceId'])
+        raise RuntimeError(f'EXPLANATION_FROZEN_SCORE_NOT_RECONSTRUCTABLE:{race_id}:{frozen_score}:currentActive={current_active}:mutable={uncertain}')
+    signatures = {m['signature'] for m in matches}
+    if len(signatures) != 1:
+        race_id = str(bundle['race']['raceId'])
+        raise RuntimeError(f'EXPLANATION_FROZEN_SCORE_AMBIGUOUS:{race_id}:matches={len(matches)}:signatures={len(signatures)}')
+    chosen = matches[0]
+    chosen['matchingRunnerSets'] = len(matches)
+    chosen['currentNonActiveHorseNos'] = uncertain
+    return chosen
+
+
 def ensure_selection_explanations(collector, date, frozen_payload=None):
     core = load(CORE_PATH, 'ten_year_selection_explanation_core')
     if frozen_payload is None:
@@ -165,6 +222,10 @@ def ensure_selection_explanations(collector, date, frozen_payload=None):
     if not isinstance(frozen_selected, list) or not frozen_selected:
         raise RuntimeError('EXPLANATION_FROZEN_SELECTION_EMPTY')
 
+    venue_counts = collections.Counter(str(row.get('venue') or '') for row in frozen_selected)
+    if '' in venue_counts or any(count != 5 for count in venue_counts.values()):
+        raise RuntimeError(f'EXPLANATION_FROZEN_SELECTION_COUNTS_INVALID:{dict(venue_counts)}')
+
     state = core.load_selection_state()
     base_through_date = str(state['throughDate'])
     delta = core.delta_bundles(collector, state['throughDate'], date)
@@ -172,58 +233,59 @@ def ensure_selection_explanations(collector, date, frozen_payload=None):
     targets = core.target_bundles(collector, date)
     if not targets:
         raise RuntimeError(f'EXPLANATION_TARGETS_EMPTY:{date}')
+    target_by_id = {str(bundle['race']['raceId']): bundle for bundle in targets}
 
-    canonical_selected = core.select_target_races(state, targets, date)
-    frozen_by_id = {str(row.get('raceId')): row for row in frozen_selected}
-    if len(canonical_selected) != len(frozen_selected):
-        raise RuntimeError(f'EXPLANATION_SELECTED_COUNT_MISMATCH:{len(canonical_selected)}:{len(frozen_selected)}')
-    for row in canonical_selected:
-        frozen = frozen_by_id.get(str(row['raceId']))
-        if not frozen or str(frozen.get('venue')) != str(row['venue']) or int(frozen.get('raceNo') or 0) != int(row['raceNo']) or not same_number(frozen.get('raceScore'), row['raceScore']):
-            raise RuntimeError(f"EXPLANATION_FROZEN_PARITY_FAILED:{row['raceId']}")
-
-    by_venue = collections.defaultdict(list)
-    for bundle in targets:
-        rows = core.selection_candidate_rows(state, bundle)
-        chosen = core.select_proxy_tickets(rows, state['stats'], state['bet_stats'])
-        race_score = round(sum(float(t['score']) for t in chosen) / len(chosen), 8)
-        by_venue[str(bundle['race'].get('venue') or '')].append((bundle, race_score, chosen))
+    venue_rank = {}
+    for venue in venue_counts:
+        rows = [row for row in frozen_selected if str(row.get('venue') or '') == venue]
+        rows.sort(key=lambda row: (-float(row.get('raceScore') or 0), int(row.get('raceNo') or 0)))
+        for index, row in enumerate(rows):
+            venue_rank[str(row.get('raceId'))] = index + 1
 
     explanations = []
-    for venue, rows in by_venue.items():
-        rows.sort(key=lambda x: (-x[1], int(x[0]['race'].get('raceNo') or 0)))
-        for index, (bundle, race_score, chosen) in enumerate(rows):
-            race = bundle['race']
-            race_id = str(race['raceId'])
-            frozen = frozen_by_id.get(race_id)
-            if frozen is None:
-                continue
-            if not same_number(race_score, frozen.get('raceScore')):
-                raise RuntimeError(f"EXPLANATION_SCORE_PARITY_FAILED:{race_id}:{race_score}:{frozen.get('raceScore')}")
-            explanations.append({
-                'version': EXPLANATION_VERSION,
-                'sourceModel': SOURCE_MODEL,
-                'raceId': race_id,
-                'raceDate': date,
-                'venue': venue,
-                'raceNo': int(race.get('raceNo') or 0),
-                'venueRank': index + 1,
-                'raceScore': float(race_score),
-                'verifiedAgainstFrozenSelection': True,
-                'stateBaseThroughDate': base_through_date,
-                'stateAdvancedThroughDate': str(state['throughDate']),
-                'topHorses': horse_evidence(core, state, bundle),
-                'proxyTickets': [ticket_evidence(core, state, ticket) for ticket in chosen],
-                'scoreFormula': {
-                    'localWeight': float(core.LOCAL_WEIGHT),
-                    'globalWeight': float(1.0 - core.LOCAL_WEIGHT),
-                    'topComponents': int(core.TOP_COMPONENTS),
-                    'minSampleN': int(core.MIN_N),
-                    'keyPriorN': int(core.KEY_PRIOR),
-                    'betPriorN': int(core.BET_PRIOR),
-                    'priorRoi': float(core.PRIOR_ROI),
-                },
-            })
+    for frozen in frozen_selected:
+        race_id = str(frozen.get('raceId') or '')
+        bundle = target_by_id.get(race_id)
+        if bundle is None:
+            raise RuntimeError(f'EXPLANATION_SELECTED_RACE_MISSING_FROM_D1:{race_id}')
+        race = bundle['race']
+        if str(race.get('venue') or '') != str(frozen.get('venue') or '') or int(race.get('raceNo') or 0) != int(frozen.get('raceNo') or 0):
+            raise RuntimeError(f'EXPLANATION_SELECTED_RACE_IDENTITY_MISMATCH:{race_id}')
+        frozen_score = float(frozen.get('raceScore'))
+        reconstructed = reconstruct_frozen_race(core, state, bundle, frozen_score)
+        if not same_number(reconstructed['score'], frozen_score):
+            raise RuntimeError(f'EXPLANATION_RECONSTRUCTED_SCORE_MISMATCH:{race_id}')
+        explanations.append({
+            'version': EXPLANATION_VERSION,
+            'sourceModel': SOURCE_MODEL,
+            'raceId': race_id,
+            'raceDate': date,
+            'venue': str(frozen.get('venue') or ''),
+            'raceNo': int(frozen.get('raceNo') or 0),
+            'venueRank': int(venue_rank[race_id]),
+            'raceScore': frozen_score,
+            'verifiedAgainstFrozenSelection': True,
+            'stateBaseThroughDate': base_through_date,
+            'stateAdvancedThroughDate': str(state['throughDate']),
+            'topHorses': reconstructed['horses'],
+            'proxyTickets': reconstructed['tickets'],
+            'scoreFormula': {
+                'localWeight': float(core.LOCAL_WEIGHT),
+                'globalWeight': float(1.0 - core.LOCAL_WEIGHT),
+                'topComponents': int(core.TOP_COMPONENTS),
+                'minSampleN': int(core.MIN_N),
+                'keyPriorN': int(core.KEY_PRIOR),
+                'betPriorN': int(core.BET_PRIOR),
+                'priorRoi': float(core.PRIOR_ROI),
+            },
+            'runnerSnapshotReconstruction': {
+                'mode': 'frozen-raceScore-exact-match',
+                'matchingRunnerSets': int(reconstructed['matchingRunnerSets']),
+                'reconstructedActiveHorseNos': reconstructed['activeHorseNos'],
+                'currentNonActiveHorseNos': reconstructed['currentNonActiveHorseNos'],
+                'addedBackHorseNos': reconstructed['addedBackHorseNos'],
+            },
+        })
 
     if len(explanations) != len(frozen_selected):
         raise RuntimeError(f'EXPLANATION_OUTPUT_COUNT_MISMATCH:{len(explanations)}:{len(frozen_selected)}')
@@ -251,6 +313,7 @@ def main():
         'version': EXPLANATION_VERSION,
         'rows': len(rows),
         'raceIds': [row['raceId'] for row in rows],
+        'reconstructedRaces': sum(1 for row in rows if row.get('runnerSnapshotReconstruction', {}).get('addedBackHorseNos')),
     }, ensure_ascii=False))
 
 
