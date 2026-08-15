@@ -1,17 +1,9 @@
 import publicSite from "./public-site-entry-v13.js";
 import { jstDateKey } from "./v1/jra-calendar.js";
+import { summarizeTodayPerformance, type TodayPerformanceBetRow } from "./v1/today-performance.js";
 import type { Env } from "./v1/types.js";
 
 const COURSES = ["ライト", "スタンダード", "プレミアム"] as const;
-type Course = typeof COURSES[number];
-type SummaryRow = {
-  course: string;
-  totalRaces: number;
-  settledRaces: number;
-  hitRaces: number;
-  stakeYen: number;
-  returnYen: number;
-};
 type TicketReasonRow = { betType: string; combination: string; assumedOdds: number | null };
 
 function esc(value: unknown): string {
@@ -23,38 +15,17 @@ function yen(value: number): string {
 }
 
 async function todaySummary(db: D1Database, date = jstDateKey()): Promise<Record<string, unknown>> {
-  const rows = await db.prepare(`
-    SELECT
-      b.course AS course,
-      COUNT(DISTINCT b.race_id) AS totalRaces,
-      COUNT(DISTINCT CASE WHEN b.settlement_status='settled' THEN b.race_id END) AS settledRaces,
-      COUNT(DISTINCT CASE WHEN b.settlement_status='settled' AND COALESCE(b.return_yen,0)>0 THEN b.race_id END) AS hitRaces,
-      COALESCE(SUM(CASE WHEN b.settlement_status='settled' THEN b.stake_yen ELSE 0 END),0) AS stakeYen,
-      COALESCE(SUM(CASE WHEN b.settlement_status='settled' THEN COALESCE(b.return_yen,0) ELSE 0 END),0) AS returnYen
+  const result = await db.prepare(`
+    SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,
+           b.stake_yen AS stakeYen,b.return_yen AS returnYen,
+           b.settlement_status AS settlementStatus,r.refund_horse_nos_json AS refundsJson
     FROM rt_public_bets b
     JOIN rt_races r ON r.race_id=b.race_id
     WHERE r.race_date=?
-    GROUP BY b.course
-  `).bind(date).all<SummaryRow>();
+    ORDER BY b.race_id,b.course,b.id
+  `).bind(date).all<TodayPerformanceBetRow>();
 
-  const byCourse = new Map(rows.results.map((row) => [row.course, {
-    course: row.course,
-    totalRaces: Number(row.totalRaces ?? 0),
-    settledRaces: Number(row.settledRaces ?? 0),
-    hitRaces: Number(row.hitRaces ?? 0),
-    stakeYen: Number(row.stakeYen ?? 0),
-    returnYen: Number(row.returnYen ?? 0)
-  }]));
-
-  const courses = COURSES.map((course) => {
-    const row = byCourse.get(course) ?? { course, totalRaces: 0, settledRaces: 0, hitRaces: 0, stakeYen: 0, returnYen: 0 };
-    return {
-      ...row,
-      roiPct: row.stakeYen > 0 ? row.returnYen / row.stakeYen * 100 : null,
-      complete: row.totalRaces > 0 && row.totalRaces === row.settledRaces
-    };
-  });
-
+  const courses = summarizeTodayPerformance(result.results ?? [], COURSES);
   return {
     date,
     hasPredictions: courses.some((row) => row.totalRaces > 0),
