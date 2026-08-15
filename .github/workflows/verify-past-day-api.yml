@@ -1,66 +1,45 @@
 name: Verify historical day API
-# verify repaired canonical history on production
+# verify frozen canonical history on production
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/verify-past-day-api.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
-  statuses: write
+
 jobs:
   verify:
     runs-on: ubuntu-24.04
     steps:
-      - name: Mark pending
-        run: |
-          curl -sS -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
-            -d '{"state":"pending","context":"production/past-day-api","description":"checking repaired historical race pages"}' >/dev/null
-      - name: Probe multiple historical days
+      - name: Probe canonical historical days
+        shell: bash
         run: |
           set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
           for d in 2024-05-26 2025-05-25 2026-08-02; do
             echo "=== $d ==="
-            code=$(curl -sS -o "/tmp/$d.body" -w '%{http_code}' "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$d")
-            echo "HTTP $code"
-            test "$code" = "200"
-            python - "$d" <<'PY'
-import json,sys
-p=json.load(open('/tmp/'+sys.argv[1]+'.body'))
-r=p.get('races')
-assert isinstance(r,list) and len(r)>=12,(sys.argv[1],p)
-print(sys.argv[1], 'races', len(r), 'selected', sum((x.get('publicState') or {}).get('code') in ('hit','miss','buy') for x in r))
-PY
+            code=$(curl --retry 5 --retry-delay 2 --retry-all-errors -sS -o "/tmp/$d.body" -w '%{http_code}' "$base/api/public/day?date=$d")
+            test "$code" = '200'
+            DATE="$d" node -e "const fs=require('fs');const d=process.env.DATE;const p=JSON.parse(fs.readFileSync('/tmp/'+d+'.body','utf8'));const r=p.races;if(!Array.isArray(r)||r.length<12)throw new Error('bad historical races '+d);const venues=new Set(r.map(x=>x.venue));const selectedCodes=new Set(['hit','miss','refund','buy','lose']);const selected=r.filter(x=>selectedCodes.has(x.publicState?.code));const skip=r.filter(x=>x.publicState?.code==='skip');if(selected.length!==venues.size*5)throw new Error('historical selection count '+d+': '+selected.length+' expected '+venues.size*5);if(skip.length!==r.length-selected.length)throw new Error('historical skip count '+d+': '+skip.length+' expected '+(r.length-selected.length));console.log(d,'races=',r.length,'venues=',venues.size,'selected=',selected.length,'skip=',skip.length)"
           done
+
       - name: Verify historical selected race detail
+        shell: bash
         run: |
           set -euo pipefail
-          race_id=$(python - <<'PY'
-import json
-p=json.load(open('/tmp/2024-05-26.body'))
-for r in p['races']:
-    if (r.get('publicState') or {}).get('code') in ('hit','miss','buy'):
-        print(r['raceId']);break
-PY
-          )
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          race_id=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/2024-05-26.body','utf8'));const selectedCodes=new Set(['hit','miss','refund','buy','lose']);const r=p.races.find(x=>selectedCodes.has(x.publicState?.code));if(!r)process.exit(2);process.stdout.write(r.raceId)")
           test -n "$race_id"
           echo "detail=$race_id"
-          code=$(curl -sS -o /tmp/detail.html -w '%{http_code}' "https://race-tantei-phase0.race-tantei.workers.dev/races/$race_id")
-          test "$code" = "200"
+          code=$(curl --retry 5 --retry-delay 2 --retry-all-errors -sS -o /tmp/detail.html -w '%{http_code}' "$base/races/$race_id")
+          test "$code" = '200'
           grep -q '確定買い目' /tmp/detail.html
-          grep -q '購入額' /tmp/detail.html
+          grep -Eq '購入(額)?' /tmp/detail.html
           grep -q '出走馬' /tmp/detail.html
-      - name: Mark success
-        if: success()
-        run: |
-          curl -sS -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
-            -d '{"state":"success","context":"production/past-day-api","description":"historical API and race detail verified"}' >/dev/null
-      - name: Mark failure
-        if: failure()
-        run: |
-          curl -sS -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/${{ github.repository }}/statuses/${{ github.sha }} \
-            -d '{"state":"failure","context":"production/past-day-api","description":"historical API/detail verification failed"}' >/dev/null
+          if grep -Eq '<h1>[0-9]{1,2}(R|レース)</h1>|<h1>(検索ウィンドウ|検索メニュー|サイト内検索|出馬表)</h1>' /tmp/detail.html; then
+            echo 'Historical detail still has a placeholder race name.' >&2
+            exit 1
+          fi
