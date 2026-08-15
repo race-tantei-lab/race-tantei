@@ -37,8 +37,31 @@ jobs:
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev'
           today="$(TZ=Asia/Tokyo date +%F)"
-          curl --retry 4 --retry-delay 2 --retry-all-errors --connect-timeout 5 --max-time 40 -fsS \
-            "$base/api/public/today-summary" > /tmp/today-summary.json
+
+          # A push to main starts this verifier and the production deploy in
+          # parallel. Do not compare the new D1 contract against an old Worker
+          # response while the deployment is still propagating.
+          ready=0
+          for attempt in $(seq 1 18); do
+            if curl --connect-timeout 5 --max-time 20 -fsS \
+              "$base/api/public/today-summary" > /tmp/today-summary.json; then
+              if node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync('/tmp/today-summary.json','utf8'));
+          const rows=Array.isArray(p.courses)?p.courses:[];
+          const ready=p.hasPredictions===false || (rows.length>0 && rows.every(x=>Object.prototype.hasOwnProperty.call(x,'refundRaces')));
+          process.exit(ready?0:1);
+          NODE
+              then
+                ready=1
+                echo "today-summary contract ready on attempt=$attempt"
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test "$ready" = 1
+
           query="SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,b.stake_yen AS stakeYen,b.return_yen AS returnYen,b.settlement_status AS settlementStatus,r.refund_horse_nos_json AS refundsJson FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date='$today' ORDER BY b.race_id,b.course,b.id;"
           npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$query" > /tmp/today-d1.json
           node scripts/verify-today-performance-response.mjs /tmp/today-summary.json /tmp/today-d1.json
