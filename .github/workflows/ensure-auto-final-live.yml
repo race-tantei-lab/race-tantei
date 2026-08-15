@@ -7,9 +7,11 @@ on:
     paths:
       - ".github/workflows/ensure-auto-final-live.yml"
   schedule:
-    # Staggered watchdog: if the primary live-lock workflow has not run successfully recently, dispatch it.
-    - cron: "7-57/10 23 * * 5,6,0"
-    - cron: "7-57/10 0-10 * * 6,0,1"
+    # Watchdog runs five minutes after the primary :07/:17/... cadence.
+    # The first active UTC hour starts at :12 so it does not pre-empt the day's first :07 primary run.
+    - cron: "12-52/10 23 * * 5,6,0"
+    - cron: "2-52/10 0-10 * * 6,0,1"
+    - cron: "2 11 * * 6,0,1"
 
 permissions:
   contents: read
