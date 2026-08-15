@@ -87,8 +87,43 @@ jobs:
           if missed:
               raise RuntimeError('LIVE_VERIFY_LOCK_DEADLINE_MISSED:'+','.join(missed))
 
+          pathlib.Path('/tmp/locked_race_ids.txt').write_text('\n'.join(sorted(locked))+'\n',encoding='utf-8')
           print(json.dumps({
               'status':'LIVE_BETS_OK','date':date,'selectedRaceCount':len(ids),'venues':dict(by_venue),
               'lockedRaceCount':len(locked),'lockedRaceIds':sorted(locked),'deadlineMissed':[]
           },ensure_ascii=False))
           PY
+      - name: Verify every locked race is visible on public detail
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          while IFS= read -r race_id; do
+            [ -n "$race_id" ] || continue
+            curl --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 4 --max-time 20 -fsS "$base/races/$race_id" -o "/tmp/${race_id}.html"
+            RACE_ID="$race_id" python - <<'PY'
+          import os
+          from pathlib import Path
+          race_id=os.environ['RACE_ID']
+          html=Path('/tmp/'+race_id+'.html').read_text(encoding='utf-8')
+          if '<h2>確定買い目</h2>' not in html:
+              raise SystemExit('LIVE_PUBLIC_BETS_HEADING_MISSING:'+race_id)
+          names=('ライト','スタンダード','プレミアム')
+          starts=[]
+          for i,name in enumerate(names):
+              marker=f'<div class="course-view" data-course="{i}"'
+              pos=html.find(marker)
+              if pos<0:
+                  raise SystemExit(f'LIVE_PUBLIC_COURSE_MISSING:{race_id}:{name}')
+              starts.append(pos)
+              if f'<h3 class="course-heading">{name}</h3>' not in html[pos:pos+500]:
+                  raise SystemExit(f'LIVE_PUBLIC_COURSE_HEADING_MISSING:{race_id}:{name}')
+          counts={}
+          for i,name in enumerate(names):
+              end=starts[i+1] if i+1<len(starts) else len(html)
+              counts[name]=html[starts[i]:end].count('<tr><td>')
+          if any(n!=2 for n in counts.values()):
+              raise SystemExit(f'LIVE_PUBLIC_TICKET_COUNT_INVALID:{race_id}:{counts}')
+          print('LIVE_PUBLIC_DETAIL_OK',race_id,counts)
+          PY
+          done < /tmp/locked_race_ids.txt
