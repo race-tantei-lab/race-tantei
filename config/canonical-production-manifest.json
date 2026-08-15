@@ -1,7 +1,7 @@
 {
   "status": "production",
   "handoffVersion": 3,
-  "asOfJst": "2026-08-15T15:58:00+09:00",
+  "asOfJst": "2026-08-15T16:25:00+09:00",
   "repository": "race-tantei-lab/race-tantei",
   "branch": "main",
   "verifiedProductionBaselineCommit": "4a02f24e06039dc3c6d3b7daee05ffe967cbdcd8",
@@ -81,8 +81,8 @@
   "site": {
     "workerConfig": "wrangler.jsonc",
     "authoritativeEntryRule": "The current UI entry is always wrangler.jsonc.main. Do not infer the current UI from public-site-entry version filenames. Current wrappers intentionally layer earlier entries, so verification must inspect the active import chain while keeping wrangler.jsonc.main as the identity source of truth.",
-    "entry": "src/public-site-entry-v23.ts",
-    "revision": "ten-year-completed-public-v23-exact-selection-evidence-20260815",
+    "entry": "src/public-site-entry-v24.ts",
+    "revision": "ten-year-completed-public-v24-verified-decision-evidence-20260815",
     "url": "https://race-tantei-phase0.race-tantei.workers.dev",
     "workerName": "race-tantei-phase0",
     "d1DatabaseName": "race-tantei-phase0",
@@ -115,7 +115,9 @@
     "Finished historical races are labeled 的中, 不的中, 見送り, or 返還 where applicable; 不的中 is red and 返還 is distinct.",
     "Frozen archive canonical skips remain skips even if legacy D1 public-bet rows exist for the same race.",
     "The public prediction-logic page explains the completed model in product-ready Japanese while preserving methodology transparency.",
-    "Live selected-race pages show exact selection evidence only after parity with the frozen selection: venue rank and raceScore, the five selection-stage candidate horses, the three proxy tickets forming raceScore, each proxy ticket's global smoothed ROI and local weighted ROI, and the actual top historical condition components with sample count, smoothed ROI, and effective weight. They also show fixed-ticket predicted probability / JRA odds / probability-times-odds / final score when available, plus real runner model probability and readable canonical feature values. Generic condition-match copy is forbidden as a prediction reason.",
+    "Live selected-race pages show verified race-level selection evidence only when that race's recomputed raceScore equals the immutable frozen raceScore: the five selection-stage candidate horses, the three proxy tickets forming raceScore, each proxy ticket's global smoothed ROI and local weighted ROI, and the actual top historical condition components with sample count, smoothed ROI, and effective weight. A different selected race whose later runner state no longer reproduces must not suppress valid evidence for other races.",
+    "Live selected-race pages show the final two ticket probabilities, JRA official odds, probability-times-odds, and final score. Prefer the immutable Worker final snapshot; if it does not exist, preserve the already-public final two tickets and fixed assumed odds and recompute only the explanatory probability/value/score from the same frozen model and canonical feature-state rule. Never rewrite the published bets.",
+    "Generic condition-match copy is forbidden as a prediction reason; explanations must use actual race, horse, sample-count, ROI, probability, odds, and score values.",
     "The data update timing panel remains compact and collapsed by default.",
     "Historical race pages show runner/result details.",
     "Confirmed bets are not presented as a horizontal swipe; courses are shown vertically and mobile ticket rows are card-like.",
@@ -141,9 +143,14 @@
       "note": "May be imported by the canonical wrapper, but is not the current production model entry."
     },
     {
-      "path": "src/public-site-entry-v22.ts and lower public-site-entry versions",
+      "path": "src/public-site-entry-v23.ts and lower public-site-entry versions",
       "classification": "transitive-ui-dependencies",
-      "note": "They may still execute through v23 layering and contain active sub-behavior, but they are not the source of truth for current UI entry identity. Follow wrangler.jsonc.main and the full active import chain."
+      "note": "They may still execute through v24 layering and contain active sub-behavior, but they are not the source of truth for current UI entry identity. Follow wrangler.jsonc.main and the full active import chain."
+    },
+    {
+      "path": "src/v1/completed-selection-explanation.ts",
+      "classification": "superseded-day-wide-explanation-helper",
+      "note": "The day-wide parity helper is not authoritative for current race-level evidence because a later runner-state change in one race may invalidate day-wide replay. Current evidence uses completed-selection-race-explanation.ts and validates each frozen race independently."
     },
     {
       "path": "research branches and research-* scripts/workflows",
