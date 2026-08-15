@@ -1,7 +1,7 @@
 {
   "status": "production",
   "handoffVersion": 3,
-  "asOfJst": "2026-08-16T00:39:00+09:00",
+  "asOfJst": "2026-08-16T00:47:00+09:00",
   "repository": "race-tantei-lab/race-tantei",
   "branch": "main",
   "verifiedProductionBaselineCommit": "4a02f24e06039dc3c6d3b7daee05ffe967cbdcd8",
@@ -81,8 +81,8 @@
   "site": {
     "workerConfig": "wrangler.jsonc",
     "authoritativeEntryRule": "The current UI entry is always wrangler.jsonc.main. Do not infer the current UI from public-site-entry version filenames. Current wrappers intentionally layer earlier entries, so verification must inspect the active import chain while keeping wrangler.jsonc.main as the identity source of truth.",
-    "entry": "src/public-site-entry-v26.ts",
-    "revision": "ten-year-completed-public-v26-win5-20260816",
+    "entry": "src/public-site-entry-v27.ts",
+    "revision": "ten-year-completed-public-v27-win5-top-nav-20260816",
     "url": "https://race-tantei-phase0.race-tantei.workers.dev",
     "workerName": "race-tantei-phase0",
     "d1DatabaseName": "race-tantei-phase0",
@@ -122,6 +122,9 @@
     "The data update timing panel remains compact and collapsed by default.",
     "Historical race pages show runner/result details.",
     "Confirmed bets are not presented as a horizontal swipe; courses are shown vertically and mobile ticket rows are card-like.",
+    "WIN5 is a first-class top navigation tab on every public HTML page; the old floating bottom-right WIN5 button must not be shown.",
+    "The WIN5 page prioritizes target races, three-plan comparison, and selected horses; probability and recent-learning diagnostics stay collapsed as secondary detail.",
+    "WIN5 target races and ticket rows must remain readable on mobile without horizontal scrolling.",
     "Past published picks and results are immutable.",
     "Worker live-lock must reject a 15-minute SLA breach rather than silently accepting incomplete bets."
   ],

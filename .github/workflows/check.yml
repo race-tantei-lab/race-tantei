@@ -26,5 +26,7 @@ jobs:
         run: python scripts/verify-live-lock-safety.py
       - name: Verify bodyweight final-lock acquisition
         run: python scripts/verify-bodyweight-final-lock.py
+      - name: Verify WIN5 navigation UI
+        run: python scripts/verify-win5-ui.py
       - name: Typecheck and test
         run: npm run check
