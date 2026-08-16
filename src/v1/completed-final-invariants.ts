@@ -35,5 +35,25 @@ export async function ensureCompletedFinalImmutability(db: D1Database): Promise<
         SELECT RAISE(ABORT, 'PROBABILITY_FALLBACK_FORBIDDEN');
       END
     `),
+    db.prepare(`
+      CREATE TRIGGER IF NOT EXISTS rt_guard_official_odds_final_insert
+      BEFORE INSERT ON rt_system_state
+      WHEN NEW.state_key LIKE 'worker_live_final:%'
+        AND json_extract(NEW.state_value, '$.status') = 'locked'
+        AND COALESCE(json_extract(NEW.state_value, '$.oddsSource'), '') NOT IN ('jra-fast-official', 'jra-crawl-official')
+      BEGIN
+        SELECT RAISE(ABORT, 'OFFICIAL_JRA_ODDS_REQUIRED');
+      END
+    `),
+    db.prepare(`
+      CREATE TRIGGER IF NOT EXISTS rt_guard_official_odds_final_update
+      BEFORE UPDATE ON rt_system_state
+      WHEN NEW.state_key LIKE 'worker_live_final:%'
+        AND json_extract(NEW.state_value, '$.status') = 'locked'
+        AND COALESCE(json_extract(NEW.state_value, '$.oddsSource'), '') NOT IN ('jra-fast-official', 'jra-crawl-official')
+      BEGIN
+        SELECT RAISE(ABORT, 'OFFICIAL_JRA_ODDS_REQUIRED');
+      END
+    `),
   ]);
 }
