@@ -7,78 +7,48 @@ on:
     paths:
       - ".github/workflows/critical-auto-bet-generation.yml"
 
-concurrency:
-  group: critical-auto-bet-generation-live
-  cancel-in-progress: false
-
 permissions:
   contents: read
-  statuses: write
 
 env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-  JRA_ODDS_REQUEST_PAUSE_SECONDS: "0.35"
 
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Inspect production deadline guard state
+      - name: Read only Niigata 7R finalization state
         run: |
           python - <<'PY'
           import importlib.util, json, pathlib
+          race_id='2026-08-16-niigata-07'
           p=pathlib.Path('scripts/collect-jra-official-odds.py')
-          spec=importlib.util.spec_from_file_location('collector_diag',p)
+          spec=importlib.util.spec_from_file_location('collector_readonly',p)
           m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
-          keys=[
-              'worker_deadline_guard:2026-08-16',
-              'worker_live_preview:2026-08-16-chukyo-06',
-              'worker_live_final:2026-08-16-chukyo-06',
-          ]
-          rows=m.d1_query(
-              'SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt FROM rt_system_state WHERE state_key IN (?,?,?) ORDER BY state_key',
-              keys,
-          )
-          out=[]
-          for row in rows:
+          rows=m.d1_query('''
+            SELECT course,bet_type AS betType,combination,stake_yen AS stakeYen,
+                   assumed_odds AS assumedOdds,locked_at AS lockedAt,
+                   settlement_status AS settlementStatus,source_prediction_id AS sourcePredictionId
+            FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type,combination
+          ''',[race_id])
+          state=m.d1_query('''
+            SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt
+            FROM rt_system_state
+            WHERE state_key IN (?,?,?) ORDER BY state_key
+          ''',[f'worker_live_preview:{race_id}',f'worker_live_final:{race_id}','worker_deadline_guard:2026-08-16'])
+          parsed=[]
+          for row in state:
               value=str(row.get('stateValue') or '')
-              try: parsed=json.loads(value)
-              except Exception: parsed=value
-              out.append({'stateKey':row.get('stateKey'),'updatedAt':row.get('updatedAt'),'value':parsed})
-          print('WORKER_DEADLINE_DIAG='+json.dumps(out,ensure_ascii=False))
+              try: value=json.loads(value)
+              except Exception: pass
+              parsed.append({'stateKey':row.get('stateKey'),'updatedAt':row.get('updatedAt'),'value':value})
+          out={'raceId':race_id,'betRows':rows,'betRowCount':len(rows),'states':parsed}
+          print('READ_ONLY_FINAL_AUDIT='+json.dumps(out,ensure_ascii=False))
           PY
-      - name: Install completed-model runtime
-        run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0"
-      - name: Compile critical generator
-        run: |
-          python -m py_compile \
-            scripts/run-critical-auto-bet-generation.py \
-            scripts/run-auto-final-live.py \
-            scripts/run-ten-year-auto-final-live.py \
-            scripts/generate-ten-year-live-bets.py \
-            scripts/collect-current-jra-official-odds-live.py \
-            scripts/collect-current-jra-official-odds-fast.py
-      - name: Generate and verify every due selected race
-        shell: bash
-        run: |
-          set -o pipefail
-          python scripts/run-critical-auto-bet-generation.py | tee critical-auto-bet-generation.log
-      - name: Upload critical generation audit
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: critical-auto-bet-generation-audit
-          path: |
-            analysis-results/critical-auto-bet-generation.json
-            analysis-results/critical-auto-bet-*.json
-            official-odds-collection-report.json
-            critical-auto-bet-generation.log
-          if-no-files-found: warn
-          retention-days: 30
