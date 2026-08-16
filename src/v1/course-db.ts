@@ -1,4 +1,5 @@
 import { savePrediction, settleRace } from "./db.js";
+import { performanceExclusionSql } from "./performance-exclusions.js";
 import type { BudgetCourse, PredictionOutput } from "./types.js";
 import { nowIso } from "./utils.js";
 
@@ -97,6 +98,7 @@ export async function getCourseMetrics(
   modelVersion?: string
 ): Promise<CourseMetric[]> {
   const filter = modelVersion ?? "";
+  const exclusion = performanceExclusionSql("b.race_id");
   const rows = await db.prepare(`
     SELECT
       CASE
@@ -113,6 +115,7 @@ export async function getCourseMetrics(
     FROM rt_bets b
     JOIN rt_predictions p ON p.id=b.prediction_id
     WHERE b.settlement_status='settled'
+      AND ${exclusion}
       AND (?='' OR p.model_version=?)
       AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
     GROUP BY course
@@ -150,6 +153,7 @@ export async function getCourseMonthlyMetrics(
   modelVersion?: string
 ): Promise<Array<CourseMetric & { month: string }>> {
   const filter = modelVersion ?? "";
+  const exclusion = performanceExclusionSql("b.race_id");
   const rows = await db.prepare(`
     SELECT substr(r.race_date,1,7) AS month,
       CASE
@@ -166,6 +170,7 @@ export async function getCourseMonthlyMetrics(
     JOIN rt_races r ON r.race_id=b.race_id
     JOIN rt_predictions p ON p.id=b.prediction_id
     WHERE b.settlement_status='settled'
+      AND ${exclusion}
       AND (?='' OR p.model_version=?)
       AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
     GROUP BY month, course
