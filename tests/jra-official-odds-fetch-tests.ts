@@ -1,5 +1,18 @@
 import { strict as assert } from "node:assert";
-import { fetchFastJraOfficialOddsForRace } from "../src/v1/jra-official-odds-fetch.js";
+import {
+  candidateJraEntryUrls,
+  fetchFastJraOfficialOddsForRace,
+  jraOddsUrlForEntry,
+} from "../src/v1/jra-official-odds-fetch.js";
+
+const spSource = "https://sp.jra.jp/JRADB/accessD.html?CNAME=sample";
+const candidates = candidateJraEntryUrls(spSource);
+assert.equal(candidates[0], spSource);
+assert.ok(candidates.includes("https://www.jra.go.jp/JRADB/accessD.html?CNAME=sample"));
+assert.ok(candidates.includes("https://jra.jp/JRADB/accessD.html?CNAME=sample"));
+assert.equal(new Set(candidates).size, candidates.length);
+assert.equal(jraOddsUrlForEntry(spSource), "https://sp.jra.jp/JRADB/accessO.html");
+assert.equal(jraOddsUrlForEntry("https://www.jra.go.jp/JRADB/accessD.html?CNAME=x"), "https://www.jra.go.jp/JRADB/accessO.html");
 
 const originalFetch = globalThis.fetch;
 const target = { raceDate: "2026-08-09", venue: "中京", raceNo: 11 } as const;
@@ -45,12 +58,13 @@ globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise
 try {
   const result = await fetchFastJraOfficialOddsForRace("https://entry.test/race", target);
   assert.equal(result.source, "jra-crawl-official");
-  assert.ok(result.fallbackReason?.includes("JRA_ODDS_HTTP_404"));
+  assert.ok(result.fallbackReason?.includes("JRA_ODDS_FAST_ALL_HOSTS_FAILED"));
   assert.equal(result.pages.length, 6);
   assert.deepEqual(new Set(result.pages.map((page) => page.betType)), new Set(["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"]));
   assert.equal(result.rows.length, 6);
   assert.ok(result.rows.every((row) => row.oddsMin > 1 && row.oddsMax >= row.oddsMin));
-  console.log("JRA_OFFICIAL_ODDS_FETCH_OK", JSON.stringify({ source: result.source, fallbackReason: result.fallbackReason }));
+  assert.deepEqual(result.attemptedHosts, ["entry.test", "sp.jra.jp", "www.jra.go.jp", "jra.jp"]);
+  console.log("JRA_OFFICIAL_ODDS_FETCH_OK", JSON.stringify({ source: result.source, fallbackReason: result.fallbackReason, attemptedHosts: result.attemptedHosts }));
 } finally {
   globalThis.fetch = originalFetch;
 }
