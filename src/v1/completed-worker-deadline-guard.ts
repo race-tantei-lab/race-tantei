@@ -331,7 +331,7 @@ export async function runCompletedWorkerDeadlineGuard(env: Env, now = new Date()
         audit.lockedOfficialPreviewRaceIds.push(raceId);
       } else {
         const { race, runners } = await loadRace(env.DB, raceId);
-        await commitFallback(env.DB, raceId, race, runners, now);
+        throw new Error(`DEADLINE_GUARD_OFFICIAL_ODDS_REQUIRED:${raceId}`);
         audit.lockedProbabilityFallbackRaceIds.push(raceId);
       }
       audit.lockedRaceIds.push(raceId);
