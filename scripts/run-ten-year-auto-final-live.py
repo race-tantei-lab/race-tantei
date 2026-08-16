@@ -163,11 +163,26 @@ def main():
         return original_collect_official_odds(window_ids)
     base.collect_official_odds=collect_after_bodyweight_audit
 
+    # A race that already started without a final bet is an audit incident, not
+    # an operational blocker for later races. Treat started races as closed for
+    # this live finalizer only, so an old miss can never prevent a future due
+    # race from reaching official-odds acquisition and finalization. Dedicated
+    # verification/performance code continues to record the historical miss.
+    original_locked_races=base.locked_races
+    def locked_races_without_started_blockers(collector,ids):
+        locked=set(original_locked_races(collector,ids))
+        starts=base.selected_timing(collector,ids)
+        now_utc=base.dt.datetime.now(base.dt.timezone.utc)
+        started={race_id for race_id,start in starts.items() if start<=now_utc}
+        ignored=sorted(started-locked)
+        if ignored:
+            print(json.dumps({'operationallyClosedStartedMisses':ignored},ensure_ascii=False),file=sys.stderr)
+        return locked|started
+    base.locked_races=locked_races_without_started_blockers
+
     # Cloudflare Worker remains the primary every-minute path. GitHub Actions is
-    # the independent backup, but it must not have a one-minute rescue window:
-    # once a selected race reaches 15 minutes before start, every backup run
-    # remains eligible until the recorded start time. At/after start the base
-    # runner refuses and reports the missed deadline instead of creating a bet.
+    # the independent backup. Finalization is never allowed before 15 minutes,
+    # and remains eligible on every run until the recorded start time.
     base.MIN_LOCK_SECONDS=0
     base.MAX_LOCK_SECONDS=15*60
     base.main()
