@@ -2,6 +2,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+CANONICAL = ROOT / "src" / "public-site-entry-v29.ts"
 ENTRY = ROOT / "src" / "public-site-entry-v28.ts"
 PARENT = ROOT / "src" / "public-site-entry-v27.ts"
 WRANGLER = ROOT / "wrangler.jsonc"
@@ -13,12 +14,14 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> None:
+    canonical = CANONICAL.read_text(encoding="utf-8")
     entry = ENTRY.read_text(encoding="utf-8")
     parent = PARENT.read_text(encoding="utf-8")
-    source = entry + "\n" + parent
+    source = canonical + "\n" + entry + "\n" + parent
     wrangler = WRANGLER.read_text(encoding="utf-8")
 
-    require('"main": "src/public-site-entry-v28.ts"' in wrangler, "WIN5_V28_NOT_CANONICAL_ENTRY")
+    require('"main": "src/public-site-entry-v29.ts"' in wrangler, "WIN5_V29_NOT_CANONICAL_ENTRY")
+    require('import publicSite from "./public-site-entry-v28.js"' in canonical, "WIN5_V29_V28_WRAPPER_MISSING")
     require('class="nav-win5"' in parent, "WIN5_TOP_NAV_TAB_MISSING")
     require('<nav class="nav"><a href="/">レース</a>' in parent, "WIN5_TOP_NAV_INSERTION_ANCHOR_MISSING")
     require('aria-current="page"' in parent, "WIN5_ACTIVE_TOP_NAV_STATE_MISSING")
@@ -48,7 +51,7 @@ def main() -> None:
     require('.win5-target-list' in parent and '.win5-ticket-row' in parent, "WIN5_MOBILE_VERTICAL_LAYOUT_MISSING")
     require('overflow-x:auto' not in source, "WIN5_HORIZONTAL_SCROLL_REINTRODUCED")
 
-    print("WIN5_UI_OK top_nav=true floating_button=false view_switch=tickets_other default=tickets duplicate_plan_comparison=false rule=false diagnostics=always_open horizontal_scroll=false")
+    print("WIN5_UI_OK top_nav=true floating_button=false view_switch=tickets_other default=tickets duplicate_plan_comparison=false rule=false diagnostics=always_open horizontal_scroll=false canonical=v29")
 
 
 if __name__ == "__main__":

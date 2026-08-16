@@ -19,6 +19,12 @@ export const PERFORMANCE_EXCLUSIONS: readonly PerformanceExclusion[] = [
     reasonCode: "system_bet_generation_failure",
     displayReason: "システム障害により締切時刻までに買い目を生成できませんでした（成績集計対象外）",
     excludedFromPerformance: true
+  },
+  {
+    raceId: "2026-08-16-chukyo-04",
+    reasonCode: "system_bet_generation_failure",
+    displayReason: "システム障害により締切時刻までに買い目を生成できませんでした（成績集計対象外）",
+    excludedFromPerformance: true
   }
 ];
 
