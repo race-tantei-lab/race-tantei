@@ -1,10 +1,11 @@
 import publicSite from "./public-site-entry-v28.js";
 import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";
-import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";
+import { ensureCompletedRaceFinalAtDeadline, runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";
+import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";
 import { runCompletedWin5Scheduled } from "./v1/completed-win5.js";
 import type { Env } from "./v1/types.js";
 
-const UI_VERSION = "ten-year-completed-public-v29-guaranteed-t15-fallback-20260816";
+const UI_VERSION = "ten-year-completed-public-v29-atomic-t15-20260816";
 
 async function emergencyFallbackNotice(response: Response, env: Env, path: string): Promise<Response> {
   if (!path.startsWith("/races/") || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
@@ -30,6 +31,28 @@ async function emergencyFallbackNotice(response: Response, env: Env, path: strin
     return new Response(html, { status: response.status, statusText: response.statusText, headers });
   } catch {
     return response;
+  }
+}
+
+async function runNormalRacePreparation(env: Env, label: string): Promise<void> {
+  const now = new Date();
+  try { await freezeCompletedWorkerSelectionIfNeeded(env, now); } catch (error) { console.error(`${label}_SELECTION_FAILED`, error); }
+  try {
+    const audit = await runCompletedWorkerLiveLock(env, now);
+    console.log(label, JSON.stringify({ status: audit.status, refreshedPreviewRaceIds: audit.refreshedPreviewRaceIds, lockedByWorker: audit.lockedByWorker, errors: audit.errors }));
+  } catch (error) {
+    console.error(`${label}_FAILED`, error);
+  }
+}
+
+async function ensureRaceDetailDeadlineFinal(env: Env, path: string): Promise<void> {
+  const match = /^\/races\/(20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2})\/?$/i.exec(path);
+  if (!match) return;
+  try {
+    const result = await ensureCompletedRaceFinalAtDeadline(env, decodeURIComponent(match[1]), new Date());
+    if (result.status === "locked") console.log("RACE_DETAIL_T15_SELF_HEAL", JSON.stringify(result));
+  } catch (error) {
+    console.error("RACE_DETAIL_T15_SELF_HEAL_FAILED", error);
   }
 }
 
@@ -81,13 +104,16 @@ async function runWin5DeadlineGuard(env: Env, label: string, strict: boolean): P
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
+    const path = new URL(request.url).pathname;
+    await ensureRaceDetailDeadlineFinal(env, path);
     const response = await publicSite.fetch(request, env, ctx);
-    return emergencyFallbackNotice(response, env, new URL(request.url).pathname);
+    return emergencyFallbackNotice(response, env, path);
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     // First pass is deliberately before all external HTTP. Failure here does
     // not block the normal acquisition chain because the second pass retries.
+    await runNormalRacePreparation(env, "COMPLETED_WORKER_PREPARE_BEFORE");
     await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE", false);
     await runWin5DeadlineGuard(env, "WIN5_DEADLINE_GUARD_BEFORE", false);
 
@@ -103,6 +129,8 @@ export default {
     // success while a selected race currently inside the 15-minute pre-start
     // window remains unresolved. This makes missing finalization observable on
     // the same invocation instead of silently looking healthy.
+    await runNormalRacePreparation(env, "COMPLETED_WORKER_PREPARE_AFTER");
+
     let finalGuardError: unknown = null;
     try {
       await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_AFTER", true);

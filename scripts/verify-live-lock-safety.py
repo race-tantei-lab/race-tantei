@@ -32,14 +32,11 @@ def main() -> None:
         'const PREVIEW_PREFIX = "worker_live_preview:";',
         'const FINAL_PREFIX = "worker_live_final:";',
         'const PREVIEW_OPEN_MS = 45 * 60 * 1000;',
-        'const FINALIZE_OPEN_MS = DEADLINE_MS;',
         'const DEADLINE_MS = 15 * 60 * 1000;',
         'const PREVIEW_HISTORY = 3;',
         'oddsSnapshotSha256',
         'await savePreview(db, snapshot)',
         'latestOfficialBodyWeightPreview',
-        'official ?? fresh ?? await latestPreview(env.DB, raceId)',
-        'await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId)',
         '"deadline_watchdog"',
         'await db.batch(statements)',
         'if (isStrictComplete(existing)) return;',
@@ -49,19 +46,28 @@ def main() -> None:
     forbid(worker, 'WORKER_FINAL_BODYWEIGHT_MISMATCH', "Worker live-lock")
     forbid(worker, "const FINALIZE_OPEN_MS = 16 * 60 * 1000;", "Worker live-lock")
 
+    # T-15 must be a hard network/recompute boundary for normal races.
+    t15_start = worker.index('if (remaining <= DEADLINE_MS)')
+    t15_end = worker.index('let fresh: PreviewSnapshot | null = null;', t15_start)
+    t15_block = worker[t15_start:t15_end]
+    for forbidden in ('generatePreview(', 'fetchFastJraOfficialOddsForRace(', 'loadWorkerModel(', 'loadCompletedRecencyLearning('):
+        forbid(t15_block, forbidden, "Worker T-15 hard boundary")
+    require(t15_block, 'await commitSnapshot(env.DB, raceId, stored, now, "deadline_watchdog")', "Worker T-15 hard boundary")
+    forbid(worker, 'const FINALIZE_OPEN_MS = DEADLINE_MS;', "Worker live-lock")
+
     guard = read("src/v1/completed-worker-deadline-guard.ts")
     for needle in (
         "export const DEADLINE_GUARD_MS = 15 * 60 * 1000;",
         "remainingMs > 0 && remainingMs <= DEADLINE_GUARD_MS",
         "orderSelectedRaceIds",
         "start_time_utc AS startTimeUtc",
-        'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
-        'finalizedFrom: "persistent_official_deadline_guard"',
-        'finalizedFrom: "probability_fallback_persistent_deadline_guard"',
+        'snapshot.oddsSource!=="jra-fast-official" && snapshot.oddsSource!=="jra-crawl-official"',
+        'finalizedFrom:"persistent_official_deadline_guard"',
         "await db.batch(statements)",
         "for (const raceId of ids)",
-        "audit.errors.push({ raceId, error: errorText(error) })",
-        "if (strictComplete(existing)) { audit.skippedAlreadyLockedRaceIds.push(raceId); continue; }",
+        "ensureCompletedRaceFinalAtDeadline",
+        "DEADLINE_GUARD_PREVIEW_MISSING",
+        "ensureCompletedFinalImmutability",
     ):
         require(guard, needle, "persistent deadline guard")
     for forbidden in (
@@ -69,14 +75,24 @@ def main() -> None:
         "remaining > 14 * 60 * 1000",
         "remaining > LATE_LIMIT_MS",
         "fetch(",
+        "probability_fallback_persistent_deadline_guard",
+        "chooseCompletedProbabilityFallbackTickets",
+        "emergencyRunnerWeights",
+        "async function buildFallback",
+        "async function commitFallback",
+        "loadCompletedFeatureStateForRace",
+        "loadCompletedRecencyLearning",
     ):
         forbid(guard, forbidden, "persistent deadline guard")
 
     production_wrapper = read("src/public-site-entry-v29.ts")
     for needle in (
         'import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";',
-        'import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";',
+        'import { ensureCompletedRaceFinalAtDeadline, runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";',
         "await freezeCompletedWorkerSelectionIfNeeded(env, now);",
+        'import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";',
+        'await runNormalRacePreparation(env, "COMPLETED_WORKER_PREPARE_BEFORE")',
+        'await ensureRaceDetailDeadlineFinal(env, path);',
         'await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE", false)',
         'await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_AFTER", true)',
         'throw new Error(`${label}_DUE_RACE_UNRESOLVED:',
@@ -90,6 +106,16 @@ def main() -> None:
     if not (before_pos < delegated_pos < after_pos):
         raise AssertionError("deadline guard must run both before and after delegated scheduled work")
     forbid(production_wrapper, "runCompletedWorkerEmergencyLock", "production deadline wrapper")
+
+
+    invariants = read("src/v1/completed-final-invariants.ts")
+    for needle in (
+        'CREATE TRIGGER IF NOT EXISTS rt_guard_locked_public_bet_terms',
+        'IMMUTABLE_FINAL_BET_TERMS',
+        'CREATE TRIGGER IF NOT EXISTS rt_guard_locked_worker_final_state',
+        'IMMUTABLE_WORKER_FINAL_STATE',
+    ):
+        require(invariants, needle, "final immutability")
 
     scheduled_gate = read("src/public-site-entry-v25.ts")
     for needle in (
