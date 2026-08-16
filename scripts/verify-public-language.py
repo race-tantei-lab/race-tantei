@@ -2,6 +2,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+TOP = ROOT / "src" / "public-site-entry-v31.ts"
 ENTRY = ROOT / "src" / "public-site-entry-v30.ts"
 WRANGLER = ROOT / "wrangler.jsonc"
 CURRENT_DAY = ROOT / "src" / "v1" / "current-day-public-api.ts"
@@ -13,11 +14,13 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> None:
+    top = TOP.read_text(encoding="utf-8")
     entry = ENTRY.read_text(encoding="utf-8")
     wrangler = WRANGLER.read_text(encoding="utf-8")
     current = CURRENT_DAY.read_text(encoding="utf-8")
 
-    require('"main": "src/public-site-entry-v30.ts"' in wrangler, "CLEAR_LANGUAGE_ENTRY_NOT_CANONICAL")
+    require('"main": "src/public-site-entry-v31.ts"' in wrangler, "CLEAR_LANGUAGE_ENTRY_NOT_CANONICAL")
+    require('import publicSite from "./public-site-entry-v30.js"' in top, "CLEAR_LANGUAGE_V31_CHAIN_MISSING")
     require('import publicSite from "./public-site-entry-v29.js"' in entry, "CLEAR_LANGUAGE_V29_CHAIN_MISSING")
 
     required_phrases = [
@@ -41,7 +44,7 @@ def main() -> None:
     require("replace(/T[-–](\\d+)/g" in entry, "CLEAR_LANGUAGE_T_MINUS_NORMALIZER_MISSING")
     require("発走15分前までに買い目確定" in current, "CURRENT_DAY_CLEAR_DEADLINE_MISSING")
 
-    print("PUBLIC_LANGUAGE_OK t_minus=plain_japanese probability=explained learning=explained fallback=hidden nav=plain_japanese")
+    print("PUBLIC_LANGUAGE_OK t_minus=plain_japanese probability=explained learning=explained fallback=hidden nav=plain_japanese canonical=v31_v30")
 
 
 if __name__ == "__main__":
