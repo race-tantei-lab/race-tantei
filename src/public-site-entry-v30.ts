@@ -7,6 +7,13 @@ function replaceExact(html: string, from: string, to: string): string {
   return html.split(from).join(to);
 }
 
+function removeTodayHomeHero(input: string): string {
+  return input.replace(
+    '<section class="hero today-hero"><span class="today-pill">TODAY</span><h1>今日のレース</h1><p>年 → 月 → 日付 → 会場 → レースの順に選ぶだけで、全レースを確認できます。買い目対象・見送り・判定中も同じ画面で分かります。</p></section>',
+    "",
+  );
+}
+
 function clarifyCommonLanguage(input: string): string {
   let html = input;
 
@@ -89,6 +96,7 @@ async function clarifyHtmlResponse(response: Response, path: string): Promise<Re
   let html = await response.text();
   if (path === "/win5") html = clarifyWin5Language(html);
   html = clarifyCommonLanguage(html);
+  if (path === "/") html = removeTodayHomeHero(html);
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   headers.set("x-race-ui-version", UI_VERSION);
