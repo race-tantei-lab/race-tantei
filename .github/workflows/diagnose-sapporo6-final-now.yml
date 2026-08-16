@@ -1,0 +1,44 @@
+name: Diagnose Sapporo 6R final now
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-sapporo6-final-now.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Read exact Sapporo 6R final state from D1
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          endpoint=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
+          def q(sql,params=None):
+              body=json.dumps({'sql':sql,'params':params or []}).encode()
+              req=urllib.request.Request(endpoint,data=body,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},method='POST')
+              with urllib.request.urlopen(req,timeout=30) as r: payload=json.loads(r.read().decode())
+              if not payload.get('success'): raise RuntimeError(payload.get('errors'))
+              return payload.get('result',[{}])[0].get('results',[])
+          rid='2026-08-16-sapporo-06'
+          state=q("SELECT state_key,state_value,updated_at FROM rt_system_state WHERE state_key=? LIMIT 1",[f'worker_live_final:{rid}'])
+          bets=q("SELECT course,bet_type,combination,stake_yen,assumed_odds,locked_at,source_prediction_id,settlement_status FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type,combination",[rid])
+          race=q("SELECT race_id,start_time_jst,start_time_utc FROM rt_races WHERE race_id=? LIMIT 1",[rid])
+          if not state: raise RuntimeError('FINAL_STATE_MISSING')
+          final=json.loads(state[0]['state_value'])
+          out={'race':race[0] if race else None,'final':final,'stateUpdatedAt':state[0]['updated_at'],'bets':bets}
+          print('SAPPORO6_FINAL_AUDIT='+json.dumps(out,ensure_ascii=False,separators=(',',':')))
+          PY
