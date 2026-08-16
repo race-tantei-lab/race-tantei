@@ -60,7 +60,7 @@ jobs:
           require_marker /tmp/conditions.html 'JRA公式オッズだけ' conditions
           require_marker /tmp/conditions.html '発走15分前までに確定' conditions
           require_marker /tmp/guide.html '継続学習について' guide
-          require_marker /tmp/guide.html '推定・合成オッズで代用' guide
+          require_marker /tmp/guide.html '合成オッズや推定オッズで代用して確定することはありません' guide
 
       - name: Wait for canonical deployment and public API
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
