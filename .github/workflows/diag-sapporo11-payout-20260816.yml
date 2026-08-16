@@ -1,4 +1,4 @@
-name: Diagnose Sapporo 11 payout 20260816
+name: Diagnose WIN5 lock timestamps 20260816
 
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Read Sapporo 11 final bets and payouts
+      - name: Read WIN5 final preview and target timestamps
         shell: bash
         run: |
           python - <<'PY'
@@ -37,18 +37,14 @@ jobs:
               with urllib.request.urlopen(req,timeout=60) as r: payload=json.loads(r.read().decode())
               if not payload.get('success'): raise RuntimeError(payload.get('errors'))
               return payload.get('result',[{}])[0].get('results',[])
-          rid='2026-08-16-sapporo-11'
-          bets=q('SELECT course,bet_type AS betType,combination,stake_yen AS stakeYen,assumed_odds AS assumedOdds,COALESCE(return_yen,0) AS returnYen,settlement_status AS settlementStatus,locked_at AS lockedAt,source_prediction_id AS sourcePredictionId FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type,combination',[rid])
-          payouts=q('SELECT bet_type AS betType,combination,payout_yen AS payoutYen FROM rt_payouts WHERE race_id=? ORDER BY bet_type,combination',[rid])
-          results=q('SELECT horse_no AS horseNo,finish_position AS finishPosition FROM rt_results WHERE race_id=? ORDER BY finish_position,horse_no',[rid])
-          state=q("SELECT state_value AS value,updated_at AS updatedAt FROM rt_system_state WHERE state_key=? LIMIT 1",['worker_live_final:'+rid])
-          print('BETS='+json.dumps(bets,ensure_ascii=False,separators=(',',':')))
-          print('PAYOUTS='+json.dumps(payouts,ensure_ascii=False,separators=(',',':')))
-          print('RESULTS='+json.dumps(results,ensure_ascii=False,separators=(',',':')))
-          print('FINAL_STATE='+json.dumps(state,ensure_ascii=False,separators=(',',':')))
-          for course in sorted({str(x['course']) for x in bets}):
-              rows=[x for x in bets if str(x['course'])==course]
-              stake=sum(int(x.get('stakeYen') or 0) for x in rows)
-              ret=sum(int(x.get('returnYen') or 0) for x in rows)
-              print('COURSE='+json.dumps({'course':course,'stakeYen':stake,'returnYen':ret,'profitYen':ret-stake,'roiPct':(ret/stake*100 if stake else None)},ensure_ascii=False,separators=(',',':')))
+          date='2026-08-16'
+          rows=q("SELECT state_key AS stateKey,state_value AS value,updated_at AS updatedAt FROM rt_system_state WHERE state_key IN (?,?,?) ORDER BY state_key",[f'win5:targets:{date}',f'win5:preview:{date}',f'win5:final:{date}'])
+          for row in rows:
+              obj=json.loads(row['value'])
+              summary={'stateKey':row['stateKey'],'updatedAt':row['updatedAt']}
+              for k in ['generatedAt','locked','lockedAt','finalizedFrom','lockDeadlineUtc','firstRaceStartUtc','fetchedAt']:
+                  if k in obj: summary[k]=obj.get(k)
+              if isinstance(obj.get('profiles'),list):
+                  summary['profiles']=[{'name':p.get('name'),'points':p.get('points'),'purchaseYen':p.get('purchaseYen'),'legs':[[x.get('leg'),[h.get('horseNo') for h in x.get('selected',[])]] for x in p.get('legs',[])]} for p in obj['profiles']]
+              print('WIN5_STATE='+json.dumps(summary,ensure_ascii=False,separators=(',',':')))
           PY
