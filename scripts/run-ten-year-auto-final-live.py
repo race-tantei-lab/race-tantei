@@ -163,11 +163,12 @@ def main():
         return original_collect_official_odds(window_ids)
     base.collect_official_odds=collect_after_bodyweight_audit
 
-    # Cloudflare Worker is the one-minute primary path. GitHub Actions remains a
-    # narrow independent fallback and must not pre-empt the Worker's fresher odds.
-    # Never pre-empt T-15. Worker is primary at the boundary; this minute-loop
-    # fallback may recover only after the boundary, during T-15..T-14.
-    base.MIN_LOCK_SECONDS=14*60
+    # Cloudflare Worker remains the primary every-minute path. GitHub Actions is
+    # the independent backup, but it must not have a one-minute rescue window:
+    # once a selected race reaches 15 minutes before start, every backup run
+    # remains eligible until the recorded start time. At/after start the base
+    # runner refuses and reports the missed deadline instead of creating a bet.
+    base.MIN_LOCK_SECONDS=0
     base.MAX_LOCK_SECONDS=15*60
     base.main()
 
