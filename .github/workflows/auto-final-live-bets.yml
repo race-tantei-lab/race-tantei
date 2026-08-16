@@ -2,40 +2,23 @@ name: Automatic final live bets
 
 on:
   workflow_dispatch:
-    inputs:
-      continuation:
-        description: Continue an already-running race-day backup monitor
-        required: false
-        default: "false"
-        type: string
   schedule:
-    - cron: "2-57/5 8 * * 6,0,1"
-      timezone: "Asia/Tokyo"
-    - cron: "7,37 9-19 * * 6,0,1"
+    - cron: "*/5 8-19 * * 6,0,1"
       timezone: "Asia/Tokyo"
   push:
     branches: [main]
     paths:
       - ".github/workflows/auto-final-live-bets.yml"
+      - "scripts/run-critical-auto-bet-generation.py"
       - "scripts/run-auto-final-live.py"
       - "scripts/run-ten-year-auto-final-live.py"
       - "scripts/refresh-selected-bodyweights-direct.mjs"
-      - "scripts/ten-year-production-core.py"
-      - "scripts/generate-ten-year-preday-selection.py"
       - "scripts/generate-ten-year-live-bets.py"
       - "scripts/collect-jra-official-odds.py"
       - "scripts/collect-current-jra-official-odds-live.py"
       - "scripts/collect-current-jra-official-odds-fast.py"
-      - "src/v1/bodyweight-refresh.ts"
-      - "src/v1/completed-worker-live-lock.ts"
-      - "config/ten-year-completed-model.json"
-      - "models/ten-year-completed-model.txt"
-      - "models/ten-year-production-state-manifest.json"
-      - "models/ten-year-runner-feature-state.json.gz"
-      - "models/ten-year-race-selection-state.json.gz"
 
 permissions:
-  actions: write
   contents: read
   statuses: write
 
@@ -44,227 +27,110 @@ env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-  JRA_ODDS_REQUEST_PAUSE_SECONDS: "0.55"
+  JRA_ODDS_REQUEST_PAUSE_SECONDS: "0.35"
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   lock:
     runs-on: ubuntu-latest
-    timeout-minutes: 330
+    timeout-minutes: 4
     steps:
-      - name: Detect an existing live backup monitor
-        id: live_gate
-        if: github.event_name != 'push'
-        shell: bash
-        env:
-          CONTINUATION: ${{ inputs.continuation || 'false' }}
-        run: |
-          set -euo pipefail
-          if [[ "$CONTINUATION" == "true" ]]; then
-            echo "run_live=true" >> "$GITHUB_OUTPUT"
-            echo "Continuation handoff accepted."
-            exit 0
-          fi
-          other_live=$(gh api \
-            "repos/${GITHUB_REPOSITORY}/actions/workflows/auto-final-live-bets.yml/runs?status=in_progress&per_page=100" \
-            --jq "[.workflow_runs[] | select(.id != ${GITHUB_RUN_ID}) | select(.event != \"push\")] | length")
-          if [[ "$other_live" -gt 0 ]]; then
-            echo "run_live=false" >> "$GITHUB_OUTPUT"
-            echo "Existing live backup monitor detected; this seed exits without interrupting it."
-          else
-            echo "run_live=true" >> "$GITHUB_OUTPUT"
-            echo "No existing live backup monitor; this run becomes the monitor."
-          fi
-
-      - name: Mark automatic live lock pending
-        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
-        run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=pending \
-            -f context='production/auto-final-live' \
-            -f description='10年完成モデルの自動固定を確認中' \
-            -f target_url="$STATUS_TARGET_URL" >/dev/null
-
       - uses: actions/checkout@v4
-        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
 
       - uses: actions/setup-node@v4
-        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
         with:
           node-version: "22"
           cache: npm
 
-      - name: Build canonical JRA parser for bodyweight refresh
-        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
+      - name: Build canonical JRA parser
         run: |
           npm ci
           npm run build:test
           node --check scripts/refresh-selected-bodyweights-direct.mjs
 
       - uses: actions/setup-python@v5
-        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
         with:
           python-version: "3.12"
 
       - name: Install completed-model runtime
-        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
         run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0"
 
-      - name: Compile automatic live runner
-        if: github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true'
+      - name: Compile independent finalizer
         run: |
           python -m py_compile \
+            scripts/run-critical-auto-bet-generation.py \
             scripts/run-auto-final-live.py \
             scripts/run-ten-year-auto-final-live.py \
-            scripts/ten-year-production-core.py \
-            scripts/generate-ten-year-preday-selection.py \
             scripts/generate-ten-year-live-bets.py \
             scripts/collect-current-jra-official-odds-live.py \
             scripts/collect-current-jra-official-odds-fast.py
 
-      - name: Check integration on code changes
-        if: github.event_name == 'push'
-        run: python scripts/run-ten-year-auto-final-live.py --check-only
-
-      - name: Seed the resilient live monitor from this explicit repair commit
-        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[seed-live-backup]')
+      - name: Refresh selected bodyweights with hard timeout
         shell: bash
         run: |
-          set -euo pipefail
-          gh api --method POST \
-            "repos/${GITHUB_REPOSITORY}/actions/workflows/auto-final-live-bets.yml/dispatches" \
-            --input - <<'JSON'
-          {"ref":"main","inputs":{"continuation":"false"}}
-          JSON
-          echo "LIVE_BACKUP_MONITOR_SEEDED"
+          set -o pipefail
+          timeout 45s node scripts/refresh-selected-bodyweights-direct.mjs 2>&1 | tee bodyweight-refresh.log || \
+            echo "WARN bodyweight refresh timed out/failed; finalizer continues with latest verified D1 inputs"
 
-      - name: Run one-minute resilient live backup monitor
-        id: monitor
-        if: github.event_name != 'push' && steps.live_gate.outputs.run_live == 'true'
+      - name: Finalize every due selected race independently
         shell: bash
         run: |
           set -uo pipefail
           : > automatic-final-live.log
-          cycle=0
-          successful_cycles=0
-          last_cycle_failed=0
-          while [[ "$cycle" -lt 300 ]]; do
-            dow=$(TZ=Asia/Tokyo date +%u)
-            hour_raw=$(TZ=Asia/Tokyo date +%H)
-            hour=$((10#$hour_raw))
-            if [[ "$dow" != "6" && "$dow" != "7" && "$dow" != "1" ]]; then
-              echo "Outside configured race-day weekdays; monitor stops cleanly." | tee -a automatic-final-live.log
-              break
-            fi
-            if (( hour < 8 || hour >= 20 )); then
-              echo "Outside JST 08:00-19:59; monitor stops cleanly." | tee -a automatic-final-live.log
-              break
-            fi
+          set +e
+          timeout 150s python scripts/run-critical-auto-bet-generation.py 2>&1 | tee automatic-final-live.log
+          generator_rc=${PIPESTATUS[0]}
+          set -e
 
-            cycle=$((cycle + 1))
-            cycle_started=$(date +%s)
-            now_jst=$(TZ=Asia/Tokyo date '+%F %T %Z')
-            echo "=== live backup cycle ${cycle} at ${now_jst} ===" | tee -a automatic-final-live.log
-
-            if (( (cycle - 1) % 5 == 0 )); then
-              today=$(TZ=Asia/Tokyo date +%F)
-              curl --retry 1 --retry-delay 1 --retry-all-errors \
-                --connect-timeout 3 --max-time 8 -fsS \
-                "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$today" \
-                >/dev/null || echo "WARN public day wake failed; D1 fallback still runs" | tee -a automatic-final-live.log
-              sleep 3
-            fi
-
-            # Acquisition first: target the selected race's exact official JRA
-            # entry page every minute from T-80. A transient refresh failure is
-            # nonfatal here because a previously verified official snapshot can
-            # still be used; the Python finalizer independently verifies the D1
-            # values against that provenance before it is allowed to write bets.
-            if node scripts/refresh-selected-bodyweights-direct.mjs 2>&1 | tee -a automatic-final-live.log; then
-              :
-            else
-              echo "WARN bodyweight refresh did not complete this cycle; finalizer provenance gate decides whether retry is required" | tee -a automatic-final-live.log
-            fi
-
-            if python scripts/run-ten-year-auto-final-live.py 2>&1 | tee -a automatic-final-live.log; then
-              successful_cycles=$((successful_cycles + 1))
-              last_cycle_failed=0
-              gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-                -f state=success \
-                -f context='production/auto-final-live' \
-                -f description='GitHubバックアップ監視は稼働中（直近1分サイクル正常）' \
-                -f target_url="$STATUS_TARGET_URL" >/dev/null || true
-            else
-              last_cycle_failed=1
-              gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-                -f state=failure \
-                -f context='production/auto-final-live' \
-                -f description='GitHubバックアップの直近1分サイクルに失敗（次サイクルで再試行）' \
-                -f target_url="$STATUS_TARGET_URL" >/dev/null || true
-            fi
-
-            elapsed=$(( $(date +%s) - cycle_started ))
-            sleep_for=$((60 - elapsed))
-            if (( sleep_for < 5 )); then sleep_for=5; fi
-            sleep "$sleep_for"
-          done
-
-          echo "successfulCycles=$successful_cycles lastCycleFailed=$last_cycle_failed" | tee -a automatic-final-live.log
-          if (( successful_cycles == 0 )); then
-            echo "No successful live backup cycle completed." >&2
-            exit 1
-          fi
-          if (( last_cycle_failed != 0 )); then
-            echo "Last live backup cycle failed." >&2
+          if [[ ! -f analysis-results/critical-auto-bet-generation.json ]]; then
+            echo "CRITICAL_AUDIT_MISSING generator_rc=$generator_rc" >&2
             exit 1
           fi
 
-      - name: Hand off live monitor before GitHub job lifetime becomes a dependency
-        if: always() && github.event_name != 'push' && steps.live_gate.outputs.run_live == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          dow=$(TZ=Asia/Tokyo date +%u)
-          hour_raw=$(TZ=Asia/Tokyo date +%H)
-          hour=$((10#$hour_raw))
-          if [[ ( "$dow" == "6" || "$dow" == "7" || "$dow" == "1" ) && "$hour" -ge 8 && "$hour" -lt 20 ]]; then
-            gh api --method POST \
-              "repos/${GITHUB_REPOSITORY}/actions/workflows/auto-final-live-bets.yml/dispatches" \
-              --input - <<'JSON'
-            {"ref":"main","inputs":{"continuation":"true"}}
-            JSON
-            echo "LIVE_BACKUP_MONITOR_HANDOFF_DISPATCHED"
-          else
-            echo "Race-day monitoring window is over; no continuation dispatched."
-          fi
+          python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('analysis-results/critical-auto-bet-generation.json')
+          data=json.loads(p.read_text(encoding='utf-8'))
+          urgent=list(data.get('urgentMissingRaceIds') or [])
+          failures=list(data.get('failures') or [])
+          if urgent or failures:
+              raise SystemExit(f"LIVE_BACKUP_CURRENT_DUE_INCOMPLETE urgent={urgent} failures={failures}")
+          print(json.dumps({
+              'status':'live_backup_due_complete',
+              'generatedRaceIds':data.get('generatedRaceIds') or [],
+              'remainingFutureRaceIds':data.get('remainingFutureRaceIds') or [],
+              'historicalOrLateAuditOnly':data.get('deadlineBreachRaceIds') or [],
+          }, ensure_ascii=False))
+          PY
 
       - name: Upload automatic live audit
-        if: always() && github.event_name != 'push' && steps.live_gate.outputs.run_live == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: automatic-final-live-audit-${{ github.run_id }}
           path: |
-            analysis-results/auto-final-live-run.json
-            analysis-results/auto-final-live-*.json
+            analysis-results/critical-auto-bet-generation.json
+            analysis-results/critical-auto-bet-*.json
             official-odds-collection-report.json
             automatic-final-live.log
+            bodyweight-refresh.log
           if-no-files-found: warn
           retention-days: 30
 
       - name: Mark automatic live lock success
-        if: success() && (github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true')
+        if: success()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/auto-final-live' \
-            -f description='10年完成モデルの自動固定経路は正常' \
+            -f description='独立バックアップ: 現在締切対象の買い目は確定済み' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Mark automatic live lock failure
-        if: failure() && (github.event_name == 'push' || steps.live_gate.outputs.run_live == 'true')
+        if: failure()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/auto-final-live' \
-            -f description='10年完成モデルの自動固定に失敗' \
+            -f description='独立バックアップ: 現在締切対象に未確定あり' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
