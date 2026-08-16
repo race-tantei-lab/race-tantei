@@ -1,0 +1,252 @@
+name: Apply normal T15 atomic root fix
+on:
+  push:
+    branches: [fix/normal-t15-atomic-v2-20260816]
+    paths: [".github/workflows/apply-normal-t15-atomic-root.yml"]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/normal-t15-atomic-v2-20260816
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Apply root fix
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          root=Path.cwd()
+
+          # 1. Replace deadline guard with one network-free, stored-preview-only finalizer.
+          guard=root/'src/v1/completed-worker-deadline-guard.ts'
+          guard.write_text(r'''import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION } from "./completed-feature-runtime.js";
+          import { ensureCompletedFinalImmutability } from "./completed-final-invariants.js";
+          import { COMPLETED_COURSE_STAKES, type CompletedCourseBet, type CompletedTicket } from "./completed-ticket-runtime.js";
+          import type { Env } from "./types.js";
+
+          const SELECTION_PREFIX = "final_daily_selection:";
+          const PREVIEW_PREFIX = "worker_live_preview:";
+          const FINAL_PREFIX = "worker_live_final:";
+          const AUDIT_PREFIX = "worker_deadline_guard:";
+          export const DEADLINE_GUARD_MS = 15 * 60 * 1000;
+          const MAX_OFFICIAL_PREVIEW_AGE_MS = 60 * 60 * 1000;
+          const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
+
+          type SelectionPayload = { sourceModel?: string; resultDataUsedForTargetDay?: boolean; selected?: Array<{ raceId?: string; venue?: string; raceNo?: number }> };
+          type RaceStartRow = { raceId: string; startTimeUtc: string | null };
+          type RaceIdentityRow = { raceDate: string; startTimeUtc: string | null };
+          type PublicBetRow = { course: string; betType: string; combination: string; stakeYen: number; settlementStatus: string; sourcePredictionId: number | null };
+          type CachedOfficialPreview = {
+            version?: number; raceId?: string; sourceModel?: string; modelSha256?: string; generatedAt?: string;
+            bodyWeightApplied?: boolean; bodyWeightSnapshot?: { fetchedAt?: string; sourceUrl?: string; snapshotSha256?: string; activeRunners?: unknown[] } | null;
+            bodyWeightError?: string | null; oddsFetchedAt?: string; oddsSource?: string; oddsSnapshotSha256?: string;
+            onlineLearning?: unknown; runnerRecencyFactors?: unknown; tickets?: CompletedTicket[]; courseBets?: CompletedCourseBet[];
+          };
+          type PreviewEnvelope = { version?: number; raceId?: string; snapshots?: CachedOfficialPreview[] };
+          export type DeadlineEnsureResult = { status: "locked" | "already_locked" | "outside_window" | "not_selected" | "preview_missing"; raceId: string; remainingMs: number };
+          export type DeadlineGuardAudit = {
+            status: "ok" | "locked" | "error"; checkedAt: string; date: string; orderedSelectedRaceIds: string[]; dueRaceIds: string[];
+            lockedRaceIds: string[]; lockedOfficialPreviewRaceIds: string[]; lockedProbabilityFallbackRaceIds: string[];
+            skippedAlreadyLockedRaceIds: string[]; skippedOutsideWindowRaceIds: string[]; errors: Array<{ raceId: string; error: string }>;
+          };
+
+          function iso(now = new Date()): string { return now.toISOString(); }
+          function jstDate(now = new Date()): string { return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10); }
+          function errorText(error: unknown): string { return error instanceof Error ? `${error.name}:${error.message}` : String(error); }
+          export function shouldDeadlineGuardLock(remainingMs: number): boolean { return Number.isFinite(remainingMs) && remainingMs > 0 && remainingMs <= DEADLINE_GUARD_MS; }
+
+          async function loadSelection(db: D1Database, date: string): Promise<string[]> {
+            const row = await db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1").bind(`${SELECTION_PREFIX}${date}`).first<{ value: string }>();
+            if (!row?.value) throw new Error(`DEADLINE_GUARD_SELECTION_MISSING:${date}`);
+            const parsed = JSON.parse(row.value) as SelectionPayload;
+            if (parsed.sourceModel !== COMPLETED_MODEL_VERSION || parsed.resultDataUsedForTargetDay !== false || !Array.isArray(parsed.selected) || !parsed.selected.length) throw new Error(`DEADLINE_GUARD_SELECTION_INVALID:${date}`);
+            const ids = parsed.selected.map((item) => String(item.raceId || "")).filter(Boolean);
+            if (!ids.length || new Set(ids).size !== ids.length) throw new Error(`DEADLINE_GUARD_SELECTION_IDS_INVALID:${date}`);
+            return ids;
+          }
+
+          async function orderSelectedRaceIds(db: D1Database, date: string, ids: string[]): Promise<string[]> {
+            const rows = await db.prepare("SELECT race_id AS raceId,start_time_utc AS startTimeUtc FROM rt_races WHERE race_date=?").bind(date).all<RaceStartRow>();
+            const startById = new Map((rows.results ?? []).map((row) => [String(row.raceId), Date.parse(String(row.startTimeUtc || ""))]));
+            return [...ids].sort((a,b) => {
+              const av = Number.isFinite(startById.get(a)) ? Number(startById.get(a)) : Number.POSITIVE_INFINITY;
+              const bv = Number.isFinite(startById.get(b)) ? Number(startById.get(b)) : Number.POSITIVE_INFINITY;
+              return av-bv || a.localeCompare(b);
+            });
+          }
+
+          async function publicRows(db: D1Database, raceId: string): Promise<PublicBetRow[]> {
+            const result = await db.prepare(`SELECT course,bet_type AS betType,combination,stake_yen AS stakeYen,settlement_status AS settlementStatus,source_prediction_id AS sourcePredictionId FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type,combination`).bind(raceId).all<PublicBetRow>();
+            return result.results ?? [];
+          }
+
+          function strictComplete(rows: PublicBetRow[]): boolean {
+            if (rows.length !== 6) return false;
+            const signatures: string[] = [];
+            for (const course of COURSES) {
+              const current=rows.filter((row)=>row.course===course); const stakes=COMPLETED_COURSE_STAKES[course];
+              if (current.length!==2 || new Set(current.map((row)=>row.betType)).size!==2) return false;
+              if (current.some((row)=>Number(row.sourcePredictionId)!==-2)) return false;
+              if (current.reduce((sum,row)=>sum+Number(row.stakeYen),0)!==stakes[0]+stakes[1]) return false;
+              signatures.push(current.map((row)=>`${row.betType}\u0001${row.combination}`).sort().join("\u0002"));
+            }
+            return new Set(signatures).size===1;
+          }
+
+          function validOfficialPreview(snapshot: CachedOfficialPreview, raceId: string, now: Date): snapshot is CachedOfficialPreview & { tickets: CompletedTicket[]; courseBets: CompletedCourseBet[]; generatedAt: string; oddsFetchedAt: string; oddsSource: string; oddsSnapshotSha256: string } {
+            if (snapshot.version!==1 || snapshot.raceId!==raceId || snapshot.sourceModel!==COMPLETED_MODEL_VERSION || snapshot.modelSha256!==COMPLETED_MODEL_SHA256) return false;
+            const generatedMs=Date.parse(String(snapshot.generatedAt||"")); const oddsMs=Date.parse(String(snapshot.oddsFetchedAt||""));
+            if (!Number.isFinite(generatedMs)||!Number.isFinite(oddsMs)||generatedMs>now.getTime()+5_000||oddsMs>now.getTime()+5_000||now.getTime()-generatedMs>MAX_OFFICIAL_PREVIEW_AGE_MS) return false;
+            if (snapshot.oddsSource!=="jra-fast-official" && snapshot.oddsSource!=="jra-crawl-official") return false;
+            if (!/^[0-9a-f]{64}$/.test(String(snapshot.oddsSnapshotSha256||""))) return false;
+            if (!Array.isArray(snapshot.tickets)||snapshot.tickets.length!==2||new Set(snapshot.tickets.map((row)=>row.betType)).size!==2) return false;
+            if (snapshot.tickets.some((row)=>!row.combination||!Number.isFinite(Number(row.officialOdds))||Number(row.officialOdds)<=0||!Number.isFinite(Number(row.predictedProbability))||Number(row.predictedProbability)<=0)) return false;
+            if (!Array.isArray(snapshot.courseBets)||snapshot.courseBets.length!==6) return false;
+            const signatures:string[]=[];
+            for (const course of COURSES) {
+              const rows=snapshot.courseBets.filter((row)=>row.course===course); const stakes=COMPLETED_COURSE_STAKES[course];
+              if (rows.length!==2||new Set(rows.map((row)=>row.betType)).size!==2||rows.reduce((sum,row)=>sum+Number(row.stakeYen),0)!==stakes[0]+stakes[1]) return false;
+              if (rows.some((row)=>!Number.isFinite(Number(row.assumedOdds))||Number(row.assumedOdds)<=0||!row.combination)) return false;
+              signatures.push(rows.map((row)=>`${row.betType}\u0001${row.combination}`).sort().join("\u0002"));
+            }
+            return new Set(signatures).size===1;
+          }
+
+          async function latestOfficialPreview(db: D1Database, raceId: string, now: Date) {
+            const row=await db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1").bind(`${PREVIEW_PREFIX}${raceId}`).first<{value:string}>();
+            if (!row?.value) return null;
+            try { const parsed=JSON.parse(row.value) as PreviewEnvelope; if (parsed.version!==1||parsed.raceId!==raceId||!Array.isArray(parsed.snapshots)) return null; return parsed.snapshots.find((snapshot)=>validOfficialPreview(snapshot,raceId,now))??null; } catch { return null; }
+          }
+
+          async function commitCourseBets(db: D1Database, raceId: string, courseBets: CompletedCourseBet[], finalPayload: Record<string,unknown>, now: Date): Promise<void> {
+            const existing=await publicRows(db,raceId); if (strictComplete(existing)) return;
+            if (existing.some((row)=>Number(row.sourcePredictionId)!==-2||row.settlementStatus!=="pending")) throw new Error(`DEADLINE_GUARD_UNSAFE_PARTIAL:${raceId}`);
+            const lockedAt=iso(now); const statements:D1PreparedStatement[]=[];
+            if (existing.length) statements.push(db.prepare("DELETE FROM rt_public_bets WHERE race_id=? AND source_prediction_id=-2 AND settlement_status='pending'").bind(raceId));
+            for (const bet of courseBets) statements.push(db.prepare(`INSERT INTO rt_public_bets(race_id,course,bet_type,combination,stake_yen,assumed_odds,return_yen,settlement_status,locked_at,source_prediction_id) VALUES(?,?,?,?,?,?,NULL,'pending',?,-2)`).bind(raceId,bet.course,bet.betType,bet.combination,bet.stakeYen,Number(bet.assumedOdds),lockedAt));
+            statements.push(db.prepare(`INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP`).bind(`${FINAL_PREFIX}${raceId}`,JSON.stringify({...finalPayload,status:"locked",raceId,lockedAt,sourceModel:COMPLETED_MODEL_VERSION,modelSha256:COMPLETED_MODEL_SHA256})));
+            await db.batch(statements); if (!strictComplete(await publicRows(db,raceId))) throw new Error(`DEADLINE_GUARD_POST_WRITE_GATE_FAILED:${raceId}`);
+          }
+
+          async function commitOfficialPreview(db: D1Database, raceId: string, snapshot: CachedOfficialPreview & { tickets: CompletedTicket[]; courseBets: CompletedCourseBet[]; generatedAt: string; oddsFetchedAt: string; oddsSource: string; oddsSnapshotSha256: string }, now: Date): Promise<void> {
+            const body=snapshot.bodyWeightSnapshot;
+            await commitCourseBets(db,raceId,snapshot.courseBets,{finalizedFrom:"persistent_official_deadline_guard",previewGeneratedAt:snapshot.generatedAt,bodyWeightApplied:snapshot.bodyWeightApplied===true,bodyWeightFetchedAt:body?.fetchedAt??null,bodyWeightSource:body?.sourceUrl??null,bodyWeightSnapshotSha256:body?.snapshotSha256??null,bodyWeights:body?.activeRunners??null,bodyWeightError:snapshot.bodyWeightError??null,oddsMode:"official_cached_deadline_guard",oddsAvailable:true,oddsFetchedAt:snapshot.oddsFetchedAt,oddsSource:snapshot.oddsSource,oddsSnapshotSha256:snapshot.oddsSnapshotSha256,onlineLearning:snapshot.onlineLearning??null,runnerRecencyFactors:snapshot.runnerRecencyFactors??null,tickets:snapshot.tickets},now);
+          }
+
+          export async function ensureCompletedRaceFinalAtDeadline(env: Env, raceId: string, now = new Date()): Promise<DeadlineEnsureResult> {
+            await ensureCompletedFinalImmutability(env.DB);
+            if (strictComplete(await publicRows(env.DB,raceId))) return {status:"already_locked",raceId,remainingMs:Number.NaN};
+            const race=await env.DB.prepare("SELECT race_date AS raceDate,start_time_utc AS startTimeUtc FROM rt_races WHERE race_id=? LIMIT 1").bind(raceId).first<RaceIdentityRow>();
+            if (!race) throw new Error(`DEADLINE_GUARD_RACE_MISSING:${raceId}`);
+            const selected=await loadSelection(env.DB,race.raceDate); if (!selected.includes(raceId)) return {status:"not_selected",raceId,remainingMs:Number.NaN};
+            const startMs=Date.parse(String(race.startTimeUtc||"")); if (!Number.isFinite(startMs)) throw new Error(`DEADLINE_GUARD_START_TIME_INVALID:${raceId}`);
+            const remainingMs=startMs-now.getTime(); if (!shouldDeadlineGuardLock(remainingMs)) return {status:"outside_window",raceId,remainingMs};
+            const official=await latestOfficialPreview(env.DB,raceId,now); if (!official) return {status:"preview_missing",raceId,remainingMs};
+            await commitOfficialPreview(env.DB,raceId,official,now); return {status:"locked",raceId,remainingMs};
+          }
+
+          async function saveAudit(db:D1Database,audit:DeadlineGuardAudit):Promise<void>{ await db.prepare(`INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP`).bind(`${AUDIT_PREFIX}${audit.date}`,JSON.stringify(audit)).run(); }
+
+          export async function runCompletedWorkerDeadlineGuard(env: Env, now = new Date()): Promise<DeadlineGuardAudit> {
+            await ensureCompletedFinalImmutability(env.DB);
+            const date=jstDate(now); const rawIds=await loadSelection(env.DB,date); const ids=await orderSelectedRaceIds(env.DB,date,rawIds);
+            const audit:DeadlineGuardAudit={status:"ok",checkedAt:iso(now),date,orderedSelectedRaceIds:ids,dueRaceIds:[],lockedRaceIds:[],lockedOfficialPreviewRaceIds:[],lockedProbabilityFallbackRaceIds:[],skippedAlreadyLockedRaceIds:[],skippedOutsideWindowRaceIds:[],errors:[]};
+            for (const raceId of ids) {
+              try {
+                if (strictComplete(await publicRows(env.DB,raceId))) { audit.skippedAlreadyLockedRaceIds.push(raceId); continue; }
+                const start=await env.DB.prepare("SELECT start_time_utc AS startTimeUtc FROM rt_races WHERE race_id=? LIMIT 1").bind(raceId).first<{startTimeUtc:string|null}>();
+                const startMs=Date.parse(String(start?.startTimeUtc||"")); if (!Number.isFinite(startMs)) throw new Error(`DEADLINE_GUARD_START_TIME_INVALID:${raceId}`);
+                const remaining=startMs-now.getTime(); if (!shouldDeadlineGuardLock(remaining)) { audit.skippedOutsideWindowRaceIds.push(raceId); continue; }
+                audit.dueRaceIds.push(raceId);
+                const result=await ensureCompletedRaceFinalAtDeadline(env,raceId,now);
+                if (result.status==="locked"||result.status==="already_locked") { audit.lockedRaceIds.push(raceId); audit.lockedOfficialPreviewRaceIds.push(raceId); }
+                else if (result.status==="preview_missing") throw new Error(`DEADLINE_GUARD_PREVIEW_MISSING:${raceId}`);
+                else throw new Error(`DEADLINE_GUARD_UNEXPECTED_STATUS:${raceId}:${result.status}`);
+              } catch(error) { audit.errors.push({raceId,error:errorText(error)}); }
+            }
+            audit.status=audit.errors.length?"error":audit.lockedRaceIds.length?"locked":"ok"; await saveAudit(env.DB,audit); return audit;
+          }
+          '''.replace(/^          /gm,''),encoding='utf-8')
+
+          # 2. Make Worker live-lock prepare only before T-15 and freeze stored preview at/after T-15.
+          p=root/'src/v1/completed-worker-live-lock.ts'; text=p.read_text(encoding='utf-8')
+          if 'completed-final-invariants' not in text:
+              anchor='import type { Env, RaceRecord, RunnerRecord } from "./types";'
+              text=text.replace(anchor,'import { ensureCompletedFinalImmutability } from "./completed-final-invariants";\n'+anchor,1)
+          text=text.replace('const FINALIZE_OPEN_MS = DEADLINE_MS;\n','')
+          marker='export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Promise<Audit> {'
+          helper='''async function orderLiveRaceIdsByStart(db: D1Database, date: string, ids: string[]): Promise<string[]> {\n  const result = await db.prepare("SELECT race_id AS raceId,start_time_utc AS startTimeUtc FROM rt_races WHERE race_date=?").bind(date).all<{ raceId: string; startTimeUtc: string | null }>();\n  const starts = new Map((result.results ?? []).map((row) => [String(row.raceId), Date.parse(String(row.startTimeUtc || ""))]));\n  return [...ids].sort((a,b) => { const av=Number.isFinite(starts.get(a))?Number(starts.get(a)):Number.POSITIVE_INFINITY; const bv=Number.isFinite(starts.get(b))?Number(starts.get(b)):Number.POSITIVE_INFINITY; return av-bv || a.localeCompare(b); });\n}\n\n'''
+          if 'orderLiveRaceIdsByStart' not in text: text=text.replace(marker,helper+marker,1)
+          text=text.replace('  const date = jstDate(now);\n  const selection = await loadSelection(env.DB, date);','  const date = jstDate(now);\n  await ensureCompletedFinalImmutability(env.DB);\n  const selection = await loadSelection(env.DB, date);',1)
+          text=text.replace('  const ids = validateSelection(selection);','  const ids = await orderLiveRaceIdsByStart(env.DB, date, validateSelection(selection));',1)
+          start=text.index('      // T-15 is the immutable boundary.')
+          end=text.index('\n\n      let fresh: PreviewSnapshot | null = null;',start)
+          replacement='''      // T-15 is a hard immutable boundary. From this point onward this\n      // path performs no JRA HTTP, model scoring, recency recomputation, or\n      // odds refresh. It only promotes a preview that was saved before T-15.\n      if (remaining <= DEADLINE_MS) {\n        const stored = await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId);\n        if (!stored) throw new Error(`WORKER_DEADLINE_PREVIEW_MISSING:${raceId}`);\n        if (!snapshotHasOfficialBodyWeight(stored)) bodyWeightBreachRaceIds.add(raceId);\n        await commitSnapshot(env.DB, raceId, stored, now, "deadline_watchdog");\n        lockedByWorker.push(raceId);\n        finalizedFromFallbackRaceIds.push(raceId);\n        continue;\n      }'''
+          text=text[:start]+replacement+text[end:]
+          old='''\n      if (remaining <= FINALIZE_OPEN_MS) {\n        const official = fresh && snapshotHasOfficialBodyWeight(fresh) ? fresh : await latestOfficialBodyWeightPreview(env.DB, raceId);\n        const chosen = official ?? fresh ?? await latestPreview(env.DB, raceId);\n        if (!chosen) throw new Error(`WORKER_FINALIZE_PREVIEW_MISSING:${raceId}`);\n        if (!snapshotHasOfficialBodyWeight(chosen)) bodyWeightBreachRaceIds.add(raceId);\n        await commitSnapshot(env.DB, raceId, chosen, now, fresh === chosen ? "fresh" : "last_good");\n        lockedByWorker.push(raceId);\n        if (fresh === chosen) finalizedFromFreshRaceIds.push(raceId);\n        else finalizedFromFallbackRaceIds.push(raceId);\n      }'''
+          if old in text: text=text.replace(old,'',1)
+          p.write_text(text,encoding='utf-8')
+
+          # 3. Run live preview preparation independently before the delegated chain,
+          # and self-heal a race detail request with the exact same DB-only finalizer.
+          p=root/'src/public-site-entry-v29.ts'; text=p.read_text(encoding='utf-8')
+          text=text.replace('import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";','import { ensureCompletedRaceFinalAtDeadline, runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";\nimport { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";',1)
+          text=text.replace('const UI_VERSION = "ten-year-completed-public-v29-guaranteed-t15-fallback-20260816";','const UI_VERSION = "ten-year-completed-public-v29-atomic-t15-20260816";',1)
+          anchor='async function runDeadlineGuard(env: Env, label: string, strict: boolean): Promise<void> {'
+          prep='''async function runNormalRacePreparation(env: Env, label: string): Promise<void> {\n  const now = new Date();\n  try { await freezeCompletedWorkerSelectionIfNeeded(env, now); } catch (error) { console.error(`${label}_SELECTION_FAILED`, error); }\n  try {\n    const audit = await runCompletedWorkerLiveLock(env, now);\n    console.log(label, JSON.stringify({ status: audit.status, refreshedPreviewRaceIds: audit.refreshedPreviewRaceIds, lockedByWorker: audit.lockedByWorker, errors: audit.errors }));\n  } catch (error) {\n    console.error(`${label}_FAILED`, error);\n  }\n}\n\nasync function ensureRaceDetailDeadlineFinal(env: Env, path: string): Promise<void> {\n  const match = /^\\/races\\/(20\\d{2}-\\d{2}-\\d{2}-[a-z0-9-]+-\\d{2})\\/?$/i.exec(path);\n  if (!match) return;\n  try {\n    const result = await ensureCompletedRaceFinalAtDeadline(env, decodeURIComponent(match[1]), new Date());\n    if (result.status === "locked") console.log("RACE_DETAIL_T15_SELF_HEAL", JSON.stringify(result));\n  } catch (error) {\n    console.error("RACE_DETAIL_T15_SELF_HEAL_FAILED", error);\n  }\n}\n\n'''
+          if 'runNormalRacePreparation' not in text: text=text.replace(anchor,prep+anchor,1)
+          old='''  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {\n    if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });\n    const response = await publicSite.fetch(request, env, ctx);\n    return emergencyFallbackNotice(response, env, new URL(request.url).pathname);\n  },'''
+          new='''  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {\n    if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });\n    const path = new URL(request.url).pathname;\n    await ensureRaceDetailDeadlineFinal(env, path);\n    const response = await publicSite.fetch(request, env, ctx);\n    return emergencyFallbackNotice(response, env, path);\n  },'''
+          if old not in text: raise SystemExit('v29 fetch anchor missing')
+          text=text.replace(old,new,1)
+          text=text.replace('''    await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE", false);''','''    await runNormalRacePreparation(env, "COMPLETED_WORKER_PREPARE_BEFORE");\n    await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE", false);''',1)
+          after_anchor='''    let finalGuardError: unknown = null;\n    try {\n      await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_AFTER", true);'''
+          after_new='''    await runNormalRacePreparation(env, "COMPLETED_WORKER_PREPARE_AFTER");\n\n    let finalGuardError: unknown = null;\n    try {\n      await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_AFTER", true);'''
+          if after_anchor not in text: raise SystemExit('v29 after anchor missing')
+          text=text.replace(after_anchor,after_new,1)
+          p.write_text(text,encoding='utf-8')
+
+          # 4. Regression verifier: no post-deadline calculation/fallback, self-heal,
+          # independent preparation and DB-level immutability must stay present.
+          p=root/'scripts/verify-live-lock-safety.py'; text=p.read_text(encoding='utf-8')
+          text=text.replace("        'const FINALIZE_OPEN_MS = DEADLINE_MS;',\n",'')
+          text=text.replace("        'official ?? fresh ?? await latestPreview(env.DB, raceId)',\n",'')
+          text=text.replace("        'await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId)',\n",'')
+          text=text.replace("        'finalizedFrom: \"probability_fallback_persistent_deadline_guard\"',\n",'')
+          text=text.replace("        'import { runCompletedWorkerDeadlineGuard } from \"./v1/completed-worker-deadline-guard.js\";',","        'import { ensureCompletedRaceFinalAtDeadline, runCompletedWorkerDeadlineGuard } from \"./v1/completed-worker-deadline-guard.js\";',")
+          insert='''\n    # T-15 must be a hard network/recompute boundary for normal races.\n    t15_start = worker.index('if (remaining <= DEADLINE_MS)')\n    t15_end = worker.index('let fresh: PreviewSnapshot | null = null;', t15_start)\n    t15_block = worker[t15_start:t15_end]\n    for forbidden in ('generatePreview(', 'fetchFastJraOfficialOddsForRace(', 'loadWorkerModel(', 'loadCompletedRecencyLearning('):\n        forbid(t15_block, forbidden, "Worker T-15 hard boundary")\n    require(t15_block, 'await commitSnapshot(env.DB, raceId, stored, now, "deadline_watchdog")', "Worker T-15 hard boundary")\n    forbid(worker, 'const FINALIZE_OPEN_MS = DEADLINE_MS;', "Worker live-lock")\n'''
+          needle='    forbid(worker, "const FINALIZE_OPEN_MS = 16 * 60 * 1000;", "Worker live-lock")\n'
+          if 'Worker T-15 hard boundary' not in text: text=text.replace(needle,needle+insert,1)
+          guard_insert='''\n    for forbidden in (\n        'probability_fallback_persistent_deadline_guard',\n        'chooseCompletedProbabilityFallbackTickets',\n        'emergencyRunnerWeights',\n        'async function buildFallback',\n        'async function commitFallback',\n    ):\n        forbid(guard, forbidden, "persistent deadline guard")\n    require(guard, 'export async function ensureCompletedRaceFinalAtDeadline', "persistent deadline guard")\n    require(guard, 'DEADLINE_GUARD_PREVIEW_MISSING', "persistent deadline guard")\n'''
+          needle2='    production_wrapper = read("src/public-site-entry-v29.ts")\n'
+          if 'async function buildFallback' not in text[text.index('guard = read'):text.index(needle2)]: text=text.replace(needle2,guard_insert+'\n'+needle2,1)
+          wrapper_req='''        'import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";',\n        'await runNormalRacePreparation(env, "COMPLETED_WORKER_PREPARE_BEFORE")',\n        'await ensureRaceDetailDeadlineFinal(env, path);',\n'''
+          wrapper_anchor='''        'await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE", false)',\n'''
+          if 'COMPLETED_WORKER_PREPARE_BEFORE' not in text: text=text.replace(wrapper_anchor,wrapper_req+wrapper_anchor,1)
+          invariant='''\n    invariants = read("src/v1/completed-final-invariants.ts")\n    for needle in (\n        'CREATE TRIGGER IF NOT EXISTS rt_guard_locked_public_bet_terms',\n        'IMMUTABLE_FINAL_BET_TERMS',\n        'CREATE TRIGGER IF NOT EXISTS rt_guard_locked_worker_final_state',\n        'IMMUTABLE_WORKER_FINAL_STATE',\n    ):\n        require(invariants, needle, "final immutability")\n'''
+          scheduled_anchor='    scheduled_gate = read("src/public-site-entry-v25.ts")\n'
+          if 'rt_guard_locked_public_bet_terms' not in text: text=text.replace(scheduled_anchor,invariant+'\n'+scheduled_anchor,1)
+          p.write_text(text,encoding='utf-8')
+          PY
+      - name: Validate root fix
+        run: |
+          npm ci
+          python scripts/verify-live-lock-safety.py
+          npm run typecheck
+          npm run build:test
+          npm test
+          npx wrangler deploy --dry-run
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/v1/completed-worker-deadline-guard.ts src/v1/completed-worker-live-lock.ts src/v1/completed-final-invariants.ts src/public-site-entry-v29.ts scripts/verify-live-lock-safety.py
+          git commit -m "Make normal race T15 final atomic and immutable"
+          git push origin HEAD:fix/normal-t15-atomic-v2-20260816
