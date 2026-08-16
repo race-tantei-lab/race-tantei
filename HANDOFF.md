@@ -66,6 +66,9 @@ live-lock / T-15 / JRA公式オッズ / DB防衛線の最終状態は:
 - state manifest: `models/ten-year-production-state-manifest.json`
 - runner state: `models/ten-year-runner-feature-state.json.gz`
 - selection state: `models/ten-year-race-selection-state.json.gz`
+- canonical ten-year generation wrapper: `scripts/run-ten-year-auto-final-live.py`
+  - これはcompleted modelのpreday/live生成wrapperとして保持する。
+  - **現行T-15自動backupはこのrunnerを呼ばず、stored-preview-onlyで動く。両者を混同しない。**
 
 weights SHA256:
 
@@ -294,6 +297,7 @@ live-lock安全検証:
 - 各会場5R、1R2点、異なる2券種。
 - race selectionはproxy-ticket raceScore。
 - final ticketsは56-feature LightGBM + Plackett-Luce + JRA公式オッズ。
+- canonical generation wrapperは `run-ten-year-auto-final-live.py`。T-15 backupとは別。
 - live final deadlineはT-15、guardはT-16からarm。
 - T-15以降の新規fetch/recompute/generation禁止。
 - locked finalはJRA公式2sourceのみ。DBでも強制。
