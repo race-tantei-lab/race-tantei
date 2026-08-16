@@ -29,8 +29,8 @@ jobs:
           python-version: "3.12"
       - name: Install canonical model runtime
         run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0" "numpy<3"
-      - name: Recover the missed 1R from pre-T15 data only
-        run: python scripts/recover-predeadline-race.py
+      - name: Recover the missed 1R without target result data
+        run: python scripts/recover-missed-race-latest-odds.py
       - name: Verify public projection
         shell: bash
         run: |
