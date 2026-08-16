@@ -57,7 +57,6 @@ def main() -> None:
         "start_time_utc AS startTimeUtc",
         'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
         'finalizedFrom: "persistent_official_deadline_guard"',
-        'finalizedFrom: "probability_fallback_persistent_deadline_guard"',
         "await db.batch(statements)",
         "for (const raceId of ids)",
         "audit.errors.push({ raceId, error: errorText(error) })",
@@ -71,6 +70,9 @@ def main() -> None:
         "fetch(",
     ):
         forbid(guard, forbidden, "persistent deadline guard")
+
+    require(guard, "DEADLINE_GUARD_OFFICIAL_ODDS_REQUIRED", "persistent deadline guard")
+    forbid(guard, "await commitFallback(env.DB, raceId, race, runners, now)", "persistent deadline guard")
 
     production_wrapper = read("src/public-site-entry-v29.ts")
     for needle in (
