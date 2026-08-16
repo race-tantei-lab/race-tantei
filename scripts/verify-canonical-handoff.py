@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED = [
     "HANDOFF.md",
+    "FINAL_STATE_20260816.md",
     "README.md",
     "config/canonical-production-manifest.json",
     "config/ten-year-completed-model.json",
@@ -94,6 +95,7 @@ def main() -> None:
         fail(f"missing required files: {missing}")
 
     handoff = read("HANDOFF.md")
+    final_state = read("FINAL_STATE_20260816.md")
     readme = read("README.md")
     methodology_audit = read("analysis-results/completed-model-methodology-audit-20260813.md")
     production_smoke = read(".github/workflows/production-smoke.yml")
@@ -246,8 +248,22 @@ def main() -> None:
         fail("canonical verifier workflow does not watch production smoke")
 
     auto_workflow = read(manifest["production"]["autoWorkflow"])
-    if "run-ten-year-auto-final-live.py" not in auto_workflow:
-        fail("auto workflow does not invoke canonical ten-year runner")
+    for needle in (
+        "scripts/run-stored-preview-deadline-backup.py",
+        "stored_preview_only",
+        "generatedRaceIds",
+        "POST_DEADLINE_GENERATION_FORBIDDEN",
+    ):
+        if needle not in auto_workflow:
+            fail(f"auto workflow missing current stored-preview-only safety marker: {needle}")
+    for forbidden in (
+        "run-ten-year-auto-final-live.py",
+        "generate-ten-year-live-bets.py",
+        "collect-current-jra-official-odds",
+        "sleep 60",
+    ):
+        if forbidden in auto_workflow:
+            fail(f"auto workflow contains obsolete post-deadline generation/monitor path: {forbidden}")
 
     wrapper = read(manifest["production"]["runner"])
     for needle in ("generate-ten-year-preday-selection.py", "generate-ten-year-live-bets.py"):
@@ -299,9 +315,20 @@ def main() -> None:
         "CANONICAL_HANDOFF_OK",
         "completed-model-methodology-audit-20260813.md",
         "完全OOF",
+        "FINAL_STATE_20260816.md",
     ):
         if needle not in handoff:
             fail(f"HANDOFF missing canonical marker: {needle}")
+
+    for needle in (
+        "DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000",
+        "jra-fast-official",
+        "jra-crawl-official",
+        "probability fallback禁止",
+        "Phase 0 checks run `31936304428`",
+    ):
+        if needle not in final_state:
+            fail(f"FINAL_STATE_20260816 missing safety marker: {needle}")
 
     print(
         "CANONICAL_HANDOFF_OK",
@@ -315,6 +342,7 @@ def main() -> None:
         "worker_model_parity=required",
         "worker_selection_parity=required",
         "worker_live_lock=required",
+        "final_state=20260816",
     )
 
 
