@@ -37,17 +37,30 @@ jobs:
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
-          curl --silent --show-error --fail --connect-timeout 3 --max-time 10 "${base}/" >/tmp/home.html
-          curl --silent --show-error --fail --connect-timeout 3 --max-time 10 "${base}/conditions" >/tmp/conditions.html
-          curl --silent --show-error --fail --connect-timeout 3 --max-time 10 "${base}/guide" >/tmp/guide.html
-          grep -q 'レース探偵' /tmp/home.html
-          grep -q '予想は当日も継続更新' /tmp/home.html
-          grep -q '完成モデル＋継続学習' /tmp/conditions.html
-          grep -q '当日結果も次レースへ反映' /tmp/conditions.html
-          grep -q 'JRA公式オッズだけ' /tmp/conditions.html
-          grep -q '発走15分前までに確定' /tmp/conditions.html
-          grep -q '継続学習について' /tmp/guide.html
-          grep -q '推定・合成オッズで代用' /tmp/guide.html
+          expected_ui='ten-year-completed-public-v31-current-methodology-20260816'
+          curl --silent --show-error --fail --connect-timeout 3 --max-time 10 -D /tmp/home.headers "${base}/" >/tmp/home.html
+          curl --silent --show-error --fail --connect-timeout 3 --max-time 10 -D /tmp/conditions.headers "${base}/conditions" >/tmp/conditions.html
+          curl --silent --show-error --fail --connect-timeout 3 --max-time 10 -D /tmp/guide.headers "${base}/guide" >/tmp/guide.html
+          ui_version="$(tr -d '\r' </tmp/conditions.headers | awk -F': ' 'tolower($1)=="x-race-ui-version"{print $2}' | tail -1)"
+          echo "production ui=${ui_version:-missing}"
+          test "$ui_version" = "$expected_ui"
+          require_marker() {
+            local file="$1" marker="$2" label="$3"
+            if grep -Fq "$marker" "$file"; then
+              echo "MARKER_OK ${label}: ${marker}"
+            else
+              echo "MARKER_MISSING ${label}: ${marker}" >&2
+              exit 1
+            fi
+          }
+          require_marker /tmp/home.html 'レース探偵' home
+          require_marker /tmp/home.html '予想は当日も継続更新' home
+          require_marker /tmp/conditions.html '完成モデル＋継続学習' conditions
+          require_marker /tmp/conditions.html '当日結果も次レースへ反映' conditions
+          require_marker /tmp/conditions.html 'JRA公式オッズだけ' conditions
+          require_marker /tmp/conditions.html '発走15分前までに確定' conditions
+          require_marker /tmp/guide.html '継続学習について' guide
+          require_marker /tmp/guide.html '推定・合成オッズで代用' guide
 
       - name: Wait for canonical deployment and public API
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
