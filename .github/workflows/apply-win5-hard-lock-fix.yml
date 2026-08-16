@@ -1,0 +1,199 @@
+name: Apply WIN5 hard lock fix
+
+on:
+  push:
+    branches:
+      - fix/win5-hard-lock-20260816
+    paths:
+      - .github/workflows/apply-win5-hard-lock-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/win5-hard-lock-20260816
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Patch WIN5 finalization and display
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          root=Path.cwd()
+          runtime=root/'src/v1/completed-win5.ts'
+          text=runtime.read_text(encoding='utf-8')
+          start=text.index('export async function runCompletedWin5Scheduled')
+          end=text.index('export async function loadWin5PublicState', start)
+          new_func=r'''export async function runCompletedWin5Scheduled(env: Env, now = new Date()): Promise<Win5PublicState> {
+            const date = jstDate(now);
+            const final = await loadJsonState<Win5Snapshot>(env.DB, stateKey(FINAL_PREFIX, date));
+            if (validSnapshot(final, date) && final.locked) {
+              // A locked WIN5 snapshot is immutable. Do not refresh targets or
+              // regenerate predictions after the final has been written.
+              const cached = await loadJsonState<Win5TargetCache>(env.DB, stateKey(TARGET_PREFIX, date));
+              return { date, status: "final", targets: validTargetCache(cached, date) ? cached.targets : final.races.map((race) => ({ leg: race.leg, raceDate: race.raceDate, venue: race.venue, raceNo: race.raceNo, startTimeJst: race.startTimeJst, startTimeUtc: race.startTimeUtc, raceId: race.raceId, raceName: race.raceName })), targetFetchedAt: validTargetCache(cached, date) ? cached.fetchedAt : final.targetFetchedAt, targetSourceUrl: validTargetCache(cached, date) ? cached.sourceUrl : final.targetSourceUrl, snapshot: final };
+            }
+
+            let preview = await loadJsonState<Win5Snapshot>(env.DB, stateKey(PREVIEW_PREFIX, date));
+            if (!validSnapshot(preview, date) || preview.locked) preview = null;
+            const cached = await loadJsonState<Win5TargetCache>(env.DB, stateKey(TARGET_PREFIX, date));
+            const cachedTargets = validTargetCache(cached, date) ? cached : null;
+            const nowMs = now.getTime();
+
+            // Hard T-15 guard. This branch performs no external HTTP and no new
+            // prediction calculation. At the first cron invocation at/after the
+            // deadline, freeze the latest pre-deadline preview exactly as it is.
+            // If the target cache is available, it is the authoritative clock.
+            if (cachedTargets) {
+              const cachedFirstStartMs = Math.min(...cachedTargets.targets.map((row) => Date.parse(row.startTimeUtc)));
+              const cachedDeadlineMs = win5LockDeadlineMs(cachedTargets.targets);
+              if (nowMs >= cachedDeadlineMs && nowMs < cachedFirstStartMs) {
+                if (preview) {
+                  const locked = await lockSnapshot(env.DB, preview, now, "last_good");
+                  return { date, status: "final", targets: cachedTargets.targets, targetFetchedAt: cachedTargets.fetchedAt, targetSourceUrl: cachedTargets.sourceUrl, snapshot: locked };
+                }
+                console.error("WIN5_DEADLINE_PREVIEW_MISSING", date, new Date(cachedDeadlineMs).toISOString());
+                return { date, status: "targets_only", targets: cachedTargets.targets, targetFetchedAt: cachedTargets.fetchedAt, targetSourceUrl: cachedTargets.sourceUrl, snapshot: null };
+              }
+            }
+
+            // The preview itself also carries the immutable deadline. This lets
+            // us lock without network I/O even if the separate target cache is
+            // temporarily unavailable at the deadline.
+            if (preview) {
+              const previewDeadlineMs = Date.parse(preview.lockDeadlineUtc);
+              const previewFirstStartMs = Date.parse(preview.firstRaceStartUtc);
+              if (Number.isFinite(previewDeadlineMs) && Number.isFinite(previewFirstStartMs) && nowMs >= previewDeadlineMs && nowMs < previewFirstStartMs) {
+                const locked = await lockSnapshot(env.DB, preview, now, "last_good");
+                const targets = preview.races.map((race) => ({ leg: race.leg, raceDate: race.raceDate, venue: race.venue, raceNo: race.raceNo, startTimeJst: race.startTimeJst, startTimeUtc: race.startTimeUtc, raceId: race.raceId, raceName: race.raceName }));
+                return { date, status: "final", targets, targetFetchedAt: preview.targetFetchedAt, targetSourceUrl: preview.targetSourceUrl, snapshot: locked };
+              }
+            }
+
+            // Before the deadline we may use the network and recompute previews.
+            // Never enter this acquisition path after the lock deadline.
+            const cache = await resolveWin5Targets(env.DB, date, now, false);
+            if (!cache) return { date, status: "targets_missing", targets: [], targetFetchedAt: null, targetSourceUrl: WIN5_PAGE_URL, snapshot: null };
+            const firstStartMs = Math.min(...cache.targets.map((row) => Date.parse(row.startTimeUtc)));
+            const deadlineMs = win5LockDeadlineMs(cache.targets);
+
+            if (nowMs >= deadlineMs && nowMs < firstStartMs) {
+              // Reaching this point means there was no valid stored preview.
+              // Refuse to manufacture a post-deadline prediction; the wrapper's
+              // hard post-condition will surface the missing final immediately.
+              console.error("WIN5_DEADLINE_PREVIEW_MISSING", date, new Date(deadlineMs).toISOString());
+              return { date, status: "targets_only", targets: cache.targets, targetFetchedAt: cache.fetchedAt, targetSourceUrl: cache.sourceUrl, snapshot: null };
+            }
+
+            if (nowMs < deadlineMs) {
+              const cadence = previewCadenceMs(firstStartMs - nowMs);
+              const stale = !preview || nowMs - Date.parse(preview.generatedAt) >= cadence;
+              if (stale) {
+                try {
+                  preview = await generateSnapshot(env.DB, cache, now);
+                  await savePreview(env.DB, preview);
+                } catch (error) {
+                  console.error("WIN5_PREVIEW_FAILED", date, errorText(error));
+                }
+              }
+            }
+            return { date, status: preview ? "preview" : "targets_only", targets: cache.targets, targetFetchedAt: cache.fetchedAt, targetSourceUrl: cache.sourceUrl, snapshot: preview };
+          }
+
+          '''
+          text=text[:start]+new_func+text[end:]
+          runtime.write_text(text,encoding='utf-8')
+
+          wrapper=root/'src/public-site-entry-v29.ts'
+          text=wrapper.read_text(encoding='utf-8')
+          anchor='''export default {\n'''
+          guard=r'''async function runWin5DeadlineGuard(env: Env, label: string, strict: boolean): Promise<void> {
+            const now = new Date();
+            try {
+              const state = await runCompletedWin5Scheduled(env, now);
+              console.log(label, JSON.stringify({ status: state.status, date: state.date, lockedAt: state.snapshot?.lockedAt ?? null, generatedAt: state.snapshot?.generatedAt ?? null }));
+              if (state.targets.length === 5) {
+                const firstStartMs = Math.min(...state.targets.map((row) => Date.parse(row.startTimeUtc)));
+                const deadlineMs = firstStartMs - 15 * 60 * 1000;
+                if (Number.isFinite(firstStartMs) && now.getTime() >= deadlineMs && now.getTime() < firstStartMs && state.status !== "final") {
+                  throw new Error(`${label}_FINAL_MISSING_AT_DEADLINE:${state.date}`);
+                }
+              }
+            } catch (error) {
+              console.error(`${label}_FAILED`, error);
+              if (strict) throw error;
+            }
+          }
+
+          '''
+          if guard.strip() not in text:
+              text=text.replace(anchor,guard+anchor,1)
+          old='''    await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE", false);\n\n    let baseFailed = false;'''
+          new='''    await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE", false);\n    // WIN5 gets its own independent pre-chain pass. Before T-15 this keeps a\n    // near-deadline preview fresh; at/after T-15 it only freezes stored data.\n    await runWin5DeadlineGuard(env, "WIN5_DEADLINE_GUARD_BEFORE", false);\n\n    let baseFailed = false;'''
+          if old not in text: raise SystemExit('wrapper before anchor missing')
+          text=text.replace(old,new,1)
+          old='''    // A normal-race SLA throw in v21 can prevent v26 from reaching WIN5.\n    // Recover that independent scheduled job when the delegated chain failed.\n    if (baseFailed) {\n      try {\n        await runCompletedWin5Scheduled(env, new Date());\n      } catch (error) {\n        console.error("WIN5_SCHEDULED_RECOVERY_FAILED", error);\n      }\n    }\n\n    if (finalGuardError) throw finalGuardError;'''
+          new='''    // WIN5 has the same hard post-condition as normal races: once the\n    // deadline has arrived, this cron may not finish healthy without a final.\n    let win5GuardError: unknown = null;\n    try {\n      await runWin5DeadlineGuard(env, "WIN5_DEADLINE_GUARD_AFTER", true);\n    } catch (error) {\n      win5GuardError = error;\n    }\n\n    if (finalGuardError) throw finalGuardError;\n    if (win5GuardError) throw win5GuardError;'''
+          if old not in text: raise SystemExit('wrapper recovery anchor missing')
+          text=text.replace(old,new,1)
+          wrapper.write_text(text,encoding='utf-8')
+
+          ui=root/'src/public-site-entry-v27.ts'
+          text=ui.read_text(encoding='utf-8')
+          text=text.replace('''  if (state.status === "final") return { label: "確定", detail: "T-15で固定済み", className: "final" };''','''  if (state.status === "final") return { label: "確定", detail: "確定済み", className: "final" };''')
+          old='''  const lockTime = state.snapshot?.lockDeadlineUtc ? fmtJst(state.snapshot.lockDeadlineUtc) : Number.isFinite(firstStart) ? fmtJst(new Date(firstStart - 15 * 60 * 1000).toISOString()) : "--:--";'''
+          new='''  const lockTime = state.status === "final" && state.snapshot?.lockedAt ? fmtJst(state.snapshot.lockedAt) : state.snapshot?.lockDeadlineUtc ? fmtJst(state.snapshot.lockDeadlineUtc) : Number.isFinite(firstStart) ? fmtJst(new Date(firstStart - 15 * 60 * 1000).toISOString()) : "--:--";'''
+          if old not in text: raise SystemExit('WIN5 UI lock time anchor missing')
+          text=text.replace(old,new,1)
+          ui.write_text(text,encoding='utf-8')
+
+          verifier=root/'scripts/verify-win5-ui.py'
+          text=verifier.read_text(encoding='utf-8')
+          text=text.replace('''WRANGLER = ROOT / "wrangler.jsonc"''','''WRANGLER = ROOT / "wrangler.jsonc"\nRUNTIME = ROOT / "src" / "v1" / "completed-win5.ts"''')
+          text=text.replace('''    wrangler = WRANGLER.read_text(encoding="utf-8")''','''    wrangler = WRANGLER.read_text(encoding="utf-8")\n    runtime = RUNTIME.read_text(encoding="utf-8")''')
+          needle='''    require('.win5-target-list' in parent and '.win5-ticket-row' in parent, "WIN5_MOBILE_VERTICAL_LAYOUT_MISSING")'''
+          checks=r'''    require('if (validSnapshot(existing, snapshot.date) && existing.locked) return existing;' in runtime, "WIN5_FINAL_IMMUTABILITY_GUARD_MISSING")
+            require('nowMs >= cachedDeadlineMs && nowMs < cachedFirstStartMs' in runtime, "WIN5_STORED_PREVIEW_DEADLINE_GUARD_MISSING")
+            require('await lockSnapshot(env.DB, preview, now, "last_good")' in runtime, "WIN5_PREVIEW_PROMOTION_MISSING")
+            require('const freshCache = await resolveWin5Targets(env.DB, date, now, true)' not in runtime, "WIN5_POST_DEADLINE_FRESH_REGEN_REINTRODUCED")
+            require('if (nowMs < deadlineMs)' in runtime, "WIN5_PREVIEW_NOT_CUTOFF_AT_DEADLINE")
+            require('WIN5_DEADLINE_GUARD_BEFORE' in deadline and 'WIN5_DEADLINE_GUARD_AFTER' in deadline, "WIN5_INDEPENDENT_DEADLINE_GUARD_MISSING")
+            require('state.status === "final" && state.snapshot?.lockedAt' in parent, "WIN5_UI_NOT_SHOWING_ACTUAL_LOCK_TIME")
+            require('detail: "T-15で固定済み"' not in parent, "WIN5_UI_FALSE_T15_CLAIM_REINTRODUCED")
+
+          '''
+          if needle not in text: raise SystemExit('WIN5 verifier insertion anchor missing')
+          text=text.replace(needle,checks+needle,1)
+          verifier.write_text(text,encoding='utf-8')
+
+          package=root/'package.json'
+          text=package.read_text(encoding='utf-8')
+          old='''node dist-test/tests/completed-worker-deadline-guard-tests.js"'''
+          new='''node dist-test/tests/completed-worker-deadline-guard-tests.js && node dist-test/tests/completed-win5-tests.js"'''
+          if old not in text: raise SystemExit('package test anchor missing')
+          text=text.replace(old,new,1)
+          package.write_text(text,encoding='utf-8')
+          PY
+      - name: Validate patch
+        run: |
+          npm install
+          python scripts/verify-win5-ui.py
+          npm run typecheck
+          npm run build:test
+          node dist-test/tests/completed-win5-tests.js
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/v1/completed-win5.ts src/public-site-entry-v29.ts src/public-site-entry-v27.ts scripts/verify-win5-ui.py package.json package-lock.json
+          git commit -m "Make WIN5 final immutable at deadline"
+          git push origin HEAD:fix/win5-hard-lock-20260816
