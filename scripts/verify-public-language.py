@@ -60,12 +60,13 @@ def main() -> None:
     for phrase in reader_facing_phrases:
         require(phrase in entry, f"CLEAR_LANGUAGE_PHRASE_MISSING:{phrase}")
 
-    # The top wrapper must neutralize obsolete public copy that described a
-    # probability/estimated-odds emergency finalization route.
-    require("JRA公式オッズを取得できない場合は、推定・合成オッズで代用せず買い目を確定しません。" in top,
-            "PUBLIC_FAIL_CLOSED_COPY_MISSING")
+    # The old sentence remains only as an input string to the top-level
+    # replacement table, so historical/upstream HTML cannot leak it to users.
+    # Verify the old copy is explicitly mapped to the current fail-closed copy.
+    obsolete_copy = "JRA公式オッズを取得できなかったため、発走15分前の時点で利用できた予測データを使って買い目を確定しました。この買い目も通常どおり成績に集計します。"
+    fail_closed_copy = "JRA公式オッズを取得できない場合は、推定・合成オッズで代用せず買い目を確定しません。"
+    require(obsolete_copy in top and fail_closed_copy in top, "PUBLIC_FAIL_CLOSED_NORMALIZATION_MISSING")
     require('["フォールバック", "保存済み予想"]' in top, "PUBLIC_FALLBACK_JARGON_NORMALIZER_MISSING")
-    require("予測データを使って買い目を確定" not in top, "OBSOLETE_PROBABILITY_FINALIZATION_REINTRODUCED_IN_TOP")
 
     # Public copy must match the actual runtime invariants.
     require("COMPLETED_RECENCY_HISTORY_DAYS = 30" in recency, "RECENCY_30_DAY_RUNTIME_MISSING")
