@@ -40,27 +40,27 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    // Hard T-15 deadline guard must be the first scheduled operation. It does
+    // zero external network I/O: a recent validated JRA preview is promoted
+    // immediately, otherwise the probability-only emergency writer is used.
+    // This prevents unrelated JRA latency from pushing a lock past T-15.
+    try {
+      const audit = await runCompletedWorkerEmergencyLock(env, new Date());
+      console.log("COMPLETED_WORKER_DEADLINE_GUARD", JSON.stringify(audit));
+    } catch (error) {
+      console.error("COMPLETED_WORKER_DEADLINE_GUARD_FAILED", error);
+    }
+
     let baseFailed = false;
     try {
       if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
     } catch (error) {
       baseFailed = true;
-      console.error("BASE_SCHEDULED_BEFORE_EMERGENCY_FAILED", error);
+      console.error("BASE_SCHEDULED_AFTER_DEADLINE_GUARD_FAILED", error);
     }
 
-    // This is intentionally after the canonical live-lock. Normal operation
-    // therefore keeps the freshest official JRA odds. Only a still-missing
-    // selected race inside T-15..T-14 is filled without external network I/O.
-    try {
-      const audit = await runCompletedWorkerEmergencyLock(env, new Date());
-      console.log("COMPLETED_WORKER_EMERGENCY_LOCK", JSON.stringify(audit));
-    } catch (error) {
-      console.error("COMPLETED_WORKER_EMERGENCY_LOCK_FAILED", error);
-    }
-
-    // A normal-race SLA throw in v21 used to prevent v26 from reaching WIN5.
-    // Recover that independent scheduled job as well when the delegated chain
-    // failed; when base succeeded, v26 has already run WIN5 once.
+    // A normal-race SLA throw in v21 can prevent v26 from reaching WIN5.
+    // Recover that independent scheduled job when the delegated chain failed.
     if (baseFailed) {
       try {
         await runCompletedWin5Scheduled(env, new Date());
