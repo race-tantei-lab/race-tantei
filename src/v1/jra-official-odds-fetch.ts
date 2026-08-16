@@ -1,5 +1,11 @@
 import type { CompletedBetType, OfficialOddsRow } from "./completed-ticket-runtime.js";
-import { JRA_ODDS_URL, decodeJraHtml, jraActionLinks, type JraOddsIdentity } from "./jra-official-odds.js";
+import {
+  JRA_ODDS_URL,
+  crawlJraOfficialOddsForRace,
+  decodeJraHtml,
+  jraActionLinks,
+  type JraOddsIdentity,
+} from "./jra-official-odds.js";
 import {
   JRA_FAST_TYPE_PREFIX,
   findFastJraTypeCnames,
@@ -12,6 +18,8 @@ export type { OfficialOddsRow } from "./completed-ticket-runtime.js";
 
 const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136 Safari/537.36";
 const BET_ORDER: readonly CompletedBetType[] = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"];
+const SECONDARY_TYPES = ["ワイド", "馬連", "馬単", "3連複", "3連単"] as const;
+const TYPE_FETCH_CONCURRENCY = 2;
 
 export interface FastJraOddsPage {
   cname: string;
@@ -25,11 +33,16 @@ export interface FastJraOddsResult {
   pages: FastJraOddsPage[];
   entryCnameCount: number;
   fetchedPageCount: number;
-  source: "jra-fast-official";
+  source: "jra-fast-official" | "jra-crawl-official";
+  fallbackReason?: string;
 }
 
 function sameIdentity(a: JraOddsIdentity | null, b: JraOddsIdentity): boolean {
   return Boolean(a && a.raceDate === b.raceDate && a.venue === b.venue && a.raceNo === b.raceNo);
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? `${error.name}:${error.message}` : String(error);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -85,43 +98,69 @@ class JraFetchSession {
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
         if (lastError.startsWith("JRA_ODDS_HTTP_") || lastError === "JRA_ODDS_BODY_TOO_LARGE") throw error;
-        if (attempt < 4) await sleep(350 * (attempt + 1));
+        if (attempt < 4) await sleep(750 * (attempt + 1));
       }
     }
     throw new Error(`JRA_ODDS_FETCH_FAILED:${lastError}`);
   }
 }
 
-export async function fetchFastJraOfficialOddsForRace(entryUrl: string, target: JraOddsIdentity): Promise<FastJraOddsResult> {
+function completePages(pages: FastJraOddsPage[]): void {
+  if (pages.length !== 6 || BET_ORDER.some((betType) => !pages.some((page) => page.betType === betType))) {
+    throw new Error(`JRA_SIX_TYPE_INCOMPLETE:${pages.map((page) => page.betType).join(",")}`);
+  }
+}
+
+async function fetchFastDirect(entryUrl: string, target: JraOddsIdentity): Promise<FastJraOddsResult> {
   const session = new JraFetchSession();
   const dateDigits = target.raceDate.replaceAll("-", "");
   const entryHtml = await session.html(entryUrl);
   const entryLinks = jraActionLinks(entryHtml).filter((link) => sameFastJraRaceLink(link.cname, dateDigits, target.raceNo));
-  const win = entryLinks.find((link) => link.cname.startsWith(JRA_FAST_TYPE_PREFIX["単勝"]));
-  if (!win) throw new Error("WIN_CNAME_NOT_FOUND");
+  const entryCnames = findFastJraTypeCnames(entryHtml, dateDigits, target.raceNo);
+  const winCname = entryCnames["単勝"] ?? entryLinks.find((link) => link.cname.startsWith(JRA_FAST_TYPE_PREFIX["単勝"]))?.cname;
+  if (!winCname) throw new Error("WIN_CNAME_NOT_FOUND");
 
-  const winPage = await session.html(JRA_ODDS_URL, { cname: win.cname, referer: entryUrl });
-  const winIdentity = parseFastJraOddsIdentity(winPage, win.cname);
+  const winPage = await session.html(JRA_ODDS_URL, { cname: winCname, referer: entryUrl });
+  const winIdentity = parseFastJraOddsIdentity(winPage, winCname);
   if (!sameIdentity(winIdentity, target)) throw new Error(`WIN_IDENTITY_MISMATCH:${JSON.stringify(winIdentity)}`);
   const winRows = parseFastJraOfficialOddsRows(winPage, "単勝");
   if (winRows.length < 2) throw new Error(`WIN_HORSES_TOO_FEW:${winRows.length}`);
-  const pages: FastJraOddsPage[] = [{ cname: win.cname, betType: "単勝", identity: winIdentity!, rows: winRows }];
+  const pages: FastJraOddsPage[] = [{ cname: winCname, betType: "単勝", identity: winIdentity!, rows: winRows }];
 
-  const cnames = findFastJraTypeCnames(winPage, dateDigits, target.raceNo);
-  for (const betType of ["ワイド", "馬連", "馬単", "3連複", "3連単"] as const) {
-    const cname = cnames[betType];
-    if (!cname) throw new Error(`${betType}_CNAME_NOT_FOUND`);
-    const page = await session.html(JRA_ODDS_URL, { cname, referer: JRA_ODDS_URL });
-    const identity = parseFastJraOddsIdentity(page, cname);
-    if (!sameIdentity(identity, target)) throw new Error(`${betType}_IDENTITY_MISMATCH:${JSON.stringify(identity)}`);
-    const rows = parseFastJraOfficialOddsRows(page, betType);
-    if (!rows.length) throw new Error(`${betType}_NO_PARSED_ROWS`);
-    pages.push({ cname, betType, identity: identity!, rows });
+  // Do not depend on a single page containing every navigation CNAME. JRA has
+  // changed where these links appear before, so merge discovery from both the
+  // entry page and the first odds page.
+  const winPageCnames = findFastJraTypeCnames(winPage, dateDigits, target.raceNo);
+  const cnames: Partial<Record<CompletedBetType, string>> = { ...entryCnames, ...winPageCnames, "単勝": winCname };
+
+  // Fetch the remaining five official pages with bounded concurrency. This is
+  // materially faster than seven fully-serial requests while avoiding a burst
+  // of five simultaneous requests against JRA.
+  let nextIndex = 0;
+  const fetched = new Map<CompletedBetType, FastJraOddsPage>();
+  await Promise.all(Array.from({ length: TYPE_FETCH_CONCURRENCY }, async () => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= SECONDARY_TYPES.length) return;
+      const betType = SECONDARY_TYPES[index];
+      const cname = cnames[betType];
+      if (!cname) throw new Error(`${betType}_CNAME_NOT_FOUND`);
+      const page = await session.html(JRA_ODDS_URL, { cname, referer: JRA_ODDS_URL });
+      const identity = parseFastJraOddsIdentity(page, cname);
+      if (!sameIdentity(identity, target)) throw new Error(`${betType}_IDENTITY_MISMATCH:${JSON.stringify(identity)}`);
+      const rows = parseFastJraOfficialOddsRows(page, betType);
+      if (!rows.length) throw new Error(`${betType}_NO_PARSED_ROWS`);
+      fetched.set(betType, { cname, betType, identity: identity!, rows });
+    }
+  }));
+  for (const betType of SECONDARY_TYPES) {
+    const page = fetched.get(betType);
+    if (!page) throw new Error(`${betType}_FETCH_RESULT_MISSING`);
+    pages.push(page);
   }
 
-  if (pages.length !== 6 || BET_ORDER.some((betType) => !pages.some((page) => page.betType === betType))) {
-    throw new Error(`JRA_SIX_TYPE_INCOMPLETE:${pages.map((page) => page.betType).join(",")}`);
-  }
+  completePages(pages);
   return {
     rows: pages.flatMap((page) => page.rows),
     pages,
@@ -129,4 +168,36 @@ export async function fetchFastJraOfficialOddsForRace(entryUrl: string, target: 
     fetchedPageCount: 7,
     source: "jra-fast-official",
   };
+}
+
+async function fetchOfficialCrawlFallback(entryUrl: string, target: JraOddsIdentity, fastError: unknown): Promise<FastJraOddsResult> {
+  const crawl = await crawlJraOfficialOddsForRace(entryUrl, target);
+  if (crawl.missingBetTypes.length) {
+    throw new Error(`JRA_OFFICIAL_ALL_PATHS_FAILED:fast=${errorText(fastError)};crawl_missing=${crawl.missingBetTypes.join(",")}`);
+  }
+  const pages: FastJraOddsPage[] = [];
+  for (const betType of BET_ORDER) {
+    const page = crawl.pages.find((row) => row.betType === betType);
+    if (!page || !page.rows.length || !sameIdentity(page.identity, target)) {
+      throw new Error(`JRA_OFFICIAL_ALL_PATHS_FAILED:fast=${errorText(fastError)};crawl_invalid=${betType}`);
+    }
+    pages.push({ cname: page.cname, betType, identity: page.identity, rows: page.rows });
+  }
+  completePages(pages);
+  return {
+    rows: pages.flatMap((page) => page.rows),
+    pages,
+    entryCnameCount: 0,
+    fetchedPageCount: crawl.fetchedCnames.length + 1,
+    source: "jra-crawl-official",
+    fallbackReason: errorText(fastError),
+  };
+}
+
+export async function fetchFastJraOfficialOddsForRace(entryUrl: string, target: JraOddsIdentity): Promise<FastJraOddsResult> {
+  try {
+    return await fetchFastDirect(entryUrl, target);
+  } catch (fastError) {
+    return fetchOfficialCrawlFallback(entryUrl, target, fastError);
+  }
 }
