@@ -1,7 +1,7 @@
 import publicSite from "./public-site-entry-v29.js";
 import type { Env } from "./v1/types.js";
 
-const UI_VERSION = "ten-year-completed-public-v30-clear-language-20260816";
+const UI_VERSION = "ten-year-completed-public-v30-clean-home-20260816";
 
 type HomeRaceRow = {
   raceId: string;
@@ -13,7 +13,6 @@ type HomeRaceRow = {
 };
 
 type HomeUx = {
-  venues: string[];
   nextRace: null | {
     raceId: string;
     venue: string;
@@ -23,7 +22,6 @@ type HomeUx = {
     overdue: boolean;
   };
   recent30: null | { races: number; roiPct: number };
-  today: null | { races: number; hits: number; roiPct: number };
 };
 
 type RaceNavRow = { raceId: string; venue: string; raceNo: number; raceDate: string };
@@ -88,7 +86,7 @@ function compactNavigation(input: string, path: string): string {
 async function loadHomeUx(db: D1Database, now = new Date()): Promise<HomeUx> {
   const date = jstDate(now);
   try {
-    const [races, selection, locked, recent30, today] = await Promise.all([
+    const [races, selection, locked, recent30] = await Promise.all([
       db.prepare(`
         SELECT race_id AS raceId,venue,race_no AS raceNo,race_name AS raceName,
                start_time_jst AS startTimeJst,start_time_utc AS startTimeUtc
@@ -114,26 +112,8 @@ async function loadHomeUx(db: D1Database, now = new Date()): Promise<HomeUx> {
           AND b.source_prediction_id=-2
           AND b.settlement_status='settled'
       `).bind(date, date).first<{ races: number; stakeYen: number; returnYen: number }>(),
-      db.prepare(`
-        SELECT COUNT(*) AS races,
-               COALESCE(SUM(hit),0) AS hits,
-               COALESCE(SUM(stakeYen),0) AS stakeYen,
-               COALESCE(SUM(returnYen),0) AS returnYen
-        FROM (
-          SELECT b.race_id,
-                 MAX(CASE WHEN COALESCE(b.return_yen,0)>b.stake_yen THEN 1 ELSE 0 END) AS hit,
-                 SUM(b.stake_yen) AS stakeYen,
-                 SUM(COALESCE(b.return_yen,0)) AS returnYen
-          FROM rt_public_bets b
-          JOIN rt_races r ON r.race_id=b.race_id
-          WHERE r.race_date=? AND b.source_prediction_id=-2
-          GROUP BY b.race_id
-          HAVING SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END)=COUNT(*)
-        )
-      `).bind(date).first<{ races: number; hits: number; stakeYen: number; returnYen: number }>(),
     ]);
 
-    const venueList = [...new Set(races.results.map((row) => String(row.venue)).filter(Boolean))];
     const lockedIds = new Set(locked.results.map((row) => String(row.raceId)));
     const selectedIds = new Set<string>();
     if (selection?.value) {
@@ -165,37 +145,24 @@ async function loadHomeUx(db: D1Database, now = new Date()): Promise<HomeUx> {
     const recentRaces = Number(recent30?.races ?? 0);
     const recentStake = Number(recent30?.stakeYen ?? 0);
     const recentReturn = Number(recent30?.returnYen ?? 0);
-    const todayRaces = Number(today?.races ?? 0);
-    const todayStake = Number(today?.stakeYen ?? 0);
-    const todayReturn = Number(today?.returnYen ?? 0);
 
     return {
-      venues: venueList,
       nextRace,
       recent30: recentRaces > 0 && recentStake > 0 ? { races: recentRaces, roiPct: recentReturn / recentStake * 100 } : null,
-      today: todayRaces > 0 && todayStake > 0 ? {
-        races: todayRaces,
-        hits: Number(today?.hits ?? 0),
-        roiPct: todayReturn / todayStake * 100,
-      } : null,
     };
   } catch (error) {
     console.error("HOME_UX_LOAD_FAILED", error);
-    return { venues: [], nextRace: null, recent30: null, today: null };
+    return { nextRace: null, recent30: null };
   }
 }
 
 function homeTopTools(ux: HomeUx): string {
-  const next = ux.nextRace ? `<section class="home-next-release${ux.nextRace.overdue ? " overdue" : ""}">
+  if (!ux.nextRace) return "";
+  return `<section class="home-next-release${ux.nextRace.overdue ? " overdue" : ""}">
     <span>${ux.nextRace.overdue ? "買い目確定待ち" : "次の買い目"}</span>
     <a href="/races/${encodeURIComponent(ux.nextRace.raceId)}"><b>${esc(ux.nextRace.venue)} ${ux.nextRace.raceNo}R</b><strong>${ux.nextRace.overdue ? "未確定" : `${esc(ux.nextRace.deadlineJst ?? "--:--")}までに公開`}</strong></a>
     <small>${esc(ux.nextRace.startTimeJst ?? "--:--")}発走</small>
-  </section>` : "";
-
-  const venues = ux.venues.length ? `<div class="home-venue-shortcuts"><span>今日の会場</span><div>${ux.venues.map((venue) => `<button type="button" data-quick-venue="${esc(venue)}">${esc(venue)}</button>`).join("")}</div></div>` : "";
-  const today = ux.today ? `<div class="home-today-result"><span>本日</span><b>${ux.today.races}R終了</b><em>${ux.today.hits}的中</em><strong>${ux.today.roiPct.toFixed(1)}%</strong></div>` : "";
-  if (!next && !venues && !today) return "";
-  return `${next}<section class="home-quick-strip">${venues}${today}</section>`;
+  </section>`;
 }
 
 function recent30Html(ux: HomeUx): string {
@@ -207,14 +174,14 @@ function homeUxStyles(): string {
   return `<style>
     .compact-nav{overflow:visible!important;align-items:center}.compact-nav>a[aria-current="page"]{border-color:var(--green);background:var(--green2);color:#c7f8e5;font-weight:900}
     .nav-more{position:relative;flex:0 0 auto}.nav-more>summary{list-style:none;cursor:pointer;white-space:nowrap;padding:8px 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:13px}.nav-more>summary::-webkit-details-marker{display:none}.nav-more.current>summary{border-color:var(--green);background:var(--green2);color:#c7f8e5;font-weight:900}.nav-more-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:80;display:grid;min-width:145px;padding:6px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 12px 28px rgba(0,0,0,.35)}.nav-more-menu a{border:0!important;border-radius:8px!important;background:transparent!important;padding:9px 10px!important;font-size:12px!important}.nav-more-menu a:hover{background:var(--panel2)!important}
-    .home-next-release{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;margin:0 0 8px;padding:11px 13px;border:1px solid var(--green);border-radius:14px;background:linear-gradient(135deg,#102b27,#101c29)}.home-next-release>span{font-size:10px;font-weight:900;color:var(--green)}.home-next-release>a{display:flex;align-items:baseline;justify-content:space-between;gap:9px;min-width:0}.home-next-release b{font-size:15px}.home-next-release strong{font-size:12px;color:#bdf5dc;white-space:nowrap}.home-next-release small{font-size:10px;color:var(--muted);white-space:nowrap}.home-next-release.overdue{border-color:#80652d;background:#2a2414}.home-next-release.overdue>span,.home-next-release.overdue strong{color:var(--warn)}
-    .home-quick-strip{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}.home-venue-shortcuts{display:flex;align-items:center;gap:8px;min-width:0}.home-venue-shortcuts>span{font-size:10px;color:var(--muted);white-space:nowrap}.home-venue-shortcuts>div{display:flex;gap:5px;flex-wrap:wrap}.home-venue-shortcuts button{appearance:none;border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--text);padding:6px 9px;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}.home-venue-shortcuts button:hover{border-color:var(--green)}.home-today-result{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:10px}.home-today-result span{color:var(--muted)}.home-today-result b{font-size:11px}.home-today-result em{font-style:normal;color:var(--muted)}.home-today-result strong{font-size:14px;color:var(--green)}
+    .home-wrap>.top{background:rgba(7,17,27,.98)!important;border-bottom:1px solid rgba(43,61,82,.65);padding-bottom:12px!important;box-shadow:0 8px 14px rgba(7,17,27,.96)}
+    .home-next-release{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;margin:4px 0 10px;padding:11px 13px;border:1px solid var(--green);border-radius:14px;background:linear-gradient(135deg,#102b27,#101c29)}.home-next-release>span{font-size:10px;font-weight:900;color:var(--green)}.home-next-release>a{display:flex;align-items:baseline;justify-content:space-between;gap:9px;min-width:0}.home-next-release b{font-size:15px}.home-next-release strong{font-size:12px;color:#bdf5dc;white-space:nowrap}.home-next-release small{font-size:10px;color:var(--muted);white-space:nowrap}.home-next-release.overdue{border-color:#80652d;background:#2a2414}.home-next-release.overdue>span,.home-next-release.overdue strong{color:var(--warn)}
     .home-publish-details{margin-top:0!important}.home-publish-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;cursor:pointer;list-style:none}.home-publish-summary::-webkit-details-marker{display:none}.home-publish-summary b{font-size:13px}.home-publish-summary span{font-size:10px;color:var(--muted)}.home-publish-summary:after{content:"＋";margin-left:auto;color:var(--muted);font-weight:900}.home-publish-details[open] .home-publish-summary:after{content:"−"}.home-publish-details>.home-publish-steps{border-top:1px solid var(--line)}
     .recent-roi-strip{display:flex;align-items:baseline;gap:9px;margin:7px 0 2px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}.recent-roi-strip span{font-size:10px;color:var(--muted)}.recent-roi-strip strong{font-size:18px;color:var(--green)}.recent-roi-strip small{margin-left:auto;color:var(--muted);font-size:10px}
     .race-filter{display:flex;gap:5px;margin:3px 0 7px}.race-filter button{appearance:none;border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--muted);padding:6px 9px;font:inherit;font-size:10px;cursor:pointer}.race-filter button.active{border-color:var(--green);background:var(--green2);color:#c7f8e5;font-weight:800}.race-filter-empty{padding:18px 4px;color:var(--muted);font-size:11px}
     .race-card{border-left-width:4px!important}.race-card.state-buy,.race-card.state-hit{border-left-color:var(--green)!important}.race-card.state-target,.race-card.state-pending{border-left-color:var(--warn)!important}.race-card.state-skip{border-left-color:#526477!important}.race-card.state-miss,.race-card.state-overdue,.race-card.state-missing{border-left-color:var(--red)!important}.race-card.state-refund{border-left-color:var(--blue)!important}
     .race-sequence-nav{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:0 0 10px}.race-sequence-nav a,.race-sequence-nav span{display:block;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);font-size:11px}.race-sequence-nav a:last-child,.race-sequence-nav span:last-child{text-align:right}.race-sequence-nav span{color:var(--muted);opacity:.55}
-    @media(max-width:760px){.top{overflow:visible}.home-next-release{grid-template-columns:auto 1fr}.home-next-release small{grid-column:2}.home-next-release>a{display:grid;gap:2px}.home-quick-strip{display:grid;gap:8px}.home-venue-shortcuts{display:grid;grid-template-columns:auto minmax(0,1fr)}.home-today-result{border-top:1px solid var(--line);padding-top:7px}.nav-more>summary{padding:7px 9px;font-size:12px}.nav-more-menu{right:0}.race-sequence-nav{margin-top:2px}}
+    @media(max-width:760px){.top{overflow:visible}.home-next-release{grid-template-columns:auto 1fr}.home-next-release small{grid-column:2}.home-next-release>a{display:grid;gap:2px}.nav-more>summary{padding:7px 9px;font-size:12px}.nav-more-menu{right:0}.race-sequence-nav{margin-top:2px}}
   </style>`;
 }
 
@@ -251,12 +218,6 @@ function homeUxScript(): string {
       step.insertBefore(filter,rail);
       filter.addEventListener('click',(event)=>{const button=event.target.closest('[data-race-filter]');if(!button)return;activeFilter=button.getAttribute('data-race-filter')||'all';filter.querySelectorAll('button').forEach((node)=>node.classList.toggle('active',node===button));apply();});
     }
-    document.querySelectorAll('[data-quick-venue]').forEach((button)=>button.addEventListener('click',()=>{
-      const venue=button.getAttribute('data-quick-venue')||'';
-      const todayButton=document.querySelector('#dates .chip.today');
-      if(todayButton&&!todayButton.classList.contains('active'))todayButton.click();
-      setTimeout(()=>{const target=[...document.querySelectorAll('#venues .chip')].find((node)=>(node.textContent||'').trim()===venue);if(target){target.click();document.querySelector('.navigator')?.scrollIntoView({behavior:'smooth',block:'start'});}},50);
-    }));
     new MutationObserver(apply).observe(rail,{childList:true,subtree:true});apply();
   })();</script>`;
 }
@@ -266,6 +227,7 @@ async function enhanceHome(response: Response, env: Env): Promise<Response> {
   try {
     const ux = await loadHomeUx(env.DB);
     let html = await response.text();
+    html = html.replace('<main class="wrap">','<main class="wrap home-wrap">');
     html = removeTodayHomeHero(html);
     html = collapseHomeTiming(html);
     const tools = homeTopTools(ux);
