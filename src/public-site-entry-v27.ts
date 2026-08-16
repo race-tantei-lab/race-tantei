@@ -29,7 +29,7 @@ function fmtJst(value: string | null | undefined): string {
 }
 
 function statusMeta(state: Win5PublicState): { label: string; detail: string; className: string } {
-  if (state.status === "final") return { label: "確定", detail: "T-15で固定済み", className: "final" };
+  if (state.status === "final") return { label: "確定", detail: "確定済み", className: "final" };
   if (state.status === "preview") return { label: "暫定", detail: "T-15まで更新", className: "preview" };
   if (state.status === "targets_only") return { label: "準備中", detail: "対象5R取得済み", className: "waiting" };
   return { label: "取得待ち", detail: "JRA公式を再確認中", className: "waiting" };
@@ -130,7 +130,7 @@ function renderWin5Page(state: Win5PublicState): string {
   const meta = statusMeta(state);
   const profiles = orderedProfiles(state);
   const firstStart = state.targets.length ? Math.min(...state.targets.map((row) => Date.parse(row.startTimeUtc)).filter(Number.isFinite)) : NaN;
-  const lockTime = state.snapshot?.lockDeadlineUtc ? fmtJst(state.snapshot.lockDeadlineUtc) : Number.isFinite(firstStart) ? fmtJst(new Date(firstStart - 15 * 60 * 1000).toISOString()) : "--:--";
+  const lockTime = state.status === "final" && state.snapshot?.lockedAt ? fmtJst(state.snapshot.lockedAt) : state.snapshot?.lockDeadlineUtc ? fmtJst(state.snapshot.lockDeadlineUtc) : Number.isFinite(firstStart) ? fmtJst(new Date(firstStart - 15 * 60 * 1000).toISOString()) : "--:--";
   const updated = state.snapshot?.generatedAt ? fmtJst(state.snapshot.generatedAt) : state.targetFetchedAt ? fmtJst(state.targetFetchedAt) : "--:--";
   const body = `
     <section class="hero win5-hero">

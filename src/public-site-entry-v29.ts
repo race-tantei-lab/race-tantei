@@ -60,6 +60,24 @@ async function runDeadlineGuard(env: Env, label: string, strict: boolean): Promi
   }
 }
 
+async function runWin5DeadlineGuard(env: Env, label: string, strict: boolean): Promise<void> {
+  const now = new Date();
+  try {
+    const state = await runCompletedWin5Scheduled(env, now);
+    console.log(label, JSON.stringify({ status: state.status, date: state.date, lockedAt: state.snapshot?.lockedAt ?? null, generatedAt: state.snapshot?.generatedAt ?? null }));
+    if (state.targets.length === 5) {
+      const firstStartMs = Math.min(...state.targets.map((row) => Date.parse(row.startTimeUtc)));
+      const deadlineMs = firstStartMs - 15 * 60 * 1000;
+      if (Number.isFinite(firstStartMs) && now.getTime() >= deadlineMs && now.getTime() < firstStartMs && state.status !== "final") {
+        throw new Error(`${label}_FINAL_MISSING_AT_DEADLINE:${state.date}`);
+      }
+    }
+  } catch (error) {
+    console.error(`${label}_FAILED`, error);
+    if (strict) throw error;
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
@@ -71,6 +89,7 @@ export default {
     // First pass is deliberately before all external HTTP. Failure here does
     // not block the normal acquisition chain because the second pass retries.
     await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE", false);
+    await runWin5DeadlineGuard(env, "WIN5_DEADLINE_GUARD_BEFORE", false);
 
     let baseFailed = false;
     try {
@@ -91,16 +110,14 @@ export default {
       finalGuardError = error;
     }
 
-    // A normal-race SLA throw in v21 can prevent v26 from reaching WIN5.
-    // Recover that independent scheduled job when the delegated chain failed.
-    if (baseFailed) {
-      try {
-        await runCompletedWin5Scheduled(env, new Date());
-      } catch (error) {
-        console.error("WIN5_SCHEDULED_RECOVERY_FAILED", error);
-      }
+    let win5GuardError: unknown = null;
+    try {
+      await runWin5DeadlineGuard(env, "WIN5_DEADLINE_GUARD_AFTER", true);
+    } catch (error) {
+      win5GuardError = error;
     }
 
     if (finalGuardError) throw finalGuardError;
+    if (win5GuardError) throw win5GuardError;
   },
 } satisfies ExportedHandler<Env>;

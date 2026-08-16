@@ -422,33 +422,60 @@ export async function runCompletedWin5Scheduled(env: Env, now = new Date()): Pro
   const date = jstDate(now);
   const final = await loadJsonState<Win5Snapshot>(env.DB, stateKey(FINAL_PREFIX, date));
   if (validSnapshot(final, date) && final.locked) {
-    const cache = await resolveWin5Targets(env.DB, date, now, false);
-    return { date, status: "final", targets: cache?.targets ?? final.races.map((race) => ({ leg: race.leg, raceDate: race.raceDate, venue: race.venue, raceNo: race.raceNo, startTimeJst: race.startTimeJst, startTimeUtc: race.startTimeUtc, raceId: race.raceId, raceName: race.raceName })), targetFetchedAt: cache?.fetchedAt ?? final.targetFetchedAt, targetSourceUrl: cache?.sourceUrl ?? final.targetSourceUrl, snapshot: final };
+    // Once a WIN5 final exists it is immutable. Never refresh targets
+    // or regenerate predictions after the final has been written.
+    const cached = await loadJsonState<Win5TargetCache>(env.DB, stateKey(TARGET_PREFIX, date));
+    return { date, status: "final", targets: validTargetCache(cached, date) ? cached.targets : final.races.map((race) => ({ leg: race.leg, raceDate: race.raceDate, venue: race.venue, raceNo: race.raceNo, startTimeJst: race.startTimeJst, startTimeUtc: race.startTimeUtc, raceId: race.raceId, raceName: race.raceName })), targetFetchedAt: validTargetCache(cached, date) ? cached.fetchedAt : final.targetFetchedAt, targetSourceUrl: validTargetCache(cached, date) ? cached.sourceUrl : final.targetSourceUrl, snapshot: final };
   }
+
+  let preview = await loadJsonState<Win5Snapshot>(env.DB, stateKey(PREVIEW_PREFIX, date));
+  if (!validSnapshot(preview, date) || preview.locked) preview = null;
+  const cached = await loadJsonState<Win5TargetCache>(env.DB, stateKey(TARGET_PREFIX, date));
+  const cachedTargets = validTargetCache(cached, date) ? cached : null;
+  const nowMs = now.getTime();
+
+  // Hard T-15 guard: no external HTTP and no new prediction calculation.
+  // Freeze the latest stored pre-deadline preview at the first cron run
+  // at/after the deadline. This makes a deadline miss unable to cause a
+  // later post-deadline prediction rewrite.
+  if (cachedTargets) {
+    const cachedFirstStartMs = Math.min(...cachedTargets.targets.map((row) => Date.parse(row.startTimeUtc)));
+    const cachedDeadlineMs = win5LockDeadlineMs(cachedTargets.targets);
+    if (nowMs >= cachedDeadlineMs && nowMs < cachedFirstStartMs) {
+      if (preview) {
+        const locked = await lockSnapshot(env.DB, preview, now, "last_good");
+        return { date, status: "final", targets: cachedTargets.targets, targetFetchedAt: cachedTargets.fetchedAt, targetSourceUrl: cachedTargets.sourceUrl, snapshot: locked };
+      }
+      console.error("WIN5_DEADLINE_PREVIEW_MISSING", date, new Date(cachedDeadlineMs).toISOString());
+      return { date, status: "targets_only", targets: cachedTargets.targets, targetFetchedAt: cachedTargets.fetchedAt, targetSourceUrl: cachedTargets.sourceUrl, snapshot: null };
+    }
+  }
+
+  // The preview carries its own deadline, so it can still be frozen
+  // without network I/O if the separate target cache is unavailable.
+  if (preview) {
+    const previewDeadlineMs = Date.parse(preview.lockDeadlineUtc);
+    const previewFirstStartMs = Date.parse(preview.firstRaceStartUtc);
+    if (Number.isFinite(previewDeadlineMs) && Number.isFinite(previewFirstStartMs) && nowMs >= previewDeadlineMs && nowMs < previewFirstStartMs) {
+      const locked = await lockSnapshot(env.DB, preview, now, "last_good");
+      const targets = preview.races.map((race) => ({ leg: race.leg, raceDate: race.raceDate, venue: race.venue, raceNo: race.raceNo, startTimeJst: race.startTimeJst, startTimeUtc: race.startTimeUtc, raceId: race.raceId, raceName: race.raceName }));
+      return { date, status: "final", targets, targetFetchedAt: preview.targetFetchedAt, targetSourceUrl: preview.targetSourceUrl, snapshot: locked };
+    }
+  }
+
+  // Network acquisition and prediction recomputation are allowed only
+  // before the deadline.
   const cache = await resolveWin5Targets(env.DB, date, now, false);
   if (!cache) return { date, status: "targets_missing", targets: [], targetFetchedAt: null, targetSourceUrl: WIN5_PAGE_URL, snapshot: null };
   const firstStartMs = Math.min(...cache.targets.map((row) => Date.parse(row.startTimeUtc)));
   const deadlineMs = win5LockDeadlineMs(cache.targets);
-  const nowMs = now.getTime();
-  let preview = await loadJsonState<Win5Snapshot>(env.DB, stateKey(PREVIEW_PREFIX, date));
-  if (!validSnapshot(preview, date) || preview.locked) preview = null;
 
   if (nowMs >= deadlineMs && nowMs < firstStartMs) {
-    try {
-      const freshCache = await resolveWin5Targets(env.DB, date, now, true) ?? cache;
-      const fresh = await generateSnapshot(env.DB, freshCache, now);
-      const locked = await lockSnapshot(env.DB, fresh, now, "fresh");
-      return { date, status: "final", targets: freshCache.targets, targetFetchedAt: freshCache.fetchedAt, targetSourceUrl: freshCache.sourceUrl, snapshot: locked };
-    } catch (error) {
-      console.error("WIN5_FINAL_FRESH_FAILED", date, errorText(error));
-      if (preview) {
-        const locked = await lockSnapshot(env.DB, preview, now, "last_good");
-        return { date, status: "final", targets: cache.targets, targetFetchedAt: cache.fetchedAt, targetSourceUrl: cache.sourceUrl, snapshot: locked };
-      }
-    }
+    console.error("WIN5_DEADLINE_PREVIEW_MISSING", date, new Date(deadlineMs).toISOString());
+    return { date, status: "targets_only", targets: cache.targets, targetFetchedAt: cache.fetchedAt, targetSourceUrl: cache.sourceUrl, snapshot: null };
   }
 
-  if (nowMs < firstStartMs) {
+  if (nowMs < deadlineMs) {
     const cadence = previewCadenceMs(firstStartMs - nowMs);
     const stale = !preview || nowMs - Date.parse(preview.generatedAt) >= cadence;
     if (stale) {
