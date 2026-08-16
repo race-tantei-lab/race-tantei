@@ -7,6 +7,8 @@ on:
       - "scripts/repair-today-entry-urls-fast.mjs"
       - "scripts/smoke-live-worker-official-odds.mjs"
       - "src/v1/jra-official-odds-fetch.ts"
+      - "src/v1/jra-official-odds-fast.ts"
+      - "src/v1/jra-official-odds.ts"
   workflow_dispatch:
 permissions:
   contents: read
