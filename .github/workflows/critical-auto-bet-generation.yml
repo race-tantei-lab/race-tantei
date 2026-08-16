@@ -30,6 +30,30 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Inspect production deadline guard state
+        run: |
+          python - <<'PY'
+          import importlib.util, json, pathlib
+          p=pathlib.Path('scripts/collect-jra-official-odds.py')
+          spec=importlib.util.spec_from_file_location('collector_diag',p)
+          m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+          keys=[
+              'worker_deadline_guard:2026-08-16',
+              'worker_live_preview:2026-08-16-chukyo-06',
+              'worker_live_final:2026-08-16-chukyo-06',
+          ]
+          rows=m.d1_query(
+              'SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt FROM rt_system_state WHERE state_key IN (?,?,?) ORDER BY state_key',
+              keys,
+          )
+          out=[]
+          for row in rows:
+              value=str(row.get('stateValue') or '')
+              try: parsed=json.loads(value)
+              except Exception: parsed=value
+              out.append({'stateKey':row.get('stateKey'),'updatedAt':row.get('updatedAt'),'value':parsed})
+          print('WORKER_DEADLINE_DIAG='+json.dumps(out,ensure_ascii=False))
+          PY
       - name: Install completed-model runtime
         run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0"
       - name: Compile critical generator
