@@ -121,7 +121,7 @@ async function loadHomeUx(db: D1Database, now = new Date()): Promise<HomeUx> {
                COALESCE(SUM(returnYen),0) AS returnYen
         FROM (
           SELECT b.race_id,
-                 MAX(CASE WHEN COALESCE(b.return_yen,0)>0 THEN 1 ELSE 0 END) AS hit,
+                 MAX(CASE WHEN COALESCE(b.return_yen,0)>b.stake_yen THEN 1 ELSE 0 END) AS hit,
                  SUM(b.stake_yen) AS stakeYen,
                  SUM(COALESCE(b.return_yen,0)) AS returnYen
           FROM rt_public_bets b
@@ -208,7 +208,7 @@ function homeUxStyles(): string {
     .compact-nav{overflow:visible!important;align-items:center}.compact-nav>a[aria-current="page"]{border-color:var(--green);background:var(--green2);color:#c7f8e5;font-weight:900}
     .nav-more{position:relative;flex:0 0 auto}.nav-more>summary{list-style:none;cursor:pointer;white-space:nowrap;padding:8px 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:13px}.nav-more>summary::-webkit-details-marker{display:none}.nav-more.current>summary{border-color:var(--green);background:var(--green2);color:#c7f8e5;font-weight:900}.nav-more-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:80;display:grid;min-width:145px;padding:6px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 12px 28px rgba(0,0,0,.35)}.nav-more-menu a{border:0!important;border-radius:8px!important;background:transparent!important;padding:9px 10px!important;font-size:12px!important}.nav-more-menu a:hover{background:var(--panel2)!important}
     .home-next-release{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;margin:0 0 8px;padding:11px 13px;border:1px solid var(--green);border-radius:14px;background:linear-gradient(135deg,#102b27,#101c29)}.home-next-release>span{font-size:10px;font-weight:900;color:var(--green)}.home-next-release>a{display:flex;align-items:baseline;justify-content:space-between;gap:9px;min-width:0}.home-next-release b{font-size:15px}.home-next-release strong{font-size:12px;color:#bdf5dc;white-space:nowrap}.home-next-release small{font-size:10px;color:var(--muted);white-space:nowrap}.home-next-release.overdue{border-color:#80652d;background:#2a2414}.home-next-release.overdue>span,.home-next-release.overdue strong{color:var(--warn)}
-    .home-quick-strip{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}.home-venue-shortcuts{display:flex;align-items:center;gap:8px;min-width:0}.home-venue-shortcuts>span{font-size:10px;color:var(--muted);white-space:nowrap}.home-venue-shortcuts>div{display:flex;gap:5px;overflow-x:auto}.home-venue-shortcuts button{appearance:none;border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--text);padding:6px 9px;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}.home-venue-shortcuts button:hover{border-color:var(--green)}.home-today-result{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:10px}.home-today-result span{color:var(--muted)}.home-today-result b{font-size:11px}.home-today-result em{font-style:normal;color:var(--muted)}.home-today-result strong{font-size:14px;color:var(--green)}
+    .home-quick-strip{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}.home-venue-shortcuts{display:flex;align-items:center;gap:8px;min-width:0}.home-venue-shortcuts>span{font-size:10px;color:var(--muted);white-space:nowrap}.home-venue-shortcuts>div{display:flex;gap:5px;flex-wrap:wrap}.home-venue-shortcuts button{appearance:none;border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--text);padding:6px 9px;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}.home-venue-shortcuts button:hover{border-color:var(--green)}.home-today-result{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:10px}.home-today-result span{color:var(--muted)}.home-today-result b{font-size:11px}.home-today-result em{font-style:normal;color:var(--muted)}.home-today-result strong{font-size:14px;color:var(--green)}
     .home-publish-details{margin-top:0!important}.home-publish-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;cursor:pointer;list-style:none}.home-publish-summary::-webkit-details-marker{display:none}.home-publish-summary b{font-size:13px}.home-publish-summary span{font-size:10px;color:var(--muted)}.home-publish-summary:after{content:"＋";margin-left:auto;color:var(--muted);font-weight:900}.home-publish-details[open] .home-publish-summary:after{content:"−"}.home-publish-details>.home-publish-steps{border-top:1px solid var(--line)}
     .recent-roi-strip{display:flex;align-items:baseline;gap:9px;margin:7px 0 2px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}.recent-roi-strip span{font-size:10px;color:var(--muted)}.recent-roi-strip strong{font-size:18px;color:var(--green)}.recent-roi-strip small{margin-left:auto;color:var(--muted);font-size:10px}
     .race-filter{display:flex;gap:5px;margin:3px 0 7px}.race-filter button{appearance:none;border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--muted);padding:6px 9px;font:inherit;font-size:10px;cursor:pointer}.race-filter button.active{border-color:var(--green);background:var(--green2);color:#c7f8e5;font-weight:800}.race-filter-empty{padding:18px 4px;color:var(--muted);font-size:11px}
@@ -238,8 +238,12 @@ function homeUxScript(): string {
         const show=activeFilter==='all'||(activeFilter==='buy'&&hasBet)||(activeFilter==='skip'&&state==='skip');
         card.style.display=show?'':'none';if(show)visible++;
       });
-      rail.querySelector('.race-filter-empty')?.remove();
-      if(cards.length&&visible===0){const empty=document.createElement('div');empty.className='race-filter-empty';empty.textContent='この条件のレースはありません。';rail.append(empty);}
+      const existingEmpty=rail.querySelector('.race-filter-empty');
+      if(cards.length&&visible===0){
+        if(!existingEmpty){const empty=document.createElement('div');empty.className='race-filter-empty';empty.textContent='この条件のレースはありません。';rail.append(empty);}
+      }else{
+        existingEmpty?.remove();
+      }
     };
     const step=rail.closest('.nav-step');
     if(step&&!step.querySelector('.race-filter')){
