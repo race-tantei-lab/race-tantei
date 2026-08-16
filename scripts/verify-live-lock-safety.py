@@ -58,7 +58,8 @@ def main() -> None:
     guard = read("src/v1/completed-worker-deadline-guard.ts")
     for needle in (
         "export const DEADLINE_GUARD_MS = 15 * 60 * 1000;",
-        "remainingMs > 0 && remainingMs <= DEADLINE_GUARD_MS",
+        "export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;",
+        "remainingMs > 0 && remainingMs <= DEADLINE_GUARD_ARM_MS",
         "orderSelectedRaceIds",
         "start_time_utc AS startTimeUtc",
         'snapshot.oddsSource!=="jra-fast-official" && snapshot.oddsSource!=="jra-crawl-official"',
@@ -113,6 +114,13 @@ def main() -> None:
         'IMMUTABLE_FINAL_BET_TERMS',
         'CREATE TRIGGER IF NOT EXISTS rt_guard_locked_worker_final_state',
         'IMMUTABLE_WORKER_FINAL_STATE',
+        'CREATE TRIGGER IF NOT EXISTS rt_guard_probability_fallback_final_insert',
+        'CREATE TRIGGER IF NOT EXISTS rt_guard_probability_fallback_final_update',
+        'PROBABILITY_FALLBACK_FORBIDDEN',
+        'CREATE TRIGGER IF NOT EXISTS rt_guard_official_odds_final_insert',
+        'CREATE TRIGGER IF NOT EXISTS rt_guard_official_odds_final_update',
+        "NOT IN ('jra-fast-official', 'jra-crawl-official')",
+        'OFFICIAL_JRA_ODDS_REQUIRED',
     ):
         require(invariants, needle, "final immutability")
 
@@ -182,6 +190,7 @@ def main() -> None:
         "worker_cron=1m",
         "preview_open=45m",
         "preview_history=3",
+        "guard_arm=16m",
         "finalize_open=15m",
         "deadline=15m",
         "persistent_guard=stored_preview_only",
@@ -192,6 +201,8 @@ def main() -> None:
         "guard_external_http=false",
         "race_page_self_heal=stored_preview_only",
         "final_db_immutability=true",
+        "official_jra_odds_required=true",
+        "probability_fallback_forbidden=true",
         "prior_learning_fail_open=08:30JST",
         "github_backup=stored_preview_only_5m",
         "post_deadline_prediction_generation=false",
