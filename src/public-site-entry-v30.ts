@@ -3,8 +3,61 @@ import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v30-clear-language-20260816";
 
+type HomeRaceRow = {
+  raceId: string;
+  venue: string;
+  raceNo: number;
+  raceName: string | null;
+  startTimeJst: string | null;
+  startTimeUtc: string | null;
+};
+
+type HomeUx = {
+  venues: string[];
+  nextRace: null | {
+    raceId: string;
+    venue: string;
+    raceNo: number;
+    startTimeJst: string | null;
+    deadlineJst: string | null;
+    overdue: boolean;
+  };
+  recent30: null | { races: number; roiPct: number };
+  today: null | { races: number; hits: number; roiPct: number };
+};
+
+type RaceNavRow = { raceId: string; venue: string; raceNo: number; raceDate: string };
+
 function replaceExact(html: string, from: string, to: string): string {
   return html.split(from).join(to);
+}
+
+function esc(value: unknown): string {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[ch] ?? ch));
+}
+
+function jstDate(now = new Date()): string {
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function jstClock(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return /^\d{1,2}:\d{2}$/.test(value) ? value.padStart(5, "0") : null;
+  return new Date(time + 9 * 60 * 60 * 1000).toISOString().slice(11, 16);
+}
+
+function deadlineClock(startTimeUtc: string | null): string | null {
+  if (!startTimeUtc) return null;
+  const time = Date.parse(startTimeUtc);
+  if (!Number.isFinite(time)) return null;
+  return new Date(time - 15 * 60 * 1000 + 9 * 60 * 60 * 1000).toISOString().slice(11, 16);
 }
 
 function removeTodayHomeHero(input: string): string {
@@ -12,6 +65,246 @@ function removeTodayHomeHero(input: string): string {
     '<section class="hero today-hero"><span class="today-pill">TODAY</span><h1>今日のレース</h1><p>年 → 月 → 日付 → 会場 → レースの順に選ぶだけで、全レースを確認できます。買い目対象・見送り・判定中も同じ画面で分かります。</p></section>',
     "",
   );
+}
+
+function collapseHomeTiming(input: string): string {
+  return input.replace(
+    /<section class="home-publish-flow" aria-label="予想の公開タイミング">([\s\S]*?)<\/section>/,
+    (_whole, inner: string) => {
+      const steps = inner.replace(/\s*<div class="home-publish-head">[\s\S]*?<\/div>\s*/, "");
+      return `<details class="home-publish-flow home-publish-details"><summary class="home-publish-summary"><b>予想の公開タイミング</b><span>日本時間</span></summary>${steps}</details>`;
+    },
+  );
+}
+
+function compactNavigation(input: string, path: string): string {
+  const raceCurrent = path === "/" || path.startsWith("/races/") ? ' aria-current="page"' : "";
+  const win5Current = path === "/win5" ? ' aria-current="page"' : "";
+  const moreCurrent = path === "/conditions" || path === "/guide" ? " current" : "";
+  const nav = `<nav class="nav compact-nav"><a href="/"${raceCurrent}>レース</a><a href="/win5"${win5Current}>WIN5</a><details class="nav-more${moreCurrent}"><summary>その他</summary><div class="nav-more-menu"><a href="/conditions">予想のしくみ</a><a href="/guide">使い方</a></div></details></nav>`;
+  return input.replace(/<nav class="nav">[\s\S]*?<\/nav>/, nav);
+}
+
+async function loadHomeUx(db: D1Database, now = new Date()): Promise<HomeUx> {
+  const date = jstDate(now);
+  try {
+    const [races, selection, locked, recent30, today] = await Promise.all([
+      db.prepare(`
+        SELECT race_id AS raceId,venue,race_no AS raceNo,race_name AS raceName,
+               start_time_jst AS startTimeJst,start_time_utc AS startTimeUtc
+        FROM rt_races
+        WHERE race_date=?
+        ORDER BY start_time_utc,race_no,race_id
+      `).bind(date).all<HomeRaceRow>(),
+      db.prepare(`SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1`)
+        .bind(`final_daily_selection:${date}`).first<{ value: string | null }>(),
+      db.prepare(`
+        SELECT DISTINCT b.race_id AS raceId
+        FROM rt_public_bets b
+        JOIN rt_races r ON r.race_id=b.race_id
+        WHERE r.race_date=? AND b.source_prediction_id=-2
+      `).bind(date).all<{ raceId: string }>(),
+      db.prepare(`
+        SELECT COUNT(DISTINCT b.race_id) AS races,
+               COALESCE(SUM(b.stake_yen),0) AS stakeYen,
+               COALESCE(SUM(COALESCE(b.return_yen,0)),0) AS returnYen
+        FROM rt_public_bets b
+        JOIN rt_races r ON r.race_id=b.race_id
+        WHERE r.race_date>=date(?,'-29 days') AND r.race_date<=?
+          AND b.source_prediction_id=-2
+          AND b.settlement_status='settled'
+      `).bind(date, date).first<{ races: number; stakeYen: number; returnYen: number }>(),
+      db.prepare(`
+        SELECT COUNT(*) AS races,
+               COALESCE(SUM(hit),0) AS hits,
+               COALESCE(SUM(stakeYen),0) AS stakeYen,
+               COALESCE(SUM(returnYen),0) AS returnYen
+        FROM (
+          SELECT b.race_id,
+                 MAX(CASE WHEN COALESCE(b.return_yen,0)>0 THEN 1 ELSE 0 END) AS hit,
+                 SUM(b.stake_yen) AS stakeYen,
+                 SUM(COALESCE(b.return_yen,0)) AS returnYen
+          FROM rt_public_bets b
+          JOIN rt_races r ON r.race_id=b.race_id
+          WHERE r.race_date=? AND b.source_prediction_id=-2
+          GROUP BY b.race_id
+          HAVING SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END)=COUNT(*)
+        )
+      `).bind(date).first<{ races: number; hits: number; stakeYen: number; returnYen: number }>(),
+    ]);
+
+    const venueList = [...new Set(races.results.map((row) => String(row.venue)).filter(Boolean))];
+    const lockedIds = new Set(locked.results.map((row) => String(row.raceId)));
+    const selectedIds = new Set<string>();
+    if (selection?.value) {
+      try {
+        const parsed = JSON.parse(selection.value) as { selected?: Array<{ raceId?: unknown }> };
+        for (const row of parsed.selected ?? []) {
+          const raceId = String(row?.raceId ?? "");
+          if (raceId) selectedIds.add(raceId);
+        }
+      } catch { /* no frozen selection yet */ }
+    }
+
+    const nowMs = now.getTime();
+    const next = races.results
+      .filter((row) => selectedIds.has(String(row.raceId)) && !lockedIds.has(String(row.raceId)))
+      .map((row) => ({ row, startMs: Date.parse(String(row.startTimeUtc ?? "")) }))
+      .filter((item) => Number.isFinite(item.startMs) && item.startMs > nowMs)
+      .sort((a, b) => a.startMs - b.startMs)[0];
+
+    const nextRace = next ? {
+      raceId: String(next.row.raceId),
+      venue: String(next.row.venue),
+      raceNo: Number(next.row.raceNo),
+      startTimeJst: jstClock(next.row.startTimeUtc) ?? next.row.startTimeJst,
+      deadlineJst: deadlineClock(next.row.startTimeUtc),
+      overdue: nowMs >= next.startMs - 15 * 60 * 1000,
+    } : null;
+
+    const recentRaces = Number(recent30?.races ?? 0);
+    const recentStake = Number(recent30?.stakeYen ?? 0);
+    const recentReturn = Number(recent30?.returnYen ?? 0);
+    const todayRaces = Number(today?.races ?? 0);
+    const todayStake = Number(today?.stakeYen ?? 0);
+    const todayReturn = Number(today?.returnYen ?? 0);
+
+    return {
+      venues: venueList,
+      nextRace,
+      recent30: recentRaces > 0 && recentStake > 0 ? { races: recentRaces, roiPct: recentReturn / recentStake * 100 } : null,
+      today: todayRaces > 0 && todayStake > 0 ? {
+        races: todayRaces,
+        hits: Number(today?.hits ?? 0),
+        roiPct: todayReturn / todayStake * 100,
+      } : null,
+    };
+  } catch (error) {
+    console.error("HOME_UX_LOAD_FAILED", error);
+    return { venues: [], nextRace: null, recent30: null, today: null };
+  }
+}
+
+function homeTopTools(ux: HomeUx): string {
+  const next = ux.nextRace ? `<section class="home-next-release${ux.nextRace.overdue ? " overdue" : ""}">
+    <span>${ux.nextRace.overdue ? "買い目確定待ち" : "次の買い目"}</span>
+    <a href="/races/${encodeURIComponent(ux.nextRace.raceId)}"><b>${esc(ux.nextRace.venue)} ${ux.nextRace.raceNo}R</b><strong>${ux.nextRace.overdue ? "未確定" : `${esc(ux.nextRace.deadlineJst ?? "--:--")}までに公開`}</strong></a>
+    <small>${esc(ux.nextRace.startTimeJst ?? "--:--")}発走</small>
+  </section>` : "";
+
+  const venues = ux.venues.length ? `<div class="home-venue-shortcuts"><span>今日の会場</span><div>${ux.venues.map((venue) => `<button type="button" data-quick-venue="${esc(venue)}">${esc(venue)}</button>`).join("")}</div></div>` : "";
+  const today = ux.today ? `<div class="home-today-result"><span>本日</span><b>${ux.today.races}R終了</b><em>${ux.today.hits}的中</em><strong>${ux.today.roiPct.toFixed(1)}%</strong></div>` : "";
+  if (!next && !venues && !today) return "";
+  return `${next}<section class="home-quick-strip">${venues}${today}</section>`;
+}
+
+function recent30Html(ux: HomeUx): string {
+  if (!ux.recent30) return "";
+  return `<div class="recent-roi-strip"><span>直近30日</span><strong>${ux.recent30.roiPct.toFixed(1)}%</strong><small>${ux.recent30.races}R</small></div>`;
+}
+
+function homeUxStyles(): string {
+  return `<style>
+    .compact-nav{overflow:visible!important;align-items:center}.compact-nav>a[aria-current="page"]{border-color:var(--green);background:var(--green2);color:#c7f8e5;font-weight:900}
+    .nav-more{position:relative;flex:0 0 auto}.nav-more>summary{list-style:none;cursor:pointer;white-space:nowrap;padding:8px 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font-size:13px}.nav-more>summary::-webkit-details-marker{display:none}.nav-more.current>summary{border-color:var(--green);background:var(--green2);color:#c7f8e5;font-weight:900}.nav-more-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:80;display:grid;min-width:145px;padding:6px;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:0 12px 28px rgba(0,0,0,.35)}.nav-more-menu a{border:0!important;border-radius:8px!important;background:transparent!important;padding:9px 10px!important;font-size:12px!important}.nav-more-menu a:hover{background:var(--panel2)!important}
+    .home-next-release{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;margin:0 0 8px;padding:11px 13px;border:1px solid var(--green);border-radius:14px;background:linear-gradient(135deg,#102b27,#101c29)}.home-next-release>span{font-size:10px;font-weight:900;color:var(--green)}.home-next-release>a{display:flex;align-items:baseline;justify-content:space-between;gap:9px;min-width:0}.home-next-release b{font-size:15px}.home-next-release strong{font-size:12px;color:#bdf5dc;white-space:nowrap}.home-next-release small{font-size:10px;color:var(--muted);white-space:nowrap}.home-next-release.overdue{border-color:#80652d;background:#2a2414}.home-next-release.overdue>span,.home-next-release.overdue strong{color:var(--warn)}
+    .home-quick-strip{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;padding:8px 10px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}.home-venue-shortcuts{display:flex;align-items:center;gap:8px;min-width:0}.home-venue-shortcuts>span{font-size:10px;color:var(--muted);white-space:nowrap}.home-venue-shortcuts>div{display:flex;gap:5px;overflow-x:auto}.home-venue-shortcuts button{appearance:none;border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--text);padding:6px 9px;font:inherit;font-size:11px;cursor:pointer;white-space:nowrap}.home-venue-shortcuts button:hover{border-color:var(--green)}.home-today-result{display:flex;align-items:center;gap:7px;white-space:nowrap;font-size:10px}.home-today-result span{color:var(--muted)}.home-today-result b{font-size:11px}.home-today-result em{font-style:normal;color:var(--muted)}.home-today-result strong{font-size:14px;color:var(--green)}
+    .home-publish-details{margin-top:0!important}.home-publish-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;cursor:pointer;list-style:none}.home-publish-summary::-webkit-details-marker{display:none}.home-publish-summary b{font-size:13px}.home-publish-summary span{font-size:10px;color:var(--muted)}.home-publish-summary:after{content:"＋";margin-left:auto;color:var(--muted);font-weight:900}.home-publish-details[open] .home-publish-summary:after{content:"−"}.home-publish-details>.home-publish-steps{border-top:1px solid var(--line)}
+    .recent-roi-strip{display:flex;align-items:baseline;gap:9px;margin:7px 0 2px;padding:9px 11px;border:1px solid var(--line);border-radius:12px;background:var(--panel2)}.recent-roi-strip span{font-size:10px;color:var(--muted)}.recent-roi-strip strong{font-size:18px;color:var(--green)}.recent-roi-strip small{margin-left:auto;color:var(--muted);font-size:10px}
+    .race-filter{display:flex;gap:5px;margin:3px 0 7px}.race-filter button{appearance:none;border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--muted);padding:6px 9px;font:inherit;font-size:10px;cursor:pointer}.race-filter button.active{border-color:var(--green);background:var(--green2);color:#c7f8e5;font-weight:800}.race-filter-empty{padding:18px 4px;color:var(--muted);font-size:11px}
+    .race-card{border-left-width:4px!important}.race-card.state-buy,.race-card.state-hit{border-left-color:var(--green)!important}.race-card.state-target,.race-card.state-pending{border-left-color:var(--warn)!important}.race-card.state-skip{border-left-color:#526477!important}.race-card.state-miss,.race-card.state-overdue,.race-card.state-missing{border-left-color:var(--red)!important}.race-card.state-refund{border-left-color:var(--blue)!important}
+    .race-sequence-nav{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:0 0 10px}.race-sequence-nav a,.race-sequence-nav span{display:block;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);font-size:11px}.race-sequence-nav a:last-child,.race-sequence-nav span:last-child{text-align:right}.race-sequence-nav span{color:var(--muted);opacity:.55}
+    @media(max-width:760px){.top{overflow:visible}.home-next-release{grid-template-columns:auto 1fr}.home-next-release small{grid-column:2}.home-next-release>a{display:grid;gap:2px}.home-quick-strip{display:grid;gap:8px}.home-venue-shortcuts{display:grid;grid-template-columns:auto minmax(0,1fr)}.home-today-result{border-top:1px solid var(--line);padding-top:7px}.nav-more>summary{padding:7px 9px;font-size:12px}.nav-more-menu{right:0}.race-sequence-nav{margin-top:2px}}
+  </style>`;
+}
+
+function homeUxScript(): string {
+  return `<script>(()=>{
+    const rail=document.getElementById('races');
+    if(!rail)return;
+    let activeFilter='all';
+    const stateOf=(card)=>{
+      const status=card.querySelector('.status');
+      if(!status)return 'unknown';
+      return ['buy','hit','miss','refund','target','pending','skip','overdue','missing'].find((name)=>status.classList.contains(name))||'unknown';
+    };
+    const apply=()=>{
+      const cards=[...rail.querySelectorAll('.race-card')];
+      let visible=0;
+      cards.forEach((card)=>{
+        [...card.classList].filter((name)=>name.startsWith('state-')).forEach((name)=>card.classList.remove(name));
+        const state=stateOf(card);card.classList.add('state-'+state);
+        const hasBet=['buy','hit','miss','refund'].includes(state);
+        const show=activeFilter==='all'||(activeFilter==='buy'&&hasBet)||(activeFilter==='skip'&&state==='skip');
+        card.style.display=show?'':'none';if(show)visible++;
+      });
+      rail.querySelector('.race-filter-empty')?.remove();
+      if(cards.length&&visible===0){const empty=document.createElement('div');empty.className='race-filter-empty';empty.textContent='この条件のレースはありません。';rail.append(empty);}
+    };
+    const step=rail.closest('.nav-step');
+    if(step&&!step.querySelector('.race-filter')){
+      const filter=document.createElement('div');filter.className='race-filter';filter.innerHTML='<button type="button" class="active" data-race-filter="all">すべて</button><button type="button" data-race-filter="buy">買い目あり</button><button type="button" data-race-filter="skip">見送り</button>';
+      step.insertBefore(filter,rail);
+      filter.addEventListener('click',(event)=>{const button=event.target.closest('[data-race-filter]');if(!button)return;activeFilter=button.getAttribute('data-race-filter')||'all';filter.querySelectorAll('button').forEach((node)=>node.classList.toggle('active',node===button));apply();});
+    }
+    document.querySelectorAll('[data-quick-venue]').forEach((button)=>button.addEventListener('click',()=>{
+      const venue=button.getAttribute('data-quick-venue')||'';
+      const todayButton=document.querySelector('#dates .chip.today');
+      if(todayButton&&!todayButton.classList.contains('active'))todayButton.click();
+      setTimeout(()=>{const target=[...document.querySelectorAll('#venues .chip')].find((node)=>(node.textContent||'').trim()===venue);if(target){target.click();document.querySelector('.navigator')?.scrollIntoView({behavior:'smooth',block:'start'});}},50);
+    }));
+    new MutationObserver(apply).observe(rail,{childList:true,subtree:true});apply();
+  })();</script>`;
+}
+
+async function enhanceHome(response: Response, env: Env): Promise<Response> {
+  if (!response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
+  try {
+    const ux = await loadHomeUx(env.DB);
+    let html = await response.text();
+    html = removeTodayHomeHero(html);
+    html = collapseHomeTiming(html);
+    const tools = homeTopTools(ux);
+    if (tools) {
+      if (html.includes('<details class="home-publish-flow home-publish-details">')) html = html.replace('<details class="home-publish-flow home-publish-details">', `${tools}<details class="home-publish-flow home-publish-details">`);
+      else html = html.replace(/(<div class="section-title"><h2>累計回収率<\/h2>)/, `${tools}$1`);
+    }
+    const recent = recent30Html(ux);
+    if (recent) html = html.replace(/(<section class="metrics">[\s\S]*?<\/section>)/, `$1${recent}`);
+    html = html.replace("</head>", `${homeUxStyles()}</head>`).replace("</body>", `${homeUxScript()}</body>`);
+    const headers = new Headers(response.headers);headers.delete("content-length");
+    return new Response(html,{status:response.status,statusText:response.statusText,headers});
+  } catch (error) {
+    console.error("HOME_UX_ENHANCE_FAILED", error);
+    return response;
+  }
+}
+
+async function enhanceRaceNavigation(response: Response, env: Env, path: string): Promise<Response> {
+  if (!path.startsWith("/races/") || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
+  try {
+    const raceId = decodeURIComponent(path.slice("/races/".length));
+    const current = await env.DB.prepare(`SELECT race_id AS raceId,venue,race_no AS raceNo,race_date AS raceDate FROM rt_races WHERE race_id=? LIMIT 1`).bind(raceId).first<RaceNavRow>();
+    if (!current) return response;
+    const [previous, next] = await Promise.all([
+      env.DB.prepare(`SELECT race_id AS raceId,venue,race_no AS raceNo,race_date AS raceDate FROM rt_races WHERE race_date=? AND venue=? AND race_no<? ORDER BY race_no DESC LIMIT 1`).bind(current.raceDate,current.venue,current.raceNo).first<RaceNavRow>(),
+      env.DB.prepare(`SELECT race_id AS raceId,venue,race_no AS raceNo,race_date AS raceDate FROM rt_races WHERE race_date=? AND venue=? AND race_no>? ORDER BY race_no ASC LIMIT 1`).bind(current.raceDate,current.venue,current.raceNo).first<RaceNavRow>(),
+    ]);
+    const prevHtml = previous ? `<a href="/races/${encodeURIComponent(previous.raceId)}">← ${esc(previous.venue)} ${Number(previous.raceNo)}R</a>` : `<span>← 前のレースなし</span>`;
+    const nextHtml = next ? `<a href="/races/${encodeURIComponent(next.raceId)}">${esc(next.venue)} ${Number(next.raceNo)}R →</a>` : `<span>次のレースなし →</span>`;
+    const nav = `<nav class="race-sequence-nav" aria-label="前後のレース">${prevHtml}${nextHtml}</nav>`;
+    let html = await response.text();
+    if (!html.includes("race-sequence-nav")) {
+      if (/<a class="back"[^>]*>[\s\S]*?<\/a>/.test(html)) html = html.replace(/(<a class="back"[^>]*>[\s\S]*?<\/a>)/, `$1${nav}`);
+      else html = html.replace(/(<div class="race-title">)/, `${nav}$1`);
+    }
+    html = html.replace("</head>", `${homeUxStyles()}</head>`);
+    const headers = new Headers(response.headers);headers.delete("content-length");
+    return new Response(html,{status:response.status,statusText:response.statusText,headers});
+  } catch (error) {
+    console.error("RACE_SEQUENCE_NAV_FAILED", error);
+    return response;
+  }
 }
 
 function clarifyCommonLanguage(input: string): string {
@@ -83,7 +376,6 @@ function clarifyWin5Language(input: string): string {
   ];
   for (const [from, to] of exact) html = replaceExact(html, from, to);
 
-  // Keep the production smoke marker without showing an English product label.
   if (html.includes("WIN5 PREDICTION")) {
     html = replaceExact(html, "WIN5 PREDICTION", "WIN5予想");
     html = html.replace("</body>", "<!-- WIN5 PREDICTION --></body>");
@@ -96,7 +388,8 @@ async function clarifyHtmlResponse(response: Response, path: string): Promise<Re
   let html = await response.text();
   if (path === "/win5") html = clarifyWin5Language(html);
   html = clarifyCommonLanguage(html);
-  if (path === "/") html = removeTodayHomeHero(html);
+  html = compactNavigation(html, path);
+  if (path !== "/" && !path.startsWith("/races/")) html = html.replace("</head>", `${homeUxStyles()}</head>`);
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   headers.set("x-race-ui-version", UI_VERSION);
@@ -106,8 +399,12 @@ async function clarifyHtmlResponse(response: Response, path: string): Promise<Re
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
-    const response = await publicSite.fetch(request, env, ctx);
-    return clarifyHtmlResponse(response, new URL(request.url).pathname);
+    const path = new URL(request.url).pathname;
+    let response = await publicSite.fetch(request, env, ctx);
+    response = await clarifyHtmlResponse(response, path);
+    if (path === "/") response = await enhanceHome(response, env);
+    else if (path.startsWith("/races/")) response = await enhanceRaceNavigation(response, env, path);
+    return response;
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
