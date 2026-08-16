@@ -69,19 +69,22 @@ def main() -> None:
         WITH per_race AS (
           SELECT r.race_id AS raceId, r.race_date AS raceDate, r.venue,
                  r.race_no AS raceNo, r.start_time_utc AS startTimeUtc,
+                 r.entry_url AS entryUrl, r.result_url AS resultUrl,
                  SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS activeRunners,
                  SUM(CASE WHEN rr.runner_status='active' AND rr.win_odds>1 THEN 1 ELSE 0 END) AS runnersWithOfficialWinOdds
           FROM rt_races r
           LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
-          WHERE r.status!='finished'
-            AND r.race_date>=date('now')
+          WHERE r.race_date>=date('now')
             AND r.race_date<=date('now','+14 days')
-          GROUP BY r.race_id,r.race_date,r.venue,r.race_no,r.start_time_utc
+          GROUP BY r.race_id,r.race_date,r.venue,r.race_no,r.start_time_utc,r.entry_url,r.result_url
         )
         SELECT raceDate, venue,
                COUNT(*) AS storedRaces,
                SUM(CASE WHEN activeRunners>=3 THEN 1 ELSE 0 END) AS racesWithEntries,
                SUM(CASE WHEN runnersWithOfficialWinOdds>=3 THEN 1 ELSE 0 END) AS racesWithWinOdds,
+               SUM(CASE WHEN entryUrl LIKE '%/JRADB/accessD.html?CNAME=%' AND entryUrl NOT LIKE '%/keiba/calendar%' THEN 1 ELSE 0 END) AS racesWithCanonicalEntryUrl,
+               SUM(CASE WHEN resultUrl LIKE '%/JRADB/accessS.html?CNAME=%' AND resultUrl NOT LIKE '%/keiba/calendar%' THEN 1 ELSE 0 END) AS racesWithCanonicalResultUrl,
+               SUM(CASE WHEN entryUrl LIKE '%/keiba/calendar%' OR resultUrl LIKE '%/keiba/calendar%' THEN 1 ELSE 0 END) AS racesWithCalendarUrlPollution,
                MIN(activeRunners) AS minimumActiveRunners,
                MAX(activeRunners) AS maximumActiveRunners,
                MIN(raceNo) AS minimumRaceNo,
@@ -98,12 +101,18 @@ def main() -> None:
         row = by_group.get((race_date, venue)) or {}
         stored = int(row.get("storedRaces") or 0)
         entries = int(row.get("racesWithEntries") or 0)
+        canonical_entries = int(row.get("racesWithCanonicalEntryUrl") or 0)
+        canonical_results = int(row.get("racesWithCanonicalResultUrl") or 0)
+        polluted = int(row.get("racesWithCalendarUrlPollution") or 0)
         min_no = int(row.get("minimumRaceNo") or 0)
         max_no = int(row.get("maximumRaceNo") or 0)
         starts = int(row.get("racesWithStartTime") or 0)
         schedule_complete = stored == 12 and min_no == 1 and max_no == 12 and starts == 12
         entry_required = race_date in entry_dates
-        entry_complete = entries == 12
+        # Entry readiness means the full race program exists AND every race has a
+        # canonical race-specific accessD/accessS URL. A calendar URL can never
+        # satisfy readiness because the official-odds crawler cannot identify a race from it.
+        entry_complete = entries == 12 and canonical_entries == 12 and canonical_results == 12 and polluted == 0
         checks.append({
             "raceDate": race_date,
             "venue": venue,
@@ -113,6 +122,9 @@ def main() -> None:
             "storedRaces": stored,
             "racesWithEntries": entries,
             "racesWithWinOdds": int(row.get("racesWithWinOdds") or 0),
+            "racesWithCanonicalEntryUrl": canonical_entries,
+            "racesWithCanonicalResultUrl": canonical_results,
+            "racesWithCalendarUrlPollution": polluted,
             "minimumRaceNo": min_no,
             "maximumRaceNo": max_no,
             "racesWithStartTime": starts,
@@ -121,13 +133,20 @@ def main() -> None:
 
     schedule_complete = bool(checks) and all(item["scheduleComplete"] for item in checks)
     required_entries_complete = all(item["entryComplete"] for item in checks if item["entryRequiredNow"])
-    weekend_ready = schedule_complete and required_entries_complete
+    canonical_urls_complete = all(
+        item["racesWithCanonicalEntryUrl"] == 12
+        and item["racesWithCanonicalResultUrl"] == 12
+        and item["racesWithCalendarUrlPollution"] == 0
+        for item in checks if item["entryRequiredNow"]
+    )
+    weekend_ready = schedule_complete and required_entries_complete and canonical_urls_complete
     report = {
         "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
         "generatedAtJst": now_jst.isoformat(),
         "weekendReady": weekend_ready,
         "scheduleComplete": schedule_complete,
         "requiredEntriesComplete": required_entries_complete,
+        "canonicalRaceUrlsComplete": canonical_urls_complete,
         "targetDates": target_dates,
         "requiredEntryDatesNow": entry_dates,
         "expectedVenueDays": len(expected),
