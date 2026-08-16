@@ -33,7 +33,7 @@ async function emergencyFallbackNotice(response: Response, env: Env, path: strin
   }
 }
 
-async function runDeadlineGuard(env: Env, label: string): Promise<void> {
+async function runDeadlineGuard(env: Env, label: string, strict: boolean): Promise<void> {
   const now = new Date();
   try {
     // If the canonical daily selection was not persisted by an earlier cron,
@@ -44,11 +44,19 @@ async function runDeadlineGuard(env: Env, label: string): Promise<void> {
   } catch (error) {
     console.error(`${label}_SELECTION_RECOVERY_FAILED`, error);
   }
+
   try {
     const audit = await runCompletedWorkerDeadlineGuard(env, now);
     console.log(label, JSON.stringify(audit));
+    const due = new Set(audit.dueRaceIds);
+    const locked = new Set(audit.lockedRaceIds);
+    const unresolved = [...due].filter((raceId) => !locked.has(raceId));
+    if (audit.errors.length || unresolved.length) {
+      throw new Error(`${label}_DUE_RACE_UNRESOLVED:${unresolved.join(",")}:errors=${JSON.stringify(audit.errors)}`);
+    }
   } catch (error) {
     console.error(`${label}_FAILED`, error);
+    if (strict) throw error;
   }
 }
 
@@ -60,11 +68,9 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    // The normal-race deadline guard is deliberately first. It performs no
-    // external HTTP. Every selected race from 15 minutes before start until
-    // start remains eligible on every cron run, so a delayed/skipped cron can
-    // catch up instead of falling through a one-minute window.
-    await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE");
+    // First pass is deliberately before all external HTTP. Failure here does
+    // not block the normal acquisition chain because the second pass retries.
+    await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE", false);
 
     let baseFailed = false;
     try {
@@ -74,10 +80,16 @@ export default {
       console.error("BASE_SCHEDULED_AFTER_DEADLINE_GUARD_FAILED", error);
     }
 
-    // Re-run after normal acquisition/preview work. This catches both a preview
-    // and a canonical daily selection produced during the delegated scheduled
-    // chain, and makes finalization independent from unrelated scheduled jobs.
-    await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_AFTER");
+    // Second pass is the hard post-condition. A cron invocation may not report
+    // success while a selected race currently inside the 15-minute pre-start
+    // window remains unresolved. This makes missing finalization observable on
+    // the same invocation instead of silently looking healthy.
+    let finalGuardError: unknown = null;
+    try {
+      await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_AFTER", true);
+    } catch (error) {
+      finalGuardError = error;
+    }
 
     // A normal-race SLA throw in v21 can prevent v26 from reaching WIN5.
     // Recover that independent scheduled job when the delegated chain failed.
@@ -88,5 +100,7 @@ export default {
         console.error("WIN5_SCHEDULED_RECOVERY_FAILED", error);
       }
     }
+
+    if (finalGuardError) throw finalGuardError;
   },
 } satisfies ExportedHandler<Env>;
