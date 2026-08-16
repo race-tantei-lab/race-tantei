@@ -47,12 +47,10 @@ for row in states:
         if rid in ids:
             snaps=value.get('snapshots',[]) if isinstance(value,dict) else []
             latest=snaps[0] if snaps else {}
-            runner_factors=latest.get('runnerFactors') or {}
+            details=latest.get('runnerRecencyFactors') or []
             factor_values=[]
-            if isinstance(runner_factors,dict):
-                factor_values=[float(v) for v in runner_factors.values() if isinstance(v,(int,float))]
-            elif isinstance(runner_factors,list):
-                for item in runner_factors:
+            if isinstance(details,list):
+                for item in details:
                     if isinstance(item,dict) and isinstance(item.get('factor'),(int,float)):
                         factor_values.append(float(item['factor']))
             preview.append({
@@ -61,10 +59,10 @@ for row in states:
                 'snapshots':len(snaps),
                 'latestGeneratedAt':latest.get('generatedAt'),
                 'latestOddsFetchedAt':latest.get('oddsFetchedAt'),
-                'learningAudit':latest.get('learningAudit'),
-                'runnerFactorCount':len(factor_values),
-                'runnerFactorMin':min(factor_values) if factor_values else None,
-                'runnerFactorMax':max(factor_values) if factor_values else None,
+                'onlineLearning':latest.get('onlineLearning'),
+                'runnerRecencyFactorCount':len(factor_values),
+                'runnerRecencyFactorMin':min(factor_values) if factor_values else None,
+                'runnerRecencyFactorMax':max(factor_values) if factor_values else None,
             })
 
 out={'checkedAtUtc':now.isoformat(),'checkedAtJst':now.astimezone(timezone(timedelta(hours=9))).isoformat(),'date':DATE,'selectionUpdatedAt':sel[0]['updatedAt'],'selectedRaceCount':len(ids),'races':races,'workerAudit':worker_audit,'previews':preview}
