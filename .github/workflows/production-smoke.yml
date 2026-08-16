@@ -41,8 +41,13 @@ jobs:
           curl --silent --show-error --fail --connect-timeout 3 --max-time 10 "${base}/conditions" >/tmp/conditions.html
           curl --silent --show-error --fail --connect-timeout 3 --max-time 10 "${base}/guide" >/tmp/guide.html
           grep -q 'レース探偵' /tmp/home.html
-          grep -q '予想ロジック' /tmp/conditions.html
-          grep -q 'レース探偵の使い方' /tmp/guide.html
+          grep -q '予想は当日も継続更新' /tmp/home.html
+          grep -q '完成モデル＋継続学習' /tmp/conditions.html
+          grep -q '当日結果も次レースへ反映' /tmp/conditions.html
+          grep -q 'JRA公式オッズだけ' /tmp/conditions.html
+          grep -q '発走15分前までに確定' /tmp/conditions.html
+          grep -q '継続学習について' /tmp/guide.html
+          grep -q '推定・合成オッズで代用' /tmp/guide.html
 
       - name: Wait for canonical deployment and public API
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -50,6 +55,7 @@ jobs:
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
           today="$(TZ=Asia/Tokyo date +%F)"
+          expected_ui='ten-year-completed-public-v31-current-methodology-20260816'
 
           fetch_url() {
             local url="$1" body="$2" codefile="$3"
@@ -61,19 +67,22 @@ jobs:
           for attempt in $(seq 1 12); do
             fetch_url "${base}/" /tmp/home.html /tmp/home.code & p1=$!
             fetch_url "${base}/conditions" /tmp/conditions.html /tmp/conditions.code & p2=$!
-            fetch_url "${base}/api/public/day?date=2026-08-08" /tmp/day8.json /tmp/day8.code & p3=$!
-            fetch_url "${base}/api/public/day?date=2026-08-09" /tmp/day9.json /tmp/day9.code & p4=$!
-            fetch_url "${base}/api/public/day?date=${today}" /tmp/today.json /tmp/today.code & p5=$!
-            wait "$p1"; wait "$p2"; wait "$p3"; wait "$p4"; wait "$p5"
+            fetch_url "${base}/guide" /tmp/guide.html /tmp/guide.code & p3=$!
+            fetch_url "${base}/api/public/day?date=2026-08-08" /tmp/day8.json /tmp/day8.code & p4=$!
+            fetch_url "${base}/api/public/day?date=2026-08-09" /tmp/day9.json /tmp/day9.code & p5=$!
+            fetch_url "${base}/api/public/day?date=${today}" /tmp/today.json /tmp/today.code & p6=$!
+            wait "$p1"; wait "$p2"; wait "$p3"; wait "$p4"; wait "$p5"; wait "$p6"
 
             home_code="$(cat /tmp/home.code)"
             conditions_code="$(cat /tmp/conditions.code)"
+            guide_code="$(cat /tmp/guide.code)"
             c8="$(cat /tmp/day8.code)"
             c9="$(cat /tmp/day9.code)"
             ctoday="$(cat /tmp/today.code)"
-            echo "attempt=${attempt} home=${home_code} conditions=${conditions_code} day8=${c8} day9=${c9} today=${today}:${ctoday}"
+            ui_version="$(curl --silent --show-error --connect-timeout 3 --max-time 8 -D - -o /dev/null "${base}/conditions" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-race-ui-version"{print $2}' | tail -1 || true)"
+            echo "attempt=${attempt} home=${home_code} conditions=${conditions_code} guide=${guide_code} day8=${c8} day9=${c9} today=${today}:${ctoday} ui=${ui_version:-missing}"
 
-            if [ "$home_code" = "200" ] && [ "$conditions_code" = "200" ] && [ "$c8" = "200" ] && [ "$c9" = "200" ] && [ "$ctoday" = "200" ]; then
+            if [ "$home_code" = "200" ] && [ "$conditions_code" = "200" ] && [ "$guide_code" = "200" ] && [ "$c8" = "200" ] && [ "$c9" = "200" ] && [ "$ctoday" = "200" ] && [ "$ui_version" = "$expected_ui" ]; then
               race_id="$(python - <<'PY'
           import json
           try:
@@ -99,6 +108,7 @@ jobs:
           from zoneinfo import ZoneInfo
           home=open('/tmp/home.html',encoding='utf-8').read()
           conditions=open('/tmp/conditions.html',encoding='utf-8').read()
+          guide=open('/tmp/guide.html',encoding='utf-8').read()
           race=open('/tmp/race.html',encoding='utf-8').read()
           d8=json.load(open('/tmp/day8.json',encoding='utf-8'))
           d9=json.load(open('/tmp/day9.json',encoding='utf-8'))
@@ -107,14 +117,26 @@ jobs:
           r9=d9.get('races')
           rt=today.get('races') if isinstance(today,dict) else None
           condition_markers=(
-            '予想ロジック',
-            '上位5頭',
-            '選定用の仮買い目',
-            'Plackett-Luce',
-            'ln(予測確率) + 0.4 × ln(JRA公式オッズ)',
-            '未使用データだけで検証した成績ではありません',
-            'データ更新のタイミング',
-            '公開した買い目と結果は後から変更しません',
+            '予想のしくみ',
+            '完成モデル＋継続学習',
+            '当日結果も次レースへ反映',
+            '直近30日＋当日終了レース',
+            '同じ日の終了済みレースを強く反映',
+            '対象レース自身や未来の結果は使いません',
+            'JRA公式オッズだけ',
+            '合成オッズ・推定オッズ',
+            '発走16分前以内で確定対象に入れる',
+            '発走15分前以降は再計算しない',
+            '推定・合成オッズで代用せず買い目を確定しません',
+            '確定後はDBでも変更不可',
+          )
+          guide_markers=(
+            '開催中も予想は更新',
+            '継続学習について',
+            '完成済みベースモデルは固定したまま',
+            '同じ日の終了レースを強く反映',
+            '市場オッズはJRA公式値だけを使用します',
+            '合成オッズや推定オッズで代用して確定することはありません',
           )
           frozen_projection=True
           projection={}
@@ -131,10 +153,14 @@ jobs:
               projection={'venues':dict(venue_counts),'states':dict(states),'structured':structured,'jstHour':now.hour}
           checks={
             'homeAlive':'レース探偵' in home,
+            'homeContinuousLearning':'予想は当日も継続更新' in home and 'JRA公式オッズだけで評価' in home,
             'homeSharedRoi':'<summary><b>全体</b>' in home and '会場別回収率' in home,
             'homeNoDuplicateCourseRoi':all(f'<summary><b>{x}</b>' not in home for x in ('ライト','スタンダード','プレミアム')),
             'raceDetailCourses':all(x in race for x in ('ライト','スタンダード','プレミアム')),
-            'conditionsMethodology':all(marker in conditions for marker in condition_markers),
+            'conditionsCurrentMethodology':all(marker in conditions for marker in condition_markers),
+            'guideCurrentMethodology':all(marker in guide for marker in guide_markers),
+            'conditionsNoOldProbabilityFinalization':'予測データを使って買い目を確定しました' not in conditions,
+            'guideNoOldProbabilityFinalization':'予測データを使って買い目を確定しました' not in guide,
             'day8ApiShape':isinstance(r8,list) and len(r8)>0,
             'day9ApiShape':isinstance(r9,list) and len(r9)>0,
             'todayFrozenSelectionProjection':frozen_projection,
