@@ -2,6 +2,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+TOP = ROOT / "src" / "public-site-entry-v31.ts"
 CANONICAL = ROOT / "src" / "public-site-entry-v30.ts"
 DEADLINE = ROOT / "src" / "public-site-entry-v29.ts"
 ENTRY = ROOT / "src" / "public-site-entry-v28.ts"
@@ -16,16 +17,18 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> None:
+    top = TOP.read_text(encoding="utf-8")
     canonical = CANONICAL.read_text(encoding="utf-8")
     deadline = DEADLINE.read_text(encoding="utf-8")
     entry = ENTRY.read_text(encoding="utf-8")
     parent = PARENT.read_text(encoding="utf-8")
-    source = canonical + "\n" + deadline + "\n" + entry + "\n" + parent
+    source = top + "\n" + canonical + "\n" + deadline + "\n" + entry + "\n" + parent
     win5_ui_source = entry + "\n" + parent
     wrangler = WRANGLER.read_text(encoding="utf-8")
     runtime = RUNTIME.read_text(encoding="utf-8")
 
-    require('"main": "src/public-site-entry-v30.ts"' in wrangler, "WIN5_V30_NOT_CANONICAL_ENTRY")
+    require('"main": "src/public-site-entry-v31.ts"' in wrangler, "WIN5_V31_NOT_CANONICAL_ENTRY")
+    require('import publicSite from "./public-site-entry-v30.js"' in top, "WIN5_V31_V30_WRAPPER_MISSING")
     require('import publicSite from "./public-site-entry-v29.js"' in canonical, "WIN5_V30_V29_WRAPPER_MISSING")
     require('import publicSite from "./public-site-entry-v28.js"' in deadline, "WIN5_V29_V28_WRAPPER_MISSING")
     require('class="nav-win5"' in parent, "WIN5_TOP_NAV_TAB_MISSING")
@@ -72,7 +75,7 @@ def main() -> None:
     # This guard is specifically for the WIN5 page implementation.
     require('overflow-x:auto' not in win5_ui_source, "WIN5_HORIZONTAL_SCROLL_REINTRODUCED")
 
-    print("WIN5_UI_OK top_nav=true floating_button=false view_switch=tickets_other default=tickets duplicate_plan_comparison=false rule=false diagnostics=always_open horizontal_scroll=false canonical=v30 clear_language=true")
+    print("WIN5_UI_OK top_nav=true floating_button=false view_switch=tickets_other default=tickets duplicate_plan_comparison=false rule=false diagnostics=always_open horizontal_scroll=false canonical=v31_v30 clear_language=true")
 
 
 if __name__ == "__main__":
