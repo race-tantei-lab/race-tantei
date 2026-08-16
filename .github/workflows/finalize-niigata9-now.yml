@@ -1,0 +1,120 @@
+name: Finalize Niigata 9R now
+
+on:
+  push:
+    branches:
+      - ops/finalize-niigata9-20260816
+    paths:
+      - .github/workflows/finalize-niigata9-now.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - name: Promote latest pre-race preview to normal final
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+
+          rid='2026-08-16-niigata-09'
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']
+          db=os.environ['CLOUDFLARE_D1_DATABASE_ID']
+          token=os.environ['CLOUDFLARE_API_TOKEN']
+          endpoint=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
+
+          def q(sql, params=None):
+              body=json.dumps({'sql':sql,'params':params or []}).encode()
+              req=urllib.request.Request(endpoint,data=body,headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'},method='POST')
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  payload=json.loads(r.read().decode())
+              if not payload.get('success'):
+                  raise RuntimeError(payload.get('errors'))
+              result=payload.get('result',[{}])[0]
+              return result.get('results',[])
+
+          race=q('SELECT race_id AS raceId,start_time_utc AS startTimeUtc FROM rt_races WHERE race_id=? LIMIT 1',[rid])
+          if not race:
+              raise RuntimeError('RACE_NOT_FOUND')
+          start=race[0].get('startTimeUtc')
+          if not start:
+              raise RuntimeError('START_TIME_MISSING')
+          start_dt=datetime.fromisoformat(start.replace('Z','+00:00'))
+          now=datetime.now(timezone.utc)
+          if now >= start_dt:
+              raise RuntimeError(f'REFUSE_POST_START now={now.isoformat()} start={start_dt.isoformat()}')
+
+          payouts=q('SELECT COUNT(*) AS n FROM rt_payouts WHERE race_id=?',[rid])
+          if int((payouts[0] if payouts else {}).get('n') or 0)>0:
+              raise RuntimeError('REFUSE_AFTER_RESULT')
+
+          existing=q("SELECT course,bet_type AS betType,combination,stake_yen AS stakeYen,settlement_status AS settlementStatus,source_prediction_id AS sourcePredictionId FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type,combination",[rid])
+          if len(existing)==6 and all(int(row.get('sourcePredictionId') or 0)==-2 for row in existing):
+              print('ALREADY_FINAL='+json.dumps(existing,ensure_ascii=False,separators=(',',':')))
+              raise SystemExit(0)
+          if any(row.get('settlementStatus')!='pending' or int(row.get('sourcePredictionId') or 0)!=-2 for row in existing):
+              raise RuntimeError('UNSAFE_EXISTING_ROWS')
+
+          state=q('SELECT state_value AS value,updated_at AS updatedAt FROM rt_system_state WHERE state_key=? LIMIT 1',[f'worker_live_preview:{rid}'])
+          if not state:
+              raise RuntimeError('PREVIEW_MISSING')
+          env=json.loads(state[0]['value'])
+          snaps=env.get('snapshots') or []
+          if not snaps:
+              raise RuntimeError('PREVIEW_SNAPSHOTS_EMPTY')
+          snap=snaps[0]
+          if snap.get('raceId')!=rid:
+              raise RuntimeError('PREVIEW_RACE_MISMATCH')
+          tickets=snap.get('tickets') or []
+          bets=snap.get('courseBets') or []
+          if len(tickets)!=2 or len({str(x.get('betType')) for x in tickets})!=2:
+              raise RuntimeError('PREVIEW_TICKETS_INVALID')
+          if len(bets)!=6:
+              raise RuntimeError(f'PREVIEW_COURSE_BETS_INVALID:{len(bets)}')
+          courses={str(x.get('course')) for x in bets}
+          if len(courses)!=3 or any(sum(1 for x in bets if str(x.get('course'))==c)!=2 for c in courses):
+              raise RuntimeError('PREVIEW_COURSE_SHAPE_INVALID')
+          sig='|'.join(sorted(f"{x.get('betType')}:{x.get('combination')}" for x in tickets))
+          for c in courses:
+              rows=[x for x in bets if str(x.get('course'))==c]
+              csig='|'.join(sorted(f"{x.get('betType')}:{x.get('combination')}" for x in rows))
+              if csig!=sig:
+                  raise RuntimeError(f'PREVIEW_SIGNATURE_MISMATCH:{c}')
+
+          locked_at=now.isoformat().replace('+00:00','Z')
+          if existing:
+              q("DELETE FROM rt_public_bets WHERE race_id=? AND source_prediction_id=-2 AND settlement_status='pending'",[rid])
+          for b in bets:
+              q("INSERT INTO rt_public_bets(race_id,course,bet_type,combination,stake_yen,assumed_odds,return_yen,settlement_status,locked_at,source_prediction_id) VALUES(?,?,?,?,?,?,NULL,'pending',?,-2)",[
+                  rid,str(b.get('course')),str(b.get('betType')),str(b.get('combination')),int(b.get('stakeYen')),float(b.get('assumedOdds')),locked_at
+              ])
+
+          bw=snap.get('bodyWeightSnapshot') if snap.get('bodyWeightApplied') else None
+          final_state={
+              'status':'locked','raceId':rid,'lockedAt':locked_at,'finalizedFrom':'last_good',
+              'sourceModel':snap.get('sourceModel'),'modelSha256':snap.get('modelSha256'),
+              'previewGeneratedAt':snap.get('generatedAt'),
+              'bodyWeightApplied':bool(bw),'bodyWeightFetchedAt':(bw or {}).get('fetchedAt'),
+              'bodyWeightSource':(bw or {}).get('sourceUrl'),'bodyWeightSnapshotSha256':(bw or {}).get('snapshotSha256'),
+              'bodyWeights':(bw or {}).get('activeRunners'),'bodyWeightError':snap.get('bodyWeightError'),
+              'oddsFetchedAt':snap.get('oddsFetchedAt'),'oddsSource':snap.get('oddsSource'),
+              'oddsSnapshotSha256':snap.get('oddsSnapshotSha256'),'onlineLearning':snap.get('onlineLearning'),
+              'runnerRecencyFactors':snap.get('runnerRecencyFactors'),'tickets':tickets
+          }
+          q("INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP",[f'worker_live_final:{rid}',json.dumps(final_state,ensure_ascii=False,separators=(',',':'))])
+
+          saved=q("SELECT course,bet_type AS betType,combination,stake_yen AS stakeYen,assumed_odds AS assumedOdds,locked_at AS lockedAt,source_prediction_id AS sourcePredictionId FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type,combination",[rid])
+          if len(saved)!=6 or any(int(row.get('sourcePredictionId') or 0)!=-2 for row in saved):
+              raise RuntimeError('POST_WRITE_VERIFY_FAILED')
+          print('FINALIZED_NIIGATA9='+json.dumps({'raceId':rid,'startTimeUtc':start,'lockedAt':locked_at,'previewGeneratedAt':snap.get('generatedAt'),'oddsFetchedAt':snap.get('oddsFetchedAt'),'oddsSource':snap.get('oddsSource'),'tickets':tickets,'bets':saved},ensure_ascii=False,separators=(',',':')))
+          PY
