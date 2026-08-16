@@ -98,14 +98,14 @@ jobs:
 
             if [ "$home_code" = "200" ] && [ "$conditions_code" = "200" ] && [ "$guide_code" = "200" ] && [ "$c8" = "200" ] && [ "$c9" = "200" ] && [ "$ctoday" = "200" ] && [ "$ui_version" = "$expected_ui" ]; then
               race_id="$(python - <<'PY'
-import json
-try:
-    rows=json.load(open('/tmp/day9.json',encoding='utf-8')).get('races') or []
-    selected=next((r for r in rows if (r.get('publicState') or {}).get('code')=='buy' and r.get('raceId')),None)
-    if selected: print(selected['raceId'])
-except Exception:
-    pass
-PY
+          import json
+          try:
+              rows=json.load(open('/tmp/day9.json',encoding='utf-8')).get('races') or []
+              selected=next((r for r in rows if (r.get('publicState') or {}).get('code')=='buy' and r.get('raceId')),None)
+              if selected: print(selected['raceId'])
+          except Exception:
+              pass
+          PY
               )"
               if [ -n "$race_id" ]; then
                 fetch_url "${base}/races/${race_id}" /tmp/race.html /tmp/race.code
@@ -117,83 +117,83 @@ PY
               echo "selected_race=${race_id:-none} race=${race_code}"
 
               if [ "$race_code" = "200" ] && python - <<'PY'
-import collections,json,sys
-from datetime import datetime
-from zoneinfo import ZoneInfo
-home=open('/tmp/home.html',encoding='utf-8').read()
-conditions=open('/tmp/conditions.html',encoding='utf-8').read()
-guide=open('/tmp/guide.html',encoding='utf-8').read()
-race=open('/tmp/race.html',encoding='utf-8').read()
-d8=json.load(open('/tmp/day8.json',encoding='utf-8'))
-d9=json.load(open('/tmp/day9.json',encoding='utf-8'))
-today=json.load(open('/tmp/today.json',encoding='utf-8'))
-r8=d8.get('races')
-r9=d9.get('races')
-rt=today.get('races') if isinstance(today,dict) else None
-condition_markers=(
-  '予想のしくみ',
-  '完成モデル＋継続学習',
-  '当日結果も次レースへ反映',
-  '直近30日＋当日終了レース',
-  '同じ日の終了済みレースを強く反映',
-  '対象レース自身や未来の結果は使いません',
-  'JRA公式オッズだけ',
-  '合成オッズ・推定オッズ',
-  '発走16分前以内で確定対象に入れる',
-  '発走15分前以降は再計算しない',
-  '推定・合成オッズでは代用しません',
-  '確定後はDBでも変更不可',
-  'ln(予測確率) + 0.4 × ln(JRA公式オッズ)',
-)
-guide_markers=(
-  '開催中も予想は更新',
-  '継続学習について',
-  '完成済みベースモデルは固定したまま',
-  '同じ日の終了レースを強く反映',
-  '市場オッズはJRA公式値だけを使用します',
-  '合成オッズや推定オッズで代用して確定することはありません',
-)
-frozen_projection=True
-projection={}
-if isinstance(rt,list):
-    venue_counts=collections.Counter(str(r.get('venue') or '') for r in rt if r.get('venue'))
-    states=collections.Counter(str((r.get('publicState') or {}).get('code') or '') for r in rt)
-    structured=len(venue_counts)>=2 and all(v==12 for v in venue_counts.values())
-    now=datetime.now(ZoneInfo('Asia/Tokyo'))
-    if structured and now.hour>=9:
-        expected_selected=5*len(venue_counts)
-        selected_like=sum(states.get(x,0) for x in ('target','buy','hit','miss','overdue','missing'))
-        expected_skip=7*len(venue_counts)
-        frozen_projection=states.get('pending',0)==0 and selected_like==expected_selected and states.get('skip',0)==expected_skip
-    projection={'venues':dict(venue_counts),'states':dict(states),'structured':structured,'jstHour':now.hour}
-current_conditions=all(marker in conditions for marker in condition_markers)
-checks={
-  'homeAlive':'レース探偵' in home,
-  'homeContinuousLearning':'予想は当日も継続更新' in home and 'JRA公式オッズだけで評価' in home,
-  'homeSharedRoi':'<summary><b>全体</b>' in home and '会場別回収率' in home,
-  'homeNoDuplicateCourseRoi':all(f'<summary><b>{x}</b>' not in home for x in ('ライト','スタンダード','プレミアム')),
-  'raceDetailCourses':all(x in race for x in ('ライト','スタンダード','プレミアム')),
-  'conditionsMethodology':current_conditions,
-  'conditionsCurrentMethodology':current_conditions,
-  'guideCurrentMethodology':all(marker in guide for marker in guide_markers),
-  'conditionsNoOldProbabilityFinalization':'予測データを使って買い目を確定しました' not in conditions,
-  'guideNoOldProbabilityFinalization':'予測データを使って買い目を確定しました' not in guide,
-  'day8ApiShape':isinstance(r8,list) and len(r8)>0,
-  'day9ApiShape':isinstance(r9,list) and len(r9)>0,
-  'todayFrozenSelectionProjection':frozen_projection,
-}
-# Legacy canonical-verifier compatibility marker only. This is not asserted as
-# public copy and must not be restored to the page:
-# 未使用データだけで検証した成績ではありません
-print(json.dumps({
-  'checks':checks,
-  'day8RaceCount':len(r8) if isinstance(r8,list) else None,
-  'day9RaceCount':len(r9) if isinstance(r9,list) else None,
-  'todayRaceCount':len(rt) if isinstance(rt,list) else None,
-  'todayProjection':projection,
-},ensure_ascii=False))
-sys.exit(0 if all(checks.values()) else 1)
-PY
+          import collections,json,sys
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          home=open('/tmp/home.html',encoding='utf-8').read()
+          conditions=open('/tmp/conditions.html',encoding='utf-8').read()
+          guide=open('/tmp/guide.html',encoding='utf-8').read()
+          race=open('/tmp/race.html',encoding='utf-8').read()
+          d8=json.load(open('/tmp/day8.json',encoding='utf-8'))
+          d9=json.load(open('/tmp/day9.json',encoding='utf-8'))
+          today=json.load(open('/tmp/today.json',encoding='utf-8'))
+          r8=d8.get('races')
+          r9=d9.get('races')
+          rt=today.get('races') if isinstance(today,dict) else None
+          condition_markers=(
+            '予想のしくみ',
+            '完成モデル＋継続学習',
+            '当日結果も次レースへ反映',
+            '直近30日＋当日終了レース',
+            '同じ日の終了済みレースを強く反映',
+            '対象レース自身や未来の結果は使いません',
+            'JRA公式オッズだけ',
+            '合成オッズ・推定オッズ',
+            '発走16分前以内で確定対象に入れる',
+            '発走15分前以降は再計算しない',
+            '推定・合成オッズでは代用しません',
+            '確定後はDBでも変更不可',
+            'ln(予測確率) + 0.4 × ln(JRA公式オッズ)',
+          )
+          guide_markers=(
+            '開催中も予想は更新',
+            '継続学習について',
+            '完成済みベースモデルは固定したまま',
+            '同じ日の終了レースを強く反映',
+            '市場オッズはJRA公式値だけを使用します',
+            '合成オッズや推定オッズで代用して確定することはありません',
+          )
+          frozen_projection=True
+          projection={}
+          if isinstance(rt,list):
+              venue_counts=collections.Counter(str(r.get('venue') or '') for r in rt if r.get('venue'))
+              states=collections.Counter(str((r.get('publicState') or {}).get('code') or '') for r in rt)
+              structured=len(venue_counts)>=2 and all(v==12 for v in venue_counts.values())
+              now=datetime.now(ZoneInfo('Asia/Tokyo'))
+              if structured and now.hour>=9:
+                  expected_selected=5*len(venue_counts)
+                  selected_like=sum(states.get(x,0) for x in ('target','buy','hit','miss','overdue','missing'))
+                  expected_skip=7*len(venue_counts)
+                  frozen_projection=states.get('pending',0)==0 and selected_like==expected_selected and states.get('skip',0)==expected_skip
+              projection={'venues':dict(venue_counts),'states':dict(states),'structured':structured,'jstHour':now.hour}
+          current_conditions=all(marker in conditions for marker in condition_markers)
+          checks={
+            'homeAlive':'レース探偵' in home,
+            'homeContinuousLearning':'予想は当日も継続更新' in home and 'JRA公式オッズだけで評価' in home,
+            'homeSharedRoi':'<summary><b>全体</b>' in home and '会場別回収率' in home,
+            'homeNoDuplicateCourseRoi':all(f'<summary><b>{x}</b>' not in home for x in ('ライト','スタンダード','プレミアム')),
+            'raceDetailCourses':all(x in race for x in ('ライト','スタンダード','プレミアム')),
+            'conditionsMethodology':current_conditions,
+            'conditionsCurrentMethodology':current_conditions,
+            'guideCurrentMethodology':all(marker in guide for marker in guide_markers),
+            'conditionsNoOldProbabilityFinalization':'予測データを使って買い目を確定しました' not in conditions,
+            'guideNoOldProbabilityFinalization':'予測データを使って買い目を確定しました' not in guide,
+            'day8ApiShape':isinstance(r8,list) and len(r8)>0,
+            'day9ApiShape':isinstance(r9,list) and len(r9)>0,
+            'todayFrozenSelectionProjection':frozen_projection,
+          }
+          # Legacy canonical-verifier compatibility marker only. This is not asserted as
+          # public copy and must not be restored to the page:
+          # 未使用データだけで検証した成績ではありません
+          print(json.dumps({
+            'checks':checks,
+            'day8RaceCount':len(r8) if isinstance(r8,list) else None,
+            'day9RaceCount':len(r9) if isinstance(r9,list) else None,
+            'todayRaceCount':len(rt) if isinstance(rt,list) else None,
+            'todayProjection':projection,
+          },ensure_ascii=False))
+          sys.exit(0 if all(checks.values()) else 1)
+          PY
               then exit 0; fi
             fi
             sleep 5
