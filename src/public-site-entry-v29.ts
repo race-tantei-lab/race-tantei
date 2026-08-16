@@ -1,4 +1,5 @@
 import publicSite from "./public-site-entry-v28.js";
+import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";
 import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";
 import { runCompletedWin5Scheduled } from "./v1/completed-win5.js";
 import type { Env } from "./v1/types.js";
@@ -33,8 +34,18 @@ async function emergencyFallbackNotice(response: Response, env: Env, path: strin
 }
 
 async function runDeadlineGuard(env: Env, label: string): Promise<void> {
+  const now = new Date();
   try {
-    const audit = await runCompletedWorkerDeadlineGuard(env, new Date());
+    // If the canonical daily selection was not persisted by an earlier cron,
+    // reconstruct it from the same canonical D1 selection state before trying
+    // to finalize races. This is DB-only and never changes the selection rule.
+    const selection = await freezeCompletedWorkerSelectionIfNeeded(env, now);
+    console.log(`${label}_SELECTION`, JSON.stringify(selection));
+  } catch (error) {
+    console.error(`${label}_SELECTION_RECOVERY_FAILED`, error);
+  }
+  try {
+    const audit = await runCompletedWorkerDeadlineGuard(env, now);
     console.log(label, JSON.stringify(audit));
   } catch (error) {
     console.error(`${label}_FAILED`, error);
@@ -63,9 +74,9 @@ export default {
       console.error("BASE_SCHEDULED_AFTER_DEADLINE_GUARD_FAILED", error);
     }
 
-    // Re-run after normal acquisition/preview work. This catches a race whose
-    // usable preview was produced during the delegated scheduled chain and also
-    // makes the guard independent from failures in unrelated scheduled jobs.
+    // Re-run after normal acquisition/preview work. This catches both a preview
+    // and a canonical daily selection produced during the delegated scheduled
+    // chain, and makes finalization independent from unrelated scheduled jobs.
     await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_AFTER");
 
     // A normal-race SLA throw in v21 can prevent v26 from reaching WIN5.
