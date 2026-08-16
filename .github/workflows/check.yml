@@ -28,5 +28,7 @@ jobs:
         run: python scripts/verify-bodyweight-final-lock.py
       - name: Verify WIN5 navigation UI
         run: python scripts/verify-win5-ui.py
+      - name: Verify public language clarity
+        run: python scripts/verify-public-language.py
       - name: Typecheck and test
         run: npm run check
