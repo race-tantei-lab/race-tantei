@@ -17,5 +17,23 @@ export async function ensureCompletedFinalImmutability(db: D1Database): Promise<
         SELECT RAISE(ABORT, 'IMMUTABLE_WORKER_FINAL_STATE');
       END
     `),
+    db.prepare(`
+      CREATE TRIGGER IF NOT EXISTS rt_guard_probability_fallback_final_insert
+      BEFORE INSERT ON rt_system_state
+      WHEN NEW.state_key LIKE 'worker_live_final:%'
+        AND json_extract(NEW.state_value, '$.oddsMode') = 'probability_fallback'
+      BEGIN
+        SELECT RAISE(ABORT, 'PROBABILITY_FALLBACK_FORBIDDEN');
+      END
+    `),
+    db.prepare(`
+      CREATE TRIGGER IF NOT EXISTS rt_guard_probability_fallback_final_update
+      BEFORE UPDATE ON rt_system_state
+      WHEN NEW.state_key LIKE 'worker_live_final:%'
+        AND json_extract(NEW.state_value, '$.oddsMode') = 'probability_fallback'
+      BEGIN
+        SELECT RAISE(ABORT, 'PROBABILITY_FALLBACK_FORBIDDEN');
+      END
+    `),
   ]);
 }
