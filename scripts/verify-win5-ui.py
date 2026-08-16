@@ -7,6 +7,7 @@ DEADLINE = ROOT / "src" / "public-site-entry-v29.ts"
 ENTRY = ROOT / "src" / "public-site-entry-v28.ts"
 PARENT = ROOT / "src" / "public-site-entry-v27.ts"
 WRANGLER = ROOT / "wrangler.jsonc"
+RUNTIME = ROOT / "src" / "v1" / "completed-win5.ts"
 
 
 def require(condition: bool, message: str) -> None:
@@ -21,6 +22,7 @@ def main() -> None:
     parent = PARENT.read_text(encoding="utf-8")
     source = canonical + "\n" + deadline + "\n" + entry + "\n" + parent
     wrangler = WRANGLER.read_text(encoding="utf-8")
+    runtime = RUNTIME.read_text(encoding="utf-8")
 
     require('"main": "src/public-site-entry-v30.ts"' in wrangler, "WIN5_V30_NOT_CANONICAL_ENTRY")
     require('import publicSite from "./public-site-entry-v29.js"' in canonical, "WIN5_V30_V29_WRAPPER_MISSING")
@@ -54,6 +56,15 @@ def main() -> None:
     require("各レースの1着予想と、最近の結果の反映状況" in canonical, "WIN5_CLEAR_DIAGNOSTICS_LABEL_MISSING")
     require("5レースすべて的中" in canonical, "WIN5_CLEAR_HIT_PROBABILITY_LABEL_MISSING")
     require("最初の対象レースの発走15分前" in canonical, "WIN5_CLEAR_DEADLINE_LABEL_MISSING")
+
+    require('if (validSnapshot(existing, snapshot.date) && existing.locked) return existing;' in runtime, "WIN5_FINAL_IMMUTABILITY_GUARD_MISSING")
+    require('nowMs >= cachedDeadlineMs && nowMs < cachedFirstStartMs' in runtime, "WIN5_STORED_PREVIEW_DEADLINE_GUARD_MISSING")
+    require('await lockSnapshot(env.DB, preview, now, "last_good")' in runtime, "WIN5_PREVIEW_PROMOTION_MISSING")
+    require('const freshCache = await resolveWin5Targets(env.DB, date, now, true)' not in runtime, "WIN5_POST_DEADLINE_FRESH_REGEN_REINTRODUCED")
+    require('if (nowMs < deadlineMs)' in runtime, "WIN5_PREVIEW_NOT_CUTOFF_AT_DEADLINE")
+    require('WIN5_DEADLINE_GUARD_BEFORE' in deadline and 'WIN5_DEADLINE_GUARD_AFTER' in deadline, "WIN5_INDEPENDENT_DEADLINE_GUARD_MISSING")
+    require('state.status === "final" && state.snapshot?.lockedAt' in parent, "WIN5_UI_NOT_SHOWING_ACTUAL_LOCK_TIME")
+    require('detail: "T-15で固定済み"' not in parent, "WIN5_UI_FALSE_T15_CLAIM_REINTRODUCED")
 
     require('.win5-target-list' in parent and '.win5-ticket-row' in parent, "WIN5_MOBILE_VERTICAL_LAYOUT_MISSING")
     require('overflow-x:auto' not in source, "WIN5_HORIZONTAL_SCROLL_REINTRODUCED")
