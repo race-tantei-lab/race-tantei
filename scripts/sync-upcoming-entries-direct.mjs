@@ -63,6 +63,19 @@ function normalizeActionCname(value) {
   return value.replace(/&amp;/gi, "&").replace(/\\u0026/gi, "&").replace(/\\\//g, "/").trim();
 }
 
+function canonicalEntryUrl(rawUrl) {
+  const parsed = new URL(String(rawUrl || ""));
+  if (parsed.protocol !== "https:" || !["www.jra.go.jp", "jra.jp", "sp.jra.jp"].includes(parsed.hostname)) {
+    throw new Error(`ENTRY_URL_HOST_INVALID:${rawUrl}`);
+  }
+  if (!/\/JRADB\/accessD\.html$/i.test(parsed.pathname)) {
+    throw new Error(`ENTRY_URL_PATH_INVALID:${rawUrl}`);
+  }
+  const cname = normalizeActionCname(decodeURIComponent(parsed.searchParams.get("CNAME") || ""));
+  if (!/(?:pw|sw)01dde/i.test(cname)) throw new Error(`ENTRY_URL_CNAME_INVALID:${rawUrl}`);
+  return `${accessDUrl}?CNAME=${encodeURIComponent(cname)}`;
+}
+
 function actionEntryUrls(html) {
   const found = new Map();
   const patterns = [
@@ -90,14 +103,21 @@ async function discoverDoActionRaceUrls() {
   const maxPages = 180;
 
   while (queue.length && visited.size < maxPages) {
-    const url = queue.shift();
-    if (!url || visited.has(url)) continue;
-    visited.add(url);
+    const requestedUrl = queue.shift();
+    if (!requestedUrl || visited.has(requestedUrl)) continue;
+    visited.add(requestedUrl);
     try {
-      const page = await fetchJraPage(url);
-      if (pageLooksLikeEntry(page.html) && /(?:pw|sw)01dde/i.test(decodeURIComponent(page.url))) {
-        const cname = new URL(page.url).searchParams.get("CNAME") || page.url;
-        raceUrls.set(cname, page.url);
+      const page = await fetchJraPage(requestedUrl);
+      if (pageLooksLikeEntry(page.html)) {
+        try {
+          // JRA can redirect an accessD request to a calendar-looking response URL.
+          // The requested accessD+CNAME is the canonical race identity and must be preserved.
+          const canonical = canonicalEntryUrl(requestedUrl);
+          const cname = decodeURIComponent(new URL(canonical).searchParams.get("CNAME") || canonical);
+          raceUrls.set(cname, canonical);
+        } catch {
+          // Discovery pages are allowed here; child race URLs are collected below.
+        }
       }
       for (const child of actionEntryUrls(page.html)) {
         if (!queued.has(child)) {
@@ -107,7 +127,7 @@ async function discoverDoActionRaceUrls() {
       }
       await sleep(80);
     } catch (error) {
-      errors.push({ url, error: `${error?.name || "Error"}:${error?.message || String(error)}` });
+      errors.push({ url: requestedUrl, error: `${error?.name || "Error"}:${error?.message || String(error)}` });
     }
   }
   return { urls: [...raceUrls.values()], visitedPages: visited.size, errors };
@@ -115,6 +135,11 @@ async function discoverDoActionRaceUrls() {
 
 async function saveRace(bundle) {
   const race = bundle.race;
+  const canonical = canonicalEntryUrl(race.entryUrl);
+  if (canonical !== race.entryUrl) throw new Error(`ENTRY_URL_NOT_CANONICAL:${race.raceId}:${race.entryUrl}`);
+  if (/\/keiba\/calendar/i.test(race.entryUrl) || /\/keiba\/calendar/i.test(race.resultUrl || "")) {
+    throw new Error(`CALENDAR_URL_REFUSED_FOR_RACE:${race.raceId}`);
+  }
   const now = new Date().toISOString();
   await d1(
     `INSERT INTO rt_races (
@@ -181,38 +206,45 @@ async function main() {
     discoverRaceUrls(homeUrl, seedUrls),
     discoverDoActionRaceUrls()
   ]);
+  const errors = [...actionDiscovery.errors];
   const unique = new Map();
-  for (const url of [...normalUrls, ...actionDiscovery.urls]) {
+  for (const rawUrl of [...normalUrls, ...actionDiscovery.urls]) {
     try {
+      const url = canonicalEntryUrl(rawUrl);
       const cname = decodeURIComponent(new URL(url).searchParams.get("CNAME") || url);
       unique.set(cname, url);
-    } catch {
-      unique.set(url, url);
+    } catch (error) {
+      errors.push({ url: rawUrl, error: `${error?.name || "Error"}:${error?.message || String(error)}` });
     }
   }
   const urls = [...unique.values()];
   const reports = [];
-  const errors = [...actionDiscovery.errors];
-  for (const url of urls) {
+  for (const requestedUrl of urls) {
     try {
-      const page = await fetchJraPage(url);
+      const canonicalUrl = canonicalEntryUrl(requestedUrl);
+      const page = await fetchJraPage(canonicalUrl);
       if (!pageLooksLikeEntry(page.html)) throw new Error("ENTRY_PAGE_SIGNATURE_MISSING");
-      const bundle = parseEntryPage(page.html, page.url);
+      // Never pass response.url here: JRA may redirect while serving the correct
+      // race HTML. The accessD+CNAME request is the stable race-specific URL.
+      const bundle = parseEntryPage(page.html, canonicalUrl);
       if (bundle.race.raceDate < today) continue;
       if (!bundle.race.startTimeUtc) throw new Error("START_TIME_MISSING");
       if (bundle.runners.filter((runner) => runner.runnerStatus === "active").length < 3) throw new Error("ACTIVE_RUNNERS_TOO_FEW");
+      if (bundle.race.entryUrl !== canonicalUrl) throw new Error(`ENTRY_URL_PARSE_DRIFT:${bundle.race.raceId}`);
       await saveRace(bundle);
       reports.push({
         raceId: bundle.race.raceId,
         raceDate: bundle.race.raceDate,
         venue: bundle.race.venue,
         raceNo: bundle.race.raceNo,
+        entryUrl: bundle.race.entryUrl,
+        responseUrl: page.url,
         activeRunners: bundle.runners.filter((runner) => runner.runnerStatus === "active").length,
         runnersWithWinOdds: bundle.runners.filter((runner) => runner.runnerStatus === "active" && Number(runner.winOdds) > 1).length
       });
       await sleep(120);
     } catch (error) {
-      errors.push({ url, error: `${error?.name || "Error"}:${error?.message || String(error)}` });
+      errors.push({ url: requestedUrl, error: `${error?.name || "Error"}:${error?.message || String(error)}` });
     }
   }
   reports.sort((a, b) => `${a.raceDate}-${a.venue}-${a.raceNo}`.localeCompare(`${b.raceDate}-${b.venue}-${b.raceNo}`, "ja"));
@@ -225,10 +257,12 @@ async function main() {
     storedRaces: reports.length,
     storedActiveRunners: reports.reduce((sum, row) => sum + row.activeRunners, 0),
     racesWithAtLeastThreeWinOdds: reports.filter((row) => row.runnersWithWinOdds >= 3).length,
+    calendarEntryUrlsStored: reports.filter((row) => /\/keiba\/calendar/i.test(row.entryUrl)).length,
     races: reports,
     errorCount: errors.length,
     errors: errors.slice(0, 100)
   };
+  if (reports.length && output.calendarEntryUrlsStored !== 0) throw new Error(`CALENDAR_ENTRY_URL_STORED:${output.calendarEntryUrlsStored}`);
   await Bun?.write?.("upcoming-entry-direct-sync.json", JSON.stringify(output, null, 2));
 }
 
