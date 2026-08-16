@@ -41,17 +41,19 @@ function pageFor(cname: string): string {
 let firstWinPost = true;
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
   const url = String(input);
-  if (url.includes("entry.test")) return new Response(entryHtml, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
-  if (!url.includes("/JRADB/accessO.html")) return new Response("not found", { status: 404 });
-  const body = String(init?.body ?? "");
-  const cname = new URLSearchParams(body).get("cname") ?? "";
-  if (cname === cnames["単勝"] && firstWinPost) {
-    firstWinPost = false;
+  if (url.includes("/JRADB/accessO.html")) {
+    const body = String(init?.body ?? "");
+    const cname = new URLSearchParams(body).get("cname") ?? "";
+    if (cname === cnames["単勝"] && firstWinPost) {
+      firstWinPost = false;
+      return new Response("not found", { status: 404 });
+    }
+    if (Object.values(cnames).includes(cname as never)) {
+      return new Response(pageFor(cname), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
+    }
     return new Response("not found", { status: 404 });
   }
-  if (Object.values(cnames).includes(cname as never)) {
-    return new Response(pageFor(cname), { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
-  }
+  if (url.includes("entry.test")) return new Response(entryHtml, { status: 200, headers: { "content-type": "text/html; charset=utf-8" } });
   return new Response("not found", { status: 404 });
 };
 
