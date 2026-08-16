@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { strict as assert } from "node:assert";
 import { DEADLINE_GUARD_MS, shouldDeadlineGuardLock } from "../src/v1/completed-worker-deadline-guard.js";
 
 assert.equal(DEADLINE_GUARD_MS, 15 * 60 * 1000);
