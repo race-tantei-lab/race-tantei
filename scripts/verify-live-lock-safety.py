@@ -49,6 +49,45 @@ def main() -> None:
     forbid(worker, 'WORKER_FINAL_BODYWEIGHT_MISMATCH', "Worker live-lock")
     forbid(worker, "const FINALIZE_OPEN_MS = 16 * 60 * 1000;", "Worker live-lock")
 
+    guard = read("src/v1/completed-worker-deadline-guard.ts")
+    for needle in (
+        "export const DEADLINE_GUARD_MS = 15 * 60 * 1000;",
+        "remainingMs > 0 && remainingMs <= DEADLINE_GUARD_MS",
+        "orderSelectedRaceIds",
+        "start_time_utc AS startTimeUtc",
+        'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
+        'finalizedFrom: "persistent_official_deadline_guard"',
+        'finalizedFrom: "probability_fallback_persistent_deadline_guard"',
+        "await db.batch(statements)",
+        "for (const raceId of ids)",
+        "audit.errors.push({ raceId, error: errorText(error) })",
+    ):
+        require(guard, needle, "persistent deadline guard")
+    for forbidden in (
+        "LATE_LIMIT_MS",
+        "remaining > 14 * 60 * 1000",
+        "remaining > LATE_LIMIT_MS",
+        "fetch(",
+    ):
+        forbid(guard, forbidden, "persistent deadline guard")
+
+    production_wrapper = read("src/public-site-entry-v29.ts")
+    for needle in (
+        'import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";',
+        'import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";',
+        "await freezeCompletedWorkerSelectionIfNeeded(env, now);",
+        'await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE")',
+        'await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_AFTER")',
+        "if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);",
+    ):
+        require(production_wrapper, needle, "production deadline wrapper")
+    before_pos = production_wrapper.index('COMPLETED_WORKER_DEADLINE_GUARD_BEFORE')
+    delegated_pos = production_wrapper.index("if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);")
+    after_pos = production_wrapper.index('COMPLETED_WORKER_DEADLINE_GUARD_AFTER')
+    if not (before_pos < delegated_pos < after_pos):
+        raise AssertionError("deadline guard must run both before and after delegated scheduled work")
+    forbid(production_wrapper, "runCompletedWorkerEmergencyLock", "production deadline wrapper")
+
     scheduled_gate = read("src/public-site-entry-v25.ts")
     for needle in (
         "const PRIOR_LEARNING_FAIL_OPEN_MINUTE_JST = 8 * 60 + 30;",
@@ -65,9 +104,10 @@ def main() -> None:
     )
 
     canonical = read("scripts/run-ten-year-auto-final-live.py")
-    require(canonical, "base.MIN_LOCK_SECONDS=14*60", "canonical GitHub fallback")
+    require(canonical, "base.MIN_LOCK_SECONDS=0", "canonical GitHub fallback")
     require(canonical, "base.MAX_LOCK_SECONDS=15*60", "canonical GitHub fallback")
     require(canonical, "fallback_without_verified_snapshot", "canonical GitHub fallback")
+    forbid(canonical, "base.MIN_LOCK_SECONDS=14*60", "canonical GitHub fallback")
 
     emergency = read("scripts/run-emergency-earliest-missing-bet.py")
     require(emergency, "RECOVERY_OPEN_SECONDS = 15 * 60", "emergency fallback")
@@ -88,9 +128,14 @@ def main() -> None:
         "preview_history=3",
         "finalize_open=15m",
         "deadline=15m",
+        "persistent_guard=15m_until_start",
+        "guard_order=start_time",
+        "guard_runs=before_and_after_scheduled",
+        "guard_selection_recovery=canonical_db_only",
+        "guard_external_http=false",
         "prior_learning_fail_open=08:30JST",
-        "github_fallback=15m_to_14m_post_boundary",
-        "emergency_fallback=15m",
+        "github_fallback=15m_until_start",
+        "manual_emergency_fallback=15m",
         "bodyweight_nonblocking=true",
         "critical_schedule=disabled",
     )

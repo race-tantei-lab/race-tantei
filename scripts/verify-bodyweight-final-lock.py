@@ -70,7 +70,8 @@ def main():
     require('const FINALIZE_OPEN_MS = 16 * 60 * 1000;' in backup,'GITHUB_BODYWEIGHT_T16_ACQUISITION_WINDOW_MISSING')
     require('verify_official_bodyweights' in wrapper,'GITHUB_BODYWEIGHT_PROVENANCE_AUDIT_MISSING')
     require('fallback_without_verified_snapshot' in wrapper,'GITHUB_BODYWEIGHT_FAILURE_STILL_BLOCKS_FINALIZER')
-    require('base.MIN_LOCK_SECONDS=14*60' in wrapper and 'base.MAX_LOCK_SECONDS=15*60' in wrapper,'GITHUB_FINALIZER_NOT_T15_TO_T14_FALLBACK')
+    require('base.MIN_LOCK_SECONDS=0' in wrapper and 'base.MAX_LOCK_SECONDS=15*60' in wrapper,'GITHUB_FINALIZER_NOT_PERSISTENT_T15_TO_START_FALLBACK')
+    require('base.MIN_LOCK_SECONDS=14*60' not in wrapper,'GITHUB_FINALIZER_OLD_ONE_MINUTE_WINDOW_REINTRODUCED')
     verify_pos=wrapper.find('verified=verify_official_bodyweights')
     except_pos=wrapper.find('except Exception as exc:',verify_pos)
     odds_pos=wrapper.find('return original_collect_official_odds',except_pos)
@@ -89,7 +90,7 @@ def main():
         'previewOpenMinutes':45,
         'finalizeOpenMinutes':15,
         'deadlineMinutes':15,
-        'githubFallbackWindowMinutes':'15_to_14_post_boundary',
+        'githubFallbackWindowMinutes':'15_until_start',
         'githubBodyweightAcquisitionOpenMinutes':16,
         'bodyweightAppliedWhenAvailable':True,
         'bodyweightFailureDoesNotSuppressPrediction':True,

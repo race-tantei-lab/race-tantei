@@ -1,5 +1,6 @@
 import publicSite from "./public-site-entry-v28.js";
-import { runCompletedWorkerEmergencyLock } from "./v1/completed-worker-emergency-lock.js";
+import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";
+import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";
 import { runCompletedWin5Scheduled } from "./v1/completed-win5.js";
 import type { Env } from "./v1/types.js";
 
@@ -13,7 +14,7 @@ async function emergencyFallbackNotice(response: Response, env: Env, path: strin
       .bind(`worker_live_final:${raceId}`).first<{ value: string }>();
     if (!row?.value) return response;
     const final = JSON.parse(row.value) as { finalizedFrom?: string; oddsMode?: string };
-    if (final.finalizedFrom !== "probability_fallback_emergency" && final.oddsMode !== "probability_fallback") return response;
+    if (final.oddsMode !== "probability_fallback") return response;
     let html = await response.text();
     html = html
       .replace(/<div><span>JRA公式オッズ<\/span><b>1\.0倍<\/b><\/div>/g, '<div><span>オッズ</span><b>取得失敗・確率優先</b></div>')
@@ -32,6 +33,25 @@ async function emergencyFallbackNotice(response: Response, env: Env, path: strin
   }
 }
 
+async function runDeadlineGuard(env: Env, label: string): Promise<void> {
+  const now = new Date();
+  try {
+    // If the canonical daily selection was not persisted by an earlier cron,
+    // reconstruct it from the same canonical D1 selection state before trying
+    // to finalize races. This is DB-only and never changes the selection rule.
+    const selection = await freezeCompletedWorkerSelectionIfNeeded(env, now);
+    console.log(`${label}_SELECTION`, JSON.stringify(selection));
+  } catch (error) {
+    console.error(`${label}_SELECTION_RECOVERY_FAILED`, error);
+  }
+  try {
+    const audit = await runCompletedWorkerDeadlineGuard(env, now);
+    console.log(label, JSON.stringify(audit));
+  } catch (error) {
+    console.error(`${label}_FAILED`, error);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
@@ -40,16 +60,11 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    // Hard T-15 deadline guard must be the first scheduled operation. It does
-    // zero external network I/O: a recent validated JRA preview is promoted
-    // immediately, otherwise the probability-only emergency writer is used.
-    // This prevents unrelated JRA latency from pushing a lock past T-15.
-    try {
-      const audit = await runCompletedWorkerEmergencyLock(env, new Date());
-      console.log("COMPLETED_WORKER_DEADLINE_GUARD", JSON.stringify(audit));
-    } catch (error) {
-      console.error("COMPLETED_WORKER_DEADLINE_GUARD_FAILED", error);
-    }
+    // The normal-race deadline guard is deliberately first. It performs no
+    // external HTTP. Every selected race from 15 minutes before start until
+    // start remains eligible on every cron run, so a delayed/skipped cron can
+    // catch up instead of falling through a one-minute window.
+    await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE");
 
     let baseFailed = false;
     try {
@@ -58,6 +73,11 @@ export default {
       baseFailed = true;
       console.error("BASE_SCHEDULED_AFTER_DEADLINE_GUARD_FAILED", error);
     }
+
+    // Re-run after normal acquisition/preview work. This catches both a preview
+    // and a canonical daily selection produced during the delegated scheduled
+    // chain, and makes finalization independent from unrelated scheduled jobs.
+    await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_AFTER");
 
     // A normal-race SLA throw in v21 can prevent v26 from reaching WIN5.
     // Recover that independent scheduled job when the delegated chain failed.
