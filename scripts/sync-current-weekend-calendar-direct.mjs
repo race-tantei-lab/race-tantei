@@ -37,6 +37,8 @@ async function d1(sql, params = []) {
 }
 
 async function saveRace(race) {
+  // Calendar pages provide schedule metadata only. They are never valid race-entry
+  // or result URLs and must never populate/overwrite those columns.
   await d1(`INSERT INTO rt_races (
     race_id,race_date,venue,meeting_no,meeting_day,race_no,race_name,conditions,surface,distance_m,direction,
     start_time_jst,start_time_utc,weather,track_condition,entry_url,result_url,status,entry_updated_at,updated_at
@@ -48,12 +50,10 @@ async function saveRace(race) {
     conditions=COALESCE(rt_races.conditions,excluded.conditions),surface=COALESCE(rt_races.surface,excluded.surface),
     distance_m=COALESCE(rt_races.distance_m,excluded.distance_m),direction=COALESCE(rt_races.direction,excluded.direction),
     start_time_jst=COALESCE(rt_races.start_time_jst,excluded.start_time_jst),start_time_utc=COALESCE(rt_races.start_time_utc,excluded.start_time_utc),
-    entry_url=CASE WHEN rt_races.entry_url IS NULL OR rt_races.entry_url LIKE '%/keiba/calendar%' THEN excluded.entry_url ELSE rt_races.entry_url END,
-    result_url=CASE WHEN rt_races.result_url IS NULL OR rt_races.result_url LIKE '%/keiba/calendar%' THEN excluded.result_url ELSE rt_races.result_url END,
     status=CASE WHEN rt_races.status='finished' THEN 'finished' ELSE 'scheduled' END,updated_at=CURRENT_TIMESTAMP`, [
     race.raceId,race.raceDate,race.venue,race.meetingNo,race.meetingDay,race.raceNo,race.raceName,race.conditions,
     race.surface,race.distanceM,race.direction,race.startTimeJst,race.startTimeUtc,race.weather,race.trackCondition,
-    race.entryUrl,race.resultUrl,race.status
+    "","",race.status
   ]);
 }
 
