@@ -1,0 +1,62 @@
+name: Apply no synthetic odds finalization v2
+on:
+  push:
+    branches: [fix/no-synthetic-odds-final-20260816]
+    paths: [.github/workflows/apply-no-synthetic-odds-final-v2.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/no-synthetic-odds-final-20260816
+      - name: Patch deadline guard
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/v1/completed-worker-deadline-guard.ts')
+          s = p.read_text()
+          s = s.replace('import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION, completedFeatureVector, loadCompletedFeatureStateForRace } from "./completed-feature-runtime.js";\n', 'import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION } from "./completed-feature-runtime.js";\n')
+          for line in [
+            'import { loadCompletedModelRuntime, type CompletedModelRuntime } from "./completed-model-runtime.js";\n',
+            'import { completedRecencyBetFactor, loadCompletedRecencyLearning } from "./completed-recency-learning.js";\n',
+            'import { chooseCompletedProbabilityFallbackTickets, emergencyRunnerWeights } from "./completed-ticket-fallback.js";\n',
+          ]:
+            s = s.replace(line, '')
+          s = s.replace('  completedCourseBets,\n  normalizeCompletedWeights,\n', '')
+          s = s.replace('type ModelMetaRow = { key: string; value: string };\ntype ModelChunkRow = { seq: number; dataB64: string };\n', '')
+          a = s.index('function decodeBase64(')
+          b = s.index('async function loadSelection(', a)
+          s = s[:a] + s[b:]
+          a = s.index('async function buildFallback(')
+          b = s.index('async function saveAudit(', a)
+          s = s[:a] + s[b:]
+          old = '''      const official = await latestOfficialPreview(env.DB, raceId, now);
+      if (official) {
+        await commitOfficialPreview(env.DB, raceId, official, now);
+        audit.lockedOfficialPreviewRaceIds.push(raceId);
+      } else {
+        const { race, runners } = await loadRace(env.DB, raceId);
+        await commitFallback(env.DB, raceId, race, runners, now);
+        audit.lockedProbabilityFallbackRaceIds.push(raceId);
+      }
+      audit.lockedRaceIds.push(raceId);'''
+          new = '''      const official = await latestOfficialPreview(env.DB, raceId, now);
+      if (!official) {
+        throw new Error(`DEADLINE_GUARD_OFFICIAL_ODDS_PREVIEW_MISSING:${raceId}`);
+      }
+      await commitOfficialPreview(env.DB, raceId, official, now);
+      audit.lockedOfficialPreviewRaceIds.push(raceId);
+      audit.lockedRaceIds.push(raceId);'''
+          if old not in s:
+            raise SystemExit('fallback block not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          git config user.name github-actions-bot
+          git config user.email github-actions-bot@users.noreply.github.com
+          git add src/v1/completed-worker-deadline-guard.ts
+          git commit -m 'Forbid synthetic odds in deadline finalization'
+          git push origin HEAD:fix/no-synthetic-odds-final-20260816
