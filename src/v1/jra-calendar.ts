@@ -48,7 +48,7 @@ function descriptorParts(descriptor: string, raceNo: number): {
   return { raceName, conditions: clean, surface, distanceM, direction };
 }
 
-export function parseOfficialCalendar(html: string, raceDate: string, calendarUrl: string): RaceRecord[] {
+export function parseOfficialCalendar(html: string, raceDate: string, _calendarUrl: string): RaceRecord[] {
   const [yearText, monthText, dayText] = raceDate.split("-");
   const year = Number(yearText), month = Number(monthText), day = Number(dayText);
   if (!year || !month || !day) throw new Error("INVALID_RACE_DATE");
@@ -98,7 +98,8 @@ export function parseOfficialCalendar(html: string, raceDate: string, calendarUr
       raceNo, raceName: parsed.raceName, conditions: parsed.conditions, surface: parsed.surface,
       distanceM: parsed.distanceM, direction: parsed.direction, startTimeJst,
       startTimeUtc: parseJapaneseDateTime(year, month, day, startTimeJst), weather: null, trackCondition: null,
-      entryUrl: calendarUrl, resultUrl: calendarUrl, status: "scheduled"
+      // Calendar pages are schedule metadata, not race-specific entry/result pages.
+      entryUrl: "", resultUrl: "", status: "scheduled"
     });
   }
 
@@ -125,8 +126,6 @@ async function upsertCalendarRaces(db: D1Database, races: RaceRecord[]): Promise
       conditions=COALESCE(rt_races.conditions,excluded.conditions), surface=COALESCE(rt_races.surface,excluded.surface),
       distance_m=COALESCE(rt_races.distance_m,excluded.distance_m), direction=COALESCE(rt_races.direction,excluded.direction),
       start_time_jst=COALESCE(rt_races.start_time_jst,excluded.start_time_jst), start_time_utc=COALESCE(rt_races.start_time_utc,excluded.start_time_utc),
-      entry_url=CASE WHEN rt_races.entry_url LIKE '%/keiba/calendar%' THEN excluded.entry_url ELSE rt_races.entry_url END,
-      result_url=CASE WHEN rt_races.result_url LIKE '%/keiba/calendar%' THEN excluded.result_url ELSE rt_races.result_url END,
       status=CASE WHEN rt_races.status='finished' THEN 'finished' ELSE rt_races.status END,
       updated_at=CURRENT_TIMESTAMP
   `).bind(
