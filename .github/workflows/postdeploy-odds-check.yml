@@ -1,0 +1,50 @@
+name: Postdeploy odds check
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/postdeploy-odds-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inspect Chukyo 5R postdeploy lock
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
+          def q(sql, params=None):
+              req=urllib.request.Request(url,data=json.dumps({'sql':sql,'params':params or []}).encode(),method='POST',headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'})
+              with urllib.request.urlopen(req,timeout=60) as r: body=json.loads(r.read().decode())
+              if not body.get('success'): raise RuntimeError(body)
+              result=body.get('result') or []
+              return (result[0].get('results') if result else []) or []
+          race='2026-08-16-chukyo-05'
+          bets=q('SELECT course,bet_type AS betType,combination,stake_yen AS stakeYen,assumed_odds AS assumedOdds,locked_at AS lockedAt,source_prediction_id AS sourcePredictionId FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type,combination',[race])
+          state=q("SELECT state_key,state_value,updated_at FROM rt_system_state WHERE state_key IN (?,?) ORDER BY state_key",[f'worker_live_final:{race}','worker_live_lock:2026-08-16'])
+          parsed={}
+          for row in state:
+              try: parsed[row['state_key']]={'updatedAt':row['updated_at'],'value':json.loads(row['state_value'])}
+              except: parsed[row['state_key']]={'updatedAt':row['updated_at'],'value':row['state_value']}
+          print(json.dumps({'raceId':race,'betRows':bets,'states':parsed},ensure_ascii=False,indent=2))
+          if len(bets)!=6: raise RuntimeError(f'CHUKYO5_NOT_LOCKED_SIX_ROWS:{len(bets)}')
+          locked={str(x.get('lockedAt') or '') for x in bets}
+          if not all(float(x.get('assumedOdds') or 0)>1 for x in bets): raise RuntimeError('CHUKYO5_NON_OFFICIAL_ODDS_FALLBACK')
+          final=parsed.get(f'worker_live_final:{race}',{}).get('value') or {}
+          if final.get('oddsMode')=='probability_fallback' or final.get('finalizedFrom')=='probability_fallback_emergency': raise RuntimeError('CHUKYO5_EMERGENCY_FALLBACK_USED')
+          print('POSTDEPLOY_CHUKYO5_OFFICIAL_ODDS_LOCK_OK', json.dumps({'lockedAt':sorted(locked),'finalizedFrom':final.get('finalizedFrom'),'oddsSource':final.get('oddsSource'),'oddsFetchedAt':final.get('oddsFetchedAt')},ensure_ascii=False))
+          PY
