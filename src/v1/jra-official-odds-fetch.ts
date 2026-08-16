@@ -1,14 +1,14 @@
-import type { CompletedBetType, OfficialOddsRow } from "./completed-ticket-runtime";
-import { JRA_ODDS_URL, decodeJraHtml, jraActionLinks, type JraOddsIdentity } from "./jra-official-odds";
+import type { CompletedBetType, OfficialOddsRow } from "./completed-ticket-runtime.js";
+import { JRA_ODDS_URL, decodeJraHtml, jraActionLinks, type JraOddsIdentity } from "./jra-official-odds.js";
 import {
   JRA_FAST_TYPE_PREFIX,
   findFastJraTypeCnames,
   parseFastJraOddsIdentity,
   parseFastJraOfficialOddsRows,
   sameFastJraRaceLink,
-} from "./jra-official-odds-fast";
+} from "./jra-official-odds-fast.js";
 
-export type { OfficialOddsRow } from "./completed-ticket-runtime";
+export type { OfficialOddsRow } from "./completed-ticket-runtime.js";
 
 const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136 Safari/537.36";
 const BET_ORDER: readonly CompletedBetType[] = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"];
