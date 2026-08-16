@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/audit-live-lock-now.yml"
+      - "scripts/audit-live-lock-now.py"
   workflow_dispatch:
 permissions:
   contents: read
