@@ -49,6 +49,21 @@ def main() -> None:
     forbid(worker, 'WORKER_FINAL_BODYWEIGHT_MISMATCH', "Worker live-lock")
     forbid(worker, "const FINALIZE_OPEN_MS = 16 * 60 * 1000;", "Worker live-lock")
 
+    scheduled_gate = read("src/public-site-entry-v25.ts")
+    for needle in (
+        "const PRIOR_LEARNING_FAIL_OPEN_MINUTE_JST = 8 * 60 + 30;",
+        "let priorReady = false;",
+        "PRIOR_DAY_LEARNING_FAIL_OPEN",
+        "if (jstMinuteOfDay(now) < PRIOR_LEARNING_FAIL_OPEN_MINUTE_JST) return;",
+        "if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);",
+    ):
+        require(scheduled_gate, needle, "prior-day learning gate")
+    forbid(
+        scheduled_gate,
+        'if (!readiness.ready) {\n          console.error("PRIOR_DAY_LEARNING_NOT_READY", JSON.stringify(readiness));\n          // Keep the generic JRA synchronizer running',
+        "prior-day learning gate",
+    )
+
     canonical = read("scripts/run-ten-year-auto-final-live.py")
     require(canonical, "base.MIN_LOCK_SECONDS=14*60", "canonical GitHub fallback")
     require(canonical, "base.MAX_LOCK_SECONDS=15*60", "canonical GitHub fallback")
@@ -73,6 +88,7 @@ def main() -> None:
         "preview_history=3",
         "finalize_open=15m",
         "deadline=15m",
+        "prior_learning_fail_open=08:30JST",
         "github_fallback=15m_to_14m_post_boundary",
         "emergency_fallback=15m",
         "bodyweight_nonblocking=true",
