@@ -42,7 +42,7 @@ function combination(kind: CompletedBetType, pos: readonly number[], horseNos: r
 
 function compareText(a: string, b: string): number { return a < b ? -1 : a > b ? 1 : 0; }
 
-export function emergencyRunnerWeights(winOdds: readonly Array<number | null | undefined>): number[] {
+export function emergencyRunnerWeights(winOdds: ReadonlyArray<number | null | undefined>): number[] {
   const usable = winOdds.length >= 3 && winOdds.every((value) => Number.isFinite(Number(value)) && Number(value) > 1);
   if (usable) return normalizeCompletedWeights(winOdds.map((value) => 1 / Number(value)));
   return normalizeCompletedWeights(winOdds.map(() => 1));
