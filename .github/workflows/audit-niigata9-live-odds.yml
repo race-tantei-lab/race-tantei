@@ -25,22 +25,25 @@ jobs:
         shell: bash
         run: |
           cat > /tmp/audit.ts <<'TS'
-          const mod:any = await import(process.cwd() + '/src/v1/jra-official-odds-fetch.ts');
-          const fetchFastJraOfficialOddsForRace = mod.fetchFastJraOfficialOddsForRace;
-          const rid='2026-08-16-niigata-09';
-          const endpoint=`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/d1/database/${process.env.CLOUDFLARE_D1_DATABASE_ID}/query`;
-          async function q(sql:string,params:any[]=[]){
-            const r=await fetch(endpoint,{method:'POST',headers:{Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,'Content-Type':'application/json'},body:JSON.stringify({sql,params})});
-            const j:any=await r.json(); if(!j.success) throw new Error(JSON.stringify(j.errors)); return j.result?.[0]?.results??[];
+          async function main(){
+            const mod:any = await import(process.cwd() + '/src/v1/jra-official-odds-fetch.ts');
+            const fetchFastJraOfficialOddsForRace = mod.fetchFastJraOfficialOddsForRace;
+            const rid='2026-08-16-niigata-09';
+            const endpoint=`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/d1/database/${process.env.CLOUDFLARE_D1_DATABASE_ID}/query`;
+            async function q(sql:string,params:any[]=[]){
+              const r=await fetch(endpoint,{method:'POST',headers:{Authorization:`Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,'Content-Type':'application/json'},body:JSON.stringify({sql,params})});
+              const j:any=await r.json(); if(!j.success) throw new Error(JSON.stringify(j.errors)); return j.result?.[0]?.results??[];
+            }
+            const race=(await q('SELECT race_date AS raceDate,venue,race_no AS raceNo,entry_url AS entryUrl,start_time_utc AS startTimeUtc FROM rt_races WHERE race_id=? LIMIT 1',[rid]))[0];
+            const bets=await q('SELECT course,bet_type AS betType,combination,stake_yen AS stakeYen,assumed_odds AS assumedOdds,locked_at AS lockedAt FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type',[rid]);
+            const st=(await q('SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1',[`worker_live_final:${rid}`]))[0];
+            const finalState=st?.value?JSON.parse(st.value):null;
+            const pv=(await q('SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1',[`worker_live_preview:${rid}`]))[0];
+            const preview=pv?.value?JSON.parse(pv.value):null;
+            const fetched=await fetchFastJraOfficialOddsForRace(race.entryUrl,{raceDate:race.raceDate,venue:race.venue,raceNo:Number(race.raceNo)});
+            const current=fetched.rows.filter((x:any)=>(x.betType==='単勝'&&String(x.combination)==='2')||(x.betType==='ワイド'&&['2-11','11-2'].includes(String(x.combination))));
+            console.log('AUDIT='+JSON.stringify({now:new Date().toISOString(),race,bets,finalState,currentSource:fetched.source,current,previewSnapshots:(preview?.snapshots??[]).map((s:any)=>({generatedAt:s.generatedAt,oddsFetchedAt:s.oddsFetchedAt,oddsSource:s.oddsSource,tickets:s.tickets}))},null,2));
           }
-          const race=(await q('SELECT race_date AS raceDate,venue,race_no AS raceNo,entry_url AS entryUrl,start_time_utc AS startTimeUtc FROM rt_races WHERE race_id=? LIMIT 1',[rid]))[0];
-          const bets=await q('SELECT course,bet_type AS betType,combination,stake_yen AS stakeYen,assumed_odds AS assumedOdds,locked_at AS lockedAt FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type',[rid]);
-          const st=(await q('SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1',[`worker_live_final:${rid}`]))[0];
-          const finalState=st?.value?JSON.parse(st.value):null;
-          const pv=(await q('SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1',[`worker_live_preview:${rid}`]))[0];
-          const preview=pv?.value?JSON.parse(pv.value):null;
-          const fetched=await fetchFastJraOfficialOddsForRace(race.entryUrl,{raceDate:race.raceDate,venue:race.venue,raceNo:Number(race.raceNo)});
-          const current=fetched.rows.filter((x:any)=>(x.betType==='単勝'&&String(x.combination)==='2')||(x.betType==='ワイド'&&['2-11','11-2'].includes(String(x.combination))));
-          console.log('AUDIT='+JSON.stringify({now:new Date().toISOString(),race,bets,finalState,currentSource:fetched.source,current,previewSnapshots:(preview?.snapshots??[]).map((s:any)=>({generatedAt:s.generatedAt,oddsFetchedAt:s.oddsFetchedAt,oddsSource:s.oddsSource,tickets:s.tickets}))},null,2));
+          main().catch(e=>{console.error(e);process.exit(1)});
           TS
           npx tsx /tmp/audit.ts
