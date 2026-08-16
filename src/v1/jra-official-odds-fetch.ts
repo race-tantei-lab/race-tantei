@@ -1,6 +1,5 @@
 import type { CompletedBetType, OfficialOddsRow } from "./completed-ticket-runtime.js";
 import {
-  JRA_ODDS_URL,
   crawlJraOfficialOddsForRace,
   decodeJraHtml,
   jraActionLinks,
@@ -20,6 +19,9 @@ const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/
 const BET_ORDER: readonly CompletedBetType[] = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"];
 const SECONDARY_TYPES = ["ワイド", "馬連", "馬単", "3連複", "3連単"] as const;
 const TYPE_FETCH_CONCURRENCY = 2;
+const JRA_HOSTS = ["sp.jra.jp", "www.jra.go.jp", "jra.jp"] as const;
+const PAGE_TIMEOUT_MS = 4_500;
+const PAGE_ATTEMPTS = 3;
 
 export interface FastJraOddsPage {
   cname: string;
@@ -35,6 +37,10 @@ export interface FastJraOddsResult {
   fetchedPageCount: number;
   source: "jra-fast-official" | "jra-crawl-official";
   fallbackReason?: string;
+  entryUrl?: string;
+  oddsUrl?: string;
+  sourceHost?: string;
+  attemptedHosts?: string[];
 }
 
 function sameIdentity(a: JraOddsIdentity | null, b: JraOddsIdentity): boolean {
@@ -47,6 +53,28 @@ function errorText(error: unknown): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function candidateJraEntryUrls(rawUrl: string): string[] {
+  const urls: string[] = [];
+  const add = (value: string) => { if (value && !urls.includes(value)) urls.push(value); };
+  add(rawUrl);
+  try {
+    const parsed = new URL(rawUrl);
+    for (const host of JRA_HOSTS) {
+      const candidate = new URL(parsed.toString());
+      candidate.hostname = host;
+      add(candidate.toString());
+    }
+  } catch {
+    // Keep the original value so the caller gets a useful URL/fetch error.
+  }
+  return urls;
+}
+
+export function jraOddsUrlForEntry(entryUrl: string): string {
+  const parsed = new URL(entryUrl);
+  return new URL("/JRADB/accessO.html", parsed.origin).toString();
 }
 
 class JraFetchSession {
@@ -69,21 +97,23 @@ class JraFetchSession {
   async html(url: string, options: { cname?: string; referer?: string } = {}): Promise<string> {
     const body = options.cname == null ? undefined : new URLSearchParams({ cname: options.cname }).toString();
     let lastError = "unknown";
-    for (let attempt = 0; attempt < 5; attempt += 1) {
+    for (let attempt = 0; attempt < PAGE_ATTEMPTS; attempt += 1) {
       const headers = new Headers({
         "User-Agent": USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "ja-JP,ja;q=0.9",
         "Cache-Control": "no-cache",
         "Pragma": "no-cache",
-        "Referer": options.referer ?? "https://www.jra.go.jp/",
+        "Referer": options.referer ?? new URL(url).origin,
         "Upgrade-Insecure-Requests": "1",
       });
       const cookie = this.cookieHeader();
       if (cookie) headers.set("Cookie", cookie);
       if (body != null) headers.set("Content-Type", "application/x-www-form-urlencoded");
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), PAGE_TIMEOUT_MS);
       try {
-        const response = await fetch(url, { method: body == null ? "GET" : "POST", headers, body, redirect: "follow" });
+        const response = await fetch(url, { method: body == null ? "GET" : "POST", headers, body, redirect: "follow", signal: controller.signal });
         this.rememberCookies(response);
         if (!response.ok) {
           const retryable = [408, 425, 429, 500, 502, 503, 504].includes(response.status);
@@ -97,8 +127,10 @@ class JraFetchSession {
         return html;
       } catch (error) {
         lastError = error instanceof Error ? error.message : String(error);
-        if (lastError.startsWith("JRA_ODDS_HTTP_") || lastError === "JRA_ODDS_BODY_TOO_LARGE") throw error;
-        if (attempt < 4) await sleep(750 * (attempt + 1));
+        if (lastError.startsWith("JRA_ODDS_HTTP_") || lastError === "JRA_ODDS_BODY_TOO_LARGE" || lastError === "JRA_ODDS_PAGE_BLOCKED") throw error;
+        if (attempt < PAGE_ATTEMPTS - 1) await sleep(250 * (attempt + 1) * (attempt + 1));
+      } finally {
+        clearTimeout(timer);
       }
     }
     throw new Error(`JRA_ODDS_FETCH_FAILED:${lastError}`);
@@ -114,28 +146,27 @@ function completePages(pages: FastJraOddsPage[]): void {
 async function fetchFastDirect(entryUrl: string, target: JraOddsIdentity): Promise<FastJraOddsResult> {
   const session = new JraFetchSession();
   const dateDigits = target.raceDate.replaceAll("-", "");
+  const oddsUrl = jraOddsUrlForEntry(entryUrl);
   const entryHtml = await session.html(entryUrl);
   const entryLinks = jraActionLinks(entryHtml).filter((link) => sameFastJraRaceLink(link.cname, dateDigits, target.raceNo));
   const entryCnames = findFastJraTypeCnames(entryHtml, dateDigits, target.raceNo);
   const winCname = entryCnames["単勝"] ?? entryLinks.find((link) => link.cname.startsWith(JRA_FAST_TYPE_PREFIX["単勝"]))?.cname;
   if (!winCname) throw new Error("WIN_CNAME_NOT_FOUND");
 
-  const winPage = await session.html(JRA_ODDS_URL, { cname: winCname, referer: entryUrl });
+  const winPage = await session.html(oddsUrl, { cname: winCname, referer: entryUrl });
   const winIdentity = parseFastJraOddsIdentity(winPage, winCname);
   if (!sameIdentity(winIdentity, target)) throw new Error(`WIN_IDENTITY_MISMATCH:${JSON.stringify(winIdentity)}`);
   const winRows = parseFastJraOfficialOddsRows(winPage, "単勝");
   if (winRows.length < 2) throw new Error(`WIN_HORSES_TOO_FEW:${winRows.length}`);
   const pages: FastJraOddsPage[] = [{ cname: winCname, betType: "単勝", identity: winIdentity!, rows: winRows }];
 
-  // Do not depend on a single page containing every navigation CNAME. JRA has
-  // changed where these links appear before, so merge discovery from both the
-  // entry page and the first odds page.
+  // Do not depend on a single page containing every navigation CNAME. Merge
+  // discovery from both the entry page and the first odds page.
   const winPageCnames = findFastJraTypeCnames(winPage, dateDigits, target.raceNo);
   const cnames: Partial<Record<CompletedBetType, string>> = { ...entryCnames, ...winPageCnames, "単勝": winCname };
 
-  // Fetch the remaining five official pages with bounded concurrency. This is
-  // materially faster than seven fully-serial requests while avoiding a burst
-  // of five simultaneous requests against JRA.
+  // Keep bounded concurrency: faster than fully serial requests without firing
+  // all five secondary pages at JRA simultaneously.
   let nextIndex = 0;
   const fetched = new Map<CompletedBetType, FastJraOddsPage>();
   await Promise.all(Array.from({ length: TYPE_FETCH_CONCURRENCY }, async () => {
@@ -146,7 +177,7 @@ async function fetchFastDirect(entryUrl: string, target: JraOddsIdentity): Promi
       const betType = SECONDARY_TYPES[index];
       const cname = cnames[betType];
       if (!cname) throw new Error(`${betType}_CNAME_NOT_FOUND`);
-      const page = await session.html(JRA_ODDS_URL, { cname, referer: JRA_ODDS_URL });
+      const page = await session.html(oddsUrl, { cname, referer: oddsUrl });
       const identity = parseFastJraOddsIdentity(page, cname);
       if (!sameIdentity(identity, target)) throw new Error(`${betType}_IDENTITY_MISMATCH:${JSON.stringify(identity)}`);
       const rows = parseFastJraOfficialOddsRows(page, betType);
@@ -167,6 +198,9 @@ async function fetchFastDirect(entryUrl: string, target: JraOddsIdentity): Promi
     entryCnameCount: entryLinks.length,
     fetchedPageCount: 7,
     source: "jra-fast-official",
+    entryUrl,
+    oddsUrl,
+    sourceHost: new URL(oddsUrl).hostname,
   };
 }
 
@@ -195,9 +229,27 @@ async function fetchOfficialCrawlFallback(entryUrl: string, target: JraOddsIdent
 }
 
 export async function fetchFastJraOfficialOddsForRace(entryUrl: string, target: JraOddsIdentity): Promise<FastJraOddsResult> {
+  const candidates = candidateJraEntryUrls(entryUrl);
+  const attemptedHosts: string[] = [];
+  const fastErrors: string[] = [];
+
+  for (const candidate of candidates) {
+    let host = candidate;
+    try { host = new URL(candidate).hostname; } catch { /* keep raw value */ }
+    if (!attemptedHosts.includes(host)) attemptedHosts.push(host);
+    try {
+      const result = await fetchFastDirect(candidate, target);
+      return { ...result, attemptedHosts };
+    } catch (error) {
+      fastErrors.push(`${host}:${errorText(error)}`);
+    }
+  }
+
+  const aggregateFastError = new Error(`JRA_ODDS_FAST_ALL_HOSTS_FAILED:${fastErrors.join("|")}`);
   try {
-    return await fetchFastDirect(entryUrl, target);
-  } catch (fastError) {
-    return fetchOfficialCrawlFallback(entryUrl, target, fastError);
+    const crawl = await fetchOfficialCrawlFallback(entryUrl, target, aggregateFastError);
+    return { ...crawl, attemptedHosts };
+  } catch (crawlError) {
+    throw new Error(`JRA_ODDS_ALL_PATHS_FAILED:fast=${fastErrors.join("|")};crawl=${errorText(crawlError)}`);
   }
 }
