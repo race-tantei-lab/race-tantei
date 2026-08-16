@@ -1,0 +1,16 @@
+name: Scan final mutation path
+on:
+  push:
+    branches: [fix/normal-t15-atomic-v2-20260816]
+    paths: [".github/workflows/scan-final-mutation-path.yml"]
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan
+        shell: bash
+        run: |
+          grep -RIn --exclude-dir=.git -E 'official_correction_pre_start|oddsCorrectedAt|probability_fallback_persistent_deadline_guard|worker_live_final:' src scripts .github || true
