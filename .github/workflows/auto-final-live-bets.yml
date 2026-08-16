@@ -9,14 +9,9 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/auto-final-live-bets.yml"
-      - "scripts/run-critical-auto-bet-generation.py"
-      - "scripts/run-auto-final-live.py"
-      - "scripts/run-ten-year-auto-final-live.py"
-      - "scripts/refresh-selected-bodyweights-direct.mjs"
-      - "scripts/generate-ten-year-live-bets.py"
-      - "scripts/collect-jra-official-odds.py"
-      - "scripts/collect-current-jra-official-odds-live.py"
-      - "scripts/collect-current-jra-official-odds-fast.py"
+      - "scripts/run-stored-preview-deadline-backup.py"
+      - "src/v1/completed-worker-deadline-guard.ts"
+      - "src/public-site-entry-v29.ts"
 
 permissions:
   contents: read
@@ -27,79 +22,47 @@ env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
   CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-  JRA_ODDS_REQUEST_PAUSE_SECONDS: "0.35"
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   lock:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-
-      - name: Build canonical JRA parser
-        run: |
-          npm ci
-          npm run build:test
-          node --check scripts/refresh-selected-bodyweights-direct.mjs
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install completed-model runtime
-        run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0"
+      - name: Compile stored-preview backup
+        run: python -m py_compile scripts/run-stored-preview-deadline-backup.py
 
-      - name: Compile independent finalizer
-        run: |
-          python -m py_compile \
-            scripts/run-critical-auto-bet-generation.py \
-            scripts/run-auto-final-live.py \
-            scripts/run-ten-year-auto-final-live.py \
-            scripts/generate-ten-year-live-bets.py \
-            scripts/collect-current-jra-official-odds-live.py \
-            scripts/collect-current-jra-official-odds-fast.py
-
-      - name: Refresh selected bodyweights with hard timeout
+      - name: Finalize due races from stored preview only
         shell: bash
         run: |
           set -o pipefail
-          timeout 45s node scripts/refresh-selected-bodyweights-direct.mjs 2>&1 | tee bodyweight-refresh.log || \
-            echo "WARN bodyweight refresh timed out/failed; finalizer continues with latest verified D1 inputs"
-
-      - name: Finalize every due selected race independently
-        shell: bash
-        run: |
-          set -uo pipefail
-          : > automatic-final-live.log
-          set +e
-          timeout 150s python scripts/run-critical-auto-bet-generation.py 2>&1 | tee automatic-final-live.log
-          generator_rc=${PIPESTATUS[0]}
-          set -e
-
-          if [[ ! -f analysis-results/critical-auto-bet-generation.json ]]; then
-            echo "CRITICAL_AUDIT_MISSING generator_rc=$generator_rc" >&2
-            exit 1
-          fi
-
+          python scripts/run-stored-preview-deadline-backup.py 2>&1 | tee automatic-final-live.log
           python - <<'PY'
           import json, pathlib
           p=pathlib.Path('analysis-results/critical-auto-bet-generation.json')
+          if not p.exists():
+              raise SystemExit('STORED_PREVIEW_BACKUP_AUDIT_MISSING')
           data=json.loads(p.read_text(encoding='utf-8'))
+          if data.get('mode')!='stored_preview_only':
+              raise SystemExit(f"BACKUP_MODE_INVALID:{data.get('mode')}")
+          if data.get('generatedRaceIds'):
+              raise SystemExit(f"POST_DEADLINE_GENERATION_FORBIDDEN:{data.get('generatedRaceIds')}")
           urgent=list(data.get('urgentMissingRaceIds') or [])
           failures=list(data.get('failures') or [])
           if urgent or failures:
               raise SystemExit(f"LIVE_BACKUP_CURRENT_DUE_INCOMPLETE urgent={urgent} failures={failures}")
           print(json.dumps({
-              'status':'live_backup_due_complete',
-              'generatedRaceIds':data.get('generatedRaceIds') or [],
+              'status':'stored_preview_backup_due_complete',
+              'dueRaceIds':data.get('dueRaceIds') or [],
+              'selfHealedRaceIds':data.get('selfHealedRaceIds') or [],
+              'alreadyFinalRaceIds':data.get('alreadyFinalRaceIds') or [],
               'remainingFutureRaceIds':data.get('remainingFutureRaceIds') or [],
-              'historicalOrLateAuditOnly':data.get('deadlineBreachRaceIds') or [],
           }, ensure_ascii=False))
           PY
 
@@ -110,10 +73,7 @@ jobs:
           name: automatic-final-live-audit-${{ github.run_id }}
           path: |
             analysis-results/critical-auto-bet-generation.json
-            analysis-results/critical-auto-bet-*.json
-            official-odds-collection-report.json
             automatic-final-live.log
-            bodyweight-refresh.log
           if-no-files-found: warn
           retention-days: 30
 
@@ -123,7 +83,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/auto-final-live' \
-            -f description='独立バックアップ: 現在締切対象の買い目は確定済み' \
+            -f description='独立バックアップ: 保存済み予測のみで締切対象を確定' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Mark automatic live lock failure
@@ -132,5 +92,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/auto-final-live' \
-            -f description='独立バックアップ: 現在締切対象に未確定あり' \
+            -f description='独立バックアップ: 締切対象に保存済み予測不足または未確定あり' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
