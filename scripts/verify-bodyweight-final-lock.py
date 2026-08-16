@@ -63,9 +63,10 @@ def main():
 
     require('horse_weight=COALESCE(excluded.horse_weight,rt_runners.horse_weight)' in direct,'DIRECT_SYNC_CAN_ERASE_CONFIRMED_BODYWEIGHT')
     require('refresh-selected-bodyweights-direct.mjs' in workflow,'GITHUB_BODYWEIGHT_ACQUISITION_NOT_WIRED')
-    acquire_pos=workflow.find('node scripts/refresh-selected-bodyweights-direct.mjs')
-    finalize_pos=workflow.find('python scripts/run-ten-year-auto-final-live.py',acquire_pos)
+    acquire_pos=workflow.find('timeout 45s node scripts/refresh-selected-bodyweights-direct.mjs')
+    finalize_pos=workflow.find('timeout 150s python scripts/run-critical-auto-bet-generation.py',acquire_pos)
     require(0 <= acquire_pos < finalize_pos,'GITHUB_FINALIZER_RUNS_BEFORE_BODYWEIGHT_ACQUISITION')
+    require('finalizer continues with latest verified D1 inputs' in workflow,'GITHUB_BODYWEIGHT_FAILURE_MUST_NOT_BLOCK_FINALIZER')
     require('worker_bodyweight_snapshot:' in backup and 'parseEntryPage' in backup,'GITHUB_BODYWEIGHT_OFFICIAL_ACQUISITION_INVALID')
     require('const FINALIZE_OPEN_MS = 16 * 60 * 1000;' in backup,'GITHUB_BODYWEIGHT_T16_ACQUISITION_WINDOW_MISSING')
     require('verify_official_bodyweights' in wrapper,'GITHUB_BODYWEIGHT_PROVENANCE_AUDIT_MISSING')
