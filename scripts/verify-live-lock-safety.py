@@ -32,14 +32,11 @@ def main() -> None:
         'const PREVIEW_PREFIX = "worker_live_preview:";',
         'const FINAL_PREFIX = "worker_live_final:";',
         'const PREVIEW_OPEN_MS = 45 * 60 * 1000;',
-        'const FINALIZE_OPEN_MS = DEADLINE_MS;',
         'const DEADLINE_MS = 15 * 60 * 1000;',
         'const PREVIEW_HISTORY = 3;',
         'oddsSnapshotSha256',
         'await savePreview(db, snapshot)',
         'latestOfficialBodyWeightPreview',
-        'official ?? fresh ?? await latestPreview(env.DB, raceId)',
-        'await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId)',
         '"deadline_watchdog"',
         'await db.batch(statements)',
         'if (isStrictComplete(existing)) return;',
@@ -49,18 +46,28 @@ def main() -> None:
     forbid(worker, 'WORKER_FINAL_BODYWEIGHT_MISMATCH', "Worker live-lock")
     forbid(worker, "const FINALIZE_OPEN_MS = 16 * 60 * 1000;", "Worker live-lock")
 
+    # T-15 must be a hard network/recompute boundary for normal races.
+    t15_start = worker.index('if (remaining <= DEADLINE_MS)')
+    t15_end = worker.index('let fresh: PreviewSnapshot | null = null;', t15_start)
+    t15_block = worker[t15_start:t15_end]
+    for forbidden in ('generatePreview(', 'fetchFastJraOfficialOddsForRace(', 'loadWorkerModel(', 'loadCompletedRecencyLearning('):
+        forbid(t15_block, forbidden, "Worker T-15 hard boundary")
+    require(t15_block, 'await commitSnapshot(env.DB, raceId, stored, now, "deadline_watchdog")', "Worker T-15 hard boundary")
+    forbid(worker, 'const FINALIZE_OPEN_MS = DEADLINE_MS;', "Worker live-lock")
+
     guard = read("src/v1/completed-worker-deadline-guard.ts")
     for needle in (
         "export const DEADLINE_GUARD_MS = 15 * 60 * 1000;",
         "remainingMs > 0 && remainingMs <= DEADLINE_GUARD_MS",
         "orderSelectedRaceIds",
         "start_time_utc AS startTimeUtc",
-        'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
-        'finalizedFrom: "persistent_official_deadline_guard"',
+        'snapshot.oddsSource!=="jra-fast-official" && snapshot.oddsSource!=="jra-crawl-official"',
+        'finalizedFrom:"persistent_official_deadline_guard"',
         "await db.batch(statements)",
         "for (const raceId of ids)",
-        "audit.errors.push({ raceId, error: errorText(error) })",
-        "if (strictComplete(existing)) { audit.skippedAlreadyLockedRaceIds.push(raceId); continue; }",
+        "ensureCompletedRaceFinalAtDeadline",
+        "DEADLINE_GUARD_PREVIEW_MISSING",
+        "ensureCompletedFinalImmutability",
     ):
         require(guard, needle, "persistent deadline guard")
     for forbidden in (
@@ -68,17 +75,24 @@ def main() -> None:
         "remaining > 14 * 60 * 1000",
         "remaining > LATE_LIMIT_MS",
         "fetch(",
+        "probability_fallback_persistent_deadline_guard",
+        "chooseCompletedProbabilityFallbackTickets",
+        "emergencyRunnerWeights",
+        "async function buildFallback",
+        "async function commitFallback",
+        "loadCompletedFeatureStateForRace",
+        "loadCompletedRecencyLearning",
     ):
         forbid(guard, forbidden, "persistent deadline guard")
-
-    require(guard, "DEADLINE_GUARD_OFFICIAL_ODDS_REQUIRED", "persistent deadline guard")
-    forbid(guard, "await commitFallback(env.DB, raceId, race, runners, now)", "persistent deadline guard")
 
     production_wrapper = read("src/public-site-entry-v29.ts")
     for needle in (
         'import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";',
-        'import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";',
+        'import { ensureCompletedRaceFinalAtDeadline, runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";',
         "await freezeCompletedWorkerSelectionIfNeeded(env, now);",
+        'import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";',
+        'await runNormalRacePreparation(env, "COMPLETED_WORKER_PREPARE_BEFORE")',
+        'await ensureRaceDetailDeadlineFinal(env, path);',
         'await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE", false)',
         'await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_AFTER", true)',
         'throw new Error(`${label}_DUE_RACE_UNRESOLVED:',
@@ -92,6 +106,15 @@ def main() -> None:
     if not (before_pos < delegated_pos < after_pos):
         raise AssertionError("deadline guard must run both before and after delegated scheduled work")
     forbid(production_wrapper, "runCompletedWorkerEmergencyLock", "production deadline wrapper")
+
+    invariants = read("src/v1/completed-final-invariants.ts")
+    for needle in (
+        'CREATE TRIGGER IF NOT EXISTS rt_guard_locked_public_bet_terms',
+        'IMMUTABLE_FINAL_BET_TERMS',
+        'CREATE TRIGGER IF NOT EXISTS rt_guard_locked_worker_final_state',
+        'IMMUTABLE_WORKER_FINAL_STATE',
+    ):
+        require(invariants, needle, "final immutability")
 
     scheduled_gate = read("src/public-site-entry-v25.ts")
     for needle in (
@@ -108,30 +131,24 @@ def main() -> None:
         "prior-day learning gate",
     )
 
-    canonical = read("scripts/run-ten-year-auto-final-live.py")
-    for needle in (
-        "base.MIN_LOCK_SECONDS=0",
-        "base.MAX_LOCK_SECONDS=15*60",
-        "fallback_without_verified_snapshot",
-        "locked_races_without_started_blockers",
-        "operationallyClosedStartedMisses",
-        "return locked|started",
-    ):
-        require(canonical, needle, "canonical GitHub fallback")
-    forbid(canonical, "base.MIN_LOCK_SECONDS=14*60", "canonical GitHub fallback")
-
     automatic = read(".github/workflows/auto-final-live-bets.yml")
     for needle in (
         'cron: "*/5 8-19 * * 6,0,1"',
-        "timeout-minutes: 4",
-        "timeout 45s node scripts/refresh-selected-bodyweights-direct.mjs",
-        "timeout 150s python scripts/run-critical-auto-bet-generation.py",
+        "timeout-minutes: 3",
+        "scripts/run-stored-preview-deadline-backup.py",
+        "stored_preview_only",
+        "generatedRaceIds",
         "urgentMissingRaceIds",
-        "LIVE_BACKUP_CURRENT_DUE_INCOMPLETE",
-        "historicalOrLateAuditOnly",
+        "failures",
+        "POST_DEADLINE_GENERATION_FORBIDDEN",
     ):
         require(automatic, needle, "independent GitHub live backup")
     for forbidden in (
+        "run-critical-auto-bet-generation.py",
+        "refresh-selected-bodyweights-direct.mjs",
+        "lightgbm",
+        "generate-ten-year-live-bets.py",
+        "collect-current-jra-official-odds",
         "Existing live backup monitor detected",
         "for _ in $(seq 1 350)",
         "sleep 60",
@@ -139,13 +156,22 @@ def main() -> None:
     ):
         forbid(automatic, forbidden, "independent GitHub live backup")
 
-    emergency = read("scripts/run-emergency-earliest-missing-bet.py")
-    require(emergency, "RECOVERY_OPEN_SECONDS = 15 * 60", "emergency fallback")
-    require(emergency, '"status":"waiting_emergency_window"', "emergency fallback")
-
-    critical_script = read("scripts/run-critical-auto-bet-generation.py")
-    require(critical_script, "RECOVERY_OPEN_SECONDS = 15 * 60", "manual critical recovery")
-    require(critical_script, "base.MAX_LOCK_SECONDS = RECOVERY_OPEN_SECONDS", "manual critical recovery")
+    backup = read("scripts/run-stored-preview-deadline-backup.py")
+    for needle in (
+        '"mode": "stored_preview_only"',
+        '"generatedRaceIds": []',
+        "trigger_race_page(race_id)",
+        "0 < remaining <= 15 * 60",
+        "strict_complete(race_id)",
+    ):
+        require(backup, needle, "stored-preview GitHub backup")
+    for forbidden in (
+        "lightgbm",
+        "generate-ten-year-live-bets",
+        "collect-current-jra-official-odds",
+        "run-critical-auto-bet-generation",
+    ):
+        forbid(backup, forbidden, "stored-preview GitHub backup")
 
     critical_workflow = read(".github/workflows/critical-auto-bet-generation.yml")
     require(critical_workflow, "workflow_dispatch:", "critical recovery workflow")
@@ -158,18 +184,17 @@ def main() -> None:
         "preview_history=3",
         "finalize_open=15m",
         "deadline=15m",
-        "persistent_guard=15m_until_start",
+        "persistent_guard=stored_preview_only",
         "guard_order=start_time",
         "guard_runs=before_and_after_scheduled",
         "guard_second_pass=fail_closed",
         "guard_selection_recovery=canonical_db_only",
         "guard_external_http=false",
+        "race_page_self_heal=stored_preview_only",
+        "final_db_immutability=true",
         "prior_learning_fail_open=08:30JST",
-        "github_backup=independent_5m",
-        "github_backup_hard_timeouts=true",
-        "past_misses_block_future=false",
-        "manual_emergency_fallback=15m",
-        "bodyweight_nonblocking=true",
+        "github_backup=stored_preview_only_5m",
+        "post_deadline_prediction_generation=false",
         "critical_schedule=disabled",
     )
 

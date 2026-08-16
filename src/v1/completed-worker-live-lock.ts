@@ -16,6 +16,7 @@ import {
   type CompletedTicket,
 } from "./completed-ticket-runtime";
 import { fetchFastJraOfficialOddsForRace, type OfficialOddsRow } from "./jra-official-odds-fetch";
+import { ensureCompletedFinalImmutability } from "./completed-final-invariants";
 import type { Env, RaceRecord, RunnerRecord } from "./types";
 
 const SELECTION_PREFIX = "final_daily_selection:";
@@ -25,7 +26,6 @@ const FINAL_PREFIX = "worker_live_final:";
 const BODY_WEIGHT_REFRESH_OPEN_MS = 80 * 60 * 1000;
 const PREVIEW_OPEN_MS = 45 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
-const FINALIZE_OPEN_MS = DEADLINE_MS;
 const PREVIEW_HISTORY = 3;
 const PREVIEW_VERSION = 1;
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
@@ -454,8 +454,15 @@ function emptyAudit(date: string, status: string): Audit {
   };
 }
 
+async function orderLiveRaceIdsByStart(db: D1Database, date: string, ids: string[]): Promise<string[]> {
+  const result = await db.prepare("SELECT race_id AS raceId,start_time_utc AS startTimeUtc FROM rt_races WHERE race_date=?").bind(date).all<{ raceId: string; startTimeUtc: string | null }>();
+  const starts = new Map((result.results ?? []).map((row) => [String(row.raceId), Date.parse(String(row.startTimeUtc || ""))]));
+  return [...ids].sort((a,b) => { const av=Number.isFinite(starts.get(a))?Number(starts.get(a)):Number.POSITIVE_INFINITY; const bv=Number.isFinite(starts.get(b))?Number(starts.get(b)):Number.POSITIVE_INFINITY; return av-bv || a.localeCompare(b); });
+}
+
 export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Promise<Audit> {
   const date = jstDate(now);
+  await ensureCompletedFinalImmutability(env.DB);
   const selection = await loadSelection(env.DB, date);
   if (!selection) {
     const audit = emptyAudit(date, "selection_missing");
@@ -463,7 +470,7 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
     await saveAudit(env.DB, audit);
     return audit;
   }
-  const ids = validateSelection(selection);
+  const ids = await orderLiveRaceIdsByStart(env.DB, date, validateSelection(selection));
   const beforeStates = await Promise.all(ids.map(async (raceId) => isStrictComplete(await publicBetRows(env.DB, raceId))));
   const completeBefore = beforeStates.filter(Boolean).length;
   const lockedByWorker: string[] = [];
@@ -501,26 +508,16 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
         continue;
       }
 
-      // T-15 is the immutable boundary. First try one last fresh score using
-      // every result settled up to this instant and the freshest official odds.
-      // If any acquisition fails, promote the last good preview so learning can
-      // never become a reason for a missing bet.
+      // T-15 is a hard immutable boundary. From this point onward this
+      // path performs no JRA HTTP, model scoring, recency recomputation, or
+      // odds refresh. It only promotes a preview that was saved before T-15.
       if (remaining <= DEADLINE_MS) {
-        let deadlineFresh: PreviewSnapshot | null = null;
-        try {
-          model ??= await loadWorkerModel(env.DB);
-          deadlineFresh = await generatePreview(env.DB, model, raceId, now);
-          refreshedPreviewRaceIds.push(raceId);
-        } catch (error) {
-          errors.push({ raceId, error: `T15_FRESH_FALLBACK:${errorText(error)}` });
-        }
-        const fallback = deadlineFresh ?? await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId);
-        if (!fallback) throw new Error(`WORKER_DEADLINE_PREVIEW_MISSING:${raceId}`);
-        if (!snapshotHasOfficialBodyWeight(fallback)) bodyWeightBreachRaceIds.add(raceId);
-        await commitSnapshot(env.DB, raceId, fallback, new Date(), deadlineFresh ? "fresh" : "deadline_watchdog");
+        const stored = await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId);
+        if (!stored) throw new Error(`WORKER_DEADLINE_PREVIEW_MISSING:${raceId}`);
+        if (!snapshotHasOfficialBodyWeight(stored)) bodyWeightBreachRaceIds.add(raceId);
+        await commitSnapshot(env.DB, raceId, stored, now, "deadline_watchdog");
         lockedByWorker.push(raceId);
-        if (deadlineFresh) finalizedFromFreshRaceIds.push(raceId);
-        else { finalizedFromFallbackRaceIds.push(raceId); latePromotedRaceIds.push(raceId); }
+        finalizedFromFallbackRaceIds.push(raceId);
         continue;
       }
 
@@ -535,16 +532,6 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
         errors.push({ raceId, error: errorText(error) });
       }
 
-      if (remaining <= FINALIZE_OPEN_MS) {
-        const official = fresh && snapshotHasOfficialBodyWeight(fresh) ? fresh : await latestOfficialBodyWeightPreview(env.DB, raceId);
-        const chosen = official ?? fresh ?? await latestPreview(env.DB, raceId);
-        if (!chosen) throw new Error(`WORKER_FINALIZE_PREVIEW_MISSING:${raceId}`);
-        if (!snapshotHasOfficialBodyWeight(chosen)) bodyWeightBreachRaceIds.add(raceId);
-        await commitSnapshot(env.DB, raceId, chosen, now, fresh === chosen ? "fresh" : "last_good");
-        lockedByWorker.push(raceId);
-        if (fresh === chosen) finalizedFromFreshRaceIds.push(raceId);
-        else finalizedFromFallbackRaceIds.push(raceId);
-      }
     } catch (error) {
       errors.push({ raceId, error: errorText(error) });
     }
