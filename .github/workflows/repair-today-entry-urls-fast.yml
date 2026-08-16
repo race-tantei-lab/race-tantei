@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/repair-today-entry-urls-fast.yml"
+      - "scripts/repair-today-entry-urls-fast.mjs"
+      - "scripts/smoke-live-worker-official-odds.mjs"
+      - "src/v1/jra-official-odds-fetch.ts"
   workflow_dispatch:
 permissions:
   contents: read
