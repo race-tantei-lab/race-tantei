@@ -1,9 +1,11 @@
 name: Critical automatic bet generation
 
 on:
-  # Retained as a manual recovery tool only. Production timing is owned by the
-  # one-minute Worker last-good path plus the gated emergency fallback.
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/critical-auto-bet-generation.yml"
 
 concurrency:
   group: critical-auto-bet-generation-live
