@@ -61,6 +61,7 @@ def main() -> None:
         "await db.batch(statements)",
         "for (const raceId of ids)",
         "audit.errors.push({ raceId, error: errorText(error) })",
+        "if (strictComplete(existing)) { audit.skippedAlreadyLockedRaceIds.push(raceId); continue; }",
     ):
         require(guard, needle, "persistent deadline guard")
     for forbidden in (
@@ -76,8 +77,10 @@ def main() -> None:
         'import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";',
         'import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";',
         "await freezeCompletedWorkerSelectionIfNeeded(env, now);",
-        'await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE")',
-        'await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_AFTER")',
+        'await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_BEFORE", false)',
+        'await runDeadlineGuard(env, "COMPLETED_WORKER_DEADLINE_GUARD_AFTER", true)',
+        'throw new Error(`${label}_DUE_RACE_UNRESOLVED:',
+        "if (finalGuardError) throw finalGuardError;",
         "if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);",
     ):
         require(production_wrapper, needle, "production deadline wrapper")
@@ -104,10 +107,35 @@ def main() -> None:
     )
 
     canonical = read("scripts/run-ten-year-auto-final-live.py")
-    require(canonical, "base.MIN_LOCK_SECONDS=0", "canonical GitHub fallback")
-    require(canonical, "base.MAX_LOCK_SECONDS=15*60", "canonical GitHub fallback")
-    require(canonical, "fallback_without_verified_snapshot", "canonical GitHub fallback")
+    for needle in (
+        "base.MIN_LOCK_SECONDS=0",
+        "base.MAX_LOCK_SECONDS=15*60",
+        "fallback_without_verified_snapshot",
+        "locked_races_without_started_blockers",
+        "operationallyClosedStartedMisses",
+        "return locked|started",
+    ):
+        require(canonical, needle, "canonical GitHub fallback")
     forbid(canonical, "base.MIN_LOCK_SECONDS=14*60", "canonical GitHub fallback")
+
+    automatic = read(".github/workflows/auto-final-live-bets.yml")
+    for needle in (
+        'cron: "*/5 8-19 * * 6,0,1"',
+        "timeout-minutes: 4",
+        "timeout 45s node scripts/refresh-selected-bodyweights-direct.mjs",
+        "timeout 150s python scripts/run-critical-auto-bet-generation.py",
+        "urgentMissingRaceIds",
+        "LIVE_BACKUP_CURRENT_DUE_INCOMPLETE",
+        "historicalOrLateAuditOnly",
+    ):
+        require(automatic, needle, "independent GitHub live backup")
+    for forbidden in (
+        "Existing live backup monitor detected",
+        "for _ in $(seq 1 350)",
+        "sleep 60",
+        'cron: "7,37 9-19',
+    ):
+        forbid(automatic, forbidden, "independent GitHub live backup")
 
     emergency = read("scripts/run-emergency-earliest-missing-bet.py")
     require(emergency, "RECOVERY_OPEN_SECONDS = 15 * 60", "emergency fallback")
@@ -131,10 +159,13 @@ def main() -> None:
         "persistent_guard=15m_until_start",
         "guard_order=start_time",
         "guard_runs=before_and_after_scheduled",
+        "guard_second_pass=fail_closed",
         "guard_selection_recovery=canonical_db_only",
         "guard_external_http=false",
         "prior_learning_fail_open=08:30JST",
-        "github_fallback=15m_until_start",
+        "github_backup=independent_5m",
+        "github_backup_hard_timeouts=true",
+        "past_misses_block_future=false",
         "manual_emergency_fallback=15m",
         "bodyweight_nonblocking=true",
         "critical_schedule=disabled",
