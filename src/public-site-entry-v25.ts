@@ -6,6 +6,7 @@ import type { Env } from "./v1/types.js";
 
 const CUTOFF = "2026-08-09";
 const UI_VERSION = "ten-year-completed-public-v25-race-detail-tabs-20260815";
+const PRIOR_LEARNING_FAIL_OPEN_MINUTE_JST = 8 * 60 + 30;
 
 function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch] ?? ch));
@@ -15,6 +16,10 @@ function num(value: number, digits = 4): string { return Number(value).toFixed(d
 function jstIso(now: Date): string { return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString(); }
 function jstDate(now: Date): string { return jstIso(now).slice(0, 10); }
 function jstHour(now: Date): number { return Number(jstIso(now).slice(11, 13)); }
+function jstMinuteOfDay(now: Date): number {
+  const value = jstIso(now);
+  return Number(value.slice(11, 13)) * 60 + Number(value.slice(14, 16));
+}
 
 async function selectionAlreadyFrozen(db: D1Database, date: string): Promise<boolean> {
   const row = await db.prepare("SELECT 1 AS found FROM rt_system_state WHERE state_key=? LIMIT 1")
@@ -158,21 +163,24 @@ export default {
     const now = new Date(controller.scheduledTime || Date.now());
     const date = jstDate(now);
     if (jstHour(now) >= 8 && !(await selectionAlreadyFrozen(env.DB, date))) {
+      let priorReady = false;
       try {
         const readiness = await verifyPriorDayLearningReady(env.DB, date);
         await savePriorLearningAudit(env.DB, readiness);
-        if (!readiness.ready) {
-          console.error("PRIOR_DAY_LEARNING_NOT_READY", JSON.stringify(readiness));
-          // Keep the generic JRA synchronizer running so missing results/payouts
-          // can recover on the next one-minute tick, but do not allow the
-          // canonical selection freezer to consume partial prior-day data.
-          if (backgroundSyncSite.scheduled) await backgroundSyncSite.scheduled(controller, env, ctx);
-          return;
-        }
+        priorReady = readiness.ready;
+        if (!priorReady) console.error("PRIOR_DAY_LEARNING_NOT_READY", JSON.stringify(readiness));
       } catch (error) {
         console.error("PRIOR_DAY_LEARNING_GATE_FAILED", error);
+      }
+
+      if (!priorReady) {
+        // Give the generic JRA synchronizer a chance to complete prior-day
+        // results/payouts first. But never let incomplete learning suppress the
+        // race-selection/live-lock critical path after 08:30 JST: producing a
+        // pre-race prediction by T-15 has higher operational priority.
         if (backgroundSyncSite.scheduled) await backgroundSyncSite.scheduled(controller, env, ctx);
-        return;
+        if (jstMinuteOfDay(now) < PRIOR_LEARNING_FAIL_OPEN_MINUTE_JST) return;
+        console.error("PRIOR_DAY_LEARNING_FAIL_OPEN", JSON.stringify({ date, minuteJst: jstMinuteOfDay(now) }));
       }
     }
     if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
