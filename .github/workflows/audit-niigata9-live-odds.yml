@@ -25,7 +25,8 @@ jobs:
         shell: bash
         run: |
           cat > /tmp/audit.ts <<'TS'
-          import { fetchFastJraOfficialOddsForRace } from process.cwd() + '/src/v1/jra-official-odds-fetch.ts';
+          const mod:any = await import(process.cwd() + '/src/v1/jra-official-odds-fetch.ts');
+          const fetchFastJraOfficialOddsForRace = mod.fetchFastJraOfficialOddsForRace;
           const rid='2026-08-16-niigata-09';
           const endpoint=`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/d1/database/${process.env.CLOUDFLARE_D1_DATABASE_ID}/query`;
           async function q(sql:string,params:any[]=[]){
