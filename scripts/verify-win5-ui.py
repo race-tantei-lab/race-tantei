@@ -21,6 +21,7 @@ def main() -> None:
     entry = ENTRY.read_text(encoding="utf-8")
     parent = PARENT.read_text(encoding="utf-8")
     source = canonical + "\n" + deadline + "\n" + entry + "\n" + parent
+    win5_ui_source = entry + "\n" + parent
     wrangler = WRANGLER.read_text(encoding="utf-8")
     runtime = RUNTIME.read_text(encoding="utf-8")
 
@@ -67,7 +68,9 @@ def main() -> None:
     require('detail: "T-15で固定済み"' not in parent, "WIN5_UI_FALSE_T15_CLAIM_REINTRODUCED")
 
     require('.win5-target-list' in parent and '.win5-ticket-row' in parent, "WIN5_MOBILE_VERTICAL_LAYOUT_MISSING")
-    require('overflow-x:auto' not in source, "WIN5_HORIZONTAL_SCROLL_REINTRODUCED")
+    # Home-page controls can independently choose their own overflow behavior.
+    # This guard is specifically for the WIN5 page implementation.
+    require('overflow-x:auto' not in win5_ui_source, "WIN5_HORIZONTAL_SCROLL_REINTRODUCED")
 
     print("WIN5_UI_OK top_nav=true floating_button=false view_switch=tickets_other default=tickets duplicate_plan_comparison=false rule=false diagnostics=always_open horizontal_scroll=false canonical=v30 clear_language=true")
 
