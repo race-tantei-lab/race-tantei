@@ -1,0 +1,114 @@
+name: JRA odds table diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Query a current real entry URL
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT entry_url AS entryUrl FROM rt_races WHERE race_date='2026-08-09' AND entry_url LIKE 'https://%/JRADB/accessD.html?%' ORDER BY race_no DESC LIMIT 1" >/tmp/d1.json
+          python - <<'PY' >/tmp/entry.txt
+          import json
+          data=json.load(open('/tmp/d1.json')); rows=[]
+          def walk(x):
+              if isinstance(x,dict):
+                  if isinstance(x.get('results'),list): rows.extend(x['results'])
+                  for v in x.values(): walk(v)
+              elif isinstance(x,list):
+                  for v in x: walk(v)
+          walk(data)
+          urls=[r.get('entryUrl') for r in rows if isinstance(r,dict) and r.get('entryUrl')]
+          if not urls: raise SystemExit('NO_CURRENT_ENTRY')
+          print(urls[0])
+          PY
+
+      - name: Open base odds page and extract type actions
+        run: |
+          set -euo pipefail
+          entry="$(cat /tmp/entry.txt)"
+          ua='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
+          curl --silent --show-error --fail --location --max-time 30 -A "$ua" -H 'Accept-Language: ja-JP,ja;q=0.9' -c /tmp/cj -b /tmp/cj "$entry" -o /tmp/entry.bin
+          ENTRY="$entry" python - <<'PY' >/tmp/base-cname.txt
+          import re,html
+          text=open('/tmp/entry.bin','rb').read().decode('shift_jis',errors='ignore')
+          xs=[html.unescape(x) for x in re.findall(r"doAction\(\s*['\"]\/JRADB\/accessO\.html['\"]\s*,\s*['\"]([^'\"]+)['\"]",text,re.I)]
+          xs=[x for x in xs if x.startswith('pw151') and re.search(r'20\d{6}',x) and not x.endswith('oli00/6D')]
+          if not xs: raise SystemExit('NO_BASE_ODDS')
+          print(xs[0])
+          PY
+          cname="$(cat /tmp/base-cname.txt)"
+          curl --silent --show-error --fail --location --max-time 30 -A "$ua" -H 'Accept-Language: ja-JP,ja;q=0.9' -H 'Content-Type: application/x-www-form-urlencoded' -H "Referer: $entry" -c /tmp/cj -b /tmp/cj --data-urlencode "cname=${cname}" 'https://www.jra.go.jp/JRADB/accessO.html' -o /tmp/base-odds.bin
+          python - <<'PY' >/tmp/type-actions.tsv
+          import re,html
+          text=open('/tmp/base-odds.bin','rb').read().decode('shift_jis',errors='ignore')
+          actions=[]
+          for x in re.findall(r"doAction\(\s*['\"]\/JRADB\/accessO\.html['\"]\s*,\s*['\"]([^'\"]+)['\"]",text,re.I):
+              x=html.unescape(x)
+              if x not in actions: actions.append(x)
+          mapping={'151':'単勝','154':'馬連','155':'ワイド','156':'馬単','157':'3連複','158':'3連単'}
+          for prefix,label in mapping.items():
+              xs=[x for x in actions if x.startswith('pw15'+prefix[-1]) and re.search(r'20\d{6}',x)]
+              if prefix=='151': xs=[x for x in actions if x.startswith('pw151') and re.search(r'20\d{6}',x)]
+              if not xs: raise SystemExit(f'MISSING_ACTION:{label}')
+              print(label+'\t'+xs[-1])
+          PY
+          cat /tmp/type-actions.tsv
+
+      - name: Fetch each betting type and dump structured table rows
+        run: |
+          set -euo pipefail
+          entry="$(cat /tmp/entry.txt)"
+          ua='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
+          n=0
+          while IFS=$'\t' read -r label cname; do
+            n=$((n+1)); out="/tmp/type-${n}.bin"
+            code="$(curl --silent --show-error --location --max-time 30 -A "$ua" -H 'Accept-Language: ja-JP,ja;q=0.9' -H 'Content-Type: application/x-www-form-urlencoded' -H "Referer: $entry" -c /tmp/cj -b /tmp/cj --data-urlencode "cname=${cname}" -o "$out" -w '%{http_code}' 'https://www.jra.go.jp/JRADB/accessO.html' || true)"
+            LABEL="$label" CNAME="$cname" OUT="$out" CODE="$code" python - <<'PY'
+          import os,re,html,json
+          label=os.environ['LABEL']; raw=open(os.environ['OUT'],'rb').read(); text=raw.decode('shift_jis',errors='ignore')
+          title=re.search(r'<title[^>]*>(.*?)</title>',text,re.I|re.S)
+          print('TYPE_PAGE',label,'HTTP',os.environ['CODE'],'BYTES',len(raw),'CNAME',os.environ['CNAME'],'TITLE',re.sub(r'\s+',' ',html.unescape(title.group(1))).strip() if title else '')
+          rows=[]
+          for rm in re.finditer(r'<tr\b[^>]*>([\s\S]*?)</tr>',text,re.I):
+              cells=[]
+              for cm in re.finditer(r'<t[dh]\b[^>]*>([\s\S]*?)</t[dh]>',rm.group(1),re.I):
+                  value=re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',cm.group(1)))).strip()
+                  cells.append(value)
+              if cells: rows.append(cells)
+          print('ROW_COUNT',label,len(rows))
+          useful=[]
+          for r in rows:
+              s=' | '.join(r)
+              if re.search(r'\d',s) and (re.search(r'\d+\.\d+',s) or len(r)>=3): useful.append(r)
+          for r in useful[:45]: print('ROW',label,json.dumps(r,ensure_ascii=False))
+          # Also expose significant class/data attributes around odds cells.
+          attrs=[]
+          for m in re.finditer(r'<(?:td|th|li|span|div)\b([^>]*)>([\s\S]{0,260}?)</(?:td|th|li|span|div)>',text,re.I):
+              plain=re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',m.group(2)))).strip()
+              if re.fullmatch(r'(?:\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?|\d+\s*-\s*\d+(?:\s*-\s*\d+)?)',plain):
+                  a=re.sub(r'\s+',' ',m.group(1)).strip()
+                  pair=(a[:500],plain)
+                  if pair not in attrs: attrs.append(pair)
+          for a,v in attrs[:35]: print('ATTR',label,a,'TEXT',v)
+          PY
+          done </tmp/type-actions.tsv
