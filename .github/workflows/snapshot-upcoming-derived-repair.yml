@@ -1,0 +1,49 @@
+name: Snapshot current derived entry repair state
+run-name: Snapshot current derived entry repair state · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/snapshot-upcoming-derived-repair.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Nudge v33 and snapshot D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --retry 3 --retry-delay 1 --retry-all-errors -fsS 'https://race-tantei-phase0.race-tantei.workers.dev/races/2026-08-22-chukyo-01' >/dev/null || true
+          sleep 8
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt FROM rt_system_state WHERE state_key IN ('worker_upcoming_entry_derived_repair','worker_upcoming_entry_repair','worker_upcoming_entry_probe:2026-08-22:中京') ORDER BY state_key;" > /tmp/state.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH per_race AS (SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,COUNT(CASE WHEN COALESCE(rr.runner_status,'active')='active' THEN 1 END) AS activeRunners,MAX(r.entry_url) AS entryUrl FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date='2026-08-22' GROUP BY r.race_id,r.venue,r.race_no) SELECT * FROM per_race ORDER BY venue,raceNo;" > /tmp/races.json
+          mkdir -p analysis-results
+          node - <<'NODE'
+          const fs=require('fs');
+          fs.writeFileSync('analysis-results/live-upcoming-derived-state.json', JSON.stringify({generatedAt:new Date().toISOString(),state:JSON.parse(fs.readFileSync('/tmp/state.json','utf8')),races:JSON.parse(fs.readFileSync('/tmp/races.json','utf8'))},null,2)+'\n');
+          NODE
+      - name: Persist snapshot
+        shell: bash
+        run: |
+          git add -f analysis-results/live-upcoming-derived-state.json
+          git config user.name "github-actions[bot]"
+          git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Save current derived entry repair snapshot" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
