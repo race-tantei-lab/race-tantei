@@ -25,13 +25,13 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Drive production Worker repair until all 36 races have entries
+      - name: Drive production Worker repair until all 36 races have entries and canonical URLs
         shell: bash
         run: |
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev'
-          sql="WITH per_race AS (SELECT r.race_id,r.venue,r.race_no,SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS activeRunners FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date='2026-08-22' GROUP BY r.race_id,r.venue,r.race_no) SELECT venue,COUNT(*) AS races,SUM(CASE WHEN activeRunners>=3 THEN 1 ELSE 0 END) AS readyRaces,MIN(activeRunners) AS minActiveRunners,MAX(activeRunners) AS maxActiveRunners FROM per_race GROUP BY venue ORDER BY venue;"
-          for attempt in $(seq 1 36); do
+          sql="WITH per_race AS (SELECT r.race_id,r.venue,r.race_no,SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS activeRunners,MAX(CASE WHEN r.entry_url LIKE 'https://www.jra.go.jp/JRADB/accessD.html?CNAME=%' THEN 1 ELSE 0 END) AS hasCanonicalEntryUrl FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date='2026-08-22' GROUP BY r.race_id,r.venue,r.race_no) SELECT venue,COUNT(*) AS races,SUM(CASE WHEN activeRunners>=3 THEN 1 ELSE 0 END) AS readyRaces,SUM(CASE WHEN activeRunners>=3 AND hasCanonicalEntryUrl=1 THEN 1 ELSE 0 END) AS fullyReadyRaces,MIN(activeRunners) AS minActiveRunners,MAX(activeRunners) AS maxActiveRunners FROM per_race GROUP BY venue ORDER BY venue;"
+          for attempt in $(seq 1 48); do
             curl --retry 2 --retry-delay 1 --retry-all-errors -fsS "$base/races/2026-08-22-chukyo-01" >/dev/null || true
             sleep 5
             npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$sql" > /tmp/summary.json
@@ -41,13 +41,13 @@ jobs:
           const raw=JSON.parse(fs.readFileSync('/tmp/summary.json','utf8'));
           const rows=(Array.isArray(raw)?raw:[raw]).flatMap(x=>x.results||[]);
           if(rows.length!==3) process.exit(1);
-          if(rows.some(r=>Number(r.races)!==12||Number(r.readyRaces)!==12||Number(r.minActiveRunners)<3)) process.exit(1);
-          console.log('ALL_36_UPCOMING_ENTRIES_READY', JSON.stringify(rows));
+          if(rows.some(r=>Number(r.races)!==12||Number(r.readyRaces)!==12||Number(r.fullyReadyRaces)!==12||Number(r.minActiveRunners)<3)) process.exit(1);
+          console.log('ALL_36_UPCOMING_ENTRIES_AND_URLS_READY', JSON.stringify(rows));
           NODE
             then
               break
             fi
-            if [ "$attempt" -eq 36 ]; then
+            if [ "$attempt" -eq 48 ]; then
               echo 'UPCOMING_ENTRY_REPAIR_NOT_COMPLETE' >&2
               exit 1
             fi
@@ -65,6 +65,6 @@ jobs:
           git add -f analysis-results/final-upcoming-entry-repair.json
           git config user.name "github-actions[bot]"
           git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Save final upcoming entry repair proof" || exit 0
+          git commit -m "Save complete upcoming entry repair proof" || exit 0
           git pull --rebase origin main
           git push origin HEAD:main
