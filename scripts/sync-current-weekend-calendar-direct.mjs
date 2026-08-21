@@ -5,6 +5,10 @@ const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const databaseId = process.env.CLOUDFLARE_D1_DATABASE_ID;
 const token = process.env.CLOUDFLARE_API_TOKEN;
 const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`;
+const VENUE_CODES = {
+  "札幌": "01", "函館": "02", "福島": "03", "新潟": "04", "東京": "05",
+  "中山": "06", "中京": "07", "京都": "08", "阪神": "09", "小倉": "10",
+};
 
 if (!accountId || !databaseId || !token) throw new Error("CLOUDFLARE_D1_ENV_MISSING");
 
@@ -37,8 +41,6 @@ async function d1(sql, params = []) {
 }
 
 async function saveRace(race) {
-  // Calendar pages provide schedule metadata only. They are never valid race-entry
-  // or result URLs and must never populate/overwrite those columns.
   await d1(`INSERT INTO rt_races (
     race_id,race_date,venue,meeting_no,meeting_day,race_no,race_name,conditions,surface,distance_m,direction,
     start_time_jst,start_time_utc,weather,track_condition,entry_url,result_url,status,entry_updated_at,updated_at
@@ -60,15 +62,32 @@ async function saveRace(race) {
 export async function syncCurrentWeekendCalendarDirect(now = new Date()) {
   const dates = currentWeekendDates(now);
   const days = [];
+  const meetings = [];
   for (const raceDate of dates) {
     const page = await fetchJraPage(officialCalendarUrl(raceDate));
     const races = parseOfficialCalendar(page.html, raceDate, page.url);
     const venues = new Set(races.map((race) => race.venue));
     if (!races.length || races.length !== venues.size * 12) throw new Error(`JRA_CALENDAR_INCOMPLETE:${raceDate}:${races.length}:${venues.size}`);
     for (const race of races) await saveRace(race);
+    const seen = new Set();
+    for (const race of races) {
+      const key = `${race.raceDate}:${race.venue}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const venueCode = VENUE_CODES[race.venue];
+      if (!venueCode) throw new Error(`JRA_CALENDAR_UNKNOWN_VENUE:${race.venue}`);
+      meetings.push({
+        date: race.raceDate,
+        venue: race.venue,
+        venueCode,
+        meetingNo: Number(race.meetingNo),
+        meetingDay: Number(race.meetingDay),
+        calendarUrl: page.url,
+      });
+    }
     days.push({ raceDate, races: races.length, venues: venues.size });
   }
-  const report = { generatedAtUtc: new Date().toISOString(), dates, days };
+  const report = { generatedAtUtc: new Date().toISOString(), dates, days, meetings };
   await globalThis.Bun?.write?.("current-weekend-calendar-sync.json", JSON.stringify(report, null, 2));
   return report;
 }
