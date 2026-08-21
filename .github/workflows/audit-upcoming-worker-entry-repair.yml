@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   audit:
@@ -34,18 +34,34 @@ jobs:
           date_jst=$(TZ=Asia/Tokyo date -d tomorrow +%F)
           base='https://race-tantei-phase0.race-tantei.workers.dev'
           echo "target=$date_jst"
+          ready=0
           for attempt in $(seq 1 30); do
-            # Nudge the Worker-side repair without making the page wait for JRA.
             curl --retry 2 --retry-delay 1 --retry-all-errors -fsS "$base/races/${date_jst}-chukyo-01" >/dev/null || true
             sleep 4
             sql="WITH per_race AS (SELECT r.race_id,r.venue,r.race_no,COUNT(CASE WHEN COALESCE(rr.runner_status,'active')='active' THEN 1 END) AS activeRunners FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date='$date_jst' GROUP BY r.race_id,r.venue,r.race_no) SELECT venue,COUNT(*) AS races,SUM(CASE WHEN activeRunners>=3 THEN 1 ELSE 0 END) AS racesWithEntries,MIN(activeRunners) AS minimumActiveRunners,MAX(activeRunners) AS maximumActiveRunners FROM per_race GROUP BY venue ORDER BY venue;"
             npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$sql" > /tmp/upcoming.json
             cat /tmp/upcoming.json
             if node -e "const fs=require('fs');const raw=JSON.parse(fs.readFileSync('/tmp/upcoming.json','utf8'));const rows=(Array.isArray(raw)?raw:[raw]).flatMap(x=>x.results||[]);if(rows.length!==3)process.exit(1);if(rows.some(x=>Number(x.races)!==12||Number(x.racesWithEntries)!==12||Number(x.minimumActiveRunners)<3))process.exit(1);console.log('UPCOMING_WORKER_ENTRY_REPAIR_OK',JSON.stringify(rows))"; then
-              exit 0
+              ready=1
+              break
             fi
             echo "not ready yet attempt=$attempt"
             sleep 16
           done
-          echo 'UPCOMING_WORKER_ENTRY_REPAIR_TIMEOUT' >&2
-          exit 1
+          mkdir -p analysis-results
+          cp /tmp/upcoming.json analysis-results/upcoming-worker-entry-repair-live.json
+          if [[ "$ready" != '1' ]]; then
+            echo 'UPCOMING_WORKER_ENTRY_REPAIR_TIMEOUT' >&2
+            exit 1
+          fi
+      - name: Save live D1 audit
+        if: always()
+        shell: bash
+        run: |
+          if [[ ! -f analysis-results/upcoming-worker-entry-repair-live.json ]]; then exit 0; fi
+          git add -f analysis-results/upcoming-worker-entry-repair-live.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Save upcoming Worker entry repair audit" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
