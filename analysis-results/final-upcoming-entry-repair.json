@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-21T10:59:38.837Z",
+  "generatedAt": "2026-08-21T11:03:23.725Z",
   "summary": [
     {
       "results": [
@@ -7,6 +7,7 @@
           "venue": "中京",
           "races": 12,
           "readyRaces": 12,
+          "fullyReadyRaces": 12,
           "minActiveRunners": 6,
           "maxActiveRunners": 18
         },
@@ -14,6 +15,7 @@
           "venue": "新潟",
           "races": 12,
           "readyRaces": 12,
+          "fullyReadyRaces": 12,
           "minActiveRunners": 7,
           "maxActiveRunners": 18
         },
@@ -21,6 +23,7 @@
           "venue": "札幌",
           "races": 12,
           "readyRaces": 12,
+          "fullyReadyRaces": 12,
           "minActiveRunners": 6,
           "maxActiveRunners": 16
         }
@@ -32,13 +35,13 @@
         "served_by_colo": "SIN",
         "served_by_primary": true,
         "timings": {
-          "sql_duration_ms": 0.7942
+          "sql_duration_ms": 1.049
         },
-        "duration": 0.7942,
+        "duration": 1.049,
         "changes": 0,
-        "last_row_id": 108557,
+        "last_row_id": 15131,
         "changed_db": false,
-        "size_after": 277749760,
+        "size_after": 277770240,
         "rows_read": 1063,
         "rows_written": 0,
         "total_attempts": 1
@@ -53,252 +56,252 @@
           "venue": "中京",
           "raceNo": 1,
           "activeRunners": 9,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202603010120260822%2F5D"
         },
         {
           "raceId": "2026-08-22-chukyo-02",
           "venue": "中京",
           "raceNo": 2,
           "activeRunners": 10,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202603010220260822%2F12"
         },
         {
           "raceId": "2026-08-22-chukyo-03",
           "venue": "中京",
           "raceNo": 3,
           "activeRunners": 8,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202603010320260822%2FC7"
         },
         {
           "raceId": "2026-08-22-chukyo-04",
           "venue": "中京",
           "raceNo": 4,
           "activeRunners": 18,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202603010420260822%2F7C"
         },
         {
           "raceId": "2026-08-22-chukyo-05",
           "venue": "中京",
           "raceNo": 5,
           "activeRunners": 16,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202603010520260822%2F31"
         },
         {
           "raceId": "2026-08-22-chukyo-06",
           "venue": "中京",
           "raceNo": 6,
           "activeRunners": 14,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202603010620260822%2FE6"
         },
         {
           "raceId": "2026-08-22-chukyo-07",
           "venue": "中京",
           "raceNo": 7,
           "activeRunners": 16,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202603010720260822%2F9B"
         },
         {
           "raceId": "2026-08-22-chukyo-08",
           "venue": "中京",
           "raceNo": 8,
           "activeRunners": 10,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202603010820260822%2F50"
         },
         {
           "raceId": "2026-08-22-chukyo-09",
           "venue": "中京",
           "raceNo": 9,
           "activeRunners": 6,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202603010920260822%2F05"
         },
         {
           "raceId": "2026-08-22-chukyo-10",
           "venue": "中京",
           "raceNo": 10,
           "activeRunners": 12,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202603011020260822%2FFA"
         },
         {
           "raceId": "2026-08-22-chukyo-11",
           "venue": "中京",
           "raceNo": 11,
           "activeRunners": 15,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202603011120260822%2FAF"
         },
         {
           "raceId": "2026-08-22-chukyo-12",
           "venue": "中京",
           "raceNo": 12,
           "activeRunners": 18,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0107202603011220260822%2F64"
         },
         {
           "raceId": "2026-08-22-niigata-01",
           "venue": "新潟",
           "raceNo": 1,
           "activeRunners": 7,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202603010120260822%2F7F"
         },
         {
           "raceId": "2026-08-22-niigata-02",
           "venue": "新潟",
           "raceNo": 2,
           "activeRunners": 12,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202603010220260822%2F34"
         },
         {
           "raceId": "2026-08-22-niigata-03",
           "venue": "新潟",
           "raceNo": 3,
           "activeRunners": 13,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202603010320260822%2FE9"
         },
         {
           "raceId": "2026-08-22-niigata-04",
           "venue": "新潟",
           "raceNo": 4,
           "activeRunners": 15,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202603010420260822%2F9E"
         },
         {
           "raceId": "2026-08-22-niigata-05",
           "venue": "新潟",
           "raceNo": 5,
           "activeRunners": 18,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202603010520260822%2F53"
         },
         {
           "raceId": "2026-08-22-niigata-06",
           "venue": "新潟",
           "raceNo": 6,
           "activeRunners": 18,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202603010620260822%2F08"
         },
         {
           "raceId": "2026-08-22-niigata-07",
           "venue": "新潟",
           "raceNo": 7,
           "activeRunners": 18,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202603010720260822%2FBD"
         },
         {
           "raceId": "2026-08-22-niigata-08",
           "venue": "新潟",
           "raceNo": 8,
           "activeRunners": 15,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202603010820260822%2F72"
         },
         {
           "raceId": "2026-08-22-niigata-09",
           "venue": "新潟",
           "raceNo": 9,
           "activeRunners": 15,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202603010920260822%2F27"
         },
         {
           "raceId": "2026-08-22-niigata-10",
           "venue": "新潟",
           "raceNo": 10,
           "activeRunners": 15,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202603011020260822%2F1C"
         },
         {
           "raceId": "2026-08-22-niigata-11",
           "venue": "新潟",
           "raceNo": 11,
           "activeRunners": 12,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202603011120260822%2FD1"
         },
         {
           "raceId": "2026-08-22-niigata-12",
           "venue": "新潟",
           "raceNo": 12,
           "activeRunners": 14,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0104202603011220260822%2F86"
         },
         {
           "raceId": "2026-08-22-sapporo-01",
           "venue": "札幌",
           "raceNo": 1,
           "activeRunners": 12,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202602010120260822%2F70"
         },
         {
           "raceId": "2026-08-22-sapporo-02",
           "venue": "札幌",
           "raceNo": 2,
           "activeRunners": 6,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202602010220260822%2F25"
         },
         {
           "raceId": "2026-08-22-sapporo-03",
           "venue": "札幌",
           "raceNo": 3,
           "activeRunners": 13,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202602010320260822%2FDA"
         },
         {
           "raceId": "2026-08-22-sapporo-04",
           "venue": "札幌",
           "raceNo": 4,
           "activeRunners": 16,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202602010420260822%2F8F"
         },
         {
           "raceId": "2026-08-22-sapporo-05",
           "venue": "札幌",
           "raceNo": 5,
           "activeRunners": 14,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202602010520260822%2F44"
         },
         {
           "raceId": "2026-08-22-sapporo-06",
           "venue": "札幌",
           "raceNo": 6,
           "activeRunners": 14,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202602010620260822%2FF9"
         },
         {
           "raceId": "2026-08-22-sapporo-07",
           "venue": "札幌",
           "raceNo": 7,
           "activeRunners": 12,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202602010720260822%2FAE"
         },
         {
           "raceId": "2026-08-22-sapporo-08",
           "venue": "札幌",
           "raceNo": 8,
           "activeRunners": 10,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202602010820260822%2F63"
         },
         {
           "raceId": "2026-08-22-sapporo-09",
           "venue": "札幌",
           "raceNo": 9,
           "activeRunners": 14,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202602010920260822%2F18"
         },
         {
           "raceId": "2026-08-22-sapporo-10",
           "venue": "札幌",
           "raceNo": 10,
           "activeRunners": 14,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202602011020260822%2F0D"
         },
         {
           "raceId": "2026-08-22-sapporo-11",
           "venue": "札幌",
           "raceNo": 11,
           "activeRunners": 14,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202602011120260822%2FC2"
         },
         {
           "raceId": "2026-08-22-sapporo-12",
           "venue": "札幌",
           "raceNo": 12,
           "activeRunners": 11,
-          "entryUrl": ""
+          "entryUrl": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0101202602011220260822%2F77"
         }
       ],
       "success": true,
@@ -308,13 +311,13 @@
         "served_by_colo": "SIN",
         "served_by_primary": true,
         "timings": {
-          "sql_duration_ms": 0.9644
+          "sql_duration_ms": 1.2649
         },
-        "duration": 0.9644,
+        "duration": 1.2649,
         "changes": 0,
-        "last_row_id": 108557,
+        "last_row_id": 15131,
         "changed_db": false,
-        "size_after": 277749760,
+        "size_after": 277770240,
         "rows_read": 1063,
         "rows_written": 0,
         "total_attempts": 1
@@ -326,13 +329,13 @@
       "results": [
         {
           "stateKey": "worker_upcoming_entry_derived_repair",
-          "stateValue": "{\"checkedAt\":\"2026-08-21T10:59:19.038Z\",\"status\":\"derived_entries_unavailable\",\"raceDate\":\"2026-08-22\",\"venue\":\"札幌\",\"priorRaceDate\":\"2026-08-16\",\"priorCname\":\"pw01dde0101202601080120260816/FE\",\"derivedRace1Cname\":\"pw01dde0101202602010120260822/70\",\"savedRaceIds\":[],\"errors\":[]}",
-          "updatedAt": "2026-08-21 10:59:21"
+          "stateValue": "{\"checkedAt\":\"2026-08-21T11:03:07.100Z\",\"status\":\"ready\",\"savedRaceIds\":[],\"groups\":[],\"errors\":[]}",
+          "updatedAt": "2026-08-21 11:03:07"
         },
         {
           "stateKey": "worker_upcoming_entry_repair",
-          "stateValue": "{\"checkedAt\":\"2026-08-21T10:59:19.038Z\",\"status\":\"probing\",\"targetDate\":\"2026-08-22\",\"targetVenue\":\"札幌\",\"probed\":48,\"anchorFound\":false,\"savedRaceIds\":[],\"errors\":[]}",
-          "updatedAt": "2026-08-21 10:59:22"
+          "stateValue": "{\"checkedAt\":\"2026-08-21T11:03:07.100Z\",\"status\":\"ready\",\"targetDate\":null,\"targetVenue\":null,\"probed\":0,\"anchorFound\":false,\"savedRaceIds\":[],\"errors\":[]}",
+          "updatedAt": "2026-08-21 11:03:07"
         }
       ],
       "success": true,
@@ -342,13 +345,13 @@
         "served_by_colo": "SIN",
         "served_by_primary": true,
         "timings": {
-          "sql_duration_ms": 0.3366
+          "sql_duration_ms": 0.2517
         },
-        "duration": 0.3366,
+        "duration": 0.2517,
         "changes": 0,
-        "last_row_id": 108557,
+        "last_row_id": 15131,
         "changed_db": false,
-        "size_after": 277749760,
+        "size_after": 277770240,
         "rows_read": 4,
         "rows_written": 0,
         "total_attempts": 1
