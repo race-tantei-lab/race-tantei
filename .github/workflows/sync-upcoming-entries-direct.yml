@@ -51,13 +51,14 @@ jobs:
       - name: Audit saved races
         run: python scripts/audit-upcoming-entry-readiness.py
       - name: Save sync reports
+        if: always()
         shell: bash
         run: |
           mkdir -p analysis-results
-          cp jra-entry-anchor-discovery.json analysis-results/jra-entry-anchor-discovery.json
-          cp upcoming-entry-direct-sync.json analysis-results/upcoming-entry-direct-sync.json
-          cp upcoming-entry-readiness.json analysis-results/upcoming-entry-readiness.json
-          git add -f analysis-results/jra-entry-anchor-discovery.json analysis-results/upcoming-entry-direct-sync.json analysis-results/upcoming-entry-readiness.json
+          for f in jra-entry-anchor-discovery.json upcoming-entry-direct-sync.json upcoming-entry-readiness.json; do
+            if [ -f "$f" ]; then cp "$f" "analysis-results/$f"; fi
+          done
+          git add -f analysis-results/jra-entry-anchor-discovery.json analysis-results/upcoming-entry-direct-sync.json analysis-results/upcoming-entry-readiness.json 2>/dev/null || true
           git config user.name "github-actions[bot]"
           git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
           git commit -m "Save upcoming JRA entry direct sync result" || true
