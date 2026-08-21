@@ -10,8 +10,9 @@ const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const databaseId = process.env.CLOUDFLARE_D1_DATABASE_ID;
 const token = process.env.CLOUDFLARE_API_TOKEN;
 const apiUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`;
-const homeUrl = process.env.JRA_HOME_URL || "https://sp.jra.jp/";
+const homeUrl = process.env.JRA_HOME_URL || "https://www.jra.go.jp/";
 const accessDUrl = "https://www.jra.go.jp/JRADB/accessD.html";
+const appAccessDUrl = "https://app.jra.jp/JRADB/accessD.html";
 const seedUrls = (process.env.JRA_SEED_ENTRY_URLS || "")
   .split(",")
   .map((value) => value.trim())
@@ -76,6 +77,71 @@ function canonicalEntryUrl(rawUrl) {
   return `${accessDUrl}?CNAME=${encodeURIComponent(cname)}`;
 }
 
+function appEntryUrl(canonicalUrl) {
+  const cname = decodeURIComponent(new URL(canonicalUrl).searchParams.get("CNAME") || "");
+  if (!/(?:pw|sw)01dde/i.test(cname)) throw new Error(`APP_ENTRY_CNAME_INVALID:${canonicalUrl}`);
+  return `${appAccessDUrl}?CNAME=${encodeURIComponent(cname)}`;
+}
+
+function decodeOfficialPage(buffer, contentType) {
+  const declared = contentType?.match(/charset\s*=\s*([^;\s]+)/i)?.[1]?.replace(/["']/g, "") || null;
+  for (const charset of [declared, "utf-8", "shift_jis"].filter(Boolean)) {
+    try { return new TextDecoder(charset).decode(buffer); } catch { /* try next */ }
+  }
+  return new TextDecoder("utf-8").decode(buffer);
+}
+
+async function fetchAppEntry(canonicalUrl) {
+  const url = appEntryUrl(canonicalUrl);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20_000);
+  try {
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.5",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+        Referer: "https://www.jra.go.jp/",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+      }
+    });
+    if (!response.ok) throw new Error(`APP_ENTRY_HTTP_${response.status}`);
+    const html = decodeOfficialPage(await response.arrayBuffer(), response.headers.get("content-type"));
+    if (/captcha|アクセスが集中|利用を制限|Forbidden|Access Denied|Service Unavailable/i.test(html)) throw new Error("APP_ENTRY_BLOCKED_PAGE");
+    return { html, url: response.url || url, source: "app.jra.jp" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadEntryBundle(canonicalUrl) {
+  const errors = [];
+  try {
+    const page = await fetchJraPage(canonicalUrl);
+    if (!pageLooksLikeEntry(page.html)) throw new Error("ENTRY_PAGE_SIGNATURE_MISSING");
+    const bundle = parseEntryPage(page.html, canonicalUrl);
+    if (bundle.runners.filter((runner) => runner.runnerStatus === "active").length < 3) throw new Error("ACTIVE_RUNNERS_TOO_FEW");
+    return { page, bundle, source: "www.jra.go.jp" };
+  } catch (error) {
+    errors.push(`www:${error?.name || "Error"}:${error?.message || String(error)}`);
+  }
+
+  try {
+    const page = await fetchAppEntry(canonicalUrl);
+    if (!pageLooksLikeEntry(page.html)) throw new Error("APP_ENTRY_PAGE_SIGNATURE_MISSING");
+    const bundle = parseEntryPage(page.html, canonicalUrl);
+    if (bundle.runners.filter((runner) => runner.runnerStatus === "active").length < 3) throw new Error("APP_ACTIVE_RUNNERS_TOO_FEW");
+    return { page, bundle, source: page.source };
+  } catch (error) {
+    errors.push(`app:${error?.name || "Error"}:${error?.message || String(error)}`);
+  }
+
+  throw new Error(`ENTRY_BOTH_OFFICIAL_SOURCES_FAILED:${errors.join("|")}`);
+}
+
 function actionEntryUrls(html) {
   const found = new Map();
   const patterns = [
@@ -110,8 +176,6 @@ async function discoverDoActionRaceUrls() {
       const page = await fetchJraPage(requestedUrl);
       if (pageLooksLikeEntry(page.html)) {
         try {
-          // JRA can redirect an accessD request to a calendar-looking response URL.
-          // The requested accessD+CNAME is the canonical race identity and must be preserved.
           const canonical = canonicalEntryUrl(requestedUrl);
           const cname = decodeURIComponent(new URL(canonical).searchParams.get("CNAME") || canonical);
           raceUrls.set(cname, canonical);
@@ -222,14 +286,9 @@ async function main() {
   for (const requestedUrl of urls) {
     try {
       const canonicalUrl = canonicalEntryUrl(requestedUrl);
-      const page = await fetchJraPage(canonicalUrl);
-      if (!pageLooksLikeEntry(page.html)) throw new Error("ENTRY_PAGE_SIGNATURE_MISSING");
-      // Never pass response.url here: JRA may redirect while serving the correct
-      // race HTML. The accessD+CNAME request is the stable race-specific URL.
-      const bundle = parseEntryPage(page.html, canonicalUrl);
+      const { page, bundle, source } = await loadEntryBundle(canonicalUrl);
       if (bundle.race.raceDate < today) continue;
       if (!bundle.race.startTimeUtc) throw new Error("START_TIME_MISSING");
-      if (bundle.runners.filter((runner) => runner.runnerStatus === "active").length < 3) throw new Error("ACTIVE_RUNNERS_TOO_FEW");
       if (bundle.race.entryUrl !== canonicalUrl) throw new Error(`ENTRY_URL_PARSE_DRIFT:${bundle.race.raceId}`);
       await saveRace(bundle);
       reports.push({
@@ -239,6 +298,7 @@ async function main() {
         raceNo: bundle.race.raceNo,
         entryUrl: bundle.race.entryUrl,
         responseUrl: page.url,
+        entryFetchSource: source,
         activeRunners: bundle.runners.filter((runner) => runner.runnerStatus === "active").length,
         runnersWithWinOdds: bundle.runners.filter((runner) => runner.runnerStatus === "active" && Number(runner.winOdds) > 1).length
       });
