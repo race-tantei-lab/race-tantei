@@ -130,12 +130,13 @@ async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]>
   const result = await db.prepare(`
     WITH per_race AS (
       SELECT r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no,
-             SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS activeRunners
+             SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS activeRunners,
+             MAX(CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END) AS hasEntryUrl
       FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
       WHERE r.race_date=? GROUP BY r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no
     )
     SELECT race_date AS raceDate,venue,meeting_no AS meetingNo,meeting_day AS meetingDay,
-           SUM(CASE WHEN activeRunners>=3 THEN 1 ELSE 0 END) AS readyRaces
+           SUM(CASE WHEN activeRunners>=3 AND hasEntryUrl=1 THEN 1 ELSE 0 END) AS readyRaces
     FROM per_race GROUP BY race_date,venue,meeting_no,meeting_day HAVING readyRaces < 12
     ORDER BY CASE venue WHEN '中京' THEN 0 WHEN '新潟' THEN 1 WHEN '札幌' THEN 2 ELSE 3 END,venue
   `).bind(targetDate).all<MissingGroup>();
@@ -147,10 +148,12 @@ async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]>
 
 async function missingRaceNos(db: D1Database, group: MissingGroup): Promise<number[]> {
   const result = await db.prepare(`
-    SELECT r.race_no AS raceNo,SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS activeRunners
+    SELECT r.race_no AS raceNo,
+           SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS activeRunners,
+           MAX(CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END) AS hasEntryUrl
     FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
     WHERE r.race_date=? AND r.venue=?
-    GROUP BY r.race_id,r.race_no HAVING activeRunners < 3 ORDER BY r.race_no
+    GROUP BY r.race_id,r.race_no HAVING activeRunners < 3 OR hasEntryUrl=0 ORDER BY r.race_no
   `).bind(group.raceDate, group.venue).all<{ raceNo: number }>();
   return (result.results ?? []).map((row) => Number(row.raceNo)).filter((n) => n >= 1 && n <= 12);
 }
