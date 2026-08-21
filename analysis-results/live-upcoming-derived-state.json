@@ -1,0 +1,318 @@
+{
+  "generatedAt": "2026-08-21T10:54:44.961Z",
+  "state": [
+    {
+      "results": [
+        {
+          "stateKey": "worker_upcoming_entry_derived_repair",
+          "stateValue": "{\"checkedAt\":\"2026-08-21T10:54:26.360Z\",\"status\":\"partial\",\"raceDate\":\"2026-08-22\",\"venue\":\"中京\",\"priorRaceDate\":\"2026-08-16\",\"priorCname\":\"pw01dde0107202602080120260816/EB\",\"derivedRace1Cname\":\"pw01dde0107202603010120260822/5D\",\"savedRaceIds\":[\"2026-08-22-chukyo-01\",\"2026-08-22-chukyo-03\",\"2026-08-22-chukyo-06\"],\"errors\":[]}",
+          "updatedAt": "2026-08-21 10:54:32"
+        },
+        {
+          "stateKey": "worker_upcoming_entry_probe:2026-08-22:中京",
+          "stateValue": "{\"modeIndex\":2,\"cursor\":48}",
+          "updatedAt": "2026-08-21 10:54:31"
+        },
+        {
+          "stateKey": "worker_upcoming_entry_repair",
+          "stateValue": "{\"checkedAt\":\"2026-08-21T10:54:26.360Z\",\"status\":\"probing\",\"targetDate\":\"2026-08-22\",\"targetVenue\":\"中京\",\"probed\":48,\"anchorFound\":false,\"savedRaceIds\":[],\"errors\":[]}",
+          "updatedAt": "2026-08-21 10:54:31"
+        }
+      ],
+      "success": true,
+      "meta": {
+        "served_by": "v3-prod",
+        "served_by_region": "APAC",
+        "served_by_colo": "SIN",
+        "served_by_primary": true,
+        "timings": {
+          "sql_duration_ms": 0.2363
+        },
+        "duration": 0.2363,
+        "changes": 0,
+        "last_row_id": 15108,
+        "changed_db": false,
+        "size_after": 277622784,
+        "rows_read": 6,
+        "rows_written": 0,
+        "total_attempts": 1
+      }
+    }
+  ],
+  "races": [
+    {
+      "results": [
+        {
+          "raceId": "2026-08-22-chukyo-01",
+          "venue": "中京",
+          "raceNo": 1,
+          "activeRunners": 9,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-chukyo-02",
+          "venue": "中京",
+          "raceNo": 2,
+          "activeRunners": 10,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-chukyo-03",
+          "venue": "中京",
+          "raceNo": 3,
+          "activeRunners": 8,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-chukyo-04",
+          "venue": "中京",
+          "raceNo": 4,
+          "activeRunners": 18,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-chukyo-05",
+          "venue": "中京",
+          "raceNo": 5,
+          "activeRunners": 16,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-chukyo-06",
+          "venue": "中京",
+          "raceNo": 6,
+          "activeRunners": 14,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-chukyo-07",
+          "venue": "中京",
+          "raceNo": 7,
+          "activeRunners": 16,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-chukyo-08",
+          "venue": "中京",
+          "raceNo": 8,
+          "activeRunners": 10,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-chukyo-09",
+          "venue": "中京",
+          "raceNo": 9,
+          "activeRunners": 6,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-chukyo-10",
+          "venue": "中京",
+          "raceNo": 10,
+          "activeRunners": 12,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-chukyo-11",
+          "venue": "中京",
+          "raceNo": 11,
+          "activeRunners": 15,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-chukyo-12",
+          "venue": "中京",
+          "raceNo": 12,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-niigata-01",
+          "venue": "新潟",
+          "raceNo": 1,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-niigata-02",
+          "venue": "新潟",
+          "raceNo": 2,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-niigata-03",
+          "venue": "新潟",
+          "raceNo": 3,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-niigata-04",
+          "venue": "新潟",
+          "raceNo": 4,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-niigata-05",
+          "venue": "新潟",
+          "raceNo": 5,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-niigata-06",
+          "venue": "新潟",
+          "raceNo": 6,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-niigata-07",
+          "venue": "新潟",
+          "raceNo": 7,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-niigata-08",
+          "venue": "新潟",
+          "raceNo": 8,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-niigata-09",
+          "venue": "新潟",
+          "raceNo": 9,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-niigata-10",
+          "venue": "新潟",
+          "raceNo": 10,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-niigata-11",
+          "venue": "新潟",
+          "raceNo": 11,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-niigata-12",
+          "venue": "新潟",
+          "raceNo": 12,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-sapporo-01",
+          "venue": "札幌",
+          "raceNo": 1,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-sapporo-02",
+          "venue": "札幌",
+          "raceNo": 2,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-sapporo-03",
+          "venue": "札幌",
+          "raceNo": 3,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-sapporo-04",
+          "venue": "札幌",
+          "raceNo": 4,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-sapporo-05",
+          "venue": "札幌",
+          "raceNo": 5,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-sapporo-06",
+          "venue": "札幌",
+          "raceNo": 6,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-sapporo-07",
+          "venue": "札幌",
+          "raceNo": 7,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-sapporo-08",
+          "venue": "札幌",
+          "raceNo": 8,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-sapporo-09",
+          "venue": "札幌",
+          "raceNo": 9,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-sapporo-10",
+          "venue": "札幌",
+          "raceNo": 10,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-sapporo-11",
+          "venue": "札幌",
+          "raceNo": 11,
+          "activeRunners": 1,
+          "entryUrl": ""
+        },
+        {
+          "raceId": "2026-08-22-sapporo-12",
+          "venue": "札幌",
+          "raceNo": 12,
+          "activeRunners": 1,
+          "entryUrl": ""
+        }
+      ],
+      "success": true,
+      "meta": {
+        "served_by": "v3-prod",
+        "served_by_region": "APAC",
+        "served_by_colo": "SIN",
+        "served_by_primary": true,
+        "timings": {
+          "sql_duration_ms": 0.6413
+        },
+        "duration": 0.6413,
+        "changes": 0,
+        "last_row_id": 15108,
+        "changed_db": false,
+        "size_after": 277622784,
+        "rows_read": 378,
+        "rows_written": 0,
+        "total_attempts": 1
+      }
+    }
+  ]
+}
