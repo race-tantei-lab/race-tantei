@@ -1,0 +1,56 @@
+name: Snapshot live upcoming D1
+run-name: Snapshot live upcoming D1 · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/snapshot-upcoming-d1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Read live D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          date_jst=$(TZ=Asia/Tokyo date -d tomorrow +%F)
+          sql="WITH per_race AS (SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.entry_url AS entryUrl,COUNT(CASE WHEN rr.runner_status='active' THEN 1 END) AS activeRunners FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date='$date_jst' GROUP BY r.race_id,r.venue,r.race_no,r.entry_url) SELECT raceId,venue,raceNo,activeRunners,entryUrl FROM per_race ORDER BY venue,raceNo;"
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$sql" > /tmp/live.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('/tmp/live.json','utf8'));
+          const rows=(Array.isArray(raw)?raw:[raw]).flatMap(x=>x.results||[]);
+          const out={generatedAt:new Date().toISOString(),rows,summary:{}};
+          for(const row of rows){
+            const v=String(row.venue); const s=out.summary[v]||(out.summary[v]={races:0,ready:0,min:999,max:0});
+            const n=Number(row.activeRunners||0); s.races++; if(n>=3)s.ready++; s.min=Math.min(s.min,n); s.max=Math.max(s.max,n);
+          }
+          fs.mkdirSync('analysis-results',{recursive:true});
+          fs.writeFileSync('analysis-results/live-upcoming-d1.json',JSON.stringify(out,null,2)+'\n');
+          console.log(JSON.stringify(out,null,2));
+          NODE
+      - name: Save snapshot
+        shell: bash
+        run: |
+          git add -f analysis-results/live-upcoming-d1.json
+          git config user.name "github-actions[bot]"
+          git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Save live upcoming D1 snapshot" || true
+          git pull --rebase origin main
+          git push origin HEAD:main
