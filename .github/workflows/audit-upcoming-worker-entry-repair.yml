@@ -1,0 +1,51 @@
+name: Audit upcoming Worker entry repair
+run-name: Audit upcoming Worker entry repair · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audit-upcoming-worker-entry-repair.yml"
+      - "src/v1/upcoming-entry-worker-repair.ts"
+      - "src/public-site-entry-v32.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Wait for tomorrow entries to be repaired in production D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          date_jst=$(TZ=Asia/Tokyo date -d tomorrow +%F)
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          echo "target=$date_jst"
+          for attempt in $(seq 1 30); do
+            # Nudge the Worker-side repair without making the page wait for JRA.
+            curl --retry 2 --retry-delay 1 --retry-all-errors -fsS "$base/races/${date_jst}-chukyo-01" >/dev/null || true
+            sleep 4
+            sql="WITH per_race AS (SELECT r.race_id,r.venue,r.race_no,COUNT(CASE WHEN COALESCE(rr.runner_status,'active')='active' THEN 1 END) AS activeRunners FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date='$date_jst' GROUP BY r.race_id,r.venue,r.race_no) SELECT venue,COUNT(*) AS races,SUM(CASE WHEN activeRunners>=3 THEN 1 ELSE 0 END) AS racesWithEntries,MIN(activeRunners) AS minimumActiveRunners,MAX(activeRunners) AS maximumActiveRunners FROM per_race GROUP BY venue ORDER BY venue;"
+            npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$sql" > /tmp/upcoming.json
+            cat /tmp/upcoming.json
+            if node -e "const fs=require('fs');const raw=JSON.parse(fs.readFileSync('/tmp/upcoming.json','utf8'));const rows=(Array.isArray(raw)?raw:[raw]).flatMap(x=>x.results||[]);if(rows.length!==3)process.exit(1);if(rows.some(x=>Number(x.races)!==12||Number(x.racesWithEntries)!==12||Number(x.minimumActiveRunners)<3))process.exit(1);console.log('UPCOMING_WORKER_ENTRY_REPAIR_OK',JSON.stringify(rows))"; then
+              exit 0
+            fi
+            echo "not ready yet attempt=$attempt"
+            sleep 16
+          done
+          echo 'UPCOMING_WORKER_ENTRY_REPAIR_TIMEOUT' >&2
+          exit 1
