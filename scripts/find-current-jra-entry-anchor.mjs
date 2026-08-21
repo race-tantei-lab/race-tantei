@@ -28,9 +28,9 @@ function currentWeekendDates(now = new Date()) {
 function datesRequiringProbe(targetDates, now = new Date()) {
   const jst = new Date(now.getTime() + 9 * 3600_000);
   const day = jst.getUTCDay();
-  if (day === 5) return targetDates.slice(0, 1); // Friday: Saturday entries are mandatory now.
-  if (day === 6 || day === 0) return targetDates; // Saturday/Sunday: all remaining race days are mandatory.
-  return targetDates.slice(0, 1); // Thursday discovery: prioritize the first race day.
+  if (day === 5) return targetDates.slice(0, 1);
+  if (day === 6 || day === 0) return targetDates;
+  return targetDates.slice(0, 1);
 }
 function calendarUrl(date) {
   const [year, month, day] = date.split("-");
@@ -50,10 +50,13 @@ async function fetchOfficial(rawUrl) {
   const timer = setTimeout(() => controller.abort(), 20_000);
   try {
     const response = await fetch(url, {
-      redirect: "follow", signal: controller.signal,
+      redirect: "follow",
+      signal: controller.signal,
       headers: {
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.5", "Cache-Control": "no-cache", Pragma: "no-cache",
+        "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.5",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
         Referer: "https://www.jra.go.jp/",
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
       },
@@ -72,10 +75,29 @@ async function calendarMeetings(date) {
   for (const match of text.matchAll(pattern)) {
     const meetingNo = Number(match[1]), venue = match[2], meetingDay = Number(match[3]), venueCode = VENUE_CODES[venue];
     if (!venueCode || !meetingNo || !meetingDay) continue;
-    const key = `${date}:${venue}`; if (seen.has(key)) continue; seen.add(key);
+    const key = `${date}:${venue}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     meetings.push({ date, venue, venueCode, meetingNo, meetingDay, calendarUrl: page.url });
   }
   return meetings;
+}
+function normalizeMeeting(row) {
+  const date = String(row?.date || row?.raceDate || "");
+  const venue = String(row?.venue || "");
+  const venueCode = String(row?.venueCode || VENUE_CODES[venue] || "");
+  const meetingNo = Number(row?.meetingNo || 0);
+  const meetingDay = Number(row?.meetingDay || 0);
+  if (!/^20\d{2}-\d{2}-\d{2}$/.test(date) || !venue || !venueCode || !meetingNo || !meetingDay) return null;
+  return { date, venue, venueCode, meetingNo, meetingDay, calendarUrl: String(row?.calendarUrl || calendarUrl(date)) };
+}
+function mergeMeetings(primary, fallback) {
+  const found = new Map();
+  for (const raw of [...fallback, ...primary]) {
+    const row = normalizeMeeting(raw);
+    if (row) found.set(`${row.date}:${row.venue}`, row);
+  }
+  return [...found.values()];
 }
 function canonicalWwwUrl(cname) { return `${WWW_ACCESS_D}?CNAME=${encodeURIComponent(cname)}`; }
 function appUrl(cname) { return `${APP_ACCESS_D}?CNAME=${encodeURIComponent(cname)}`; }
@@ -83,7 +105,8 @@ function cnameCandidates(html) {
   const decoded = html.replace(/&amp;/gi, "&").replace(/\\u0026/gi, "&").replace(/\\\//g, "/");
   const found = new Set();
   for (const match of decoded.matchAll(/((?:pw|sw)01(?:dde|ddd)[A-Za-z0-9/]+)/gi)) {
-    const cname = String(match[1] || "").replace(/["'<>\s].*$/, ""); if (cname) found.add(cname);
+    const cname = String(match[1] || "").replace(/["'<>\s].*$/, "");
+    if (cname) found.add(cname);
   }
   return [...found];
 }
@@ -91,42 +114,73 @@ function cnameRaceDate(cname) { return [...String(cname).matchAll(/(20\d{6})/g)]
 function linksFromEntryHtml(html) { return cnameCandidates(html).filter((cname) => /(?:pw|sw)01dde/i.test(cname)).map(canonicalWwwUrl); }
 async function validateCname(cname, meeting = null) {
   const canonicalUrl = canonicalWwwUrl(cname);
-  const page = await fetchOfficial(appUrl(cname));
-  if (!pageLooksLikeEntry(page.html)) return null;
-  const bundle = parseEntryPage(page.html, canonicalUrl);
-  if (meeting && (bundle.race.raceDate !== meeting.date || bundle.race.venue !== meeting.venue)) return null;
-  return {
-    found: true, targetDate: bundle.race.raceDate, venue: bundle.race.venue,
-    meetingNo: bundle.race.meetingNo, meetingDay: bundle.race.meetingDay,
-    suffix: String(cname).split("/").at(-1) || null, family: String(cname).slice(0, 7), viewMode: String(cname).slice(7, 9),
-    prefix: String(cname).split("/")[0], anchorUrl: canonicalUrl, raceId: bundle.race.raceId,
-    runnerCount: bundle.runners.length, discoveredLinks: linksFromEntryHtml(page.html), discoveryMode: "app-link",
-  };
+  const attempts = [
+    { mode: "www", url: canonicalUrl },
+    { mode: "app", url: appUrl(cname) },
+  ];
+  let lastError = null;
+  for (const attempt of attempts) {
+    try {
+      const page = await fetchOfficial(attempt.url);
+      if (!pageLooksLikeEntry(page.html)) continue;
+      const bundle = parseEntryPage(page.html, canonicalUrl);
+      if (bundle.runners.length < 2) continue;
+      if (meeting && (bundle.race.raceDate !== meeting.date || bundle.race.venue !== meeting.venue)) continue;
+      return {
+        found: true,
+        targetDate: bundle.race.raceDate,
+        venue: bundle.race.venue,
+        meetingNo: bundle.race.meetingNo,
+        meetingDay: bundle.race.meetingDay,
+        suffix: String(cname).split("/").at(-1) || null,
+        family: String(cname).slice(0, 7),
+        viewMode: String(cname).slice(7, 9),
+        prefix: String(cname).split("/")[0],
+        anchorUrl: canonicalUrl,
+        raceId: bundle.race.raceId,
+        runnerCount: bundle.runners.length,
+        discoveredLinks: linksFromEntryHtml(page.html),
+        discoveryMode: `${attempt.mode}-entry`,
+      };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) throw lastError;
+  return null;
 }
 async function discoverPublishedAnchors(targetDates, errors) {
   const cnames = new Set();
-  for (const url of [APP_ACCESS_D, "https://app.jra.jp/", WWW_ACCESS_D, "https://www.jra.go.jp/"]) {
-    try { const page = await fetchOfficial(url); for (const cname of cnameCandidates(page.html)) cnames.add(cname); }
-    catch (error) { if (errors.length < 80) errors.push(`LANDING:${url}:${error?.name || "Error"}:${error?.message || String(error)}`); }
+  for (const url of [WWW_ACCESS_D, "https://www.jra.go.jp/", APP_ACCESS_D, "https://app.jra.jp/"]) {
+    try {
+      const page = await fetchOfficial(url);
+      for (const cname of cnameCandidates(page.html)) cnames.add(cname);
+    } catch (error) {
+      if (errors.length < 80) errors.push(`LANDING:${url}:${error?.name || "Error"}:${error?.message || String(error)}`);
+    }
   }
   const anchors = [];
   for (const date of targetDates) {
     const compact = date.replaceAll("-", "");
     for (const cname of [...cnames].filter((value) => cnameRaceDate(value) === compact)) {
-      try { const found = await validateCname(cname); if (found?.targetDate === date) { anchors.push(found); break; } }
-      catch (error) { if (errors.length < 80) errors.push(`${date}:LANDING_CNAME:${error?.name || "Error"}:${error?.message || String(error)}`); }
+      try {
+        const found = await validateCname(cname);
+        if (found?.targetDate === date) { anchors.push(found); break; }
+      } catch (error) {
+        if (errors.length < 80) errors.push(`${date}:LANDING_CNAME:${error?.name || "Error"}:${error?.message || String(error)}`);
+      }
     }
   }
   return anchors;
 }
-function anchorPrefix(meeting, family = "sw01dde", viewMode = "01") {
+function anchorPrefix(meeting, family = "pw01dde", viewMode = "01") {
   const compactDate = meeting.date.replaceAll("-", ""), year = meeting.date.slice(0, 4);
   return `${family}${viewMode}${meeting.venueCode}${year}${String(meeting.meetingNo).padStart(2, "0")}${String(meeting.meetingDay).padStart(2, "0")}01${compactDate}`;
 }
 async function probeMeeting(meeting, errors) {
   for (const { family, viewMode } of [
-    { family: "sw01dde", viewMode: "01" }, { family: "sw01dde", viewMode: "10" },
     { family: "pw01dde", viewMode: "01" }, { family: "pw01dde", viewMode: "10" },
+    { family: "sw01dde", viewMode: "01" }, { family: "sw01dde", viewMode: "10" },
   ]) {
     const prefix = anchorPrefix(meeting, family, viewMode);
     for (let start = 0; start <= 255; start += PROBE_CONCURRENCY) {
@@ -136,39 +190,64 @@ async function probeMeeting(meeting, errors) {
         try {
           const result = await validateCname(cname, meeting);
           if (!result || result.raceId.split("-").at(-1) !== "01") return null;
-          return { ...result, suffix, family, viewMode, prefix, probes: start + values.length, discoveryMode: "app-probe" };
+          return { ...result, suffix, family, viewMode, prefix, probes: start + values.length, discoveryMode: `${result.discoveryMode}-probe` };
         } catch (error) {
           if (errors.length < 80) errors.push(`${meeting.date}:${meeting.venue}:${family}:${viewMode}:${suffix}:${error?.name || "Error"}:${error?.message || String(error)}`);
           return null;
         }
       }));
-      const found = results.find(Boolean); if (found) return found; if (PAUSE_MS > 0) await sleep(PAUSE_MS);
+      const found = results.find(Boolean);
+      if (found) return found;
+      if (PAUSE_MS > 0) await sleep(PAUSE_MS);
     }
   }
   return null;
 }
-export async function findCurrentEntryAnchor(now = new Date()) {
-  const errors = [], targetDates = currentWeekendDates(now), meetings = [];
+export async function findCurrentEntryAnchor(now = new Date(), fallbackMeetings = []) {
+  const errors = [], targetDates = currentWeekendDates(now), dynamicallyParsed = [];
   for (const date of targetDates) {
-    try { meetings.push(...await calendarMeetings(date)); }
+    try { dynamicallyParsed.push(...await calendarMeetings(date)); }
     catch (error) { errors.push(`${date}:CALENDAR:${error?.name || "Error"}:${error?.message || String(error)}`); }
   }
-  const anchors = await discoverPublishedAnchors(targetDates, errors), foundDates = new Set(anchors.map((row) => row.targetDate));
+  const meetings = mergeMeetings(dynamicallyParsed, Array.isArray(fallbackMeetings) ? fallbackMeetings : []);
+  const anchors = await discoverPublishedAnchors(targetDates, errors);
+  const foundDates = new Set(anchors.map((row) => row.targetDate));
   const probeDates = new Set(datesRequiringProbe(targetDates, now));
   for (const date of targetDates) {
     if (foundDates.has(date) || !probeDates.has(date)) continue;
     let dateAnchor = null;
-    for (const meeting of meetings.filter((row) => row.date === date)) { dateAnchor = await probeMeeting(meeting, errors); if (dateAnchor) break; }
-    if (dateAnchor) { anchors.push(dateAnchor); foundDates.add(date); } else errors.push(`${date}:ENTRY_ANCHOR_NOT_FOUND`);
+    for (const meeting of meetings.filter((row) => row.date === date)) {
+      dateAnchor = await probeMeeting(meeting, errors);
+      if (dateAnchor) break;
+    }
+    if (dateAnchor) {
+      anchors.push(dateAnchor);
+      foundDates.add(date);
+    } else {
+      errors.push(`${date}:ENTRY_ANCHOR_NOT_FOUND`);
+    }
   }
-  const discoveredLinks = [...new Set(anchors.flatMap((anchor) => anchor.discoveredLinks || []))], first = anchors[0] || null;
+  const discoveredLinks = [...new Set(anchors.flatMap((anchor) => anchor.discoveredLinks || []))];
+  const first = anchors[0] || null;
   return {
     found: [...probeDates].every((date) => foundDates.has(date)) && probeDates.size > 0,
-    targetDates, requiredProbeDates: [...probeDates], calendarMeetings: meetings, anchors,
-    anchorUrl: first?.anchorUrl ?? null, raceId: first?.raceId ?? null, targetDate: first?.targetDate ?? null,
-    venue: first?.venue ?? null, meetingNo: first?.meetingNo ?? null, meetingDay: first?.meetingDay ?? null,
-    family: first?.family ?? null, viewMode: first?.viewMode ?? null, prefix: first?.prefix ?? null, suffix: first?.suffix ?? null,
-    runnerCount: first?.runnerCount ?? 0, probes: anchors.reduce((sum, anchor) => sum + Number(anchor.probes || 0), 0),
-    discoveredLinks, errors,
+    targetDates,
+    requiredProbeDates: [...probeDates],
+    calendarMeetings: meetings,
+    anchors,
+    anchorUrl: first?.anchorUrl ?? null,
+    raceId: first?.raceId ?? null,
+    targetDate: first?.targetDate ?? null,
+    venue: first?.venue ?? null,
+    meetingNo: first?.meetingNo ?? null,
+    meetingDay: first?.meetingDay ?? null,
+    family: first?.family ?? null,
+    viewMode: first?.viewMode ?? null,
+    prefix: first?.prefix ?? null,
+    suffix: first?.suffix ?? null,
+    runnerCount: first?.runnerCount ?? 0,
+    probes: anchors.reduce((sum, anchor) => sum + Number(anchor.probes || 0), 0),
+    discoveredLinks,
+    errors,
   };
 }
