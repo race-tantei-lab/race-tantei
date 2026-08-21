@@ -49,6 +49,7 @@ jobs:
       - name: Discover current weekend anchor and save entries
         run: node scripts/run-upcoming-entry-direct-sync.mjs
       - name: Audit saved races
+        if: always()
         run: python scripts/audit-upcoming-entry-readiness.py
       - name: Save sync reports
         if: always()
