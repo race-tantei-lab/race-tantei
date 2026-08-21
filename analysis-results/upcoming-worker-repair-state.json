@@ -1,0 +1,34 @@
+[
+  {
+    "results": [
+      {
+        "stateKey": "worker_upcoming_entry_probe:2026-08-22:中京",
+        "stateValue": "{\"modeIndex\":1,\"cursor\":144}",
+        "updatedAt": "2026-08-21 10:45:34"
+      },
+      {
+        "stateKey": "worker_upcoming_entry_repair",
+        "stateValue": "{\"checkedAt\":\"2026-08-21T10:45:29.798Z\",\"status\":\"probing\",\"targetDate\":\"2026-08-22\",\"targetVenue\":\"中京\",\"probed\":48,\"anchorFound\":false,\"savedRaceIds\":[],\"errors\":[]}",
+        "updatedAt": "2026-08-21 10:45:35"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.5347
+      },
+      "duration": 0.5347,
+      "changes": 0,
+      "last_row_id": 15072,
+      "changed_db": false,
+      "size_after": 277577728,
+      "rows_read": 237,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
