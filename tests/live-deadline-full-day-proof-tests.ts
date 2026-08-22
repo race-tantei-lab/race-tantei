@@ -34,11 +34,13 @@ const startsMinutes = [
 ];
 
 function providerTick(provider: Provider, minute: number, shift: number): boolean {
-  const shifted = minute - shift;
-  if (shifted < 0) return false;
-  if (provider === "primary") return true; // Cloudflare primary every minute.
-  if (provider === "backup") return ((shifted % 5) + 5) % 5 === 2; // staggered CF backup.
-  return ((shifted % 5) + 5) % 5 === 4; // independent GitHub scheduler.
+  // All three production paths now attempt one pulse per minute: two independent
+  // Cloudflare Workers plus the GitHub job's minute pulses. Inject a recurring
+  // three-minute blackout into each provider, with different provider offsets,
+  // so every single-provider scenario also proves recovery from missed minutes.
+  const providerOffset = provider === "primary" ? 0 : provider === "backup" ? 5 : 10;
+  const phase = ((minute - shift + providerOffset) % 15 + 15) % 15;
+  return phase >= 3;
 }
 
 function runScenario(scenario: Scenario): RaceState[] {
@@ -74,10 +76,9 @@ function runScenario(scenario: Scenario): RaceState[] {
           continue;
         }
 
-        // Model one lost eligible execution for the race across the whole scheduler
-        // mesh. This is in addition to complete loss of any providers excluded from
-        // scenario.providers; it is not an impossible demand that every surviving
-        // scheduler independently loses the same last pre-deadline invocation.
+        // In multi-provider scenarios, lose one additional eligible execution per
+        // race across the whole scheduler mesh. This is on top of the recurring
+        // three-minute provider blackouts above.
         if (scenario.skipFirstEligibleTick && !skippedRace.has(race.id)) {
           skippedRace.add(race.id);
           continue;
@@ -121,13 +122,12 @@ for (let mask = 1; mask < 8; mask += 1) {
 
 let scenarioCount = 0;
 for (const providers of providerSets) {
-  for (let phaseShiftMinutes = 0; phaseShiftMinutes <= 9; phaseShiftMinutes += 1) {
+  for (let phaseShiftMinutes = 0; phaseShiftMinutes <= 14; phaseShiftMinutes += 1) {
     for (const jraRecoveryMinutesBeforeStart of [90, 60, 40, 30, 25, 22, 20]) {
-      for (const generationSeconds of [0, 5, 15, 25]) {
-        // If two scheduler providers are already completely unavailable, prove
-        // the remaining one can carry the day at its documented cadence. With
-        // two or three providers alive, additionally lose one eligible execution
-        // per race and require the scheduler mesh to recover.
+      for (const generationSeconds of [0, 5, 15, 25, 30]) {
+        // If two providers are completely unavailable, the remaining provider
+        // must still carry all 15 races through its own injected blackout. With
+        // two or three alive, add one more lost eligible execution per race.
         const skipOptions = providers.size >= 2 ? [false, true] : [false];
         for (const skipFirstEligibleTick of skipOptions) {
           const scenario: Scenario = {
@@ -181,4 +181,4 @@ for (const providers of providerSets) {
   assert.equal(races.filter((race) => race.finalAtMs != null).length, 0, "no official odds means no synthetic final");
 }
 
-console.log(`live-deadline-full-day-proof-tests: ok scenarios=${scenarioCount} races_per_scenario=15`);
+console.log(`live-deadline-full-day-proof-tests: ok scenarios=${scenarioCount} races_per_scenario=15 blackout_minutes=3`);
