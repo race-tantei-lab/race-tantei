@@ -7,6 +7,7 @@ on:
     paths:
       - 'HANDOFF.md'
       - 'README.md'
+      - 'FINAL_STATE_20260816.md'
       - 'config/canonical-production-manifest.json'
       - 'config/ten-year-completed-model.json'
       - 'analysis-results/ten-year-model-completion-20260812.json'
@@ -16,27 +17,121 @@ on:
       - 'scripts/run-ten-year-auto-final-live.py'
       - 'scripts/ten-year-production-core.py'
       - 'scripts/generate-ten-year-*'
+      - 'scripts/build-worker-completed-model-assets.py'
+      - 'scripts/verify-worker-model-parity.ts'
+      - 'scripts/verify-live-lock-safety.py'
       - 'scripts/verify-canonical-handoff.py'
       - 'wrangler.jsonc'
+      - 'wrangler.live-deadline.jsonc'
+      - 'wrangler.live-deadline-backup.jsonc'
       - 'src/public-site-entry-v*.ts'
+      - 'src/live-deadline-entry-v2.ts'
       - 'src/v1/ten-year-*'
+      - 'src/v1/completed-worker-live-lock.ts'
+      - 'src/v1/completed-worker-deadline-guard.ts'
+      - 'src/v1/completed-final-invariants.ts'
+      - 'src/v1/live-preview-safety.ts'
       - 'data/ten-year-runners/manifest.json'
-      - '.github/workflows/auto-final-live-bets.yml'
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/deploy-live-deadline.yml'
+      - '.github/workflows/verify-live-deadline-production.yml'
       - '.github/workflows/production-smoke.yml'
+      - '.github/workflows/verify-worker-selection-parity.yml'
       - '.github/workflows/verify-canonical-handoff.yml'
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
+      - name: Publish canonical handoff pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='production/canonical-handoff' \
+            -f description='Verifying canonical Race Tantei handoff v5' \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+
       - name: Verify canonical handoff
         run: python scripts/verify-canonical-handoff.py
+
+      - name: Verify v5 handoff documentation markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          for marker in \
+            'handoff version: **5**' \
+            'src/live-deadline-entry-v2.ts' \
+            'wrangler.live-deadline.jsonc' \
+            'wrangler.live-deadline-backup.jsonc' \
+            'public live mutation: **disabled**' \
+            '**T-90**' \
+            '**T-30**' \
+            '**T-25**' \
+            '**T-20**' \
+            '**T-15**' \
+            'historical baseline'; do
+            grep -Fq -- "$marker" HANDOFF.md
+          done
+          for marker in \
+            'src/public-site-entry-v34.ts' \
+            'src/live-deadline-entry-v2.ts' \
+            'wrangler.live-deadline.jsonc' \
+            'wrangler.live-deadline-backup.jsonc' \
+            '**T-90**' \
+            '**T-25**' \
+            '**T-20**' \
+            '**T-15**' \
+            'CANONICAL_HANDOFF_OK'; do
+            grep -Fq -- "$marker" README.md
+          done
+          if grep -Fq -- '.github/workflows/auto-final-live-bets.yml' HANDOFF.md; then
+            echo 'HANDOFF still identifies the obsolete automatic-final workflow as current.' >&2
+            exit 1
+          fi
+          if grep -Fq -- 'handoff version: **4**' HANDOFF.md; then
+            echo 'HANDOFF is still version 4.' >&2
+            exit 1
+          fi
+          echo 'CANONICAL_HANDOFF_V5_DOCS_OK'
+
+      - name: Publish canonical handoff success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='production/canonical-handoff' \
+            -f description='Canonical Race Tantei handoff v5 verified' \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Publish canonical handoff failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='production/canonical-handoff' \
+            -f description='Canonical Race Tantei handoff v5 verification failed' \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
