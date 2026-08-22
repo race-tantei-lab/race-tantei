@@ -48,4 +48,4 @@ jobs:
           git pull --rebase origin main
           git push origin HEAD:main
 
-# 2026-08-22 afternoon full-day re-audit.
+# Audit immediately after deploying and invoking the two-pass live driver.
