@@ -1,6 +1,7 @@
 import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";
 import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";
 import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";
+import { verifyGithubActionsOidcAuthorization } from "./v1/github-actions-oidc.js";
 import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import {
   acquireLiveDeadlineLease,
@@ -11,7 +12,7 @@ import {
 } from "./v1/live-preview-safety.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "live-deadline-v2-lease-archive-sla-20260822";
+const DRIVER_VERSION = "live-deadline-v3-multi-scheduler-proof-20260822";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
 const SELECTION_PREFIX = "final_daily_selection:";
@@ -65,11 +66,12 @@ function auditLive(live: Awaited<ReturnType<typeof runCompletedWorkerLiveLock>>)
     lockedByWorker: live.lockedByWorker,
     incompleteRaceIds: live.incompleteRaceIds,
     deadlineBreachRaceIds: live.deadlineBreachRaceIds,
+    alreadyStartedIncompleteRaceIds: live.alreadyStartedIncompleteRaceIds,
     errors: live.errors,
   };
 }
 
-async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promise<Record<string, unknown>> {
+export async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promise<Record<string, unknown>> {
   const started = new Date();
   const startedAt = iso(started);
   const date = jstDate(started);
@@ -77,7 +79,11 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
   const base = { version: DRIVER_VERSION, date, scheduledAt, startedAt, owner };
 
   await ensureLivePreviewSafetySchema(env.DB);
-  const acquired = await acquireLiveDeadlineLease(env.DB, owner, 55);
+  // A 90-second lease covers normal multi-venue work without letting a crashed
+  // invocation suppress retries all the way to T-15. Final-row uniqueness and
+  // immutable final state are an additional fencing layer if an old invocation
+  // ever outlives this lease.
+  const acquired = await acquireLiveDeadlineLease(env.DB, owner, 90);
   if (!acquired) {
     const skipped = {
       ...base,
@@ -164,12 +170,19 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
     ]);
     const unresolvedDueRaceIds = [...due].filter((raceId) => !locked.has(raceId));
     const unresolvedGuardErrors = [...guardBefore.errors, ...guardAfter.errors].filter((row) => !locked.has(row.raceId));
+
+    // A miss from an already-started race remains preserved in the audit, but it
+    // must not poison every later tick and hide whether future races are safe.
+    const alreadyStartedIncomplete = new Set(live?.alreadyStartedIncompleteRaceIds ?? []);
+    const liveCurrentDeadlineBreaches = (live?.deadlineBreachRaceIds ?? [])
+      .filter((raceId) => !alreadyStartedIncomplete.has(raceId));
     const hardDeadlineBreachRaceIds = [...new Set([
       ...guardBefore.deadlineMissedRaceIds,
       ...guardAfter.deadlineMissedRaceIds,
-      ...(live?.deadlineBreachRaceIds ?? []),
+      ...liveCurrentDeadlineBreaches,
       ...slaAfter.deadlineMissedRaceIds,
     ])];
+    const historicalMissRaceIds = [...alreadyStartedIncomplete];
     const preDeadlineCriticalRaceIds = [...new Set([
       ...slaAfter.previewMissingByT30RaceIds,
       ...slaAfter.finalMissingByT20RaceIds,
@@ -211,6 +224,7 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       unresolvedGuardErrors,
       hardDeadlineBreachRaceIds,
       preDeadlineCriticalRaceIds,
+      historicalMissRaceIds,
       completedAt: iso(completed),
       durationMs: completed.getTime() - started.getTime(),
     };
@@ -251,7 +265,7 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
 }
 
 export default {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
       return Response.json(
@@ -259,6 +273,26 @@ export default {
         { headers: { "cache-control": "no-store" } },
       );
     }
+
+    if (request.method === "POST" && url.pathname === "/internal/github-tick") {
+      try {
+        const claims = await verifyGithubActionsOidcAuthorization(request.headers.get("authorization"));
+        if (!claims) return new Response("UNAUTHORIZED", { status: 401, headers: { "cache-control": "no-store" } });
+        const result = await runIsolatedLiveDeadlineTick(env, `github-oidc:${iso()}`);
+        const status = result.status === "lease_busy" ? 202 : 200;
+        return Response.json({ source: "github-oidc", event: claims.event_name, result }, {
+          status,
+          headers: { "cache-control": "no-store" },
+        });
+      } catch (error) {
+        console.error("GITHUB_OIDC_LIVE_TICK_FAILED", error);
+        return Response.json({ status: "error", error: errorText(error) }, {
+          status: 503,
+          headers: { "cache-control": "no-store" },
+        });
+      }
+    }
+
     return new Response("NOT_FOUND", { status: 404 });
   },
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
