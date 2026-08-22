@@ -24,32 +24,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Wait for v34 and run production live tick
+      - name: Wait for two-pass v34 and run production live tick
         shell: bash
         run: |
           set -euo pipefail
           url='https://race-tantei-phase0.race-tantei.workers.dev/_ops/live-tick'
+          expected='ten-year-completed-public-v34-live-tick-two-pass-20260822'
           for attempt in $(seq 1 40); do
             rm -f /tmp/h /tmp/b
             code=$(curl --max-time 120 -sS -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST "$url" || true)
             version=$(tr -d '\r' </tmp/h 2>/dev/null | awk -F': ' 'tolower($1)=="x-race-ui-version"{print $2}' | tail -1)
             body=$(cat /tmp/b 2>/dev/null || true)
             echo "attempt=$attempt code=$code version=$version body=$body"
-            if [ "$version" = "ten-year-completed-public-v34-live-tick-backup-20260822" ] && [ "$code" = "200" ]; then
+            if [ "$version" = "$expected" ] && [ "$code" = "200" ]; then
               exit 0
             fi
             # Historical missed races remain visible as deadline_breach. A 503 with
             # exactly that status means the current tick still executed; retrying/error
             # statuses remain hard failures so the next five-minute tick is observable.
-            if [ "$version" = "ten-year-completed-public-v34-live-tick-backup-20260822" ] && [ "$code" = "503" ] && echo "$body" | grep -q '"status":"deadline_breach"'; then
+            if [ "$version" = "$expected" ] && [ "$code" = "503" ] && echo "$body" | grep -q '"status":"deadline_breach"'; then
               echo 'LIVE_TICK_EXECUTED_WITH_HISTORICAL_BREACH'
               exit 0
             fi
-            if [ "$version" = "ten-year-completed-public-v34-live-tick-backup-20260822" ] && [ "$code" = "503" ]; then
+            if [ "$version" = "$expected" ] && [ "$code" = "503" ]; then
               echo 'LIVE_TICK_CURRENT_ERROR' >&2
               exit 1
             fi
             sleep 5
           done
-          echo 'LIVE_TICK_V34_NOT_READY' >&2
+          echo 'LIVE_TICK_TWO_PASS_NOT_READY' >&2
           exit 1
