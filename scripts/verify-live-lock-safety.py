@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import runpy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +28,10 @@ def require_missing(path: str, label: str) -> None:
 
 
 def main() -> None:
+    # First prove that normal-race mutation has exactly one runtime owner. This
+    # catches inherited scheduled() paths that a top-file-only check can miss.
+    runpy.run_path(str(ROOT / "scripts/verify-live-ownership.py"), run_name="__main__")
+
     public_wrangler = json.loads(read("wrangler.jsonc"))
     primary_wrangler = json.loads(read("wrangler.live-deadline.jsonc"))
     backup_wrangler = json.loads(read("wrangler.live-deadline-backup.jsonc"))
@@ -124,6 +129,10 @@ def main() -> None:
         "runCompletedWorkerDeadlineGuard",
         "runCompletedWorkerLiveLock",
         "runUpcomingEntryDerivedRepair",
+        "verifyPriorDayLearningReady",
+        "PRIOR_LEARNING_FAIL_OPEN_MINUTE_JST",
+        'status: "waiting_prior_learning"',
+        "PRIOR_DAY_LEARNING_FAIL_OPEN",
         "selection_critical",
         "predeadline_critical",
         "LIVE_DEADLINE_HARD_T15_BREACH",
@@ -141,18 +150,27 @@ def main() -> None:
     ):
         forbid(public29, forbidden, "public v29")
     require(public29, "runCompletedWin5Scheduled", "public v29")
-    require(public29, "if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);", "public v29")
 
     public34 = read("src/public-site-entry-v34.ts")
     for forbidden in (
+        "publicSite.scheduled",
         "runCompletedWorkerLiveLock",
         "runCompletedWorkerDeadlineGuard",
+        "freezeCompletedWorkerSelectionIfNeeded",
         "runDirectLiveTick",
         "shouldOpportunisticallyDrive",
     ):
         forbid(public34, forbidden, "public v34")
-    require(public34, 'pathname === "/_ops/live-tick"', "public v34")
-    require(public34, 'status: 404', "public v34")
+    for needle in (
+        'pathname === "/_ops/live-tick"',
+        'status: 404',
+        'import maintenanceSite from "./public-site-entry-v19.js";',
+        "maintenanceSite.scheduled",
+        "runCompletedWin5Scheduled",
+        "runUpcomingEntryWorkerRepair",
+        "runUpcomingEntryDerivedRepair",
+    ):
+        require(public34, needle, "public v34")
 
     require_missing(".github/workflows/drive-live-tick.yml", "obsolete public live driver")
     require_missing(".github/workflows/auto-final-live-bets.yml", "obsolete stored-preview finalizer")
