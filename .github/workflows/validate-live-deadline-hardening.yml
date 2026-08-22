@@ -12,12 +12,14 @@ on:
       - "src/v1/completed-worker-deadline-guard.ts"
       - "src/v1/completed-selection-runtime.ts"
       - "src/v1/completed-final-invariants.ts"
+      - "src/v1/upcoming-entry-derived-repair.ts"
       - "src/v1/jra-official-odds-fetch.ts"
       - "src/v1/jra-official-odds.ts"
       - "tests/completed-worker-deadline-guard-tests.ts"
       - "scripts/verify-live-hardening-policy.py"
       - "wrangler.live-deadline.jsonc"
       - "wrangler.live-deadline-backup.jsonc"
+      - ".github/workflows/deploy-live-deadline.yml"
       - ".github/workflows/validate-live-deadline-hardening.yml"
   workflow_dispatch:
 
@@ -60,7 +62,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='hardening/live-deadline' \
-            -f description='Typecheck, T-15, policy, and dual Worker dry-runs passed' \
+            -f description='Round 3: typecheck, T-15, policy, selection repair, and dual Worker dry-runs passed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark hardening validation failure
         if: failure()
@@ -68,5 +70,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='hardening/live-deadline' \
-            -f description='Hardening validation failed' \
+            -f description='Round 3 live deadline hardening validation failed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
