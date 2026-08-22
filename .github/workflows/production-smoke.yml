@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "src/**"
+      - "scripts/verify-production-smoke.py"
       - "wrangler.jsonc"
       - "package.json"
       - "package-lock.json"
@@ -25,6 +26,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
       - name: Publish production verification pending
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         env:
@@ -34,180 +40,22 @@ jobs:
 
       - name: Verify current production is alive on PR
         if: github.event_name == 'pull_request'
-        run: |
-          set -euo pipefail
-          base="https://race-tantei-phase0.race-tantei.workers.dev"
-          expected_ui="$(python -c 'import json; print(json.load(open("wrangler.jsonc", encoding="utf-8"))["vars"]["DEPLOY_REVISION"])')"
-          curl --silent --show-error --fail --connect-timeout 3 --max-time 10 -D /tmp/home.headers "${base}/" >/tmp/home.html
-          curl --silent --show-error --fail --connect-timeout 3 --max-time 10 -D /tmp/conditions.headers "${base}/conditions" >/tmp/conditions.html
-          curl --silent --show-error --fail --connect-timeout 3 --max-time 10 -D /tmp/guide.headers "${base}/guide" >/tmp/guide.html
-          ui_version="$(tr -d '\r' </tmp/conditions.headers | awk -F': ' 'tolower($1)=="x-race-ui-version"{print $2}' | tail -1)"
-          echo "production ui=${ui_version:-missing} expected=${expected_ui}"
-          test "$ui_version" = "$expected_ui"
-          require_marker() {
-            local file="$1" marker="$2" label="$3"
-            if grep -Fq "$marker" "$file"; then
-              echo "MARKER_OK ${label}: ${marker}"
-            else
-              echo "MARKER_MISSING ${label}: ${marker}" >&2
-              exit 1
-            fi
-          }
-          require_marker /tmp/home.html 'レース探偵' home
-          require_marker /tmp/home.html '予想は当日も継続更新' home
-          require_marker /tmp/conditions.html '完成モデル＋継続学習' conditions
-          require_marker /tmp/conditions.html '当日結果も次レースへ反映' conditions
-          require_marker /tmp/conditions.html 'JRA公式オッズだけ' conditions
-          require_marker /tmp/conditions.html '発走15分前までに確定' conditions
-          require_marker /tmp/conditions.html '推定・合成オッズでは代用しません' conditions
-          require_marker /tmp/guide.html '継続学習について' guide
-          require_marker /tmp/guide.html '合成オッズや推定オッズで代用して確定することはありません' guide
+        run: python scripts/verify-production-smoke.py --attempts 2 --delay-seconds 2
 
       - name: Wait for canonical deployment and public API
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        run: |
-          set -euo pipefail
-          base="https://race-tantei-phase0.race-tantei.workers.dev"
-          today="$(TZ=Asia/Tokyo date +%F)"
-          expected_ui="$(python -c 'import json; print(json.load(open("wrangler.jsonc", encoding="utf-8"))["vars"]["DEPLOY_REVISION"])')"
-
-          fetch_url() {
-            local url="$1" body="$2" codefile="$3"
-            local code
-            code="$(curl --silent --show-error --connect-timeout 3 --max-time 8 -o "$body" -w '%{http_code}' "$url" || true)"
-            printf '%s' "$code" >"$codefile"
-          }
-
-          for attempt in $(seq 1 12); do
-            fetch_url "${base}/" /tmp/home.html /tmp/home.code & p1=$!
-            fetch_url "${base}/conditions" /tmp/conditions.html /tmp/conditions.code & p2=$!
-            fetch_url "${base}/guide" /tmp/guide.html /tmp/guide.code & p3=$!
-            fetch_url "${base}/api/public/day?date=2026-08-08" /tmp/day8.json /tmp/day8.code & p4=$!
-            fetch_url "${base}/api/public/day?date=2026-08-09" /tmp/day9.json /tmp/day9.code & p5=$!
-            fetch_url "${base}/api/public/day?date=${today}" /tmp/today.json /tmp/today.code & p6=$!
-            wait "$p1"; wait "$p2"; wait "$p3"; wait "$p4"; wait "$p5"; wait "$p6"
-
-            home_code="$(cat /tmp/home.code)"
-            conditions_code="$(cat /tmp/conditions.code)"
-            guide_code="$(cat /tmp/guide.code)"
-            c8="$(cat /tmp/day8.code)"
-            c9="$(cat /tmp/day9.code)"
-            ctoday="$(cat /tmp/today.code)"
-            ui_version="$(curl --silent --show-error --connect-timeout 3 --max-time 8 -D - -o /dev/null "${base}/conditions" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-race-ui-version"{print $2}' | tail -1 || true)"
-            echo "attempt=${attempt} home=${home_code} conditions=${conditions_code} guide=${guide_code} day8=${c8} day9=${c9} today=${today}:${ctoday} ui=${ui_version:-missing} expected=${expected_ui}"
-
-            if [ "$home_code" = "200" ] && [ "$conditions_code" = "200" ] && [ "$guide_code" = "200" ] && [ "$c8" = "200" ] && [ "$c9" = "200" ] && [ "$ctoday" = "200" ] && [ "$ui_version" = "$expected_ui" ]; then
-              race_id="$(python - <<'PY'
-import json
-try:
-    rows=json.load(open('/tmp/day9.json',encoding='utf-8')).get('races') or []
-    selected=next((r for r in rows if (r.get('publicState') or {}).get('code')=='buy' and r.get('raceId')),None)
-    if selected: print(selected['raceId'])
-except Exception:
-    pass
-PY
-              )"
-              if [ -n "$race_id" ]; then
-                fetch_url "${base}/races/${race_id}" /tmp/race.html /tmp/race.code
-              else
-                printf '000' >/tmp/race.code
-                : >/tmp/race.html
-              fi
-              race_code="$(cat /tmp/race.code)"
-              echo "selected_race=${race_id:-none} race=${race_code}"
-
-              if [ "$race_code" = "200" ] && python - <<'PY'
-import collections,json,sys
-from datetime import datetime
-from zoneinfo import ZoneInfo
-home=open('/tmp/home.html',encoding='utf-8').read()
-conditions=open('/tmp/conditions.html',encoding='utf-8').read()
-guide=open('/tmp/guide.html',encoding='utf-8').read()
-race=open('/tmp/race.html',encoding='utf-8').read()
-d8=json.load(open('/tmp/day8.json',encoding='utf-8'))
-d9=json.load(open('/tmp/day9.json',encoding='utf-8'))
-today=json.load(open('/tmp/today.json',encoding='utf-8'))
-r8=d8.get('races')
-r9=d9.get('races')
-rt=today.get('races') if isinstance(today,dict) else None
-condition_markers=(
-  '予想のしくみ',
-  '完成モデル＋継続学習',
-  '当日結果も次レースへ反映',
-  '直近30日＋当日終了レース',
-  '同じ日の終了済みレースを強く反映',
-  '対象レース自身や未来の結果は使いません',
-  'JRA公式オッズだけ',
-  '合成オッズ・推定オッズ',
-  '発走16分前以内で確定対象に入れる',
-  '発走15分前以降は再計算しない',
-  '推定・合成オッズでは代用しません',
-  '確定後はDBでも変更不可',
-  'ln(予測確率) + 0.4 × ln(JRA公式オッズ)',
-)
-guide_markers=(
-  '開催中も予想は更新',
-  '継続学習について',
-  '完成済みベースモデルは固定したまま',
-  '同じ日の終了レースを強く反映',
-  '市場オッズはJRA公式値だけを使用します',
-  '合成オッズや推定オッズで代用して確定することはありません',
-)
-frozen_projection=True
-projection={}
-if isinstance(rt,list):
-    venue_counts=collections.Counter(str(r.get('venue') or '') for r in rt if r.get('venue'))
-    states=collections.Counter(str((r.get('publicState') or {}).get('code') or '') for r in rt)
-    structured=len(venue_counts)>=2 and all(v==12 for v in venue_counts.values())
-    now=datetime.now(ZoneInfo('Asia/Tokyo'))
-    if structured and now.hour>=9:
-        expected_selected=5*len(venue_counts)
-        selected_like=sum(states.get(x,0) for x in ('target','buy','hit','miss','overdue','missing'))
-        expected_skip=7*len(venue_counts)
-        frozen_projection=states.get('pending',0)==0 and selected_like==expected_selected and states.get('skip',0)==expected_skip
-    projection={'venues':dict(venue_counts),'states':dict(states),'structured':structured,'jstHour':now.hour}
-current_conditions=all(marker in conditions for marker in condition_markers)
-checks={
-  'homeAlive':'レース探偵' in home,
-  'homeContinuousLearning':'予想は当日も継続更新' in home and 'JRA公式オッズだけで評価' in home,
-  'homeSharedRoi':'<summary><b>全体</b>' in home and '会場別回収率' in home,
-  'homeNoDuplicateCourseRoi':all(f'<summary><b>{x}</b>' not in home for x in ('ライト','スタンダード','プレミアム')),
-  'raceDetailCourses':all(x in race for x in ('ライト','スタンダード','プレミアム')),
-  'conditionsMethodology':current_conditions,
-  'conditionsCurrentMethodology':current_conditions,
-  'guideCurrentMethodology':all(marker in guide for marker in guide_markers),
-  'conditionsNoOldProbabilityFinalization':'予測データを使って買い目を確定しました' not in conditions,
-  'guideNoOldProbabilityFinalization':'予測データを使って買い目を確定しました' not in guide,
-  'day8ApiShape':isinstance(r8,list) and len(r8)>0,
-  'day9ApiShape':isinstance(r9,list) and len(r9)>0,
-  'todayFrozenSelectionProjection':frozen_projection,
-}
-# Legacy canonical-verifier compatibility marker only. This is not asserted as
-# public copy and must not be restored to the page:
-# 未使用データだけで検証した成績ではありません
-print(json.dumps({
-  'checks':checks,
-  'day8RaceCount':len(r8) if isinstance(r8,list) else None,
-  'day9RaceCount':len(r9) if isinstance(r9,list) else None,
-  'todayRaceCount':len(rt) if isinstance(rt,list) else None,
-  'todayProjection':projection,
-},ensure_ascii=False))
-sys.exit(0 if all(checks.values()) else 1)
-PY
-              then exit 0; fi
-            fi
-            sleep 5
-          done
-          echo 'Canonical public site did not satisfy production smoke within the bounded wait.'; exit 1
+        run: python scripts/verify-production-smoke.py --attempts 12 --delay-seconds 5
 
       - name: Publish production verification
         if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        env: { GH_TOKEN: "${{ github.token }}" }
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh api --method POST -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/phase-d' -f description='Canonical public API and product copy verified' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Publish production verification failure
         if: failure() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        env: { GH_TOKEN: "${{ github.token }}" }
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh api --method POST -H "Accept: application/vnd.github+json" "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/phase-d' -f description='Canonical public deployment verification failed' -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
