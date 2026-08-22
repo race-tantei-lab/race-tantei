@@ -48,4 +48,4 @@ jobs:
           git pull --rebase origin main
           git push origin HEAD:main
 
-# Emergency audit at 17:27 JST after Niigata 11R missed the displayed 17:25 finalization deadline.
+# Emergency re-audit after the independent live driver ran at 17:34 JST; verify Niigata 12R preview/final state.
