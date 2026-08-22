@@ -23,6 +23,42 @@ jobs:
       HEAD_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       BASE_URL: https://race-tantei-phase0.race-tantei.workers.dev
     steps:
+      - name: Checkout deployed revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve expected deployed UI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          wrangler = Path('wrangler.jsonc').read_text(encoding='utf-8')
+          main_match = re.search(r'"main"\s*:\s*"([^"]+)"', wrangler)
+          revision_match = re.search(r'"DEPLOY_REVISION"\s*:\s*"([^"]+)"', wrangler)
+          if not main_match or not revision_match:
+              raise SystemExit('Could not resolve current main entry / DEPLOY_REVISION from wrangler.jsonc')
+
+          entry = main_match.group(1)
+          revision = revision_match.group(1)
+          source = Path(entry).read_text(encoding='utf-8')
+          ui_match = re.search(r'const\s+UI_VERSION\s*=\s*"([^"]+)"', source)
+          if not ui_match:
+              raise SystemExit(f'Could not resolve UI_VERSION from {entry}')
+          ui_version = ui_match.group(1)
+          if ui_version != revision:
+              raise SystemExit(f'UI_VERSION / DEPLOY_REVISION mismatch: {ui_version} != {revision}')
+
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
+              f.write(f'EXPECTED_UI_VERSION={ui_version}\n')
+              f.write(f'EXPECTED_UI_ENTRY={entry}\n')
+          print(f'expected ui entry={entry} version={ui_version}')
+          PY
+
       - name: Mark feature verification pending
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
@@ -82,19 +118,20 @@ jobs:
           const headers=fs.readFileSync('/tmp/detail.headers','utf8');
           const required=[
             ['tabs','data-race-tabs'],
-            ['bets-tab','予想買い目'],
-            ['reason-tab','>根拠<'],
-            ['horses-tab','馬一覧'],
-            ['ticket-probability','組合せ予測確率'],
+            ['bets-tab','data-race-tab="bets"'],
+            ['reason-tab','data-race-tab="reason"'],
+            ['horses-tab','data-race-tab="horses"'],
+            ['ticket-probability','この組合せが当たる推定確率'],
             ['official-odds','JRA公式オッズ'],
-            ['ticket-value-product','確率 × オッズ'],
-            ['ticket-final-score','最終スコア'],
+            ['ticket-value-product','推定確率 × 公式オッズ'],
+            ['ticket-final-score','買い目の評価点'],
             ['selection-explanation','選ばれた理由：'],
             ['runner-list','出走馬'],
             ['tab-activation','function activate(name)'],
           ];
           const missing=required.filter(([,needle])=>!html.includes(needle)).map(([name])=>name);
-          if(!/x-race-ui-version:\s*ten-year-completed-public-v25-race-detail-tabs-20260815/i.test(headers)) missing.push('ui-version-header');
+          const actualUi=(headers.match(/^x-race-ui-version:\s*(.+)$/mi)||[])[1]?.trim()||'';
+          if(actualUi!==process.env.EXPECTED_UI_VERSION) missing.push(`ui-version-header=${actualUi||'missing'} expected=${process.env.EXPECTED_UI_VERSION}`);
           const reasonCount=(html.match(/data-ticket-reason=/g)||[]).length;
           if(reasonCount!==2) missing.push(`ticket-reason-count=${reasonCount}`);
           for(const forbidden of ['なぜこのレースを選んだか','レース選定用 仮買い目','raceScore','この条件の過去サンプル','補正後ROI']){
@@ -105,7 +142,7 @@ jobs:
             console.error('RACE_DETAIL_UI_DEBUG bytes='+Buffer.byteLength(html)+' headers='+headers.replace(/\r?\n/g,' | '));
             process.exit(1);
           }
-          console.log('RACE_DETAIL_TABS_OK race='+process.env.RACE_ID+' reasons='+reasonCount);
+          console.log('RACE_DETAIL_TABS_OK race='+process.env.RACE_ID+' reasons='+reasonCount+' ui='+actualUi);
           NODE
 
       - name: Mark feature verification success
