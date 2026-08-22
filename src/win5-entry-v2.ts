@@ -1,7 +1,8 @@
 import { runCompletedWin5Scheduled, type Win5PublicState } from "./v1/completed-win5.js";
+import { ensureWin5OfficialTargetCache } from "./v1/win5-official-target-repair.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "win5-driver-v2-isolated-dual-20260823";
+const DRIVER_VERSION = "win5-driver-v3-official-row-hydration-20260823";
 const TICK_PREFIX = "win5_driver_tick:";
 const SUCCESS_PREFIX = "win5_driver_success:";
 const LEASE_TTL_SECONDS = 180;
@@ -88,9 +89,6 @@ function assertOperationalState(state: Win5PublicState, now: Date): void {
     }
   }
 
-  // Regular Sunday WIN5 must be discoverable by the morning readiness window.
-  // Other weekdays/holiday schedules remain fail-open here because the JRA calendar
-  // is the source of truth and the live integration test verifies published targets.
   if (
     state.targets.length === 0
     && jstDayOfWeek(now) === 0
@@ -116,14 +114,36 @@ async function runIsolatedWin5Tick(env: Env, scheduledAt: string): Promise<Recor
   }
 
   try {
-    // Deadline decisions must use the actual execution time, not a delayed cron timestamp.
+    let targetRepair: Record<string, unknown> | null = null;
+    let targetRepairError: string | null = null;
+    try {
+      const targetCache = await ensureWin5OfficialTargetCache(env.DB, date, new Date());
+      targetRepair = targetCache ? {
+        status: "ready",
+        targetCount: targetCache.targets.length,
+        fetchedAt: targetCache.fetchedAt,
+        sourceUrl: targetCache.sourceUrl,
+      } : { status: "not_published", targetCount: 0 };
+    } catch (error) {
+      targetRepairError = errorText(error);
+      console.error("WIN5_OFFICIAL_TARGET_REPAIR_FAILED", date, targetRepairError);
+    }
+
+    // Deadline decisions use actual execution time. The official WIN5 page now
+    // publishes only the five venue/race identities, so target repair hydrates
+    // exact start times from the already-synced JRA race table before core logic.
     const state = await runCompletedWin5Scheduled(env, new Date());
+    if (targetRepairError && state.targets.length === 0 && jstDayOfWeek(new Date()) === 0) {
+      throw new Error(`WIN5_TARGET_REPAIR_FAILED:${targetRepairError}`);
+    }
     assertOperationalState(state, new Date());
     const completed = new Date();
     const result = {
       ...base,
       status: "ok",
       ok: true,
+      targetRepair,
+      targetRepairError,
       ...summarize(state),
       completedAt: iso(completed),
       durationMs: completed.getTime() - started.getTime(),

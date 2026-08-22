@@ -6,6 +6,7 @@ on:
     paths:
       - "src/win5-entry-v2.ts"
       - "src/v1/completed-win5.ts"
+      - "src/v1/win5-official-target-repair.ts"
       - "wrangler.win5.jsonc"
       - "wrangler.win5-backup.jsonc"
       - ".github/workflows/deploy-win5.yml"

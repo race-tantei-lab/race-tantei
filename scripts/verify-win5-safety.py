@@ -45,18 +45,32 @@ def main() -> None:
 
     driver = read("src/win5-entry-v2.ts")
     for needle in (
-        'const DRIVER_VERSION = "win5-driver-v2-isolated-dual-20260823";',
+        'const DRIVER_VERSION = "win5-driver-v3-official-row-hydration-20260823";',
+        "ensureWin5OfficialTargetCache",
         "runCompletedWin5Scheduled(env, new Date())",
         "rt_win5_driver_lease",
         "win5_driver_tick:",
         "win5_driver_success:",
         "WIN5_FINAL_MISSING_AFTER_DEADLINE",
         "WIN5_PREVIEW_NOT_READY_AFTER_0930",
+        "WIN5_TARGET_REPAIR_FAILED",
         'path === "/health"',
         'return new Response("NOT_FOUND", { status: 404 });',
     ):
         require(driver, needle, "isolated WIN5 driver")
     forbid(driver, "public-site-entry", "isolated WIN5 driver")
+
+    repair = read("src/v1/win5-official-target-repair.ts")
+    for needle in (
+        "parseWin5TargetIdentitiesFromHtml",
+        "WIN5_PAGE_URL",
+        'const TARGET_PREFIX = "win5:targets:";',
+        "hydrateFromRaceTable",
+        "start_time_utc AS startTimeUtc",
+        "ensureWin5OfficialTargetCache",
+        "WIN5_TARGET_RACE_TIME_MISSING",
+    ):
+        require(repair, needle, "WIN5 official target repair")
 
     public34 = read("src/public-site-entry-v34.ts")
     require(public34, 'import maintenanceSite from "./public-site-entry-v25.js";', "public v34")
@@ -77,8 +91,13 @@ def main() -> None:
     ):
         require(completed, needle, "WIN5 core")
 
+    live_test = read("tests/live-win5-official.ts")
+    require(live_test, "parseWin5TargetIdentitiesFromHtml", "WIN5 live JRA test")
+    forbid(live_test, "Date.parse(row.startTimeUtc)", "WIN5 live JRA target-row test")
+
     deploy = read(".github/workflows/deploy-win5.yml")
     for needle in (
+        "src/v1/win5-official-target-repair.ts",
         "Deploy primary WIN5 Worker",
         "Deploy backup WIN5 Worker",
         "wrangler.win5.jsonc",
@@ -103,6 +122,8 @@ def main() -> None:
         "backup_cron=5m_staggered",
         "lease=true",
         "public_win5_mutation=false",
+        "official_target_row_parse=true",
+        "race_time_hydration=d1_official_program",
         "actual_time_deadline=true",
         "t15_lock=true",
         "morning_preview_guard=0930_jst",

@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { decodeJraHtml } from "../src/v1/jra-official-odds.js";
-import { parseWin5TargetsFromHtml, WIN5_PAGE_URL } from "../src/v1/completed-win5.js";
+import { WIN5_PAGE_URL } from "../src/v1/completed-win5.js";
+import { parseWin5TargetIdentitiesFromHtml } from "../src/v1/win5-official-target-repair.js";
 
 function jstNow(now = new Date()): { date: string; hour: number } {
   const shifted = new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString();
@@ -22,16 +23,17 @@ const response = await fetch(WIN5_PAGE_URL, {
 assert.equal(response.ok, true, `JRA WIN5 page HTTP ${response.status}`);
 const bytes = await response.arrayBuffer();
 const html = decodeJraHtml(bytes, response.headers.get("content-type"));
-const targets = parseWin5TargetsFromHtml(html, date);
+const targets = parseWin5TargetIdentitiesFromHtml(html, date);
 
-// JRA's public WIN5 page can stop exposing the finished day's target block
-// later in the evening. That is not a parser/runtime regression. During the
-// publication window, however, zero targets remains a hard failure.
+// The current JRA target-list table publishes venue/race identities, but does
+// not publish each race start time in the same row. Production hydrates those
+// exact five identities from the already-synced official race table in D1.
 if (targets.length === 0 && now.hour >= 18) {
   console.log(JSON.stringify({ status: "LIVE_WIN5_OFFICIAL_AFTER_HOURS", date, jstHour: now.hour, targetCount: 0 }));
 } else {
-  assert.equal(targets.length, 5, `JRA WIN5 target parse failed for ${date}: ${targets.length}`);
+  assert.equal(targets.length, 5, `JRA WIN5 target identity parse failed for ${date}: ${targets.length}`);
   assert.deepEqual(targets.map((row) => row.leg), [1, 2, 3, 4, 5]);
-  assert.ok(targets.every((row) => row.raceDate === date && row.raceNo >= 1 && row.raceNo <= 12 && Number.isFinite(Date.parse(row.startTimeUtc))));
-  console.log(JSON.stringify({ status: "LIVE_WIN5_OFFICIAL_OK", date, targets: targets.map((row) => ({ leg: row.leg, venue: row.venue, raceNo: row.raceNo, startTimeJst: row.startTimeJst })) }));
+  assert.ok(targets.every((row) => row.raceDate === date && row.raceNo >= 1 && row.raceNo <= 12 && row.venue.length > 0));
+  assert.equal(new Set(targets.map((row) => `${row.venue}:${row.raceNo}`)).size, 5);
+  console.log(JSON.stringify({ status: "LIVE_WIN5_OFFICIAL_OK", date, targets: targets.map((row) => ({ leg: row.leg, venue: row.venue, raceNo: row.raceNo })) }));
 }
