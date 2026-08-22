@@ -54,3 +54,5 @@ jobs:
           done
           echo 'LIVE_TICK_TWO_PASS_NOT_READY' >&2
           exit 1
+
+# Immediate production tick after the 2026-08-22 full-day miss audit.
