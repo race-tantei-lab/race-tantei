@@ -13,6 +13,7 @@ import type { Env } from "./v1/types.js";
 
 const DRIVER_VERSION = "live-deadline-v2-lease-archive-sla-20260822";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
+const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
 const SELECTION_PREFIX = "final_daily_selection:";
 
 function iso(now = new Date()): string { return now.toISOString(); }
@@ -31,6 +32,14 @@ async function saveDriverState(db: D1Database, date: string, payload: Record<str
     VALUES(?,?,CURRENT_TIMESTAMP)
     ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
   `).bind(`${DRIVER_STATE_PREFIX}${date}`, JSON.stringify(payload)).run();
+}
+
+async function saveLeaseSkipState(db: D1Database, date: string, payload: Record<string, unknown>): Promise<void> {
+  await db.prepare(`
+    INSERT INTO rt_system_state(state_key,state_value,updated_at)
+    VALUES(?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
+  `).bind(`${LEASE_SKIP_PREFIX}${date}`, JSON.stringify(payload)).run();
 }
 
 function auditGuard(guard: Awaited<ReturnType<typeof runCompletedWorkerDeadlineGuard>>) {
@@ -78,7 +87,7 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       completedAt: iso(),
       durationMs: Date.now() - started.getTime(),
     };
-    await saveDriverState(env.DB, date, skipped);
+    await saveLeaseSkipState(env.DB, date, skipped);
     return skipped;
   }
 
@@ -216,12 +225,19 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
     return result;
   } catch (error) {
     const completed = new Date();
+    let previousState: unknown = null;
+    try {
+      const row = await env.DB.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
+        .bind(`${DRIVER_STATE_PREFIX}${date}`).first<{ value: string }>();
+      previousState = row?.value ? JSON.parse(row.value) : null;
+    } catch { /* preserve the primary failure even if audit recovery fails */ }
     const failure = {
       ...base,
       status: "error",
       phase: "failed",
       ok: false,
       error: errorText(error),
+      previousState,
       completedAt: iso(completed),
       durationMs: completed.getTime() - started.getTime(),
     };
