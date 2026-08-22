@@ -1,60 +1,71 @@
 # レース探偵 — 正本引継ぎ
 
-> **次スレッドで「レース探偵を引き継いで」「最終状態から再開」と言われたら、最初にこのファイルと `FINAL_STATE_20260816.md` を読むこと。**
+> **次スレッドで「レース探偵を引き継いで」「最終状態から再開」と言われたら、このファイル → `config/canonical-production-manifest.json` → 現行 `main` / runtime の順で確認すること。**
 >
-> 保存会話・古いREADME・研究ブランチ・旧 `public-site-entry-v*`・旧monitorから現行仕様を推測しない。
-> current runtimeは必ず `main` / `wrangler.jsonc` / GitHub Actions / 必要なら本番D1を直接確認する。
+> 保存会話・古いREADME・研究ブランチ・旧 `public-site-entry-v*` から現行仕様を推測しない。
+> `FINAL_STATE_20260816.md` は2026-08-16時点の事故対応・安全要件を残す**historical baseline**であり、現在のライブ確定アーキテクチャそのものではない。
 
 ## 0. 現在地
 
 - repository: `race-tantei-lab/race-tantei`
 - production branch: `main`
 - status: **completed model / production active**
-- handoff version: **4**
+- handoff version: **5**
+- canonical manifest: `config/canonical-production-manifest.json`
+- manifest as-of: `2026-08-22T19:20:00+09:00`
+- verified live-architecture baseline commit: `5265321ad2186271aee96f45f98cbeec79c7df83`
 - production site: `https://race-tantei-phase0.race-tantei.workers.dev`
-- Worker: `race-tantei-phase0`
+- public Worker: `race-tantei-phase0`
 - D1: `race-tantei-phase0`
 - D1 database ID: `949b5e8b-d1a4-4c4e-80d1-d031afdc03de`
 - current UI entry: **固定値で覚えず必ず `wrangler.jsonc.main` を読む**
+  - 2026-08-22確認値: `src/public-site-entry-v34.ts`
 - current deploy revision: **必ず `wrangler.jsonc.vars.DEPLOY_REVISION` を読む**
-- Worker version IDも固定しない。必要なら本番deploymentを直接確認する。
+  - 2026-08-22確認値: `ten-year-completed-public-v34-live-deadline-detached-20260822`
+- public Worker version IDも固定しない。必要なら `analysis-results/production-deployment.log` と本番deploymentを直接確認する。
 
-### 2026-08-16 17:29 JSTの最終基準
+### 現行ライブ確定の正本
 
-live-lock / T-15 / JRA公式オッズ / DB防衛線の最終状態は:
+- scheduler entry: `src/live-deadline-entry-v2.ts`
+- primary Worker config: `wrangler.live-deadline.jsonc`
+- backup Worker config: `wrangler.live-deadline-backup.jsonc`
+- deploy workflow: `.github/workflows/deploy-live-deadline.yml`
+- production readiness: `.github/workflows/verify-live-deadline-production.yml`
+- primary schedule: **毎分** (`* * * * *`)
+- backup schedule: **5分間隔で2分ずらし** (`2-59/5 * * * *`)
+- public live mutation: **disabled**
+- 旧 `/_ops/live-tick`: **本番404 / hard-disabled**
 
-**`FINAL_STATE_20260816.md`**
+2026-08-22の実装baseline `5265321...` では:
 
-を正本とする。
+- live-deadline deploy run `32567140449`: **success**
+- live-deadline readiness run `32567140403`: **success**
+- その後のpublic deploy run `32567363557`: **success**
 
-この時点では:
-
-- `wrangler.jsonc.main = src/public-site-entry-v30.ts`
-- deploy revision = `ten-year-completed-public-v30-clear-language-20260816`
-- Worker cron = 毎分 (`* * * * *`)
-- final safety implementation baseline = `6c96994f250fc6e91a33ff7e8a5b26a6c565a8a7`
-- Phase 0 checks run `31936304428` / job `95138668577` は全step success
-
-以後コードが進んだ場合はこの固定値より現行mainを優先するが、**安全要件を後退させてはいけない**。
+以後コードが進んだ場合はこの固定値より**現行main・GitHub Actions・必要なら本番D1**を優先する。ただし下記の安全要件を後退させてはいけない。
 
 ## 1. 次スレッドの開始順
 
-1. `HANDOFF.md`
-2. `FINAL_STATE_20260816.md`
-3. `config/canonical-production-manifest.json`
-4. `config/ten-year-completed-model.json`
-5. `analysis-results/ten-year-model-completion-20260812.json`
-6. `analysis-results/completed-model-methodology-audit-20260813.md`
-7. `wrangler.jsonc` でcurrent entry / cron / build / revision確認
-8. live-lock safetyを確認
-   - `src/v1/completed-worker-deadline-guard.ts`
-   - `src/v1/completed-worker-live-lock.ts`
-   - `src/v1/completed-final-invariants.ts`
-   - `.github/workflows/auto-final-live-bets.yml`
-   - `scripts/run-stored-preview-deadline-backup.py`
-9. 最新mainのPhase 0 checks / production checks確認
-10. 必要なら本番D1で対象レースのfinal state / locked_at / oddsSourceを確認
-11. 依頼された具体作業へ進む。モデル探索からやり直さない。
+1. `HANDOFF.md`（このファイル）
+2. `config/canonical-production-manifest.json`
+3. `wrangler.jsonc` のcurrent public entry / revision / D1
+4. `wrangler.live-deadline.jsonc`
+5. `wrangler.live-deadline-backup.jsonc`
+6. `src/live-deadline-entry-v2.ts`
+7. `src/v1/completed-worker-live-lock.ts`
+8. `src/v1/completed-worker-deadline-guard.ts`
+9. `src/v1/completed-final-invariants.ts`
+10. `src/v1/live-preview-safety.ts`
+11. `.github/workflows/deploy-live-deadline.yml`
+12. `.github/workflows/verify-live-deadline-production.yml`
+13. `config/ten-year-completed-model.json`
+14. `analysis-results/ten-year-model-completion-20260812.json`
+15. `analysis-results/completed-model-methodology-audit-20260813.md`
+16. 最新mainのproduction checks / readiness / deploymentを直接確認
+17. 必要なら本番D1で対象レースのpreview / final state / `locked_at` / `oddsSource` を確認
+18. 依頼された具体作業へ進む。**モデル探索からやり直さない。**
+
+`FINAL_STATE_20260816.md` は過去事故・旧安全baselineの確認が必要な場合だけ参照する。現在のscheduler構成をそこから復元しない。
 
 ## 2. 完成モデルの正本
 
@@ -66,9 +77,7 @@ live-lock / T-15 / JRA公式オッズ / DB防衛線の最終状態は:
 - state manifest: `models/ten-year-production-state-manifest.json`
 - runner state: `models/ten-year-runner-feature-state.json.gz`
 - selection state: `models/ten-year-race-selection-state.json.gz`
-- canonical ten-year generation wrapper: `scripts/run-ten-year-auto-final-live.py`
-  - これはcompleted modelのpreday/live生成wrapperとして保持する。
-  - **現行T-15自動backupはこのrunnerを呼ばず、stored-preview-onlyで動く。両者を混同しない。**
+- canonical generation wrapper: `scripts/run-ten-year-auto-final-live.py`
 
 weights SHA256:
 
@@ -106,9 +115,9 @@ canonical selection constants:
 
 完成監査:
 
-- targetDayResultsUsedForSelection false
-- historicalFinalOddsUsedForSelection false
-- syntheticOddsUsed false
+- `targetDayResultsUsedForSelection = false`
+- `historicalFinalOddsUsedForSelection = false`
+- `syntheticOddsUsed = false`
 
 ### final tickets
 
@@ -134,7 +143,7 @@ stakes:
 - スタンダード 5,000円
 - プレミアム 10,000円
 
-**JRA公式オッズのみ。synthetic / estimated oddsは禁止。**
+**JRA公式オッズのみ。synthetic / estimated / probability-derived substitute oddsは禁止。**
 
 ## 3. 過去成績の読み方
 
@@ -143,75 +152,92 @@ stakes:
 - ROI `431.6505898681471%`
 - hitRacePct `54.406662040249834%`
 
-ただしこれは `full frozen archive uniform discovery` のfull-period retrospective aggregate。
+これは完成ルールを凍結10年アーカイブ全体へ適用した `full-period retrospective aggregate`。
 
 以下の断定は禁止:
 
-- 「431.7%は完全OOF」
-- 「431.7%は未使用期間だけの成績」
-- 「431.7%がそのまま将来期待回収率」
+- 「431.65%は完全OOF」
+- 「431.65%は未使用期間だけの成績」
+- 「431.65%がそのまま将来期待回収率」
 - timestamp証拠なしに「過去14,410Rは現在のlive lockと完全同条件」
 
 詳細は `analysis-results/completed-model-methodology-audit-20260813.md` を読む。
 
-## 4. production state
+## 4. 現行ライブ確定アーキテクチャ
 
-正本: `models/ten-year-production-state-manifest.json`
+ライブ買い目生成・確定は**隔離されたlive-deadline Workersだけ**が所有する。公開サイトの閲覧・APIアクセス・一般リクエストからライブ買い目を生成・再計算・確定してはいけない。
 
-- throughDate 2026-08-09
-- sourceHistoryArtifactId 9056288221
-- canonicalFeatureArtifactId 9087261097
-- canonicalDemandArtifactId 9074033903
+### 時系列
 
-SHA256:
+- **T-90**: JRA公式オッズでpreview作成を開始
+- **T-40**: 早期SLA監査
+- **T-30**: official previewが無ければ異常検知
+- **T-25**: 通常のimmutable finalを確定
+- **T-20**: 保存済みofficial previewだけを使うDB中心の最終救済guard
+- **T-15**: hard creation boundary。新規作成を一切しない。既に正しくfinal済みか確認するだけ
+- **T-15経過後**: D1 trigger自体が新規final / 後付けfinalを拒否
 
-- runner feature state: `86f8fdf6ee82d4465efec50ff36198010a20044bc1187f4b8c8ded912f640f3f`
-- race selection state: `b27775dbc645ce326348cf60c6f139f8689db779a7fbd86c19d1b26eb5691ca8`
+T-15境界以降に禁止されること:
 
-正本にないmetadataをchecker通過目的で捏造しない。
+- 新規モデルロード
+- 新規モデル推論
+- 新規レース再計算
+- 新規JRAオッズfetch
+- 新規買い目生成
+- backfillによる後付け確定
+- synthetic / estimated / probability fallbackでの代替確定
 
-## 5. Worker parity
+### 冗長化と排他
 
-- asset builder: `scripts/build-worker-completed-model-assets.py`
-- model parity: `scripts/verify-worker-model-parity.ts`
-- generated runtime asset: `worker-assets/_internal/completed-model/`
-- selection parity workflow: `.github/workflows/verify-worker-selection-parity.yml`
+- primary Workerは毎分実行
+- backup Workerは5分ごとに2分ずらして実行
+- D1 leaseで同時mutationを排他
+- official previewはappend-only archiveにも保存
+- 障害時はnewest last-good official previewを復元可能
+- 各工程で現在時刻を取り直し、古いscheduled timestampを締切判定へ流用しない
+- 1レースの異常を理由に他レースの確定経路全体を長時間停止させない
 
-Worker assetはcanonical model本体ではなく生成物。
+### official odds only
 
-2026-08-15の検証では644行、最大絶対誤差 `1.1102230246251565e-16` で `WORKER_MODEL_PARITY_OK` を確認済み。
+finalに使える `oddsSource` は次の2種類だけ。
 
-## 6. 2026-08-16 live-lock最終安全要件
+- `jra-fast-official`
+- `jra-crawl-official`
 
-詳細正本: `FINAL_STATE_20260816.md`
+JRA公式previewが作れない外部障害時は、偽データで埋めず**fail closed**する。
 
-最低限、以下を維持する。
+### final immutable
 
-- public final deadlineはT-15
-- 毎分Cronの秒ズレ対策としてdeadline guardはT-16からarm
-- T-15 boundaryでは新規モデル推論・再計算・外部オッズfetch・新規買い目生成をしない
-- finalは保存済みpreviewのみから作る
-- allowed oddsSourceは `jra-fast-official` / `jra-crawl-official` のみ
-- probability fallback禁止
-- D1 triggerでも非公式locked finalを拒否
-- locked finalはimmutable
-- strict complete = 3コース×2点 = 6行、各予算一致、source_prediction_id=-2
-- GitHub backupは5分ごとのstored-preview-only one-shot
-- long-running monitor依存へ戻さない
-- 1レースのfailureで後続を止めない
-- official previewが作れない外部障害時は偽データで埋めずfail closed
+strict completeは1レースにつき:
 
-### 過去事故の扱い
+- `rt_public_bets` 6行
+- ライト / スタンダード / プレミアム各2点
+- 各コースで異なる2券種
+- 3コースの買い目組合せは同一
+- `source_prediction_id = -2`
+- ライト合計2,000円
+- スタンダード合計5,000円
+- プレミアム合計10,000円
+- final state = locked
 
-正常扱いへ書き換えない。
+locked後の公開買い目はD1 invariantでもimmutable。
 
-- 札幌6R: T-15より21.864秒遅延
-- 中京6R: 旧monitor/backup詰まりで大幅遅延
-- 新潟7R: 厳密T-15基準で10.532秒遅延
+## 5. 旧構成との関係
 
-これらを受けて現在のT-16 arm + DB防衛線へ変更した。
+2026-08-16の `FINAL_STATE_20260816.md` に記録されたT-16 arm + stored-preview backup構成は、札幌6R・中京6R・新潟7Rの締切事故を受けて作られた重要なhistorical safety baseline。ただし**2026-08-22現在のproduction schedulerではない**。
 
-## 7. frozen history / 公開サイト
+その後の監査で見つかった次の問題を解消するため、現行v5へ移行した。
+
+- scheduled時刻と実処理時刻の混同
+- 公開Worker Cronとライブ確定処理の結合
+- 複数のライブ生成経路
+- ページ閲覧からのバックグラウンド生成
+- 外部から叩けるライブmutation endpoint
+- primary/backupの重複mutation
+
+現在は隔離Worker + lease + archive + T-90/T-25/T-20/T-15構成を正本とする。旧GitHub backup方式や公開サイト経由のlive-tickを現行経路として復活させない。
+
+## 6. frozen history / 公開サイト
 
 - 2016-08-10〜2026-08-09のcanonical history assetが選定身分を決める
 - canonical ticketあり → 選定済み
@@ -240,15 +266,17 @@ runner archive:
 - `data/ten-year-runners/manifest.json`
 - 34,566R / 480,441 runner rows / 121 months
 
-## 8. 絶対にしないこと
+## 7. 絶対にしないこと
 
 - 完成モデルを勝手に再探索・再学習・再選定しない
 - completed modelをcandidateへ戻さない
 - 過去結果から買い目を後付け変更しない
 - synthetic / estimated / probability fallback oddsを使わない
 - JRA公式2source以外をlocked finalにしない
-- T-15以降に新しい予測やオッズを生成して後付け確定しない
+- T-15以降に新しい予測・オッズ・買い目を生成して後付け確定しない
 - locked 6行を変更しない
+- 公開サイト・ページアクセスへライブmutationを戻さない
+- 旧 `/_ops/live-tick` を再公開しない
 - long-running monitorへ戻さない
 - frozen canonical skipを旧D1買い目だけで選定済みにしない
 - Worker assetをcanonical model本体扱いしない
@@ -258,54 +286,45 @@ runner archive:
 - validationの種類を根拠なくOOFと呼ばない
 - exact odds timestampを証拠なしにlive-equivalentと呼ばない
 
-## 9. 検証ルール
+## 8. 検証ルール
 
-通常のcanonical verifier:
+canonical verifier:
 
 - script: `scripts/verify-canonical-handoff.py`
 - workflow: `.github/workflows/verify-canonical-handoff.yml`
 - success marker: `CANONICAL_HANDOFF_OK`
 
-live-lock安全検証:
+live production:
 
-- `scripts/verify-live-lock-safety.py`
-- Phase 0 checks
+- deploy: `.github/workflows/deploy-live-deadline.yml`
+- readiness: `.github/workflows/verify-live-deadline-production.yml`
+- safety verifier: `scripts/verify-live-lock-safety.py`
 
-2026-08-16最終baselineではrun `31936304428` / job `95138668577` が以下すべてsuccess:
+「完成」と言うときは、コード存在だけでなく**current mainの実行証跡**を確認する。関連production checkが赤い場合は完成扱いしない。
 
-- Verify live-lock safety
-- Verify bodyweight final-lock acquisition
-- Verify WIN5 navigation UI
-- Verify public language clarity
-- Typecheck and test
+なお、旧研究・ROI探索用workflowはproduction正本ではない。研究workflowの失敗をcompleted modelやlive-deadline productionの失敗と混同しない一方、production checkの失敗を研究扱いして無視することもしない。
 
-以後もcurrent mainのcheck結果を直接確認し、赤いまま完成扱いしない。
+## 9. 会話上の進め方
 
-## 10. 会話上の進め方
+ツール作業では進捗を短く表示する。同一タスク内で不要な承認待ちを増やさず進める。
 
-ツール作業では進捗を短く表示する。同一タスク内で承認待ちを増やさず進める。
+ユーザーが「確認して」「完璧に引き継いで」と言った場合、保存会話の記憶だけでなくcurrent GitHub / workflow / 必要ならproduction D1を直接確認する。
 
-ユーザーが「確認して」と言った場合、保存会話の記憶だけでなくcurrent GitHub / workflow / 必要ならproduction D1を直接確認する。
-
-「絶対」「完璧」と言う場合は、コード存在だけでなく実行証跡まで確認する。
-
-## 11. 一番短い引継ぎ認識
+## 10. 一番短い引継ぎ認識
 
 - completed modelは凍結production active。
 - weights SHA `63e359...453a5`。
-- 14,410R / retrospective ROI 431.6505898681471% / hit 54.4%。完全OOFとは呼ばない。
+- 34,566R中14,410R選定、retrospective ROI 431.6505898681471%、hit 54.4%。完全OOFとは呼ばない。
 - 各会場5R、1R2点、異なる2券種。
-- race selectionはproxy-ticket raceScore。
+- race selectionはprior-only proxy-ticket raceScore。
 - final ticketsは56-feature LightGBM + Plackett-Luce + JRA公式オッズ。
-- canonical generation wrapperは `run-ten-year-auto-final-live.py`。T-15 backupとは別。
-- live final deadlineはT-15、guardはT-16からarm。
-- T-15以降の新規fetch/recompute/generation禁止。
-- locked finalはJRA公式2sourceのみ。DBでも強制。
-- probability fallback禁止。
-- locked final immutable。
-- backupはstored-preview-only one-shot。
-- 外部障害時は捏造せずfail closed。
-- current UIは毎回 `wrangler.jsonc.main` を確認。2026-08-16 17:29 JST時点はv30。
-- live-lock最終正本は `FINAL_STATE_20260816.md`。
-
-**2026-08-16の最終状態は `FINAL_STATE_20260816.md` を優先する。**
+- public live mutationはdisabled。
+- live schedulerは `src/live-deadline-entry-v2.ts`。
+- primary毎分 + backup 5分staggered + D1 lease。
+- T-90 preview開始 / T-30 required / T-25 normal final / T-20 rescue / T-15 hard no-new-final。
+- official oddsは `jra-fast-official` / `jra-crawl-official` のみ。
+- T-15後の新規finalはD1でも拒否。
+- locked finalはimmutable。
+- external outage時は偽データで埋めずfail closed。
+- `FINAL_STATE_20260816.md` はhistorical baselineでありcurrent schedulerではない。
+- 次回も必ず現行main・Actions・必要ならD1まで直接確認してから続ける。
