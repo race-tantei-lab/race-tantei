@@ -3,7 +3,7 @@ import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-
 import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "live-deadline-v1-isolated-actual-clock-20260822";
+const DRIVER_VERSION = "live-deadline-v2-hard-t15-20260822";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
 const SELECTION_PREFIX = "final_daily_selection:";
 
@@ -40,6 +40,7 @@ function auditGuard(guard: Awaited<ReturnType<typeof runCompletedWorkerDeadlineG
     checkedAt: guard.checkedAt,
     dueRaceIds: guard.dueRaceIds,
     lockedRaceIds: guard.lockedRaceIds,
+    deadlineMissedRaceIds: guard.deadlineMissedRaceIds,
     skippedAlreadyLockedRaceIds: guard.skippedAlreadyLockedRaceIds,
     errors: guard.errors,
   };
@@ -129,14 +130,29 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       ...guardAfter.skippedAlreadyLockedRaceIds,
     ]);
     const unresolvedDueRaceIds = [...due].filter((raceId) => !locked.has(raceId));
-    const guardErrors = [...guardBefore.errors, ...guardAfter.errors];
+    const allGuardErrors = [...guardBefore.errors, ...guardAfter.errors];
+    const unresolvedGuardErrors = allGuardErrors.filter((row) => !locked.has(row.raceId));
     const liveErrors = live?.errors ?? [];
+    const hardDeadlineBreachRaceIds = [...new Set([
+      ...guardBefore.deadlineMissedRaceIds,
+      ...guardAfter.deadlineMissedRaceIds,
+      ...(live?.deadlineBreachRaceIds ?? []),
+    ])];
     const completed = new Date();
-    const ok = !liveFailure && !guardErrors.length && !unresolvedDueRaceIds.length;
+    const ok = !liveFailure
+      && !unresolvedGuardErrors.length
+      && !unresolvedDueRaceIds.length
+      && !hardDeadlineBreachRaceIds.length;
 
     const result = {
       ...base,
-      status: ok ? "ok" : unresolvedDueRaceIds.length || guardErrors.length ? "deadline_unresolved" : "live_retry_needed",
+      status: ok
+        ? "ok"
+        : hardDeadlineBreachRaceIds.length
+          ? "deadline_breach"
+          : unresolvedDueRaceIds.length || unresolvedGuardErrors.length
+            ? "deadline_unresolved"
+            : "live_retry_needed",
       phase: "complete",
       ok,
       selection,
@@ -150,14 +166,19 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       guardAfterCheckedAt: iso(guardAfterNow),
       guardAfter: auditGuard(guardAfter),
       unresolvedDueRaceIds,
+      unresolvedGuardErrors,
+      hardDeadlineBreachRaceIds,
       completedAt: iso(completed),
       durationMs: completed.getTime() - started.getTime(),
     };
 
     await saveDriverState(env.DB, date, result);
 
-    if (unresolvedDueRaceIds.length || guardErrors.length) {
-      throw new Error(`LIVE_DEADLINE_DUE_UNRESOLVED:${unresolvedDueRaceIds.join(",")}:guards=${JSON.stringify(guardErrors)}`);
+    if (hardDeadlineBreachRaceIds.length) {
+      throw new Error(`LIVE_DEADLINE_HARD_T15_BREACH:${hardDeadlineBreachRaceIds.join(",")}`);
+    }
+    if (unresolvedDueRaceIds.length || unresolvedGuardErrors.length) {
+      throw new Error(`LIVE_DEADLINE_DUE_UNRESOLVED:${unresolvedDueRaceIds.join(",")}:guards=${JSON.stringify(unresolvedGuardErrors)}`);
     }
     if (liveFailure) throw new Error(`LIVE_DEADLINE_GENERATION_FAILED:${liveFailure}`);
     return result;
