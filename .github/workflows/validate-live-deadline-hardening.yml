@@ -41,10 +41,8 @@ jobs:
       - run: npm ci
       - name: Typecheck repository
         run: npm run typecheck
-      - name: Build deadline regression tests
-        run: npm run build:test
       - name: Verify strict T-15 boundary
-        run: node dist-test/tests/completed-worker-deadline-guard-tests.js
+        run: npx tsx tests/completed-worker-deadline-guard-tests.ts
       - name: Build isolated Worker without deployment
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
       - name: Mark hardening validation success
