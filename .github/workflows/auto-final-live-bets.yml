@@ -3,8 +3,10 @@ name: Automatic final live bets
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/5 8-19 * * 6,0,1"
-      timezone: "Asia/Tokyo"
+    # GitHub schedule cron is UTC. These two windows equal 08:00-19:55 JST
+    # on Saturday/Sunday/Monday.
+    - cron: "*/5 23 * * 5,6,0"
+    - cron: "*/5 0-10 * * 6,0,1"
   push:
     branches: [main]
     paths:
