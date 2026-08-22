@@ -1,0 +1,39 @@
+name: Validate live deadline hardening
+
+on:
+  push:
+    branches:
+      - hardening/live-lock-v35
+    paths:
+      - "src/live-deadline-entry-v1.ts"
+      - "src/v1/completed-worker-live-lock.ts"
+      - "src/v1/completed-worker-deadline-guard.ts"
+      - "src/v1/completed-selection-runtime.ts"
+      - "src/v1/completed-final-invariants.ts"
+      - "src/v1/jra-official-odds-fetch.ts"
+      - "wrangler.live-deadline.jsonc"
+      - ".github/workflows/validate-live-deadline-hardening.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-live-deadline-hardening
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Typecheck repository
+        run: npm run typecheck
+      - name: Build isolated Worker without deployment
+        run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
