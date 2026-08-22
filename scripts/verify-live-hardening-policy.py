@@ -19,12 +19,17 @@ fast = read("src/v1/jra-official-odds-fetch.ts")
 crawl = read("src/v1/jra-official-odds.ts")
 primary = read("wrangler.live-deadline.jsonc")
 backup = read("wrangler.live-deadline-backup.jsonc")
+deploy = read(".github/workflows/deploy-live-deadline.yml")
 
 for token, label in [
     ("const PREVIEW_OPEN_MS = 90 * 60 * 1000;", "preview-opens-t90"),
     ("const PREVIEW_REQUIRED_MS = 30 * 60 * 1000;", "preview-required-t30"),
     ("const NORMAL_LOCK_MS = 25 * 60 * 1000;", "normal-final-t25"),
     ("const DEADLINE_MS = 15 * 60 * 1000;", "hard-t15"),
+    ("const EARLY_PREVIEW_REFRESH_MS = 10 * 60 * 1000;", "early-refresh-cadence"),
+    ("const MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000;", "mid-refresh-cadence"),
+    ("const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;", "near-refresh-cadence"),
+    ("previewIsFreshEnough", "preview-refresh-throttle"),
     ('new Set(["jra-fast-official", "jra-crawl-official"])', "official-odds-only"),
     ("cachedWorkerModel", "model-runtime-cache"),
     ("WORKER_HARD_T15_MISSED", "no-post-t15-generation"),
@@ -65,8 +70,13 @@ for token, label in [
 
 for token, label in [
     ("acquireLiveDeadlineLease", "entry-lease"),
+    ("LEASE_SKIP_PREFIX", "lease-skip-audit-isolation"),
     ("restoreNewestOfficialPreviewArchives", "entry-archive-restore"),
     ("auditLiveDeadlineSla", "entry-sla"),
+    ("runUpcomingEntryDerivedRepair", "selection-entry-repair"),
+    ("selection_critical", "selection-sla"),
+    ("remainingToFirstRaceMs", "selection-time-margin"),
+    ("previousState", "failure-audit-preservation"),
     ("new Date()", "entry-wall-clock"),
     ('return new Response("NOT_FOUND", { status: 404 });', "no-public-mutation-endpoint"),
 ]:
@@ -85,6 +95,12 @@ for token, label in [
     ('"crons": ["2-59/5 * * * *"]', "backup-staggered-five-minute"),
 ]:
     require(backup, token, label)
+for token, label in [
+    ("Deploy primary live deadline Worker", "primary-deploy"),
+    ("Deploy backup live deadline Worker", "backup-deploy"),
+    ("production/live-deadline", "dual-deploy-status"),
+]:
+    require(deploy, token, label)
 
 for token, label in [
     ("const FETCH_BUDGET_MS = 25_000;", "jra-total-budget"),
