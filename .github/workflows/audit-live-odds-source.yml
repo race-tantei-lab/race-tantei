@@ -1,0 +1,44 @@
+name: Audit live official odds source
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/audit-live-odds-source.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Query current production final sources
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          echo "=== LIVE_FINAL_SOURCES $today ==="
+          sql="SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.start_time_jst AS startTimeJst,COUNT(b.id) AS betRows,MIN(b.locked_at) AS publicLockedAt,json_extract(s.state_value,'$.lockedAt') AS stateLockedAt,json_extract(s.state_value,'$.finalizedFrom') AS finalizedFrom,json_extract(s.state_value,'$.oddsSource') AS oddsSource,json_extract(s.state_value,'$.oddsAvailable') AS oddsAvailable,json_extract(s.state_value,'$.previewGeneratedAt') AS previewGeneratedAt FROM rt_races r LEFT JOIN rt_public_bets b ON b.race_id=r.race_id AND b.source_prediction_id=-2 LEFT JOIN rt_system_state s ON s.state_key='worker_live_final:'||r.race_id WHERE r.race_date='$today' AND (s.state_key IS NOT NULL OR b.id IS NOT NULL) GROUP BY r.race_id,r.venue,r.race_no,r.start_time_jst,s.state_value ORDER BY r.start_time_utc,r.venue,r.race_no;"
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$sql" | tee /tmp/live-final-sources.json
+          echo "=== LIVE_LOCK_AUDITS ==="
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,state_value,updated_at FROM rt_system_state WHERE state_key IN ('worker_live_lock:$today','worker_emergency_lock:$today') ORDER BY state_key;"
+          TODAY="$today" node <<'NODE'
+          const fs=require('fs');
+          const raw=JSON.parse(fs.readFileSync('/tmp/live-final-sources.json','utf8'));
+          const rows=(Array.isArray(raw)?raw:[raw]).flatMap(x=>Array.isArray(x?.results)?x.results:[]);
+          console.log('SUMMARY', JSON.stringify(rows.map(r=>({raceId:r.raceId,start:r.startTimeJst,betRows:Number(r.betRows||0),finalizedFrom:r.finalizedFrom||null,oddsSource:r.oddsSource||null,oddsAvailable:r.oddsAvailable==null?null:Number(r.oddsAvailable),lockedAt:r.stateLockedAt||r.publicLockedAt||null}))));
+          if (!rows.length) throw new Error('No current-day final/public bet rows found');
+          const official=rows.filter(r=>r.oddsSource==='jra-fast-official'||r.oddsSource==='jra-crawl-official');
+          const emergency=rows.filter(r=>r.finalizedFrom==='probability_fallback_emergency');
+          console.log(`official=${official.length} emergency=${emergency.length} total=${rows.length}`);
+          NODE
