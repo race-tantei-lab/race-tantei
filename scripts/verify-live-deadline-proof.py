@@ -88,12 +88,14 @@ def main() -> None:
     forbid(public, "runCompletedWorkerDeadlineGuard", "public site")
 
     require(primary, '"crons": ["* * * * *"]', "primary cron")
-    require(backup, '"crons": ["2-59/5 * * * *"]', "backup cron")
+    require(backup, '"crons": ["* * * * *"]', "backup cron")
 
     for needle in (
         'cron: "*/5 23 * * *"',
         'cron: "*/5 0-10 * * *"',
         "id-token: write",
+        'pulses=5',
+        'sleep 55',
         "audience=race-tantei-live-deadline",
         "/internal/github-tick",
         "production/live-deadline-external-watchdog",
@@ -126,6 +128,7 @@ def main() -> None:
     for needle in (
         "const providerSets",
         "races_per_scenario=15",
+        "blackout_minutes=3",
         "jraRecoveryMinutesBeforeStart",
         "generationSeconds",
         "skipFirstEligibleTick",
@@ -135,7 +138,8 @@ def main() -> None:
 
     print(
         "LIVE_DEADLINE_PROOF_OK",
-        "schedulers=cloudflare_1m+cloudflare_5m+github_5m",
+        "schedulers=cloudflare_primary_1m+cloudflare_backup_1m+github_minute_pulses",
+        "scheduler_blackout_fault_injection=3m",
         "github_auth=oidc_rs256_workflow_bound",
         "preview=T90",
         "normal_lock=T25",
