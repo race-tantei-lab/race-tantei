@@ -14,6 +14,8 @@ on:
       - "src/v1/upcoming-entry-derived-repair.ts"
       - "src/v1/jra-official-odds-fetch.ts"
       - "src/v1/jra-official-odds.ts"
+      - "tests/live-deadline-full-day-proof-tests.ts"
+      - "scripts/verify-live-deadline-proof.py"
       - "wrangler.live-deadline.jsonc"
       - "wrangler.live-deadline-backup.jsonc"
       - ".github/workflows/deploy-live-deadline.yml"
@@ -45,11 +47,10 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck
-      - name: Compile and run full-day live deadline proof
+      - name: Run exhaustive live deadline proof
         run: |
-          npm run build:test
-          node dist-test/tests/live-deadline-full-day-proof-tests.js
-          node dist-test/tests/completed-worker-deadline-guard-tests.js
+          npx tsx tests/live-deadline-full-day-proof-tests.ts
+          npx tsx tests/completed-worker-deadline-guard-tests.ts
           python scripts/verify-live-deadline-proof.py
       - name: Validate primary isolated Worker bundle
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
