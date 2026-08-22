@@ -158,7 +158,7 @@ jobs:
           schema=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
             "SELECT name,type FROM sqlite_master WHERE name='rt_win5_driver_lease' LIMIT 1")
           echo "$schema"
-          echo "$schema" | grep -q 'rt_win5_driver_lease'
+          grep -Fq 'rt_win5_driver_lease' <<<"$schema"
           state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
             "SELECT state_key AS stateKey,updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.status') AS driverStatus,json_extract(state_value,'$.win5Status') AS win5Status,json_extract(state_value,'$.targetCount') AS targetCount,json_extract(state_value,'$.snapshotReady') AS snapshotReady,json_extract(state_value,'$.snapshotLocked') AS snapshotLocked FROM rt_system_state WHERE state_key='win5_driver_success:${today}' LIMIT 1")
           echo "$state"
@@ -201,9 +201,9 @@ jobs:
           NODE
           page=$(curl --max-time 20 --retry 5 --retry-delay 3 --fail-with-body -sS \
             "https://race-tantei-phase0.race-tantei.workers.dev/win5?date=${today}")
-          echo "$page" | grep -q 'WIN5予想'
-          echo "$page" | grep -q '対象5レース'
-          echo "$page" | grep -q '買い目'
+          grep -Fq 'WIN5予想' <<<"$page"
+          grep -Fq '対象5レース' <<<"$page"
+          grep -Fq '買い目' <<<"$page"
       - name: Mark WIN5 production readiness success
         if: success()
         run: |
