@@ -20,9 +20,9 @@ type GithubOidcClaims = {
   event_name?: string;
   workflow_ref?: string;
 };
-type JwkSet = { keys?: JsonWebKey[] };
-
-type CachedJwks = { fetchedAt: number; keys: JsonWebKey[] };
+type GithubJwk = JsonWebKey & { kid?: string; alg?: string };
+type JwkSet = { keys?: GithubJwk[] };
+type CachedJwks = { fetchedAt: number; keys: GithubJwk[] };
 let cachedJwks: CachedJwks | null = null;
 
 function decodeBase64Url(value: string): Uint8Array {
@@ -38,7 +38,7 @@ function decodeJson<T>(value: string): T {
   return JSON.parse(new TextDecoder().decode(decodeBase64Url(value))) as T;
 }
 
-async function loadJwks(force = false): Promise<JsonWebKey[]> {
+async function loadJwks(force = false): Promise<GithubJwk[]> {
   const now = Date.now();
   if (!force && cachedJwks && now - cachedJwks.fetchedAt < JWKS_CACHE_MS) return cachedJwks.keys;
   const response = await fetch(GITHUB_OIDC_JWKS, {
@@ -46,7 +46,7 @@ async function loadJwks(force = false): Promise<JsonWebKey[]> {
     cf: { cacheTtl: 3600, cacheEverything: true },
   });
   if (!response.ok) throw new Error(`GITHUB_OIDC_JWKS_HTTP_${response.status}`);
-  const body = await response.json<JwkSet>();
+  const body = await response.json() as JwkSet;
   const keys = Array.isArray(body.keys) ? body.keys : [];
   if (!keys.length) throw new Error("GITHUB_OIDC_JWKS_EMPTY");
   cachedJwks = { fetchedAt: now, keys };
@@ -73,7 +73,7 @@ async function verifyWithKeys(
   signingInput: string,
   signature: Uint8Array,
   kid: string,
-  keys: JsonWebKey[],
+  keys: GithubJwk[],
 ): Promise<boolean> {
   const matching = keys.filter((key) => key.kid === kid && (key.alg == null || key.alg === "RS256"));
   for (const jwk of matching) {
