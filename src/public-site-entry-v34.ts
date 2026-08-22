@@ -3,7 +3,7 @@ import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-
 import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";
 import type { Env } from "./v1/types.js";
 
-const UI_VERSION = "ten-year-completed-public-v34-live-tick-backup-20260822";
+const UI_VERSION = "ten-year-completed-public-v34-live-tick-two-pass-20260822";
 const SELECTION_PREFIX = "final_daily_selection:";
 
 function jstDate(now = new Date()): string {
@@ -26,9 +26,8 @@ async function runDirectLiveTick(env: Env, now = new Date()) {
     return { status: "selection_missing", date, checkedAt: now.toISOString(), live: null, guardBefore: null, guardAfter: null };
   }
 
-  // First protect any race that already has a valid official preview. Do this before
-  // preview refresh/model work so an unrelated live-generation failure can never
-  // prevent a due race from becoming immutable.
+  // Protect any race that already has a valid official preview before attempting
+  // new model/odds work. An unrelated generation failure must never block a due lock.
   const guardBefore = await runCompletedWorkerDeadlineGuard(env, now);
 
   let live: Awaited<ReturnType<typeof runCompletedWorkerLiveLock>> | null = null;
@@ -39,9 +38,8 @@ async function runDirectLiveTick(env: Env, now = new Date()) {
     liveFailure = errorText(error);
   }
 
-  // Run the guard again because a T-20 tick may have had no preview on the first
-  // pass and generated one during runCompletedWorkerLiveLock. The second pass must
-  // lock that freshly saved official preview in the same invocation.
+  // A T-20 tick may have had no preview on the first pass and generated one during
+  // live work. Lock that newly stored official preview in the same invocation.
   const guardAfter = await runCompletedWorkerDeadlineGuard(env, now);
   const lockedAfter = new Set(guardAfter.lockedRaceIds);
   const unresolvedDueRaceIds = guardAfter.dueRaceIds.filter((raceId) => !lockedAfter.has(raceId));
@@ -129,8 +127,6 @@ export default {
     }
 
     // Preserve every existing scheduled task (results, settlement, WIN5, entry repair, etc.).
-    // The direct live tick above deliberately runs first so a failure deeper in the
-    // inherited chain cannot prevent preview generation / T-15 finalization.
     if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
