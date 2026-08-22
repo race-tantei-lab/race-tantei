@@ -45,10 +45,7 @@ function decodeJson<T>(value: string): T {
 async function loadJwks(force = false): Promise<GithubJwk[]> {
   const now = Date.now();
   if (!force && cachedJwks && now - cachedJwks.fetchedAt < JWKS_CACHE_MS) return cachedJwks.keys;
-  const response = await fetch(GITHUB_OIDC_JWKS, {
-    headers: { accept: "application/json" },
-    cf: { cacheTtl: 3600, cacheEverything: true },
-  });
+  const response = await fetch(GITHUB_OIDC_JWKS, { headers: { accept: "application/json" } });
   if (!response.ok) throw new Error(`GITHUB_OIDC_JWKS_HTTP_${response.status}`);
   const body = await response.json() as JwkSet;
   const keys = Array.isArray(body.keys) ? body.keys : [];
@@ -81,6 +78,8 @@ async function verifyWithKeys(
   keys: GithubJwk[],
 ): Promise<boolean> {
   const matching = keys.filter((key) => key.kid === kid && (key.alg == null || key.alg === "RS256"));
+  const signatureBytes = Uint8Array.from(signature);
+  const signingBytes = new TextEncoder().encode(signingInput);
   for (const jwk of matching) {
     try {
       const key = await crypto.subtle.importKey(
@@ -93,8 +92,8 @@ async function verifyWithKeys(
       const ok = await crypto.subtle.verify(
         "RSASSA-PKCS1-v1_5",
         key,
-        signature,
-        new TextEncoder().encode(signingInput),
+        signatureBytes.buffer,
+        signingBytes.buffer,
       );
       if (ok) return true;
     } catch {
