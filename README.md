@@ -2,11 +2,13 @@
 
 > **現行仕様・引継ぎは最初に [`HANDOFF.md`](HANDOFF.md) と [`config/canonical-production-manifest.json`](config/canonical-production-manifest.json) を参照してください。**
 >
-> 旧研究・旧UI・旧 `scripts/run-auto-final-live.py` から現行仕様を推測しないでください。
+> 旧研究・旧UI・旧ライブ確定経路から現行仕様を推測しないでください。current runtimeは `main` / `wrangler*.jsonc` / GitHub Actions を直接確認します。
 
 JRA中央競馬を対象に、発走前情報を使って完成済み10年モデルからレース選定と2点の買い目を固定し、公開成績を継続記録する Cloudflare Workers / D1 サイトです。
 
 ## 現在のproduction
+
+### Completed model
 
 - model: `ten-year-completed-model`
 - config: `config/ten-year-completed-model.json`
@@ -14,31 +16,60 @@ JRA中央競馬を対象に、発走前情報を使って完成済み10年モデ
 - model SHA256: `63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5`
 - completion audit: `analysis-results/ten-year-model-completion-20260812.json`
 - methodology audit: `analysis-results/completed-model-methodology-audit-20260813.md`
-- historical completion: 34,566 universe / 14,410 selected / ROI 431.6506%
-- live runner: `scripts/run-ten-year-auto-final-live.py`
-- workflow: `.github/workflows/auto-final-live-bets.yml`
-- public site entry: **`wrangler.jsonc.main`**
-  - 現時点: `src/public-site-entry-v18.ts`
+- historical completion: 34,566 universe / 14,410 selected / ROI 431.6505898681471%
+- canonical generation wrapper: `scripts/run-ten-year-auto-final-live.py`
+
+### Public site
+
+- public site entry: **常に `wrangler.jsonc.main` が正本**
+  - 2026-08-22確認値: `src/public-site-entry-v34.ts`
+- deploy revision: `ten-year-completed-public-v34-live-deadline-detached-20260822`
 - site: `https://race-tantei-phase0.race-tantei.workers.dev`
+- public-site Workerは表示・通常APIを担当し、**ライブ買い目の生成・確定を行わない**
+- 旧 `/_ops/live-tick` はhard-disabled / 404
+
+### Live deadline production
+
+ライブ買い目生成・確定は、公開サイトから分離した専用Workersが担当します。
+
+- scheduler entry: `src/live-deadline-entry-v2.ts`
+- primary config: `wrangler.live-deadline.jsonc`
+  - every minute: `* * * * *`
+- backup config: `wrangler.live-deadline-backup.jsonc`
+  - staggered every five minutes: `2-59/5 * * * *`
+- deployment: `.github/workflows/deploy-live-deadline.yml`
+- production readiness: `.github/workflows/verify-live-deadline-production.yml`
+- D1 leaseでprimary / backupの重複mutationを排他
+- official previewはappend-only archiveへ保存し、newest last-good official previewを復元可能
+
+締切フロー:
+
+- **T-90**: JRA公式オッズでpreview作成開始
+- **T-40**: 早期SLA監査
+- **T-30**: official preview必須
+- **T-25**: 通常のimmutable final
+- **T-20**: 保存済みofficial previewだけを使う救済guard
+- **T-15**: hard creation boundary。新規推論・オッズ取得・買い目生成・backfillは禁止
+- T-15後の新規finalはD1 invariantでも拒否
+
+finalに使えるmarket oddsは `jra-fast-official` / `jra-crawl-official` のみです。synthetic / estimated / probability-derived substitute oddsは禁止し、公式previewが無い場合は偽データで補完せずfail closedします。
 
 ## 完成モデル
 
 - 各会場・各開催日5R
-- レース選定は前日までの履歴stateから上位5頭→6券種proxy ticket→raceScore→会場上位5R
+- レース選定は前日までの履歴stateから上位5頭 → 6券種proxy ticket → raceScore → 会場上位5R
 - 56特徴量 LightGBM 勝率モデル
 - JRA公式オッズのみ
 - 対象6券種: 単勝 / ワイド / 馬連 / 馬単 / 3連複 / 3連単
-- 各券種 `predictedProbability × officialJraOdds` 上位5→`ln(p)+0.4ln(odds)`で代表1点
+- 各券種 `predictedProbability × officialJraOdds` 上位候補 → `ln(p)+0.4ln(odds)` で代表1点
 - 1R 2点固定、異なる2券種
 - ライト 2,000円 / スタンダード 5,000円 / プレミアム 10,000円
-- 各コース50/50
-- synthetic oddsなし
-- 対象日の結果をレース選定・買い目作成に使わない
+- 対象日の結果をレース選定・買い目作成に直接使わない
 - 過去公開買い目は後から変更しない
 
 ## 過去成績の読み方
 
-公開している ROI 431.6505898681471% と的中レース率約54.4%は、完成ルールを凍結10年アーカイブ全体へ適用したfull-period retrospective aggregateです。completion auditは `trainingMode: full frozen archive uniform discovery` と記録しています。
+公開している ROI 431.6505898681471% と的中レース率約54.4%は、完成ルールを凍結10年アーカイブ全体へ適用したfull-period retrospective aggregateです。
 
 したがって431.65%そのものを、完全OOF成績・未使用期間だけの成績・現在のlive lockと完全同条件の将来期待値とは扱いません。対象日結果の直接利用やsynthetic oddsは監査上確認されていませんが、研究時のルール選択とhistorical odds timestampの同等性は別論点です。詳細は `analysis-results/completed-model-methodology-audit-20260813.md` を参照してください。
 
@@ -60,32 +91,43 @@ npm run check
 python scripts/verify-canonical-handoff.py
 ```
 
+canonical verifierの成功markerは `CANONICAL_HANDOFF_OK` です。
+
 ### サイト変更
 
 1. `wrangler.jsonc.main` で現在のentryを確認
 2. 必要なentry / 下位wrapperを変更
-3. Typecheck
+3. Typecheck / canonical verification
 4. Cloudflare deploy
 5. production HTTP / workflow verify
 
-### モデル・運用変更
+### ライブ確定変更
 
-1. canonical config / manifestを確認
-2. `scripts/run-ten-year-auto-final-live.py` を確認
-3. `--check-only`
-4. workflow run確認
+1. `HANDOFF.md` / canonical manifestを確認
+2. `src/live-deadline-entry-v2.ts` と2つの `wrangler.live-deadline*.jsonc` を確認
+3. `completed-worker-live-lock` / deadline guard / D1 invariants / preview safetyを確認
+4. `scripts/verify-live-lock-safety.py`
+5. dedicated live-deadline deploy
+6. production readinessでprimary / backup / D1 / public 404を確認
 
-## Legacy warning
+### モデル変更
+
+completed modelは凍結productionです。ユーザーから明示的なモデル変更依頼がない限り、再探索・再学習・再選定しません。
+
+## Historical / Legacy warning
 
 以下は現行production source-of-truthではありません。
 
+- `FINAL_STATE_20260816.md` に記録された2026-08-16時点のT-16 + stored-preview backup構成（重要なhistorical baselineだがcurrent schedulerではない）
+- 旧GitHub automatic-final backup経路
+- 旧public live-tick経路
 - `scripts/run-auto-final-live.py` 単体
 - 下位 `public-site-entry-v*` を単独で現行UIとみなすこと
 - research branches / `research-*`
 - old `approved-production-model` / ROI200 / rule-based production experiments
 - 古い保存会話の途中経過をrepo正本より優先すること
 
-継続作業は必ず [`HANDOFF.md`](HANDOFF.md) から開始してください。
+継続作業は必ず [`HANDOFF.md`](HANDOFF.md) から開始し、current GitHub / Actions / 必要ならD1まで確認してください。
 
 ## Disclaimer
 
