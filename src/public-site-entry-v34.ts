@@ -10,6 +10,10 @@ function jstDate(now = new Date()): string {
   return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+function errorText(error: unknown): string {
+  return error instanceof Error ? `${error.name}:${error.message}` : String(error);
+}
+
 async function hasSelection(db: D1Database, date: string): Promise<boolean> {
   const row = await db.prepare("SELECT 1 AS ok FROM rt_system_state WHERE state_key=? LIMIT 1")
     .bind(`${SELECTION_PREFIX}${date}`).first<{ ok: number }>();
@@ -19,23 +23,46 @@ async function hasSelection(db: D1Database, date: string): Promise<boolean> {
 async function runDirectLiveTick(env: Env, now = new Date()) {
   const date = jstDate(now);
   if (!(await hasSelection(env.DB, date))) {
-    return { status: "selection_missing", date, checkedAt: now.toISOString(), live: null, guard: null };
+    return { status: "selection_missing", date, checkedAt: now.toISOString(), live: null, guardBefore: null, guardAfter: null };
   }
 
-  const live = await runCompletedWorkerLiveLock(env, now);
-  const guard = await runCompletedWorkerDeadlineGuard(env, now);
-  const locked = new Set(guard.lockedRaceIds);
-  const unresolvedDueRaceIds = guard.dueRaceIds.filter((raceId) => !locked.has(raceId));
+  // First protect any race that already has a valid official preview. Do this before
+  // preview refresh/model work so an unrelated live-generation failure can never
+  // prevent a due race from becoming immutable.
+  const guardBefore = await runCompletedWorkerDeadlineGuard(env, now);
 
-  if (guard.errors.length || unresolvedDueRaceIds.length) {
-    throw new Error(`DIRECT_LIVE_TICK_DUE_UNRESOLVED:${unresolvedDueRaceIds.join(",")}:errors=${JSON.stringify(guard.errors)}`);
+  let live: Awaited<ReturnType<typeof runCompletedWorkerLiveLock>> | null = null;
+  let liveFailure: string | null = null;
+  try {
+    live = await runCompletedWorkerLiveLock(env, now);
+  } catch (error) {
+    liveFailure = errorText(error);
   }
+
+  // Run the guard again because a T-20 tick may have had no preview on the first
+  // pass and generated one during runCompletedWorkerLiveLock. The second pass must
+  // lock that freshly saved official preview in the same invocation.
+  const guardAfter = await runCompletedWorkerDeadlineGuard(env, now);
+  const lockedAfter = new Set(guardAfter.lockedRaceIds);
+  const unresolvedDueRaceIds = guardAfter.dueRaceIds.filter((raceId) => !lockedAfter.has(raceId));
+
+  if (guardAfter.errors.length || unresolvedDueRaceIds.length) {
+    throw new Error(`DIRECT_LIVE_TICK_DUE_UNRESOLVED:${unresolvedDueRaceIds.join(",")}:errors=${JSON.stringify(guardAfter.errors)}`);
+  }
+
+  const liveErrors = live?.errors ?? [];
+  const status = liveFailure || liveErrors.length
+    ? "retrying"
+    : live?.status === "deadline_breach"
+      ? "deadline_breach"
+      : "ok";
 
   return {
-    status: live.status === "deadline_breach" ? "deadline_breach" : "ok",
+    status,
     date,
     checkedAt: now.toISOString(),
-    live: {
+    liveFailure,
+    live: live ? {
       status: live.status,
       completeBefore: live.completeBefore,
       completeAfter: live.completeAfter,
@@ -45,13 +72,20 @@ async function runDirectLiveTick(env: Env, now = new Date()) {
       incompleteRaceIds: live.incompleteRaceIds,
       deadlineBreachRaceIds: live.deadlineBreachRaceIds,
       errors: live.errors,
+    } : null,
+    guardBefore: {
+      status: guardBefore.status,
+      dueRaceIds: guardBefore.dueRaceIds,
+      lockedRaceIds: guardBefore.lockedRaceIds,
+      skippedAlreadyLockedRaceIds: guardBefore.skippedAlreadyLockedRaceIds,
+      errors: guardBefore.errors,
     },
-    guard: {
-      status: guard.status,
-      dueRaceIds: guard.dueRaceIds,
-      lockedRaceIds: guard.lockedRaceIds,
-      skippedAlreadyLockedRaceIds: guard.skippedAlreadyLockedRaceIds,
-      errors: guard.errors,
+    guardAfter: {
+      status: guardAfter.status,
+      dueRaceIds: guardAfter.dueRaceIds,
+      lockedRaceIds: guardAfter.lockedRaceIds,
+      skippedAlreadyLockedRaceIds: guardAfter.skippedAlreadyLockedRaceIds,
+      errors: guardAfter.errors,
     },
   };
 }
@@ -63,12 +97,13 @@ export default {
       if (request.method !== "POST") return new Response("METHOD_NOT_ALLOWED", { status: 405 });
       try {
         const result = await runDirectLiveTick(env, new Date());
+        const ok = result.status === "ok" || result.status === "selection_missing";
         return Response.json(result, {
-          status: result.status === "deadline_breach" ? 503 : 200,
+          status: ok ? 200 : 503,
           headers: { "cache-control": "no-store", "x-race-ui-version": UI_VERSION },
         });
       } catch (error) {
-        const message = error instanceof Error ? `${error.name}:${error.message}` : String(error);
+        const message = errorText(error);
         console.error("DIRECT_LIVE_TICK_FAILED", error);
         return Response.json({ status: "error", error: message }, {
           status: 503,
