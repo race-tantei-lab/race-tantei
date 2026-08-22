@@ -1,0 +1,49 @@
+name: Audit live T15 20260822
+run-name: Audit live T15 20260822 · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audit-live-t15-20260822.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Snapshot production D1 T15 state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p analysis-results
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt FROM rt_system_state WHERE state_key IN ('final_daily_selection:2026-08-22','worker_live_lock:2026-08-22','worker_deadline_guard:2026-08-22') OR state_key LIKE 'worker_live_preview:2026-08-22-%' OR state_key LIKE 'worker_live_final:2026-08-22-%' ORDER BY state_key;" > /tmp/state.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH selected AS (SELECT json_extract(value,'$.raceId') AS raceId FROM json_each((SELECT json_extract(state_value,'$.selected') FROM rt_system_state WHERE state_key='final_daily_selection:2026-08-22'))) SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.start_time_jst AS startTimeJst,r.start_time_utc AS startTimeUtc,COUNT(CASE WHEN rr.runner_status='active' THEN 1 END) AS activeRunners,COUNT(b.id) AS betRows,COUNT(DISTINCT CASE WHEN b.source_prediction_id=-2 THEN b.id END) AS canonicalBetRows,MIN(b.locked_at) AS firstLockedAt,MAX(b.locked_at) AS lastLockedAt FROM selected s JOIN rt_races r ON r.race_id=s.raceId LEFT JOIN rt_runners rr ON rr.race_id=r.race_id LEFT JOIN rt_public_bets b ON b.race_id=r.race_id GROUP BY r.race_id,r.venue,r.race_no,r.start_time_jst,r.start_time_utc ORDER BY r.start_time_utc,r.venue,r.race_no;" > /tmp/races.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id AS raceId,course,bet_type AS betType,combination,stake_yen AS stakeYen,assumed_odds AS assumedOdds,settlement_status AS settlementStatus,locked_at AS lockedAt,source_prediction_id AS sourcePredictionId FROM rt_public_bets WHERE race_id IN (SELECT json_extract(value,'$.raceId') FROM json_each((SELECT json_extract(state_value,'$.selected') FROM rt_system_state WHERE state_key='final_daily_selection:2026-08-22'))) ORDER BY race_id,course,bet_type;" > /tmp/bets.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const out={generatedAt:new Date().toISOString(),state:JSON.parse(fs.readFileSync('/tmp/state.json','utf8')),races:JSON.parse(fs.readFileSync('/tmp/races.json','utf8')),bets:JSON.parse(fs.readFileSync('/tmp/bets.json','utf8'))};
+          fs.writeFileSync('analysis-results/live-t15-20260822.json',JSON.stringify(out,null,2)+'\n');
+          NODE
+      - name: Persist audit
+        shell: bash
+        run: |
+          git add -f analysis-results/live-t15-20260822.json
+          git config user.name "github-actions[bot]"
+          git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Save live T15 audit 20260822" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
