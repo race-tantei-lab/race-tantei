@@ -28,6 +28,9 @@ const PREVIEW_OPEN_MS = 90 * 60 * 1000;
 const PREVIEW_REQUIRED_MS = 30 * 60 * 1000;
 const NORMAL_LOCK_MS = 25 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
+const EARLY_PREVIEW_REFRESH_MS = 10 * 60 * 1000;
+const MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000;
+const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;
 const PREVIEW_HISTORY = 3;
 const PREVIEW_VERSION = 1;
 const OFFICIAL_ODDS_SOURCES = new Set(["jra-fast-official", "jra-crawl-official"]);
@@ -293,6 +296,18 @@ async function latestOfficialBodyWeightPreview(db: D1Database, raceId: string): 
   return (await loadPreviewEnvelope(db, raceId))?.snapshots.find(snapshotHasOfficialBodyWeight) ?? null;
 }
 
+function previewRefreshIntervalMs(remainingMs: number): number {
+  if (remainingMs > 45 * 60_000) return EARLY_PREVIEW_REFRESH_MS;
+  if (remainingMs > 30 * 60_000) return MID_PREVIEW_REFRESH_MS;
+  return NEAR_PREVIEW_REFRESH_MS;
+}
+
+function previewIsFreshEnough(snapshot: PreviewSnapshot, remainingMs: number, now: Date): boolean {
+  const generatedMs = Date.parse(snapshot.generatedAt);
+  if (!Number.isFinite(generatedMs)) return false;
+  return now.getTime() - generatedMs < previewRefreshIntervalMs(remainingMs);
+}
+
 async function savePreview(db: D1Database, snapshot: PreviewSnapshot): Promise<void> {
   if (!validSnapshot(snapshot, snapshot.raceId)) throw new Error(`WORKER_PREVIEW_INVALID:${snapshot.raceId}`);
   const existing = await loadPreviewEnvelope(db, snapshot.raceId);
@@ -526,6 +541,11 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       // generation or final creation is forbidden once the boundary is reached.
       if (remaining <= DEADLINE_MS) {
         errors.push({ raceId, error: `WORKER_HARD_T15_MISSED:${raceId}` });
+        continue;
+      }
+
+      const existingPreview = await latestPreview(env.DB, raceId);
+      if (remaining > NORMAL_LOCK_MS && existingPreview && previewIsFreshEnough(existingPreview, remaining, raceNow)) {
         continue;
       }
 
