@@ -48,9 +48,9 @@ jobs:
       - run: npm ci
       - name: Re-run exhaustive proof before production checks
         run: |
-          npm run build:test
-          node dist-test/tests/live-deadline-full-day-proof-tests.js
-          node dist-test/tests/completed-worker-deadline-guard-tests.js
+          npm run typecheck
+          npx tsx tests/live-deadline-full-day-proof-tests.ts
+          npx tsx tests/completed-worker-deadline-guard-tests.ts
           python scripts/verify-live-deadline-proof.py
       - name: Wait for production deploy and cron registration
         run: sleep 120
