@@ -18,6 +18,11 @@ on:
 
 permissions:
   contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
   tick:
@@ -54,5 +59,23 @@ jobs:
           done
           echo 'LIVE_TICK_TWO_PASS_NOT_READY' >&2
           exit 1
+
+      - name: Mark live tick driver success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='production/live-tick-driver' \
+            -f description='JST live tick backup executed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Mark live tick driver failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='production/live-tick-driver' \
+            -f description='JST live tick backup failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
 
 # Immediate production tick after the 2026-08-22 full-day miss audit.
