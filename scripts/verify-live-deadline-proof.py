@@ -80,7 +80,7 @@ def main() -> None:
         require(entry, needle, "isolated driver")
 
     for needle in (
-        'url.pathname === "/_ops/live-tick"',
+        'new URL(request.url).pathname === "/_ops/live-tick"',
         'new Response("NOT_FOUND", { status: 404',
     ):
         require(public, needle, "public site")
