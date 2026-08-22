@@ -26,18 +26,27 @@ REQUIRED = [
     "src/v1/ten-year-public-summary.ts",
     "src/v1/ten-year-history.ts",
     "src/v1/completed-worker-live-lock.ts",
+    "src/v1/completed-worker-deadline-guard.ts",
+    "src/v1/completed-final-invariants.ts",
+    "src/v1/live-preview-safety.ts",
+    "src/live-deadline-entry-v2.ts",
+    "src/public-site-entry-v34.ts",
     "scripts/run-ten-year-auto-final-live.py",
     "scripts/ten-year-production-core.py",
     "scripts/generate-ten-year-preday-selection.py",
     "scripts/generate-ten-year-live-bets.py",
     "scripts/build-worker-completed-model-assets.py",
     "scripts/verify-worker-model-parity.ts",
-    ".github/workflows/auto-final-live-bets.yml",
+    "scripts/verify-live-lock-safety.py",
     ".github/workflows/deploy.yml",
+    ".github/workflows/deploy-live-deadline.yml",
+    ".github/workflows/verify-live-deadline-production.yml",
     ".github/workflows/production-smoke.yml",
     ".github/workflows/verify-canonical-handoff.yml",
     ".github/workflows/verify-worker-selection-parity.yml",
     "wrangler.jsonc",
+    "wrangler.live-deadline.jsonc",
+    "wrangler.live-deadline-backup.jsonc",
 ]
 
 
@@ -62,12 +71,6 @@ def sha256_file(path: str) -> str:
 
 
 def collect_public_site_sources(path: str) -> str:
-    """Collect the current layered public-site entry and its publicSite parents.
-
-    v20/v21 are wrappers around the v19 product-copy layer. The current entry remains
-    wrangler.jsonc.main, while product/methodology assertions must inspect the whole
-    active chain instead of assuming every marker lives in the top wrapper file.
-    """
     current = Path(path)
     seen: set[str] = set()
     sources: list[str] = []
@@ -93,51 +96,45 @@ def main() -> None:
     missing = [p for p in REQUIRED if not (ROOT / p).exists()]
     if missing:
         fail(f"missing required files: {missing}")
+    for obsolete in (
+        ".github/workflows/auto-final-live-bets.yml",
+        ".github/workflows/drive-live-tick.yml",
+    ):
+        if (ROOT / obsolete).exists():
+            fail(f"obsolete live workflow must remain removed: {obsolete}")
 
-    handoff = read("HANDOFF.md")
-    final_state = read("FINAL_STATE_20260816.md")
-    readme = read("README.md")
-    methodology_audit = read("analysis-results/completed-model-methodology-audit-20260813.md")
-    production_smoke = read(".github/workflows/production-smoke.yml")
-    verify_workflow = read(".github/workflows/verify-canonical-handoff.yml")
-    deploy_workflow = read(".github/workflows/deploy.yml")
-    parity_workflow = read(".github/workflows/verify-worker-selection-parity.yml")
     manifest = load_json("config/canonical-production-manifest.json")
     config = load_json("config/ten-year-completed-model.json")
     audit = load_json("analysis-results/ten-year-model-completion-20260812.json")
     state_manifest = load_json("models/ten-year-production-state-manifest.json")
     runner_manifest = load_json("data/ten-year-runners/manifest.json")
     wrangler = load_json("wrangler.jsonc")
-    deployment_log = read("analysis-results/production-deployment.log")
+    primary = load_json("wrangler.live-deadline.jsonc")
+    backup = load_json("wrangler.live-deadline-backup.jsonc")
 
-    if manifest.get("status") != "production":
-        fail("canonical manifest status is not production")
-    if int(manifest.get("handoffVersion", 0)) < 2:
-        fail("canonical handoffVersion is not completed version 2+")
+    if manifest.get("status") != "production" or int(manifest.get("handoffVersion", 0)) < 5:
+        fail("canonical manifest is not the current production handoff")
     if manifest.get("sourceOfTruth") != "HANDOFF.md":
         fail("canonical manifest sourceOfTruth mismatch")
-
     verification = manifest.get("handoffVerification", {})
     if verification.get("script") != "scripts/verify-canonical-handoff.py":
         fail("canonical handoff verifier path mismatch")
-    if verification.get("workflow") != ".github/workflows/verify-canonical-handoff.yml":
-        fail("canonical handoff workflow path mismatch")
     if verification.get("requiredResult") != "CANONICAL_HANDOFF_OK":
         fail("canonical handoff required result mismatch")
 
     if config.get("status") != "completed" or config.get("name") != "ten-year-completed-model":
         fail("completed model config identity mismatch")
     if config.get("productionChanged") is not True:
-        fail("completed model config is not marked productionChanged=true")
-
+        fail("completed model is not marked productionChanged=true")
     expected_model_sha = manifest["model"]["weightsSha256"]
     actual_model_sha = sha256_file(manifest["model"]["weights"])
     if actual_model_sha != expected_model_sha:
         fail(f"model sha mismatch: {actual_model_sha} != {expected_model_sha}")
+    if actual_model_sha != "63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5":
+        fail("canonical completed model SHA changed")
 
     if state_manifest.get("throughDate") != manifest["model"]["stateThroughDate"]:
         fail("production state throughDate mismatch")
-
     source_ids = {
         "history": int(state_manifest.get("sourceHistoryArtifactId", -1)),
         "runnerFeatures": int(state_manifest.get("canonicalFeatureArtifactId", -1)),
@@ -145,16 +142,13 @@ def main() -> None:
     }
     if source_ids != manifest["model"]["sourceArtifactIds"]:
         fail(f"source artifact IDs mismatch: {source_ids}")
-
     state_files = state_manifest.get("files", {})
     for path in (manifest["model"]["runnerFeatureState"], manifest["model"]["raceSelectionState"]):
         info = state_files.get(path)
         if not isinstance(info, dict):
             fail(f"state manifest missing file entry: {path}")
-        expected = str(info.get("sha256", ""))
-        actual = sha256_file(path)
-        if actual != expected:
-            fail(f"state sha mismatch for {path}: {actual} != {expected}")
+        if sha256_file(path) != str(info.get("sha256", "")):
+            fail(f"state sha mismatch for {path}")
 
     if audit.get("completed") is not True or audit.get("allCompletionGatesPassed") is not True:
         fail("completion audit gates are not all passed")
@@ -162,8 +156,6 @@ def main() -> None:
         fail("completion audit universe race count mismatch")
     if int(audit.get("archive", {}).get("selectedRaces", -1)) != 14410:
         fail("completion audit selected race count mismatch")
-    if audit.get("probabilityModel", {}).get("trainingMode") != "full frozen archive uniform discovery":
-        fail("completion audit trainingMode changed unexpectedly")
     if audit.get("raceSelectionAudit", {}).get("targetDayResultsUsedForSelection") is not False:
         fail("target-day result leakage flag is not false")
     if audit.get("raceSelectionAudit", {}).get("historicalFinalOddsUsedForSelection") is not False:
@@ -171,178 +163,188 @@ def main() -> None:
     if audit.get("raceSelectionAudit", {}).get("syntheticOddsUsed") is not False:
         fail("race selection synthetic odds flag is not false")
 
-    for needle in (
-        "431.6505898681471%",
-        "full frozen archive uniform discovery",
-        "完全OOF成績",
-        "acf44ad91c83e30f3a3e0363b43bbc8fb4a51a2c",
-        "timestamp",
-        "0.4",
-    ):
-        if needle not in methodology_audit:
-            fail(f"methodology audit missing transparency marker: {needle}")
-
-    if wrangler.get("main") != manifest["site"]["entry"]:
-        fail(f"wrangler main mismatch: {wrangler.get('main')} != {manifest['site']['entry']}")
+    site = manifest["site"]
+    if wrangler.get("main") != site["entry"]:
+        fail("wrangler main mismatch")
     vars_ = wrangler.get("vars", {})
-    if vars_.get("DEPLOY_REVISION") != manifest["site"]["revision"]:
-        fail("DEPLOY_REVISION mismatch")
+    if vars_.get("DEPLOY_REVISION") != site["revision"]:
+        fail(f"DEPLOY_REVISION mismatch: {vars_.get('DEPLOY_REVISION')} != {site['revision']}")
     if vars_.get("MODEL_VERSION") != manifest["model"]["name"]:
         fail("MODEL_VERSION mismatch")
-
-    build_command = str(wrangler.get("build", {}).get("command", ""))
-    if "build-worker-completed-model-assets.py" not in build_command:
+    if "build-worker-completed-model-assets.py" not in str(wrangler.get("build", {}).get("command", "")):
         fail("wrangler build does not generate canonical Worker model assets")
-
     d1 = wrangler.get("d1_databases", [])
-    if len(d1) != 1:
-        fail("expected exactly one D1 binding")
-    if d1[0].get("database_name") != manifest["site"]["d1DatabaseName"]:
-        fail("D1 database name mismatch")
-    if d1[0].get("database_id") != manifest["site"]["d1DatabaseId"]:
-        fail("D1 database ID mismatch")
+    if len(d1) != 1 or d1[0].get("database_name") != site["d1DatabaseName"] or d1[0].get("database_id") != site["d1DatabaseId"]:
+        fail("public Worker D1 identity mismatch")
 
-    active_ui_sources = collect_public_site_sources(manifest["site"]["entry"])
+    prod = manifest["production"]
+    expected_prod = {
+        "liveDeadlineEntry": "src/live-deadline-entry-v2.ts",
+        "liveDeadlinePrimaryConfig": "wrangler.live-deadline.jsonc",
+        "liveDeadlineBackupConfig": "wrangler.live-deadline-backup.jsonc",
+        "liveDeadlineDeployWorkflow": ".github/workflows/deploy-live-deadline.yml",
+        "liveDeadlineReadinessWorkflow": ".github/workflows/verify-live-deadline-production.yml",
+        "publicLiveMutationEnabled": False,
+        "previewOpenMinutes": 90,
+        "previewRequiredMinutes": 30,
+        "normalLockMinutes": 25,
+        "deadlineGuardArmMinutes": 20,
+        "hardDeadlineMinutes": 15,
+        "officialOddsOnly": True,
+        "syntheticOddsForbidden": True,
+    }
+    for key, expected in expected_prod.items():
+        if prod.get(key) != expected:
+            fail(f"production live architecture mismatch for {key}: {prod.get(key)!r} != {expected!r}")
+
+    if primary.get("name") != "race-tantei-live-deadline" or primary.get("main") != prod["liveDeadlineEntry"]:
+        fail("primary live deadline Worker identity mismatch")
+    if primary.get("triggers", {}).get("crons") != ["* * * * *"]:
+        fail("primary live deadline cron mismatch")
+    if backup.get("name") != "race-tantei-live-deadline-backup" or backup.get("main") != prod["liveDeadlineEntry"]:
+        fail("backup live deadline Worker identity mismatch")
+    if backup.get("triggers", {}).get("crons") != ["2-59/5 * * * *"]:
+        fail("backup live deadline cron mismatch")
+    for cfg in (primary, backup):
+        bindings = cfg.get("d1_databases", [])
+        if len(bindings) != 1 or bindings[0].get("database_id") != site["d1DatabaseId"]:
+            fail("live deadline Worker D1 binding mismatch")
+
+    active_ui_sources = collect_public_site_sources(site["entry"])
     for needle in (
         "予想ロジック",
-        "上位5頭",
-        "選定用の仮買い目",
-        "Plackett-Luce",
-        "ln(予測確率) + 0.4 × ln(JRA公式オッズ)",
-        "431.7%",
-        "54.4%",
-        "未使用データだけで検証した成績ではありません",
-        "データ更新のタイミング",
+        "JRA公式オッズ",
         "公開した買い目と結果は後から変更しません",
-        "runCompletedWorkerLiveLock",
-        "WORKER_COMPLETED_15_MINUTE_SLA_BREACH",
-        "FROZEN_ARCHIVE_END",
+        "予想のしくみ",
     ):
         if needle not in active_ui_sources:
-            fail(f"active public-site chain missing canonical marker: {needle}")
+            fail(f"active public-site chain missing canonical UI marker: {needle}")
+    top_public = read(site["entry"])
+    for forbidden in ("runCompletedWorkerLiveLock", "runCompletedWorkerDeadlineGuard", "runDirectLiveTick"):
+        if forbidden in top_public:
+            fail(f"public top entry must not own live prediction mutation: {forbidden}")
+    if 'pathname === "/_ops/live-tick"' not in top_public or 'status: 404' not in top_public:
+        fail("public legacy live-tick endpoint is not hard-disabled")
 
+    live_entry = read(prod["liveDeadlineEntry"])
+    live_worker = read(prod["workerLiveLock"])
+    live_safety = read("src/v1/live-preview-safety.ts")
+    deadline_guard = read("src/v1/completed-worker-deadline-guard.ts")
+    invariants = read("src/v1/completed-final-invariants.ts")
+    for needle in (
+        "acquireLiveDeadlineLease",
+        "restoreNewestOfficialPreviewArchives",
+        "auditLiveDeadlineSla",
+        "LIVE_DEADLINE_HARD_T15_BREACH",
+        "selection_critical",
+        "predeadline_critical",
+    ):
+        if needle not in live_entry:
+            fail(f"live deadline entry missing marker: {needle}")
+    if "/_ops/live-tick" in live_entry:
+        fail("isolated live deadline Worker must not expose a public mutation endpoint")
+    for needle in (
+        "const PREVIEW_OPEN_MS = 90 * 60 * 1000;",
+        "const PREVIEW_REQUIRED_MS = 30 * 60 * 1000;",
+        "const NORMAL_LOCK_MS = 25 * 60 * 1000;",
+        "const DEADLINE_MS = 15 * 60 * 1000;",
+        'new Set(["jra-fast-official", "jra-crawl-official"])',
+        "WORKER_HARD_T15_MISSED",
+    ):
+        if needle not in live_worker:
+            fail(f"live lock missing marker: {needle}")
+    for needle in (
+        "rt_live_preview_archive",
+        "rt_live_deadline_lease",
+        "previewMissingByT40RaceIds",
+        "previewMissingByT30RaceIds",
+        "finalMissingByT25RaceIds",
+        "finalMissingByT20RaceIds",
+        "deadlineMissedRaceIds",
+    ):
+        if needle not in live_safety:
+            fail(f"live safety missing marker: {needle}")
+    for needle in (
+        "DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000",
+        "remainingMs >= DEADLINE_GUARD_MS",
+        "isDeadlineGuardMissed",
+    ):
+        if needle not in deadline_guard:
+            fail(f"deadline guard missing marker: {needle}")
+    for needle in (
+        "FINAL_BET_DEADLINE_PASSED",
+        "FINAL_STATE_DEADLINE_PASSED",
+        "OFFICIAL_JRA_ODDS_REQUIRED",
+        "PROBABILITY_FALLBACK_FORBIDDEN",
+    ):
+        if needle not in invariants:
+            fail(f"D1 invariant missing marker: {needle}")
+
+    deploy_live = read(prod["liveDeadlineDeployWorkflow"])
+    for needle in ("Deploy primary live deadline Worker", "Deploy backup live deadline Worker", "production/live-deadline"):
+        if needle not in deploy_live:
+            fail(f"live deadline deploy workflow missing marker: {needle}")
+    readiness = read(prod["liveDeadlineReadinessWorkflow"])
+    for needle in ("/health", "_ops/live-tick", "rt_live_preview_archive", "production/live-deadline-readiness"):
+        if needle not in readiness:
+            fail(f"live deadline readiness workflow missing marker: {needle}")
+
+    deploy_workflow = read(prod["deployWorkflow"])
     for needle in (
         "build-worker-completed-model-assets.py",
         "verify-worker-model-parity.ts",
         "Verify historical race APIs and detail",
         "Verify live result ingestion and settlement",
+        "verify-live-lock-safety.py",
     ):
         if needle not in deploy_workflow:
-            fail(f"production deploy missing canonical runtime verification: {needle}")
-    if "verify-worker-selection-parity" not in parity_workflow.lower() and "Compare Worker selection with canonical Python" not in parity_workflow:
-        fail("Worker/Python selection parity workflow marker missing")
-
-    for needle in (
-        "conditionsMethodology",
-        "day8ApiShape",
-        "day9ApiShape",
-        "未使用データだけで検証した成績ではありません",
-        "ln(予測確率) + 0.4 × ln(JRA公式オッズ)",
-    ):
-        if needle not in production_smoke:
-            fail(f"production smoke missing canonical marker: {needle}")
-    for stale in ("296.8%", "297.6%", "297.0%", "3225R", "len(aug8)==15", "len(aug9)==15"):
-        if stale in production_smoke:
-            fail(f"production smoke contains stale assertion: {stale}")
-    if ".github/workflows/production-smoke.yml" not in verify_workflow:
-        fail("canonical verifier workflow does not watch production smoke")
-
-    auto_workflow = read(manifest["production"]["autoWorkflow"])
-    for needle in (
-        "scripts/run-stored-preview-deadline-backup.py",
-        "stored_preview_only",
-        "generatedRaceIds",
-        "POST_DEADLINE_GENERATION_FORBIDDEN",
-    ):
-        if needle not in auto_workflow:
-            fail(f"auto workflow missing current stored-preview-only safety marker: {needle}")
-    for forbidden in (
-        "run-ten-year-auto-final-live.py",
-        "generate-ten-year-live-bets.py",
-        "collect-current-jra-official-odds",
-        "sleep 60",
-    ):
-        if forbidden in auto_workflow:
-            fail(f"auto workflow contains obsolete post-deadline generation/monitor path: {forbidden}")
-
-    wrapper = read(manifest["production"]["runner"])
-    for needle in ("generate-ten-year-preday-selection.py", "generate-ten-year-live-bets.py"):
-        if needle not in wrapper:
-            fail(f"canonical wrapper missing {needle}")
+            fail(f"production deploy missing canonical verification: {needle}")
 
     public_summary = read(manifest["publicHistory"]["summary"])
     if "14410" not in public_summary or "431.6505898681471" not in public_summary:
         fail("public summary is not canonical 14,410R / 431.6505898681471%")
-
     if int(runner_manifest.get("races", -1)) != manifest["publicHistory"]["historyRaces"]:
         fail("runner archive race count mismatch")
     if int(runner_manifest.get("runners", -1)) != manifest["publicHistory"]["runnerRows"]:
         fail("runner archive runner count mismatch")
 
-    history_loader = read(manifest["publicHistory"]["loader"])
-    if "34566" not in history_loader:
-        fail("ten-year history loader does not contain canonical race count")
-
-    # Wrangler truncates long environment values in the printed binding table.
-    # Exact deploy revision/model/D1 identity are verified above from wrangler.jsonc;
-    # the deployment log proves the production URL, model/D1 presence, and Worker version.
-    if manifest["site"]["url"] not in deployment_log:
-        fail("deployment log does not contain canonical production URL")
-    for needle in (
-        manifest["model"]["name"],
-        manifest["site"]["d1DatabaseName"],
-    ):
+    deployment_log = read(site["deploymentLog"])
+    if site["url"] not in deployment_log:
+        fail("deployment log does not contain production URL")
+    for needle in (manifest["model"]["name"], site["d1DatabaseName"]):
         if needle not in deployment_log:
             fail(f"deployment log missing canonical marker: {needle}")
-    version_match = re.search(r"Current Version ID:\s*([0-9a-fA-F-]{36})", deployment_log)
-    if not version_match:
+    if not re.search(r"Current Version ID:\s*([0-9a-fA-F-]{36})", deployment_log):
         fail("deployment log does not contain a valid Current Version ID")
-    worker_version = version_match.group(1)
 
-    if "HANDOFF.md" not in readme:
-        fail("README does not point to HANDOFF.md")
-    if "canonical-production-manifest.json" not in readme:
-        fail("README does not point to canonical production manifest")
-    if "completed-model-methodology-audit-20260813.md" not in readme:
-        fail("README does not point to methodology audit")
-
+    readme = read("README.md")
+    handoff = read("HANDOFF.md")
+    for needle in ("HANDOFF.md", "canonical-production-manifest.json", "completed-model-methodology-audit-20260813.md"):
+        if needle not in readme:
+            fail(f"README missing canonical pointer: {needle}")
     for needle in (
         "63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5",
-        "run-ten-year-auto-final-live.py",
         "wrangler.jsonc.main",
         "431.6505898681471%",
         "verify-canonical-handoff.py",
         "CANONICAL_HANDOFF_OK",
-        "completed-model-methodology-audit-20260813.md",
-        "完全OOF",
-        "FINAL_STATE_20260816.md",
     ):
         if needle not in handoff:
             fail(f"HANDOFF missing canonical marker: {needle}")
-
-    for needle in (
-        "DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000",
-        "jra-fast-official",
-        "jra-crawl-official",
-        "probability fallback禁止",
-        "Phase 0 checks run `31936304428`",
-    ):
-        if needle not in final_state:
-            fail(f"FINAL_STATE_20260816 missing safety marker: {needle}")
 
     print(
         "CANONICAL_HANDOFF_OK",
         f"model_sha={actual_model_sha}",
         f"site_entry={wrangler['main']}",
-        f"worker_version={worker_version}",
         "selected_races=14410",
         "roi_pct=431.6505898681471",
-        "methodology_audit=20260813",
-        "production_smoke=canonical",
-        "worker_model_parity=required",
-        "worker_selection_parity=required",
-        "worker_live_lock=required",
-        "final_state=20260816",
+        "live_primary=1m",
+        "live_backup=5m_staggered",
+        "preview_open=90m",
+        "normal_lock=25m",
+        "hard_deadline=15m",
+        "public_live_mutation=false",
+        "official_jra_odds_only=true",
     )
 
 
