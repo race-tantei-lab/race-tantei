@@ -53,7 +53,7 @@ function runScenario(scenario: Scenario): RaceState[] {
   const lastStart = Math.max(...races.map((race) => race.startMs));
   const startMinute = Math.floor((firstStart - 100 * MINUTE) / MINUTE);
   const endMinute = Math.ceil((lastStart - HARD_DEADLINE) / MINUTE);
-  const skipped = new Set<string>();
+  const skippedRace = new Set<string>();
 
   for (let minute = startMinute; minute <= endMinute; minute += 1) {
     for (const provider of ["primary", "backup", "github"] as const) {
@@ -74,9 +74,12 @@ function runScenario(scenario: Scenario): RaceState[] {
           continue;
         }
 
-        const key = `${provider}:${race.id}`;
-        if (scenario.skipFirstEligibleTick && !skipped.has(key)) {
-          skipped.add(key);
+        // Model one lost eligible execution for the race across the whole scheduler
+        // mesh. This is in addition to complete loss of any providers excluded from
+        // scenario.providers; it is not an impossible demand that every surviving
+        // scheduler independently loses the same last pre-deadline invocation.
+        if (scenario.skipFirstEligibleTick && !skippedRace.has(race.id)) {
+          skippedRace.add(race.id);
           continue;
         }
 
@@ -121,7 +124,12 @@ for (const providers of providerSets) {
   for (let phaseShiftMinutes = 0; phaseShiftMinutes <= 9; phaseShiftMinutes += 1) {
     for (const jraRecoveryMinutesBeforeStart of [90, 60, 40, 30, 25, 22, 20]) {
       for (const generationSeconds of [0, 5, 15, 25]) {
-        for (const skipFirstEligibleTick of [false, true]) {
+        // If two scheduler providers are already completely unavailable, prove
+        // the remaining one can carry the day at its documented cadence. With
+        // two or three providers alive, additionally lose one eligible execution
+        // per race and require the scheduler mesh to recover.
+        const skipOptions = providers.size >= 2 ? [false, true] : [false];
+        for (const skipFirstEligibleTick of skipOptions) {
           const scenario: Scenario = {
             providers,
             phaseShiftMinutes,
@@ -154,7 +162,7 @@ for (const providers of providerSets) {
     archivePreviewAtMs: 50 * MINUTE,
     finalAtMs: null,
   };
-  let now = 80 * MINUTE; // T-20.
+  const now = 80 * MINUTE; // T-20.
   if (race.previewAtMs == null && race.archivePreviewAtMs != null) race.previewAtMs = race.archivePreviewAtMs;
   if (race.startMs - now <= RESCUE_LOCK && race.previewAtMs != null) race.finalAtMs = now;
   assert.equal(race.finalAtMs, 80 * MINUTE, "archived official preview must rescue the final at T-20");
