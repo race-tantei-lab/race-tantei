@@ -4,8 +4,10 @@ run-name: Drive live tick · ${{ github.event_name }} · ${{ github.sha }}
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/5 8-19 * * 6,0,1"
-      timezone: "Asia/Tokyo"
+    # GitHub schedule cron is UTC. These two windows equal 08:00-19:55 JST
+    # on Saturday/Sunday/Monday, including the JST day boundary correctly.
+    - cron: "*/5 23 * * 5,6,0"
+    - cron: "*/5 0-10 * * 6,0,1"
   push:
     branches: [main]
     paths:
@@ -36,8 +38,9 @@ jobs:
             if [ "$version" = "ten-year-completed-public-v34-live-tick-backup-20260822" ] && [ "$code" = "200" ]; then
               exit 0
             fi
-            # Earlier missed races can keep the aggregate live audit at deadline_breach.
-            # The endpoint still performs the current preview + guard before returning 503.
+            # Historical missed races remain visible as deadline_breach. A 503 with
+            # exactly that status means the current tick still executed; retrying/error
+            # statuses remain hard failures so the next five-minute tick is observable.
             if [ "$version" = "ten-year-completed-public-v34-live-tick-backup-20260822" ] && [ "$code" = "503" ] && echo "$body" | grep -q '"status":"deadline_breach"'; then
               echo 'LIVE_TICK_EXECUTED_WITH_HISTORICAL_BREACH'
               exit 0
