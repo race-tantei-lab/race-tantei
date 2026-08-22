@@ -1,0 +1,54 @@
+name: Apply live deadline arm20
+run-name: Apply live deadline arm20 · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/apply-live-deadline-arm20.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Arm finalization 20 minutes before start
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/v1/completed-worker-deadline-guard.ts')
+          s=p.read_text()
+          old='export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;'
+          new='export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;'
+          if old not in s and new not in s:
+              raise SystemExit('deadline arm constant not found')
+          s=s.replace(old,new)
+          s=s.replace('Arming one full tick\n// before the public T-15 deadline absorbs scheduler/runtime seconds so the\n// official-odds snapshot is already immutable by T-15 instead of seconds late.', 'Arming five minutes before the public T-15 deadline absorbs both the\n// per-minute Worker cron and the independent five-minute live-tick backup so\n// the official-odds snapshot is already immutable by T-15.')
+          p.write_text(s)
+
+          p=Path('tests/completed-worker-deadline-guard-tests.ts')
+          s=p.read_text()
+          s=s.replace('assert.equal(DEADLINE_GUARD_ARM_MS, 16 * 60 * 1000, "arm one cron tick early so the final is immutable by T-15");','assert.equal(DEADLINE_GUARD_ARM_MS, 20 * 60 * 1000, "arm five minutes early so both schedulers make the final immutable by T-15");')
+          s=s.replace('"the T-16 cron tick must be allowed to arm the final"','"the T-20 backup tick must be allowed to arm the final"')
+          s=s.replace('"scheduler seconds between T-16 and T-15 must remain protected"','"scheduler seconds before T-15 must remain protected"')
+          s=s.replace('"do not lock before the one-tick arm window"','"do not lock before the T-20 arm window"')
+          p.write_text(s)
+          PY
+          git diff --check
+      - name: Commit patch
+        shell: bash
+        run: |
+          git add src/v1/completed-worker-deadline-guard.ts tests/completed-worker-deadline-guard-tests.ts
+          git config user.name "github-actions[bot]"
+          git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Arm live finalization at T-20 for scheduler safety" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
