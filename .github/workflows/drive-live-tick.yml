@@ -29,12 +29,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Wait for two-pass v34 and run production live tick
+      - name: Run independent live-deadline driver
         shell: bash
         run: |
           set -euo pipefail
           url='https://race-tantei-phase0.race-tantei.workers.dev/_ops/live-tick'
-          expected='ten-year-completed-public-v34-live-tick-two-pass-20260822'
+          expected='ten-year-completed-public-v34-independent-live-driver-20260822'
           for attempt in $(seq 1 40); do
             rm -f /tmp/h /tmp/b
             code=$(curl --max-time 120 -sS -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST "$url" || true)
@@ -44,9 +44,6 @@ jobs:
             if [ "$version" = "$expected" ] && [ "$code" = "200" ]; then
               exit 0
             fi
-            # Historical missed races remain visible as deadline_breach. A 503 with
-            # exactly that status means the current tick still executed; retrying/error
-            # statuses remain hard failures so the next five-minute tick is observable.
             if [ "$version" = "$expected" ] && [ "$code" = "503" ] && echo "$body" | grep -q '"status":"deadline_breach"'; then
               echo 'LIVE_TICK_EXECUTED_WITH_HISTORICAL_BREACH'
               exit 0
@@ -57,7 +54,7 @@ jobs:
             fi
             sleep 5
           done
-          echo 'LIVE_TICK_TWO_PASS_NOT_READY' >&2
+          echo 'LIVE_TICK_INDEPENDENT_DRIVER_NOT_READY' >&2
           exit 1
 
       - name: Mark live tick driver success
@@ -66,7 +63,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/live-tick-driver' \
-            -f description='JST live tick backup executed' \
+            -f description='Independent JST live deadline driver executed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Mark live tick driver failure
@@ -75,7 +72,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/live-tick-driver' \
-            -f description='JST live tick backup failed' \
+            -f description='Independent JST live deadline driver failed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
-
-# Immediate production tick after the 2026-08-22 full-day miss audit.
