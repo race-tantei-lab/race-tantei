@@ -1,0 +1,45 @@
+name: Drive live tick
+run-name: Drive live tick · ${{ github.event_name }} · ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 8-19 * * 6,0,1"
+      timezone: "Asia/Tokyo"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/drive-live-tick.yml"
+      - "src/public-site-entry-v34.ts"
+      - "src/v1/completed-worker-deadline-guard.ts"
+      - "wrangler.jsonc"
+
+permissions:
+  contents: read
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Wait for v34 and run production live tick
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://race-tantei-phase0.race-tantei.workers.dev/_ops/live-tick'
+          for attempt in $(seq 1 40); do
+            rm -f /tmp/h /tmp/b
+            code=$(curl --max-time 120 -sS -D /tmp/h -o /tmp/b -w '%{http_code}' -X POST "$url" || true)
+            version=$(tr -d '\r' </tmp/h 2>/dev/null | awk -F': ' 'tolower($1)=="x-race-ui-version"{print $2}' | tail -1)
+            echo "attempt=$attempt code=$code version=$version body=$(cat /tmp/b 2>/dev/null || true)"
+            if [ "$code" = "200" ] && [ "$version" = "ten-year-completed-public-v34-live-tick-backup-20260822" ]; then
+              exit 0
+            fi
+            if [ "$code" = "503" ] && [ "$version" = "ten-year-completed-public-v34-live-tick-backup-20260822" ]; then
+              echo 'LIVE_TICK_RETURNED_503' >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          echo 'LIVE_TICK_V34_NOT_READY' >&2
+          exit 1
