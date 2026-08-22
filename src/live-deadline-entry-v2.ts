@@ -1,6 +1,7 @@
 import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";
 import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";
 import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";
+import { verifyPriorDayLearningReady, type PriorLearningReadiness } from "./v1/prior-day-learning-gate.js";
 import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import {
   acquireLiveDeadlineLease,
@@ -11,13 +12,21 @@ import {
 } from "./v1/live-preview-safety.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "live-deadline-v2-lease-archive-sla-20260822";
+const DRIVER_VERSION = "live-deadline-v3-exclusive-owner-prior-learning-20260822";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
 const SELECTION_PREFIX = "final_daily_selection:";
+const PRIOR_LEARNING_PREFIX = "worker_prior_learning:";
+const PRIOR_LEARNING_START_MINUTE_JST = 8 * 60;
+const PRIOR_LEARNING_FAIL_OPEN_MINUTE_JST = 8 * 60 + 30;
 
 function iso(now = new Date()): string { return now.toISOString(); }
-function jstDate(now = new Date()): string { return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10); }
+function jstIso(now = new Date()): string { return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString(); }
+function jstDate(now = new Date()): string { return jstIso(now).slice(0, 10); }
+function jstMinuteOfDay(now = new Date()): number {
+  const value = jstIso(now);
+  return Number(value.slice(11, 13)) * 60 + Number(value.slice(14, 16));
+}
 function errorText(error: unknown): string { return error instanceof Error ? `${error.name}:${error.message}` : String(error); }
 
 async function hasSelection(db: D1Database, date: string): Promise<boolean> {
@@ -40,6 +49,72 @@ async function saveLeaseSkipState(db: D1Database, date: string, payload: Record<
     VALUES(?,?,CURRENT_TIMESTAMP)
     ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
   `).bind(`${LEASE_SKIP_PREFIX}${date}`, JSON.stringify(payload)).run();
+}
+
+async function savePriorLearningAudit(
+  db: D1Database,
+  date: string,
+  payload: Record<string, unknown>,
+): Promise<void> {
+  await db.prepare(`
+    INSERT INTO rt_system_state(state_key,state_value,updated_at)
+    VALUES(?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
+  `).bind(`${PRIOR_LEARNING_PREFIX}${date}`, JSON.stringify(payload)).run();
+}
+
+type PriorLearningGate = {
+  status: "not_required" | "ready" | "waiting_prior_learning" | "fail_open";
+  blockSelection: boolean;
+  readiness: PriorLearningReadiness | null;
+  error: string | null;
+  minuteJst: number;
+};
+
+async function checkPriorLearningGate(env: Env, date: string, now: Date): Promise<PriorLearningGate> {
+  const minuteJst = jstMinuteOfDay(now);
+  if (await hasSelection(env.DB, date) || minuteJst < PRIOR_LEARNING_START_MINUTE_JST) {
+    return { status: "not_required", blockSelection: false, readiness: null, error: null, minuteJst };
+  }
+
+  let readiness: PriorLearningReadiness | null = null;
+  let failure: string | null = null;
+  try {
+    readiness = await verifyPriorDayLearningReady(env.DB, date);
+  } catch (error) {
+    failure = errorText(error);
+  }
+
+  if (readiness?.ready) {
+    const audit = {
+      ...readiness,
+      status: "ready",
+      checkedAt: iso(now),
+      minuteJst,
+      owner: "isolated-live-deadline",
+    };
+    await savePriorLearningAudit(env.DB, date, audit);
+    return { status: "ready", blockSelection: false, readiness, error: null, minuteJst };
+  }
+
+  const failOpen = minuteJst >= PRIOR_LEARNING_FAIL_OPEN_MINUTE_JST;
+  const status = failOpen ? "fail_open" : "waiting_prior_learning";
+  const audit = {
+    ...(readiness ?? { targetDate: date }),
+    status,
+    ready: false,
+    checkedAt: iso(now),
+    minuteJst,
+    owner: "isolated-live-deadline",
+    error: failure,
+  };
+  await savePriorLearningAudit(env.DB, date, audit);
+  if (failOpen) {
+    console.error("PRIOR_DAY_LEARNING_FAIL_OPEN", JSON.stringify(audit));
+  } else {
+    console.error("PRIOR_DAY_LEARNING_NOT_READY", JSON.stringify(audit));
+  }
+  return { status, blockSelection: !failOpen, readiness, error: failure, minuteJst };
 }
 
 function auditGuard(guard: Awaited<ReturnType<typeof runCompletedWorkerDeadlineGuard>>) {
@@ -102,6 +177,24 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
 
   try {
     const selectionNow = new Date();
+    const priorLearning = await checkPriorLearningGate(env, date, selectionNow);
+    if (priorLearning.blockSelection) {
+      const completed = new Date();
+      const result = {
+        ...base,
+        status: "waiting_prior_learning",
+        phase: "complete",
+        ok: true,
+        priorLearning,
+        selection: null,
+        selectionCheckedAt: iso(selectionNow),
+        completedAt: iso(completed),
+        durationMs: completed.getTime() - started.getTime(),
+      };
+      await saveDriverState(env.DB, date, result);
+      return result;
+    }
+
     let selection = await freezeCompletedWorkerSelectionIfNeeded(env, selectionNow);
     let selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
     let entryRepair: Record<string, unknown> | null = null;
@@ -115,13 +208,14 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
         .bind(date).first<{ firstStart: string | null }>();
       const firstStartMs = Date.parse(String(firstRace?.firstStart || ""));
       const remainingToFirstRaceMs = Number.isFinite(firstStartMs) ? firstStartMs - Date.now() : Number.NaN;
-      const selectionCritical = Number.isFinite(remainingToFirstRaceMs) && remainingToFirstRaceMs <= 100 * 60_000;
+      const selectionCritical = Number.isFinite(firstStartMs) && Number.isFinite(remainingToFirstRaceMs) && remainingToFirstRaceMs <= 100 * 60_000;
       const completed = new Date();
       const result = {
         ...base,
         status: selectionCritical ? "selection_critical" : "waiting_selection",
         phase: "complete",
         ok: !selectionCritical,
+        priorLearning,
         selection,
         entryRepair,
         selectionCheckedAt: iso(selectionNow),
@@ -194,6 +288,7 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
               : "live_retry_needed",
       phase: "complete",
       ok,
+      priorLearning,
       selection,
       selectionCheckedAt: iso(selectionNow),
       restoredBefore,
