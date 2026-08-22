@@ -56,6 +56,8 @@ jobs:
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
       - name: Build backup isolated Worker without deployment
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline-backup.jsonc --outdir dist-live-deadline-backup
+      - name: Round three checkpoint
+        run: echo 'ROUND3_LIVE_DEADLINE_HARDENING_READY'
       - name: Mark hardening validation success
         if: success()
         run: |
