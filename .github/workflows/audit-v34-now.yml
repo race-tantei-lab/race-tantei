@@ -1,0 +1,44 @@
+name: Audit v34 now
+run-name: Audit v34 now · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audit-v34-now.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - name: Snapshot critical live rows
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p analysis-results
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt FROM rt_system_state WHERE state_key IN ('worker_live_lock:2026-08-22','worker_deadline_guard:2026-08-22') OR state_key IN ('worker_live_preview:2026-08-22-chukyo-02','worker_live_preview:2026-08-22-sapporo-02','worker_live_final:2026-08-22-chukyo-02','worker_live_final:2026-08-22-sapporo-02') ORDER BY state_key;" > /tmp/state.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id AS raceId,course,bet_type AS betType,combination,stake_yen AS stakeYen,assumed_odds AS assumedOdds,locked_at AS lockedAt,source_prediction_id AS sourcePredictionId FROM rt_public_bets WHERE race_id IN ('2026-08-22-chukyo-02','2026-08-22-sapporo-02') ORDER BY race_id,course,bet_type;" > /tmp/bets.json
+          node - <<'NODE'
+          const fs=require('fs'); fs.writeFileSync('analysis-results/v34-now-20260822.json',JSON.stringify({generatedAt:new Date().toISOString(),state:JSON.parse(fs.readFileSync('/tmp/state.json','utf8')),bets:JSON.parse(fs.readFileSync('/tmp/bets.json','utf8'))},null,2)+'\n');
+          NODE
+      - name: Persist
+        shell: bash
+        run: |
+          git add -f analysis-results/v34-now-20260822.json
+          git config user.name "github-actions[bot]"
+          git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Save v34 immediate live audit" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
