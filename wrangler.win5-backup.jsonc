@@ -1,0 +1,27 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "race-tantei-win5-backup",
+  "main": "src/win5-entry-v2.ts",
+  "compatibility_date": "2026-08-01",
+  "account_id": "3c6d1826b573b2e68cb13ec37e9e8ade",
+  "workers_dev": true,
+  "triggers": {
+    "crons": ["3-59/5 * * * *"]
+  },
+  "vars": {
+    "ENVIRONMENT": "production",
+    "MODEL_VERSION": "ten-year-completed-model",
+    "JRA_HOME_URL": "https://www.jra.go.jp/",
+    "JRA_SEED_ENTRY_URLS": "",
+    "MIN_EXPECTED_VALUE": "108",
+    "MAX_RACE_BUDGET_YEN": "10000",
+    "SYNC_BATCH_SIZE": "12"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "race-tantei-phase0",
+      "database_id": "949b5e8b-d1a4-4c4e-80d1-d031afdc03de"
+    }
+  ]
+}

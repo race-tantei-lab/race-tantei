@@ -1,65 +1,212 @@
-name: Verify WIN5 Integration
+name: Verify WIN5 production readiness
 
 on:
   pull_request:
     paths:
       - "src/v1/completed-win5.ts"
-      - "src/public-site-entry-v26.ts"
+      - "src/win5-entry-v2.ts"
+      - "src/public-site-entry-v34.ts"
       - "tests/completed-win5-tests.ts"
       - "tests/live-win5-official.ts"
-      - "package.json"
-      - "wrangler.jsonc"
+      - "scripts/verify-win5-safety.py"
+      - "wrangler.win5.jsonc"
+      - "wrangler.win5-backup.jsonc"
+      - ".github/workflows/deploy-win5.yml"
       - ".github/workflows/verify-win5.yml"
   push:
-    branches:
-      - "feat/win5-page"
+    branches: [main]
     paths:
       - "src/v1/completed-win5.ts"
-      - "src/public-site-entry-v26.ts"
+      - "src/win5-entry-v2.ts"
+      - "src/public-site-entry-v34.ts"
       - "tests/completed-win5-tests.ts"
       - "tests/live-win5-official.ts"
-      - "package.json"
-      - "wrangler.jsonc"
+      - "scripts/verify-win5-safety.py"
+      - "wrangler.win5.jsonc"
+      - "wrangler.win5-backup.jsonc"
+      - ".github/workflows/deploy-win5.yml"
       - ".github/workflows/verify-win5.yml"
+  schedule:
+    # Regular Sunday WIN5 readiness: 06:00 / 08:00 / 09:30 JST.
+    - cron: "0 21,23 * * 6"
+    - cron: "30 0 * * 0"
   workflow_dispatch:
 
 permissions:
   contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
-  verify:
+  code:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "22"
           cache: npm
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
       - name: Install canonical model runtime
         run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3'
       - name: Build canonical Worker model asset
         run: python scripts/build-worker-completed-model-assets.py
       - name: Verify canonical model parity
         run: npx tsx scripts/verify-worker-model-parity.ts
-      - name: Verify live-lock safety
-        run: python scripts/verify-live-lock-safety.py
       - name: Typecheck
         run: npm run typecheck
-      - name: Build tests
-        run: npm run build:test
-      - name: Existing unit tests
-        run: npm run test:unit
+      - name: Verify WIN5 isolation safety
+        run: python scripts/verify-win5-safety.py
       - name: WIN5 unit tests
         run: npx tsx tests/completed-win5-tests.ts
       - name: Verify live JRA WIN5 targets
         run: npx tsx tests/live-win5-official.ts
-      - name: Wrangler dry run
-        run: npm run build
+      - name: Validate primary WIN5 bundle
+        run: npx wrangler deploy --dry-run --config wrangler.win5.jsonc --outdir dist-win5-verify
+      - name: Validate backup WIN5 bundle
+        run: npx wrangler deploy --dry-run --config wrangler.win5-backup.jsonc --outdir dist-win5-backup-verify
+
+  production:
+    if: github.event_name != 'pull_request'
+    needs: code
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Wait for WIN5 deploy and cron registration
+        if: github.event_name == 'push'
+        run: sleep 150
+      - name: Verify isolated WIN5 Workers are healthy and current
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_version=$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path('src/win5-entry-v2.ts').read_text(encoding='utf-8')
+          match = re.search(r'const\s+DRIVER_VERSION\s*=\s*"([^"]+)"', text)
+          if not match:
+              raise SystemExit('WIN5_DRIVER_VERSION_NOT_FOUND')
+          print(match.group(1))
+          PY
+          )
+          for url in \
+            'https://race-tantei-win5.race-tantei.workers.dev/health' \
+            'https://race-tantei-win5-backup.race-tantei.workers.dev/health'; do
+            body=$(curl --max-time 20 --retry 6 --retry-delay 5 --fail-with-body -sS "$url")
+            echo "$url $body"
+            BODY="$body" EXPECTED_VERSION="$expected_version" URL="$url" node - <<'NODE'
+          const body = JSON.parse(process.env.BODY || '{}');
+          if (body.status !== 'up') throw new Error(`WIN5_HEALTH_NOT_UP:${process.env.URL}`);
+          if (body.service !== 'race-tantei-win5') throw new Error(`WIN5_SERVICE_MISMATCH:${process.env.URL}:${body.service}`);
+          if (body.version !== process.env.EXPECTED_VERSION) throw new Error(`WIN5_VERSION_MISMATCH:${process.env.URL}:${body.version}:${process.env.EXPECTED_VERSION}`);
+          NODE
+          done
+      - name: Verify Cloudflare WIN5 cron registrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_schedule() {
+            script="$1"
+            expected="$2"
+            body=$(curl --max-time 20 --retry 4 --retry-delay 3 --fail-with-body -sS \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${script}/schedules" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
+            echo "$script $body"
+            BODY="$body" SCRIPT="$script" EXPECTED="$expected" node - <<'NODE'
+          const body = JSON.parse(process.env.BODY || '{}');
+          if (body.success !== true) throw new Error(`WIN5_CLOUDFLARE_SCHEDULE_API_FAILED:${process.env.SCRIPT}`);
+          const schedules = Array.isArray(body.result?.schedules) ? body.result.schedules.map(x => String(x.cron)).sort() : [];
+          if (schedules.length !== 1 || schedules[0] !== process.env.EXPECTED) {
+            throw new Error(`WIN5_CRON_MISMATCH:${process.env.SCRIPT}:${JSON.stringify(schedules)}:${process.env.EXPECTED}`);
+          }
+          NODE
+          }
+          check_schedule 'race-tantei-win5' '* * * * *'
+          check_schedule 'race-tantei-win5-backup' '3-59/5 * * * *'
+      - name: Verify fresh WIN5 driver execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          schema=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT name,type FROM sqlite_master WHERE name='rt_win5_driver_lease' LIMIT 1")
+          echo "$schema"
+          echo "$schema" | grep -q 'rt_win5_driver_lease'
+          state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT state_key AS stateKey,updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.status') AS driverStatus,json_extract(state_value,'$.win5Status') AS win5Status,json_extract(state_value,'$.targetCount') AS targetCount,json_extract(state_value,'$.snapshotReady') AS snapshotReady,json_extract(state_value,'$.snapshotLocked') AS snapshotLocked FROM rt_system_state WHERE state_key='win5_driver_success:${today}' LIMIT 1")
+          echo "$state"
+          STATE_JSON="$state" TODAY="$today" node - <<'NODE'
+          const payload = JSON.parse(process.env.STATE_JSON || '[]');
+          const row = payload?.[0]?.results?.[0];
+          if (!row) throw new Error(`WIN5_CURRENT_DAY_SUCCESS_MISSING:${process.env.TODAY}`);
+          if (row.stateKey !== `win5_driver_success:${process.env.TODAY}`) throw new Error(`WIN5_SUCCESS_KEY_MISMATCH:${row.stateKey}`);
+          const age = Number(row.ageSeconds);
+          if (!Number.isFinite(age) || age < -30 || age > 600) throw new Error(`WIN5_SUCCESS_STALE:${age}`);
+          if (row.driverStatus !== 'ok') throw new Error(`WIN5_DRIVER_BAD_STATUS:${row.driverStatus}`);
+          if (!['preview','final','targets_only','targets_missing'].includes(String(row.win5Status || ''))) throw new Error(`WIN5_STATE_BAD_STATUS:${row.win5Status}`);
+          console.log(JSON.stringify({win5Driver:'fresh',ageSeconds:age,status:row.win5Status,targetCount:Number(row.targetCount),snapshotReady:Boolean(row.snapshotReady),snapshotLocked:Boolean(row.snapshotLocked),updatedAt:row.updatedAt}));
+          NODE
+      - name: Verify public WIN5 API and page
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          api=$(curl --max-time 20 --retry 5 --retry-delay 3 --fail-with-body -sS \
+            "https://race-tantei-phase0.race-tantei.workers.dev/api/win5?date=${today}")
+          echo "$api"
+          API_JSON="$api" TODAY="$today" node - <<'NODE'
+          const state = JSON.parse(process.env.API_JSON || '{}');
+          if (state.date !== process.env.TODAY) throw new Error(`WIN5_PUBLIC_DATE_MISMATCH:${state.date}:${process.env.TODAY}`);
+          if (!Array.isArray(state.targets) || state.targets.length !== 5) throw new Error(`WIN5_PUBLIC_TARGET_COUNT:${state.targets?.length}`);
+          if (state.targets.some((row, i) => Number(row.leg) !== i + 1)) throw new Error('WIN5_PUBLIC_LEG_ORDER_INVALID');
+          if (!['preview','final','targets_only'].includes(String(state.status || ''))) throw new Error(`WIN5_PUBLIC_STATUS_INVALID:${state.status}`);
+          const firstStartMs = Math.min(...state.targets.map(row => Date.parse(String(row.startTimeUtc || ''))));
+          if (!Number.isFinite(firstStartMs)) throw new Error('WIN5_PUBLIC_FIRST_START_INVALID');
+          const deadlineMs = firstStartMs - 15 * 60_000;
+          const now = Date.now();
+          const jst = new Date(now + 9 * 60 * 60_000).toISOString();
+          const minuteJst = Number(jst.slice(11,13)) * 60 + Number(jst.slice(14,16));
+          if (now >= deadlineMs && state.status !== 'final') throw new Error(`WIN5_FINAL_NOT_PUBLIC_AT_DEADLINE:${state.status}`);
+          if (now < deadlineMs && minuteJst >= 9 * 60 + 30 && !state.snapshot) throw new Error(`WIN5_PREVIEW_NOT_PUBLIC_AFTER_0930:${state.status}`);
+          if (state.snapshot) {
+            if (!Array.isArray(state.snapshot.races) || state.snapshot.races.length !== 5) throw new Error('WIN5_PUBLIC_RACE_COUNT_INVALID');
+            if (!Array.isArray(state.snapshot.profiles) || state.snapshot.profiles.length !== 3) throw new Error('WIN5_PUBLIC_PROFILE_COUNT_INVALID');
+          }
+          console.log(JSON.stringify({publicWin5:'ok',date:state.date,status:state.status,targetCount:state.targets.length,snapshotReady:Boolean(state.snapshot),deadline:new Date(deadlineMs).toISOString()}));
+          NODE
+          page=$(curl --max-time 20 --retry 5 --retry-delay 3 --fail-with-body -sS \
+            "https://race-tantei-phase0.race-tantei.workers.dev/win5?date=${today}")
+          echo "$page" | grep -q 'WIN5予想'
+          echo "$page" | grep -q '対象5レース'
+          echo "$page" | grep -q '買い目'
+      - name: Mark WIN5 production readiness success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='production/win5-readiness' \
+            -f description='WIN5 dual Workers current, crons active, driver fresh, public output valid' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark WIN5 production readiness failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='production/win5-readiness' \
+            -f description='WIN5 production readiness verification failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null

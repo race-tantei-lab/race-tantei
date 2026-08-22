@@ -1,0 +1,70 @@
+name: Deploy isolated WIN5 Workers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/win5-entry-v2.ts"
+      - "src/v1/completed-win5.ts"
+      - "wrangler.win5.jsonc"
+      - "wrangler.win5-backup.jsonc"
+      - ".github/workflows/deploy-win5.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+concurrency:
+  group: deploy-race-tantei-win5
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Validate primary isolated WIN5 Worker bundle
+        run: npx wrangler deploy --dry-run --config wrangler.win5.jsonc --outdir dist-win5
+      - name: Validate backup isolated WIN5 Worker bundle
+        run: npx wrangler deploy --dry-run --config wrangler.win5-backup.jsonc --outdir dist-win5-backup
+      - name: Deploy primary WIN5 Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 3c6d1826b573b2e68cb13ec37e9e8ade
+          command: deploy --config wrangler.win5.jsonc
+      - name: Deploy backup WIN5 Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 3c6d1826b573b2e68cb13ec37e9e8ade
+          command: deploy --config wrangler.win5-backup.jsonc
+      - name: Mark WIN5 deploy success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='production/win5' \
+            -f description='Primary and backup isolated WIN5 Workers deployed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark WIN5 deploy failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='production/win5' \
+            -f description='Isolated WIN5 Worker deployment failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null

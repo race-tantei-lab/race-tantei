@@ -1,7 +1,19 @@
 import publicSite from "./public-site-entry-v33.js";
+import maintenanceSite from "./public-site-entry-v25.js";
+import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.js";
+import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v34-live-deadline-detached-20260822";
+
+function scheduleEntryRepairs(env: Env, ctx: ExecutionContext, now: Date): void {
+  ctx.waitUntil(runUpcomingEntryWorkerRepair(env, now).then((audit) => {
+    if (audit.status !== "ready" && audit.status !== "idle") console.log("UPCOMING_ENTRY_WORKER_REPAIR", JSON.stringify(audit));
+  }).catch((error) => console.error("UPCOMING_ENTRY_WORKER_REPAIR_FAILED", error)));
+  ctx.waitUntil(runUpcomingEntryDerivedRepair(env, now).then((audit) => {
+    if (audit.status !== "ready" && audit.status !== "idle") console.log("UPCOMING_ENTRY_DERIVED_CRON_REPAIR", JSON.stringify(audit));
+  }).catch((error) => console.error("UPCOMING_ENTRY_DERIVED_CRON_REPAIR_FAILED", error)));
+}
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -24,10 +36,12 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    // Race-bet finalization has been removed from the public-site cron. Normal
-    // site maintenance, WIN5, and entry repair remain in the inherited chain.
-    // Race-bet preview/final ownership is exclusive to the isolated primary and
-    // staggered backup live-deadline Workers.
-    if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
+    // WIN5 is deliberately excluded from the public-site cron. The inherited
+    // v26/v29 chain contains historical WIN5 scheduler calls, so delegating to
+    // publicSite.scheduled here would couple WIN5 to unrelated maintenance again.
+    // Run only the pre-WIN5 maintenance chain and the two current entry repairs;
+    // isolated primary/backup WIN5 Workers own all WIN5 generation/finalization.
+    if (maintenanceSite.scheduled) await maintenanceSite.scheduled(controller, env, ctx);
+    scheduleEntryRepairs(env, ctx, new Date(controller.scheduledTime || Date.now()));
   },
 } satisfies ExportedHandler<Env>;
