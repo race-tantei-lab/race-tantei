@@ -1,0 +1,110 @@
+name: Ten-year full result research
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/research-ten-year-full-results.yml"
+      - "scripts/research-export-official-history.mjs"
+  push:
+    branches:
+      - agent/ten-year-full-results
+    paths:
+      - ".github/workflows/research-ten-year-full-results.yml"
+      - "scripts/research-export-official-history.mjs"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ten-year-full-result-research-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  collect:
+    name: Official results ${{ matrix.year }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - year: 2016
+            start: "201601"
+            end: "201612"
+          - year: 2017
+            start: "201701"
+            end: "201712"
+          - year: 2018
+            start: "201801"
+            end: "201812"
+          - year: 2019
+            start: "201901"
+            end: "201912"
+          - year: 2020
+            start: "202001"
+            end: "202012"
+          - year: 2021
+            start: "202101"
+            end: "202112"
+          - year: 2022
+            start: "202201"
+            end: "202212"
+          - year: 2023
+            start: "202301"
+            end: "202312"
+          - year: 2024
+            start: "202401"
+            end: "202412"
+          - year: 2025
+            start: "202501"
+            end: "202512"
+          - year: 2026
+            start: "202601"
+            end: "202608"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install and compile official parsers
+        run: |
+          npm ci
+          npm run build:test
+      - name: Collect official result history without production writes
+        run: |
+          node scripts/research-export-official-history.mjs \
+            --start-month "${{ matrix.start }}" \
+            --end-month "${{ matrix.end }}" \
+            --concurrency 4 \
+            --discovery-attempts 4 \
+            --out "analysis-results/research-results-${{ matrix.year }}.jsonl" \
+            --meta "analysis-results/research-results-${{ matrix.year }}-meta.json"
+      - name: Verify research-only provenance
+        run: |
+          YEAR="${{ matrix.year }}" python - <<'PY'
+          import json,os
+          from pathlib import Path
+          year=os.environ['YEAR']
+          meta=json.loads(Path(f'analysis-results/research-results-{year}-meta.json').read_text())
+          assert meta['productionDatabaseWritten'] is False
+          assert meta['syntheticOddsUsed'] is False
+          assert meta['completed'] == meta['requestedUrls']
+          assert not meta['failures']
+          assert meta['completed'] > 1000
+          print(json.dumps({'year':year,'races':meta['completed'],'months':len(meta['scope']['months'])}))
+          PY
+      - name: Upload yearly research shard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ten-year-results-${{ matrix.year }}
+          path: |
+            analysis-results/research-results-${{ matrix.year }}.jsonl
+            analysis-results/research-results-${{ matrix.year }}-meta.json
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 9
