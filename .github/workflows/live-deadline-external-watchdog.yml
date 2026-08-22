@@ -4,8 +4,9 @@ run-name: Live deadline external watchdog · ${{ github.event_name }} · ${{ git
 on:
   workflow_dispatch:
   schedule:
-    # GitHub cron is UTC. Run every five minutes during 08:00-19:55 JST every
-    # day so irregular/postponed JRA dates are covered too.
+    # GitHub cron itself has a five-minute floor. Each scheduled job below stays
+    # alive and emits one authenticated pulse per minute, closing that cadence gap.
+    # UTC windows cover 08:00-19:55 JST every day, including irregular JRA dates.
     - cron: "*/5 23 * * *"
     - cron: "*/5 0-10 * * *"
   push:
@@ -38,50 +39,44 @@ env:
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 7
     steps:
-      - name: Obtain GitHub OIDC token
-        id: oidc
+      - name: Execute independent minute-pulse live deadline watchdog
         shell: bash
-        run: |
-          set -euo pipefail
-          response=$(curl --fail-with-body --max-time 15 -sS \
-            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=race-tantei-live-deadline")
-          token=$(printf '%s' "$response" | python -c 'import json,sys; print(json.load(sys.stdin)["value"])')
-          test -n "$token"
-          echo "::add-mask::$token"
-          echo "token=$token" >> "$GITHUB_OUTPUT"
-
-      - name: Execute independent live deadline tick
-        shell: bash
-        env:
-          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
         run: |
           set -euo pipefail
           url='https://race-tantei-live-deadline.race-tantei.workers.dev/internal/github-tick'
-          for attempt in 1 2 3 4; do
+          pulses=5
+          if [ "$GITHUB_EVENT_NAME" != "schedule" ]; then pulses=1; fi
+
+          for pulse in $(seq 1 "$pulses"); do
+            response=$(curl --fail-with-body --max-time 15 -sS \
+              -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=race-tantei-live-deadline")
+            token=$(printf '%s' "$response" | python -c 'import json,sys; print(json.load(sys.stdin)["value"])')
+            test -n "$token"
+            echo "::add-mask::$token"
+
             rm -f /tmp/live-watchdog-body
             code=$(curl --max-time 90 -sS -o /tmp/live-watchdog-body -w '%{http_code}' \
-              -X POST -H "Authorization: Bearer ${OIDC_TOKEN}" "$url" || true)
+              -X POST -H "Authorization: Bearer ${token}" "$url" || true)
             body=$(cat /tmp/live-watchdog-body 2>/dev/null || true)
-            echo "attempt=$attempt code=$code body=$body"
+            echo "pulse=$pulse/$pulses code=$code body=$body"
+
             if [ "$code" = "200" ]; then
               echo "$body" | grep -q '"source":"github-oidc"'
-              exit 0
-            fi
-            if [ "$code" = "202" ] && echo "$body" | grep -q '"status":"lease_busy"'; then
-              sleep 20
-              continue
-            fi
-            if [ "$code" = "401" ]; then
+            elif [ "$code" = "202" ] && echo "$body" | grep -q '"status":"lease_busy"'; then
+              echo "pulse=$pulse overlapped a healthy live-deadline owner"
+            elif [ "$code" = "401" ]; then
               echo 'GITHUB_OIDC_AUTHENTICATION_FAILED' >&2
               exit 1
+            else
+              echo "EXTERNAL_LIVE_DEADLINE_PULSE_FAILED pulse=$pulse code=$code" >&2
+              exit 1
             fi
-            sleep 10
+
+            if [ "$pulse" -lt "$pulses" ]; then sleep 55; fi
           done
-          echo 'EXTERNAL_LIVE_DEADLINE_TICK_FAILED' >&2
-          exit 1
 
       - name: Mark external watchdog success
         if: success()
@@ -89,7 +84,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/live-deadline-external-watchdog' \
-            -f description='Independent GitHub OIDC scheduler executed live deadline tick' \
+            -f description='Independent GitHub OIDC watchdog completed minute pulses' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Mark external watchdog failure
@@ -98,5 +93,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/live-deadline-external-watchdog' \
-            -f description='Independent GitHub OIDC live deadline tick failed' \
+            -f description='Independent GitHub OIDC live deadline pulse failed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
