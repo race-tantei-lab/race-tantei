@@ -42,3 +42,5 @@ jobs:
           git commit -m "Save v34 immediate live audit" || exit 0
           git pull --rebase origin main
           git push origin HEAD:main
+
+# Recheck after Sapporo2 entered the T-20 guard window.
