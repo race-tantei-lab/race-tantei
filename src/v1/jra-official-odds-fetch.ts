@@ -22,6 +22,7 @@ const TYPE_FETCH_CONCURRENCY = 2;
 const JRA_HOSTS = ["sp.jra.jp", "www.jra.go.jp", "jra.jp"] as const;
 const PAGE_TIMEOUT_MS = 4_500;
 const PAGE_ATTEMPTS = 3;
+const FETCH_BUDGET_MS = 25_000;
 
 export interface FastJraOddsPage {
   cname: string;
@@ -80,6 +81,8 @@ export function jraOddsUrlForEntry(entryUrl: string): string {
 class JraFetchSession {
   private cookies = new Map<string, string>();
 
+  constructor(private readonly deadlineMs: number) {}
+
   private cookieHeader(): string {
     return [...this.cookies.entries()].map(([key, value]) => `${key}=${value}`).join("; ");
   }
@@ -98,6 +101,8 @@ class JraFetchSession {
     const body = options.cname == null ? undefined : new URLSearchParams({ cname: options.cname }).toString();
     let lastError = "unknown";
     for (let attempt = 0; attempt < PAGE_ATTEMPTS; attempt += 1) {
+      const remainingBudgetMs = this.deadlineMs - Date.now();
+      if (remainingBudgetMs <= 0) throw new Error("JRA_ODDS_FETCH_BUDGET_EXHAUSTED");
       const headers = new Headers({
         "User-Agent": USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -111,7 +116,7 @@ class JraFetchSession {
       if (cookie) headers.set("Cookie", cookie);
       if (body != null) headers.set("Content-Type", "application/x-www-form-urlencoded");
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), PAGE_TIMEOUT_MS);
+      const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(PAGE_TIMEOUT_MS, remainingBudgetMs)));
       try {
         const response = await fetch(url, { method: body == null ? "GET" : "POST", headers, body, redirect: "follow", signal: controller.signal });
         this.rememberCookies(response);
@@ -143,8 +148,8 @@ function completePages(pages: FastJraOddsPage[]): void {
   }
 }
 
-async function fetchFastDirect(entryUrl: string, target: JraOddsIdentity): Promise<FastJraOddsResult> {
-  const session = new JraFetchSession();
+async function fetchFastDirect(entryUrl: string, target: JraOddsIdentity, deadlineMs: number): Promise<FastJraOddsResult> {
+  const session = new JraFetchSession(deadlineMs);
   const dateDigits = target.raceDate.replaceAll("-", "");
   const oddsUrl = jraOddsUrlForEntry(entryUrl);
   const entryHtml = await session.html(entryUrl);
@@ -204,8 +209,8 @@ async function fetchFastDirect(entryUrl: string, target: JraOddsIdentity): Promi
   };
 }
 
-async function fetchOfficialCrawlFallback(entryUrl: string, target: JraOddsIdentity, fastError: unknown): Promise<FastJraOddsResult> {
-  const crawl = await crawlJraOfficialOddsForRace(entryUrl, target);
+async function fetchOfficialCrawlFallback(entryUrl: string, target: JraOddsIdentity, fastError: unknown, deadlineMs: number): Promise<FastJraOddsResult> {
+  const crawl = await crawlJraOfficialOddsForRace(entryUrl, target, deadlineMs);
   if (crawl.missingBetTypes.length) {
     throw new Error(`JRA_OFFICIAL_ALL_PATHS_FAILED:fast=${errorText(fastError)};crawl_missing=${crawl.missingBetTypes.join(",")}`);
   }
@@ -232,13 +237,18 @@ export async function fetchFastJraOfficialOddsForRace(entryUrl: string, target: 
   const candidates = candidateJraEntryUrls(entryUrl);
   const attemptedHosts: string[] = [];
   const fastErrors: string[] = [];
+  const deadlineMs = Date.now() + FETCH_BUDGET_MS;
 
   for (const candidate of candidates) {
+    if (Date.now() >= deadlineMs) {
+      fastErrors.push("budget:JRA_ODDS_FETCH_BUDGET_EXHAUSTED");
+      break;
+    }
     let host = candidate;
     try { host = new URL(candidate).hostname; } catch { /* keep raw value */ }
     if (!attemptedHosts.includes(host)) attemptedHosts.push(host);
     try {
-      const result = await fetchFastDirect(candidate, target);
+      const result = await fetchFastDirect(candidate, target, deadlineMs);
       return { ...result, attemptedHosts };
     } catch (error) {
       fastErrors.push(`${host}:${errorText(error)}`);
@@ -246,8 +256,9 @@ export async function fetchFastJraOfficialOddsForRace(entryUrl: string, target: 
   }
 
   const aggregateFastError = new Error(`JRA_ODDS_FAST_ALL_HOSTS_FAILED:${fastErrors.join("|")}`);
+  if (Date.now() >= deadlineMs) throw new Error(`JRA_ODDS_ALL_PATHS_BUDGET_EXHAUSTED:fast=${fastErrors.join("|")}`);
   try {
-    const crawl = await fetchOfficialCrawlFallback(entryUrl, target, aggregateFastError);
+    const crawl = await fetchOfficialCrawlFallback(entryUrl, target, aggregateFastError, deadlineMs);
     return { ...crawl, attemptedHosts };
   } catch (crawlError) {
     throw new Error(`JRA_ODDS_ALL_PATHS_FAILED:fast=${fastErrors.join("|")};crawl=${errorText(crawlError)}`);

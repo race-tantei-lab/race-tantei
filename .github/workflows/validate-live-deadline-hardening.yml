@@ -1,0 +1,83 @@
+name: Validate live deadline hardening
+
+on:
+  push:
+    branches:
+      - hardening/live-lock-v35
+    paths:
+      - "src/live-deadline-entry-v1.ts"
+      - "src/live-deadline-entry-v2.ts"
+      - "src/public-site-entry-v29.ts"
+      - "src/public-site-entry-v34.ts"
+      - "src/v1/live-preview-safety.ts"
+      - "src/v1/completed-worker-live-lock.ts"
+      - "src/v1/completed-worker-deadline-guard.ts"
+      - "src/v1/completed-selection-runtime.ts"
+      - "src/v1/completed-final-invariants.ts"
+      - "src/v1/upcoming-entry-derived-repair.ts"
+      - "src/v1/jra-official-odds-fetch.ts"
+      - "src/v1/jra-official-odds.ts"
+      - "tests/completed-worker-deadline-guard-tests.ts"
+      - "scripts/verify-live-hardening-policy.py"
+      - "scripts/verify-live-production-ownership.py"
+      - "wrangler.live-deadline.jsonc"
+      - "wrangler.live-deadline-backup.jsonc"
+      - ".github/workflows/deploy-live-deadline.yml"
+      - ".github/workflows/validate-live-deadline-hardening.yml"
+      - ".github/workflows/drive-live-tick.yml"
+      - ".github/workflows/auto-final-live-bets.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+concurrency:
+  group: validate-live-deadline-hardening
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Typecheck repository
+        run: npm run typecheck
+      - name: Verify strict T-15 boundary
+        run: npx tsx tests/completed-worker-deadline-guard-tests.ts
+      - name: Verify live hardening policy
+        run: python scripts/verify-live-hardening-policy.py
+      - name: Verify exclusive live finalization ownership
+        run: python scripts/verify-live-production-ownership.py
+      - name: Build primary isolated Worker without deployment
+        run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
+      - name: Build backup isolated Worker without deployment
+        run: npx wrangler deploy --dry-run --config wrangler.live-deadline-backup.jsonc --outdir dist-live-deadline-backup
+      - name: Round four checkpoint
+        run: echo 'ROUND4_LIVE_DEADLINE_READY_FOR_PRODUCTION'
+      - name: Mark hardening validation success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='hardening/live-deadline' \
+            -f description='Round 4: ownership, T-15, policy, and dual Worker dry-runs passed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark hardening validation failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='hardening/live-deadline' \
+            -f description='Round 4 live deadline hardening validation failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null

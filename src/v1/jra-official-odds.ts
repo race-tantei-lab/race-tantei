@@ -8,6 +8,7 @@ const BET_SET = new Set<string>(BET_TYPES);
 const UNORDERED = new Set<CompletedBetType>(["ワイド", "馬連", "3連複"]);
 const ARITY: Record<CompletedBetType, number> = { "単勝": 1, "ワイド": 2, "馬連": 2, "馬単": 2, "3連複": 3, "3連単": 3 };
 const VENUES = "札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉";
+const CRAWL_PAGE_TIMEOUT_MS = 3_500;
 
 export interface JraOddsIdentity {
   raceDate: string;
@@ -140,7 +141,7 @@ function guessedBetType(context: string, cname: string): CompletedBetType | null
   return prefixes.find(([prefix]) => cname.startsWith(prefix))?.[1] ?? null;
 }
 
-async function fetchHtml(url: string, cname?: string, referer = "https://www.jra.go.jp/"): Promise<string> {
+async function fetchHtml(url: string, cname?: string, referer = "https://www.jra.go.jp/", deadlineMs = Number.POSITIVE_INFINITY): Promise<string> {
   const headers: Record<string, string> = {
     "User-Agent": USER_AGENT,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -149,7 +150,16 @@ async function fetchHtml(url: string, cname?: string, referer = "https://www.jra
   };
   let body: string | undefined;
   if (cname != null) { body = new URLSearchParams({ cname }).toString(); headers["Content-Type"] = "application/x-www-form-urlencoded"; }
-  const response = await fetch(url, { method: body ? "POST" : "GET", headers, body, redirect: "follow" });
+  const remainingBudgetMs = deadlineMs - Date.now();
+  if (remainingBudgetMs <= 0) throw new Error("JRA_ODDS_CRAWL_BUDGET_EXHAUSTED");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1, Math.min(CRAWL_PAGE_TIMEOUT_MS, remainingBudgetMs)));
+  let response: Response;
+  try {
+    response = await fetch(url, { method: body ? "POST" : "GET", headers, body, redirect: "follow", signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!response.ok) throw new Error(`JRA_ODDS_HTTP_${response.status}`);
   const bytes = await response.arrayBuffer();
   if (bytes.byteLength > 4_000_000) throw new Error("JRA_ODDS_BODY_TOO_LARGE");
@@ -158,16 +168,16 @@ async function fetchHtml(url: string, cname?: string, referer = "https://www.jra
   return html;
 }
 
-export async function crawlJraOfficialOddsForRace(entryUrl: string, target: JraOddsIdentity): Promise<JraOfficialOddsCrawlResult> {
-  const entryHtml = await fetchHtml(entryUrl);
+export async function crawlJraOfficialOddsForRace(entryUrl: string, target: JraOddsIdentity, deadlineMs = Number.POSITIVE_INFINITY): Promise<JraOfficialOddsCrawlResult> {
+  const entryHtml = await fetchHtml(entryUrl, undefined, "https://www.jra.go.jp/", deadlineMs);
   const queue = jraActionLinks(entryHtml).map((link) => link.cname);
   const seen = new Set<string>(); const pages: JraOfficialOddsPage[] = [];
-  while (queue.length && seen.size < 40) {
+  while (queue.length && seen.size < 40 && Date.now() < deadlineMs) {
     const cname = queue.shift()!;
     if (seen.has(cname)) continue;
     seen.add(cname);
     try {
-      const page = await fetchHtml(JRA_ODDS_URL, cname, JRA_ODDS_URL);
+      const page = await fetchHtml(JRA_ODDS_URL, cname, JRA_ODDS_URL, deadlineMs);
       const identity = parseJraOddsIdentity(page, cname);
       if (!identity || identity.raceDate !== target.raceDate || identity.venue !== target.venue || identity.raceNo !== target.raceNo) continue;
       const links = jraActionLinks(page);
