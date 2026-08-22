@@ -6,25 +6,25 @@
 ✨ Read 5 files from the assets directory /home/runner/work/race-tantei/race-tantei/worker-assets
 🌀 Starting asset upload...
 No updated asset files to upload. Proceeding with deployment...
-Total Upload: 1629.77 KiB / gzip: 800.76 KiB
+Total Upload: 1660.78 KiB / gzip: 807.78 KiB
 Worker Startup Time: 3 ms
 Your Worker has access to the following bindings:
 Binding                                                                   Resource                  
 env.DB (race-tantei-phase0)                                               D1 Database               
 env.ASSETS                                                                Assets                    
 env.ENVIRONMENT ("production")                                            Environment Variable      
-env.DEPLOY_REVISION ("ten-year-completed-public-v31-current...")          Environment Variable      
+env.DEPLOY_REVISION ("ten-year-completed-public-v34-live-ti...")          Environment Variable      
 env.MODEL_VERSION ("ten-year-completed-model")                            Environment Variable      
-env.JRA_HOME_URL ("https://sp.jra.jp/")                                   Environment Variable      
+env.JRA_HOME_URL ("https://www.jra.go.jp/")                               Environment Variable      
 env.JRA_SEED_ENTRY_URLS ("https://sp.jra.jp/JRADB/accessD.html?...")      Environment Variable      
 env.MIN_EXPECTED_VALUE ("108")                                            Environment Variable      
 env.MAX_RACE_BUDGET_YEN ("10000")                                         Environment Variable      
 env.SYNC_BATCH_SIZE ("12")                                                Environment Variable      
 
-Uploaded race-tantei-phase0 (3.09 sec)
-Deployed race-tantei-phase0 triggers (0.71 sec)
+Uploaded race-tantei-phase0 (4.27 sec)
+Deployed race-tantei-phase0 triggers (0.56 sec)
   https://race-tantei-phase0.race-tantei.workers.dev
   schedule: * * * * *
-Current Version ID: 015d0646-851a-4011-a1eb-1d3609a41cef
+Current Version ID: 1c10252e-3b12-41da-8b5c-a48185d717ff
 
 Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
