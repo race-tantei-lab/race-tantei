@@ -6,13 +6,18 @@ on:
       - hardening/live-lock-v35
     paths:
       - "src/live-deadline-entry-v1.ts"
+      - "src/live-deadline-entry-v2.ts"
+      - "src/v1/live-preview-safety.ts"
       - "src/v1/completed-worker-live-lock.ts"
       - "src/v1/completed-worker-deadline-guard.ts"
       - "src/v1/completed-selection-runtime.ts"
       - "src/v1/completed-final-invariants.ts"
       - "src/v1/jra-official-odds-fetch.ts"
+      - "src/v1/jra-official-odds.ts"
       - "tests/completed-worker-deadline-guard-tests.ts"
+      - "scripts/verify-live-hardening-policy.py"
       - "wrangler.live-deadline.jsonc"
+      - "wrangler.live-deadline-backup.jsonc"
       - ".github/workflows/validate-live-deadline-hardening.yml"
   workflow_dispatch:
 
@@ -43,15 +48,19 @@ jobs:
         run: npm run typecheck
       - name: Verify strict T-15 boundary
         run: npx tsx tests/completed-worker-deadline-guard-tests.ts
-      - name: Build isolated Worker without deployment
+      - name: Verify live hardening policy
+        run: python scripts/verify-live-hardening-policy.py
+      - name: Build primary isolated Worker without deployment
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
+      - name: Build backup isolated Worker without deployment
+        run: npx wrangler deploy --dry-run --config wrangler.live-deadline-backup.jsonc --outdir dist-live-deadline-backup
       - name: Mark hardening validation success
         if: success()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='hardening/live-deadline' \
-            -f description='Typecheck, T-15 regression, and isolated dry-run passed' \
+            -f description='Typecheck, T-15, policy, and dual Worker dry-runs passed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark hardening validation failure
         if: failure()
