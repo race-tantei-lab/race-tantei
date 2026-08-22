@@ -1,7 +1,7 @@
 {
   "status": "production",
   "handoffVersion": 4,
-  "asOfJst": "2026-08-21T19:41:00+09:00",
+  "asOfJst": "2026-08-22T09:58:00+09:00",
   "repository": "race-tantei-lab/race-tantei",
   "branch": "main",
   "verifiedProductionBaselineCommit": "4a02f24e06039dc3c6d3b7daee05ffe967cbdcd8",
@@ -53,14 +53,30 @@
     "racesPerVenueDay": 5,
     "ticketsPerSelectedRace": 2,
     "distinctBetTypesPerRace": 2,
-    "betTypes": ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"],
+    "betTypes": [
+      "単勝",
+      "ワイド",
+      "馬連",
+      "馬単",
+      "3連複",
+      "3連単"
+    ],
     "ticketScore": "ln(predictedProbability) + 0.4 * ln(officialJraOdds)",
     "officialOddsOnly": true,
     "syntheticOddsForbidden": true,
     "courses": {
-      "ライト": [1000, 1000],
-      "スタンダード": [2500, 2500],
-      "プレミアム": [5000, 5000]
+      "ライト": [
+        1000,
+        1000
+      ],
+      "スタンダード": [
+        2500,
+        2500
+      ],
+      "プレミアム": [
+        5000,
+        5000
+      ]
     },
     "historicalRoiPct": 431.6505898681471
   },
@@ -76,13 +92,16 @@
     "workerSelectionParityWorkflow": ".github/workflows/verify-worker-selection-parity.yml",
     "workerLiveLock": "src/v1/completed-worker-live-lock.ts",
     "legacyShellDependency": "scripts/run-auto-final-live.py",
-    "legacyShellRule": "Do not run scripts/run-auto-final-live.py directly as the current production model. The canonical wrapper imports it only as a runtime shell and replaces selection/generator/validation with ten-year-completed implementations."
+    "legacyShellRule": "Do not run scripts/run-auto-final-live.py directly as the current production model. The canonical wrapper imports it only as a runtime shell and replaces selection/generator/validation with ten-year-completed implementations.",
+    "independentLiveTick": "src/public-site-entry-v34.ts:/_ops/live-tick",
+    "independentLiveTickWorkflow": ".github/workflows/drive-live-tick.yml",
+    "deadlineGuardArmMinutes": 20
   },
   "site": {
     "workerConfig": "wrangler.jsonc",
     "authoritativeEntryRule": "The current UI entry is always wrangler.jsonc.main. Do not infer the current UI from public-site-entry version filenames. Current wrappers intentionally layer earlier entries, so verification must inspect the active import chain while keeping wrangler.jsonc.main as the identity source of truth.",
-    "entry": "src/public-site-entry-v32.ts",
-    "revision": "ten-year-completed-public-v32-worker-entry-repair-20260821",
+    "entry": "src/public-site-entry-v34.ts",
+    "revision": "ten-year-completed-public-v34-live-tick-t20-20260822",
     "url": "https://race-tantei-phase0.race-tantei.workers.dev",
     "workerName": "race-tantei-phase0",
     "d1DatabaseName": "race-tantei-phase0",
@@ -118,7 +137,7 @@
     "The public prediction-logic page is labeled 予想のしくみ and explains the completed model in product-ready Japanese while preserving methodology transparency.",
     "The public prediction-logic and guide pages explain that the frozen completed base model is combined with continuous recency learning that incorporates same-day finished races and settled bets before each later prediction.",
     "Public methodology states that JRA official odds are the only allowed market odds, synthetic/estimated/probability-derived substitute odds are forbidden, and missing official odds fails closed instead of fabricating a final bet.",
-    "Public methodology states that previews are refreshed before the deadline, the deadline guard arms within 16 minutes so the bet is immutable by 15 minutes before post time, and locked bets cannot be rewritten.",
+    "Public methodology states that previews are refreshed before the deadline, the deadline guard arms within 20 minutes so both the per-minute Worker cron and independent five-minute live-tick backup can make the bet immutable by 15 minutes before post time, and locked bets cannot be rewritten.",
     "Live selected-race pages use three compact tabs: 予想買い目, 買い目の理由, 出走馬. Only one of these long sections is shown at a time on the race detail page.",
     "The 買い目の理由 tab explains only why the final two tickets were selected. It shows each ticket's estimated combination hit probability, JRA official odds, probability-times-odds value, and a plainly labeled ticket evaluation score, plus the actual narrowing sequence.",
     "Race-selection rationale, raceScore, selection proxy tickets, selection-stage ROI components, and generic condition-match copy are not shown in the live race-detail 買い目の理由 tab.",

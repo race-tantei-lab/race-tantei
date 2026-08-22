@@ -58,7 +58,7 @@ def main() -> None:
     guard = read("src/v1/completed-worker-deadline-guard.ts")
     for needle in (
         "export const DEADLINE_GUARD_MS = 15 * 60 * 1000;",
-        "export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;",
+        "export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;",
         "remainingMs > 0 && remainingMs <= DEADLINE_GUARD_ARM_MS",
         "orderSelectedRaceIds",
         "start_time_utc AS startTimeUtc",
