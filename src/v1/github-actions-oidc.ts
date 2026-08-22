@@ -4,6 +4,10 @@ export const LIVE_DEADLINE_OIDC_AUDIENCE = "race-tantei-live-deadline";
 const ALLOWED_REPOSITORY = "race-tantei-lab/race-tantei";
 const ALLOWED_REF = "refs/heads/main";
 const ALLOWED_EVENTS = new Set(["schedule", "workflow_dispatch", "push"]);
+const ALLOWED_WORKFLOW_REFS = new Set([
+  "race-tantei-lab/race-tantei/.github/workflows/live-deadline-external-watchdog.yml@refs/heads/main",
+  "race-tantei-lab/race-tantei/.github/workflows/verify-live-deadline-production.yml@refs/heads/main",
+]);
 const CLOCK_SKEW_SECONDS = 90;
 const JWKS_CACHE_MS = 6 * 60 * 60 * 1000;
 
@@ -62,6 +66,7 @@ function claimsAllowed(claims: GithubOidcClaims, nowSeconds: number): boolean {
   if (!audienceAllowed(claims.aud)) return false;
   if (claims.repository !== ALLOWED_REPOSITORY || claims.ref !== ALLOWED_REF) return false;
   if (!claims.event_name || !ALLOWED_EVENTS.has(claims.event_name)) return false;
+  if (!claims.workflow_ref || !ALLOWED_WORKFLOW_REFS.has(claims.workflow_ref)) return false;
   if (!claims.sub?.startsWith(`repo:${ALLOWED_REPOSITORY}:`)) return false;
   if (!Number.isFinite(claims.exp) || Number(claims.exp) < nowSeconds - CLOCK_SKEW_SECONDS) return false;
   if (Number.isFinite(claims.nbf) && Number(claims.nbf) > nowSeconds + CLOCK_SKEW_SECONDS) return false;
