@@ -11,6 +11,7 @@ on:
       - "src/v1/completed-selection-runtime.ts"
       - "src/v1/completed-final-invariants.ts"
       - "src/v1/jra-official-odds-fetch.ts"
+      - "tests/completed-worker-deadline-guard-tests.ts"
       - "wrangler.live-deadline.jsonc"
       - ".github/workflows/validate-live-deadline-hardening.yml"
   workflow_dispatch:
@@ -40,6 +41,10 @@ jobs:
       - run: npm ci
       - name: Typecheck repository
         run: npm run typecheck
+      - name: Build deadline regression tests
+        run: npm run build:test
+      - name: Verify strict T-15 boundary
+        run: node dist-test/tests/completed-worker-deadline-guard-tests.js
       - name: Build isolated Worker without deployment
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
       - name: Mark hardening validation success
@@ -48,7 +53,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='hardening/live-deadline' \
-            -f description='Typecheck and isolated Worker dry-run passed' \
+            -f description='Typecheck, T-15 regression, and isolated dry-run passed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark hardening validation failure
         if: failure()
