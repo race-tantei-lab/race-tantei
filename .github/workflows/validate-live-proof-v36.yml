@@ -3,6 +3,8 @@ name: Validate live deadline proof v36
 on:
   push:
     branches: [hardening/live-proof-v36]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -16,7 +18,7 @@ env:
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 concurrency:
-  group: validate-live-proof-v36
+  group: validate-live-proof-v36-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -48,6 +50,7 @@ jobs:
       - name: Verify production architecture markers
         run: python scripts/verify-live-deadline-proof.py
       - name: Verify existing canonical final rows have no duplicate ticket identity
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
@@ -74,7 +77,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='hardening/live-deadline-proof-v36' \
-            -f description='15-race fault matrix, D1 duplicate audit, T-15 boundary and dual builds passed' \
+            -f description='15-race fault matrix, T-15 boundary and dual builds passed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark proof failure
         if: failure()
