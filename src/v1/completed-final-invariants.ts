@@ -9,6 +9,22 @@ export async function ensureCompletedFinalImmutability(db: D1Database): Promise<
       END
     `),
     db.prepare(`
+      CREATE TRIGGER IF NOT EXISTS rt_guard_duplicate_worker_final_bet
+      BEFORE INSERT ON rt_public_bets
+      WHEN NEW.source_prediction_id = -2
+        AND EXISTS (
+          SELECT 1 FROM rt_public_bets
+          WHERE race_id = NEW.race_id
+            AND course = NEW.course
+            AND bet_type = NEW.bet_type
+            AND source_prediction_id = -2
+          LIMIT 1
+        )
+      BEGIN
+        SELECT RAISE(ABORT, 'DUPLICATE_WORKER_FINAL_BET');
+      END
+    `),
+    db.prepare(`
       CREATE TRIGGER IF NOT EXISTS rt_guard_final_bet_insert_deadline
       BEFORE INSERT ON rt_public_bets
       WHEN NEW.source_prediction_id = -2
