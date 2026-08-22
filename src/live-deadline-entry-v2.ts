@@ -79,10 +79,6 @@ export async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string)
   const base = { version: DRIVER_VERSION, date, scheduledAt, startedAt, owner };
 
   await ensureLivePreviewSafetySchema(env.DB);
-  // A 90-second lease covers normal multi-venue work without letting a crashed
-  // invocation suppress retries all the way to T-15. Final-row uniqueness and
-  // immutable final state are an additional fencing layer if an old invocation
-  // ever outlives this lease.
   const acquired = await acquireLiveDeadlineLease(env.DB, owner, 90);
   if (!acquired) {
     const skipped = {
@@ -142,6 +138,9 @@ export async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string)
 
     const restoredBefore = await restoreNewestOfficialPreviewArchives(env.DB, date);
     const slaBefore = await auditLiveDeadlineSla(env.DB, date, new Date());
+    if (slaBefore.structuralErrorRaceIds.length) {
+      throw new Error(`LIVE_DEADLINE_STRUCTURAL_RACE_ERROR:${slaBefore.structuralErrorRaceIds.join(",")}`);
+    }
 
     const guardBeforeNow = new Date();
     const guardBefore = await runCompletedWorkerDeadlineGuard(env, guardBeforeNow);
@@ -171,8 +170,6 @@ export async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string)
     const unresolvedDueRaceIds = [...due].filter((raceId) => !locked.has(raceId));
     const unresolvedGuardErrors = [...guardBefore.errors, ...guardAfter.errors].filter((row) => !locked.has(row.raceId));
 
-    // A miss from an already-started race remains preserved in the audit, but it
-    // must not poison every later tick and hide whether future races are safe.
     const alreadyStartedIncomplete = new Set(live?.alreadyStartedIncompleteRaceIds ?? []);
     const liveCurrentDeadlineBreaches = (live?.deadlineBreachRaceIds ?? [])
       .filter((raceId) => !alreadyStartedIncomplete.has(raceId));
@@ -183,6 +180,7 @@ export async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string)
       ...slaAfter.deadlineMissedRaceIds,
     ])];
     const historicalMissRaceIds = [...alreadyStartedIncomplete];
+    const structuralErrorRaceIds = [...new Set(slaAfter.structuralErrorRaceIds)];
     const preDeadlineCriticalRaceIds = [...new Set([
       ...slaAfter.previewMissingByT30RaceIds,
       ...slaAfter.finalMissingByT20RaceIds,
@@ -190,6 +188,7 @@ export async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string)
 
     const completed = new Date();
     const ok = !liveFailure
+      && !structuralErrorRaceIds.length
       && !unresolvedGuardErrors.length
       && !unresolvedDueRaceIds.length
       && !hardDeadlineBreachRaceIds.length
@@ -198,13 +197,15 @@ export async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string)
       ...base,
       status: ok
         ? "ok"
-        : hardDeadlineBreachRaceIds.length
-          ? "deadline_breach"
-          : preDeadlineCriticalRaceIds.length
-            ? "predeadline_critical"
-            : unresolvedDueRaceIds.length || unresolvedGuardErrors.length
-              ? "deadline_unresolved"
-              : "live_retry_needed",
+        : structuralErrorRaceIds.length
+          ? "structural_critical"
+          : hardDeadlineBreachRaceIds.length
+            ? "deadline_breach"
+            : preDeadlineCriticalRaceIds.length
+              ? "predeadline_critical"
+              : unresolvedDueRaceIds.length || unresolvedGuardErrors.length
+                ? "deadline_unresolved"
+                : "live_retry_needed",
       phase: "complete",
       ok,
       selection,
@@ -220,6 +221,7 @@ export async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string)
       guardAfterCheckedAt: iso(guardAfterNow),
       guardAfter: auditGuard(guardAfter),
       slaAfter,
+      structuralErrorRaceIds,
       unresolvedDueRaceIds,
       unresolvedGuardErrors,
       hardDeadlineBreachRaceIds,
@@ -230,6 +232,7 @@ export async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string)
     };
     await saveDriverState(env.DB, date, result);
 
+    if (structuralErrorRaceIds.length) throw new Error(`LIVE_DEADLINE_STRUCTURAL_RACE_ERROR:${structuralErrorRaceIds.join(",")}`);
     if (hardDeadlineBreachRaceIds.length) throw new Error(`LIVE_DEADLINE_HARD_T15_BREACH:${hardDeadlineBreachRaceIds.join(",")}`);
     if (preDeadlineCriticalRaceIds.length) throw new Error(`LIVE_DEADLINE_PREDEADLINE_CRITICAL:${preDeadlineCriticalRaceIds.join(",")}`);
     if (unresolvedDueRaceIds.length || unresolvedGuardErrors.length) {
