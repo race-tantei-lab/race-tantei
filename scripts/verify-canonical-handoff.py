@@ -70,6 +70,11 @@ def sha256_file(path: str) -> str:
     return h.hexdigest()
 
 
+def require(text: str, needle: str, label: str) -> None:
+    if needle not in text:
+        fail(f"{label} missing marker: {needle}")
+
+
 def collect_public_site_sources(path: str) -> str:
     current = Path(path)
     seen: set[str] = set()
@@ -96,6 +101,7 @@ def main() -> None:
     missing = [p for p in REQUIRED if not (ROOT / p).exists()]
     if missing:
         fail(f"missing required files: {missing}")
+
     for obsolete in (
         ".github/workflows/auto-final-live-bets.yml",
         ".github/workflows/drive-live-tick.yml",
@@ -119,6 +125,8 @@ def main() -> None:
     verification = manifest.get("handoffVerification", {})
     if verification.get("script") != "scripts/verify-canonical-handoff.py":
         fail("canonical handoff verifier path mismatch")
+    if verification.get("workflow") != ".github/workflows/verify-canonical-handoff.yml":
+        fail("canonical handoff workflow path mismatch")
     if verification.get("requiredResult") != "CANONICAL_HANDOFF_OK":
         fail("canonical handoff required result mismatch")
 
@@ -217,8 +225,8 @@ def main() -> None:
         "公開した買い目と結果は後から変更しません",
         "予想のしくみ",
     ):
-        if needle not in active_ui_sources:
-            fail(f"active public-site chain missing canonical UI marker: {needle}")
+        require(active_ui_sources, needle, "active public-site chain")
+
     top_public = read(site["entry"])
     for forbidden in ("runCompletedWorkerLiveLock", "runCompletedWorkerDeadlineGuard", "runDirectLiveTick"):
         if forbidden in top_public:
@@ -231,6 +239,7 @@ def main() -> None:
     live_safety = read("src/v1/live-preview-safety.ts")
     deadline_guard = read("src/v1/completed-worker-deadline-guard.ts")
     invariants = read("src/v1/completed-final-invariants.ts")
+
     for needle in (
         "acquireLiveDeadlineLease",
         "restoreNewestOfficialPreviewArchives",
@@ -239,10 +248,10 @@ def main() -> None:
         "selection_critical",
         "predeadline_critical",
     ):
-        if needle not in live_entry:
-            fail(f"live deadline entry missing marker: {needle}")
+        require(live_entry, needle, "live deadline entry")
     if "/_ops/live-tick" in live_entry:
         fail("isolated live deadline Worker must not expose a public mutation endpoint")
+
     for needle in (
         "const PREVIEW_OPEN_MS = 90 * 60 * 1000;",
         "const PREVIEW_REQUIRED_MS = 30 * 60 * 1000;",
@@ -251,8 +260,8 @@ def main() -> None:
         'new Set(["jra-fast-official", "jra-crawl-official"])',
         "WORKER_HARD_T15_MISSED",
     ):
-        if needle not in live_worker:
-            fail(f"live lock missing marker: {needle}")
+        require(live_worker, needle, "live lock")
+
     for needle in (
         "rt_live_preview_archive",
         "rt_live_deadline_lease",
@@ -262,32 +271,29 @@ def main() -> None:
         "finalMissingByT20RaceIds",
         "deadlineMissedRaceIds",
     ):
-        if needle not in live_safety:
-            fail(f"live safety missing marker: {needle}")
+        require(live_safety, needle, "live safety")
+
     for needle in (
         "DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000",
         "remainingMs >= DEADLINE_GUARD_MS",
         "isDeadlineGuardMissed",
     ):
-        if needle not in deadline_guard:
-            fail(f"deadline guard missing marker: {needle}")
+        require(deadline_guard, needle, "deadline guard")
+
     for needle in (
         "FINAL_BET_DEADLINE_PASSED",
         "FINAL_STATE_DEADLINE_PASSED",
         "OFFICIAL_JRA_ODDS_REQUIRED",
         "PROBABILITY_FALLBACK_FORBIDDEN",
     ):
-        if needle not in invariants:
-            fail(f"D1 invariant missing marker: {needle}")
+        require(invariants, needle, "D1 invariant")
 
     deploy_live = read(prod["liveDeadlineDeployWorkflow"])
     for needle in ("Deploy primary live deadline Worker", "Deploy backup live deadline Worker", "production/live-deadline"):
-        if needle not in deploy_live:
-            fail(f"live deadline deploy workflow missing marker: {needle}")
+        require(deploy_live, needle, "live deadline deploy workflow")
     readiness = read(prod["liveDeadlineReadinessWorkflow"])
     for needle in ("/health", "_ops/live-tick", "rt_live_preview_archive", "production/live-deadline-readiness"):
-        if needle not in readiness:
-            fail(f"live deadline readiness workflow missing marker: {needle}")
+        require(readiness, needle, "live deadline readiness workflow")
 
     deploy_workflow = read(prod["deployWorkflow"])
     for needle in (
@@ -297,8 +303,7 @@ def main() -> None:
         "Verify live result ingestion and settlement",
         "verify-live-lock-safety.py",
     ):
-        if needle not in deploy_workflow:
-            fail(f"production deploy missing canonical verification: {needle}")
+        require(deploy_workflow, needle, "production deploy")
 
     public_summary = read(manifest["publicHistory"]["summary"])
     if "14410" not in public_summary or "431.6505898681471" not in public_summary:
@@ -312,30 +317,73 @@ def main() -> None:
     if site["url"] not in deployment_log:
         fail("deployment log does not contain production URL")
     for needle in (manifest["model"]["name"], site["d1DatabaseName"]):
-        if needle not in deployment_log:
-            fail(f"deployment log missing canonical marker: {needle}")
+        require(deployment_log, needle, "deployment log")
     if not re.search(r"Current Version ID:\s*([0-9a-fA-F-]{36})", deployment_log):
         fail("deployment log does not contain a valid Current Version ID")
 
     readme = read("README.md")
     handoff = read("HANDOFF.md")
-    for needle in ("HANDOFF.md", "canonical-production-manifest.json", "completed-model-methodology-audit-20260813.md"):
-        if needle not in readme:
-            fail(f"README missing canonical pointer: {needle}")
+
     for needle in (
+        "HANDOFF.md",
+        "canonical-production-manifest.json",
+        "completed-model-methodology-audit-20260813.md",
+        "src/public-site-entry-v34.ts",
+        "src/live-deadline-entry-v2.ts",
+        "wrangler.live-deadline.jsonc",
+        "wrangler.live-deadline-backup.jsonc",
+        "**T-90**",
+        "**T-25**",
+        "**T-20**",
+        "**T-15**",
+        "CANONICAL_HANDOFF_OK",
+    ):
+        require(readme, needle, "README")
+
+    for needle in (
+        "handoff version: **5**",
         "63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5",
         "wrangler.jsonc.main",
         "431.6505898681471%",
+        "src/live-deadline-entry-v2.ts",
+        "wrangler.live-deadline.jsonc",
+        "wrangler.live-deadline-backup.jsonc",
+        "public live mutation: **disabled**",
+        "**T-90**",
+        "**T-30**",
+        "**T-25**",
+        "**T-20**",
+        "**T-15**",
+        "historical baseline",
         "verify-canonical-handoff.py",
         "CANONICAL_HANDOFF_OK",
     ):
-        if needle not in handoff:
-            fail(f"HANDOFF missing canonical marker: {needle}")
+        require(handoff, needle, "HANDOFF")
+
+    for stale in (
+        "handoff version: **4**",
+        ".github/workflows/auto-final-live-bets.yml",
+        "scripts/run-stored-preview-deadline-backup.py",
+        "現行T-15自動backup",
+    ):
+        if stale in handoff:
+            fail(f"HANDOFF still contains obsolete current-architecture marker: {stale}")
+
+    verify_workflow = read(".github/workflows/verify-canonical-handoff.yml")
+    for needle in (
+        "production/canonical-handoff",
+        "src/live-deadline-entry-v2.ts",
+        "wrangler.live-deadline.jsonc",
+        "wrangler.live-deadline-backup.jsonc",
+        "Verify v5 handoff documentation markers",
+    ):
+        require(verify_workflow, needle, "canonical handoff workflow")
 
     print(
         "CANONICAL_HANDOFF_OK",
         f"model_sha={actual_model_sha}",
         f"site_entry={wrangler['main']}",
+        "handoff_version=5",
         "selected_races=14410",
         "roi_pct=431.6505898681471",
         "live_primary=1m",
