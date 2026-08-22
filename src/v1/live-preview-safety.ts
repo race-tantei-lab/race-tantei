@@ -8,6 +8,7 @@ export type LiveDeadlineSlaAudit = {
   checkedAt: string;
   date: string;
   selectedRaceCount: number;
+  structuralErrorRaceIds: string[];
   previewReadyRaceIds: string[];
   finalReadyRaceIds: string[];
   previewMissingByT40RaceIds: string[];
@@ -165,7 +166,7 @@ export async function auditLiveDeadlineSla(db: D1Database, date: string, now = n
   const ids = await loadSelectedRaceIds(db, date);
   const audit: LiveDeadlineSlaAudit = {
     checkedAt: iso(now), date, selectedRaceCount: ids.length,
-    previewReadyRaceIds: [], finalReadyRaceIds: [],
+    structuralErrorRaceIds: [], previewReadyRaceIds: [], finalReadyRaceIds: [],
     previewMissingByT40RaceIds: [], previewMissingByT30RaceIds: [],
     finalMissingByT25RaceIds: [], finalMissingByT20RaceIds: [], deadlineMissedRaceIds: [],
   };
@@ -177,10 +178,17 @@ export async function auditLiveDeadlineSla(db: D1Database, date: string, now = n
       (SELECT s.state_value FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS previewJson
     FROM rt_races r WHERE r.race_id IN (${placeholders})
   `).bind(...ids).all<RaceSlaRow>();
+  const returnedIds = new Set((rows.results ?? []).map((row) => String(row.raceId)));
+  for (const raceId of ids) {
+    if (!returnedIds.has(raceId)) audit.structuralErrorRaceIds.push(raceId);
+  }
   for (const row of rows.results ?? []) {
     const raceId = String(row.raceId);
     const startMs = Date.parse(String(row.startTimeUtc || ""));
-    if (!Number.isFinite(startMs)) continue;
+    if (!Number.isFinite(startMs)) {
+      audit.structuralErrorRaceIds.push(raceId);
+      continue;
+    }
     const remaining = startMs - now.getTime();
     const previewReady = Number.isFinite(parseOfficialPreviewGeneratedAt(row.previewJson));
     const finalReady = Number(row.finalBetCount) === 6;
@@ -192,6 +200,7 @@ export async function auditLiveDeadlineSla(db: D1Database, date: string, now = n
     if (remaining > 0 && remaining <= 20 * 60_000 && !finalReady) audit.finalMissingByT20RaceIds.push(raceId);
     if (remaining > 0 && remaining < 15 * 60_000 && !finalReady) audit.deadlineMissedRaceIds.push(raceId);
   }
+  audit.structuralErrorRaceIds = [...new Set(audit.structuralErrorRaceIds)];
   await db.prepare(`
     INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
     ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP

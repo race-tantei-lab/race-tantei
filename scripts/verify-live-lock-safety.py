@@ -45,8 +45,8 @@ def main() -> None:
         raise AssertionError("backup live deadline Worker name mismatch")
     if backup_wrangler.get("main") != "src/live-deadline-entry-v2.ts":
         raise AssertionError("backup live deadline Worker must use v2 entry")
-    if backup_wrangler.get("triggers", {}).get("crons", []) != ["2-59/5 * * * *"]:
-        raise AssertionError("backup live deadline Worker must be staggered every five minutes")
+    if backup_wrangler.get("triggers", {}).get("crons", []) != ["* * * * *"]:
+        raise AssertionError("backup live deadline Worker must also run every minute")
 
     live = read("src/v1/completed-worker-live-lock.ts")
     for needle in (
@@ -90,6 +90,7 @@ def main() -> None:
 
     invariants = read("src/v1/completed-final-invariants.ts")
     for needle in (
+        "DUPLICATE_WORKER_FINAL_BET",
         "FINAL_BET_DEADLINE_PASSED",
         "FINAL_STATE_DEADLINE_PASSED",
         "IMMUTABLE_FINAL_BET_TERMS",
@@ -108,6 +109,7 @@ def main() -> None:
         "rt_live_deadline_lease",
         "acquireLiveDeadlineLease",
         "restoreNewestOfficialPreviewArchives",
+        "structuralErrorRaceIds",
         "previewMissingByT40RaceIds",
         "previewMissingByT30RaceIds",
         "finalMissingByT25RaceIds",
@@ -126,7 +128,10 @@ def main() -> None:
         "runUpcomingEntryDerivedRepair",
         "selection_critical",
         "predeadline_critical",
+        "structural_critical",
+        "LIVE_DEADLINE_STRUCTURAL_RACE_ERROR",
         "LIVE_DEADLINE_HARD_T15_BREACH",
+        'url.pathname === "/internal/github-tick"',
         'return new Response("NOT_FOUND", { status: 404 });',
     ):
         require(driver, needle, "isolated live deadline driver")
@@ -159,6 +164,7 @@ def main() -> None:
 
     deploy = read(".github/workflows/deploy-live-deadline.yml")
     for needle in (
+        "Run exhaustive live deadline proof",
         "Deploy primary live deadline Worker",
         "Deploy backup live deadline Worker",
         "wrangler.live-deadline.jsonc",
@@ -167,6 +173,17 @@ def main() -> None:
     ):
         require(deploy, needle, "dual live deadline deploy")
 
+    watchdog = read(".github/workflows/live-deadline-external-watchdog.yml")
+    for needle in (
+        "id-token: write",
+        "pulses=5",
+        "sleep 55",
+        "audience=race-tantei-live-deadline",
+        "/internal/github-tick",
+        "production/live-deadline-external-watchdog",
+    ):
+        require(watchdog, needle, "independent GitHub watchdog")
+
     readiness = read(".github/workflows/verify-live-deadline-production.yml")
     for needle in (
         "race-tantei-live-deadline.race-tantei.workers.dev/health",
@@ -174,6 +191,8 @@ def main() -> None:
         "race-tantei-phase0.race-tantei.workers.dev/_ops/live-tick",
         "rt_live_preview_archive",
         "rt_live_deadline_lease",
+        "rt_guard_duplicate_worker_final_bet",
+        "Prove independent GitHub scheduler can execute the production tick",
         "production/live-deadline-readiness",
     ):
         require(readiness, needle, "production readiness audit")
@@ -199,7 +218,8 @@ def main() -> None:
     print(
         "LIVE_LOCK_SAFETY_OK",
         "primary_cron=1m",
-        "backup_cron=5m_staggered",
+        "backup_cron=1m",
+        "github_external_pulse=1m",
         "preview_open=90m",
         "preview_required=30m",
         "normal_lock=25m",
@@ -210,6 +230,8 @@ def main() -> None:
         "append_only_preview_archive=true",
         "last_good_restore=true",
         "lease=true",
+        "duplicate_final_fence=true",
+        "structural_race_faults=hard_fail",
         "sla_t40_t30_t25_t20_t15=true",
         "public_live_mutation=false",
         "post_t15_creation=false",

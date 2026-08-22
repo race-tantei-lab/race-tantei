@@ -7,21 +7,26 @@ on:
       - "src/live-deadline-entry-v2.ts"
       - "src/public-site-entry-v29.ts"
       - "src/public-site-entry-v34.ts"
+      - "src/v1/github-actions-oidc.ts"
       - "src/v1/live-preview-safety.ts"
       - "src/v1/completed-worker-live-lock.ts"
       - "src/v1/completed-worker-deadline-guard.ts"
       - "src/v1/completed-final-invariants.ts"
       - "src/v1/jra-official-odds-fetch.ts"
       - "src/v1/jra-official-odds.ts"
+      - "tests/live-deadline-full-day-proof-tests.ts"
+      - "scripts/verify-live-deadline-proof.py"
       - "wrangler.jsonc"
       - "wrangler.live-deadline.jsonc"
       - "wrangler.live-deadline-backup.jsonc"
       - ".github/workflows/deploy-live-deadline.yml"
+      - ".github/workflows/live-deadline-external-watchdog.yml"
       - ".github/workflows/verify-live-deadline-production.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+  id-token: write
   statuses: write
 
 env:
@@ -33,7 +38,7 @@ env:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 14
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,6 +46,12 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - name: Re-run exhaustive proof before production checks
+        run: |
+          npm run typecheck
+          npx tsx tests/live-deadline-full-day-proof-tests.ts
+          npx tsx tests/completed-worker-deadline-guard-tests.ts
+          python scripts/verify-live-deadline-proof.py
       - name: Wait for production deploy and cron registration
         run: sleep 120
       - name: Verify isolated Workers are healthy
@@ -53,36 +64,90 @@ jobs:
             body=$(curl --max-time 20 --retry 6 --retry-delay 5 --fail-with-body -sS "$url")
             echo "$url $body"
             echo "$body" | grep -q '"status":"up"'
+            echo "$body" | grep -q 'live-deadline-v3-multi-scheduler-proof-20260822'
           done
-      - name: Verify public Worker cannot mutate live bets
+      - name: Verify public and unauthenticated mutation are blocked
         shell: bash
         run: |
           set -euo pipefail
-          code=$(curl --max-time 20 -sS -o /tmp/public-live-tick-body -w '%{http_code}' -X POST \
+          public_code=$(curl --max-time 20 -sS -o /tmp/public-live-tick-body -w '%{http_code}' -X POST \
             'https://race-tantei-phase0.race-tantei.workers.dev/_ops/live-tick' || true)
           cat /tmp/public-live-tick-body || true
-          test "$code" = "404"
-      - name: Verify D1 safety schema and cron heartbeat
+          test "$public_code" = "404"
+          internal_code=$(curl --max-time 20 -sS -o /tmp/internal-live-tick-body -w '%{http_code}' -X POST \
+            'https://race-tantei-live-deadline.race-tantei.workers.dev/internal/github-tick' || true)
+          cat /tmp/internal-live-tick-body || true
+          test "$internal_code" = "401"
+      - name: Obtain GitHub OIDC token
+        id: oidc
+        shell: bash
+        run: |
+          set -euo pipefail
+          response=$(curl --fail-with-body --max-time 15 -sS \
+            -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=race-tantei-live-deadline")
+          token=$(printf '%s' "$response" | python -c 'import json,sys; print(json.load(sys.stdin)["value"])')
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+      - name: Prove independent GitHub scheduler can execute the production tick
+        shell: bash
+        env:
+          OIDC_TOKEN: ${{ steps.oidc.outputs.token }}
+        run: |
+          set -euo pipefail
+          url='https://race-tantei-live-deadline.race-tantei.workers.dev/internal/github-tick'
+          for attempt in 1 2 3 4; do
+            code=$(curl --max-time 90 -sS -o /tmp/github-tick-body -w '%{http_code}' \
+              -X POST -H "Authorization: Bearer ${OIDC_TOKEN}" "$url" || true)
+            body=$(cat /tmp/github-tick-body 2>/dev/null || true)
+            echo "attempt=$attempt code=$code body=$body"
+            if [ "$code" = "200" ] && echo "$body" | grep -q '"source":"github-oidc"'; then
+              exit 0
+            fi
+            if [ "$code" = "202" ]; then sleep 20; continue; fi
+            sleep 10
+          done
+          exit 1
+      - name: Verify D1 safety schema and fresh successful heartbeat
         shell: bash
         run: |
           set -euo pipefail
           schema=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "SELECT name,type FROM sqlite_master WHERE name IN ('rt_live_preview_archive','rt_live_deadline_lease','rt_guard_final_bet_insert_deadline','rt_guard_final_state_insert_deadline','rt_guard_official_odds_final_insert') ORDER BY name")
+            "SELECT name,type FROM sqlite_master WHERE name IN ('rt_live_preview_archive','rt_live_deadline_lease','rt_guard_duplicate_worker_final_bet','rt_guard_final_bet_insert_deadline','rt_guard_final_state_insert_deadline','rt_guard_official_odds_final_insert') ORDER BY name")
           echo "$schema"
-          for name in rt_live_preview_archive rt_live_deadline_lease rt_guard_final_bet_insert_deadline rt_guard_final_state_insert_deadline rt_guard_official_odds_final_insert; do
+          for name in rt_live_preview_archive rt_live_deadline_lease rt_guard_duplicate_worker_final_bet rt_guard_final_bet_insert_deadline rt_guard_final_state_insert_deadline rt_guard_official_odds_final_insert; do
             echo "$schema" | grep -q "$name"
           done
           state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "SELECT state_key,updated_at FROM rt_system_state WHERE state_key LIKE 'live_deadline_driver:%' ORDER BY updated_at DESC LIMIT 1")
+            "SELECT state_key,state_value,updated_at,(unixepoch('now')-unixepoch(updated_at)) AS age_seconds FROM rt_system_state WHERE state_key LIKE 'live_deadline_driver:%' ORDER BY updated_at DESC LIMIT 1")
           echo "$state"
-          echo "$state" | grep -q 'live_deadline_driver:'
+          STATE="$state" python - <<'PY'
+          import json, os
+          body = json.loads(os.environ['STATE'])
+          rows = []
+          for part in body:
+              rows.extend(part.get('results') or [])
+          if len(rows) != 1:
+              raise SystemExit('missing live deadline heartbeat')
+          row = rows[0]
+          age = int(row.get('age_seconds') or 999999)
+          if age > 180:
+              raise SystemExit(f'stale live deadline heartbeat: {age}s')
+          payload = json.loads(row['state_value'])
+          if payload.get('version') != 'live-deadline-v3-multi-scheduler-proof-20260822':
+              raise SystemExit('wrong production live driver version')
+          if payload.get('ok') is not True:
+              raise SystemExit('latest production live tick is not ok')
+          print('fresh production heartbeat: ok', age)
+          PY
       - name: Mark production readiness success
         if: success()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/live-deadline-readiness' \
-            -f description='Dual Workers healthy, public mutation disabled, D1 guards active' \
+            -f description='3 schedulers proven, OIDC tick executed, D1 guards and fresh heartbeat verified' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark production readiness failure
         if: failure()
@@ -90,5 +155,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/live-deadline-readiness' \
-            -f description='Production live deadline readiness verification failed' \
+            -f description='Production live deadline proof failed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
