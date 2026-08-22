@@ -1,0 +1,65 @@
+name: Apply v34 verifier manifest fix
+run-name: Apply v34 verifier manifest fix · ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/apply-v34-verifier-manifest-fix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Update safety verifier and canonical manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          p=Path('scripts/verify-live-lock-safety.py')
+          s=p.read_text()
+          old='"export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;",'
+          new='"export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;",'
+          if old not in s and new not in s:
+              raise SystemExit('live-lock verifier arm marker not found')
+          p.write_text(s.replace(old,new))
+
+          p=Path('config/canonical-production-manifest.json')
+          data=json.loads(p.read_text())
+          data['asOfJst']='2026-08-22T09:58:00+09:00'
+          data['site']['entry']='src/public-site-entry-v34.ts'
+          data['site']['revision']='ten-year-completed-public-v34-live-tick-t20-20260822'
+          req=data.get('currentUiRequirements',[])
+          data['currentUiRequirements']=[
+              x.replace('deadline guard arms within 16 minutes so the bet is immutable by 15 minutes before post time',
+                        'deadline guard arms within 20 minutes so both the per-minute Worker cron and independent five-minute live-tick backup can make the bet immutable by 15 minutes before post time')
+              for x in req
+          ]
+          prod=data.setdefault('production',{})
+          prod['independentLiveTick']='src/public-site-entry-v34.ts:/_ops/live-tick'
+          prod['independentLiveTickWorkflow']='.github/workflows/drive-live-tick.yml'
+          prod['deadlineGuardArmMinutes']=20
+          p.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+          PY
+          python scripts/verify-live-lock-safety.py
+          git diff --check
+      - name: Commit patch
+        shell: bash
+        run: |
+          git add scripts/verify-live-lock-safety.py config/canonical-production-manifest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update v34 live safety verifier and manifest" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
