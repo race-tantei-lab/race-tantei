@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-22T07:31:34.334Z",
+  "generatedAt": "2026-08-22T08:28:48.187Z",
   "state": [
     {
       "results": [
@@ -10,8 +10,8 @@
         },
         {
           "stateKey": "worker_deadline_guard:2026-08-22",
-          "stateValue": "{\"status\":\"ok\",\"checkedAt\":\"2026-08-22T07:30:53.000Z\",\"date\":\"2026-08-22\",\"orderedSelectedRaceIds\":[\"2026-08-22-chukyo-01\",\"2026-08-22-sapporo-01\",\"2026-08-22-chukyo-02\",\"2026-08-22-sapporo-02\",\"2026-08-22-chukyo-03\",\"2026-08-22-sapporo-03\",\"2026-08-22-niigata-04\",\"2026-08-22-chukyo-04\",\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-06\",\"2026-08-22-niigata-07\",\"2026-08-22-sapporo-11\",\"2026-08-22-chukyo-09\",\"2026-08-22-niigata-11\",\"2026-08-22-niigata-12\"],\"dueRaceIds\":[],\"lockedRaceIds\":[],\"lockedOfficialPreviewRaceIds\":[],\"lockedProbabilityFallbackRaceIds\":[],\"skippedAlreadyLockedRaceIds\":[\"2026-08-22-chukyo-02\",\"2026-08-22-sapporo-02\",\"2026-08-22-chukyo-03\",\"2026-08-22-sapporo-03\",\"2026-08-22-niigata-04\",\"2026-08-22-chukyo-04\",\"2026-08-22-sapporo-11\",\"2026-08-22-chukyo-09\"],\"skippedOutsideWindowRaceIds\":[\"2026-08-22-chukyo-01\",\"2026-08-22-sapporo-01\",\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-06\",\"2026-08-22-niigata-07\",\"2026-08-22-niigata-11\",\"2026-08-22-niigata-12\"],\"errors\":[]}",
-          "updatedAt": "2026-08-22 07:31:17"
+          "stateValue": "{\"status\":\"ok\",\"checkedAt\":\"2026-08-22T07:37:53.000Z\",\"date\":\"2026-08-22\",\"orderedSelectedRaceIds\":[\"2026-08-22-chukyo-01\",\"2026-08-22-sapporo-01\",\"2026-08-22-chukyo-02\",\"2026-08-22-sapporo-02\",\"2026-08-22-chukyo-03\",\"2026-08-22-sapporo-03\",\"2026-08-22-niigata-04\",\"2026-08-22-chukyo-04\",\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-06\",\"2026-08-22-niigata-07\",\"2026-08-22-sapporo-11\",\"2026-08-22-chukyo-09\",\"2026-08-22-niigata-11\",\"2026-08-22-niigata-12\"],\"dueRaceIds\":[],\"lockedRaceIds\":[],\"lockedOfficialPreviewRaceIds\":[],\"lockedProbabilityFallbackRaceIds\":[],\"skippedAlreadyLockedRaceIds\":[\"2026-08-22-chukyo-02\",\"2026-08-22-sapporo-02\",\"2026-08-22-chukyo-03\",\"2026-08-22-sapporo-03\",\"2026-08-22-niigata-04\",\"2026-08-22-chukyo-04\",\"2026-08-22-sapporo-11\",\"2026-08-22-chukyo-09\"],\"skippedOutsideWindowRaceIds\":[\"2026-08-22-chukyo-01\",\"2026-08-22-sapporo-01\",\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-06\",\"2026-08-22-niigata-07\",\"2026-08-22-niigata-11\",\"2026-08-22-niigata-12\"],\"errors\":[]}",
+          "updatedAt": "2026-08-22 07:37:58"
         },
         {
           "stateKey": "worker_live_final:2026-08-22-chukyo-02",
@@ -55,8 +55,8 @@
         },
         {
           "stateKey": "worker_live_lock:2026-08-22",
-          "stateValue": "{\"status\":\"deadline_breach\",\"checkedAt\":\"2026-08-22T07:30:53.000Z\",\"date\":\"2026-08-22\",\"sourceModel\":\"ten-year-completed-model\",\"selectedRaceCount\":15,\"completeBefore\":8,\"completeAfter\":8,\"lockedByWorker\":[],\"refreshedBodyWeightRaceIds\":[],\"bodyWeightPendingRaceIds\":[\"2026-08-22-niigata-11\"],\"bodyWeightBreachRaceIds\":[],\"refreshedPreviewRaceIds\":[],\"previewAvailableRaceIds\":[\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-07\"],\"finalizedFromFreshRaceIds\":[],\"finalizedFromFallbackRaceIds\":[],\"latePromotedRaceIds\":[],\"protectedRaceIds\":[\"2026-08-22-chukyo-02\",\"2026-08-22-sapporo-02\",\"2026-08-22-chukyo-03\",\"2026-08-22-sapporo-03\",\"2026-08-22-niigata-04\",\"2026-08-22-chukyo-04\",\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-07\",\"2026-08-22-sapporo-11\",\"2026-08-22-chukyo-09\"],\"incompleteRaceIds\":[\"2026-08-22-chukyo-01\",\"2026-08-22-sapporo-01\",\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-06\",\"2026-08-22-niigata-07\",\"2026-08-22-niigata-11\",\"2026-08-22-niigata-12\"],\"deadlineBreachRaceIds\":[\"2026-08-22-chukyo-01\",\"2026-08-22-sapporo-01\",\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-06\",\"2026-08-22-niigata-07\"],\"notYetInWindowRaceIds\":[\"2026-08-22-niigata-12\"],\"alreadyStartedIncompleteRaceIds\":[\"2026-08-22-chukyo-01\",\"2026-08-22-sapporo-01\",\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-06\",\"2026-08-22-niigata-07\"],\"errors\":[]}",
-          "updatedAt": "2026-08-22 07:31:12"
+          "stateValue": "{\"status\":\"deadline_breach\",\"checkedAt\":\"2026-08-22T07:37:37.714Z\",\"date\":\"2026-08-22\",\"sourceModel\":\"ten-year-completed-model\",\"selectedRaceCount\":15,\"completeBefore\":8,\"completeAfter\":8,\"lockedByWorker\":[],\"refreshedBodyWeightRaceIds\":[],\"bodyWeightPendingRaceIds\":[\"2026-08-22-niigata-11\"],\"bodyWeightBreachRaceIds\":[],\"refreshedPreviewRaceIds\":[],\"previewAvailableRaceIds\":[\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-07\"],\"finalizedFromFreshRaceIds\":[],\"finalizedFromFallbackRaceIds\":[],\"latePromotedRaceIds\":[],\"protectedRaceIds\":[\"2026-08-22-chukyo-02\",\"2026-08-22-sapporo-02\",\"2026-08-22-chukyo-03\",\"2026-08-22-sapporo-03\",\"2026-08-22-niigata-04\",\"2026-08-22-chukyo-04\",\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-07\",\"2026-08-22-sapporo-11\",\"2026-08-22-chukyo-09\"],\"incompleteRaceIds\":[\"2026-08-22-chukyo-01\",\"2026-08-22-sapporo-01\",\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-06\",\"2026-08-22-niigata-07\",\"2026-08-22-niigata-11\",\"2026-08-22-niigata-12\"],\"deadlineBreachRaceIds\":[\"2026-08-22-chukyo-01\",\"2026-08-22-sapporo-01\",\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-06\",\"2026-08-22-niigata-07\"],\"notYetInWindowRaceIds\":[\"2026-08-22-niigata-12\"],\"alreadyStartedIncompleteRaceIds\":[\"2026-08-22-chukyo-01\",\"2026-08-22-sapporo-01\",\"2026-08-22-sapporo-06\",\"2026-08-22-niigata-06\",\"2026-08-22-niigata-07\"],\"errors\":[]}",
+          "updatedAt": "2026-08-22 07:37:53"
         },
         {
           "stateKey": "worker_live_preview:2026-08-22-chukyo-02",
@@ -116,13 +116,13 @@
         "served_by_colo": "SIN",
         "served_by_primary": true,
         "timings": {
-          "sql_duration_ms": 4.6443
+          "sql_duration_ms": 7.5891
         },
-        "duration": 4.6443,
+        "duration": 7.5891,
         "changes": 0,
-        "last_row_id": 15281,
+        "last_row_id": 0,
         "changed_db": false,
-        "size_after": 278196224,
+        "size_after": 278204416,
         "rows_read": 273,
         "rows_written": 0,
         "total_attempts": 1
@@ -320,13 +320,13 @@
         "served_by_colo": "SIN",
         "served_by_primary": true,
         "timings": {
-          "sql_duration_ms": 1.4149
+          "sql_duration_ms": 1.387
         },
-        "duration": 1.4149,
+        "duration": 1.387,
         "changes": 0,
-        "last_row_id": 15281,
+        "last_row_id": 0,
         "changed_db": false,
-        "size_after": 278196224,
+        "size_after": 278204416,
         "rows_read": 1517,
         "rows_written": 0,
         "total_attempts": 1
@@ -541,7 +541,7 @@
           "combination": "2-4",
           "stakeYen": 2500,
           "assumedOdds": 4,
-          "settlementStatus": "pending",
+          "settlementStatus": "settled",
           "lockedAt": "2026-08-22T07:25:07.785Z",
           "sourcePredictionId": -2
         },
@@ -552,7 +552,7 @@
           "combination": "2-4",
           "stakeYen": 2500,
           "assumedOdds": 12.6,
-          "settlementStatus": "pending",
+          "settlementStatus": "settled",
           "lockedAt": "2026-08-22T07:25:07.785Z",
           "sourcePredictionId": -2
         },
@@ -563,7 +563,7 @@
           "combination": "2-4",
           "stakeYen": 5000,
           "assumedOdds": 4,
-          "settlementStatus": "pending",
+          "settlementStatus": "settled",
           "lockedAt": "2026-08-22T07:25:07.785Z",
           "sourcePredictionId": -2
         },
@@ -574,7 +574,7 @@
           "combination": "2-4",
           "stakeYen": 5000,
           "assumedOdds": 12.6,
-          "settlementStatus": "pending",
+          "settlementStatus": "settled",
           "lockedAt": "2026-08-22T07:25:07.785Z",
           "sourcePredictionId": -2
         },
@@ -585,7 +585,7 @@
           "combination": "2-4",
           "stakeYen": 1000,
           "assumedOdds": 4,
-          "settlementStatus": "pending",
+          "settlementStatus": "settled",
           "lockedAt": "2026-08-22T07:25:07.785Z",
           "sourcePredictionId": -2
         },
@@ -596,7 +596,7 @@
           "combination": "2-4",
           "stakeYen": 1000,
           "assumedOdds": 12.6,
-          "settlementStatus": "pending",
+          "settlementStatus": "settled",
           "lockedAt": "2026-08-22T07:25:07.785Z",
           "sourcePredictionId": -2
         },
@@ -872,13 +872,13 @@
         "served_by_colo": "SIN",
         "served_by_primary": true,
         "timings": {
-          "sql_duration_ms": 0.6694
+          "sql_duration_ms": 0.8243
         },
-        "duration": 0.6694,
+        "duration": 0.8243,
         "changes": 0,
-        "last_row_id": 15282,
+        "last_row_id": 0,
         "changed_db": false,
-        "size_after": 278196224,
+        "size_after": 278204416,
         "rows_read": 86,
         "rows_written": 0,
         "total_attempts": 1
