@@ -8,7 +8,7 @@ const PREVIEW_PREFIX = "worker_live_preview:";
 const FINAL_PREFIX = "worker_live_final:";
 const AUDIT_PREFIX = "worker_deadline_guard:";
 export const DEADLINE_GUARD_MS = 15 * 60 * 1000;
-export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;
+export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;
 const MAX_OFFICIAL_PREVIEW_AGE_MS = 60 * 60 * 1000;
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
 
@@ -33,9 +33,9 @@ export type DeadlineGuardAudit = {
 function iso(now = new Date()): string { return now.toISOString(); }
 function jstDate(now = new Date()): string { return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10); }
 function errorText(error: unknown): string { return error instanceof Error ? `${error.name}:${error.message}` : String(error); }
-// Cloudflare invokes the production cron once per minute. Arming one full tick
-// before the public T-15 deadline absorbs scheduler/runtime seconds so the
-// official-odds snapshot is already immutable by T-15 instead of seconds late.
+// Cloudflare invokes the production cron once per minute. Arming five minutes before the public T-15 deadline absorbs both the
+// per-minute Worker cron and the independent five-minute live-tick backup so
+// the official-odds snapshot is already immutable by T-15.
 export function shouldDeadlineGuardLock(remainingMs: number): boolean { return Number.isFinite(remainingMs) && remainingMs > 0 && remainingMs <= DEADLINE_GUARD_ARM_MS; }
 
 async function loadSelection(db: D1Database, date: string): Promise<string[]> {
