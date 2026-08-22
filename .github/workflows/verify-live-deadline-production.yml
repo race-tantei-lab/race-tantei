@@ -19,6 +19,12 @@ on:
       - ".github/workflows/deploy-live-deadline.yml"
       - ".github/workflows/verify-live-deadline-production.yml"
   workflow_dispatch:
+  # Automatic preflight before the normal JRA race window. GitHub cron is UTC:
+  # 22:00 = 07:00 JST next day, 23:30 = 08:30 JST next day, 00:30 = 09:30 JST.
+  schedule:
+    - cron: "0 22 * * *"
+    - cron: "30 23 * * *"
+    - cron: "30 0 * * *"
 
 permissions:
   contents: read
@@ -41,19 +47,63 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Wait for production deploy and cron registration
-        run: sleep 120
-      - name: Verify isolated Workers are healthy
+      - name: Static safety verification
         shell: bash
         run: |
           set -euo pipefail
+          npm run typecheck
+          python3 scripts/verify-live-lock-safety.py
+      - name: Wait for production deploy and cron registration
+        if: github.event_name == 'push'
+        run: sleep 120
+      - name: Verify isolated Workers are healthy and current
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_version=$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path('src/live-deadline-entry-v2.ts').read_text(encoding='utf-8')
+          match = re.search(r'const\s+DRIVER_VERSION\s*=\s*"([^"]+)"', text)
+          if not match:
+              raise SystemExit('LIVE_DEADLINE_DRIVER_VERSION_NOT_FOUND')
+          print(match.group(1))
+          PY
+          )
           for url in \
             'https://race-tantei-live-deadline.race-tantei.workers.dev/health' \
             'https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health'; do
             body=$(curl --max-time 20 --retry 6 --retry-delay 5 --fail-with-body -sS "$url")
             echo "$url $body"
-            echo "$body" | grep -q '"status":"up"'
+            BODY="$body" EXPECTED_VERSION="$expected_version" URL="$url" node - <<'NODE'
+          const body = JSON.parse(process.env.BODY || '{}');
+          if (body.status !== 'up') throw new Error(`LIVE_DEADLINE_HEALTH_NOT_UP:${process.env.URL}`);
+          if (body.service !== 'race-tantei-live-deadline') throw new Error(`LIVE_DEADLINE_SERVICE_MISMATCH:${process.env.URL}:${body.service}`);
+          if (body.version !== process.env.EXPECTED_VERSION) throw new Error(`LIVE_DEADLINE_VERSION_MISMATCH:${process.env.URL}:${body.version}:${process.env.EXPECTED_VERSION}`);
+          NODE
           done
+      - name: Verify Cloudflare cron registrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_schedule() {
+            script="$1"
+            expected="$2"
+            body=$(curl --max-time 20 --retry 4 --retry-delay 3 --fail-with-body -sS \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${script}/schedules" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
+            echo "$script $body"
+            BODY="$body" SCRIPT="$script" EXPECTED="$expected" node - <<'NODE'
+          const body = JSON.parse(process.env.BODY || '{}');
+          if (body.success !== true) throw new Error(`CLOUDFLARE_SCHEDULE_API_FAILED:${process.env.SCRIPT}`);
+          const schedules = Array.isArray(body.result?.schedules) ? body.result.schedules.map(x => String(x.cron)).sort() : [];
+          if (schedules.length !== 1 || schedules[0] !== process.env.EXPECTED) {
+            throw new Error(`LIVE_DEADLINE_CRON_MISMATCH:${process.env.SCRIPT}:${JSON.stringify(schedules)}:${process.env.EXPECTED}`);
+          }
+          NODE
+          }
+          check_schedule 'race-tantei-live-deadline' '* * * * *'
+          check_schedule 'race-tantei-live-deadline-backup' '2-59/5 * * * *'
       - name: Verify public Worker cannot mutate live bets
         shell: bash
         run: |
@@ -62,7 +112,7 @@ jobs:
             'https://race-tantei-phase0.race-tantei.workers.dev/_ops/live-tick' || true)
           cat /tmp/public-live-tick-body || true
           test "$code" = "404"
-      - name: Verify D1 safety schema and cron heartbeat
+      - name: Verify D1 safety schema and fresh cron heartbeat
         shell: bash
         run: |
           set -euo pipefail
@@ -72,17 +122,29 @@ jobs:
           for name in rt_live_preview_archive rt_live_deadline_lease rt_guard_final_bet_insert_deadline rt_guard_final_state_insert_deadline rt_guard_official_odds_final_insert; do
             echo "$schema" | grep -q "$name"
           done
+
+          today=$(TZ=Asia/Tokyo date +%F)
           state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "SELECT state_key,updated_at FROM rt_system_state WHERE state_key LIKE 'live_deadline_driver:%' ORDER BY updated_at DESC LIMIT 1")
+            "SELECT state_key AS stateKey,updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok FROM rt_system_state WHERE state_key='live_deadline_driver:${today}' LIMIT 1")
           echo "$state"
-          echo "$state" | grep -q 'live_deadline_driver:'
+          STATE_JSON="$state" TODAY="$today" node - <<'NODE'
+          const payload = JSON.parse(process.env.STATE_JSON || '[]');
+          const row = payload?.[0]?.results?.[0];
+          if (!row) throw new Error(`LIVE_DEADLINE_CURRENT_DAY_HEARTBEAT_MISSING:${process.env.TODAY}`);
+          if (row.stateKey !== `live_deadline_driver:${process.env.TODAY}`) throw new Error(`LIVE_DEADLINE_HEARTBEAT_KEY_MISMATCH:${row.stateKey}`);
+          const age = Number(row.ageSeconds);
+          if (!Number.isFinite(age) || age < -30 || age > 300) throw new Error(`LIVE_DEADLINE_HEARTBEAT_STALE:${age}`);
+          const allowed = new Set(['running','ok','waiting_selection']);
+          if (!allowed.has(String(row.status || ''))) throw new Error(`LIVE_DEADLINE_HEARTBEAT_BAD_STATUS:${row.status}`);
+          console.log(JSON.stringify({heartbeat:'fresh',ageSeconds:age,status:row.status,updatedAt:row.updatedAt}));
+          NODE
       - name: Mark production readiness success
         if: success()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/live-deadline-readiness' \
-            -f description='Dual Workers healthy, public mutation disabled, D1 guards active' \
+            -f description='Dual Workers current, crons registered, heartbeat fresh, D1 guards active' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark production readiness failure
         if: failure()
