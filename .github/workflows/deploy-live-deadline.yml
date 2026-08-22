@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "src/live-deadline-entry-v2.ts"
+      - "src/v1/github-actions-oidc.ts"
       - "src/v1/live-preview-safety.ts"
       - "src/v1/completed-worker-live-lock.ts"
       - "src/v1/completed-worker-deadline-guard.ts"
@@ -16,6 +17,7 @@ on:
       - "wrangler.live-deadline.jsonc"
       - "wrangler.live-deadline-backup.jsonc"
       - ".github/workflows/deploy-live-deadline.yml"
+      - ".github/workflows/live-deadline-external-watchdog.yml"
   workflow_dispatch:
 
 permissions:
@@ -43,6 +45,12 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck
+      - name: Compile and run full-day live deadline proof
+        run: |
+          npm run build:test
+          node dist-test/tests/live-deadline-full-day-proof-tests.js
+          node dist-test/tests/completed-worker-deadline-guard-tests.js
+          python scripts/verify-live-deadline-proof.py
       - name: Validate primary isolated Worker bundle
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
       - name: Validate backup isolated Worker bundle
@@ -65,7 +73,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/live-deadline' \
-            -f description='Primary and backup live deadline Workers deployed' \
+            -f description='Primary/backup Workers deployed after exhaustive live deadline proof' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark dual live deadline deploy failure
         if: failure()
@@ -73,5 +81,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/live-deadline' \
-            -f description='Live deadline Worker deployment failed' \
+            -f description='Live deadline proof or Worker deployment failed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
