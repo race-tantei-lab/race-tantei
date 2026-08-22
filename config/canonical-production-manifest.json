@@ -1,10 +1,10 @@
 {
   "status": "production",
-  "handoffVersion": 4,
-  "asOfJst": "2026-08-22T09:58:00+09:00",
+  "handoffVersion": 5,
+  "asOfJst": "2026-08-22T19:20:00+09:00",
   "repository": "race-tantei-lab/race-tantei",
   "branch": "main",
-  "verifiedProductionBaselineCommit": "4a02f24e06039dc3c6d3b7daee05ffe967cbdcd8",
+  "verifiedProductionBaselineCommit": "5265321ad2186271aee96f45f98cbeec79c7df83",
   "sourceOfTruth": "HANDOFF.md",
   "handoffVerification": {
     "script": "scripts/verify-canonical-handoff.py",
@@ -17,13 +17,14 @@
       "production state throughDate, artifact IDs, and both state-file SHA256 values",
       "completion audit gates and canonical 34,566 / 14,410 race counts",
       "wrangler.jsonc.main, exact deploy revision, model version, D1 identity, and canonical Worker asset build command",
-      "canonical live workflow and ten-year production runner wiring",
-      "Worker model parity, Worker/Python race-selection parity, and Worker live-lock/SLA wiring",
       "frozen historical archive identity remains exactly five selected races per venue-day and legacy D1 rows cannot promote canonical skips",
       "production deploy verifies historical API/detail plus current result ingestion and settlement",
       "public 10-year summary and runner archive counts",
       "deployment log production URL, model version, D1 binding, and presence of a Current Version ID; Wrangler may truncate long environment values in its printed binding table",
-      "README and HANDOFF canonical markers"
+      "README and HANDOFF canonical markers",
+      "isolated primary and staggered backup live-deadline Workers, with no public live mutation route",
+      "T-90 official preview acquisition, T-25 normal finalization, T-20 rescue guard, and hard T-15 database boundary",
+      "append-only preview archive, last-good restore, lease exclusion, and T-40/T-30/T-25/T-20/T-15 SLA audit wiring"
     ]
   },
   "model": {
@@ -81,7 +82,6 @@
     "historicalRoiPct": 431.6505898681471
   },
   "production": {
-    "autoWorkflow": ".github/workflows/auto-final-live-bets.yml",
     "runner": "scripts/run-ten-year-auto-final-live.py",
     "core": "scripts/ten-year-production-core.py",
     "selection": "scripts/generate-ten-year-preday-selection.py",
@@ -93,15 +93,25 @@
     "workerLiveLock": "src/v1/completed-worker-live-lock.ts",
     "legacyShellDependency": "scripts/run-auto-final-live.py",
     "legacyShellRule": "Do not run scripts/run-auto-final-live.py directly as the current production model. The canonical wrapper imports it only as a runtime shell and replaces selection/generator/validation with ten-year-completed implementations.",
-    "independentLiveTick": "src/public-site-entry-v34.ts:/_ops/live-tick",
-    "independentLiveTickWorkflow": ".github/workflows/drive-live-tick.yml",
-    "deadlineGuardArmMinutes": 20
+    "deadlineGuardArmMinutes": 20,
+    "liveDeadlineEntry": "src/live-deadline-entry-v2.ts",
+    "liveDeadlinePrimaryConfig": "wrangler.live-deadline.jsonc",
+    "liveDeadlineBackupConfig": "wrangler.live-deadline-backup.jsonc",
+    "liveDeadlineDeployWorkflow": ".github/workflows/deploy-live-deadline.yml",
+    "liveDeadlineReadinessWorkflow": ".github/workflows/verify-live-deadline-production.yml",
+    "publicLiveMutationEnabled": false,
+    "previewOpenMinutes": 90,
+    "previewRequiredMinutes": 30,
+    "normalLockMinutes": 25,
+    "hardDeadlineMinutes": 15,
+    "officialOddsOnly": true,
+    "syntheticOddsForbidden": true
   },
   "site": {
     "workerConfig": "wrangler.jsonc",
     "authoritativeEntryRule": "The current UI entry is always wrangler.jsonc.main. Do not infer the current UI from public-site-entry version filenames. Current wrappers intentionally layer earlier entries, so verification must inspect the active import chain while keeping wrangler.jsonc.main as the identity source of truth.",
     "entry": "src/public-site-entry-v34.ts",
-    "revision": "ten-year-completed-public-v34-live-tick-t20-20260822",
+    "revision": "ten-year-completed-public-v34-live-deadline-detached-20260822",
     "url": "https://race-tantei-phase0.race-tantei.workers.dev",
     "workerName": "race-tantei-phase0",
     "d1DatabaseName": "race-tantei-phase0",
@@ -137,7 +147,6 @@
     "The public prediction-logic page is labeled 予想のしくみ and explains the completed model in product-ready Japanese while preserving methodology transparency.",
     "The public prediction-logic and guide pages explain that the frozen completed base model is combined with continuous recency learning that incorporates same-day finished races and settled bets before each later prediction.",
     "Public methodology states that JRA official odds are the only allowed market odds, synthetic/estimated/probability-derived substitute odds are forbidden, and missing official odds fails closed instead of fabricating a final bet.",
-    "Public methodology states that previews are refreshed before the deadline, the deadline guard arms within 20 minutes so both the per-minute Worker cron and independent five-minute live-tick backup can make the bet immutable by 15 minutes before post time, and locked bets cannot be rewritten.",
     "Live selected-race pages use three compact tabs: 予想買い目, 買い目の理由, 出走馬. Only one of these long sections is shown at a time on the race detail page.",
     "The 買い目の理由 tab explains only why the final two tickets were selected. It shows each ticket's estimated combination hit probability, JRA official odds, probability-times-odds value, and a plainly labeled ticket evaluation score, plus the actual narrowing sequence.",
     "Race-selection rationale, raceScore, selection proxy tickets, selection-stage ROI components, and generic condition-match copy are not shown in the live race-detail 買い目の理由 tab.",
@@ -151,7 +160,10 @@
     "The WIN5 その他 view shows only finalization/update metadata plus a permanently open section labeled in plain Japanese for each race's first-place prediction and recent-result reflection status; rule cards and duplicate rule notes are not shown.",
     "WIN5 target races and ticket rows must remain readable on mobile without horizontal scrolling.",
     "Past published picks and results are immutable.",
-    "Worker live-lock must reject a 15-minute SLA breach rather than silently accepting incomplete bets."
+    "Live race-bet generation is owned only by the isolated live-deadline Workers; the public-site Worker and public requests cannot create or finalize race bets.",
+    "Official JRA-odds previews begin from 90 minutes before post time, a preview is required by 30 minutes, normal immutable finalization is targeted by 25 minutes, the DB-only rescue guard operates from 20 to 15 minutes, and T-15 is a hard no-new-final boundary.",
+    "Primary live-deadline scheduling runs every minute and a separate staggered backup Worker runs every five minutes; a D1 lease prevents overlapping mutation while append-only preview archives preserve the newest last-good official preview.",
+    "JRA official odds are the only allowed market odds; synthetic, estimated, and probability-derived substitute odds are forbidden by both application validation and D1 final-state guards."
   ],
   "authoritativeRules": [
     "Read HANDOFF.md and this manifest before any continuation work.",
@@ -163,7 +175,9 @@
     "Do not re-select, retrain, revalidate, or replace the completed model unless the user explicitly asks to change the model.",
     "Do not rewrite historical picks after publication.",
     "Do not use synthetic odds.",
-    "Do not declare the handoff complete unless scripts/verify-canonical-handoff.py succeeds and emits CANONICAL_HANDOFF_OK on current main."
+    "Do not declare the handoff complete unless scripts/verify-canonical-handoff.py succeeds and emits CANONICAL_HANDOFF_OK on current main.",
+    "Treat src/live-deadline-entry-v2.ts plus wrangler.live-deadline.jsonc and wrangler.live-deadline-backup.jsonc as the canonical race-bet live scheduler; public-site requests must not mutate live race bets.",
+    "T-15 is a hard creation boundary: never create or backfill a new final race bet after fewer than 15 minutes remain before post time."
   ],
   "notAuthoritative": [
     {
