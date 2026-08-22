@@ -1,6 +1,7 @@
 import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";
 import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";
 import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";
+import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import {
   acquireLiveDeadlineLease,
   auditLiveDeadlineSla,
@@ -92,21 +93,35 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
 
   try {
     const selectionNow = new Date();
-    const selection = await freezeCompletedWorkerSelectionIfNeeded(env, selectionNow);
-    const selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
+    let selection = await freezeCompletedWorkerSelectionIfNeeded(env, selectionNow);
+    let selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
+    let entryRepair: Record<string, unknown> | null = null;
+    if (!selectionReady && String(selection.status || "") === "waiting_complete_program") {
+      entryRepair = await runUpcomingEntryDerivedRepair(env, new Date()) as unknown as Record<string, unknown>;
+      selection = await freezeCompletedWorkerSelectionIfNeeded(env, new Date());
+      selectionReady = await hasSelection(env.DB, jstDate(new Date()));
+    }
     if (!selectionReady) {
+      const firstRace = await env.DB.prepare("SELECT MIN(start_time_utc) AS firstStart FROM rt_races WHERE race_date=? AND start_time_utc IS NOT NULL")
+        .bind(date).first<{ firstStart: string | null }>();
+      const firstStartMs = Date.parse(String(firstRace?.firstStart || ""));
+      const remainingToFirstRaceMs = Number.isFinite(firstStartMs) ? firstStartMs - Date.now() : Number.NaN;
+      const selectionCritical = Number.isFinite(remainingToFirstRaceMs) && remainingToFirstRaceMs <= 100 * 60_000;
       const completed = new Date();
       const result = {
         ...base,
-        status: "waiting_selection",
+        status: selectionCritical ? "selection_critical" : "waiting_selection",
         phase: "complete",
-        ok: true,
+        ok: !selectionCritical,
         selection,
+        entryRepair,
         selectionCheckedAt: iso(selectionNow),
+        remainingToFirstRaceMs,
         completedAt: iso(completed),
         durationMs: completed.getTime() - started.getTime(),
       };
       await saveDriverState(env.DB, date, result);
+      if (selectionCritical) throw new Error(`LIVE_DEADLINE_SELECTION_CRITICAL:${date}:${remainingToFirstRaceMs}`);
       return result;
     }
 
