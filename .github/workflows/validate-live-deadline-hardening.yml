@@ -17,6 +17,11 @@ on:
 
 permissions:
   contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 concurrency:
   group: validate-live-deadline-hardening
@@ -37,3 +42,19 @@ jobs:
         run: npm run typecheck
       - name: Build isolated Worker without deployment
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
+      - name: Mark hardening validation success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='hardening/live-deadline' \
+            -f description='Typecheck and isolated Worker dry-run passed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark hardening validation failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='hardening/live-deadline' \
+            -f description='Hardening validation failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
