@@ -14,6 +14,7 @@ on:
       - "scripts/run-stored-preview-deadline-backup.py"
       - "src/v1/completed-worker-deadline-guard.ts"
       - "src/public-site-entry-v29.ts"
+      - "src/public-site-entry-v34.ts"
 
 permissions:
   contents: read
@@ -29,7 +30,7 @@ env:
 jobs:
   lock:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v4
 
@@ -37,10 +38,36 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Drive pre-deadline official live tick
+        id: live_tick
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://race-tantei-phase0.race-tantei.workers.dev/_ops/live-tick'
+          rm -f /tmp/live-tick-h /tmp/live-tick-b
+          code=$(curl --max-time 120 -sS -D /tmp/live-tick-h -o /tmp/live-tick-b -w '%{http_code}' -X POST "$url" || true)
+          body=$(cat /tmp/live-tick-b 2>/dev/null || true)
+          version=$(tr -d '\r' </tmp/live-tick-h 2>/dev/null | awk -F': ' 'tolower($1)=="x-race-ui-version"{print $2}' | tail -1)
+          echo "LIVE_TICK code=$code version=$version body=$body"
+          if [ "$code" = "200" ]; then
+            exit 0
+          fi
+          # Historical misses keep status=deadline_breach even when this invocation
+          # successfully refreshes/locks the current future race. Accept that state;
+          # true current unresolved/error responses remain hard failures.
+          if [ "$code" = "503" ] && echo "$body" | grep -q '"status":"deadline_breach"'; then
+            echo 'LIVE_TICK_EXECUTED_WITH_HISTORICAL_BREACH'
+            exit 0
+          fi
+          echo 'PRE_DEADLINE_LIVE_TICK_FAILED' >&2
+          exit 1
+
       - name: Compile stored-preview backup
+        if: always()
         run: python -m py_compile scripts/run-stored-preview-deadline-backup.py
 
       - name: Finalize due races from stored preview only
+        if: always()
         shell: bash
         run: |
           set -o pipefail
@@ -85,7 +112,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/auto-final-live' \
-            -f description='独立バックアップ: 保存済み予測のみで締切対象を確定' \
+            -f description='独立バックアップ: 締切前ライブ駆動 + 保存済み予測で締切確定' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Mark automatic live lock failure
@@ -94,5 +121,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/auto-final-live' \
-            -f description='独立バックアップ: 締切対象に保存済み予測不足または未確定あり' \
+            -f description='独立バックアップ: ライブ駆動失敗または締切対象未確定あり' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
