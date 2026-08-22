@@ -27,6 +27,7 @@ def main() -> None:
     primary = read("wrangler.live-deadline.jsonc")
     backup = read("wrangler.live-deadline-backup.jsonc")
     external = read(".github/workflows/live-deadline-external-watchdog.yml")
+    readiness = read(".github/workflows/verify-live-deadline-production.yml")
     oidc = read("src/v1/github-actions-oidc.ts")
     proof = read("tests/live-deadline-full-day-proof-tests.ts")
 
@@ -48,6 +49,7 @@ def main() -> None:
         "rt_live_preview_archive",
         "rt_live_deadline_lease",
         "restoreNewestOfficialPreviewArchives",
+        "structuralErrorRaceIds",
         "previewMissingByT30RaceIds",
         "finalMissingByT25RaceIds",
         "finalMissingByT20RaceIds",
@@ -71,6 +73,8 @@ def main() -> None:
         "verifyGithubActionsOidcAuthorization",
         "historicalMissRaceIds",
         "alreadyStartedIncomplete",
+        "structuralErrorRaceIds",
+        "LIVE_DEADLINE_STRUCTURAL_RACE_ERROR",
         "acquireLiveDeadlineLease(env.DB, owner, 90)",
     ):
         require(entry, needle, "isolated driver")
@@ -101,10 +105,23 @@ def main() -> None:
         'LIVE_DEADLINE_OIDC_AUDIENCE = "race-tantei-live-deadline"',
         'ALLOWED_REPOSITORY = "race-tantei-lab/race-tantei"',
         'ALLOWED_REF = "refs/heads/main"',
+        "ALLOWED_WORKFLOW_REFS",
+        'race-tantei-lab/race-tantei/.github/workflows/live-deadline-external-watchdog.yml@refs/heads/main',
+        'race-tantei-lab/race-tantei/.github/workflows/verify-live-deadline-production.yml@refs/heads/main',
+        "ALLOWED_WORKFLOW_REFS.has(claims.workflow_ref)",
         'header.alg !== "RS256"',
         "crypto.subtle.verify",
     ):
         require(oidc, needle, "GitHub OIDC verifier")
+
+    for needle in (
+        "Prove independent GitHub scheduler can execute the production tick",
+        'test "$internal_code" = "401"',
+        "age > 180",
+        "payload.get('ok') is not True",
+        "rt_guard_duplicate_worker_final_bet",
+    ):
+        require(readiness, needle, "production readiness")
 
     for needle in (
         "const providerSets",
@@ -119,12 +136,13 @@ def main() -> None:
     print(
         "LIVE_DEADLINE_PROOF_OK",
         "schedulers=cloudflare_1m+cloudflare_5m+github_5m",
-        "github_auth=oidc_rs256",
+        "github_auth=oidc_rs256_workflow_bound",
         "preview=T90",
         "normal_lock=T25",
         "rescue=T20",
         "hard_deadline=T15",
         "archive_restore=true",
+        "structural_race_faults=hard_fail",
         "concurrent_final_fence=true",
         "public_mutation=false",
         "official_odds_only=true",
