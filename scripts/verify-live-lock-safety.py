@@ -75,7 +75,7 @@ def main() -> None:
         "remainingMs <= DEADLINE_GUARD_ARM_MS",
         "isDeadlineGuardMissed",
         "deadlineMissedRaceIds",
-        'snapshot.oddsSource!=="jra-fast-official" && snapshot.oddsSource!=="jra-crawl-official"',
+        'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
         "ensureCompletedFinalImmutability",
     ):
         require(guard, needle, "persistent deadline guard")
