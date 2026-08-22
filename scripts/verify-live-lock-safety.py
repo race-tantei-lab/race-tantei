@@ -108,6 +108,22 @@ def main() -> None:
         raise AssertionError("deadline guard must run both before and after delegated scheduled work")
     forbid(production_wrapper, "runCompletedWorkerEmergencyLock", "production deadline wrapper")
 
+    direct_wrapper = read("src/public-site-entry-v34.ts")
+    for needle in (
+        "const guardBefore = await runCompletedWorkerDeadlineGuard(env, now);",
+        "live = await runCompletedWorkerLiveLock(env, now);",
+        "const guardAfter = await runCompletedWorkerDeadlineGuard(env, now);",
+        "const status = liveFailure || liveErrors.length",
+        "DIRECT_LIVE_TICK_DUE_UNRESOLVED",
+        'url.pathname === "/_ops/live-tick"',
+    ):
+        require(direct_wrapper, needle, "direct live tick")
+    direct_before = direct_wrapper.index("const guardBefore = await runCompletedWorkerDeadlineGuard(env, now);")
+    direct_live = direct_wrapper.index("live = await runCompletedWorkerLiveLock(env, now);")
+    direct_after = direct_wrapper.index("const guardAfter = await runCompletedWorkerDeadlineGuard(env, now);")
+    if not (direct_before < direct_live < direct_after):
+        raise AssertionError("direct live tick must guard before live generation and guard again after it")
+
     invariants = read("src/v1/completed-final-invariants.ts")
     for needle in (
         'CREATE TRIGGER IF NOT EXISTS rt_guard_locked_public_bet_terms',
@@ -141,7 +157,8 @@ def main() -> None:
 
     automatic = read(".github/workflows/auto-final-live-bets.yml")
     for needle in (
-        'cron: "*/5 8-19 * * 6,0,1"',
+        'cron: "*/5 23 * * 5,6,0"',
+        'cron: "*/5 0-10 * * 6,0,1"',
         "timeout-minutes: 3",
         "scripts/run-stored-preview-deadline-backup.py",
         "stored_preview_only",
@@ -151,6 +168,7 @@ def main() -> None:
         "POST_DEADLINE_GENERATION_FORBIDDEN",
     ):
         require(automatic, needle, "independent GitHub live backup")
+    forbid(automatic, "timezone:", "independent GitHub live backup")
     for forbidden in (
         "run-critical-auto-bet-generation.py",
         "refresh-selected-bodyweights-direct.mjs",
@@ -163,6 +181,17 @@ def main() -> None:
         'cron: "7,37 9-19',
     ):
         forbid(automatic, forbidden, "independent GitHub live backup")
+
+    driver = read(".github/workflows/drive-live-tick.yml")
+    for needle in (
+        'cron: "*/5 23 * * 5,6,0"',
+        'cron: "*/5 0-10 * * 6,0,1"',
+        "race-tantei-phase0.race-tantei.workers.dev/_ops/live-tick",
+        "LIVE_TICK_EXECUTED_WITH_HISTORICAL_BREACH",
+        "LIVE_TICK_CURRENT_ERROR",
+    ):
+        require(driver, needle, "independent live tick driver")
+    forbid(driver, "timezone:", "independent live tick driver")
 
     backup = read("scripts/run-stored-preview-deadline-backup.py")
     for needle in (
@@ -190,12 +219,13 @@ def main() -> None:
         "worker_cron=1m",
         "preview_open=45m",
         "preview_history=3",
-        "guard_arm=16m",
+        "guard_arm=20m",
         "finalize_open=15m",
         "deadline=15m",
         "persistent_guard=stored_preview_only",
         "guard_order=start_time",
         "guard_runs=before_and_after_scheduled",
+        "direct_guard_runs=before_and_after_live_generation",
         "guard_second_pass=fail_closed",
         "guard_selection_recovery=canonical_db_only",
         "guard_external_http=false",
@@ -204,7 +234,8 @@ def main() -> None:
         "official_jra_odds_required=true",
         "probability_fallback_forbidden=true",
         "prior_learning_fail_open=08:30JST",
-        "github_backup=stored_preview_only_5m",
+        "github_driver=live_tick_5m_UTC_mapped_to_JST",
+        "github_backup=stored_preview_only_5m_UTC_mapped_to_JST",
         "post_deadline_prediction_generation=false",
         "critical_schedule=disabled",
     )
