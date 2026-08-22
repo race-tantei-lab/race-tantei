@@ -3,8 +3,9 @@ import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-
 import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";
 import type { Env } from "./v1/types.js";
 
-const UI_VERSION = "ten-year-completed-public-v34-live-tick-two-pass-20260822";
+const UI_VERSION = "ten-year-completed-public-v34-independent-live-driver-20260822";
 const SELECTION_PREFIX = "final_daily_selection:";
+const HEARTBEAT_PREFIX = "worker_live_heartbeat:";
 
 function jstDate(now = new Date()): string {
   return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -20,14 +21,22 @@ async function hasSelection(db: D1Database, date: string): Promise<boolean> {
   return Number(row?.ok ?? 0) === 1;
 }
 
+async function saveHeartbeat(env: Env, now: Date, source: string): Promise<void> {
+  const date = jstDate(now);
+  await env.DB.prepare(`
+    INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
+  `).bind(`${HEARTBEAT_PREFIX}${date}`, JSON.stringify({ checkedAt: now.toISOString(), source, version: UI_VERSION })).run();
+}
+
 async function runDirectLiveTick(env: Env, now = new Date()) {
   const date = jstDate(now);
   if (!(await hasSelection(env.DB, date))) {
     return { status: "selection_missing", date, checkedAt: now.toISOString(), live: null, guardBefore: null, guardAfter: null };
   }
 
-  // Protect any race that already has a valid official preview before attempting
-  // new model/odds work. An unrelated generation failure must never block a due lock.
+  // First pass is DB-only: if a valid official preview already exists, lock it
+  // before any new JRA/model work can delay this invocation.
   const guardBefore = await runCompletedWorkerDeadlineGuard(env, now);
 
   let live: Awaited<ReturnType<typeof runCompletedWorkerLiveLock>> | null = null;
@@ -38,14 +47,15 @@ async function runDirectLiveTick(env: Env, now = new Date()) {
     liveFailure = errorText(error);
   }
 
-  // A T-20 tick may have had no preview on the first pass and generated one during
-  // live work. Lock that newly stored official preview in the same invocation.
+  // A pre-deadline tick may generate a new official preview. Lock it in the
+  // same invocation once the race enters the safety arm window.
   const guardAfter = await runCompletedWorkerDeadlineGuard(env, now);
-  const lockedAfter = new Set(guardAfter.lockedRaceIds);
-  const unresolvedDueRaceIds = guardAfter.dueRaceIds.filter((raceId) => !lockedAfter.has(raceId));
+  const lockedAfter = new Set([...guardBefore.lockedRaceIds, ...guardAfter.lockedRaceIds]);
+  const due = new Set([...guardBefore.dueRaceIds, ...guardAfter.dueRaceIds]);
+  const unresolvedDueRaceIds = [...due].filter((raceId) => !lockedAfter.has(raceId));
 
-  if (guardAfter.errors.length || unresolvedDueRaceIds.length) {
-    throw new Error(`DIRECT_LIVE_TICK_DUE_UNRESOLVED:${unresolvedDueRaceIds.join(",")}:errors=${JSON.stringify(guardAfter.errors)}`);
+  if (guardBefore.errors.length || guardAfter.errors.length || unresolvedDueRaceIds.length) {
+    throw new Error(`DIRECT_LIVE_TICK_DUE_UNRESOLVED:${unresolvedDueRaceIds.join(",")}:before=${JSON.stringify(guardBefore.errors)}:after=${JSON.stringify(guardAfter.errors)}`);
   }
 
   const liveErrors = live?.errors ?? [];
@@ -88,12 +98,18 @@ async function runDirectLiveTick(env: Env, now = new Date()) {
   };
 }
 
+function shouldOpportunisticallyDrive(url: URL, request: Request): boolean {
+  if (request.method !== "GET" && request.method !== "HEAD") return false;
+  return url.pathname === "/" || url.pathname.startsWith("/races/") || url.pathname.startsWith("/api/public/");
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/_ops/live-tick") {
       if (request.method !== "POST") return new Response("METHOD_NOT_ALLOWED", { status: 405 });
       try {
+        await saveHeartbeat(env, new Date(), "ops_post");
         const result = await runDirectLiveTick(env, new Date());
         const ok = result.status === "ok" || result.status === "selection_missing";
         return Response.json(result, {
@@ -110,6 +126,14 @@ export default {
       }
     }
 
+    if (shouldOpportunisticallyDrive(url, request)) {
+      ctx.waitUntil(
+        saveHeartbeat(env, new Date(), "public_request")
+          .then(() => runDirectLiveTick(env, new Date()))
+          .catch((error) => console.error("PUBLIC_REQUEST_LIVE_TICK_FAILED", error)),
+      );
+    }
+
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
     const response = await publicSite.fetch(request, env, ctx);
     const headers = new Headers(response.headers);
@@ -119,14 +143,30 @@ export default {
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     const now = new Date(controller.scheduledTime || Date.now());
+
+    // The heartbeat and DB-only deadline guard run synchronously and finish fast.
+    // Heavy live/JRA work and inherited maintenance are detached from each other so
+    // one blocked maintenance fetch cannot suppress the next minute's deadline path.
     try {
-      const direct = await runDirectLiveTick(env, now);
-      if (direct.status !== "selection_missing") console.log("DIRECT_LIVE_TICK_CRON", JSON.stringify(direct));
+      await saveHeartbeat(env, now, "cloudflare_cron");
+      await runCompletedWorkerDeadlineGuard(env, now);
     } catch (error) {
-      console.error("DIRECT_LIVE_TICK_CRON_FAILED", error);
+      console.error("DIRECT_DEADLINE_GUARD_CRON_FAILED", error);
     }
 
-    // Preserve every existing scheduled task (results, settlement, WIN5, entry repair, etc.).
-    if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
+    ctx.waitUntil(
+      runDirectLiveTick(env, now)
+        .then((direct) => {
+          if (direct.status !== "selection_missing") console.log("DIRECT_LIVE_TICK_CRON", JSON.stringify(direct));
+        })
+        .catch((error) => console.error("DIRECT_LIVE_TICK_CRON_FAILED", error)),
+    );
+
+    if (publicSite.scheduled) {
+      ctx.waitUntil(
+        Promise.resolve(publicSite.scheduled(controller, env, ctx))
+          .catch((error) => console.error("INHERITED_SCHEDULED_FAILED", error)),
+      );
+    }
   },
 } satisfies ExportedHandler<Env>;
