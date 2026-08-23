@@ -1,4 +1,4 @@
-name: Inspect live Niigata9 production state
+name: Verify live finalization transparency
 on:
   push:
     branches: [main]
@@ -8,8 +8,6 @@ permissions:
   contents: read
   statuses: write
 env:
-  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
   GH_TOKEN: ${{ github.token }}
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 jobs:
@@ -18,28 +16,67 @@ jobs:
     timeout-minutes: 6
     steps:
       - name: Mark pending
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/niigata9-live-inspect' -f description='Inspecting Niigata9 final and driver state' -f target_url="$STATUS_TARGET_URL" >/dev/null
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
-      - name: Inspect D1 and health
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/finalization-ui-transparency' -f description='Verifying T-15/T-10 public states' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Verify production home, API, race details and disabled mutation route
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== HEALTH ==='
-          for u in https://race-tantei-live-deadline.race-tantei.workers.dev/health https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health; do curl -fsS "$u"; echo; done
-          echo '=== FINAL SHAPE ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id,COUNT(*) AS bet_rows,COUNT(DISTINCT course) AS courses,COUNT(DISTINCT bet_type||':'||combination) AS unique_bets,MIN(locked_at) AS locked_at,MAX(locked_at) AS max_locked_at,group_concat(course||':'||bet_type||':'||combination||':'||stake_yen,' | ') AS rows FROM rt_public_bets WHERE race_id='2026-08-23-niigata-09' GROUP BY race_id"
-          echo '=== FINAL STATE ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,json_extract(state_value,'$.finalizedFrom') AS finalized_from,json_extract(state_value,'$.previewGeneratedAt') AS preview_generated_at,json_extract(state_value,'$.generationStartedAt') AS generation_started_at,json_extract(state_value,'$.oddsFetchedAt') AS odds_fetched_at,json_extract(state_value,'$.oddsSource') AS odds_source,json_extract(state_value,'$.bodyWeightApplied') AS body_weight_applied,json_extract(state_value,'$.bodyWeightFetchedAt') AS body_weight_fetched_at,json_extract(state_value,'$.onlineLearning.cutoffUtc') AS learning_cutoff,json_extract(state_value,'$.bodyWeightError') AS body_weight_error FROM rt_system_state WHERE state_key='worker_live_final:2026-08-23-niigata-09' LIMIT 1"
-          echo '=== DRIVER/AUDIT ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('live_deadline_driver:2026-08-23','worker_live_lock:2026-08-23','worker_deadline_guard:2026-08-23','live_deadline_sla:2026-08-23') ORDER BY state_key"
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          today='2026-08-23'
+
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS -D /tmp/home.headers -o /tmp/home.html "$base/"
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS -D /tmp/day.headers -o /tmp/day.json "$base/api/public/day?date=$today"
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS -D /tmp/c9.headers -o /tmp/c9.html "$base/races/2026-08-23-chukyo-09"
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS -D /tmp/c10.headers -o /tmp/c10.html "$base/races/2026-08-23-chukyo-10"
+
+          echo '=== HOME HEADER ==='; grep -i 'x-race-finalization-ui' /tmp/home.headers || true
+          echo '=== DAY HEADER ==='; grep -i 'x-race-current-day-path' /tmp/day.headers || true
+          echo '=== CURRENT STATES ==='
+          node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync('/tmp/day.json','utf8'));
+          for(const id of ['2026-08-23-chukyo-09','2026-08-23-chukyo-10','2026-08-23-niigata-11','2026-08-23-niigata-12']){
+            const r=p.races.find(x=>x.raceId===id);
+            console.log(JSON.stringify({raceId:id,start:r?.startTimeJst,state:r?.publicState}));
+          }
+          NODE
+          echo '=== CHUKYO9 BANNER ==='; grep -oE '買い目確定・以後変更なし|最終計算中（確定前）|確定前|最終確定期限を超過' /tmp/c9.html | head -5 || true
+          echo '=== CHUKYO10 BANNER ==='; grep -oE '買い目確定・以後変更なし|最終計算中（確定前）|確定前|最終確定期限を超過' /tmp/c10.html | head -5 || true
+
+          grep -Fq 'x-race-finalization-ui: t15-start-t10-finalization-transparent-20260823' <(tr -d '\r' </tmp/home.headers)
+          grep -Fq 'x-race-current-day-path: direct-d1-v2-t15-start-t10-final' <(tr -d '\r' </tmp/day.headers)
+          grep -Fq '「買い目確定」と表示されるまでは確定前です' /tmp/home.html
+
+          DAY_JSON=$(cat /tmp/day.json) node - <<'NODE'
+          const p=JSON.parse(process.env.DAY_JSON);
+          const c10=p.races.find(x=>x.raceId==='2026-08-23-chukyo-10');
+          if(!c10) throw new Error('CHUKYO10_MISSING');
+          const s=c10.publicState||{};
+          if(s.code==='target'){
+            if(s.label!=='買い目対象・確定前') throw new Error('TARGET_NOT_EXPLICITLY_UNCONFIRMED:'+JSON.stringify(s));
+            if(!String(s.deadline||'').includes('17:05までに最終計算開始')||!String(s.deadline||'').includes('17:10までに確定')) throw new Error('TARGET_TIMING_UNCLEAR:'+JSON.stringify(s));
+          } else if(s.code==='pending'){
+            if(s.label!=='最終計算中（確定前）'||!String(s.deadline||'').includes('それまでは変更の可能性あり')) throw new Error('CALCULATING_NOT_EXPLICIT:'+JSON.stringify(s));
+          } else if(s.code==='buy'){
+            if(s.label!=='買い目確定'||s.deadline!=='確定済み・以後変更なし') throw new Error('FINAL_NOT_IMMUTABLE_LABEL:'+JSON.stringify(s));
+          } else {
+            throw new Error('CHUKYO10_UNEXPECTED_STATE:'+JSON.stringify(s));
+          }
+          NODE
+
+          # At least one future/current race detail must explicitly say it is not final unless already locked.
+          if grep -Fq '買い目確定・以後変更なし' /tmp/c10.html; then
+            grep -Fq '確定後の組合せ・購入額は変更しません' /tmp/c10.html
+          else
+            grep -Eq '最終計算中（確定前）|>確定前<' /tmp/c10.html
+            grep -Eq '「買い目確定」と表示されるまでは.*変わる可能性|「買い目確定」と表示されるまでは確定ではありません' /tmp/c10.html
+          fi
+
+          code=$(curl --max-time 20 -sS -o /tmp/live-tick -w '%{http_code}' -X POST "$base/_ops/live-tick" || true)
+          test "$code" = '404'
       - name: Mark success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/niigata9-live-inspect' -f description='Niigata9 live state captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/finalization-ui-transparency' -f description='Final means immutable; pre-final is explicit' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/niigata9-live-inspect' -f description='Niigata9 live state capture failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/finalization-ui-transparency' -f description='Finalization transparency verification failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
