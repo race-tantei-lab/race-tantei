@@ -1,4 +1,4 @@
-name: Verify bounded live deadline production tick
+name: Verify Sapporo 12R preview and v4 production
 
 on:
   push:
@@ -23,19 +23,20 @@ jobs:
     timeout-minutes: 6
     steps:
       - name: Mark pending
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/live-deadline-postfix-verify' -f description='Checking v4 deadline cron in production' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/sapporo12-preview-verify' -f description='Checking Sapporo 12R preview and v4 driver' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Verify production deadline state
+      - name: Verify production state
         shell: bash
         run: |
           set -euo pipefail
           DATE='2026-08-23'
-          OUT=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('live_deadline_driver:$DATE','worker_live_lock:$DATE','worker_deadline_guard:$DATE') ORDER BY state_key")
+          RID='2026-08-23-sapporo-12'
+          OUT=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('live_deadline_driver:$DATE','worker_live_lock:$DATE','worker_deadline_guard:$DATE','worker_live_preview:$RID') ORDER BY state_key")
           echo "$OUT"
           node - "$OUT" <<'NODE'
           const x=JSON.parse(process.argv[2]);
@@ -45,13 +46,14 @@ jobs:
           const d=JSON.parse(driver.state_value);
           if(d.version!=='live-deadline-v4-bounded-subrequests-20260823') throw new Error('v4 driver not active: '+d.version);
           if(String(driver.state_value).includes('Too many subrequests')) throw new Error('subrequest exhaustion still present');
+          const preview=rows.find(r=>r.state_key==='worker_live_preview:2026-08-23-sapporo-12');
           console.log('V4_DRIVER_OK', JSON.stringify({updatedAt:driver.updated_at,status:d.status,phase:d.phase,ok:d.ok,durationMs:d.durationMs,error:d.error||null}));
+          console.log('SAPPORO12_PREVIEW_STATE', preview ? preview.state_value : null);
           NODE
-          echo '=== FUTURE SELECTED READINESS ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH selected AS (SELECT je.value->>'$.raceId' AS race_id FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) je WHERE s.state_key='final_daily_selection:$DATE') SELECT r.race_id,r.start_time_jst,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS final_rows,(SELECT json_extract(state_value,'$.snapshots[0].generatedAt') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id) AS preview_generated FROM selected s JOIN rt_races r ON r.race_id=s.race_id WHERE r.start_time_utc>strftime('%Y-%m-%dT%H:%M:%fZ','now') ORDER BY r.start_time_utc"
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT r.race_id,r.start_time_jst,r.start_time_utc,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS final_rows,(SELECT json_extract(state_value,'$.snapshots[0].generatedAt') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id) AS preview_generated,(SELECT json_extract(state_value,'$.snapshots[0].oddsSource') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id) AS odds_source,(SELECT json_array_length(json_extract(state_value,'$.snapshots[0].courseBets')) FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id) AS preview_bets FROM rt_races r WHERE r.race_id='$RID'"
       - name: Mark success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/live-deadline-postfix-verify' -f description='v4 deadline cron verified in production' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/sapporo12-preview-verify' -f description='Sapporo 12R production state captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/live-deadline-postfix-verify' -f description='v4 deadline cron production verification failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/sapporo12-preview-verify' -f description='Sapporo 12R production verification failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
