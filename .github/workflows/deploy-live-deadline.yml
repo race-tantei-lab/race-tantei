@@ -45,10 +45,8 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck
-      - name: Build tests
-        run: npm run build:test
       - name: Verify JRA official odds parser regression
-        run: node dist-test/tests/jra-official-odds-fetch-tests.js
+        run: npx tsx tests/jra-official-odds-fetch-tests.ts
       - name: Validate primary isolated Worker bundle
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
       - name: Validate backup isolated Worker bundle
