@@ -1,0 +1,65 @@
+name: Sanitize pre-fix odds previews
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/sanitize-prefixed-odds-previews-20260823.yml"]
+permissions:
+  contents: read
+  statuses: write
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+jobs:
+  sanitize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Purge only remaining unfinalized pre-fix preview envelopes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for race in 2026-08-23-niigata-11 2026-08-23-niigata-12; do
+            final_count=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT COUNT(*) AS n FROM rt_public_bets WHERE race_id='$race' AND source_prediction_id=-2" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(String(JSON.parse(s)[0].results[0].n)))")
+            if [[ "$final_count" = "0" ]]; then
+              echo "Deleting stale preview envelope for $race"
+              npx wrangler d1 execute race-tantei-phase0 --remote --command "DELETE FROM rt_system_state WHERE state_key='worker_live_preview:$race'"
+            else
+              echo "$race already immutable final; not touched"
+            fi
+          done
+      - name: Wait for fixed parser to regenerate fresh previews
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 8); do
+            sleep 15
+            out=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,json_extract(state_value,'$.snapshots[0].oddsSource') AS source,json_extract(state_value,'$.snapshots[0].oddsFetchedAt') AS fetched,json_extract(state_value,'$.snapshots[0].tickets[0].officialOdds') AS odds0,json_extract(state_value,'$.snapshots[0].tickets[1].officialOdds') AS odds1 FROM rt_system_state WHERE state_key IN ('worker_live_preview:2026-08-23-niigata-11','worker_live_preview:2026-08-23-niigata-12') ORDER BY state_key")
+            echo "$out"
+            if OUT="$out" node - <<'NODE'
+          const p=JSON.parse(process.env.OUT); const rows=p[0]?.results||[];
+          const now=Date.now();
+          if(!rows.length) process.exit(1);
+          for(const r of rows){
+            if(!['jra-fast-official','jra-crawl-official'].includes(r.source)) process.exit(2);
+            if(!Number.isFinite(Date.parse(r.fetched)) || now-Date.parse(r.fetched)>180000) process.exit(3);
+            if(!(Number(r.odds0)>1) || !(Number(r.odds1)>1)) process.exit(4);
+          }
+          NODE
+            then ok=1; break; fi
+          done
+          test "$ok" = "1"
+      - name: Mark success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/odds-preview-sanitized' -f description='Remaining pre-fix odds previews purged and regenerated' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/odds-preview-sanitized' -f description='Odds preview sanitation failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
