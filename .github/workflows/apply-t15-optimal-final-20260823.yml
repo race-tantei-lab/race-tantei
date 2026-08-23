@@ -1,0 +1,173 @@
+name: Apply T-15 optimal finalization patch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/apply-t15-optimal-final-20260823.yml"
+
+permissions:
+  contents: write
+  statuses: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  patch-deploy-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Patch finalization timing and safety gates
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def read(path):
+              return Path(path).read_text(encoding='utf-8')
+          def write(path, text):
+              Path(path).write_text(text, encoding='utf-8')
+          def one(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'MISSING_PATCH_MARKER:{label}')
+              return text.replace(old, new, 1)
+
+          path='src/v1/completed-worker-live-lock.ts'
+          t=read(path)
+          t=one(t, 'const NORMAL_LOCK_MS = 25 * 60 * 1000;', 'const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;', 'live final arm')
+          t=t.replace('NORMAL_LOCK_MS', 'FINAL_LOCK_ARM_MS')
+          t=one(t, 'const NEAR_PREVIEW_REFRESH_MS = 4 * 60 * 1000;', 'const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;', 'near preview refresh')
+          old='''      if (remaining <= FINAL_LOCK_ARM_MS && existingPreview) {\n        const commitNow = new Date();\n        if (startMs - commitNow.getTime() <= DEADLINE_MS) {\n          errors.push({ raceId, error: `WORKER_STORED_PREVIEW_COMMIT_CROSSED_T15:${raceId}` });\n          continue;\n        }\n        if (!snapshotHasOfficialBodyWeight(existingPreview)) bodyWeightBreachRaceIds.add(raceId);\n        await commitSnapshot(env.DB, raceId, existingPreview, commitNow, "last_good");\n        lockedByWorker.push(raceId);\n        finalizedFromFallbackRaceIds.push(raceId);\n        continue;\n      }\n'''
+          if old not in t:
+              raise SystemExit('MISSING_PATCH_MARKER:remove early stored-preview final')
+          t=t.replace(old, '', 1)
+          t=one(t,
+              '      // Normal finalization happens by T-25. If the newest fetch failed, use\n      // the durable last-good official preview instead of waiting until T-15.\n',
+              '      // Finalization is armed only near the hard boundary. Always attempt a fresh\n      // preview in the same tick first so the final can include the newest official odds,\n      // body weight snapshot, and all results already confirmed before this prediction.\n      // Only if that refresh fails do we fall back to the durable last-good official preview.\n',
+              'finalization comment')
+          write(path,t)
+
+          path='src/v1/completed-worker-deadline-guard.ts'
+          t=read(path)
+          t=one(t, 'export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;', 'export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;', 'guard arm')
+          t=one(t,
+              '// The final must already exist by T-15. The guard arms from T-20 through\n// the exact T-15 boundary so normal per-minute cron jitter still has margin.\n',
+              '// The normal worker gets the first chance to build a fresh final near T-17.\n// This guard is rescue-only from T-16 through the exact T-15 boundary, using\n// an already-persisted official preview if the fresh path failed.\n',
+              'guard comment')
+          write(path,t)
+
+          path='src/v1/live-preview-safety.ts'
+          t=read(path)
+          t=t.replace('finalMissingByT25RaceIds', 'finalMissingByT17RaceIds')
+          t=t.replace('finalMissingByT20RaceIds', 'finalMissingByT16RaceIds')
+          t=one(t, 'remaining <= 25 * 60_000 && !finalReady', 'remaining <= 17 * 60_000 && !finalReady', 'sla t17')
+          t=one(t, 'remaining <= 20 * 60_000 && !finalReady', 'remaining <= 16 * 60_000 && !finalReady', 'sla t16')
+          write(path,t)
+
+          path='src/live-deadline-entry-v2.ts'
+          t=read(path)
+          t=one(t, 'const DRIVER_VERSION = "live-deadline-v4-bounded-subrequests-20260823";', 'const DRIVER_VERSION = "live-deadline-v5-t15-optimal-refresh-20260823";', 'driver version')
+          t=t.replace('T-20 -> T-15 finalization', 'T-16 -> T-15 rescue finalization')
+          t=t.replace('slaAfter.finalMissingByT20RaceIds', 'slaAfter.finalMissingByT16RaceIds')
+          write(path,t)
+
+          path='tests/completed-worker-deadline-guard-tests.ts'
+          t=read(path)
+          t=one(t, 'assert.equal(DEADLINE_GUARD_ARM_MS, 20 * 60 * 1000, "arm five minutes early so the final is immutable before T-15");', 'assert.equal(DEADLINE_GUARD_ARM_MS, 16 * 60 * 1000, "rescue guard arms one minute before the hard T-15 boundary");', 'guard test arm')
+          t=t.replace('"the T-20 backup tick may arm the final"', '"the T-16 rescue tick may arm the final"')
+          t=t.replace('"do not lock before the T-20 arm window"', '"do not rescue-lock before the T-16 arm window"')
+          write(path,t)
+
+          path='scripts/verify-live-lock-safety.py'
+          t=read(path)
+          t=t.replace("'const NORMAL_LOCK_MS = 25 * 60 * 1000;'", "'const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;'")
+          t=t.replace('"export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;"', '"export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;"')
+          t=t.replace('"finalMissingByT25RaceIds"', '"finalMissingByT17RaceIds"')
+          t=t.replace('"finalMissingByT20RaceIds"', '"finalMissingByT16RaceIds"')
+          t=t.replace('"normal_lock=25m",', '"fresh_final_arm=17m",')
+          t=t.replace('"guard_arm=20m",', '"rescue_guard_arm=16m",')
+          t=t.replace('"sla_t40_t30_t25_t20_t15=true",', '"sla_t40_t30_t17_t16_t15=true",')
+          write(path,t)
+
+          path='.github/workflows/verify-live-deadline-production.yml'
+          t=read(path)
+          t=t.replace('Verify every currently due selected race has exact six final rows', 'Verify every T-16 due selected race has exact six final rows')
+          t=t.replace('WHERE minutesToStart BETWEEN 15 AND 24 ORDER BY minutesToStart', 'WHERE minutesToStart BETWEEN 15 AND 16 ORDER BY minutesToStart')
+          t=t.replace("description='Priority rescue completed, crons active, due finals exact-six verified'", "description='T-17 fresh final, T-16 rescue, T-15 hard boundary verified'")
+          write(path,t)
+
+          path='HANDOFF.md'
+          t=read(path)
+          t=t.replace('- **T-25**: 通常のimmutable finalを確定\n- **T-20**: 保存済みofficial previewだけを使うDB中心の最終救済guard', '- **T-17**: 最新情報でfresh previewを再生成してimmutable finalを確定\n- **T-16**: fresh経路失敗時だけ、保存済みofficial previewを使うDB中心の最終救済guard')
+          t=t.replace('T-90/T-25/T-20/T-15構成', 'T-90/T-17/T-16/T-15構成')
+          t=t.replace('T-90 preview開始 / T-30 required / T-25 normal final / T-20 rescue / T-15 hard no-new-final', 'T-90 preview開始 / T-30 required / T-17 fresh final / T-16 rescue / T-15 hard no-new-final')
+          write(path,t)
+          PY
+      - name: Static and unit verification
+        run: |
+          npm run typecheck
+          npm run build:test
+          node dist-test/tests/completed-worker-deadline-guard-tests.js
+          python3 scripts/verify-live-lock-safety.py
+      - name: Commit patched production code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/live-deadline-entry-v2.ts src/v1/completed-worker-live-lock.ts src/v1/completed-worker-deadline-guard.ts src/v1/live-preview-safety.ts tests/completed-worker-deadline-guard-tests.ts scripts/verify-live-lock-safety.py .github/workflows/verify-live-deadline-production.yml HANDOFF.md
+          git commit -m 'Finalize live bets from latest T-15 inputs'
+          git pull --rebase origin main
+          git push origin HEAD:main
+          echo "PATCH_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Deploy patched primary and backup Workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.live-deadline.jsonc
+          npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
+      - name: Verify deployed v5 and fresh production heartbeat
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in \
+            'https://race-tantei-live-deadline.race-tantei.workers.dev/health' \
+            'https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health'; do
+            body=$(curl --max-time 20 --retry 6 --retry-delay 5 --fail-with-body -sS "$url")
+            echo "$body"
+            BODY="$body" node - <<'NODE'
+          const b=JSON.parse(process.env.BODY||'{}');
+          if(b.status!=='up'||b.version!=='live-deadline-v5-t15-optimal-refresh-20260823') throw new Error(JSON.stringify(b));
+          NODE
+          done
+          sleep 75
+          today=$(TZ=Asia/Tokyo date +%F)
+          state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.version') AS version,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok,state_value AS stateValue FROM rt_system_state WHERE state_key='live_deadline_driver:${today}' LIMIT 1")
+          echo "$state"
+          STATE="$state" node - <<'NODE'
+          const p=JSON.parse(process.env.STATE||'[]'); const r=p?.[0]?.results?.[0];
+          if(!r) throw new Error('DRIVER_STATE_MISSING');
+          if(r.version!=='live-deadline-v5-t15-optimal-refresh-20260823') throw new Error('OLD_DRIVER:'+r.version);
+          const age=Number(r.ageSeconds); if(!Number.isFinite(age)||age>180) throw new Error('STALE_DRIVER:'+age);
+          if(String(r.stateValue||'').includes('Too many subrequests')) throw new Error('SUBREQUEST_EXHAUSTION_RECURRED');
+          console.log(JSON.stringify({version:r.version,status:r.status,ok:r.ok,ageSeconds:age}));
+          NODE
+      - name: Mark patched commit production success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${PATCH_SHA}" -f state=success -f context='production/live-deadline' -f description='v5 latest-input finalization deployed to primary and backup' >/dev/null
+      - name: Mark patched commit production failure
+        if: failure() && env.PATCH_SHA != ''
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${PATCH_SHA}" -f state=failure -f context='production/live-deadline' -f description='v5 latest-input finalization deployment or heartbeat failed' >/dev/null
