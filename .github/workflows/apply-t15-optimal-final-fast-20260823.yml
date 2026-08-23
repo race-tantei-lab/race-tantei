@@ -1,0 +1,156 @@
+name: Fast T-15 optimal finalization deployment
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/apply-t15-optimal-final-fast-20260823.yml"
+
+permissions:
+  contents: write
+  statuses: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  patch-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Mark patch pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='production/t15-optimal-patch' \
+            -f description='Applying and deploying latest-input T-15 finalization' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Apply idempotent T-15 patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def patch(path, transforms):
+              p=Path(path); t=p.read_text(encoding='utf-8')
+              for old,new,label,mode in transforms:
+                  if mode=='once':
+                      if old in t: t=t.replace(old,new,1)
+                      elif new not in t: raise SystemExit(f'MISSING:{path}:{label}')
+                  elif mode=='all':
+                      if old in t: t=t.replace(old,new)
+              p.write_text(t,encoding='utf-8')
+
+          p='src/v1/completed-worker-live-lock.ts'
+          t=Path(p).read_text(encoding='utf-8')
+          if 'const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;' not in t:
+              if 'const NORMAL_LOCK_MS = 25 * 60 * 1000;' not in t: raise SystemExit('LIVE_ARM_MARKER_MISSING')
+              t=t.replace('const NORMAL_LOCK_MS = 25 * 60 * 1000;','const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;',1).replace('NORMAL_LOCK_MS','FINAL_LOCK_ARM_MS')
+          t=t.replace('const NEAR_PREVIEW_REFRESH_MS = 4 * 60 * 1000;','const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;',1)
+          early='''      if (remaining <= FINAL_LOCK_ARM_MS && existingPreview) {\n        const commitNow = new Date();\n        if (startMs - commitNow.getTime() <= DEADLINE_MS) {\n          errors.push({ raceId, error: `WORKER_STORED_PREVIEW_COMMIT_CROSSED_T15:${raceId}` });\n          continue;\n        }\n        if (!snapshotHasOfficialBodyWeight(existingPreview)) bodyWeightBreachRaceIds.add(raceId);\n        await commitSnapshot(env.DB, raceId, existingPreview, commitNow, "last_good");\n        lockedByWorker.push(raceId);\n        finalizedFromFallbackRaceIds.push(raceId);\n        continue;\n      }\n'''
+          if early in t: t=t.replace(early,'',1)
+          old='''      // Normal finalization happens by T-25. If the newest fetch failed, use\n      // the durable last-good official preview instead of waiting until T-15.\n'''
+          new='''      // Near T-15, always try one fresh preview first so the final uses the newest\n      // official odds, body weights, and all results confirmed before this prediction.\n      // A durable last-good official preview is rescue-only if that refresh fails.\n'''
+          if old in t: t=t.replace(old,new,1)
+          Path(p).write_text(t,encoding='utf-8')
+
+          patch('src/v1/completed-worker-deadline-guard.ts',[
+            ('export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;','export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;','guard-arm','once'),
+            ('// The final must already exist by T-15. The guard arms from T-20 through\n// the exact T-15 boundary so normal per-minute cron jitter still has margin.\n','// The normal worker gets the first chance to build a fresh final near T-17.\n// This guard is rescue-only from T-16 through the exact T-15 boundary.\n','guard-comment','once'),
+          ])
+          patch('src/v1/live-preview-safety.ts',[
+            ('finalMissingByT25RaceIds','finalMissingByT17RaceIds','sla-name-17','all'),
+            ('finalMissingByT20RaceIds','finalMissingByT16RaceIds','sla-name-16','all'),
+            ('remaining <= 25 * 60_000 && !finalReady','remaining <= 17 * 60_000 && !finalReady','sla-17','once'),
+            ('remaining <= 20 * 60_000 && !finalReady','remaining <= 16 * 60_000 && !finalReady','sla-16','once'),
+          ])
+          patch('src/live-deadline-entry-v2.ts',[
+            ('const DRIVER_VERSION = "live-deadline-v4-bounded-subrequests-20260823";','const DRIVER_VERSION = "live-deadline-v5-t15-optimal-refresh-20260823";','version','once'),
+            ('T-20 -> T-15 finalization','T-16 -> T-15 rescue finalization','comment','all'),
+            ('slaAfter.finalMissingByT20RaceIds','slaAfter.finalMissingByT16RaceIds','driver-sla','all'),
+          ])
+          patch('tests/completed-worker-deadline-guard-tests.ts',[
+            ('assert.equal(DEADLINE_GUARD_ARM_MS, 20 * 60 * 1000, "arm five minutes early so the final is immutable before T-15");','assert.equal(DEADLINE_GUARD_ARM_MS, 16 * 60 * 1000, "rescue guard arms one minute before the hard T-15 boundary");','test-arm','once'),
+            ('"the T-20 backup tick may arm the final"','"the T-16 rescue tick may arm the final"','test-msg','all'),
+            ('"do not lock before the T-20 arm window"','"do not rescue-lock before the T-16 arm window"','test-msg2','all'),
+          ])
+          patch('scripts/verify-live-lock-safety.py',[
+            ("'const NORMAL_LOCK_MS = 25 * 60 * 1000;'","'const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;'",'verify-arm','once'),
+            ('"export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;"','"export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;"','verify-guard','once'),
+            ('"finalMissingByT25RaceIds"','"finalMissingByT17RaceIds"','verify-17','all'),
+            ('"finalMissingByT20RaceIds"','"finalMissingByT16RaceIds"','verify-16','all'),
+            ('"normal_lock=25m",','"fresh_final_arm=17m",','verify-print1','once'),
+            ('"guard_arm=20m",','"rescue_guard_arm=16m",','verify-print2','once'),
+            ('"sla_t40_t30_t25_t20_t15=true",','"sla_t40_t30_t17_t16_t15=true",','verify-print3','once'),
+          ])
+          patch('.github/workflows/verify-live-deadline-production.yml',[
+            ('Verify every currently due selected race has exact six final rows','Verify every T-16 due selected race has exact six final rows','readiness-name','once'),
+            ('WHERE minutesToStart BETWEEN 15 AND 24 ORDER BY minutesToStart','WHERE minutesToStart BETWEEN 15 AND 16 ORDER BY minutesToStart','readiness-window','once'),
+            ("description='Priority rescue completed, crons active, due finals exact-six verified'","description='T-17 fresh final, T-16 rescue, T-15 hard boundary verified'",'readiness-desc','once'),
+          ])
+          patch('HANDOFF.md',[
+            ('- **T-25**: 通常のimmutable finalを確定\n- **T-20**: 保存済みofficial previewだけを使うDB中心の最終救済guard','- **T-17**: 最新情報でfresh previewを再生成してimmutable finalを確定\n- **T-16**: fresh経路失敗時だけ、保存済みofficial previewを使うDB中心の最終救済guard','handoff-timing','once'),
+            ('T-90/T-25/T-20/T-15構成','T-90/T-17/T-16/T-15構成','handoff-short','all'),
+            ('T-90 preview開始 / T-30 required / T-25 normal final / T-20 rescue / T-15 hard no-new-final','T-90 preview開始 / T-30 required / T-17 fresh final / T-16 rescue / T-15 hard no-new-final','handoff-summary','all'),
+          ])
+          PY
+      - name: Verify before deploy
+        run: |
+          npm run typecheck
+          npm run build:test
+          node dist-test/tests/completed-worker-deadline-guard-tests.js
+          python3 scripts/verify-live-lock-safety.py
+      - name: Deploy v5 primary and backup now
+        run: |
+          npx wrangler deploy --config wrangler.live-deadline.jsonc
+          npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
+      - name: Verify v5 health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in 'https://race-tantei-live-deadline.race-tantei.workers.dev/health' 'https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health'; do
+            body=$(curl --max-time 20 --retry 4 --retry-delay 3 --fail-with-body -sS "$url")
+            echo "$body"
+            printf '%s' "$body" | grep -Fq 'live-deadline-v5-t15-optimal-refresh-20260823'
+          done
+      - name: Commit v5 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/live-deadline-entry-v2.ts src/v1/completed-worker-live-lock.ts src/v1/completed-worker-deadline-guard.ts src/v1/live-preview-safety.ts tests/completed-worker-deadline-guard-tests.ts scripts/verify-live-lock-safety.py .github/workflows/verify-live-deadline-production.yml HANDOFF.md
+          if git diff --cached --quiet; then
+            echo "PATCH_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          else
+            git commit -m 'Finalize live bets from latest T-15 inputs'
+            git pull --rebase origin main
+            git push origin HEAD:main
+            echo "PATCH_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          fi
+      - name: Mark success
+        if: success()
+        run: |
+          sha="${PATCH_SHA:-$GITHUB_SHA}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${sha}" \
+            -f state=success -f context='production/t15-optimal-patch' \
+            -f description='v5 latest-input finalization deployed to both Workers' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: |
+          sha="${PATCH_SHA:-$GITHUB_SHA}"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${sha}" \
+            -f state=failure -f context='production/t15-optimal-patch' \
+            -f description='T-15 optimal finalization patch failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
