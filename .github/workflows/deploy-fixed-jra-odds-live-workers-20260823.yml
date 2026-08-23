@@ -64,25 +64,46 @@ jobs:
         run: npx wrangler deploy --config wrangler.live-deadline.jsonc
       - name: Deploy backup live deadline Worker
         run: npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
-      - name: Verify Cloudflare production scripts and cron schedules
+      - name: Verify production health and deployed script content
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in \
+            https://race-tantei-live-deadline.race-tantei.workers.dev/health \
+            https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health; do
+            body=$(curl -fsS -H 'Cache-Control: no-cache' "$url")
+            echo "HEALTH $url $body"
+            BODY="$body" node - <<'NODE'
+          const p=JSON.parse(process.env.BODY||'{}');
+          if(p.service!=='race-tantei-live-deadline'||p.status!=='up'||p.version!=='live-deadline-v6-t15-start-t10-reflect-20260823') throw new Error(`HEALTH_INVALID:${JSON.stringify(p)}`);
+          NODE
+          done
+          auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+          base="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers"
+          for script in race-tantei-live-deadline race-tantei-live-deadline-backup; do
+            curl -fsS "${auth[@]}" "$base/scripts/$script" -o "/tmp/$script.bundle"
+            grep -a -F 'jra-semantic-table-parser-v3-20260823' "/tmp/$script.bundle" >/dev/null
+            echo "PRODUCTION_SCRIPT_PARSER_OK $script"
+          done
+      - name: Verify Cloudflare cron schedules unchanged
         shell: bash
         run: |
           set -euo pipefail
           auth=(-H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
           base="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers"
           for script in race-tantei-live-deadline race-tantei-live-deadline-backup; do
-            curl -fsS "${auth[@]}" "$base/scripts/$script" -o "/tmp/$script.bundle"
-            grep -a -F 'jra-semantic-table-parser-v3-20260823' "/tmp/$script.bundle" >/dev/null
             curl -fsS "${auth[@]}" "$base/scripts/$script/schedules" -o "/tmp/$script.schedules.json"
             node - "$script" "/tmp/$script.schedules.json" <<'NODE'
           const fs=require('fs');
           const [script,file]=process.argv.slice(2);
           const p=JSON.parse(fs.readFileSync(file,'utf8'));
           if(!p.success) throw new Error(`${script}:SCHEDULE_API_FAILED:${JSON.stringify(p.errors)}`);
-          const crons=(p.result||[]).map(x=>x.cron).sort();
+          const r=p.result;
+          const rows=Array.isArray(r)?r:Array.isArray(r?.schedules)?r.schedules:Array.isArray(r?.triggers)?r.triggers:[];
+          const crons=rows.map(x=>x.cron).filter(Boolean).sort();
           const expected=script.endsWith('-backup')?['2-59/5 * * * *']:['* * * * *'];
-          if(JSON.stringify(crons)!==JSON.stringify(expected)) throw new Error(`${script}:CRON_MISMATCH:${JSON.stringify(crons)}`);
-          console.log('PRODUCTION_WORKER_OK',script,'crons=',crons.join(','));
+          if(JSON.stringify(crons)!==JSON.stringify(expected)) throw new Error(`${script}:CRON_MISMATCH:${JSON.stringify(r)}`);
+          console.log('PRODUCTION_CRON_OK',script,crons.join(','));
           NODE
           done
       - name: List deployed versions
@@ -91,7 +112,7 @@ jobs:
           npx wrangler deployments list --config wrangler.live-deadline-backup.jsonc | head -80
       - name: Mark dual live deadline deploy success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/live-deadline' -f description='Fixed JRA odds parser deployed to primary and backup' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/live-deadline' -f description='Fixed JRA odds parser deployed and verified on both workers' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark dual live deadline deploy failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/live-deadline' -f description='Fixed JRA odds parser live deployment failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/live-deadline' -f description='Fixed JRA odds parser live deployment verification failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
