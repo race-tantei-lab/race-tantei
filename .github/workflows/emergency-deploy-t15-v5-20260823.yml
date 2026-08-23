@@ -1,0 +1,153 @@
+name: Emergency deploy T-15 latest-input finalization
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/emergency-deploy-t15-v5-20260823.yml"
+
+permissions:
+  contents: write
+  statuses: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mark pending
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/t15-v5-emergency' -f description='Deploying T-17 fresh / T-16 rescue / T-15 hard boundary' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Patch runtime and production guards
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def rw(path, fn):
+              p=Path(path); t=p.read_text(encoding='utf-8'); n=fn(t); p.write_text(n,encoding='utf-8')
+          def need(t, old, new, label):
+              if new in t: return t
+              if old not in t: raise SystemExit('MISSING:'+label)
+              return t.replace(old,new,1)
+
+          def live(t):
+              t=need(t,'const NORMAL_LOCK_MS = 25 * 60 * 1000;','const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;','live-arm')
+              t=t.replace('NORMAL_LOCK_MS','FINAL_LOCK_ARM_MS')
+              t=t.replace('const NEAR_PREVIEW_REFRESH_MS = 4 * 60 * 1000;','const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;',1)
+              block='''      if (remaining <= FINAL_LOCK_ARM_MS && existingPreview) {\n        const commitNow = new Date();\n        if (startMs - commitNow.getTime() <= DEADLINE_MS) {\n          errors.push({ raceId, error: `WORKER_STORED_PREVIEW_COMMIT_CROSSED_T15:${raceId}` });\n          continue;\n        }\n        if (!snapshotHasOfficialBodyWeight(existingPreview)) bodyWeightBreachRaceIds.add(raceId);\n        await commitSnapshot(env.DB, raceId, existingPreview, commitNow, "last_good");\n        lockedByWorker.push(raceId);\n        finalizedFromFallbackRaceIds.push(raceId);\n        continue;\n      }\n'''
+              t=t.replace(block,'',1)
+              t=t.replace('      // Normal finalization happens by T-25. If the newest fetch failed, use\n      // the durable last-good official preview instead of waiting until T-15.\n','      // Near T-15, always generate a fresh preview first so the final uses the newest\n      // official odds, body weights, and all results confirmed before this prediction.\n      // Durable last-good official preview is rescue-only if that fresh attempt fails.\n',1)
+              return t
+          rw('src/v1/completed-worker-live-lock.ts', live)
+
+          def guard(t):
+              t=need(t,'export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;','export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;','guard-arm')
+              t=t.replace('// The final must already exist by T-15. The guard arms from T-20 through\n// the exact T-15 boundary so normal per-minute cron jitter still has margin.\n','// Fresh finalization gets the first chance near T-17. This guard is rescue-only\n// from T-16 through the exact T-15 boundary using a persisted official preview.\n',1)
+              return t
+          rw('src/v1/completed-worker-deadline-guard.ts', guard)
+
+          def safety(t):
+              t=t.replace('finalMissingByT25RaceIds','finalMissingByT17RaceIds').replace('finalMissingByT20RaceIds','finalMissingByT16RaceIds')
+              t=t.replace('remaining <= 25 * 60_000 && !finalReady','remaining <= 17 * 60_000 && !finalReady',1)
+              t=t.replace('remaining <= 20 * 60_000 && !finalReady','remaining <= 16 * 60_000 && !finalReady',1)
+              return t
+          rw('src/v1/live-preview-safety.ts', safety)
+
+          def driver(t):
+              t=need(t,'const DRIVER_VERSION = "live-deadline-v4-bounded-subrequests-20260823";','const DRIVER_VERSION = "live-deadline-v5-t15-optimal-refresh-20260823";','driver-version')
+              t=t.replace('T-20 -> T-15 finalization','T-16 -> T-15 rescue finalization')
+              t=t.replace('slaAfter.finalMissingByT20RaceIds','slaAfter.finalMissingByT16RaceIds')
+              return t
+          rw('src/live-deadline-entry-v2.ts', driver)
+
+          def tests(t):
+              t=t.replace('assert.equal(DEADLINE_GUARD_ARM_MS, 20 * 60 * 1000, "arm five minutes early so the final is immutable before T-15");','assert.equal(DEADLINE_GUARD_ARM_MS, 16 * 60 * 1000, "rescue guard arms one minute before the hard T-15 boundary");',1)
+              t=t.replace('"the T-20 backup tick may arm the final"','"the T-16 rescue tick may arm the final"').replace('"do not lock before the T-20 arm window"','"do not rescue-lock before the T-16 arm window"')
+              return t
+          rw('tests/completed-worker-deadline-guard-tests.ts', tests)
+
+          def verifier(t):
+              t=t.replace("'const NORMAL_LOCK_MS = 25 * 60 * 1000;'","'const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;'",1)
+              t=t.replace('"export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;"','"export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;"',1)
+              t=t.replace('"finalMissingByT25RaceIds"','"finalMissingByT17RaceIds"').replace('"finalMissingByT20RaceIds"','"finalMissingByT16RaceIds"')
+              t=t.replace('"normal_lock=25m",','"fresh_final_arm=17m",',1).replace('"guard_arm=20m",','"rescue_guard_arm=16m",',1).replace('"sla_t40_t30_t25_t20_t15=true",','"sla_t40_t30_t17_t16_t15=true",',1)
+              return t
+          rw('scripts/verify-live-lock-safety.py', verifier)
+
+          def readiness(t):
+              t=t.replace('Verify every currently due selected race has exact six final rows','Verify every T-16 due selected race has exact six final rows',1)
+              t=t.replace('WHERE minutesToStart BETWEEN 15 AND 24 ORDER BY minutesToStart','WHERE minutesToStart BETWEEN 15 AND 16 ORDER BY minutesToStart',1)
+              t=t.replace("description='Priority rescue completed, crons active, due finals exact-six verified'","description='T-17 fresh final, T-16 rescue, T-15 hard boundary verified'",1)
+              return t
+          rw('.github/workflows/verify-live-deadline-production.yml', readiness)
+
+          def handoff(t):
+              t=t.replace('- **T-25**: 通常のimmutable finalを確定\n- **T-20**: 保存済みofficial previewだけを使うDB中心の最終救済guard','- **T-17**: 最新情報でfresh previewを再生成してimmutable finalを確定\n- **T-16**: fresh経路失敗時だけ、保存済みofficial previewを使うDB中心の最終救済guard',1)
+              t=t.replace('T-90/T-25/T-20/T-15構成','T-90/T-17/T-16/T-15構成').replace('T-90 preview開始 / T-30 required / T-25 normal final / T-20 rescue / T-15 hard no-new-final','T-90 preview開始 / T-30 required / T-17 fresh final / T-16 rescue / T-15 hard no-new-final')
+              return t
+          rw('HANDOFF.md', handoff)
+          PY
+      - name: Typecheck and safety gate
+        run: |
+          npm run typecheck
+          python3 scripts/verify-live-lock-safety.py
+      - name: Deploy primary and backup v5
+        run: |
+          npx wrangler deploy --config wrangler.live-deadline.jsonc
+          npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
+      - name: Verify both health endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in 'https://race-tantei-live-deadline.race-tantei.workers.dev/health' 'https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health'; do
+            body=$(curl --max-time 20 --retry 6 --retry-delay 2 --fail-with-body -sS "$url")
+            echo "$url $body"
+            BODY="$body" node -e "const b=JSON.parse(process.env.BODY);if(b.status!=='up'||b.version!=='live-deadline-v5-t15-optimal-refresh-20260823')process.exit(1)"
+          done
+      - name: Commit source of deployed v5
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/live-deadline-entry-v2.ts src/v1/completed-worker-live-lock.ts src/v1/completed-worker-deadline-guard.ts src/v1/live-preview-safety.ts tests/completed-worker-deadline-guard-tests.ts scripts/verify-live-lock-safety.py .github/workflows/verify-live-deadline-production.yml HANDOFF.md
+          git commit -m 'Finalize live bets from latest T-15 inputs'
+          git pull --rebase origin main
+          git push origin HEAD:main
+          echo "PATCH_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Verify fresh production heartbeat
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 70
+          today=$(TZ=Asia/Tokyo date +%F)
+          state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.version') AS version,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok,state_value AS stateValue FROM rt_system_state WHERE state_key='live_deadline_driver:${today}' LIMIT 1")
+          echo "$state"
+          STATE="$state" node - <<'NODE'
+          const p=JSON.parse(process.env.STATE||'[]'); const r=p?.[0]?.results?.[0];
+          if(!r) throw new Error('DRIVER_STATE_MISSING');
+          if(r.version!=='live-deadline-v5-t15-optimal-refresh-20260823') throw new Error('OLD_DRIVER:'+r.version);
+          const age=Number(r.ageSeconds); if(!Number.isFinite(age)||age>180) throw new Error('STALE_DRIVER:'+age);
+          if(String(r.stateValue||'').includes('Too many subrequests')) throw new Error('SUBREQUEST_EXHAUSTION_RECURRED');
+          console.log(JSON.stringify({version:r.version,status:r.status,ok:r.ok,ageSeconds:age}));
+          NODE
+      - name: Mark success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${PATCH_SHA}" -f state=success -f context='production/t15-v5-emergency' -f description='v5 deployed; latest-input finalization heartbeat verified' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/t15-v5-emergency' -f description='Emergency v5 deployment failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
