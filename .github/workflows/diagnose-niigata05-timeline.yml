@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
+      - name: Mark pending
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='diagnostic/niigata05-timeline' -f description='Reading Niigata 5R generation timeline' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -46,3 +48,9 @@ jobs:
           const p=require('/tmp/day.json');
           console.log(JSON.stringify((p.races||[]).find(x=>x.raceId==='2026-08-23-niigata-05')||null,null,2));
           NODE
+      - name: Mark success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='diagnostic/niigata05-timeline' -f description='Niigata 5R timeline captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='diagnostic/niigata05-timeline' -f description='Niigata 5R timeline diagnostic failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
