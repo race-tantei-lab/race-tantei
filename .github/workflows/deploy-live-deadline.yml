@@ -5,7 +5,6 @@ on:
     branches: [main]
     paths:
       - "src/live-deadline-entry-v2.ts"
-      - "src/live-deadline-guardian-entry-v1.ts"
       - "src/v1/live-preview-safety.ts"
       - "src/v1/completed-worker-live-lock.ts"
       - "src/v1/completed-worker-deadline-guard.ts"
@@ -16,8 +15,6 @@ on:
       - "src/v1/jra-official-odds.ts"
       - "wrangler.live-deadline.jsonc"
       - "wrangler.live-deadline-backup.jsonc"
-      - "wrangler.live-deadline-guardian.jsonc"
-      - "wrangler.live-deadline-guardian-backup.jsonc"
       - ".github/workflows/deploy-live-deadline.yml"
   workflow_dispatch:
 
@@ -50,10 +47,6 @@ jobs:
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
       - name: Validate backup isolated Worker bundle
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline-backup.jsonc --outdir dist-live-deadline-backup
-      - name: Validate primary guardian bundle
-        run: npx wrangler deploy --dry-run --config wrangler.live-deadline-guardian.jsonc --outdir dist-live-deadline-guardian
-      - name: Validate backup guardian bundle
-        run: npx wrangler deploy --dry-run --config wrangler.live-deadline-guardian-backup.jsonc --outdir dist-live-deadline-guardian-backup
       - name: Deploy primary live deadline Worker
         uses: cloudflare/wrangler-action@v3
         with:
@@ -66,31 +59,19 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 3c6d1826b573b2e68cb13ec37e9e8ade
           command: deploy --config wrangler.live-deadline-backup.jsonc
-      - name: Deploy primary cached-preview guardian
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: 3c6d1826b573b2e68cb13ec37e9e8ade
-          command: deploy --config wrangler.live-deadline-guardian.jsonc
-      - name: Deploy backup cached-preview guardian
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: 3c6d1826b573b2e68cb13ec37e9e8ade
-          command: deploy --config wrangler.live-deadline-guardian-backup.jsonc
-      - name: Mark live deadline deploy success
+      - name: Mark dual live deadline deploy success
         if: success()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/live-deadline' \
-            -f description='Live deadline primary, backup and guardians deployed' \
+            -f description='Primary and backup live deadline Workers deployed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
-      - name: Mark live deadline deploy failure
+      - name: Mark dual live deadline deploy failure
         if: failure()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/live-deadline' \
-            -f description='Live deadline or guardian Worker deployment failed' \
+            -f description='Live deadline Worker deployment failed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
