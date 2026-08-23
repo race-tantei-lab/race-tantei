@@ -11,7 +11,7 @@ import {
 } from "./v1/live-preview-safety.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "live-deadline-v3-priority-guard-20260823";
+const DRIVER_VERSION = "live-deadline-v4-bounded-subrequests-20260823";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
 const PRIORITY_GUARD_SUCCESS_PREFIX = "live_deadline_priority_guard_success:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
@@ -122,13 +122,17 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
     });
 
     const selectionNow = new Date();
-    let selection = await freezeCompletedWorkerSelectionIfNeeded(env, selectionNow);
     let selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
+    let selection: Record<string, unknown> = { status: "already_frozen" };
     let entryRepair: Record<string, unknown> | null = null;
-    if (!selectionReady && String(selection.status || "") === "waiting_complete_program") {
-      entryRepair = await runUpcomingEntryDerivedRepair(env, new Date()) as unknown as Record<string, unknown>;
-      selection = await freezeCompletedWorkerSelectionIfNeeded(env, new Date());
-      selectionReady = await hasSelection(env.DB, jstDate(new Date()));
+    if (!selectionReady) {
+      selection = await freezeCompletedWorkerSelectionIfNeeded(env, selectionNow) as unknown as Record<string, unknown>;
+      selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
+      if (!selectionReady && String(selection.status || "") === "waiting_complete_program") {
+        entryRepair = await runUpcomingEntryDerivedRepair(env, new Date()) as unknown as Record<string, unknown>;
+        selection = await freezeCompletedWorkerSelectionIfNeeded(env, new Date()) as unknown as Record<string, unknown>;
+        selectionReady = await hasSelection(env.DB, jstDate(new Date()));
+      }
     }
     if (!selectionReady) {
       const firstRace = await env.DB.prepare("SELECT MIN(start_time_utc) AS firstStart FROM rt_races WHERE race_date=? AND start_time_utc IS NOT NULL")
@@ -156,11 +160,13 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       return result;
     }
 
-    const restoredBefore = await restoreNewestOfficialPreviewArchives(env.DB, date);
-    const slaBefore = await auditLiveDeadlineSla(env.DB, date, new Date());
-
-    const guardBeforeNow = new Date();
-    const guardBefore = await runCompletedWorkerDeadlineGuard(env, guardBeforeNow);
+    let restoredBefore: string[] = [];
+    if (priorityGuard.errors.some((row) => row.error.includes("PREVIEW_MISSING"))) {
+      restoredBefore = await restoreNewestOfficialPreviewArchives(env.DB, date);
+    }
+    const slaBefore = null;
+    const guardBeforeNow = priorityGuardNow;
+    const guardBefore = priorityGuard;
 
     const liveNow = new Date();
     let live: Awaited<ReturnType<typeof runCompletedWorkerLiveLock>> | null = null;
@@ -171,9 +177,14 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       liveFailure = errorText(error);
     }
 
-    const restoredAfter = await restoreNewestOfficialPreviewArchives(env.DB, date);
-    const guardAfterNow = new Date();
-    const guardAfter = await runCompletedWorkerDeadlineGuard(env, guardAfterNow);
+    let restoredAfter: string[] = [];
+    let guardAfterNow = new Date();
+    let guardAfter = await runCompletedWorkerDeadlineGuard(env, guardAfterNow);
+    if (guardAfter.errors.some((row) => row.error.includes("PREVIEW_MISSING"))) {
+      restoredAfter = await restoreNewestOfficialPreviewArchives(env.DB, date);
+      guardAfterNow = new Date();
+      guardAfter = await runCompletedWorkerDeadlineGuard(env, guardAfterNow);
+    }
     const slaAfter = await auditLiveDeadlineSla(env.DB, date, new Date());
 
     const due = new Set([...priorityGuard.dueRaceIds, ...guardBefore.dueRaceIds, ...guardAfter.dueRaceIds]);

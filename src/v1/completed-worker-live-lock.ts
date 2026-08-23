@@ -30,7 +30,7 @@ const NORMAL_LOCK_MS = 25 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
 const EARLY_PREVIEW_REFRESH_MS = 10 * 60 * 1000;
 const MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000;
-const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;
+const NEAR_PREVIEW_REFRESH_MS = 4 * 60 * 1000;
 const PREVIEW_HISTORY = 3;
 const PREVIEW_VERSION = 1;
 const OFFICIAL_ODDS_SOURCES = new Set(["jra-fast-official", "jra-crawl-official"]);
@@ -496,7 +496,13 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
     await saveAudit(env.DB, audit);
     return audit;
   }
-  const ids = await orderLiveRaceIdsByStart(env.DB, date, validateSelection(selection));
+  const selectedIds = await orderLiveRaceIdsByStart(env.DB, date, validateSelection(selection));
+  const activeResult = await env.DB.prepare(`
+    SELECT race_id AS raceId FROM rt_races
+    WHERE race_date=? AND start_time_utc>? AND start_time_utc<=?
+  `).bind(date, iso(now), iso(new Date(now.getTime() + BODY_WEIGHT_REFRESH_OPEN_MS))).all<{ raceId: string }>();
+  const activeSet = new Set((activeResult.results ?? []).map((row) => String(row.raceId)));
+  const ids = selectedIds.filter((raceId) => activeSet.has(raceId));
   const beforeStates = await Promise.all(ids.map(async (raceId) => isStrictComplete(await publicBetRows(env.DB, raceId))));
   const completeBefore = beforeStates.filter(Boolean).length;
   const lockedByWorker: string[] = [];
@@ -511,6 +517,7 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
   const alreadyStartedIncompleteRaceIds: string[] = [];
   const errors: Array<{ raceId: string; error: string }> = [];
   let model: CompletedModelRuntime | null = null;
+  let generatedThisTick = 0;
 
   for (const raceId of ids) {
     const existing = await publicBetRows(env.DB, raceId);
@@ -548,11 +555,25 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       if (remaining > NORMAL_LOCK_MS && existingPreview && previewIsFreshEnough(existingPreview, remaining, raceNow)) {
         continue;
       }
+      if (remaining <= NORMAL_LOCK_MS && existingPreview) {
+        const commitNow = new Date();
+        if (startMs - commitNow.getTime() <= DEADLINE_MS) {
+          errors.push({ raceId, error: `WORKER_STORED_PREVIEW_COMMIT_CROSSED_T15:${raceId}` });
+          continue;
+        }
+        if (!snapshotHasOfficialBodyWeight(existingPreview)) bodyWeightBreachRaceIds.add(raceId);
+        await commitSnapshot(env.DB, raceId, existingPreview, commitNow, "last_good");
+        lockedByWorker.push(raceId);
+        finalizedFromFallbackRaceIds.push(raceId);
+        continue;
+      }
+      if (generatedThisTick >= 1 && remaining > NORMAL_LOCK_MS) continue;
 
       let fresh: PreviewSnapshot | null = null;
       try {
         model ??= await loadWorkerModel(env.DB);
         fresh = await generatePreview(env.DB, model, raceId, new Date());
+        generatedThisTick += 1;
         refreshedPreviewRaceIds.push(raceId);
         if (snapshotHasOfficialBodyWeight(fresh)) refreshedBodyWeightRaceIds.add(raceId);
         else bodyWeightPendingRaceIds.add(raceId);
@@ -618,7 +639,7 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
     checkedAt: iso(now),
     date,
     sourceModel: COMPLETED_MODEL_VERSION,
-    selectedRaceCount: ids.length,
+    selectedRaceCount: selectedIds.length,
     completeBefore,
     completeAfter,
     lockedByWorker,
