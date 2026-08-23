@@ -35,16 +35,18 @@ jobs:
           entry=$(node -e "const p=require('/tmp/race.json');process.stdout.write(p[0].results[0].entry_url)")
           ENTRY_URL="$entry" npx tsx -e '
             import { fetchFastJraOfficialOddsForRace } from "./src/v1/jra-official-odds-fetch.ts";
-            const r=await fetchFastJraOfficialOddsForRace(process.env.ENTRY_URL!,{raceDate:"2026-08-23",venue:"中京",raceNo:10});
-            const counts=Object.fromEntries(r.pages.map(p=>[p.betType,p.rows.length]));
-            console.log(JSON.stringify({source:r.source,sourceHost:r.sourceHost,counts},null,2));
-            const expected={"単勝":14,"馬連":91,"ワイド":91,"馬単":182,"3連複":364,"3連単":2184};
-            for(const [k,v] of Object.entries(expected)) if(Number(counts[k])!==v) throw new Error(`COUNT_MISMATCH:${k}:${counts[k]}:${v}`);
-            const win=r.rows.find(x=>x.betType==="単勝"&&x.combination==="12");
-            console.log("HORSE12_WIN",JSON.stringify(win));
-            if(!win || win.oddsMin!==1.7 || win.oddsMax!==1.7) throw new Error(`HORSE12_WIN_MISMATCH:${JSON.stringify(win)}`);
-            const keys=new Set<string>();
-            for(const row of r.rows){const key=`${row.betType}:${row.combination}`; if(keys.has(key)) throw new Error(`DUPLICATE:${key}`); keys.add(key); if(!Number.isFinite(row.oddsMin)||!Number.isFinite(row.oddsMax)||row.oddsMin<1||row.oddsMax<row.oddsMin) throw new Error(`ODDS_INVALID:${key}`);}
+            (async()=>{
+              const r=await fetchFastJraOfficialOddsForRace(process.env.ENTRY_URL!,{raceDate:"2026-08-23",venue:"中京",raceNo:10});
+              const counts=Object.fromEntries(r.pages.map(p=>[p.betType,p.rows.length]));
+              console.log(JSON.stringify({source:r.source,sourceHost:r.sourceHost,counts},null,2));
+              const expected={"単勝":14,"馬連":91,"ワイド":91,"馬単":182,"3連複":364,"3連単":2184};
+              for(const [k,v] of Object.entries(expected)) if(Number(counts[k])!==v) throw new Error(`COUNT_MISMATCH:${k}:${counts[k]}:${v}`);
+              const win=r.rows.find(x=>x.betType==="単勝"&&x.combination==="12");
+              console.log("HORSE12_WIN",JSON.stringify(win));
+              if(!win || win.oddsMin!==1.7 || win.oddsMax!==1.7) throw new Error(`HORSE12_WIN_MISMATCH:${JSON.stringify(win)}`);
+              const keys=new Set<string>();
+              for(const row of r.rows){const key=`${row.betType}:${row.combination}`; if(keys.has(key)) throw new Error(`DUPLICATE:${key}`); keys.add(key); if(!Number.isFinite(row.oddsMin)||!Number.isFinite(row.oddsMax)||row.oddsMin<1||row.oddsMax<row.oddsMin) throw new Error(`ODDS_INVALID:${key}`);}
+            })().catch(e=>{console.error(e);process.exit(1)});
           '
       - name: Mark success
         if: success()
