@@ -5,6 +5,10 @@ on:
     paths: [".github/workflows/finalize-semantic-jra-odds-parser-20260823.yml"]
 permissions:
   contents: write
+  statuses: write
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 jobs:
   patch-test-commit:
     runs-on: ubuntu-latest
@@ -24,33 +28,8 @@ jobs:
           from pathlib import Path
           p = Path('src/v1/jra-official-odds.ts')
           s = p.read_text()
-          old = r'''function positionedHorse(context: string, label: "1着" | "2着"): number | null {
-            const pattern = new RegExp(`${label}[\\s\\S]{0,500}?<div\\b([^>]*)>([\\s\\S]*?)<\\/div>`, "i");
-            const match = pattern.exec(context);
-            if (!match || !hasClass(match[1] ?? "", "num")) return null;
-            return horseNumber(match[2] ?? "");
-          }
-
-          function parseTrifectaRows(pageHtml: string): OfficialOddsRow[] {
-            const parsed = new Map<string, [number, number]>();
-            for (const table of tablesByClass(pageHtml, "tan3")) {
-              const liStart = pageHtml.lastIndexOf("<li", table.start);
-              const contextStart = liStart >= 0 ? liStart : Math.max(0, table.start - 1800);
-              const context = pageHtml.slice(contextStart, table.start);
-              const first = positionedHorse(context, "1着");
-              const second = positionedHorse(context, "2着");
-              if (first == null || second == null || first === second) continue;
-              for (const row of table.body.matchAll(/<tr\\b[^>]*>([\\s\\S]*?)<\\/tr>/gi)) {
-                const rowHtml = row[0] ?? "";
-                const third = rowHorseFromScope(rowHtml);
-                const odds = exactRowOdds(rowHtml);
-                if (third == null || odds == null || third === first || third === second) continue;
-                parsed.set(`${first}-${second}-${third}`, odds);
-              }
-            }
-            return [...parsed.entries()].sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))
-              .map(([combination, [oddsMin, oddsMax]]) => ({ betType: "3連単", combination, oddsMin, oddsMax }));
-          }'''.replace('          ','')
+          start = s.index('function positionedHorse(context: string, label: "1着" | "2着"): number | null {')
+          end = s.index('\n\nexport function parseJraOfficialOddsRows', start)
           new = r'''function positionedHorse(context: string, label: "1着" | "2着"): number | null {
             const pattern = new RegExp(
               `<span\\b[^>]*>\\s*${label}\\s*<\\/span>[\\s\\S]{0,350}?<div\\b([^>]*)>\\s*(\\d{1,2})\\s*<\\/div>`,
@@ -86,9 +65,7 @@ jobs:
             return [...parsed.entries()].sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))
               .map(([combination, [oddsMin, oddsMax]]) => ({ betType: "3連単", combination, oddsMin, oddsMax }));
           }'''.replace('          ','')
-          if old not in s:
-              raise SystemExit('trifecta parser block not found')
-          p.write_text(s.replace(old, new))
+          p.write_text(s[:start] + new + s[end:])
 
           p = Path('tests/jra-official-odds-fetch-tests.ts')
           s = p.read_text()
@@ -121,3 +98,9 @@ jobs:
           if git diff --cached --quiet; then echo 'No changes'; exit 0; fi
           git commit -m 'Parse JRA trifecta odds within exact list units'
           git push origin HEAD:main
+      - name: Mark success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/jra-trifecta-semantic-patch' -f description='Exact JRA trifecta unit parser patched and tested' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/jra-trifecta-semantic-patch' -f description='Exact JRA trifecta unit parser patch failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
