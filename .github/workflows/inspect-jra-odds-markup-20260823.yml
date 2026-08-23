@@ -42,27 +42,31 @@ jobs:
             let charset=(r.headers.get('content-type')||'').match(/charset\s*=\s*([^;\s]+)/i)?.[1]||'shift_jis';
             try{return new TextDecoder(charset).decode(b)}catch{return new TextDecoder('shift_jis').decode(b)}
           }
+          function links(page){ return [...page.matchAll(/doAction\(\s*['"]\/JRADB\/accessO\.html['"]\s*,\s*['"]([^'"]+)['"]\s*\)/gi)].map(m=>m[1]); }
           const entry=await html(entryUrl);
-          const actions=[...entry.matchAll(/doAction\(\s*['"]\/JRADB\/accessO\.html['"]\s*,\s*['"]([^'"]+)['"]\s*\)/gi)].map(m=>m[1]);
           const prefixes={win:'pw151ou',umaren:'pw154ou',wide:'pw155ou',umatan:'pw156ou',fuku3:'pw157ou',tan3:'pw158ou'};
           const oddsUrl=new URL('/JRADB/accessO.html',entryUrl).toString();
+          const winCname=links(entry).find(x=>x.startsWith(prefixes.win));
+          if(!winCname) throw new Error('WIN_CNAME_MISSING');
+          const winPage=await html(oddsUrl,winCname,entryUrl);
+          const allLinks=[...new Set([...links(entry),...links(winPage)])];
           function rowSummary(page){
             const rows=[...page.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)].map(m=>m[0]).filter(x=>/\d+\.\d+/.test(x));
-            return rows.slice(0,10).map((x,i)=>`${i+1}: ${x.replace(/\s+/g,' ').slice(0,1600)}`).join('\n');
+            return rows.slice(0,12).map((x,i)=>`${i+1}: ${x.replace(/\s+/g,' ').slice(0,1800)}`).join('\n');
           }
-          function tableTags(page){return [...page.matchAll(/<table\b[^>]*>/gi)].map(m=>m[0].replace(/\s+/g,' ')).slice(0,100)}
+          function tableTags(page){return [...page.matchAll(/<table\b[^>]*>/gi)].map(m=>m[0].replace(/\s+/g,' ')).slice(0,120)}
           for(const [name,prefix] of Object.entries(prefixes)){
-            const cname=actions.find(x=>x.startsWith(prefix));
+            const cname=name==='win'?winCname:allLinks.find(x=>x.startsWith(prefix));
             console.log(`\n===== ${name} cname=${cname||'MISSING'} =====`);
             if(!cname) continue;
-            const page=await html(oddsUrl,cname,entryUrl);
+            const page=name==='win'?winPage:await html(oddsUrl,cname,oddsUrl);
             console.log('TABLE_TAGS'); console.log(tableTags(page).join('\n'));
             console.log('DECIMAL_ROWS'); console.log(rowSummary(page));
           }
           NODE
       - name: Mark success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='diagnostic/jra-odds-markup' -f description='JRA odds markup captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='diagnostic/jra-odds-markup' -f description='JRA six-market markup captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark failure
         if: failure()
         run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='diagnostic/jra-odds-markup' -f description='JRA odds markup capture failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
