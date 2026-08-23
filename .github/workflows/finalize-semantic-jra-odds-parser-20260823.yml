@@ -1,0 +1,80 @@
+name: Finalize semantic JRA odds parser 20260823
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/finalize-semantic-jra-odds-parser-20260823.yml"]
+permissions:
+  contents: write
+jobs:
+  patch-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Apply final semantic-parser corrections
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/v1/jra-official-odds.ts')
+          s = p.read_text()
+          old = '''function wideOdds(cellBody: string): [number, number] | null {
+            const minBody = bodyByClass(cellBody, "span", "min");
+            const maxBody = bodyByClass(cellBody, "span", "max");
+            if (minBody == null || maxBody == null) return null;
+            const low = Number(stripJraTags(minBody).replaceAll(",", ""));
+            const high = Number(stripJraTags(maxBody).replaceAll(",", ""));
+            return Number.isFinite(low) && Number.isFinite(high) && low >= 1 && high >= low && high <= 100000 ? [low, high] : null;
+          }'''.replace('          ','')
+          new = '''function nestedElementBodyByClass(html: string, tag: "span", token: string): string | null {
+            const opening = new RegExp(`<${tag}\\\\b([^>]*)>`, "gi");
+            let match: RegExpExecArray | null;
+            while ((match = opening.exec(html)) !== null) {
+              if (!hasClass(match[1] ?? "", token)) continue;
+              const close = html.indexOf(`</${tag}>`, opening.lastIndex);
+              if (close < 0) return null;
+              return html.slice(opening.lastIndex, close);
+            }
+            return null;
+          }
+
+          function wideOdds(cellBody: string): [number, number] | null {
+            const minBody = nestedElementBodyByClass(cellBody, "span", "min");
+            const maxBody = nestedElementBodyByClass(cellBody, "span", "max");
+            if (minBody == null || maxBody == null) return null;
+            const low = Number(stripJraTags(minBody).replaceAll(",", ""));
+            const high = Number(stripJraTags(maxBody).replaceAll(",", ""));
+            return Number.isFinite(low) && Number.isFinite(high) && low >= 1 && high >= low && high <= 100000 ? [low, high] : null;
+          }'''.replace('          ','')
+          if old not in s:
+              raise SystemExit('wideOdds block not found')
+          p.write_text(s.replace(old, new))
+
+          p = Path('src/v1/jra-official-odds-fetch.ts')
+          s = p.read_text().replace('!Number.isFinite(odds) || odds <= 1 || Number(row.oddsMax) !== odds', '!Number.isFinite(odds) || odds < 1 || Number(row.oddsMax) !== odds')
+          p.write_text(s)
+
+          for p in Path('src').rglob('*.ts'):
+              s = p.read_text()
+              if 'jra-decimal-cells-sanity-v2-20260823' in s:
+                  p.write_text(s.replace('jra-decimal-cells-sanity-v2-20260823', 'jra-semantic-table-parser-v3-20260823'))
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Verify all six semantic odds parsers
+        run: npx tsx tests/jra-official-odds-fetch-tests.ts
+      - name: Commit semantic parser corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/v1/jra-official-odds.ts src/v1/jra-official-odds-fetch.ts src/v1/completed-worker-live-lock.ts
+          if git diff --cached --quiet; then echo 'No changes'; exit 0; fi
+          git commit -m 'Finalize structural JRA odds parser'
+          git push origin HEAD:main
