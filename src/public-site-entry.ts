@@ -127,37 +127,42 @@ async function raceDetail(db: D1Database, raceId: string): Promise<string | null
   } else if (state.code === "pending") {
     bets = `<div class="section-title"><h2>買い目</h2><span class="status pending">判定中</span></div><div class="notice">${escapeHtml(state.deadline ?? "発走15分前までに確定")}</div>`;
   } else {
-    bets = `<div class="section-title"><h2>買い目</h2><span class="status skip">見送り</span></div><div class="notice">このレースは買い目対象ではありません。</div>`;
+    bets = `<div class="section-title"><h2>買い目</h2><span class="status ${state.code}">${state.label}</span></div><section class="panel"><p>このレースは購入対象に選ばれませんでした。</p></section>`;
   }
-  const runnerRows = runners.results.map((r) => `<tr><td>${r.frameNo ?? "—"}</td><td><b>${r.horseNo}</b></td><td>${escapeHtml(r.horseName)}</td><td>${escapeHtml(r.sexAge ?? "—")}</td><td>${r.horseWeight === null ? "—" : `${r.horseWeight}kg${r.weightChange === null ? "" : ` (${r.weightChange >= 0 ? "+" : ""}${r.weightChange})`}`}</td><td>${escapeHtml(r.jockey ?? "—")}</td><td>${r.assignedWeight === null ? "—" : r.assignedWeight.toFixed(1)}</td><td>${escapeHtml(r.trainer ?? "—")}</td><td>${r.winOdds === null ? "—" : r.winOdds.toFixed(1)}</td><td>${r.popularity ?? "—"}</td><td>${r.finishPosition ?? "—"}</td></tr>`).join("");
-  const body = `<section class="hero"><h1>${escapeHtml(race.venue)} ${race.raceNo}R　${escapeHtml(race.raceName)}</h1><p>${escapeHtml(meta)}</p></section>${bets}<div class="section-title"><h2>出走馬</h2><span class="muted">最新の取得情報</span></div><div class="runner-table"><table><thead><tr><th>枠</th><th>馬</th><th>馬名</th><th>性齢</th><th>馬体重</th><th>騎手</th><th>斤量</th><th>調教師</th><th>単勝</th><th>人気</th><th>着順</th></tr></thead><tbody>${runnerRows || `<tr><td colspan="11">出走馬情報を取得中です。</td></tr>`}</tbody></table></div>`;
-  return shell(`${race.venue} ${race.raceNo}R`, body, `<script>document.querySelectorAll('[data-course-tab]').forEach((b)=>b.addEventListener('click',()=>{const i=b.dataset.courseTab;document.querySelectorAll('[data-course-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-course]').forEach(x=>x.style.display=x.dataset.course===i?'':'none');}));</script>`);
+  const runnerTable = `<div class="section-title"><h2>出走馬</h2><span class="muted">${runners.results.length}頭</span></div><div class="runner-table"><table><thead><tr><th>馬番</th><th>馬名</th><th>性齢</th><th>騎手</th><th>調教師</th><th>馬体重</th><th>単勝</th><th>人気</th><th>結果</th></tr></thead><tbody>${runners.results.map((r)=>`<tr><td><span class="horse-no">${r.horseNo}</span></td><td><b>${escapeHtml(r.horseName)}</b></td><td>${escapeHtml(r.sexAge ?? "—")}</td><td>${escapeHtml(r.jockey ?? "—")}${r.assignedWeight !== null ? `<br><span class="muted">${r.assignedWeight}kg</span>`:""}</td><td>${escapeHtml(r.trainer ?? "—")}</td><td>${r.horseWeight === null ? "—" : `${r.horseWeight}kg${r.weightChange === null ? "" : ` (${r.weightChange>=0?"+":""}${r.weightChange})`}`}</td><td>${r.winOdds === null ? "—" : `${r.winOdds}倍`}</td><td>${r.popularity === null ? "—" : `${r.popularity}番人気`}</td><td>${r.finishPosition === null ? "—" : `${r.finishPosition}着`}</td></tr>`).join("")}</tbody></table></div>`;
+  const body = `<a class="back" href="/">← レース一覧へ</a><section class="hero ${race.raceDate===today?"today-hero":""}"><div class="race-title"><span class="race-no">${race.raceNo}R</span><h1>${escapeHtml(race.raceName)}</h1><span class="status ${state.code}">${state.label}</span></div><p>${escapeHtml(meta)}</p>${race.conditions ? `<p>${escapeHtml(race.conditions)}</p>`:""}</section>${bets}${runnerTable}`;
+  const script = `<script>document.querySelectorAll('[data-course-tab]').forEach(b=>b.addEventListener('click',()=>{const n=b.getAttribute('data-course-tab');document.querySelectorAll('[data-course-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-course]').forEach(x=>x.style.display=x.getAttribute('data-course')===n?'block':'none');}));</script>`;
+  return shell(`${race.venue}${race.raceNo}R`, body).replace("</body></html>", `${script}</body></html>`);
+}
+
+async function dayApi(db: D1Database, date: string): Promise<unknown> {
+  if (!/^20\d{2}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: "INVALID_DATE" };
+  const today = jstDateKey();
+  const rows = await racesOnDate(db, date);
+  return { ok: true, date, races: rows.map((row) => ({
+    ...row,
+    publicState: publicRaceState(row, today, isFrozenSelectedRace(row.raceDate, row.venue, row.raceNo))
+  })) };
 }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
-    const path = url.pathname;
-    if (request.method !== "GET" && request.method !== "HEAD") return response("METHOD_NOT_ALLOWED", 405);
+    const url = new URL(request.url); const path = url.pathname;
     if (path === "/") return response(await home(env, ctx));
     if (path === "/conditions") return response(conditionsPage());
     if (path === "/guide") return response(guidePage());
-    if (path === "/api/public/calendar") return json(await calendar(env.DB));
-    if (path === "/api/public/day") {
-      const date = url.searchParams.get("date") ?? jstDateKey();
-      const rows = await racesOnDate(env.DB, date);
-      const today = jstDateKey();
-      const enriched = rows.map((row) => ({ ...row, publicState: publicRaceState(row, today, isFrozenSelectedRace(row.raceDate, row.venue, row.raceNo)) }));
-      return json({ date, races: enriched });
-    }
+    if (path === "/performance") return redirect("/");
+    if (path === "/validation" || path.startsWith("/validation/")) return redirect("/conditions");
+    if (path === "/api/public/calendar") return json({ ok: true, calendar: await calendar(env.DB) });
+    if (path === "/api/public/day") return json(await dayApi(env.DB, url.searchParams.get("date") ?? ""));
     if (path.startsWith("/races/")) {
-      const html = await raceDetail(env.DB, decodeURIComponent(path.slice("/races/".length)));
-      return html ? response(html) : response("NOT_FOUND", 404);
+      const page = await raceDetail(env.DB, decodeURIComponent(path.slice("/races/".length)));
+      return page ? response(page) : response(shell("レースが見つかりません", `<section class="panel"><h1>レースが見つかりません</h1><p><a class="back" href="/">レース一覧へ戻る</a></p></section>`), 404);
     }
-    if (path === "/history") return redirect("/");
-    return response("NOT_FOUND", 404);
+    if (path.startsWith("/api/")) return json({ ok: false, error: "NOT_FOUND" }, 404);
+    return response(shell("ページが見つかりません", `<section class="panel"><h1>ページが見つかりません</h1><p><a class="back" href="/">レース一覧へ戻る</a></p></section>`), 404);
   },
-  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+  async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
     await runPublicDataSync(env, "cron");
-  },
+  }
 } satisfies ExportedHandler<Env>;
