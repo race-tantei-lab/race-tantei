@@ -11,7 +11,9 @@ export const JRA_FAST_TYPE_PREFIX: Record<CompletedBetType, string> = {
 
 function parseOddsValue(value: string): [number, number] | null {
   const compact = value.replaceAll(",", "").replaceAll("倍", "").trim();
-  const match = compact.match(/^(\d+(?:\.\d+)?)\s*(?:[-－–〜～]\s*(\d+(?:\.\d+)?))?$/);
+  // JRA displays tote odds as decimal values. Integer cells in these tables are
+  // horse numbers / ranks and must never be interpreted as odds.
+  const match = compact.match(/^(\d+\.\d+)\s*(?:[-－–〜～]\s*(\d+\.\d+))?$/);
   if (!match) return null;
   const low = Number(match[1]);
   const high = Number(match[2] ?? match[1]);
