@@ -23,6 +23,8 @@ permissions:
 
 jobs:
   learn:
+    # A push can happen during racing. Production-D1 learning is schedule/manual only.
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
