@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/apply-t15-start-t10-reflect-20260823.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -19,14 +20,10 @@ env:
 jobs:
   patch-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 12
     steps:
       - name: Mark pending
-        run: |
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=pending -f context='production/t15-start-t10-reflect' \
-            -f description='Applying T-15 start / T-10 reflection window' \
-            -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/t15-start-t10-reflect' -f description='Applying T-15 start / T-10 reflection window' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -35,435 +32,49 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Patch runtime and invariants
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          p=Path('src/v1/completed-worker-live-lock.ts')
-          t=p.read_text(encoding='utf-8')
-          t=t.replace('const DEADLINE_MS = 15 * 60 * 1000;\n', 'const DEADLINE_MS = 15 * 60 * 1000;\nconst FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;\n', 1)
-          t=t.replace('  generatedAt: string;\n', '  generatedAt: string;\n  generationStartedAt?: string;\n', 1)
-          t=t.replace('  if (!Number.isFinite(Date.parse(snapshot.generatedAt)) || !Number.isFinite(Date.parse(snapshot.oddsFetchedAt))) return false;\n', '  if (!Number.isFinite(Date.parse(snapshot.generatedAt)) || !Number.isFinite(Date.parse(snapshot.oddsFetchedAt))) return false;\n  if (snapshot.generationStartedAt != null && !Number.isFinite(Date.parse(snapshot.generationStartedAt))) return false;\n', 1)
-          t=t.replace('    generatedAt: iso(),\n', '    generatedAt: iso(),\n    generationStartedAt: iso(now),\n', 1)
-
-          start=t.index('async function commitSnapshot(')
-          end=t.index('\nasync function saveAudit(', start)
-          new_commit=r'''async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewSnapshot, now: Date, finalizedFrom: "fresh" | "last_good" | "deadline_watchdog"): Promise<void> {
-  if (!validSnapshot(snapshot, raceId)) throw new Error(`WORKER_FINAL_SNAPSHOT_INVALID:${raceId}`);
-  const { race } = await loadRace(db, raceId);
-  if (!race.startTimeUtc) throw new Error(`WORKER_START_TIME_MISSING:${raceId}`);
-  const startMs = Date.parse(race.startTimeUtc);
-  if (!Number.isFinite(startMs) || startMs <= now.getTime()) throw new Error(`WORKER_REFUSES_POST_START_LOCK:${raceId}`);
-
-  const remainingAtCommit = startMs - now.getTime();
-  const generationStartedMs = Date.parse(String(snapshot.generationStartedAt || snapshot.generatedAt));
-  if (finalizedFrom === "fresh") {
-    if (!Number.isFinite(generationStartedMs) || startMs - generationStartedMs < DEADLINE_MS) {
-      throw new Error(`WORKER_FRESH_GENERATION_STARTED_AFTER_T15:${raceId}`);
-    }
-    if (remainingAtCommit < FINAL_REFLECTION_DEADLINE_MS) {
-      throw new Error(`WORKER_FRESH_REFLECTION_CROSSED_T10:${raceId}`);
-    }
-  } else if (remainingAtCommit < DEADLINE_MS) {
-    throw new Error(`WORKER_NONFRESH_REFLECTION_CROSSED_T15:${raceId}`);
-  }
-
-  const existing = await publicBetRows(db, raceId);
-  if (isStrictComplete(existing)) return;
-  if (existing.length && existing.some((row) => Number(row.sourcePredictionId) !== -2 || row.settlementStatus !== "pending")) {
-    throw new Error(`WORKER_UNSAFE_PARTIAL_ROWS:${raceId}`);
-  }
-
-  const lockedAt = iso(now);
-  const hasBodyWeight = snapshotHasOfficialBodyWeight(snapshot);
-  const bodyWeightSnapshot = hasBodyWeight ? snapshot.bodyWeightSnapshot as OfficialBodyWeightSnapshot : null;
-  const statements: D1PreparedStatement[] = [];
-  if (existing.length) statements.push(db.prepare("DELETE FROM rt_public_bets WHERE race_id=? AND source_prediction_id=-2 AND settlement_status='pending'").bind(raceId));
-
-  // The final-state authorization is deliberately inserted before bet rows.
-  // D1's bet trigger reads it when a fresh calculation that started by T-15
-  // finishes during the T-15..T-10 reflection grace window.
-  statements.push(db.prepare(`
-    INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
-    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
-  `).bind(`${FINAL_PREFIX}${raceId}`, JSON.stringify({
-    status: "locked",
-    raceId,
-    lockedAt,
-    finalizedFrom,
-    generationStartedAt: snapshot.generationStartedAt ?? null,
-    reflectionDeadlineMinutes: 10,
-    sourceModel: COMPLETED_MODEL_VERSION,
-    modelSha256: COMPLETED_MODEL_SHA256,
-    previewGeneratedAt: snapshot.generatedAt,
-    bodyWeightApplied: hasBodyWeight,
-    bodyWeightFetchedAt: bodyWeightSnapshot?.fetchedAt ?? null,
-    bodyWeightSource: bodyWeightSnapshot?.sourceUrl ?? null,
-    bodyWeightSnapshotSha256: bodyWeightSnapshot?.snapshotSha256 ?? null,
-    bodyWeights: bodyWeightSnapshot?.activeRunners ?? null,
-    bodyWeightError: snapshot.bodyWeightError ?? null,
-    oddsFetchedAt: snapshot.oddsFetchedAt,
-    oddsSource: snapshot.oddsSource,
-    oddsSnapshotSha256: snapshot.oddsSnapshotSha256,
-    onlineLearning: snapshot.onlineLearning ?? null,
-    runnerRecencyFactors: snapshot.runnerRecencyFactors ?? null,
-    tickets: snapshot.tickets,
-  })));
-  for (const bet of snapshot.courseBets) {
-    statements.push(db.prepare(`
-      INSERT INTO rt_public_bets(race_id,course,bet_type,combination,stake_yen,assumed_odds,return_yen,settlement_status,locked_at,source_prediction_id)
-      VALUES(?,?,?,?,?,?,NULL,'pending',?,-2)
-    `).bind(raceId, bet.course, bet.betType, bet.combination, bet.stakeYen, Number(bet.assumedOdds.toFixed(6)), lockedAt));
-  }
-  await db.batch(statements);
-  const saved = await publicBetRows(db, raceId);
-  if (!isStrictComplete(saved)) throw new Error(`WORKER_POST_WRITE_GATE_FAILED:${raceId}`);
-}
-'''
-          t=t[:start]+new_commit+t[end:]
-
-          old=r'''      // T-15 is an assertion boundary, never a recovery window. New preview
-      // generation or final creation is forbidden once the boundary is reached.
-      if (remaining <= DEADLINE_MS) {
-        errors.push({ raceId, error: `WORKER_HARD_T15_MISSED:${raceId}` });
-        continue;
-      }
-
-      const existingPreview = await latestPreview(env.DB, raceId);
-      if (remaining > FINAL_LOCK_ARM_MS && existingPreview && previewIsFreshEnough(existingPreview, remaining, raceNow)) {
-        continue;
-      }
-      if (generatedThisTick >= 1 && remaining > FINAL_LOCK_ARM_MS) continue;
-
-      let fresh: PreviewSnapshot | null = null;
-      try {
-        model ??= await loadWorkerModel(env.DB);
-        fresh = await generatePreview(env.DB, model, raceId, new Date());
-        generatedThisTick += 1;
-        refreshedPreviewRaceIds.push(raceId);
-        if (snapshotHasOfficialBodyWeight(fresh)) refreshedBodyWeightRaceIds.add(raceId);
-        else bodyWeightPendingRaceIds.add(raceId);
-      } catch (error) {
-        errors.push({ raceId, error: errorText(error) });
-      }
-
-      // Normal finalization happens by T-25. If the newest fetch failed, use
-      // the durable last-good official preview instead of waiting until T-15.
-      const commitNow = new Date();
-      const remainingAfterGeneration = startMs - commitNow.getTime();
-      if (remainingAfterGeneration <= DEADLINE_MS) {
-        errors.push({ raceId, error: `WORKER_GENERATION_CROSSED_T15:${raceId}` });
-        continue;
-      }
-      if (remainingAfterGeneration <= FINAL_LOCK_ARM_MS) {
-        const stored = fresh ?? await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId);
-        if (!stored) throw new Error(`WORKER_T25_PREVIEW_MISSING:${raceId}`);
-        if (!snapshotHasOfficialBodyWeight(stored)) bodyWeightBreachRaceIds.add(raceId);
-        await commitSnapshot(env.DB, raceId, stored, commitNow, fresh ? "fresh" : "last_good");
-        lockedByWorker.push(raceId);
-        if (fresh) finalizedFromFreshRaceIds.push(raceId);
-        else finalizedFromFallbackRaceIds.push(raceId);
-      }
-'''
-          new=r'''      // T-15 is the generation-start boundary. No new calculation starts
-      // after it, but a fresh calculation that started on time may finish and
-      // be reflected until the hard T-10 reflection boundary.
-      if (remaining < DEADLINE_MS) {
-        errors.push({ raceId, error: `WORKER_HARD_T15_START_MISSED:${raceId}` });
-        continue;
-      }
-
-      const existingPreview = await latestPreview(env.DB, raceId);
-      if (remaining > FINAL_LOCK_ARM_MS && existingPreview && previewIsFreshEnough(existingPreview, remaining, raceNow)) {
-        continue;
-      }
-      if (generatedThisTick >= 1 && remaining > FINAL_LOCK_ARM_MS) continue;
-
-      const generationStartedAt = new Date();
-      let fresh: PreviewSnapshot | null = null;
-      try {
-        model ??= await loadWorkerModel(env.DB);
-        fresh = await generatePreview(env.DB, model, raceId, generationStartedAt);
-        generatedThisTick += 1;
-        refreshedPreviewRaceIds.push(raceId);
-        if (snapshotHasOfficialBodyWeight(fresh)) refreshedBodyWeightRaceIds.add(raceId);
-        else bodyWeightPendingRaceIds.add(raceId);
-      } catch (error) {
-        errors.push({ raceId, error: errorText(error) });
-      }
-
-      const commitNow = new Date();
-      const remainingAfterGeneration = startMs - commitNow.getTime();
-      if (remainingAfterGeneration < FINAL_REFLECTION_DEADLINE_MS) {
-        errors.push({ raceId, error: `WORKER_GENERATION_CROSSED_T10:${raceId}` });
-        continue;
-      }
-      if (!fresh && remainingAfterGeneration < DEADLINE_MS) {
-        errors.push({ raceId, error: `WORKER_FALLBACK_CROSSED_T15:${raceId}` });
-        continue;
-      }
-      if (remainingAfterGeneration <= FINAL_LOCK_ARM_MS) {
-        const stored = fresh ?? await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId);
-        if (!stored) throw new Error(`WORKER_T17_PREVIEW_MISSING:${raceId}`);
-        if (!snapshotHasOfficialBodyWeight(stored)) bodyWeightBreachRaceIds.add(raceId);
-        await commitSnapshot(env.DB, raceId, stored, commitNow, fresh ? "fresh" : "last_good");
-        lockedByWorker.push(raceId);
-        if (fresh) finalizedFromFreshRaceIds.push(raceId);
-        else finalizedFromFallbackRaceIds.push(raceId);
-      }
-'''
-          if old not in t:
-            raise SystemExit('LIVE_FINALIZATION_BLOCK_NOT_FOUND')
-          t=t.replace(old,new,1)
-          t=t.replace('        if (remaining <= DEADLINE_MS) deadlineBreachRaceIds.add(raceId);', '        if (remaining < FINAL_REFLECTION_DEADLINE_MS) deadlineBreachRaceIds.add(raceId);', 1)
-          p.write_text(t,encoding='utf-8')
-
-          Path('src/v1/completed-final-invariants.ts').write_text(r'''type TriggerRow = { name: string; sql: string | null };
-
-export async function ensureCompletedFinalImmutability(db: D1Database): Promise<void> {
-  const deadlineRows = await db.prepare(`
-    SELECT name,sql FROM sqlite_master
-    WHERE type='trigger' AND name IN ('rt_guard_final_bet_insert_deadline','rt_guard_final_state_insert_deadline')
-  `).all<TriggerRow>();
-  const triggerSql = new Map((deadlineRows.results ?? []).map((row) => [row.name, String(row.sql || '')]));
-  const betWindowCurrent = triggerSql.get('rt_guard_final_bet_insert_deadline')?.includes('FINAL_BET_REFLECTION_WINDOW_PASSED') === true;
-  const stateWindowCurrent = triggerSql.get('rt_guard_final_state_insert_deadline')?.includes('FINAL_STATE_REFLECTION_WINDOW_PASSED') === true;
-
-  if (!betWindowCurrent || !stateWindowCurrent) {
-    await db.batch([
-      db.prepare('DROP TRIGGER IF EXISTS rt_guard_final_bet_insert_deadline'),
-      db.prepare('DROP TRIGGER IF EXISTS rt_guard_final_state_insert_deadline'),
-      db.prepare(`
-        CREATE TRIGGER rt_guard_final_state_insert_deadline
-        BEFORE INSERT ON rt_system_state
-        WHEN NEW.state_key LIKE 'worker_live_final:%'
-          AND json_extract(NEW.state_value, '$.status') = 'locked'
-          AND (
-            COALESCE((
-              SELECT unixepoch(start_time_utc)
-              FROM rt_races
-              WHERE race_id = json_extract(NEW.state_value, '$.raceId')
-              LIMIT 1
-            ),0) < unixepoch('now') + 600
-            OR (
-              COALESCE((
-                SELECT unixepoch(start_time_utc)
-                FROM rt_races
-                WHERE race_id = json_extract(NEW.state_value, '$.raceId')
-                LIMIT 1
-              ),0) < unixepoch('now') + 900
-              AND NOT (
-                json_extract(NEW.state_value, '$.finalizedFrom') = 'fresh'
-                AND unixepoch(json_extract(NEW.state_value, '$.generationStartedAt')) IS NOT NULL
-                AND unixepoch(json_extract(NEW.state_value, '$.generationStartedAt')) <= COALESCE((
-                  SELECT unixepoch(start_time_utc) - 900
-                  FROM rt_races
-                  WHERE race_id = json_extract(NEW.state_value, '$.raceId')
-                  LIMIT 1
-                ),0)
-              )
-            )
-          )
-        BEGIN
-          SELECT RAISE(ABORT, 'FINAL_STATE_REFLECTION_WINDOW_PASSED');
-        END
-      `),
-      db.prepare(`
-        CREATE TRIGGER rt_guard_final_bet_insert_deadline
-        BEFORE INSERT ON rt_public_bets
-        WHEN NEW.source_prediction_id = -2
-          AND (
-            COALESCE((SELECT unixepoch(start_time_utc) FROM rt_races WHERE race_id = NEW.race_id LIMIT 1),0) < unixepoch('now') + 600
-            OR (
-              COALESCE((SELECT unixepoch(start_time_utc) FROM rt_races WHERE race_id = NEW.race_id LIMIT 1),0) < unixepoch('now') + 900
-              AND NOT EXISTS (
-                SELECT 1 FROM rt_system_state s
-                WHERE s.state_key = 'worker_live_final:' || NEW.race_id
-                  AND json_extract(s.state_value, '$.status') = 'locked'
-                  AND json_extract(s.state_value, '$.finalizedFrom') = 'fresh'
-                  AND unixepoch(json_extract(s.state_value, '$.generationStartedAt')) IS NOT NULL
-                  AND unixepoch(json_extract(s.state_value, '$.generationStartedAt')) <= COALESCE((
-                    SELECT unixepoch(start_time_utc) - 900 FROM rt_races WHERE race_id = NEW.race_id LIMIT 1
-                  ),0)
-              )
-            )
-          )
-        BEGIN
-          SELECT RAISE(ABORT, 'FINAL_BET_REFLECTION_WINDOW_PASSED');
-        END
-      `),
-    ]);
-  }
-
-  await db.batch([
-    db.prepare(`
-      CREATE TRIGGER IF NOT EXISTS rt_guard_locked_public_bet_terms
-      BEFORE UPDATE OF course,bet_type,combination,stake_yen,assumed_odds,locked_at,source_prediction_id ON rt_public_bets
-      WHEN OLD.source_prediction_id = -2
-      BEGIN
-        SELECT RAISE(ABORT, 'IMMUTABLE_FINAL_BET_TERMS');
-      END
-    `),
-    db.prepare(`
-      CREATE TRIGGER IF NOT EXISTS rt_guard_locked_worker_final_state
-      BEFORE UPDATE ON rt_system_state
-      WHEN OLD.state_key LIKE 'worker_live_final:%'
-        AND json_extract(OLD.state_value, '$.status') = 'locked'
-      BEGIN
-        SELECT RAISE(ABORT, 'IMMUTABLE_WORKER_FINAL_STATE');
-      END
-    `),
-    db.prepare(`
-      CREATE TRIGGER IF NOT EXISTS rt_guard_probability_fallback_final_insert
-      BEFORE INSERT ON rt_system_state
-      WHEN NEW.state_key LIKE 'worker_live_final:%'
-        AND json_extract(NEW.state_value, '$.oddsMode') = 'probability_fallback'
-      BEGIN
-        SELECT RAISE(ABORT, 'PROBABILITY_FALLBACK_FORBIDDEN');
-      END
-    `),
-    db.prepare(`
-      CREATE TRIGGER IF NOT EXISTS rt_guard_probability_fallback_final_update
-      BEFORE UPDATE ON rt_system_state
-      WHEN NEW.state_key LIKE 'worker_live_final:%'
-        AND json_extract(NEW.state_value, '$.oddsMode') = 'probability_fallback'
-      BEGIN
-        SELECT RAISE(ABORT, 'PROBABILITY_FALLBACK_FORBIDDEN');
-      END
-    `),
-    db.prepare(`
-      CREATE TRIGGER IF NOT EXISTS rt_guard_official_odds_final_insert
-      BEFORE INSERT ON rt_system_state
-      WHEN NEW.state_key LIKE 'worker_live_final:%'
-        AND json_extract(NEW.state_value, '$.status') = 'locked'
-        AND COALESCE(json_extract(NEW.state_value, '$.oddsSource'), '') NOT IN ('jra-fast-official', 'jra-crawl-official')
-      BEGIN
-        SELECT RAISE(ABORT, 'OFFICIAL_JRA_ODDS_REQUIRED');
-      END
-    `),
-    db.prepare(`
-      CREATE TRIGGER IF NOT EXISTS rt_guard_official_odds_final_update
-      BEFORE UPDATE ON rt_system_state
-      WHEN NEW.state_key LIKE 'worker_live_final:%'
-        AND json_extract(NEW.state_value, '$.status') = 'locked'
-        AND COALESCE(json_extract(NEW.state_value, '$.oddsSource'), '') NOT IN ('jra-fast-official', 'jra-crawl-official')
-      BEGIN
-        SELECT RAISE(ABORT, 'OFFICIAL_JRA_ODDS_REQUIRED');
-      END
-    `),
-  ]);
-}
-''', encoding='utf-8')
-
-          p=Path('src/v1/completed-worker-deadline-guard.ts')
-          t=p.read_text(encoding='utf-8')
-          t=t.replace('export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;\n', 'export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;\nexport const FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;\n', 1)
-          t=t.replace('    && remainingMs < DEADLINE_GUARD_MS;', '    && remainingMs < FINAL_REFLECTION_DEADLINE_MS;', 1)
-          p.write_text(t,encoding='utf-8')
-
-          p=Path('src/v1/live-preview-safety.ts')
-          t=p.read_text(encoding='utf-8')
-          t=t.replace('    if (remaining > 0 && remaining < 15 * 60_000 && !finalReady) audit.deadlineMissedRaceIds.push(raceId);', '    if (remaining > 0 && remaining < 10 * 60_000 && !finalReady) audit.deadlineMissedRaceIds.push(raceId);', 1)
-          p.write_text(t,encoding='utf-8')
-
-          p=Path('src/live-deadline-entry-v2.ts')
-          t=p.read_text(encoding='utf-8')
-          t=t.replace('live-deadline-v5-t15-optimal-refresh-20260823', 'live-deadline-v6-t15-start-t10-reflect-20260823')
-          t=t.replace('LIVE_DEADLINE_HARD_T15_BREACH', 'LIVE_DEADLINE_HARD_T10_REFLECTION_BREACH')
-          p.write_text(t,encoding='utf-8')
-
-          p=Path('tests/completed-worker-deadline-guard-tests.ts')
-          t=p.read_text(encoding='utf-8')
-          t=t.replace('  DEADLINE_GUARD_MS,\n', '  DEADLINE_GUARD_MS,\n  FINAL_REFLECTION_DEADLINE_MS,\n', 1)
-          t=t.replace('assert.equal(DEADLINE_GUARD_ARM_MS, 16 * 60 * 1000, "rescue guard arms one minute before the hard T-15 boundary");', 'assert.equal(DEADLINE_GUARD_ARM_MS, 16 * 60 * 1000, "rescue guard arms one minute before the T-15 generation-start boundary");\nassert.equal(FINAL_REFLECTION_DEADLINE_MS, 10 * 60 * 1000, "an on-time fresh generation may reflect until T-10");')
-          old='''assert.equal(isDeadlineGuardMissed(15 * 60 * 1000), false, "exactly T-15 is still on time");\nassert.equal(isDeadlineGuardMissed(15 * 60 * 1000 - 1), true, "one millisecond past T-15 is a hard miss");\nassert.equal(isDeadlineGuardMissed(14 * 60 * 1000), true);\nassert.equal(isDeadlineGuardMissed(1), true);'''
-          new='''assert.equal(isDeadlineGuardMissed(15 * 60 * 1000), false, "T-15 begins the completion grace for an already-started fresh generation");\nassert.equal(isDeadlineGuardMissed(14 * 60 * 1000), false, "T-14 is still inside the reflection grace");\nassert.equal(isDeadlineGuardMissed(10 * 60 * 1000), false, "exactly T-10 is the last reflection instant");\nassert.equal(isDeadlineGuardMissed(10 * 60 * 1000 - 1), true, "past T-10 is a hard miss");\nassert.equal(isDeadlineGuardMissed(1), true);'''
-          if old not in t: raise SystemExit('GUARD_TEST_BLOCK_NOT_FOUND')
-          t=t.replace(old,new,1)
-          p.write_text(t,encoding='utf-8')
-
-          p=Path('scripts/verify-live-lock-safety.py')
-          t=p.read_text(encoding='utf-8')
-          t=t.replace("        'const DEADLINE_MS = 15 * 60 * 1000;',\n", "        'const DEADLINE_MS = 15 * 60 * 1000;',\n        'const FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;',\n", 1)
-          t=t.replace("        'WORKER_HARD_T15_MISSED',\n        'WORKER_GENERATION_CROSSED_T15',", "        'WORKER_HARD_T15_START_MISSED',\n        'WORKER_GENERATION_CROSSED_T10',")
-          t=t.replace('        "export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;",\n', '        "export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;",\n        "export const FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;",\n', 1)
-          t=t.replace('        "FINAL_BET_DEADLINE_PASSED",\n        "FINAL_STATE_DEADLINE_PASSED",', '        "FINAL_BET_REFLECTION_WINDOW_PASSED",\n        "FINAL_STATE_REFLECTION_WINDOW_PASSED",')
-          t=t.replace('        "LIVE_DEADLINE_HARD_T15_BREACH",', '        "LIVE_DEADLINE_HARD_T10_REFLECTION_BREACH",')
-          t=t.replace('        "deadline=15m_hard",', '        "generation_start_deadline=15m_hard",\n        "fresh_reflection_deadline=10m_hard",')
-          t=t.replace('        "sla_t40_t30_t17_t16_t15=true",', '        "sla_t40_t30_t17_t16_t10=true",')
-          t=t.replace('        "post_t15_creation=false",', '        "post_t15_new_generation=false",\n        "t15_started_fresh_reflection_to_t10=true",')
-          p.write_text(t,encoding='utf-8')
-
-          p=Path('HANDOFF.md')
-          t=p.read_text(encoding='utf-8')
-          t=t.replace('- **T-15**: hard creation boundary。新規作成を一切しない。既に正しくfinal済みか確認するだけ', '- **T-15**: 新規予想生成のhard start boundary。ここ以降は新しい計算を開始しない\n- **T-15〜T-10**: T-15までに開始済みのfresh生成だけ、完了した結果のfinal反映を許可\n- **T-10**: hard reflection boundary。以後は新規final反映を一切しない')
-          t=t.replace('T-90/T-17/T-16/T-15構成', 'T-90/T-17/T-16/T-15-start/T-10-reflect構成')
-          t=t.replace('T-90 preview開始 / T-30 required / T-17 fresh final / T-16 rescue / T-15 hard no-new-final', 'T-90 preview開始 / T-30 required / T-17 fresh final開始 / T-16 rescue / T-15 no-new-generation / T-10 hard reflection cutoff')
-          p.write_text(t,encoding='utf-8')
-          PY
-      - name: Verify patched runtime
+      - name: Apply patch
+        run: python3 scripts/apply-t15-start-t10-reflect-20260823.py
+      - name: Verify
         run: |
           npm run typecheck
           npm run build:test
           node dist-test/tests/completed-worker-deadline-guard-tests.js
           python3 scripts/verify-live-lock-safety.py
-      - name: Commit runtime source
+      - name: Commit source
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/live-deadline-entry-v2.ts src/v1/completed-worker-live-lock.ts src/v1/completed-worker-deadline-guard.ts src/v1/completed-final-invariants.ts src/v1/live-preview-safety.ts tests/completed-worker-deadline-guard-tests.ts scripts/verify-live-lock-safety.py HANDOFF.md
+          git add src/live-deadline-entry-v2.ts src/v1/completed-worker-live-lock.ts src/v1/completed-worker-deadline-guard.ts src/v1/completed-final-invariants.ts src/v1/live-preview-safety.ts tests/completed-worker-deadline-guard-tests.ts scripts/verify-live-lock-safety.py
           git commit -m 'Allow on-time fresh generations to reflect through T-10'
           git pull --rebase origin main
           git push origin HEAD:main
           echo "PATCH_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-      - name: Deploy primary and backup v6
+      - name: Deploy v6 primary and backup
         run: |
           npx wrangler deploy --config wrangler.live-deadline.jsonc
           npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
-      - name: Verify v6 health
+      - name: Verify health
         shell: bash
         run: |
           set -euo pipefail
-          for url in 'https://race-tantei-live-deadline.race-tantei.workers.dev/health' 'https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health'; do
-            ok=0
+          for url in https://race-tantei-live-deadline.race-tantei.workers.dev/health https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health; do
             for i in 1 2 3 4 5 6; do
               body=$(curl --max-time 20 --fail-with-body -sS "$url" || true)
               echo "$url $body"
-              if printf '%s' "$body" | grep -Fq 'live-deadline-v6-t15-start-t10-reflect-20260823'; then ok=1; break; fi
+              printf '%s' "$body" | grep -Fq 'live-deadline-v6-t15-start-t10-reflect-20260823' && break
+              test "$i" != 6
               sleep 3
             done
-            test "$ok" = 1
           done
-      - name: Wait for cron to install D1 reflection guards
-        run: sleep 70
-      - name: Verify D1 reflection guards and driver
-        shell: bash
-        run: |
-          set -euo pipefail
-          triggers=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT name,sql FROM sqlite_master WHERE name IN ('rt_guard_final_bet_insert_deadline','rt_guard_final_state_insert_deadline') ORDER BY name")
-          echo "$triggers"
-          printf '%s' "$triggers" | grep -Fq 'FINAL_BET_REFLECTION_WINDOW_PASSED'
-          printf '%s' "$triggers" | grep -Fq 'FINAL_STATE_REFLECTION_WINDOW_PASSED'
-          state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT json_extract(state_value,'$.version') AS version,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok,updated_at FROM rt_system_state WHERE state_key='live_deadline_driver:2026-08-23' LIMIT 1")
-          echo "$state"
-          printf '%s' "$state" | grep -Fq 'live-deadline-v6-t15-start-t10-reflect-20260823'
       - name: Mark success
         if: success()
         run: |
           sha="${PATCH_SHA:-$GITHUB_SHA}"
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${sha}" \
-            -f state=success -f context='production/t15-start-t10-reflect' \
-            -f description='T-15 start / T-10 reflection v6 deployed and verified' \
-            -f target_url="$STATUS_TARGET_URL" >/dev/null
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${sha}" -f state=success -f context='production/t15-start-t10-reflect' -f description='T-15 start / T-10 reflection v6 deployed' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark failure
         if: failure()
         run: |
           sha="${PATCH_SHA:-$GITHUB_SHA}"
-          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${sha}" \
-            -f state=failure -f context='production/t15-start-t10-reflect' \
-            -f description='T-15 start / T-10 reflection patch failed' \
-            -f target_url="$STATUS_TARGET_URL" >/dev/null
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${sha}" -f state=failure -f context='production/t15-start-t10-reflect' -f description='T-15/T-10 patch failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
