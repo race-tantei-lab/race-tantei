@@ -1,0 +1,64 @@
+name: Persist T-15 v5 runtime v3
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/persist-t15-v5-runtime-v3-20260823.yml"]
+permissions:
+  contents: write
+  statuses: write
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+jobs:
+  persist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Mark pending
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/t15-v5-runtime' -f description='Persisting deployed v5 runtime' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22", cache: npm}
+      - run: npm ci
+      - name: Patch runtime
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          def edit(path,pairs):
+            p=Path(path);t=p.read_text(encoding='utf-8')
+            for a,b in pairs:t=t.replace(a,b)
+            p.write_text(t,encoding='utf-8')
+          p=Path('src/v1/completed-worker-live-lock.ts');t=p.read_text(encoding='utf-8')
+          t=t.replace('const NORMAL_LOCK_MS = 25 * 60 * 1000;','const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;',1).replace('NORMAL_LOCK_MS','FINAL_LOCK_ARM_MS').replace('const NEAR_PREVIEW_REFRESH_MS = 4 * 60 * 1000;','const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;',1)
+          block='''      if (remaining <= FINAL_LOCK_ARM_MS && existingPreview) {\n        const commitNow = new Date();\n        if (startMs - commitNow.getTime() <= DEADLINE_MS) {\n          errors.push({ raceId, error: `WORKER_STORED_PREVIEW_COMMIT_CROSSED_T15:${raceId}` });\n          continue;\n        }\n        if (!snapshotHasOfficialBodyWeight(existingPreview)) bodyWeightBreachRaceIds.add(raceId);\n        await commitSnapshot(env.DB, raceId, existingPreview, commitNow, "last_good");\n        lockedByWorker.push(raceId);\n        finalizedFromFallbackRaceIds.push(raceId);\n        continue;\n      }\n'''
+          t=t.replace(block,'',1);p.write_text(t,encoding='utf-8')
+          edit('src/v1/completed-worker-deadline-guard.ts',[('export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;','export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;')])
+          edit('src/v1/live-preview-safety.ts',[('finalMissingByT25RaceIds','finalMissingByT17RaceIds'),('finalMissingByT20RaceIds','finalMissingByT16RaceIds'),('remaining <= 25 * 60_000 && !finalReady','remaining <= 17 * 60_000 && !finalReady'),('remaining <= 20 * 60_000 && !finalReady','remaining <= 16 * 60_000 && !finalReady')])
+          edit('src/live-deadline-entry-v2.ts',[('live-deadline-v4-bounded-subrequests-20260823','live-deadline-v5-t15-optimal-refresh-20260823'),('T-20 -> T-15 finalization','T-16 -> T-15 rescue finalization'),('slaAfter.finalMissingByT20RaceIds','slaAfter.finalMissingByT16RaceIds')])
+          edit('tests/completed-worker-deadline-guard-tests.ts',[('DEADLINE_GUARD_ARM_MS, 20 * 60 * 1000','DEADLINE_GUARD_ARM_MS, 16 * 60 * 1000'),('arm five minutes early so the final is immutable before T-15','rescue guard arms one minute before the hard T-15 boundary'),('the T-20 backup tick may arm the final','the T-16 rescue tick may arm the final'),('do not lock before the T-20 arm window','do not rescue-lock before the T-16 arm window')])
+          edit('scripts/verify-live-lock-safety.py',[("'const NORMAL_LOCK_MS = 25 * 60 * 1000;'","'const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;'"),('"export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;"','"export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;"'),('"finalMissingByT25RaceIds"','"finalMissingByT17RaceIds"'),('"finalMissingByT20RaceIds"','"finalMissingByT16RaceIds"'),('"normal_lock=25m",','"fresh_final_arm=17m",'),('"guard_arm=20m",','"rescue_guard_arm=16m",'),('"sla_t40_t30_t25_t20_t15=true",','"sla_t40_t30_t17_t16_t15=true",')])
+          edit('HANDOFF.md',[('- **T-25**: 通常のimmutable finalを確定\n- **T-20**: 保存済みofficial previewだけを使うDB中心の最終救済guard','- **T-17**: 最新情報でfresh previewを再生成してimmutable finalを確定\n- **T-16**: fresh経路失敗時だけ、保存済みofficial previewを使うDB中心の最終救済guard'),('T-90/T-25/T-20/T-15構成','T-90/T-17/T-16/T-15構成'),('T-90 preview開始 / T-30 required / T-25 normal final / T-20 rescue / T-15 hard no-new-final','T-90 preview開始 / T-30 required / T-17 fresh final / T-16 rescue / T-15 hard no-new-final')])
+          PY
+      - name: Verify runtime
+        run: |
+          npm run typecheck
+          python3 scripts/verify-live-lock-safety.py
+      - name: Commit and push runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/live-deadline-entry-v2.ts src/v1/completed-worker-live-lock.ts src/v1/completed-worker-deadline-guard.ts src/v1/live-preview-safety.ts tests/completed-worker-deadline-guard-tests.ts scripts/verify-live-lock-safety.py HANDOFF.md
+          git commit -m 'Finalize live bets from latest T-15 inputs'
+          git pull --rebase origin main
+          git push origin HEAD:main
+          echo "PATCH_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Mark success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${PATCH_SHA}" -f state=success -f context='production/t15-v5-runtime' -f description='v5 runtime persisted to main' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/t15-v5-runtime' -f description='v5 runtime persistence failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
