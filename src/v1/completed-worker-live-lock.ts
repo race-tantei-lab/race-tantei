@@ -34,6 +34,7 @@ const MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000;
 const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;
 const PREVIEW_HISTORY = 3;
 const PREVIEW_VERSION = 1;
+const ODDS_PARSER_VERSION = "jra-decimal-cells-sanity-v2-20260823";
 const OFFICIAL_ODDS_SOURCES = new Set(["jra-fast-official", "jra-crawl-official"]);
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
 
@@ -68,6 +69,7 @@ type PreviewSnapshot = {
   bodyWeightError?: string | null;
   oddsFetchedAt: string;
   oddsSource: string;
+  oddsParserVersion: string;
   oddsSnapshotSha256: string;
   onlineLearning?: CompletedRecencyAudit;
   runnerRecencyFactors?: CompletedRunnerRecencyDetail[];
@@ -261,6 +263,7 @@ function validSnapshot(snapshot: PreviewSnapshot, raceId: string): boolean {
   if (!Number.isFinite(Date.parse(snapshot.generatedAt)) || !Number.isFinite(Date.parse(snapshot.oddsFetchedAt))) return false;
   if (snapshot.generationStartedAt != null && !Number.isFinite(Date.parse(snapshot.generationStartedAt))) return false;
   if (snapshot.bodyWeightApplied === true && !validBodyWeightSnapshot(snapshot.bodyWeightSnapshot, raceId)) return false;
+  if (snapshot.oddsParserVersion !== ODDS_PARSER_VERSION) return false;
   if (!OFFICIAL_ODDS_SOURCES.has(snapshot.oddsSource) || !/^[0-9a-f]{64}$/.test(snapshot.oddsSnapshotSha256)) return false;
   if (!Array.isArray(snapshot.tickets) || snapshot.tickets.length !== 2 || new Set(snapshot.tickets.map((ticket) => ticket.betType)).size !== 2) return false;
   if (snapshot.tickets.some((ticket) => !ticket.combination || !Number.isFinite(ticket.officialOdds) || ticket.officialOdds <= 0 || !Number.isFinite(ticket.predictedProbability) || ticket.predictedProbability <= 0)) return false;
@@ -385,6 +388,7 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     bodyWeightError,
     oddsFetchedAt,
     oddsSource: fetched.source,
+    oddsParserVersion: ODDS_PARSER_VERSION,
     oddsSnapshotSha256: await sha256Hex(canonicalOddsRows(fetched.rows)),
     onlineLearning: learning.audit,
     runnerRecencyFactors: learning.runnerDetails,
@@ -434,6 +438,7 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
     bodyWeights: bodyWeightSnapshot?.activeRunners ?? null,
     bodyWeightError: snapshot.bodyWeightError ?? null,
     oddsFetchedAt: snapshot.oddsFetchedAt, oddsSource: snapshot.oddsSource,
+    oddsParserVersion: snapshot.oddsParserVersion,
     oddsSnapshotSha256: snapshot.oddsSnapshotSha256,
     onlineLearning: snapshot.onlineLearning ?? null,
     runnerRecencyFactors: snapshot.runnerRecencyFactors ?? null,
