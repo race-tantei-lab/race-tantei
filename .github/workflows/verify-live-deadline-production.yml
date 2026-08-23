@@ -19,8 +19,7 @@ on:
       - ".github/workflows/deploy-live-deadline.yml"
       - ".github/workflows/verify-live-deadline-production.yml"
   workflow_dispatch:
-  # Automatic preflight before the normal JRA race window. GitHub cron is UTC:
-  # 22:00 = 07:00 JST next day, 23:30 = 08:30 JST next day, 00:30 = 09:30 JST.
+  # Automatic preflight before the normal JRA race window. GitHub cron is UTC.
   schedule:
     - cron: "0 22 * * *"
     - cron: "30 23 * * *"
@@ -41,6 +40,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
+      - name: Mark production readiness pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='production/live-deadline-readiness' \
+            -f description='Verifying completed priority rescue and production finals' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -63,11 +69,10 @@ jobs:
           expected_version=$(python3 - <<'PY'
           import re
           from pathlib import Path
-          text = Path('src/live-deadline-entry-v2.ts').read_text(encoding='utf-8')
-          match = re.search(r'const\s+DRIVER_VERSION\s*=\s*"([^"]+)"', text)
-          if not match:
-              raise SystemExit('LIVE_DEADLINE_DRIVER_VERSION_NOT_FOUND')
-          print(match.group(1))
+          text=Path('src/live-deadline-entry-v2.ts').read_text(encoding='utf-8')
+          m=re.search(r'const\s+DRIVER_VERSION\s*=\s*"([^"]+)"',text)
+          if not m: raise SystemExit('LIVE_DEADLINE_DRIVER_VERSION_NOT_FOUND')
+          print(m.group(1))
           PY
           )
           for url in \
@@ -76,10 +81,9 @@ jobs:
             body=$(curl --max-time 20 --retry 6 --retry-delay 5 --fail-with-body -sS "$url")
             echo "$url $body"
             BODY="$body" EXPECTED_VERSION="$expected_version" URL="$url" node - <<'NODE'
-          const body = JSON.parse(process.env.BODY || '{}');
-          if (body.status !== 'up') throw new Error(`LIVE_DEADLINE_HEALTH_NOT_UP:${process.env.URL}`);
-          if (body.service !== 'race-tantei-live-deadline') throw new Error(`LIVE_DEADLINE_SERVICE_MISMATCH:${process.env.URL}:${body.service}`);
-          if (body.version !== process.env.EXPECTED_VERSION) throw new Error(`LIVE_DEADLINE_VERSION_MISMATCH:${process.env.URL}:${body.version}:${process.env.EXPECTED_VERSION}`);
+          const b=JSON.parse(process.env.BODY||'{}');
+          if(b.status!=='up'||b.service!=='race-tantei-live-deadline') throw new Error(`LIVE_HEALTH_BAD:${process.env.URL}`);
+          if(b.version!==process.env.EXPECTED_VERSION) throw new Error(`LIVE_VERSION_MISMATCH:${process.env.URL}:${b.version}:${process.env.EXPECTED_VERSION}`);
           NODE
           done
       - name: Verify Cloudflare cron registrations
@@ -87,19 +91,14 @@ jobs:
         run: |
           set -euo pipefail
           check_schedule() {
-            script="$1"
-            expected="$2"
+            script="$1"; expected="$2"
             body=$(curl --max-time 20 --retry 4 --retry-delay 3 --fail-with-body -sS \
               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${script}/schedules" \
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
-            echo "$script $body"
             BODY="$body" SCRIPT="$script" EXPECTED="$expected" node - <<'NODE'
-          const body = JSON.parse(process.env.BODY || '{}');
-          if (body.success !== true) throw new Error(`CLOUDFLARE_SCHEDULE_API_FAILED:${process.env.SCRIPT}`);
-          const schedules = Array.isArray(body.result?.schedules) ? body.result.schedules.map(x => String(x.cron)).sort() : [];
-          if (schedules.length !== 1 || schedules[0] !== process.env.EXPECTED) {
-            throw new Error(`LIVE_DEADLINE_CRON_MISMATCH:${process.env.SCRIPT}:${JSON.stringify(schedules)}:${process.env.EXPECTED}`);
-          }
+          const b=JSON.parse(process.env.BODY||'{}');
+          const s=Array.isArray(b.result?.schedules)?b.result.schedules.map(x=>String(x.cron)).sort():[];
+          if(b.success!==true||s.length!==1||s[0]!==process.env.EXPECTED) throw new Error(`LIVE_CRON_BAD:${process.env.SCRIPT}:${JSON.stringify(s)}`);
           NODE
           }
           check_schedule 'race-tantei-live-deadline' '* * * * *'
@@ -110,33 +109,40 @@ jobs:
           set -euo pipefail
           code=$(curl --max-time 20 -sS -o /tmp/public-live-tick-body -w '%{http_code}' -X POST \
             'https://race-tantei-phase0.race-tantei.workers.dev/_ops/live-tick' || true)
-          cat /tmp/public-live-tick-body || true
           test "$code" = "404"
-      - name: Verify D1 safety schema and fresh cron heartbeat
+      - name: Verify D1 guards and completed priority rescue heartbeat
         shell: bash
         run: |
           set -euo pipefail
           schema=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
             "SELECT name,type FROM sqlite_master WHERE name IN ('rt_live_preview_archive','rt_live_deadline_lease','rt_guard_final_bet_insert_deadline','rt_guard_final_state_insert_deadline','rt_guard_official_odds_final_insert') ORDER BY name")
-          echo "$schema"
           for name in rt_live_preview_archive rt_live_deadline_lease rt_guard_final_bet_insert_deadline rt_guard_final_state_insert_deadline rt_guard_official_odds_final_insert; do
-            echo "$schema" | grep -q "$name"
+            printf '%s' "$schema" | grep -Fq "$name"
           done
-
           today=$(TZ=Asia/Tokyo date +%F)
           state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "SELECT state_key AS stateKey,updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok FROM rt_system_state WHERE state_key='live_deadline_driver:${today}' LIMIT 1")
+            "SELECT state_key AS stateKey,updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok,json_extract(state_value,'$.completedAt') AS completedAt FROM rt_system_state WHERE state_key='live_deadline_priority_guard_success:${today}' LIMIT 1")
           echo "$state"
           STATE_JSON="$state" TODAY="$today" node - <<'NODE'
-          const payload = JSON.parse(process.env.STATE_JSON || '[]');
-          const row = payload?.[0]?.results?.[0];
-          if (!row) throw new Error(`LIVE_DEADLINE_CURRENT_DAY_HEARTBEAT_MISSING:${process.env.TODAY}`);
-          if (row.stateKey !== `live_deadline_driver:${process.env.TODAY}`) throw new Error(`LIVE_DEADLINE_HEARTBEAT_KEY_MISMATCH:${row.stateKey}`);
-          const age = Number(row.ageSeconds);
-          if (!Number.isFinite(age) || age < -30 || age > 300) throw new Error(`LIVE_DEADLINE_HEARTBEAT_STALE:${age}`);
-          const allowed = new Set(['running','ok','waiting_selection']);
-          if (!allowed.has(String(row.status || ''))) throw new Error(`LIVE_DEADLINE_HEARTBEAT_BAD_STATUS:${row.status}`);
-          console.log(JSON.stringify({heartbeat:'fresh',ageSeconds:age,status:row.status,updatedAt:row.updatedAt}));
+          const p=JSON.parse(process.env.STATE_JSON||'[]'); const r=p?.[0]?.results?.[0];
+          if(!r) throw new Error(`PRIORITY_GUARD_SUCCESS_MISSING:${process.env.TODAY}`);
+          const age=Number(r.ageSeconds);
+          if(r.status!=='completed'||Number(r.ok)!==1||!r.completedAt) throw new Error(`PRIORITY_GUARD_NOT_COMPLETED:${r.status}:${r.ok}`);
+          if(!Number.isFinite(age)||age < -30||age > 300) throw new Error(`PRIORITY_GUARD_STALE:${age}`);
+          console.log(JSON.stringify({priorityGuard:'completed',ageSeconds:age,updatedAt:r.updatedAt}));
+          NODE
+      - name: Verify every currently due selected race has exact six final rows
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,finalRows FROM q WHERE minutesToStart BETWEEN 15 AND 24 ORDER BY minutesToStart")
+          echo "$rows"
+          ROWS="$rows" node - <<'NODE'
+          const p=JSON.parse(process.env.ROWS||'[]'); const rows=p?.[0]?.results||[];
+          for(const r of rows){ if(Number(r.finalRows)!==6) throw new Error(`DUE_FINAL_NOT_SIX:${r.raceId}:${r.minutesToStart}:${r.finalRows}`); }
+          console.log(JSON.stringify({dueFinalRows:'ok',checked:rows.length}));
           NODE
       - name: Mark production readiness success
         if: success()
@@ -144,7 +150,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/live-deadline-readiness' \
-            -f description='Dual Workers current, crons registered, heartbeat fresh, D1 guards active' \
+            -f description='Priority rescue completed, crons active, due finals exact-six verified' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark production readiness failure
         if: failure()
@@ -152,5 +158,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/live-deadline-readiness' \
-            -f description='Production live deadline readiness verification failed' \
+            -f description='Live deadline readiness failed closed; inspect production state' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
