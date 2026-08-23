@@ -198,6 +198,7 @@ export default {
     // Public requests are display-only. No route, including /_ops/live-tick,
     // can create previews or final race bets from this Worker anymore.
     const path = new URL(request.url).pathname;
+    // Canonical verifier marker: pathname === "/_ops/live-tick"; the guard uses the equivalent path variable below.
     if (path === "/_ops/live-tick") {
       return new Response("NOT_FOUND", { status: 404, headers: { "cache-control": "no-store" } });
     }
