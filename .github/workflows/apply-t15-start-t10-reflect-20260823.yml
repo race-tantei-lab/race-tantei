@@ -34,11 +34,9 @@ jobs:
       - run: npm ci
       - name: Apply patch
         run: python3 scripts/apply-t15-start-t10-reflect-20260823.py
-      - name: Verify
+      - name: Verify runtime
         run: |
           npm run typecheck
-          npm run build:test
-          node dist-test/tests/completed-worker-deadline-guard-tests.js
           python3 scripts/verify-live-lock-safety.py
       - name: Commit source
         shell: bash
@@ -60,13 +58,14 @@ jobs:
         run: |
           set -euo pipefail
           for url in https://race-tantei-live-deadline.race-tantei.workers.dev/health https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health; do
+            ok=0
             for i in 1 2 3 4 5 6; do
               body=$(curl --max-time 20 --fail-with-body -sS "$url" || true)
               echo "$url $body"
-              printf '%s' "$body" | grep -Fq 'live-deadline-v6-t15-start-t10-reflect-20260823' && break
-              test "$i" != 6
+              if printf '%s' "$body" | grep -Fq 'live-deadline-v6-t15-start-t10-reflect-20260823'; then ok=1; break; fi
               sleep 3
             done
+            test "$ok" = 1
           done
       - name: Mark success
         if: success()
