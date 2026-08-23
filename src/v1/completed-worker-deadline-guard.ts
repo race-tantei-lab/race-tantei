@@ -8,7 +8,7 @@ const PREVIEW_PREFIX = "worker_live_preview:";
 const FINAL_PREFIX = "worker_live_final:";
 const AUDIT_PREFIX = "worker_deadline_guard:";
 export const DEADLINE_GUARD_MS = 15 * 60 * 1000;
-export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;
+export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;
 const MAX_OFFICIAL_PREVIEW_AGE_MS = 60 * 60 * 1000;
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
 

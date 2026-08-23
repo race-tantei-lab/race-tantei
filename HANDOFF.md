@@ -172,8 +172,8 @@ stakes:
 - **T-90**: JRA公式オッズでpreview作成を開始
 - **T-40**: 早期SLA監査
 - **T-30**: official previewが無ければ異常検知
-- **T-25**: 通常のimmutable finalを確定
-- **T-20**: 保存済みofficial previewだけを使うDB中心の最終救済guard
+- **T-17**: 最新情報でfresh previewを再生成してimmutable finalを確定
+- **T-16**: fresh経路失敗時だけ、保存済みofficial previewを使うDB中心の最終救済guard
 - **T-15**: hard creation boundary。新規作成を一切しない。既に正しくfinal済みか確認するだけ
 - **T-15経過後**: D1 trigger自体が新規final / 後付けfinalを拒否
 
@@ -235,7 +235,7 @@ locked後の公開買い目はD1 invariantでもimmutable。
 - 外部から叩けるライブmutation endpoint
 - primary/backupの重複mutation
 
-現在は隔離Worker + lease + archive + T-90/T-25/T-20/T-15構成を正本とする。旧GitHub backup方式や公開サイト経由のlive-tickを現行経路として復活させない。
+現在は隔離Worker + lease + archive + T-90/T-17/T-16/T-15構成を正本とする。旧GitHub backup方式や公開サイト経由のlive-tickを現行経路として復活させない。
 
 ## 6. frozen history / 公開サイト
 
@@ -321,7 +321,7 @@ live production:
 - public live mutationはdisabled。
 - live schedulerは `src/live-deadline-entry-v2.ts`。
 - primary毎分 + backup 5分staggered + D1 lease。
-- T-90 preview開始 / T-30 required / T-25 normal final / T-20 rescue / T-15 hard no-new-final。
+- T-90 preview開始 / T-30 required / T-17 fresh final / T-16 rescue / T-15 hard no-new-final。
 - official oddsは `jra-fast-official` / `jra-crawl-official` のみ。
 - T-15後の新規finalはD1でも拒否。
 - locked finalはimmutable。

@@ -11,7 +11,7 @@ import {
 } from "./v1/live-preview-safety.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "live-deadline-v4-bounded-subrequests-20260823";
+const DRIVER_VERSION = "live-deadline-v5-t15-optimal-refresh-20260823";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
 const PRIORITY_GUARD_SUCCESS_PREFIX = "live_deadline_priority_guard_success:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
@@ -95,7 +95,7 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
   try {
     // Priority path: rescue from an already-persisted official preview before any
     // selection repair, archive restore, JRA fetch/model inference, or SLA audit.
-    // This keeps T-20 -> T-15 finalization alive even if the heavier pipeline fails.
+    // This keeps T-16 -> T-15 rescue finalization alive even if the heavier pipeline fails.
     const priorityGuardNow = new Date();
     const priorityGuard = await runCompletedWorkerDeadlineGuard(env, priorityGuardNow);
     const priorityGuardPayload = {
@@ -209,7 +209,7 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
     ])];
     const preDeadlineCriticalRaceIds = [...new Set([
       ...slaAfter.previewMissingByT30RaceIds,
-      ...slaAfter.finalMissingByT20RaceIds,
+      ...slaAfter.finalMissingByT16RaceIds,
     ])].filter((raceId) => !locked.has(raceId));
 
     const completed = new Date();

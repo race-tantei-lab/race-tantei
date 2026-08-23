@@ -26,11 +26,11 @@ const FINAL_PREFIX = "worker_live_final:";
 const BODY_WEIGHT_REFRESH_OPEN_MS = 100 * 60 * 1000;
 const PREVIEW_OPEN_MS = 90 * 60 * 1000;
 const PREVIEW_REQUIRED_MS = 30 * 60 * 1000;
-const NORMAL_LOCK_MS = 25 * 60 * 1000;
+const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
 const EARLY_PREVIEW_REFRESH_MS = 10 * 60 * 1000;
 const MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000;
-const NEAR_PREVIEW_REFRESH_MS = 4 * 60 * 1000;
+const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;
 const PREVIEW_HISTORY = 3;
 const PREVIEW_VERSION = 1;
 const OFFICIAL_ODDS_SOURCES = new Set(["jra-fast-official", "jra-crawl-official"]);
@@ -552,22 +552,10 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       }
 
       const existingPreview = await latestPreview(env.DB, raceId);
-      if (remaining > NORMAL_LOCK_MS && existingPreview && previewIsFreshEnough(existingPreview, remaining, raceNow)) {
+      if (remaining > FINAL_LOCK_ARM_MS && existingPreview && previewIsFreshEnough(existingPreview, remaining, raceNow)) {
         continue;
       }
-      if (remaining <= NORMAL_LOCK_MS && existingPreview) {
-        const commitNow = new Date();
-        if (startMs - commitNow.getTime() <= DEADLINE_MS) {
-          errors.push({ raceId, error: `WORKER_STORED_PREVIEW_COMMIT_CROSSED_T15:${raceId}` });
-          continue;
-        }
-        if (!snapshotHasOfficialBodyWeight(existingPreview)) bodyWeightBreachRaceIds.add(raceId);
-        await commitSnapshot(env.DB, raceId, existingPreview, commitNow, "last_good");
-        lockedByWorker.push(raceId);
-        finalizedFromFallbackRaceIds.push(raceId);
-        continue;
-      }
-      if (generatedThisTick >= 1 && remaining > NORMAL_LOCK_MS) continue;
+      if (generatedThisTick >= 1 && remaining > FINAL_LOCK_ARM_MS) continue;
 
       let fresh: PreviewSnapshot | null = null;
       try {
@@ -589,7 +577,7 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
         errors.push({ raceId, error: `WORKER_GENERATION_CROSSED_T15:${raceId}` });
         continue;
       }
-      if (remainingAfterGeneration <= NORMAL_LOCK_MS) {
+      if (remainingAfterGeneration <= FINAL_LOCK_ARM_MS) {
         const stored = fresh ?? await latestOfficialBodyWeightPreview(env.DB, raceId) ?? await latestPreview(env.DB, raceId);
         if (!stored) throw new Error(`WORKER_T25_PREVIEW_MISSING:${raceId}`);
         if (!snapshotHasOfficialBodyWeight(stored)) bodyWeightBreachRaceIds.add(raceId);
