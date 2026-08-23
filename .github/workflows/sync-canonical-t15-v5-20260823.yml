@@ -1,0 +1,60 @@
+name: Sync canonical handoff with T-15 v5 runtime
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/sync-canonical-t15-v5-20260823.yml"]
+permissions:
+  contents: write
+  statuses: write
+env:
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - name: Align canonical manifest and verifier
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          mp=Path('config/canonical-production-manifest.json')
+          m=json.loads(mp.read_text(encoding='utf-8'))
+          m['asOfJst']='2026-08-23T16:02:00+09:00'
+          p=m['production']
+          p.pop('normalLockMinutes',None)
+          p['freshFinalArmMinutes']=17
+          p['deadlineGuardArmMinutes']=16
+          v=m['handoffVerification']['verifies']
+          m['handoffVerification']['verifies']=[s.replace('T-25 normal finalization, T-20 rescue guard','T-17 fresh finalization, T-16 rescue guard').replace('T-40/T-30/T-25/T-20/T-15','T-40/T-30/T-17/T-16/T-15') for s in v]
+          m['currentUiRequirements']=[s.replace('normal immutable finalization is targeted by 25 minutes, the DB-only rescue guard operates from 20 to 15 minutes','fresh immutable finalization is targeted at 17 minutes using the newest available inputs, the DB-only rescue guard operates from 16 to 15 minutes') for s in m['currentUiRequirements']]
+          mp.write_text(json.dumps(m,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+
+          vp=Path('scripts/verify-canonical-handoff.py')
+          t=vp.read_text(encoding='utf-8')
+          t=t.replace('"normalLockMinutes": 25,','"freshFinalArmMinutes": 17,')
+          t=t.replace('"deadlineGuardArmMinutes": 20,','"deadlineGuardArmMinutes": 16,')
+          t=t.replace('"const NORMAL_LOCK_MS = 25 * 60 * 1000;"','"const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;"')
+          t=t.replace('"finalMissingByT25RaceIds"','"finalMissingByT17RaceIds"')
+          t=t.replace('"finalMissingByT20RaceIds"','"finalMissingByT16RaceIds"')
+          t=t.replace('"DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000"','"DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000"')
+          vp.write_text(t,encoding='utf-8')
+          PY
+      - name: Verify canonical handoff locally
+        run: python scripts/verify-canonical-handoff.py
+      - name: Commit canonical sync
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add config/canonical-production-manifest.json scripts/verify-canonical-handoff.py
+          git commit -m 'Align canonical handoff with T-15 v5 runtime'
+          git pull --rebase origin main
+          git push origin HEAD:main
