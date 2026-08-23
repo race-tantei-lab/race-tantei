@@ -1,0 +1,60 @@
+name: Verify Niigata12 parser provenance
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/verify-niigata12-parser-provenance-20260823.yml"]
+permissions:
+  contents: read
+  statuses: write
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Mark pending
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/niigata12-odds-provenance' -f description='Verifying hardened preview provenance' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Wait for hardened preview and verify fresh JRA market
+        shell: bash
+        run: |
+          set -euo pipefail
+          race='2026-08-23-niigata-12'
+          ok=0
+          for attempt in $(seq 1 12); do
+            out=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT updated_at,json_extract(state_value,'$.snapshots[0].generatedAt') AS generated,json_extract(state_value,'$.snapshots[0].oddsFetchedAt') AS fetched,json_extract(state_value,'$.snapshots[0].oddsSource') AS source,json_extract(state_value,'$.snapshots[0].oddsParserVersion') AS parser_version,json_extract(state_value,'$.snapshots[0].tickets[0].betType') AS type0,json_extract(state_value,'$.snapshots[0].tickets[0].combination') AS combo0,json_extract(state_value,'$.snapshots[0].tickets[0].officialOdds') AS odds0,json_extract(state_value,'$.snapshots[0].tickets[1].betType') AS type1,json_extract(state_value,'$.snapshots[0].tickets[1].combination') AS combo1,json_extract(state_value,'$.snapshots[0].tickets[1].officialOdds') AS odds1 FROM rt_system_state WHERE state_key='worker_live_preview:$race' LIMIT 1")
+            echo "$out"
+            if OUT="$out" node - <<'NODE'
+          const p=JSON.parse(process.env.OUT); const r=p[0]?.results?.[0];
+          if(!r) process.exit(1);
+          if(r.parser_version!=='jra-decimal-cells-sanity-v2-20260823') process.exit(2);
+          if(!['jra-fast-official','jra-crawl-official'].includes(r.source)) process.exit(3);
+          if(!(Number(r.odds0)>1)||!(Number(r.odds1)>1)) process.exit(4);
+          if(r.type0==='単勝' && Number(r.odds0)===Number(r.combo0)) process.exit(5);
+          if(r.type1==='単勝' && Number(r.odds1)===Number(r.combo1)) process.exit(6);
+          if(Date.now()-Date.parse(r.fetched)>180000) process.exit(7);
+          NODE
+            then ok=1; break; fi
+            sleep 12
+          done
+          test "$ok" = "1"
+          echo '=== RACE ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id,race_date,venue,race_no,start_time_jst,entry_url FROM rt_races WHERE race_id='$race'" > /tmp/race.json
+          cat /tmp/race.json
+          entry=$(node -e "const p=require('/tmp/race.json');process.stdout.write(p[0].results[0].entry_url)")
+          ENTRY_URL="$entry" npx tsx -e "import {fetchFastJraOfficialOddsForRace} from './src/v1/jra-official-odds-fetch.ts'; (async()=>{const r=await fetchFastJraOfficialOddsForRace(process.env.ENTRY_URL!,{raceDate:'2026-08-23',venue:'新潟',raceNo:12}); const win=r.rows.filter(x=>x.betType==='単勝').sort((a,b)=>Number(a.combination)-Number(b.combination)); const implied=win.reduce((s,x)=>s+1/x.oddsMin,0); console.log(JSON.stringify({source:r.source,host:r.sourceHost,win,implied},null,2)); if(win.length<5||implied<0.55||implied>1.8) throw new Error('WIN_MARKET_SANITY:'+implied); if(win.filter(x=>Number(x.combination)===Number(x.oddsMin)).length>=3) throw new Error('HORSE_NUMBER_PATTERN'); })()"
+      - name: Mark success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/niigata12-odds-provenance' -f description='Hardened official-odds preview verified live' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/niigata12-odds-provenance' -f description='Hardened odds preview verification failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
