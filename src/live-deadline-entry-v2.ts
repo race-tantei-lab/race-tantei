@@ -11,7 +11,7 @@ import {
 } from "./v1/live-preview-safety.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "live-deadline-v5-t15-optimal-refresh-20260823";
+const DRIVER_VERSION = "live-deadline-v6-t15-start-t10-reflect-20260823";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
 const PRIORITY_GUARD_SUCCESS_PREFIX = "live_deadline_priority_guard_success:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
@@ -255,7 +255,7 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
     };
     await saveDriverState(env.DB, date, result);
 
-    if (hardDeadlineBreachRaceIds.length) throw new Error(`LIVE_DEADLINE_HARD_T15_BREACH:${hardDeadlineBreachRaceIds.join(",")}`);
+    if (hardDeadlineBreachRaceIds.length) throw new Error(`LIVE_DEADLINE_HARD_T10_REFLECTION_BREACH:${hardDeadlineBreachRaceIds.join(",")}`);
     if (preDeadlineCriticalRaceIds.length) throw new Error(`LIVE_DEADLINE_PREDEADLINE_CRITICAL:${preDeadlineCriticalRaceIds.join(",")}`);
     if (unresolvedDueRaceIds.length || unresolvedGuardErrors.length) {
       throw new Error(`LIVE_DEADLINE_DUE_UNRESOLVED:${unresolvedDueRaceIds.join(",")}:guards=${JSON.stringify(unresolvedGuardErrors)}`);

@@ -56,11 +56,12 @@ def main() -> None:
         'const PREVIEW_REQUIRED_MS = 30 * 60 * 1000;',
         'const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;',
         'const DEADLINE_MS = 15 * 60 * 1000;',
+        'const FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;',
         'new Set(["jra-fast-official", "jra-crawl-official"])',
         'cachedWorkerModel',
         'previewMissingUrgentRaceIds',
-        'WORKER_HARD_T15_MISSED',
-        'WORKER_GENERATION_CROSSED_T15',
+        'WORKER_HARD_T15_START_MISSED',
+        'WORKER_GENERATION_CROSSED_T10',
         'await db.batch(statements)',
         'if (isStrictComplete(existing)) return;',
     ):
@@ -90,8 +91,8 @@ def main() -> None:
 
     invariants = read("src/v1/completed-final-invariants.ts")
     for needle in (
-        "FINAL_BET_DEADLINE_PASSED",
-        "FINAL_STATE_DEADLINE_PASSED",
+        "FINAL_BET_REFLECTION_WINDOW_PASSED",
+        "FINAL_STATE_REFLECTION_WINDOW_PASSED",
         "IMMUTABLE_FINAL_BET_TERMS",
         "IMMUTABLE_WORKER_FINAL_STATE",
         "PROBABILITY_FALLBACK_FORBIDDEN",
@@ -126,7 +127,7 @@ def main() -> None:
         "runUpcomingEntryDerivedRepair",
         "selection_critical",
         "predeadline_critical",
-        "LIVE_DEADLINE_HARD_T15_BREACH",
+        "LIVE_DEADLINE_HARD_T10_REFLECTION_BREACH",
         'return new Response("NOT_FOUND", { status: 404 });',
     ):
         require(driver, needle, "isolated live deadline driver")
@@ -204,7 +205,8 @@ def main() -> None:
         "preview_required=30m",
         "fresh_final_arm=17m",
         "rescue_guard_arm=16m",
-        "deadline=15m_hard",
+        "generation_start_deadline=15m_hard",
+        "fresh_reflection_deadline=10m_hard",
         "official_jra_odds_required=true",
         "probability_fallback_forbidden=true",
         "append_only_preview_archive=true",
