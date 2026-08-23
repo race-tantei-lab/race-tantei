@@ -2,8 +2,10 @@ name: Continuous final rule learning
 
 on:
   workflow_dispatch:
+  # Keep analytical D1 work away from the live race/deadline window.
+  # 12:37 UTC = 21:37 JST, after normal JRA racing has finished.
   schedule:
-    - cron: "37 * * * *"
+    - cron: "37 12 * * *"
   push:
     branches: [main]
     paths:
