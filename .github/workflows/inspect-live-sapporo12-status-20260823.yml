@@ -1,4 +1,4 @@
-name: Inspect live Sapporo12 production state
+name: Inspect live v6 production state
 on:
   push:
     branches: [main]
@@ -15,10 +15,10 @@ env:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 7
     steps:
       - name: Mark pending
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/sapporo12-live-inspect' -f description='Inspecting Sapporo12 and later live finals' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/v6-live-inspect' -f description='Inspecting v6 reflection guards and finals' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -30,14 +30,28 @@ jobs:
         run: |
           set -euo pipefail
           echo '=== HEALTH ==='
-          for u in https://race-tantei-live-deadline.race-tantei.workers.dev/health https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health; do curl -fsS "$u" || true; echo; done
+          for u in https://race-tantei-live-deadline.race-tantei.workers.dev/health https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health; do curl -fsS "$u"; echo; done
+          echo '=== DEADLINE TRIGGERS ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT name,sql FROM sqlite_master WHERE name IN ('rt_guard_final_bet_insert_deadline','rt_guard_final_state_insert_deadline') ORDER BY name"
           echo '=== RACES ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH ids(race_id) AS (VALUES ('2026-08-23-sapporo-12'),('2026-08-23-niigata-09'),('2026-08-23-chukyo-09'),('2026-08-23-chukyo-10'),('2026-08-23-niigata-11'),('2026-08-23-niigata-12')) SELECT i.race_id,r.start_time_jst,r.start_time_utc,ROUND((julianday(r.start_time_utc)-julianday('now'))*1440,2) AS minutes_to_start,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=i.race_id) AS bet_rows,(SELECT COUNT(DISTINCT course) FROM rt_public_bets b WHERE b.race_id=i.race_id) AS courses,(SELECT COUNT(DISTINCT bet_type||':'||combination) FROM rt_public_bets b WHERE b.race_id=i.race_id) AS unique_bets,(SELECT json_array_length(json_extract(s.state_value,'$.snapshots[0].courseBets')) FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||i.race_id) AS preview_bets,(SELECT json_extract(s.state_value,'$.snapshots[0].generatedAt') FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||i.race_id) AS preview_generated,(SELECT json_extract(s.state_value,'$.snapshots[0].oddsSource') FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||i.race_id) AS odds_source FROM ids i LEFT JOIN rt_races r ON r.race_id=i.race_id ORDER BY r.start_time_utc"
-          echo '=== STATES ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('live_deadline_driver:2026-08-23','worker_live_lock:2026-08-23','worker_deadline_guard:2026-08-23','live_deadline_sla:2026-08-23','live_deadline_priority_guard_success:2026-08-23') ORDER BY state_key"
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH ids(race_id) AS (VALUES ('2026-08-23-niigata-09'),('2026-08-23-chukyo-09'),('2026-08-23-chukyo-10'),('2026-08-23-niigata-11'),('2026-08-23-niigata-12')) SELECT i.race_id,r.start_time_jst,ROUND((julianday(r.start_time_utc)-julianday('now'))*1440,2) AS minutes_to_start,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=i.race_id) AS bet_rows,(SELECT MIN(locked_at) FROM rt_public_bets b WHERE b.race_id=i.race_id) AS locked_at,(SELECT json_extract(s.state_value,'$.finalizedFrom') FROM rt_system_state s WHERE s.state_key='worker_live_final:'||i.race_id) AS finalized_from,(SELECT json_extract(s.state_value,'$.generationStartedAt') FROM rt_system_state s WHERE s.state_key='worker_live_final:'||i.race_id) AS generation_started_at,(SELECT json_extract(s.state_value,'$.previewGeneratedAt') FROM rt_system_state s WHERE s.state_key='worker_live_final:'||i.race_id) AS preview_generated_at,(SELECT json_extract(s.state_value,'$.oddsSource') FROM rt_system_state s WHERE s.state_key='worker_live_final:'||i.race_id) AS odds_source,(SELECT json_extract(s.state_value,'$.bodyWeightApplied') FROM rt_system_state s WHERE s.state_key='worker_live_final:'||i.race_id) AS body_weight_applied,(SELECT json_extract(s.state_value,'$.onlineLearning.cutoffUtc') FROM rt_system_state s WHERE s.state_key='worker_live_final:'||i.race_id) AS learning_cutoff FROM ids i LEFT JOIN rt_races r ON r.race_id=i.race_id ORDER BY r.start_time_utc"
+          echo '=== DRIVER ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,json_extract(state_value,'$.version') AS version,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok,json_extract(state_value,'$.error') AS error FROM rt_system_state WHERE state_key='live_deadline_driver:2026-08-23' LIMIT 1"
+      - name: Validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          h1=$(curl -fsS https://race-tantei-live-deadline.race-tantei.workers.dev/health)
+          h2=$(curl -fsS https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health)
+          printf '%s' "$h1" | grep -Fq 'live-deadline-v6-t15-start-t10-reflect-20260823'
+          printf '%s' "$h2" | grep -Fq 'live-deadline-v6-t15-start-t10-reflect-20260823'
+          trg=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT group_concat(sql,' ') AS sql FROM sqlite_master WHERE name IN ('rt_guard_final_bet_insert_deadline','rt_guard_final_state_insert_deadline')")
+          printf '%s' "$trg" | grep -Fq 'FINAL_BET_REFLECTION_WINDOW_PASSED'
+          printf '%s' "$trg" | grep -Fq 'FINAL_STATE_REFLECTION_WINDOW_PASSED'
+          printf '%s' "$trg" | grep -Fq 'generationStartedAt'
       - name: Mark success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/sapporo12-live-inspect' -f description='Live state captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/v6-live-inspect' -f description='v6 health and D1 reflection guards verified' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/sapporo12-live-inspect' -f description='Live state capture failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/v6-live-inspect' -f description='v6 inspection failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
