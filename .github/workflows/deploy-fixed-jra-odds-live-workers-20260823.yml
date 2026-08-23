@@ -33,23 +33,26 @@ jobs:
           race='2026-08-23-chukyo-10'
           npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT entry_url FROM rt_races WHERE race_id='$race'" > /tmp/race.json
           entry=$(node -e "const p=require('/tmp/race.json');process.stdout.write(p[0].results[0].entry_url)")
-          cat > /tmp/verify-real-odds.ts <<'TS'
-          import { fetchFastJraOfficialOddsForRace } from "${GITHUB_WORKSPACE}/src/v1/jra-official-odds-fetch.ts";
-          const entry=process.env.ENTRY_URL!;
-          const r=await fetchFastJraOfficialOddsForRace(entry,{raceDate:"2026-08-23",venue:"中京",raceNo:10});
-          const counts=Object.fromEntries(r.pages.map(p=>[p.betType,p.rows.length]));
-          const expected={"単勝":14,"ワイド":91,"馬連":91,"馬単":182,"3連複":364,"3連単":2184};
-          console.log("REAL_JRA_COUNTS",JSON.stringify(counts));
-          for(const [k,v] of Object.entries(expected)) if(Number(counts[k])!==v) throw new Error(`COUNT_MISMATCH:${k}:${counts[k]}:${v}`);
-          const tan3=r.rows.filter(x=>x.betType==="3連単");
-          const high=tan3.filter(x=>x.oddsMin>100000);
-          if(high.length!==253) throw new Error(`HIGH_ODDS_COUNT:${high.length}`);
-          const win12=r.rows.find(x=>x.betType==="単勝"&&x.combination==="12");
-          if(!win12||win12.oddsMin!==1.7||win12.oddsMax!==1.7) throw new Error(`WIN12_MISMATCH:${JSON.stringify(win12)}`);
-          console.log("REAL_JRA_HIGH_ODDS",high.length,"WIN12",JSON.stringify(win12));
+          cat > .verify-real-odds.ts <<'TS'
+          import { fetchFastJraOfficialOddsForRace } from "./src/v1/jra-official-odds-fetch.ts";
+          async function main() {
+            const entry=process.env.ENTRY_URL!;
+            const r=await fetchFastJraOfficialOddsForRace(entry,{raceDate:"2026-08-23",venue:"中京",raceNo:10});
+            const counts=Object.fromEntries(r.pages.map(p=>[p.betType,p.rows.length]));
+            const expected={"単勝":14,"ワイド":91,"馬連":91,"馬単":182,"3連複":364,"3連単":2184};
+            console.log("REAL_JRA_COUNTS",JSON.stringify(counts));
+            for(const [k,v] of Object.entries(expected)) if(Number(counts[k])!==v) throw new Error(`COUNT_MISMATCH:${k}:${counts[k]}:${v}`);
+            const tan3=r.rows.filter(x=>x.betType==="3連単");
+            const high=tan3.filter(x=>x.oddsMin>100000);
+            if(high.length!==253) throw new Error(`HIGH_ODDS_COUNT:${high.length}`);
+            const win12=r.rows.find(x=>x.betType==="単勝"&&x.combination==="12");
+            if(!win12||win12.oddsMin!==1.7||win12.oddsMax!==1.7) throw new Error(`WIN12_MISMATCH:${JSON.stringify(win12)}`);
+            console.log("REAL_JRA_HIGH_ODDS",high.length,"WIN12",JSON.stringify(win12));
+          }
+          main().catch(e=>{console.error(e);process.exit(1)});
           TS
-          sed -i "s|\${GITHUB_WORKSPACE}|$GITHUB_WORKSPACE|g" /tmp/verify-real-odds.ts
-          ENTRY_URL="$entry" npx tsx /tmp/verify-real-odds.ts
+          ENTRY_URL="$entry" npx tsx .verify-real-odds.ts
+          rm -f .verify-real-odds.ts
       - name: Validate primary and backup bundles
         run: |
           rm -rf /tmp/live-primary /tmp/live-backup
