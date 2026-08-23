@@ -28,22 +28,11 @@ jobs:
           from pathlib import Path
           p = Path('src/v1/jra-official-odds.ts')
           s = p.read_text()
-          start = s.index('function positionedHorse(context: string, label: "1着" | "2着"): number | null {')
+          start = s.index('function parseTrifectaRows(pageHtml: string): OfficialOddsRow[] {')
           end = s.index('\n\nexport function parseJraOfficialOddsRows', start)
-          new = r'''function positionedHorse(context: string, label: "1着" | "2着"): number | null {
-            const pattern = new RegExp(
-              `<span\\b[^>]*>\\s*${label}\\s*<\\/span>[\\s\\S]{0,350}?<div\\b([^>]*)>\\s*(\\d{1,2})\\s*<\\/div>`,
-              "i",
-            );
-            const match = pattern.exec(context);
-            if (!match || !hasClass(match[1] ?? "", "num")) return null;
-            const value = Number(match[2]);
-            return Number.isInteger(value) && value >= 1 && value <= 18 ? value : null;
-          }
-
-          function parseTrifectaRows(pageHtml: string): OfficialOddsRow[] {
+          new = r'''function parseTrifectaRows(pageHtml: string): OfficialOddsRow[] {
             const parsed = new Map<string, [number, number]>();
-            for (const unit of pageHtml.matchAll(/<li\\b[^>]*>([\\s\\S]*?)<\\/li>/gi)) {
+            for (const unit of pageHtml.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)) {
               const unitHtml = unit[1] ?? "";
               const tables = tablesByClass(unitHtml, "tan3");
               if (tables.length !== 1) continue;
@@ -52,7 +41,7 @@ jobs:
               const first = positionedHorse(context, "1着");
               const second = positionedHorse(context, "2着");
               if (first == null || second == null || first === second) continue;
-              for (const row of table.body.matchAll(/<tr\\b[^>]*>([\\s\\S]*?)<\\/tr>/gi)) {
+              for (const row of table.body.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
                 const rowHtml = row[0] ?? "";
                 const third = rowHorseFromScope(rowHtml);
                 const odds = exactRowOdds(rowHtml);
@@ -72,8 +61,8 @@ jobs:
           marker = 'const originalFetch = globalThis.fetch;'
           regression = r'''
           const tan3SiblingUnitsHtml = `<ul class="tan3_list">
-            <li><div class="p_line"><div class="cap"><span>1着</span></div><div class="num">1</div></div><div class="p_line"><div class="cap"><span>2着</span></div><div class="num">2</div></div><table class="basic narrow-xy tan3"><tr><th scope="row">3</th><td>42.6</td></tr></table></li>
-            <li><div class="p_line"><div class="cap"><span>1着</span></div><div class="num">1</div></div><div class="p_line"><div class="cap"><span>2着</span></div><div class="num">3</div></div><table class="basic narrow-xy tan3"><tr><th scope="row">2</th><td>51.4</td></tr></table></li>
+            <li><div class="p_line"><div class="inner"><div class="cap"><span>1着</span></div><div class="num">1</div></div></div><div class="p_line"><div class="inner"><div class="cap"><span>2着</span></div><div class="num">2</div></div></div><table class="basic narrow-xy tan3"><caption><div class="p_line"><span class="cap">3着</span></div></caption><tr><th scope="row">3</th><td>42.6</td></tr></table></li>
+            <li><div class="p_line"><div class="inner"><div class="cap"><span>1着</span></div><div class="num">1</div></div></div><div class="p_line"><div class="inner"><div class="cap"><span>2着</span></div><div class="num">3</div></div></div><table class="basic narrow-xy tan3"><caption><div class="p_line"><span class="cap">3着</span></div></caption><tr><th scope="row">2</th><td>51.4</td></tr></table></li>
           </ul>`;
           assert.deepEqual(parseFastJraOfficialOddsRows(tan3SiblingUnitsHtml, "3連単"), [
             { betType: "3連単", combination: "1-2-3", oddsMin: 42.6, oddsMax: 42.6 },
