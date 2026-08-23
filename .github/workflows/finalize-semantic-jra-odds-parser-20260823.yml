@@ -18,63 +18,106 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Apply final semantic-parser corrections
+      - name: Parse each JRA trifecta unit structurally
         shell: python
         run: |
           from pathlib import Path
           p = Path('src/v1/jra-official-odds.ts')
           s = p.read_text()
-          old = '''function wideOdds(cellBody: string): [number, number] | null {
-            const minBody = bodyByClass(cellBody, "span", "min");
-            const maxBody = bodyByClass(cellBody, "span", "max");
-            if (minBody == null || maxBody == null) return null;
-            const low = Number(stripJraTags(minBody).replaceAll(",", ""));
-            const high = Number(stripJraTags(maxBody).replaceAll(",", ""));
-            return Number.isFinite(low) && Number.isFinite(high) && low >= 1 && high >= low && high <= 100000 ? [low, high] : null;
-          }'''.replace('          ','')
-          new = '''function nestedElementBodyByClass(html: string, tag: "span", token: string): string | null {
-            const opening = new RegExp(`<${tag}\\\\b([^>]*)>`, "gi");
-            let match: RegExpExecArray | null;
-            while ((match = opening.exec(html)) !== null) {
-              if (!hasClass(match[1] ?? "", token)) continue;
-              const close = html.indexOf(`</${tag}>`, opening.lastIndex);
-              if (close < 0) return null;
-              return html.slice(opening.lastIndex, close);
-            }
-            return null;
+          old = r'''function positionedHorse(context: string, label: "1着" | "2着"): number | null {
+            const pattern = new RegExp(`${label}[\\s\\S]{0,500}?<div\\b([^>]*)>([\\s\\S]*?)<\\/div>`, "i");
+            const match = pattern.exec(context);
+            if (!match || !hasClass(match[1] ?? "", "num")) return null;
+            return horseNumber(match[2] ?? "");
           }
 
-          function wideOdds(cellBody: string): [number, number] | null {
-            const minBody = nestedElementBodyByClass(cellBody, "span", "min");
-            const maxBody = nestedElementBodyByClass(cellBody, "span", "max");
-            if (minBody == null || maxBody == null) return null;
-            const low = Number(stripJraTags(minBody).replaceAll(",", ""));
-            const high = Number(stripJraTags(maxBody).replaceAll(",", ""));
-            return Number.isFinite(low) && Number.isFinite(high) && low >= 1 && high >= low && high <= 100000 ? [low, high] : null;
+          function parseTrifectaRows(pageHtml: string): OfficialOddsRow[] {
+            const parsed = new Map<string, [number, number]>();
+            for (const table of tablesByClass(pageHtml, "tan3")) {
+              const liStart = pageHtml.lastIndexOf("<li", table.start);
+              const contextStart = liStart >= 0 ? liStart : Math.max(0, table.start - 1800);
+              const context = pageHtml.slice(contextStart, table.start);
+              const first = positionedHorse(context, "1着");
+              const second = positionedHorse(context, "2着");
+              if (first == null || second == null || first === second) continue;
+              for (const row of table.body.matchAll(/<tr\\b[^>]*>([\\s\\S]*?)<\\/tr>/gi)) {
+                const rowHtml = row[0] ?? "";
+                const third = rowHorseFromScope(rowHtml);
+                const odds = exactRowOdds(rowHtml);
+                if (third == null || odds == null || third === first || third === second) continue;
+                parsed.set(`${first}-${second}-${third}`, odds);
+              }
+            }
+            return [...parsed.entries()].sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))
+              .map(([combination, [oddsMin, oddsMax]]) => ({ betType: "3連単", combination, oddsMin, oddsMax }));
+          }'''.replace('          ','')
+          new = r'''function positionedHorse(context: string, label: "1着" | "2着"): number | null {
+            const pattern = new RegExp(
+              `<span\\b[^>]*>\\s*${label}\\s*<\\/span>[\\s\\S]{0,350}?<div\\b([^>]*)>\\s*(\\d{1,2})\\s*<\\/div>`,
+              "i",
+            );
+            const match = pattern.exec(context);
+            if (!match || !hasClass(match[1] ?? "", "num")) return null;
+            const value = Number(match[2]);
+            return Number.isInteger(value) && value >= 1 && value <= 18 ? value : null;
+          }
+
+          function parseTrifectaRows(pageHtml: string): OfficialOddsRow[] {
+            const parsed = new Map<string, [number, number]>();
+            for (const unit of pageHtml.matchAll(/<li\\b[^>]*>([\\s\\S]*?)<\\/li>/gi)) {
+              const unitHtml = unit[1] ?? "";
+              const tables = tablesByClass(unitHtml, "tan3");
+              if (tables.length !== 1) continue;
+              const table = tables[0];
+              const context = unitHtml.slice(0, table.start);
+              const first = positionedHorse(context, "1着");
+              const second = positionedHorse(context, "2着");
+              if (first == null || second == null || first === second) continue;
+              for (const row of table.body.matchAll(/<tr\\b[^>]*>([\\s\\S]*?)<\\/tr>/gi)) {
+                const rowHtml = row[0] ?? "";
+                const third = rowHorseFromScope(rowHtml);
+                const odds = exactRowOdds(rowHtml);
+                if (third == null || odds == null || third === first || third === second) continue;
+                const combination = `${first}-${second}-${third}`;
+                if (parsed.has(combination)) throw new Error(`JRA_TAN3_DUPLICATE_COMBINATION:${combination}`);
+                parsed.set(combination, odds);
+              }
+            }
+            return [...parsed.entries()].sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))
+              .map(([combination, [oddsMin, oddsMax]]) => ({ betType: "3連単", combination, oddsMin, oddsMax }));
           }'''.replace('          ','')
           if old not in s:
-              raise SystemExit('wideOdds block not found')
+              raise SystemExit('trifecta parser block not found')
           p.write_text(s.replace(old, new))
 
-          p = Path('src/v1/jra-official-odds-fetch.ts')
-          s = p.read_text().replace('!Number.isFinite(odds) || odds <= 1 || Number(row.oddsMax) !== odds', '!Number.isFinite(odds) || odds < 1 || Number(row.oddsMax) !== odds')
-          p.write_text(s)
+          p = Path('tests/jra-official-odds-fetch-tests.ts')
+          s = p.read_text()
+          marker = 'const originalFetch = globalThis.fetch;'
+          regression = r'''
+          const tan3SiblingUnitsHtml = `<ul class="tan3_list">
+            <li><div class="p_line"><div class="cap"><span>1着</span></div><div class="num">1</div></div><div class="p_line"><div class="cap"><span>2着</span></div><div class="num">2</div></div><table class="basic narrow-xy tan3"><tr><th scope="row">3</th><td>42.6</td></tr></table></li>
+            <li><div class="p_line"><div class="cap"><span>1着</span></div><div class="num">1</div></div><div class="p_line"><div class="cap"><span>2着</span></div><div class="num">3</div></div><table class="basic narrow-xy tan3"><tr><th scope="row">2</th><td>51.4</td></tr></table></li>
+          </ul>`;
+          assert.deepEqual(parseFastJraOfficialOddsRows(tan3SiblingUnitsHtml, "3連単"), [
+            { betType: "3連単", combination: "1-2-3", oddsMin: 42.6, oddsMax: 42.6 },
+            { betType: "3連単", combination: "1-3-2", oddsMin: 51.4, oddsMax: 51.4 },
+          ]);
 
-          for p in Path('src').rglob('*.ts'):
-              s = p.read_text()
-              if 'jra-decimal-cells-sanity-v2-20260823' in s:
-                  p.write_text(s.replace('jra-decimal-cells-sanity-v2-20260823', 'jra-semantic-table-parser-v3-20260823'))
+          '''.replace('          ','')
+          if 'tan3SiblingUnitsHtml' not in s:
+              if marker not in s: raise SystemExit('test insertion marker not found')
+              p.write_text(s.replace(marker, regression + marker))
       - name: Typecheck
         run: npm run typecheck
       - name: Verify all six semantic odds parsers
         run: npx tsx tests/jra-official-odds-fetch-tests.ts
-      - name: Commit semantic parser corrections
+      - name: Commit exact trifecta parser
         shell: bash
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/v1/jra-official-odds.ts src/v1/jra-official-odds-fetch.ts src/v1/completed-worker-live-lock.ts
+          git add src/v1/jra-official-odds.ts tests/jra-official-odds-fetch-tests.ts
           if git diff --cached --quiet; then echo 'No changes'; exit 0; fi
-          git commit -m 'Finalize structural JRA odds parser'
+          git commit -m 'Parse JRA trifecta odds within exact list units'
           git push origin HEAD:main
