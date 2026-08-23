@@ -94,7 +94,11 @@ export function parseJraOddsIdentity(pageHtml: string, cname: string): JraOddsId
 
 function oddsValue(text: string): [number, number] | null {
   const clean = text.replaceAll(",", "").replaceAll("倍", "").trim();
-  const match = clean.match(/^(\d+(?:\.\d+)?)\s*(?:[-－–〜～]\s*(\d+(?:\.\d+)?))?$/);
+  // JRA tote odds are rendered with a decimal point (for example 1.9 or
+  // 2.3-5.3). Requiring that decimal is important: horse numbers and popularity
+  // ranks are integer cells in the same table and must never be accepted as an
+  // odds value. The old permissive integer parser turned horse 12 into 12.0x.
+  const match = clean.match(/^(\d+\.\d+)\s*(?:[-－–〜～]\s*(\d+\.\d+))?$/);
   if (!match) return null;
   const low = Number(match[1]); const high = Number(match[2] ?? match[1]);
   return Number.isFinite(low) && Number.isFinite(high) && low > 1 && high >= low && high <= 100000 ? [low, high] : null;
