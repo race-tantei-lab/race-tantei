@@ -1,4 +1,4 @@
-name: Hotfix bounded live deadline pipeline
+name: Verify bounded live deadline production tick
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   statuses: write
 
 env:
@@ -18,202 +18,40 @@ env:
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
-  hotfix:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 6
     steps:
+      - name: Mark pending
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/live-deadline-postfix-verify' -f description='Checking v4 deadline cron in production' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Patch live pipeline subrequest bounds
+      - name: Verify production deadline state
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-
-          def replace_once(path, old, new):
-              p=Path(path)
-              s=p.read_text()
-              if old not in s:
-                  raise SystemExit(f'pattern not found in {path}: {old[:120]!r}')
-              s=s.replace(old,new,1)
-              p.write_text(s)
-
-          p='src/v1/completed-worker-live-lock.ts'
-          replace_once(p,
-              'const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;',
-              'const NEAR_PREVIEW_REFRESH_MS = 4 * 60 * 1000;')
-
-          replace_once(p,
-'''  const ids = await orderLiveRaceIdsByStart(env.DB, date, validateSelection(selection));
-  const beforeStates = await Promise.all(ids.map(async (raceId) => isStrictComplete(await publicBetRows(env.DB, raceId))));
-  const completeBefore = beforeStates.filter(Boolean).length;''',
-'''  const selectedIds = await orderLiveRaceIdsByStart(env.DB, date, validateSelection(selection));
-  // Bound each cron invocation to races that can actually need work in the next
-  // 100 minutes. Finished races and far-future races must not consume D1
-  // subrequests every minute.
-  const activeResult = await env.DB.prepare(`
-    SELECT race_id AS raceId
-    FROM rt_races
-    WHERE race_date=? AND start_time_utc>? AND start_time_utc<=?
-  `).bind(date, iso(now), iso(new Date(now.getTime() + BODY_WEIGHT_REFRESH_OPEN_MS))).all<{ raceId: string }>();
-  const activeSet = new Set((activeResult.results ?? []).map((row) => String(row.raceId)));
-  const ids = selectedIds.filter((raceId) => activeSet.has(raceId));
-  const beforeStates = await Promise.all(ids.map(async (raceId) => isStrictComplete(await publicBetRows(env.DB, raceId))));
-  const completeBefore = beforeStates.filter(Boolean).length;''')
-
-          replace_once(p,
-'''  const errors: Array<{ raceId: string; error: string }> = [];
-  let model: CompletedModelRuntime | null = null;
-
-  for (const raceId of ids) {''',
-'''  const errors: Array<{ raceId: string; error: string }> = [];
-  let model: CompletedModelRuntime | null = null;
-  let generatedThisTick = 0;
-
-  for (const raceId of ids) {''')
-
-          replace_once(p,
-'''      const existingPreview = await latestPreview(env.DB, raceId);
-      if (remaining > NORMAL_LOCK_MS && existingPreview && previewIsFreshEnough(existingPreview, remaining, raceNow)) {
-        continue;
-      }
-
-      let fresh: PreviewSnapshot | null = null;
-      try {
-        model ??= await loadWorkerModel(env.DB);
-        fresh = await generatePreview(env.DB, model, raceId, new Date());
-        refreshedPreviewRaceIds.push(raceId);''',
-'''      const existingPreview = await latestPreview(env.DB, raceId);
-      if (remaining > NORMAL_LOCK_MS && existingPreview && previewIsFreshEnough(existingPreview, remaining, raceNow)) {
-        continue;
-      }
-
-      // Inside T-25, reliability beats refreshing again: an already persisted
-      // official preview is sufficient and can be committed without another JRA
-      // request/model pass. This is exactly the durable fallback the deadline
-      // architecture is supposed to guarantee.
-      if (remaining <= NORMAL_LOCK_MS && existingPreview) {
-        const commitNow = new Date();
-        const remainingAtCommit = startMs - commitNow.getTime();
-        if (remainingAtCommit <= DEADLINE_MS) {
-          errors.push({ raceId, error: `WORKER_STORED_PREVIEW_COMMIT_CROSSED_T15:${raceId}` });
-          continue;
-        }
-        if (!snapshotHasOfficialBodyWeight(existingPreview)) bodyWeightBreachRaceIds.add(raceId);
-        await commitSnapshot(env.DB, raceId, existingPreview, commitNow, "last_good");
-        lockedByWorker.push(raceId);
-        finalizedFromFallbackRaceIds.push(raceId);
-        continue;
-      }
-
-      // Generate at most one non-urgent preview per minute. With one-minute cron
-      // cadence this gives every selected race many chances before T-40/T-30,
-      // while preventing a cluster of simultaneous races from exhausting the
-      // Worker subrequest budget.
-      if (generatedThisTick >= 1 && remaining > NORMAL_LOCK_MS) continue;
-
-      let fresh: PreviewSnapshot | null = null;
-      try {
-        model ??= await loadWorkerModel(env.DB);
-        fresh = await generatePreview(env.DB, model, raceId, new Date());
-        generatedThisTick += 1;
-        refreshedPreviewRaceIds.push(raceId);''')
-
-          replace_once(p,'    selectedRaceCount: ids.length,','    selectedRaceCount: selectedIds.length,')
-
-          p='src/live-deadline-entry-v2.ts'
-          replace_once(p,
-              'const DRIVER_VERSION = "live-deadline-v3-priority-guard-20260823";',
-              'const DRIVER_VERSION = "live-deadline-v4-bounded-subrequests-20260823";')
-
-          replace_once(p,
-'''    const selectionNow = new Date();
-    let selection = await freezeCompletedWorkerSelectionIfNeeded(env, selectionNow);
-    let selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
-    let entryRepair: Record<string, unknown> | null = null;
-    if (!selectionReady && String(selection.status || "") === "waiting_complete_program") {
-      entryRepair = await runUpcomingEntryDerivedRepair(env, new Date()) as unknown as Record<string, unknown>;
-      selection = await freezeCompletedWorkerSelectionIfNeeded(env, new Date());
-      selectionReady = await hasSelection(env.DB, jstDate(new Date()));
-    }''',
-'''    const selectionNow = new Date();
-    let selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
-    let selection: Record<string, unknown> = { status: "already_frozen" };
-    let entryRepair: Record<string, unknown> | null = null;
-    if (!selectionReady) {
-      selection = await freezeCompletedWorkerSelectionIfNeeded(env, selectionNow) as unknown as Record<string, unknown>;
-      selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
-      if (!selectionReady && String(selection.status || "") === "waiting_complete_program") {
-        entryRepair = await runUpcomingEntryDerivedRepair(env, new Date()) as unknown as Record<string, unknown>;
-        selection = await freezeCompletedWorkerSelectionIfNeeded(env, new Date()) as unknown as Record<string, unknown>;
-        selectionReady = await hasSelection(env.DB, jstDate(new Date()));
-      }
-    }''')
-
-          replace_once(p,
-'''    const restoredBefore = await restoreNewestOfficialPreviewArchives(env.DB, date);
-    const slaBefore = await auditLiveDeadlineSla(env.DB, date, new Date());
-
-    const guardBeforeNow = new Date();
-    const guardBefore = await runCompletedWorkerDeadlineGuard(env, guardBeforeNow);''',
-'''    // The priority guard already checked the due window. Archive recovery is
-    // expensive, so only scan archives when a due race actually reports a
-    // missing preview instead of doing two full-day archive sweeps every minute.
-    let restoredBefore: string[] = [];
-    if (priorityGuard.errors.some((row) => row.error.includes("PREVIEW_MISSING"))) {
-      restoredBefore = await restoreNewestOfficialPreviewArchives(env.DB, date);
-    }
-    const slaBefore = null;
-    const guardBeforeNow = priorityGuardNow;
-    const guardBefore = priorityGuard;''')
-
-          replace_once(p,
-'''    const restoredAfter = await restoreNewestOfficialPreviewArchives(env.DB, date);
-    const guardAfterNow = new Date();
-    const guardAfter = await runCompletedWorkerDeadlineGuard(env, guardAfterNow);
-    const slaAfter = await auditLiveDeadlineSla(env.DB, date, new Date());''',
-'''    let restoredAfter: string[] = [];
-    let guardAfterNow = new Date();
-    let guardAfter = await runCompletedWorkerDeadlineGuard(env, guardAfterNow);
-    if (guardAfter.errors.some((row) => row.error.includes("PREVIEW_MISSING"))) {
-      restoredAfter = await restoreNewestOfficialPreviewArchives(env.DB, date);
-      guardAfterNow = new Date();
-      guardAfter = await runCompletedWorkerDeadlineGuard(env, guardAfterNow);
-    }
-    const slaAfter = await auditLiveDeadlineSla(env.DB, date, new Date());''')
-
-          PY
-          git diff --check
-          git diff -- src/v1/completed-worker-live-lock.ts src/live-deadline-entry-v2.ts
-      - name: Typecheck and build isolated workers
-        run: |
-          npm run typecheck
-          npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-hotfix
-          npx wrangler deploy --dry-run --config wrangler.live-deadline-backup.jsonc --outdir dist-live-hotfix-backup
-      - name: Deploy primary and backup hotfix
-        shell: bash
-        run: |
-          npx wrangler deploy --config wrangler.live-deadline.jsonc
-          npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
-      - name: Persist hotfix to main
-        shell: bash
-        run: |
-          git add src/v1/completed-worker-live-lock.ts src/live-deadline-entry-v2.ts
-          git config user.name "github-actions[bot]"
-          git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Bound live deadline subrequests and preserve saved previews"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          DATE='2026-08-23'
+          OUT=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('live_deadline_driver:$DATE','worker_live_lock:$DATE','worker_deadline_guard:$DATE') ORDER BY state_key")
+          echo "$OUT"
+          node - "$OUT" <<'NODE'
+          const x=JSON.parse(process.argv[2]);
+          const rows=x?.[0]?.results||[];
+          const driver=rows.find(r=>r.state_key==='live_deadline_driver:2026-08-23');
+          if(!driver) throw new Error('driver state missing');
+          const d=JSON.parse(driver.state_value);
+          if(d.version!=='live-deadline-v4-bounded-subrequests-20260823') throw new Error('v4 driver not active: '+d.version);
+          if(String(driver.state_value).includes('Too many subrequests')) throw new Error('subrequest exhaustion still present');
+          console.log('V4_DRIVER_OK', JSON.stringify({updatedAt:driver.updated_at,status:d.status,phase:d.phase,ok:d.ok,durationMs:d.durationMs,error:d.error||null}));
+          NODE
+          echo '=== FUTURE SELECTED READINESS ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH selected AS (SELECT je.value->>'$.raceId' AS race_id FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) je WHERE s.state_key='final_daily_selection:$DATE') SELECT r.race_id,r.start_time_jst,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS final_rows,(SELECT json_extract(state_value,'$.snapshots[0].generatedAt') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id) AS preview_generated FROM selected s JOIN rt_races r ON r.race_id=s.race_id WHERE r.start_time_utc>strftime('%Y-%m-%dT%H:%M:%fZ','now') ORDER BY r.start_time_utc"
       - name: Mark success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/live-deadline-hotfix' -f description='Bounded primary and backup live deadline Workers deployed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/live-deadline-postfix-verify' -f description='v4 deadline cron verified in production' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/live-deadline-hotfix' -f description='Live deadline hotfix failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/live-deadline-postfix-verify' -f description='v4 deadline cron production verification failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
