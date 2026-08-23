@@ -44,7 +44,7 @@ jobs:
             const r=await fetchFastJraOfficialOddsForRace(entryUrl,target);
             const counts=Object.fromEntries(r.pages.map(p=>[p.betType,p.rows.length]));
             console.log(JSON.stringify({source:r.source,sourceHost:r.sourceHost,counts},null,2));
-            const expected={"単勝":14,"馬連":91,"ワイド":91,"馬単":182,"3連複":364,"3連単":1931};
+            const expected={"単勝":14,"馬連":91,"ワイド":91,"馬単":182,"3連複":364,"3連単":2184};
             for(const [k,v] of Object.entries(expected)) if(Number(counts[k])!==v) throw new Error(`COUNT_MISMATCH:${k}:${counts[k]}:${v}`);
             const win=r.rows.find(x=>x.betType==="単勝"&&x.combination==="12");
             console.log("HORSE12_WIN",JSON.stringify(win));
@@ -72,6 +72,7 @@ jobs:
               for(const row of (table[2]??"").matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) if(/<td\b[^>]*>[\s\S]*?\d+\.\d+[\s\S]*?<\/td>/i.test(row[0])) rawPublishedTan3++;
             }
             console.log("RAW_PUBLISHED_TAN3_ROWS",rawPublishedTan3);
+            if(rawPublishedTan3!==2184) throw new Error(`RAW_TAN3_EXPECTED_2184:${rawPublishedTan3}`);
             if(rawPublishedTan3!==counts["3連単"]) throw new Error(`TAN3_RAW_COVERAGE_MISMATCH:${rawPublishedTan3}:${counts["3連単"]}`);
           }
           main().catch(e=>{console.error(e);process.exit(1)});
