@@ -148,6 +148,39 @@ function completePages(pages: FastJraOddsPage[]): void {
   }
 }
 
+function validateWinMarketSanity(pages: FastJraOddsPage[]): void {
+  const win = pages.find((page) => page.betType === "単勝");
+  if (!win || !win.rows.length) throw new Error("JRA_WIN_MARKET_MISSING");
+  const horseNos = new Set<number>();
+  let identicalHorseNumberOdds = 0;
+  let impliedProbabilitySum = 0;
+  for (const row of win.rows) {
+    const horseNo = Number(row.combination);
+    if (!Number.isInteger(horseNo) || horseNo < 1 || horseNo > 18 || horseNos.has(horseNo)) {
+      throw new Error(`JRA_WIN_MARKET_HORSE_INVALID:${row.combination}`);
+    }
+    horseNos.add(horseNo);
+    const odds = Number(row.oddsMin);
+    if (!Number.isFinite(odds) || odds <= 1 || Number(row.oddsMax) !== odds) {
+      throw new Error(`JRA_WIN_MARKET_ODDS_INVALID:${row.combination}:${row.oddsMin}:${row.oddsMax}`);
+    }
+    impliedProbabilitySum += 1 / odds;
+    if (Math.abs(odds - horseNo) < 1e-9) identicalHorseNumberOdds += 1;
+  }
+  if (win.rows.length >= 5) {
+    // A malformed table parser once read horse-number cells as odds (e.g. horse
+    // 12 became 12.0x). Both gates below reject that shape before it can become
+    // a preview or immutable public bet while remaining intentionally broad for
+    // normal tote-pool movement.
+    if (impliedProbabilitySum < 0.55 || impliedProbabilitySum > 1.8) {
+      throw new Error(`JRA_WIN_MARKET_IMPLIED_SUM_INVALID:${impliedProbabilitySum.toFixed(6)}`);
+    }
+    if (identicalHorseNumberOdds >= Math.max(3, Math.ceil(win.rows.length * 0.25))) {
+      throw new Error(`JRA_WIN_MARKET_HORSE_NUMBER_PATTERN:${identicalHorseNumberOdds}/${win.rows.length}`);
+    }
+  }
+}
+
 async function fetchFastDirect(entryUrl: string, target: JraOddsIdentity, deadlineMs: number): Promise<FastJraOddsResult> {
   const session = new JraFetchSession(deadlineMs);
   const dateDigits = target.raceDate.replaceAll("-", "");
@@ -197,6 +230,7 @@ async function fetchFastDirect(entryUrl: string, target: JraOddsIdentity, deadli
   }
 
   completePages(pages);
+  validateWinMarketSanity(pages);
   return {
     rows: pages.flatMap((page) => page.rows),
     pages,
@@ -223,6 +257,7 @@ async function fetchOfficialCrawlFallback(entryUrl: string, target: JraOddsIdent
     pages.push({ cname: page.cname, betType, identity: page.identity, rows: page.rows });
   }
   completePages(pages);
+  validateWinMarketSanity(pages);
   return {
     rows: pages.flatMap((page) => page.rows),
     pages,
