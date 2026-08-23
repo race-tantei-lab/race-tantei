@@ -11,8 +11,9 @@ import {
 } from "./v1/live-preview-safety.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "live-deadline-v2-lease-archive-sla-20260822";
+const DRIVER_VERSION = "live-deadline-v3-priority-guard-20260823";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
+const PRIORITY_GUARD_SUCCESS_PREFIX = "live_deadline_priority_guard_success:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
 const SELECTION_PREFIX = "final_daily_selection:";
 
@@ -26,20 +27,20 @@ async function hasSelection(db: D1Database, date: string): Promise<boolean> {
   return Number(row?.ok ?? 0) === 1;
 }
 
-async function saveDriverState(db: D1Database, date: string, payload: Record<string, unknown>): Promise<void> {
+async function saveState(db: D1Database, key: string, payload: Record<string, unknown>): Promise<void> {
   await db.prepare(`
     INSERT INTO rt_system_state(state_key,state_value,updated_at)
     VALUES(?,?,CURRENT_TIMESTAMP)
     ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
-  `).bind(`${DRIVER_STATE_PREFIX}${date}`, JSON.stringify(payload)).run();
+  `).bind(key, JSON.stringify(payload)).run();
+}
+
+async function saveDriverState(db: D1Database, date: string, payload: Record<string, unknown>): Promise<void> {
+  await saveState(db, `${DRIVER_STATE_PREFIX}${date}`, payload);
 }
 
 async function saveLeaseSkipState(db: D1Database, date: string, payload: Record<string, unknown>): Promise<void> {
-  await db.prepare(`
-    INSERT INTO rt_system_state(state_key,state_value,updated_at)
-    VALUES(?,?,CURRENT_TIMESTAMP)
-    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
-  `).bind(`${LEASE_SKIP_PREFIX}${date}`, JSON.stringify(payload)).run();
+  await saveState(db, `${LEASE_SKIP_PREFIX}${date}`, payload);
 }
 
 function auditGuard(guard: Awaited<ReturnType<typeof runCompletedWorkerDeadlineGuard>>) {
@@ -91,16 +92,35 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
     return skipped;
   }
 
-  await saveDriverState(env.DB, date, {
-    ...base,
-    status: "running",
-    phase: "selection",
-    completedAt: null,
-    durationMs: null,
-    ok: false,
-  });
-
   try {
+    // Priority path: rescue from an already-persisted official preview before any
+    // selection repair, archive restore, JRA fetch/model inference, or SLA audit.
+    // This keeps T-20 -> T-15 finalization alive even if the heavier pipeline fails.
+    const priorityGuardNow = new Date();
+    const priorityGuard = await runCompletedWorkerDeadlineGuard(env, priorityGuardNow);
+    const priorityGuardPayload = {
+      ...base,
+      status: "completed",
+      phase: "priority_guard",
+      ok: true,
+      priorityGuardCheckedAt: iso(priorityGuardNow),
+      priorityGuard: auditGuard(priorityGuard),
+      completedAt: iso(),
+      durationMs: Date.now() - started.getTime(),
+    };
+    await saveState(env.DB, `${PRIORITY_GUARD_SUCCESS_PREFIX}${date}`, priorityGuardPayload);
+
+    await saveDriverState(env.DB, date, {
+      ...base,
+      status: "running",
+      phase: "selection",
+      priorityGuardCheckedAt: iso(priorityGuardNow),
+      priorityGuard: auditGuard(priorityGuard),
+      completedAt: null,
+      durationMs: null,
+      ok: false,
+    });
+
     const selectionNow = new Date();
     let selection = await freezeCompletedWorkerSelectionIfNeeded(env, selectionNow);
     let selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
@@ -122,6 +142,8 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
         status: selectionCritical ? "selection_critical" : "waiting_selection",
         phase: "complete",
         ok: !selectionCritical,
+        priorityGuardCheckedAt: iso(priorityGuardNow),
+        priorityGuard: auditGuard(priorityGuard),
         selection,
         entryRepair,
         selectionCheckedAt: iso(selectionNow),
@@ -154,8 +176,10 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
     const guardAfter = await runCompletedWorkerDeadlineGuard(env, guardAfterNow);
     const slaAfter = await auditLiveDeadlineSla(env.DB, date, new Date());
 
-    const due = new Set([...guardBefore.dueRaceIds, ...guardAfter.dueRaceIds]);
+    const due = new Set([...priorityGuard.dueRaceIds, ...guardBefore.dueRaceIds, ...guardAfter.dueRaceIds]);
     const locked = new Set([
+      ...priorityGuard.lockedRaceIds,
+      ...priorityGuard.skippedAlreadyLockedRaceIds,
       ...guardBefore.lockedRaceIds,
       ...guardAfter.lockedRaceIds,
       ...guardBefore.skippedAlreadyLockedRaceIds,
@@ -163,8 +187,10 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       ...slaAfter.finalReadyRaceIds,
     ]);
     const unresolvedDueRaceIds = [...due].filter((raceId) => !locked.has(raceId));
-    const unresolvedGuardErrors = [...guardBefore.errors, ...guardAfter.errors].filter((row) => !locked.has(row.raceId));
+    const unresolvedGuardErrors = [...priorityGuard.errors, ...guardBefore.errors, ...guardAfter.errors]
+      .filter((row) => !locked.has(row.raceId));
     const hardDeadlineBreachRaceIds = [...new Set([
+      ...priorityGuard.deadlineMissedRaceIds,
       ...guardBefore.deadlineMissedRaceIds,
       ...guardAfter.deadlineMissedRaceIds,
       ...(live?.deadlineBreachRaceIds ?? []),
@@ -194,6 +220,8 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
               : "live_retry_needed",
       phase: "complete",
       ok,
+      priorityGuardCheckedAt: iso(priorityGuardNow),
+      priorityGuard: auditGuard(priorityGuard),
       selection,
       selectionCheckedAt: iso(selectionNow),
       restoredBefore,
