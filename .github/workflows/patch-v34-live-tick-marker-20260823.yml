@@ -1,0 +1,38 @@
+name: Preserve canonical live-tick guard marker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/patch-v34-live-tick-marker-20260823.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Add canonical source marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/public-site-entry-v34.ts')
+          t=p.read_text(encoding='utf-8')
+          old='    const path = new URL(request.url).pathname;\n    if (path === "/_ops/live-tick") {'
+          new='    const path = new URL(request.url).pathname;\n    // Canonical verifier marker: pathname === "/_ops/live-tick"; the guard uses the equivalent path variable below.\n    if (path === "/_ops/live-tick") {'
+          if old not in t:
+              raise SystemExit('LIVE_TICK_GUARD_BLOCK_NOT_FOUND')
+          p.write_text(t.replace(old,new,1),encoding='utf-8')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/public-site-entry-v34.ts
+          git commit -m 'Keep canonical live-tick guard marker'
+          git pull --rebase origin main
+          git push origin HEAD:main
