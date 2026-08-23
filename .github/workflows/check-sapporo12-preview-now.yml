@@ -1,0 +1,41 @@
+name: Check Sapporo 12R preview now
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/check-sapporo12-preview-now.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Check production state
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATE='2026-08-23'
+          RID='2026-08-23-sapporo-12'
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('live_deadline_driver:$DATE','worker_live_lock:$DATE','worker_deadline_guard:$DATE','worker_live_preview:$RID') ORDER BY state_key"
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT r.race_id,r.start_time_jst,r.start_time_utc,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS final_rows,(SELECT json_extract(state_value,'$.snapshots[0].generatedAt') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id) AS preview_generated,(SELECT json_extract(state_value,'$.snapshots[0].oddsSource') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id) AS odds_source,(SELECT json_array_length(json_extract(state_value,'$.snapshots[0].courseBets')) FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id) AS preview_bets FROM rt_races r WHERE r.race_id='$RID'"
+      - name: Mark success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/sapporo12-preview-check' -f description='Sapporo 12R production state checked' -f target_url="$STATUS_TARGET_URL" >/dev/null
