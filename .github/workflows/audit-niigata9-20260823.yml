@@ -7,7 +7,7 @@ on:
       - ".github/workflows/audit-niigata9-20260823.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -27,20 +29,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Q() { npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$1"; }
-          echo '=== RACE ==='
+          mkdir -p audits
+          OUT=audits/niigata9-20260823.txt
+          : > "$OUT"
+          Q() { npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$1" | tee -a "$OUT"; }
+          echo '=== RACE ===' | tee -a "$OUT"
           Q "SELECT race_id,race_date,venue,race_no,start_time_jst,start_time_utc FROM rt_races WHERE race_date='2026-08-23' AND venue='新潟' AND race_no=9 LIMIT 1"
-          echo '=== BET_ROWS ==='
+          echo '=== BET_ROWS ===' | tee -a "$OUT"
           Q "SELECT b.race_id,b.course,b.bet_type,b.combination,b.stake_yen,b.assumed_odds,b.locked_at,b.source_prediction_id,b.settlement_status FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date='2026-08-23' AND r.venue='新潟' AND r.race_no=9 ORDER BY b.course,b.bet_type,b.combination"
-          echo '=== BET_SUMMARY ==='
+          echo '=== BET_SUMMARY ===' | tee -a "$OUT"
           Q "SELECT COUNT(*) AS rows,COUNT(DISTINCT course) AS courses,COUNT(DISTINCT bet_type||'|'||combination) AS distinct_tickets,MIN(locked_at) AS min_locked_at,MAX(locked_at) AS max_locked_at,MIN(source_prediction_id) AS min_source_prediction_id,MAX(source_prediction_id) AS max_source_prediction_id FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date='2026-08-23' AND r.venue='新潟' AND r.race_no=9"
-          echo '=== FINAL_STATE ==='
+          echo '=== FINAL_STATE ===' | tee -a "$OUT"
           Q "SELECT s.state_key,s.updated_at,json_extract(s.state_value,'$.status') AS status,json_extract(s.state_value,'$.lockedAt') AS lockedAt,json_extract(s.state_value,'$.finalizedFrom') AS finalizedFrom,json_extract(s.state_value,'$.generationStartedAt') AS generationStartedAt,json_extract(s.state_value,'$.previewGeneratedAt') AS previewGeneratedAt,json_extract(s.state_value,'$.oddsFetchedAt') AS oddsFetchedAt,json_extract(s.state_value,'$.oddsSource') AS oddsSource,json_extract(s.state_value,'$.bodyWeightApplied') AS bodyWeightApplied,json_extract(s.state_value,'$.onlineLearning.status') AS learningStatus,json_extract(s.state_value,'$.onlineLearning.cutoffUtc') AS learningCutoffUtc,json_extract(s.state_value,'$.onlineLearning.sameDayFinishedResultsAllowed') AS sameDayFinishedResultsAllowed,json_extract(s.state_value,'$.onlineLearning.sameDayFinishedRaces') AS sameDayFinishedRaces FROM rt_system_state s JOIN rt_races r ON s.state_key='worker_live_final:'||r.race_id WHERE r.race_date='2026-08-23' AND r.venue='新潟' AND r.race_no=9 LIMIT 1"
-          echo '=== PREVIEW ==='
+          echo '=== PREVIEW ===' | tee -a "$OUT"
           Q "SELECT s.state_key,s.updated_at,json_extract(s.state_value,'$.snapshots[0].generatedAt') AS generatedAt,json_extract(s.state_value,'$.snapshots[0].generationStartedAt') AS generationStartedAt,json_extract(s.state_value,'$.snapshots[0].oddsFetchedAt') AS oddsFetchedAt,json_extract(s.state_value,'$.snapshots[0].oddsSource') AS oddsSource,json_extract(s.state_value,'$.snapshots[0].bodyWeightApplied') AS bodyWeightApplied,json_extract(s.state_value,'$.snapshots[0].onlineLearning.status') AS learningStatus,json_extract(s.state_value,'$.snapshots[0].onlineLearning.cutoffUtc') AS learningCutoffUtc,json_extract(s.state_value,'$.snapshots[0].onlineLearning.sameDayFinishedResultsAllowed') AS sameDayFinishedResultsAllowed,json_extract(s.state_value,'$.snapshots[0].onlineLearning.sameDayFinishedRaces') AS sameDayFinishedRaces FROM rt_system_state s JOIN rt_races r ON s.state_key='worker_live_preview:'||r.race_id WHERE r.race_date='2026-08-23' AND r.venue='新潟' AND r.race_no=9 LIMIT 1"
-          echo '=== DRIVER ==='
+          echo '=== DRIVER ===' | tee -a "$OUT"
           Q "SELECT state_key,updated_at,json_extract(state_value,'$.version') AS version,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok,json_extract(state_value,'$.hardDeadlineBreachRaceIds') AS hardDeadlineBreachRaceIds,json_extract(state_value,'$.preDeadlineCriticalRaceIds') AS preDeadlineCriticalRaceIds,json_extract(state_value,'$.liveFailure') AS liveFailure,json_extract(state_value,'$.live.errors') AS liveErrors FROM rt_system_state WHERE state_key='live_deadline_driver:2026-08-23' LIMIT 1"
-          echo '=== SLA ==='
+          echo '=== SLA ===' | tee -a "$OUT"
           Q "SELECT state_key,updated_at,json_extract(state_value,'$.deadlineMissedRaceIds') AS deadlineMissedRaceIds,json_extract(state_value,'$.finalMissingByT17RaceIds') AS finalMissingByT17RaceIds,json_extract(state_value,'$.finalMissingByT16RaceIds') AS finalMissingByT16RaceIds FROM rt_system_state WHERE state_key='live_deadline_sla:2026-08-23' LIMIT 1"
-          echo '=== TOO_MANY_SUBREQUESTS ==='
+          echo '=== TOO_MANY_SUBREQUESTS ===' | tee -a "$OUT"
           Q "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE updated_at >= '2026-08-23 06:00:00' AND state_value LIKE '%Too many subrequests%' ORDER BY updated_at DESC LIMIT 20"
+      - name: Commit audit evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add audits/niigata9-20260823.txt
+          git commit -m 'Record Niigata 9R production audit evidence'
+          git pull --rebase origin main
+          git push origin HEAD:main
