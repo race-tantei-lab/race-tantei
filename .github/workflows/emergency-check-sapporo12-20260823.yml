@@ -1,0 +1,71 @@
+name: Emergency check Sapporo12 and later races
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/emergency-check-sapporo12-20260823.yml"
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  check-protect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Snapshot production before action
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== HEALTH ==='
+          for u in https://race-tantei-live-deadline.race-tantei.workers.dev/health https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health; do curl -fsS "$u" || true; echo; done
+          echo '=== TARGET RACES ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH ids(race_id) AS (VALUES ('2026-08-23-sapporo-12'),('2026-08-23-niigata-09'),('2026-08-23-chukyo-09'),('2026-08-23-chukyo-10'),('2026-08-23-niigata-11'),('2026-08-23-niigata-12')) SELECT i.race_id,r.start_time_jst,r.start_time_utc,ROUND((julianday(r.start_time_utc)-julianday('now'))*1440,2) AS minutes_to_start,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=i.race_id) AS bet_rows,(SELECT COUNT(DISTINCT course) FROM rt_public_bets b WHERE b.race_id=i.race_id) AS courses,(SELECT COUNT(DISTINCT bet_type||':'||combination) FROM rt_public_bets b WHERE b.race_id=i.race_id) AS unique_bets,(SELECT json_array_length(json_extract(s.state_value,'$.snapshots[0].courseBets')) FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||i.race_id) AS preview_bets,(SELECT json_extract(s.state_value,'$.snapshots[0].generatedAt') FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||i.race_id) AS preview_generated,(SELECT json_extract(s.state_value,'$.snapshots[0].oddsSource') FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||i.race_id) AS odds_source FROM ids i LEFT JOIN rt_races r ON r.race_id=i.race_id ORDER BY r.start_time_utc"
+          echo '=== DRIVER/GUARD STATES ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,substr(state_value,1,5000) AS state_value FROM rt_system_state WHERE state_key IN ('live_deadline_driver:2026-08-23','worker_live_lock:2026-08-23','worker_deadline_guard:2026-08-23','live_deadline_sla:2026-08-23','live_deadline_priority_guard_success:2026-08-23') ORDER BY state_key"
+      - name: Protect with v5 runtime if Sapporo12 is not final
+        shell: bash
+        run: |
+          set -euo pipefail
+          row=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT ROUND((julianday(start_time_utc)-julianday('now'))*1440,2) AS mins,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS n FROM rt_races r WHERE race_id='2026-08-23-sapporo-12'" )
+          echo "$row"
+          NEED=$(ROW="$row" node -e "const x=JSON.parse(process.env.ROW);const r=x?.[0]?.results?.[0]||{};process.stdout.write(Number(r.n)===6?'0':(Number(r.mins)>15?'1':'0'))")
+          if [ "$NEED" != 1 ]; then echo 'No emergency deploy needed or already past T-15'; exit 0; fi
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/v1/completed-worker-live-lock.ts'); t=p.read_text()
+          t=t.replace('const NORMAL_LOCK_MS = 25 * 60 * 1000;','const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;',1).replace('NORMAL_LOCK_MS','FINAL_LOCK_ARM_MS')
+          t=t.replace('const NEAR_PREVIEW_REFRESH_MS = 4 * 60 * 1000;','const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;',1)
+          block='''      if (remaining <= FINAL_LOCK_ARM_MS && existingPreview) {\n        const commitNow = new Date();\n        if (startMs - commitNow.getTime() <= DEADLINE_MS) {\n          errors.push({ raceId, error: `WORKER_STORED_PREVIEW_COMMIT_CROSSED_T15:${raceId}` });\n          continue;\n        }\n        if (!snapshotHasOfficialBodyWeight(existingPreview)) bodyWeightBreachRaceIds.add(raceId);\n        await commitSnapshot(env.DB, raceId, existingPreview, commitNow, "last_good");\n        lockedByWorker.push(raceId);\n        finalizedFromFallbackRaceIds.push(raceId);\n        continue;\n      }\n'''
+          t=t.replace(block,'',1); p.write_text(t)
+          p=Path('src/v1/completed-worker-deadline-guard.ts'); t=p.read_text().replace('export const DEADLINE_GUARD_ARM_MS = 20 * 60 * 1000;','export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;',1); p.write_text(t)
+          p=Path('src/v1/live-preview-safety.ts'); t=p.read_text().replace('finalMissingByT25RaceIds','finalMissingByT17RaceIds').replace('finalMissingByT20RaceIds','finalMissingByT16RaceIds').replace('remaining <= 25 * 60_000 && !finalReady','remaining <= 17 * 60_000 && !finalReady',1).replace('remaining <= 20 * 60_000 && !finalReady','remaining <= 16 * 60_000 && !finalReady',1); p.write_text(t)
+          p=Path('src/live-deadline-entry-v2.ts'); t=p.read_text().replace('const DRIVER_VERSION = "live-deadline-v4-bounded-subrequests-20260823";','const DRIVER_VERSION = "live-deadline-v5-t15-optimal-refresh-20260823";',1).replace('slaAfter.finalMissingByT20RaceIds','slaAfter.finalMissingByT16RaceIds'); p.write_text(t)
+          PY
+          npm run typecheck
+          npx wrangler deploy --config wrangler.live-deadline.jsonc
+          npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
+          sleep 80
+      - name: Snapshot production after action
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== HEALTH AFTER ==='
+          for u in https://race-tantei-live-deadline.race-tantei.workers.dev/health https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health; do curl -fsS "$u" || true; echo; done
+          echo '=== FINAL TARGET STATUS ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH ids(race_id) AS (VALUES ('2026-08-23-sapporo-12'),('2026-08-23-niigata-09'),('2026-08-23-chukyo-09'),('2026-08-23-chukyo-10'),('2026-08-23-niigata-11'),('2026-08-23-niigata-12')) SELECT i.race_id,r.start_time_jst,ROUND((julianday(r.start_time_utc)-julianday('now'))*1440,2) AS minutes_to_start,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=i.race_id) AS bet_rows,(SELECT COUNT(DISTINCT course) FROM rt_public_bets b WHERE b.race_id=i.race_id) AS courses,(SELECT json_array_length(json_extract(s.state_value,'$.snapshots[0].courseBets')) FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||i.race_id) AS preview_bets,(SELECT json_extract(s.state_value,'$.snapshots[0].generatedAt') FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||i.race_id) AS preview_generated FROM ids i LEFT JOIN rt_races r ON r.race_id=i.race_id ORDER BY r.start_time_utc"
+          echo '=== ERRORS ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('live_deadline_driver:2026-08-23','worker_live_lock:2026-08-23','worker_deadline_guard:2026-08-23')" | grep -E 'Too many subrequests|PREVIEW_MISSING|HARD_T15|deadline|error|subrequest' || true
