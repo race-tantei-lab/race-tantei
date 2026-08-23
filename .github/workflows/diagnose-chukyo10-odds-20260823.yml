@@ -1,0 +1,53 @@
+name: Diagnose Chukyo10 odds mismatch
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-chukyo10-odds-20260823.yml"
+permissions:
+  contents: read
+  statuses: write
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Mark pending
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='production/chukyo10-odds-diagnosis' -f description='Inspecting Chukyo10 odds source and stored values' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Inspect D1, source state, and odds code
+        shell: bash
+        run: |
+          set -euo pipefail
+          race='2026-08-23-chukyo-10'
+          echo '=== TIME ==='; TZ=Asia/Tokyo date -Is
+          echo '=== RACE ROW ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT * FROM rt_races WHERE race_id='$race' LIMIT 1"
+          echo '=== PUBLIC BETS ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT * FROM rt_public_bets WHERE race_id='$race' ORDER BY id"
+          echo '=== FINAL/PREVIEW STATES ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key LIKE '%chukyo-10%' OR state_key IN ('live_deadline_driver:2026-08-23','worker_live_lock:2026-08-23','worker_deadline_guard:2026-08-23') ORDER BY state_key"
+          echo '=== PREVIEW ARCHIVE SCHEMA ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "PRAGMA table_info(rt_live_preview_archive)"
+          echo '=== PREVIEW ARCHIVE ROWS ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT * FROM rt_live_preview_archive WHERE race_id='$race' ORDER BY created_at DESC LIMIT 10" || true
+          echo '=== ODDS-RELATED SOURCE LOCATIONS ==='
+          rg -n "jra-fast-official|jra-crawl-official|officialOdds|winOdds|wideOdds|oddsSource|odds_fetched|oddsFetched" src scripts | head -n 400 || true
+          echo '=== CURRENT PUBLIC API RACE ==='
+          curl -fsS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-08-23" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const p=JSON.parse(s);console.log(JSON.stringify(p.races.find(x=>x.raceId==='2026-08-23-chukyo-10'),null,2))})"
+      - name: Mark success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/chukyo10-odds-diagnosis' -f description='Chukyo10 odds diagnosis captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/chukyo10-odds-diagnosis' -f description='Chukyo10 odds diagnosis failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
