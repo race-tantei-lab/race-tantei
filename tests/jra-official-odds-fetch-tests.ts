@@ -4,6 +4,7 @@ import {
   fetchFastJraOfficialOddsForRace,
   jraOddsUrlForEntry,
 } from "../src/v1/jra-official-odds-fetch.js";
+import { parseFastJraOfficialOddsRows } from "../src/v1/jra-official-odds-fast.js";
 
 const spSource = "https://sp.jra.jp/JRADB/accessD.html?CNAME=sample";
 const candidates = candidateJraEntryUrls(spSource);
@@ -13,6 +14,28 @@ assert.ok(candidates.includes("https://jra.jp/JRADB/accessD.html?CNAME=sample"))
 assert.equal(new Set(candidates).size, candidates.length);
 assert.equal(jraOddsUrlForEntry(spSource), "https://sp.jra.jp/JRADB/accessO.html");
 assert.equal(jraOddsUrlForEntry("https://www.jra.go.jp/JRADB/accessD.html?CNAME=x"), "https://www.jra.go.jp/JRADB/accessO.html");
+
+// Regression: JRA's win table contains the horse number as an integer cell
+// before the decimal odds cell. Horse 12 must never become "12.0倍".
+const winRegressionHtml = `<!doctype html><table>
+  <tr><td>12</td><td>メイショウナナシロ</td><td>1.9</td><td>1</td></tr>
+  <tr><td>13</td><td>アビル</td><td>4.4</td><td>2</td></tr>
+  <tr><td>11</td><td>ラミエルノムスコ</td><td>9.1</td><td>3</td></tr>
+</table>`;
+const winRegressionRows = parseFastJraOfficialOddsRows(winRegressionHtml, "単勝");
+assert.deepEqual(winRegressionRows, [
+  { betType: "単勝", combination: "11", oddsMin: 9.1, oddsMax: 9.1 },
+  { betType: "単勝", combination: "12", oddsMin: 1.9, oddsMax: 1.9 },
+  { betType: "単勝", combination: "13", oddsMin: 4.4, oddsMax: 4.4 },
+]);
+assert.equal(winRegressionRows.find((row) => row.combination === "12")?.oddsMin, 1.9);
+
+const wideRegressionHtml = `<!doctype html><table class="wide"><caption>11</caption>
+  <tr><th>12</th><td>4.3</td><td>2</td></tr>
+</table>`;
+assert.deepEqual(parseFastJraOfficialOddsRows(wideRegressionHtml, "ワイド"), [
+  { betType: "ワイド", combination: "11-12", oddsMin: 4.3, oddsMax: 4.3 },
+]);
 
 const originalFetch = globalThis.fetch;
 const target = { raceDate: "2026-08-09", venue: "中京", raceNo: 11 } as const;
