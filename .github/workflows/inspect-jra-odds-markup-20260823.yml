@@ -50,23 +50,22 @@ jobs:
           if(!winCname) throw new Error('WIN_CNAME_MISSING');
           const winPage=await html(oddsUrl,winCname,entryUrl);
           const allLinks=[...new Set([...links(entry),...links(winPage)])];
-          function rowSummary(page){
-            const rows=[...page.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)].map(m=>m[0]).filter(x=>/\d+\.\d+/.test(x));
-            return rows.slice(0,12).map((x,i)=>`${i+1}: ${x.replace(/\s+/g,' ').slice(0,1800)}`).join('\n');
-          }
-          function tableTags(page){return [...page.matchAll(/<table\b[^>]*>/gi)].map(m=>m[0].replace(/\s+/g,' ')).slice(0,120)}
-          for(const [name,prefix] of Object.entries(prefixes)){
-            const cname=name==='win'?winCname:allLinks.find(x=>x.startsWith(prefix));
-            console.log(`\n===== ${name} cname=${cname||'MISSING'} =====`);
+          for(const name of ['umaren','wide','umatan','fuku3','tan3']){
+            const cname=allLinks.find(x=>x.startsWith(prefixes[name]));
             if(!cname) continue;
-            const page=name==='win'?winPage:await html(oddsUrl,cname,oddsUrl);
-            console.log('TABLE_TAGS'); console.log(tableTags(page).join('\n'));
-            console.log('DECIMAL_ROWS'); console.log(rowSummary(page));
+            const page=await html(oddsUrl,cname,oddsUrl);
+            const token=name;
+            const re=new RegExp(`<table\\b([^>]*)class=(['"])\\s*[^'"]*${token}[^'"]*\\2[^>]*>[\\s\\S]*?<\\/table>`,'i');
+            const m=re.exec(page);
+            console.log(`\n===== ${name} FIRST_TABLE_CONTEXT =====`);
+            if(!m){console.log('NO_TABLE');continue;}
+            const start=m.index;
+            console.log(page.slice(Math.max(0,start-1800),Math.min(page.length,start+2600)).replace(/\s+/g,' '));
           }
           NODE
       - name: Mark success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='diagnostic/jra-odds-markup' -f description='JRA six-market markup captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='diagnostic/jra-odds-markup' -f description='JRA grouped-table context captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='diagnostic/jra-odds-markup' -f description='JRA odds markup capture failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='diagnostic/jra-odds-markup' -f description='JRA grouped-table context capture failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
