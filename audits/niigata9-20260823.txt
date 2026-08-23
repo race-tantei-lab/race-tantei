@@ -1,0 +1,329 @@
+=== RACE ===
+[
+  {
+    "results": [
+      {
+        "race_id": "2026-08-23-niigata-09",
+        "race_date": "2026-08-23",
+        "venue": "新潟",
+        "race_no": 9,
+        "start_time_jst": "16:35",
+        "start_time_utc": "2026-08-23T07:35:00.000Z"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.2966
+      },
+      "duration": 0.2966,
+      "changes": 0,
+      "last_row_id": 1,
+      "changed_db": false,
+      "size_after": 280350720,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
+=== BET_ROWS ===
+[
+  {
+    "results": [
+      {
+        "race_id": "2026-08-23-niigata-09",
+        "course": "スタンダード",
+        "bet_type": "ワイド",
+        "combination": "7-15",
+        "stake_yen": 2500,
+        "assumed_odds": 126,
+        "locked_at": "2026-08-23T07:18:14.090Z",
+        "source_prediction_id": -2,
+        "settlement_status": "pending"
+      },
+      {
+        "race_id": "2026-08-23-niigata-09",
+        "course": "スタンダード",
+        "bet_type": "単勝",
+        "combination": "15",
+        "stake_yen": 2500,
+        "assumed_odds": 15,
+        "locked_at": "2026-08-23T07:18:14.090Z",
+        "source_prediction_id": -2,
+        "settlement_status": "pending"
+      },
+      {
+        "race_id": "2026-08-23-niigata-09",
+        "course": "プレミアム",
+        "bet_type": "ワイド",
+        "combination": "7-15",
+        "stake_yen": 5000,
+        "assumed_odds": 126,
+        "locked_at": "2026-08-23T07:18:14.090Z",
+        "source_prediction_id": -2,
+        "settlement_status": "pending"
+      },
+      {
+        "race_id": "2026-08-23-niigata-09",
+        "course": "プレミアム",
+        "bet_type": "単勝",
+        "combination": "15",
+        "stake_yen": 5000,
+        "assumed_odds": 15,
+        "locked_at": "2026-08-23T07:18:14.090Z",
+        "source_prediction_id": -2,
+        "settlement_status": "pending"
+      },
+      {
+        "race_id": "2026-08-23-niigata-09",
+        "course": "ライト",
+        "bet_type": "ワイド",
+        "combination": "7-15",
+        "stake_yen": 1000,
+        "assumed_odds": 126,
+        "locked_at": "2026-08-23T07:18:14.090Z",
+        "source_prediction_id": -2,
+        "settlement_status": "pending"
+      },
+      {
+        "race_id": "2026-08-23-niigata-09",
+        "course": "ライト",
+        "bet_type": "単勝",
+        "combination": "15",
+        "stake_yen": 1000,
+        "assumed_odds": 15,
+        "locked_at": "2026-08-23T07:18:14.090Z",
+        "source_prediction_id": -2,
+        "settlement_status": "pending"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.4019
+      },
+      "duration": 0.4019,
+      "changes": 0,
+      "last_row_id": 1,
+      "changed_db": false,
+      "size_after": 280350720,
+      "rows_read": 15,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
+=== BET_SUMMARY ===
+[
+  {
+    "results": [
+      {
+        "rows": 6,
+        "courses": 3,
+        "distinct_tickets": 2,
+        "min_locked_at": "2026-08-23T07:18:14.090Z",
+        "max_locked_at": "2026-08-23T07:18:14.090Z",
+        "min_source_prediction_id": -2,
+        "max_source_prediction_id": -2
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.2703
+      },
+      "duration": 0.2703,
+      "changes": 0,
+      "last_row_id": 1,
+      "changed_db": false,
+      "size_after": 280350720,
+      "rows_read": 9,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
+=== FINAL_STATE ===
+[
+  {
+    "results": [
+      {
+        "state_key": "worker_live_final:2026-08-23-niigata-09",
+        "updated_at": "2026-08-23 07:18:15",
+        "status": "locked",
+        "lockedAt": "2026-08-23T07:18:14.090Z",
+        "finalizedFrom": "fresh",
+        "generationStartedAt": null,
+        "previewGeneratedAt": "2026-08-23T07:18:12.862Z",
+        "oddsFetchedAt": "2026-08-23T07:18:12.862Z",
+        "oddsSource": "jra-fast-official",
+        "bodyWeightApplied": 1,
+        "learningStatus": "applied",
+        "learningCutoffUtc": "2026-08-23T07:18:00.755Z",
+        "sameDayFinishedResultsAllowed": 1,
+        "sameDayFinishedRaces": 12
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.4077
+      },
+      "duration": 0.4077,
+      "changes": 0,
+      "last_row_id": 1,
+      "changed_db": false,
+      "size_after": 280350720,
+      "rows_read": 2,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
+=== PREVIEW ===
+[
+  {
+    "results": [
+      {
+        "state_key": "worker_live_preview:2026-08-23-niigata-09",
+        "updated_at": "2026-08-23 07:18:13",
+        "generatedAt": "2026-08-23T07:18:12.862Z",
+        "generationStartedAt": null,
+        "oddsFetchedAt": "2026-08-23T07:18:12.862Z",
+        "oddsSource": "jra-fast-official",
+        "bodyWeightApplied": 1,
+        "learningStatus": "applied",
+        "learningCutoffUtc": "2026-08-23T07:18:00.755Z",
+        "sameDayFinishedResultsAllowed": 1,
+        "sameDayFinishedRaces": 12
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.4911
+      },
+      "duration": 0.4911,
+      "changes": 0,
+      "last_row_id": 1,
+      "changed_db": false,
+      "size_after": 280350720,
+      "rows_read": 2,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
+=== DRIVER ===
+[
+  {
+    "results": [
+      {
+        "state_key": "live_deadline_driver:2026-08-23",
+        "updated_at": "2026-08-23 07:24:06",
+        "version": "live-deadline-v6-t15-start-t10-reflect-20260823",
+        "status": "running",
+        "ok": 0,
+        "hardDeadlineBreachRaceIds": null,
+        "preDeadlineCriticalRaceIds": null,
+        "liveFailure": null,
+        "liveErrors": null
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.4615
+      },
+      "duration": 0.4615,
+      "changes": 0,
+      "last_row_id": 1,
+      "changed_db": false,
+      "size_after": 280350720,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
+=== SLA ===
+[
+  {
+    "results": [
+      {
+        "state_key": "live_deadline_sla:2026-08-23",
+        "updated_at": "2026-08-23 07:23:39",
+        "deadlineMissedRaceIds": "[]",
+        "finalMissingByT17RaceIds": "[]",
+        "finalMissingByT16RaceIds": "[]"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.2572
+      },
+      "duration": 0.2572,
+      "changes": 0,
+      "last_row_id": 1,
+      "changed_db": false,
+      "size_after": 280350720,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
+=== TOO_MANY_SUBREQUESTS ===
+[
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "APAC",
+      "served_by_colo": "SIN",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 11.9267
+      },
+      "duration": 11.9267,
+      "changes": 0,
+      "last_row_id": 1,
+      "changed_db": false,
+      "size_after": 280350720,
+      "rows_read": 329,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
