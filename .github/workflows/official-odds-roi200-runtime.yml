@@ -45,6 +45,8 @@ concurrency:
 
 jobs:
   collect-search-promote:
+    # Pushes may happen during racing; they must never start production-D1 research work.
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
