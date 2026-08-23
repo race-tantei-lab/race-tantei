@@ -137,9 +137,21 @@ function exactOdds(text: string): [number, number] | null {
   return Number.isFinite(value) && value >= 1 && value <= 100000 ? [value, value] : null;
 }
 
+function nestedElementBodyByClass(html: string, tag: "span", token: string): string | null {
+  const opening = new RegExp(`<${tag}\\b([^>]*)>`, "gi");
+  let match: RegExpExecArray | null;
+  while ((match = opening.exec(html)) !== null) {
+    if (!hasClass(match[1] ?? "", token)) continue;
+    const close = html.indexOf(`</${tag}>`, opening.lastIndex);
+    if (close < 0) return null;
+    return html.slice(opening.lastIndex, close);
+  }
+  return null;
+}
+
 function wideOdds(cellBody: string): [number, number] | null {
-  const minBody = bodyByClass(cellBody, "span", "min");
-  const maxBody = bodyByClass(cellBody, "span", "max");
+  const minBody = nestedElementBodyByClass(cellBody, "span", "min");
+  const maxBody = nestedElementBodyByClass(cellBody, "span", "max");
   if (minBody == null || maxBody == null) return null;
   const low = Number(stripJraTags(minBody).replaceAll(",", ""));
   const high = Number(stripJraTags(maxBody).replaceAll(",", ""));

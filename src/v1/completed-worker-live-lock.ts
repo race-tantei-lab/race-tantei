@@ -34,7 +34,7 @@ const MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000;
 const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;
 const PREVIEW_HISTORY = 3;
 const PREVIEW_VERSION = 1;
-const ODDS_PARSER_VERSION = "jra-decimal-cells-sanity-v2-20260823";
+const ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";
 const OFFICIAL_ODDS_SOURCES = new Set(["jra-fast-official", "jra-crawl-official"]);
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
 

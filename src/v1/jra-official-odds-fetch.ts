@@ -161,7 +161,7 @@ function validateWinMarketSanity(pages: FastJraOddsPage[]): void {
     }
     horseNos.add(horseNo);
     const odds = Number(row.oddsMin);
-    if (!Number.isFinite(odds) || odds <= 1 || Number(row.oddsMax) !== odds) {
+    if (!Number.isFinite(odds) || odds < 1 || Number(row.oddsMax) !== odds) {
       throw new Error(`JRA_WIN_MARKET_ODDS_INVALID:${row.combination}:${row.oddsMin}:${row.oddsMax}`);
     }
     impliedProbabilitySum += 1 / odds;
