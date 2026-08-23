@@ -74,7 +74,7 @@ function homeScript(rows: CalendarRow[], today: string): string {
   const payload = JSON.stringify(rows).replace(/</g, "\\u003c");
   return `
 const calendar=${payload};const today=${JSON.stringify(today)};
-const byId=(id)=>document.getElementById(id);let selectedDate=(calendar.some(x=>x.raceDate===today)?today:(calendar.at(-1)?.raceDate||today));let selectedVenue="";
+const byId=(id)=>document.getElementById(id);let selectedDate=(calendar.some(x=>x.raceDate===today)?today:(calendar.at(-1)?.raceDate||today));let selectedVenue="";let raceLoadSeq=0;
 const uniq=(a)=>[...new Set(a)];
 function button(text,active,onClick,extra){const b=document.createElement("button");b.className="chip"+(active?" active":"")+(extra?" "+extra:"");b.textContent=text;b.onclick=onClick;return b;}
 function parts(date){return {y:date.slice(0,4),m:date.slice(5,7)};}
@@ -83,8 +83,12 @@ const months=uniq(calendar.filter(x=>x.raceDate.startsWith(p.y+"-")).map(x=>x.ra
 const dates=uniq(calendar.filter(x=>x.raceDate.startsWith(p.y+"-"+p.m+"-")).map(x=>x.raceDate));const da=byId("dates");da.replaceChildren();dates.forEach(d=>{const label=Number(d.slice(8))+"日"+(d===today?" 今日":"");da.append(button(label,d===selectedDate,()=>{selectedDate=d;selectedVenue="";renderHierarchy();},d===today?"today":""));});
 const venues=calendar.filter(x=>x.raceDate===selectedDate).map(x=>x.venue);if(!venues.includes(selectedVenue))selectedVenue=venues[0]||"";const ve=byId("venues");ve.replaceChildren();venues.forEach(v=>ve.append(button(v,v===selectedVenue,()=>{selectedVenue=v;renderVenuesOnly();loadRaces();})));byId("selected-date").textContent=selectedDate===today?"今日のレース":selectedDate.replaceAll("-","/");loadRaces();}
 function renderVenuesOnly(){const venues=calendar.filter(x=>x.raceDate===selectedDate).map(x=>x.venue);const ve=byId("venues");ve.replaceChildren();venues.forEach(v=>ve.append(button(v,v===selectedVenue,()=>{selectedVenue=v;renderVenuesOnly();loadRaces();})));}
-async function loadRaces(){const rail=byId("races");rail.innerHTML='<div class="empty">レース情報を読み込み中…</div>';try{const res=await fetch("/api/public/day?date="+encodeURIComponent(selectedDate));const data=await res.json();const rows=data.races.filter(x=>x.venue===selectedVenue);rail.replaceChildren();if(!rows.length){rail.innerHTML='<div class="empty">この会場のレース情報はまだありません。</div>';return;}rows.forEach(r=>{const a=document.createElement("a");a.className="race-card"+(r.raceDate===today?" today":"");a.href="/races/"+encodeURIComponent(r.raceId);const meta=[r.surface,r.distanceM?String(r.distanceM)+"m":null].filter(Boolean).join("・");a.innerHTML='<div class="race-head"><span class="race-no">'+r.raceNo+'R</span><span class="race-time">'+(r.startTimeJst||"—")+'</span></div><div class="race-name"></div><div class="race-meta"></div><span class="status '+r.publicState.code+'">'+r.publicState.label+'</span>'+(r.publicState.deadline?'<div class="deadline">'+r.publicState.deadline+'</div>':'');a.querySelector(".race-name").textContent=r.raceName||r.raceNo+"R";a.querySelector(".race-meta").textContent=meta;rail.append(a);});}catch(e){rail.innerHTML='<div class="empty">レース情報を取得できませんでした。再読み込みしてください。</div>';}}
-renderHierarchy();`;
+async function loadRaces(silent=false){const rail=byId("races");const seq=++raceLoadSeq;const dateAtStart=selectedDate;const venueAtStart=selectedVenue;const previousScroll=rail.scrollLeft;if(!silent)rail.innerHTML='<div class="empty">レース情報を読み込み中…</div>';try{const url="/api/public/day?date="+encodeURIComponent(dateAtStart)+"&_rt="+Date.now();const res=await fetch(url,{cache:"no-store",headers:{"cache-control":"no-cache"}});if(!res.ok)throw new Error("RACE_DAY_HTTP_"+res.status);const data=await res.json();if(seq!==raceLoadSeq||dateAtStart!==selectedDate||venueAtStart!==selectedVenue)return;const dayRows=Array.isArray(data.races)?data.races:[];const rows=dayRows.filter(x=>x.venue===venueAtStart);rail.replaceChildren();if(!rows.length){rail.innerHTML='<div class="empty">この会場のレース情報はまだありません。</div>';return;}rows.forEach(r=>{const a=document.createElement("a");a.className="race-card"+(r.raceDate===today?" today":"");a.href="/races/"+encodeURIComponent(r.raceId);const meta=[r.surface,r.distanceM?String(r.distanceM)+"m":null].filter(Boolean).join("・");a.innerHTML='<div class="race-head"><span class="race-no">'+r.raceNo+'R</span><span class="race-time">'+(r.startTimeJst||"—")+'</span></div><div class="race-name"></div><div class="race-meta"></div><span class="status '+r.publicState.code+'">'+r.publicState.label+'</span>'+(r.publicState.deadline?'<div class="deadline">'+r.publicState.deadline+'</div>':'');a.querySelector(".race-name").textContent=r.raceName||r.raceNo+"R";a.querySelector(".race-meta").textContent=meta;rail.append(a);});if(silent)requestAnimationFrame(()=>{rail.scrollLeft=previousScroll;});}catch(e){if(seq!==raceLoadSeq)return;if(!silent)rail.innerHTML='<div class="empty">レース情報を取得できませんでした。再読み込みしてください。</div>';}}
+function refreshLiveRaceState(){if(selectedDate===today&&document.visibilityState!=="hidden")loadRaces(true);}
+renderHierarchy();
+setInterval(refreshLiveRaceState,15000);
+window.addEventListener("pageshow",refreshLiveRaceState);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refreshLiveRaceState();});`;
 }
 
 async function home(env: Env, ctx: ExecutionContext): Promise<string> {
@@ -123,42 +127,37 @@ async function raceDetail(db: D1Database, raceId: string): Promise<string | null
   } else if (state.code === "pending") {
     bets = `<div class="section-title"><h2>買い目</h2><span class="status pending">判定中</span></div><div class="notice">${escapeHtml(state.deadline ?? "発走15分前までに確定")}</div>`;
   } else {
-    bets = `<div class="section-title"><h2>買い目</h2><span class="status ${state.code}">${state.label}</span></div><section class="panel"><p>このレースは購入対象に選ばれませんでした。</p></section>`;
+    bets = `<div class="section-title"><h2>買い目</h2><span class="status skip">見送り</span></div><div class="notice">このレースは買い目対象ではありません。</div>`;
   }
-  const runnerTable = `<div class="section-title"><h2>出走馬</h2><span class="muted">${runners.results.length}頭</span></div><div class="runner-table"><table><thead><tr><th>馬番</th><th>馬名</th><th>性齢</th><th>騎手</th><th>調教師</th><th>馬体重</th><th>単勝</th><th>人気</th><th>結果</th></tr></thead><tbody>${runners.results.map((r)=>`<tr><td><span class="horse-no">${r.horseNo}</span></td><td><b>${escapeHtml(r.horseName)}</b></td><td>${escapeHtml(r.sexAge ?? "—")}</td><td>${escapeHtml(r.jockey ?? "—")}${r.assignedWeight !== null ? `<br><span class="muted">${r.assignedWeight}kg</span>`:""}</td><td>${escapeHtml(r.trainer ?? "—")}</td><td>${r.horseWeight === null ? "—" : `${r.horseWeight}kg${r.weightChange === null ? "" : ` (${r.weightChange>=0?"+":""}${r.weightChange})`}`}</td><td>${r.winOdds === null ? "—" : `${r.winOdds}倍`}</td><td>${r.popularity === null ? "—" : `${r.popularity}番人気`}</td><td>${r.finishPosition === null ? "—" : `${r.finishPosition}着`}</td></tr>`).join("")}</tbody></table></div>`;
-  const body = `<a class="back" href="/">← レース一覧へ</a><section class="hero ${race.raceDate===today?"today-hero":""}"><div class="race-title"><span class="race-no">${race.raceNo}R</span><h1>${escapeHtml(race.raceName)}</h1><span class="status ${state.code}">${state.label}</span></div><p>${escapeHtml(meta)}</p>${race.conditions ? `<p>${escapeHtml(race.conditions)}</p>`:""}</section>${bets}${runnerTable}`;
-  const script = `<script>document.querySelectorAll('[data-course-tab]').forEach(b=>b.addEventListener('click',()=>{const n=b.getAttribute('data-course-tab');document.querySelectorAll('[data-course-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-course]').forEach(x=>x.style.display=x.getAttribute('data-course')===n?'block':'none');}));</script>`;
-  return shell(`${race.venue}${race.raceNo}R`, body).replace("</body></html>", `${script}</body></html>`);
-}
-
-async function dayApi(db: D1Database, date: string): Promise<unknown> {
-  if (!/^20\d{2}-\d{2}-\d{2}$/.test(date)) return { ok: false, error: "INVALID_DATE" };
-  const today = jstDateKey();
-  const rows = await racesOnDate(db, date);
-  return { ok: true, date, races: rows.map((row) => ({
-    ...row,
-    publicState: publicRaceState(row, today, isFrozenSelectedRace(row.raceDate, row.venue, row.raceNo))
-  })) };
+  const runnerRows = runners.results.map((r) => `<tr><td>${r.frameNo ?? "—"}</td><td><b>${r.horseNo}</b></td><td>${escapeHtml(r.horseName)}</td><td>${escapeHtml(r.sexAge ?? "—")}</td><td>${r.horseWeight === null ? "—" : `${r.horseWeight}kg${r.weightChange === null ? "" : ` (${r.weightChange >= 0 ? "+" : ""}${r.weightChange})`}`}</td><td>${escapeHtml(r.jockey ?? "—")}</td><td>${r.assignedWeight === null ? "—" : r.assignedWeight.toFixed(1)}</td><td>${escapeHtml(r.trainer ?? "—")}</td><td>${r.winOdds === null ? "—" : r.winOdds.toFixed(1)}</td><td>${r.popularity ?? "—"}</td><td>${r.finishPosition ?? "—"}</td></tr>`).join("");
+  const body = `<section class="hero"><h1>${escapeHtml(race.venue)} ${race.raceNo}R　${escapeHtml(race.raceName)}</h1><p>${escapeHtml(meta)}</p></section>${bets}<div class="section-title"><h2>出走馬</h2><span class="muted">最新の取得情報</span></div><div class="runner-table"><table><thead><tr><th>枠</th><th>馬</th><th>馬名</th><th>性齢</th><th>馬体重</th><th>騎手</th><th>斤量</th><th>調教師</th><th>単勝</th><th>人気</th><th>着順</th></tr></thead><tbody>${runnerRows || `<tr><td colspan="11">出走馬情報を取得中です。</td></tr>`}</tbody></table></div>`;
+  return shell(`${race.venue} ${race.raceNo}R`, body, `<script>document.querySelectorAll('[data-course-tab]').forEach((b)=>b.addEventListener('click',()=>{const i=b.dataset.courseTab;document.querySelectorAll('[data-course-tab]').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('[data-course]').forEach(x=>x.style.display=x.dataset.course===i?'':'none');}));</script>`);
 }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url); const path = url.pathname;
+    const url = new URL(request.url);
+    const path = url.pathname;
+    if (request.method !== "GET" && request.method !== "HEAD") return response("METHOD_NOT_ALLOWED", 405);
     if (path === "/") return response(await home(env, ctx));
     if (path === "/conditions") return response(conditionsPage());
     if (path === "/guide") return response(guidePage());
-    if (path === "/performance") return redirect("/");
-    if (path === "/validation" || path.startsWith("/validation/")) return redirect("/conditions");
-    if (path === "/api/public/calendar") return json({ ok: true, calendar: await calendar(env.DB) });
-    if (path === "/api/public/day") return json(await dayApi(env.DB, url.searchParams.get("date") ?? ""));
-    if (path.startsWith("/races/")) {
-      const page = await raceDetail(env.DB, decodeURIComponent(path.slice("/races/".length)));
-      return page ? response(page) : response(shell("レースが見つかりません", `<section class="panel"><h1>レースが見つかりません</h1><p><a class="back" href="/">レース一覧へ戻る</a></p></section>`), 404);
+    if (path === "/api/public/calendar") return json(await calendar(env.DB));
+    if (path === "/api/public/day") {
+      const date = url.searchParams.get("date") ?? jstDateKey();
+      const rows = await racesOnDate(env.DB, date);
+      const today = jstDateKey();
+      const enriched = rows.map((row) => ({ ...row, publicState: publicRaceState(row, today, isFrozenSelectedRace(row.raceDate, row.venue, row.raceNo)) }));
+      return json({ date, races: enriched });
     }
-    if (path.startsWith("/api/")) return json({ ok: false, error: "NOT_FOUND" }, 404);
-    return response(shell("ページが見つかりません", `<section class="panel"><h1>ページが見つかりません</h1><p><a class="back" href="/">レース一覧へ戻る</a></p></section>`), 404);
+    if (path.startsWith("/races/")) {
+      const html = await raceDetail(env.DB, decodeURIComponent(path.slice("/races/".length)));
+      return html ? response(html) : response("NOT_FOUND", 404);
+    }
+    if (path === "/history") return redirect("/");
+    return response("NOT_FOUND", 404);
   },
-  async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
+  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     await runPublicDataSync(env, "cron");
-  }
+  },
 } satisfies ExportedHandler<Env>;
