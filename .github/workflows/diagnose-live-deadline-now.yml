@@ -47,6 +47,14 @@ jobs:
           echo '=== SELECTED RACE FINAL/PREVIEW STATUS ==='
           npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
             "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}') SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.start_time_jst AS startTimeJst,r.start_time_utc AS startTimeUtc,CAST((julianday(r.start_time_utc)-julianday('now'))*1440 AS INTEGER) AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows,(SELECT COUNT(*) FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id) AS previewState,(SELECT COUNT(*) FROM rt_live_preview_archive a WHERE a.race_id=r.race_id) AS previewArchiveRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id ORDER BY r.start_time_utc,r.race_id"
+          echo '=== MISSED NIIGATA 1R PREVIEW ENVELOPE ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT s.updated_at AS stateUpdatedAt,json_extract(j.value,'$.generatedAt') AS generatedAt,json_extract(j.value,'$.oddsFetchedAt') AS oddsFetchedAt,json_extract(j.value,'$.oddsSource') AS oddsSource,json_extract(j.value,'$.bodyWeightApplied') AS bodyWeightApplied,json_array_length(json_extract(j.value,'$.courseBets')) AS courseBetCount FROM rt_system_state s,json_each(json_extract(s.state_value,'$.snapshots')) j WHERE s.state_key='worker_live_preview:2026-08-23-niigata-01' ORDER BY generatedAt DESC"
+          echo '=== PREVIEW ARCHIVE SCHEMA ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "PRAGMA table_info(rt_live_preview_archive)"
+          echo '=== MISSED NIIGATA 1R ARCHIVE ROWS ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT * FROM rt_live_preview_archive WHERE race_id='2026-08-23-niigata-01' ORDER BY rowid DESC LIMIT 10"
           echo '=== FIRST RACES ALL VENUES ==='
           npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
             "SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.start_time_jst AS startTimeJst,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows FROM rt_races r WHERE r.race_date='${today}' AND r.race_no<=2 ORDER BY r.start_time_utc,r.race_id"
