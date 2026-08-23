@@ -1,4 +1,5 @@
 name: Deploy live deadline Workers
+# Includes parser-provenance hardening so obsolete odds previews can never be finalized.
 
 on:
   push:
