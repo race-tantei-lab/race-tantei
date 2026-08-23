@@ -5,9 +5,12 @@ on:
     paths: [".github/workflows/inspect-jra-odds-markup-20260823.yml"]
 permissions:
   contents: read
+  statuses: write
 env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  GH_TOKEN: ${{ github.token }}
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 jobs:
   inspect:
     runs-on: ubuntu-latest
@@ -45,9 +48,9 @@ jobs:
           const oddsUrl=new URL('/JRADB/accessO.html',entryUrl).toString();
           function rowSummary(page){
             const rows=[...page.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)].map(m=>m[0]).filter(x=>/\d+\.\d+/.test(x));
-            return rows.slice(0,8).map((x,i)=>`${i+1}: ${x.replace(/\s+/g,' ').slice(0,1200)}`).join('\n');
+            return rows.slice(0,10).map((x,i)=>`${i+1}: ${x.replace(/\s+/g,' ').slice(0,1600)}`).join('\n');
           }
-          function tableTags(page){return [...page.matchAll(/<table\b[^>]*>/gi)].map(m=>m[0].replace(/\s+/g,' ')).slice(0,80)}
+          function tableTags(page){return [...page.matchAll(/<table\b[^>]*>/gi)].map(m=>m[0].replace(/\s+/g,' ')).slice(0,100)}
           for(const [name,prefix] of Object.entries(prefixes)){
             const cname=actions.find(x=>x.startsWith(prefix));
             console.log(`\n===== ${name} cname=${cname||'MISSING'} =====`);
@@ -57,3 +60,9 @@ jobs:
             console.log('DECIMAL_ROWS'); console.log(rowSummary(page));
           }
           NODE
+      - name: Mark success
+        if: success()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='diagnostic/jra-odds-markup' -f description='JRA odds markup captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark failure
+        if: failure()
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='diagnostic/jra-odds-markup' -f description='JRA odds markup capture failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
