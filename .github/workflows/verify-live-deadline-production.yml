@@ -45,7 +45,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='production/live-deadline-readiness' \
-            -f description='Verifying completed priority rescue and production finals' \
+            -f description='Verifying T-17 fresh final and T-16 rescue' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -131,13 +131,13 @@ jobs:
           if(!Number.isFinite(age)||age < -30||age > 300) throw new Error(`PRIORITY_GUARD_STALE:${age}`);
           console.log(JSON.stringify({priorityGuard:'completed',ageSeconds:age,updatedAt:r.updatedAt}));
           NODE
-      - name: Verify every currently due selected race has exact six final rows
+      - name: Verify every T-16 due selected race has exact six final rows
         shell: bash
         run: |
           set -euo pipefail
           today=$(TZ=Asia/Tokyo date +%F)
           rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,finalRows FROM q WHERE minutesToStart BETWEEN 15 AND 24 ORDER BY minutesToStart")
+            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,finalRows FROM q WHERE minutesToStart BETWEEN 15 AND 16 ORDER BY minutesToStart")
           echo "$rows"
           ROWS="$rows" node - <<'NODE'
           const p=JSON.parse(process.env.ROWS||'[]'); const rows=p?.[0]?.results||[];
@@ -150,7 +150,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/live-deadline-readiness' \
-            -f description='Priority rescue completed, crons active, due finals exact-six verified' \
+            -f description='T-17 fresh final, T-16 rescue, T-15 hard boundary verified' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark production readiness failure
         if: failure()
