@@ -30,8 +30,10 @@ on:
       - "scripts/official-odds-roi200-policy-v2.py"
       - "scripts/publish-official-odds-roi200-production-v2.py"
       - ".github/workflows/official-odds-roi200-runtime.yml"
+  # Research must not compete with live deadline writes on the production D1.
+  # 11:30 UTC = 20:30 JST, after the normal Saturday/Sunday race window.
   schedule:
-    - cron: "*/30 * * * 5,6,0"
+    - cron: "30 11 * * 6,0"
 
 permissions:
   contents: write
