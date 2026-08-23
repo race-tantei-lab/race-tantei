@@ -239,10 +239,12 @@ function positionedHorse(context: string, label: "1着" | "2着"): number | null
 
 function parseTrifectaRows(pageHtml: string): OfficialOddsRow[] {
   const parsed = new Map<string, [number, number]>();
-  for (const table of tablesByClass(pageHtml, "tan3")) {
-    const liStart = pageHtml.lastIndexOf("<li", table.start);
-    const contextStart = liStart >= 0 ? liStart : Math.max(0, table.start - 1800);
-    const context = pageHtml.slice(contextStart, table.start);
+  for (const unit of pageHtml.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)) {
+    const unitHtml = unit[1] ?? "";
+    const tables = tablesByClass(unitHtml, "tan3");
+    if (tables.length !== 1) continue;
+    const table = tables[0];
+    const context = unitHtml.slice(0, table.start);
     const first = positionedHorse(context, "1着");
     const second = positionedHorse(context, "2着");
     if (first == null || second == null || first === second) continue;
@@ -251,7 +253,9 @@ function parseTrifectaRows(pageHtml: string): OfficialOddsRow[] {
       const third = rowHorseFromScope(rowHtml);
       const odds = exactRowOdds(rowHtml);
       if (third == null || odds == null || third === first || third === second) continue;
-      parsed.set(`${first}-${second}-${third}`, odds);
+      const combination = `${first}-${second}-${third}`;
+      if (parsed.has(combination)) throw new Error(`JRA_TAN3_DUPLICATE_COMBINATION:${combination}`);
+      parsed.set(combination, odds);
     }
   }
   return [...parsed.entries()].sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))

@@ -72,6 +72,16 @@ const ambiguousHtml = `<table><tr><td>12</td><td>1.9</td><td>57.0</td></tr></tab
 assert.deepEqual(parseFastJraOfficialOddsRows(ambiguousHtml, "単勝"), []);
 assert.deepEqual(parseFastJraOfficialOddsRows(ambiguousHtml, "馬連"), []);
 
+
+const tan3SiblingUnitsHtml = `<ul class="tan3_list">
+  <li><div class="p_line"><div class="inner"><div class="cap"><span>1着</span></div><div class="num">1</div></div></div><div class="p_line"><div class="inner"><div class="cap"><span>2着</span></div><div class="num">2</div></div></div><table class="basic narrow-xy tan3"><caption><div class="p_line"><span class="cap">3着</span></div></caption><tr><th scope="row">3</th><td>42.6</td></tr></table></li>
+  <li><div class="p_line"><div class="inner"><div class="cap"><span>1着</span></div><div class="num">1</div></div></div><div class="p_line"><div class="inner"><div class="cap"><span>2着</span></div><div class="num">3</div></div></div><table class="basic narrow-xy tan3"><caption><div class="p_line"><span class="cap">3着</span></div></caption><tr><th scope="row">2</th><td>51.4</td></tr></table></li>
+</ul>`;
+assert.deepEqual(parseFastJraOfficialOddsRows(tan3SiblingUnitsHtml, "3連単"), [
+  { betType: "3連単", combination: "1-2-3", oddsMin: 42.6, oddsMax: 42.6 },
+  { betType: "3連単", combination: "1-3-2", oddsMin: 51.4, oddsMax: 51.4 },
+]);
+
 const originalFetch = globalThis.fetch;
 const target = { raceDate: "2026-08-09", venue: "中京", raceNo: 11 } as const;
 const suffix = "S301202601061120260809Z/EA";
