@@ -32,7 +32,8 @@ export type CurrentPublicState = {
 };
 
 const COURSES = ["ライト", "スタンダード", "プレミアム"] as const;
-const DEADLINE_MS = 15 * 60 * 1000;
+const START_DEADLINE_MS = 15 * 60 * 1000;
+const FINAL_DEADLINE_MS = 10 * 60 * 1000;
 
 function selectedIds(raw: string | null | undefined): Set<string> | null {
   if (!raw) return null;
@@ -69,7 +70,7 @@ function completeFinal(rows: CurrentBetRow[]): boolean {
 function finalState(rows: CurrentBetRow[]): CurrentPublicState | null {
   if (!completeFinal(rows)) return null;
   if (rows.some((row) => row.settlementStatus !== "settled")) {
-    return { code: "buy", label: "買い目あり", deadline: null };
+    return { code: "buy", label: "買い目確定", deadline: "確定済み・以後変更なし" };
   }
   let genuineHit = false;
   let hasRefund = false;
@@ -93,11 +94,23 @@ function raceStartMs(race: Pick<CurrentRaceRow, "raceDate" | "startTimeJst" | "s
   return Number.isFinite(fallback) ? fallback : null;
 }
 
-function deadlineText(startTimeJst: string | null): string {
+function clockBefore(startTimeJst: string | null, minutesBefore: number): string | null {
   const match = String(startTimeJst ?? "").match(/^(\d{1,2}):(\d{2})$/);
-  if (!match) return "発走15分前までに買い目確定";
-  const total = (Number(match[1]) * 60 + Number(match[2]) - 15 + 24 * 60) % (24 * 60);
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}までに買い目確定`;
+  if (!match) return null;
+  const total = (Number(match[1]) * 60 + Number(match[2]) - minutesBefore + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function timingText(startTimeJst: string | null): string {
+  const start = clockBefore(startTimeJst, 15);
+  const final = clockBefore(startTimeJst, 10);
+  if (!start || !final) return "発走15分前までに最終計算開始・発走10分前までに確定";
+  return `${start}までに最終計算開始 / ${final}までに確定`;
+}
+
+function finalDeadlineText(startTimeJst: string | null): string {
+  const final = clockBefore(startTimeJst, 10);
+  return final ? `${final}までに確定・それまでは変更の可能性あり` : "発走10分前までに確定・それまでは変更の可能性あり";
 }
 
 export function projectCurrentPublicState(
@@ -112,10 +125,18 @@ export function projectCurrentPublicState(
   if (frozenSelection) {
     if (!frozenSelection.has(race.raceId)) return { code: "skip", label: "見送り", deadline: null };
     const startMs = raceStartMs(race);
-    if (startMs === null) return { code: "target", label: "買い目対象", deadline: "発走15分前までに買い目確定" };
-    const deadlineMs = startMs - DEADLINE_MS;
-    if (nowMs < deadlineMs) return { code: "target", label: "買い目対象", deadline: deadlineText(race.startTimeJst) };
-    if (nowMs < startMs) return { code: "overdue", label: "買い目未確定", deadline: `${deadlineText(race.startTimeJst).replace("買い目確定", "確定予定")}（未反映）` };
+    if (startMs === null) return { code: "target", label: "買い目対象・確定前", deadline: timingText(race.startTimeJst) };
+    const startDeadlineMs = startMs - START_DEADLINE_MS;
+    const finalDeadlineMs = startMs - FINAL_DEADLINE_MS;
+    if (nowMs < startDeadlineMs) {
+      return { code: "target", label: "買い目対象・確定前", deadline: timingText(race.startTimeJst) };
+    }
+    if (nowMs < finalDeadlineMs) {
+      return { code: "pending", label: "最終計算中（確定前）", deadline: finalDeadlineText(race.startTimeJst) };
+    }
+    if (nowMs < startMs) {
+      return { code: "overdue", label: "最終確定期限超過", deadline: "確定買い目として扱いません" };
+    }
     return { code: "missing", label: "買い目未生成", deadline: null };
   }
 
@@ -156,7 +177,7 @@ export async function fastCurrentDayResponse(db: D1Database, date: string, now =
   return Response.json({ ok: true, date, races }, {
     headers: {
       "cache-control": "no-store, max-age=0",
-      "x-race-current-day-path": "direct-d1-v1",
+      "x-race-current-day-path": "direct-d1-v2-t15-start-t10-final",
     },
   });
 }
