@@ -1,0 +1,87 @@
+name: Inspect Niigata9 production 20260823
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-niigata9-20260823.yml"
+
+permissions:
+  contents: write
+  statuses: write
+
+env:
+  CF_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  CF_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+  CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect production around T-17/T-15
+        shell: bash
+        run: |
+          set -euo pipefail
+          q() {
+            local sql="$1"
+            curl --fail-with-body -sS -X POST \
+              "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/d1/database/${CF_DATABASE_ID}/query" \
+              -H "Authorization: Bearer ${CF_API_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              --data "$(jq -cn --arg sql "$sql" '{sql:$sql}')"
+          }
+          mkdir -p reports
+          OUT=reports/niigata9-production-20260823.jsonl
+          : > "$OUT"
+          for pass in 1 2 3 4 5 6 7 8; do
+            now=$(date -u +%FT%TZ)
+            race=$(q "SELECT race_id AS raceId,start_time_utc AS startTimeUtc,start_time_jst AS startTimeJst FROM rt_races WHERE race_date='2026-08-23' AND venue='新潟' AND race_no=9 LIMIT 1")
+            rid=$(printf '%s' "$race" | jq -r '.result[0].results[0].raceId // empty')
+            if [ -z "$rid" ]; then
+              printf '%s\n' "$(jq -cn --arg now "$now" --argjson race "$race" '{now:$now,error:"race_not_found",race:$race}')" >> "$OUT"
+              sleep 12
+              continue
+            fi
+            state=$(q "SELECT state_key,state_value,updated_at FROM rt_system_state WHERE state_key IN ('worker_live_preview:'||'$rid','worker_live_final:'||'$rid','worker_live_lock:2026-08-23','live_deadline_driver:2026-08-23','live_deadline_sla:2026-08-23') ORDER BY state_key")
+            bets=$(q "SELECT course,bet_type AS betType,combination,stake_yen AS stakeYen,assumed_odds AS assumedOdds,locked_at AS lockedAt,source_prediction_id AS sourcePredictionId FROM rt_public_bets WHERE race_id='$rid' ORDER BY course,bet_type,combination")
+            runners=$(q "SELECT horse_no AS horseNo,horse_weight AS horseWeight,weight_change AS weightChange,win_odds AS winOdds,popularity FROM rt_runners WHERE race_id='$rid' ORDER BY horse_no")
+            health1=$(curl -sS --max-time 10 'https://race-tantei-live-deadline.race-tantei.workers.dev/health' || true)
+            health2=$(curl -sS --max-time 10 'https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health' || true)
+            jq -cn --arg now "$now" --arg pass "$pass" --arg rid "$rid" --argjson race "$race" --argjson state "$state" --argjson bets "$bets" --argjson runners "$runners" --arg h1 "$health1" --arg h2 "$health2" '{now:$now,pass:($pass|tonumber),raceId:$rid,race:$race,state:$state,bets:$bets,runners:$runners,healthPrimary:$h1,healthBackup:$h2}' >> "$OUT"
+            sleep 12
+          done
+      - name: Summarize and persist report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('reports/niigata9-production-20260823.jsonl')
+          rows=[json.loads(x) for x in p.read_text().splitlines() if x.strip()]
+          last=rows[-1] if rows else {}
+          def cf_results(obj):
+            try: return obj['result'][0]['results']
+            except Exception: return []
+          summary={'samples':len(rows),'raceId':last.get('raceId'),'sampledAt':[r.get('now') for r in rows]}
+          states={}
+          for r in rows:
+            for x in cf_results(r.get('state',{})):
+              try: val=json.loads(x.get('state_value') or '{}')
+              except Exception: val={'raw':x.get('state_value')}
+              states.setdefault(x.get('state_key'),[]).append({'sampledAt':r.get('now'),'updatedAt':x.get('updated_at'),'value':val})
+          summary['states']=states
+          summary['betsBySample']=[{'sampledAt':r.get('now'),'rows':cf_results(r.get('bets',{}))} for r in rows]
+          summary['healthBySample']=[{'sampledAt':r.get('now'),'primary':r.get('healthPrimary'),'backup':r.get('healthBackup')} for r in rows]
+          pathlib.Path('reports/niigata9-production-20260823-summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps(summary,ensure_ascii=False,indent=2))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add reports/niigata9-production-20260823.jsonl reports/niigata9-production-20260823-summary.json
+          git commit -m 'Record Niigata9 production T-17 T-15 audit' || true
+          git pull --rebase origin main
+          git push origin HEAD:main
