@@ -4,9 +4,7 @@ export const JRA_ODDS_URL = "https://www.jra.go.jp/JRADB/accessO.html";
 export const JRA_ODDS_HOME_CNAME = "pw15oli00/6D";
 const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136 Safari/537.36";
 const BET_TYPES: readonly CompletedBetType[] = ["3連単", "3連複", "馬単", "馬連", "ワイド", "単勝"];
-const BET_SET = new Set<string>(BET_TYPES);
 const UNORDERED = new Set<CompletedBetType>(["ワイド", "馬連", "3連複"]);
-const ARITY: Record<CompletedBetType, number> = { "単勝": 1, "ワイド": 2, "馬連": 2, "馬単": 2, "3連複": 3, "3連単": 3 };
 const VENUES = "札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉";
 const CRAWL_PAGE_TIMEOUT_MS = 3_500;
 
@@ -36,6 +34,8 @@ export interface JraOfficialOddsCrawlResult {
   missingBetTypes: CompletedBetType[];
   source: "jra_official";
 }
+
+type TableBlock = { attrs: string; body: string; start: number };
 
 export function decodeJraHtml(buffer: ArrayBuffer, contentType: string | null): string {
   const declared = contentType?.match(/charset\s*=\s*([^;\s]+)/i)?.[1]?.replace(/["']/g, "") ?? null;
@@ -92,48 +92,167 @@ export function parseJraOddsIdentity(pageHtml: string, cname: string): JraOddsId
   };
 }
 
-function oddsValue(text: string): [number, number] | null {
-  const clean = text.replaceAll(",", "").replaceAll("倍", "").trim();
-  // JRA tote odds are rendered with a decimal point (for example 1.9 or
-  // 2.3-5.3). Requiring that decimal is important: horse numbers and popularity
-  // ranks are integer cells in the same table and must never be accepted as an
-  // odds value. The old permissive integer parser turned horse 12 into 12.0x.
-  const match = clean.match(/^(\d+\.\d+)\s*(?:[-－–〜～]\s*(\d+\.\d+))?$/);
+function classValue(attrs: string): string {
+  return attrs.match(/\bclass\s*=\s*(['"])(.*?)\1/i)?.[2] ?? "";
+}
+
+function hasClass(attrs: string, token: string): boolean {
+  return classValue(attrs).split(/\s+/).includes(token);
+}
+
+function tablesByClass(pageHtml: string, token: string): TableBlock[] {
+  const out: TableBlock[] = [];
+  const pattern = /<table\b([^>]*)>([\s\S]*?)<\/table>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(pageHtml)) !== null) {
+    if (hasClass(match[1] ?? "", token)) out.push({ attrs: match[1] ?? "", body: match[2] ?? "", start: match.index });
+  }
+  return out;
+}
+
+function elementBodies(html: string, tag: "td" | "th" | "span"): Array<{ attrs: string; body: string }> {
+  const result: Array<{ attrs: string; body: string }> = [];
+  const pattern = new RegExp(`<${tag}\\b([^>]*)>([\\s\\S]*?)<\\/${tag}>`, "gi");
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html)) !== null) result.push({ attrs: match[1] ?? "", body: match[2] ?? "" });
+  return result;
+}
+
+function bodyByClass(html: string, tag: "td" | "th" | "span", token: string): string | null {
+  return elementBodies(html, tag).find((element) => hasClass(element.attrs, token))?.body ?? null;
+}
+
+function horseNumber(text: string): number | null {
+  const clean = stripJraTags(text).trim();
+  if (!/^\d{1,2}$/.test(clean)) return null;
+  const value = Number(clean);
+  return Number.isInteger(value) && value >= 1 && value <= 18 ? value : null;
+}
+
+function exactOdds(text: string): [number, number] | null {
+  const clean = stripJraTags(text).replaceAll(",", "").replaceAll("倍", "").trim();
+  const match = clean.match(/^(\d+\.\d+)$/);
   if (!match) return null;
-  const low = Number(match[1]); const high = Number(match[2] ?? match[1]);
-  return Number.isFinite(low) && Number.isFinite(high) && low > 1 && high >= low && high <= 100000 ? [low, high] : null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) && value >= 1 && value <= 100000 ? [value, value] : null;
+}
+
+function wideOdds(cellBody: string): [number, number] | null {
+  const minBody = bodyByClass(cellBody, "span", "min");
+  const maxBody = bodyByClass(cellBody, "span", "max");
+  if (minBody == null || maxBody == null) return null;
+  const low = Number(stripJraTags(minBody).replaceAll(",", ""));
+  const high = Number(stripJraTags(maxBody).replaceAll(",", ""));
+  return Number.isFinite(low) && Number.isFinite(high) && low >= 1 && high >= low && high <= 100000 ? [low, high] : null;
 }
 
 function normalizeCombination(betType: CompletedBetType, horses: number[]): string {
   return (UNORDERED.has(betType) ? [...horses].sort((a, b) => a - b) : horses).join("-");
 }
 
-function numericCells(rowHtml: string): number[] {
-  const cells = [...rowHtml.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((match) => stripJraTags(match[1] ?? ""));
-  const values: number[] = [];
-  for (const cell of cells) if (/^\d{1,2}$/.test(cell) && Number(cell) >= 1 && Number(cell) <= 18) values.push(Number(cell));
+function captionHorses(tableBody: string, expected: number): number[] | null {
+  const caption = tableBody.match(/<caption\b[^>]*>([\s\S]*?)<\/caption>/i)?.[1];
+  if (caption == null) return null;
+  const values = [...stripJraTags(caption).matchAll(/(?<!\d)(\d{1,2})(?!\d)/g)]
+    .map((row) => Number(row[1])).filter((value) => value >= 1 && value <= 18);
+  if (values.length !== expected || new Set(values).size !== values.length) return null;
   return values;
 }
 
-export function parseJraOfficialOddsRows(pageHtml: string, betType: CompletedBetType): OfficialOddsRow[] {
-  const arity = ARITY[betType];
-  const rows = new Map<string, [number, number]>();
-  for (const row of pageHtml.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
-    const rowHtml = row[0] ?? "";
-    const horses = numericCells(rowHtml);
-    if (horses.length < arity) continue;
-    const combinationHorses = horses.slice(0, arity);
-    if (new Set(combinationHorses).size !== combinationHorses.length) continue;
-    let odds: [number, number] | null = null;
-    for (const cell of rowHtml.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)) {
-      const parsed = oddsValue(stripJraTags(cell[1] ?? ""));
-      if (parsed) { odds = parsed; break; }
-    }
-    if (!odds) continue;
-    const key = normalizeCombination(betType, combinationHorses);
-    if (!rows.has(key) || odds[0] < rows.get(key)![0]) rows.set(key, odds);
+function rowHorseFromScope(rowHtml: string): number | null {
+  for (const th of elementBodies(rowHtml, "th")) {
+    const scope = th.attrs.match(/\bscope\s*=\s*(['"])(.*?)\1/i)?.[2]?.trim().toLowerCase();
+    if (scope === "row") return horseNumber(th.body);
   }
-  return [...rows.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([combination, [oddsMin, oddsMax]]) => ({ betType, combination, oddsMin, oddsMax }));
+  return null;
+}
+
+function exactRowOdds(rowHtml: string): [number, number] | null {
+  const cells = elementBodies(rowHtml, "td");
+  if (cells.length !== 1) return null;
+  return exactOdds(cells[0].body);
+}
+
+function parseWinRows(pageHtml: string): OfficialOddsRow[] {
+  const rows = new Map<string, [number, number]>();
+  for (const table of tablesByClass(pageHtml, "tanpuku")) {
+    for (const row of table.body.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const rowHtml = row[0] ?? "";
+      const numberBody = bodyByClass(rowHtml, "td", "num");
+      const oddsBody = bodyByClass(rowHtml, "td", "odds_tan");
+      if (numberBody == null || oddsBody == null) continue;
+      const number = horseNumber(numberBody);
+      const odds = exactOdds(oddsBody);
+      if (number == null || odds == null) continue;
+      rows.set(String(number), odds);
+    }
+  }
+  return [...rows.entries()].sort(([a], [b]) => Number(a) - Number(b))
+    .map(([combination, [oddsMin, oddsMax]]) => ({ betType: "単勝", combination, oddsMin, oddsMax }));
+}
+
+function parseGroupedRows(pageHtml: string, betType: Exclude<CompletedBetType, "単勝" | "3連単">, token: string, prefixCount: number): OfficialOddsRow[] {
+  const parsed = new Map<string, [number, number]>();
+  for (const table of tablesByClass(pageHtml, token)) {
+    const prefix = captionHorses(table.body, prefixCount);
+    if (!prefix) continue;
+    for (const row of table.body.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const rowHtml = row[0] ?? "";
+      const lastHorse = rowHorseFromScope(rowHtml);
+      if (lastHorse == null) continue;
+      const horses = [...prefix, lastHorse];
+      if (new Set(horses).size !== horses.length) continue;
+      let odds: [number, number] | null;
+      if (betType === "ワイド") {
+        const oddsBody = bodyByClass(rowHtml, "td", "odds");
+        odds = oddsBody == null ? null : wideOdds(oddsBody);
+      } else {
+        odds = exactRowOdds(rowHtml);
+      }
+      if (!odds) continue;
+      const combination = normalizeCombination(betType, horses);
+      parsed.set(combination, odds);
+    }
+  }
+  return [...parsed.entries()].sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))
+    .map(([combination, [oddsMin, oddsMax]]) => ({ betType, combination, oddsMin, oddsMax }));
+}
+
+function positionedHorse(context: string, label: "1着" | "2着"): number | null {
+  const pattern = new RegExp(`${label}[\\s\\S]{0,500}?<div\\b([^>]*)>([\\s\\S]*?)<\\/div>`, "i");
+  const match = pattern.exec(context);
+  if (!match || !hasClass(match[1] ?? "", "num")) return null;
+  return horseNumber(match[2] ?? "");
+}
+
+function parseTrifectaRows(pageHtml: string): OfficialOddsRow[] {
+  const parsed = new Map<string, [number, number]>();
+  for (const table of tablesByClass(pageHtml, "tan3")) {
+    const liStart = pageHtml.lastIndexOf("<li", table.start);
+    const contextStart = liStart >= 0 ? liStart : Math.max(0, table.start - 1800);
+    const context = pageHtml.slice(contextStart, table.start);
+    const first = positionedHorse(context, "1着");
+    const second = positionedHorse(context, "2着");
+    if (first == null || second == null || first === second) continue;
+    for (const row of table.body.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+      const rowHtml = row[0] ?? "";
+      const third = rowHorseFromScope(rowHtml);
+      const odds = exactRowOdds(rowHtml);
+      if (third == null || odds == null || third === first || third === second) continue;
+      parsed.set(`${first}-${second}-${third}`, odds);
+    }
+  }
+  return [...parsed.entries()].sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }))
+    .map(([combination, [oddsMin, oddsMax]]) => ({ betType: "3連単", combination, oddsMin, oddsMax }));
+}
+
+export function parseJraOfficialOddsRows(pageHtml: string, betType: CompletedBetType): OfficialOddsRow[] {
+  if (betType === "単勝") return parseWinRows(pageHtml);
+  if (betType === "馬連") return parseGroupedRows(pageHtml, betType, "umaren", 1);
+  if (betType === "ワイド") return parseGroupedRows(pageHtml, betType, "wide", 1);
+  if (betType === "馬単") return parseGroupedRows(pageHtml, betType, "umatan", 1);
+  if (betType === "3連複") return parseGroupedRows(pageHtml, betType, "fuku3", 2);
+  return parseTrifectaRows(pageHtml);
 }
 
 function guessedBetType(context: string, cname: string): CompletedBetType | null {
