@@ -82,6 +82,16 @@ assert.deepEqual(parseFastJraOfficialOddsRows(tan3SiblingUnitsHtml, "3連単"), 
   { betType: "3連単", combination: "1-3-2", oddsMin: 51.4, oddsMax: 51.4 },
 ]);
 
+
+const tan3HighOddsHtml = `<ul class="tan3_list"><li>
+  <div class="p_line"><div class="inner"><div class="cap"><span>1着</span></div><div class="num">7</div></div></div>
+  <div class="p_line"><div class="inner"><div class="cap"><span>2着</span></div><div class="num">14</div></div></div>
+  <table class="basic narrow-xy tan3"><tr><th scope="row">1</th><td>182345.6</td></tr></table>
+</li></ul>`;
+assert.deepEqual(parseFastJraOfficialOddsRows(tan3HighOddsHtml, "3連単"), [
+  { betType: "3連単", combination: "7-14-1", oddsMin: 182345.6, oddsMax: 182345.6 },
+]);
+
 const originalFetch = globalThis.fetch;
 const target = { raceDate: "2026-08-09", venue: "中京", raceNo: 11 } as const;
 const suffix = "S301202601061120260809Z/EA";

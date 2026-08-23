@@ -134,7 +134,7 @@ function exactOdds(text: string): [number, number] | null {
   const match = clean.match(/^(\d+\.\d+)$/);
   if (!match) return null;
   const value = Number(match[1]);
-  return Number.isFinite(value) && value >= 1 && value <= 100000 ? [value, value] : null;
+  return Number.isFinite(value) && value >= 1 ? [value, value] : null;
 }
 
 function nestedElementBodyByClass(html: string, tag: "span", token: string): string | null {
@@ -155,7 +155,7 @@ function wideOdds(cellBody: string): [number, number] | null {
   if (minBody == null || maxBody == null) return null;
   const low = Number(stripJraTags(minBody).replaceAll(",", ""));
   const high = Number(stripJraTags(maxBody).replaceAll(",", ""));
-  return Number.isFinite(low) && Number.isFinite(high) && low >= 1 && high >= low && high <= 100000 ? [low, high] : null;
+  return Number.isFinite(low) && Number.isFinite(high) && low >= 1 && high >= low ? [low, high] : null;
 }
 
 function normalizeCombination(betType: CompletedBetType, horses: number[]): string {
