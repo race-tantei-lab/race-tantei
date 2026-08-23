@@ -33,7 +33,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Apply patch
-        run: python3 scripts/apply-t15-start-t10-reflect-20260823.py
+        run: python3 scripts/apply-t15-start-t10-reflect-v2-20260823.py
       - name: Verify runtime
         run: |
           npm run typecheck
