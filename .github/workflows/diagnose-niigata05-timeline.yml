@@ -1,4 +1,4 @@
-name: Diagnose Sapporo 9R timeline
+name: Audit selected live deadline readiness
 
 on:
   push:
@@ -23,38 +23,26 @@ jobs:
     timeout-minutes: 6
     steps:
       - name: Mark pending
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='diagnostic/sapporo09-timeline' -f description='Reading Sapporo 9R generation timeline' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='diagnostic/live-readiness' -f description='Auditing selected race readiness' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Dump Sapporo 9R exact timeline
+      - name: Dump selected-race readiness
         shell: bash
         run: |
           set -euo pipefail
-          RID='2026-08-23-sapporo-09'
           DATE='2026-08-23'
-          echo '=== RACE ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id,race_date,venue,race_no,start_time_jst,start_time_utc,status FROM rt_races WHERE race_id='$RID'"
-          echo '=== DAILY SELECTION ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key='final_daily_selection:$DATE'"
-          echo '=== FINAL BET ROWS ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT id,race_id,course,bet_type,combination,stake_yen,assumed_odds,locked_at,source_prediction_id,created_at,settlement_status FROM rt_public_bets WHERE race_id='$RID' ORDER BY id"
-          echo '=== FINAL/PREVIEW/DRIVER STATES ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key AS stateKey,updated_at AS updatedAt,state_value AS stateValue FROM rt_system_state WHERE state_key IN ('worker_live_preview:$RID','worker_live_final:$RID','live_deadline_driver:$DATE','worker_deadline_guard:$DATE','worker_live_lock:$DATE') ORDER BY state_key"
-          echo '=== PREVIEW ARCHIVE ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT id,race_id,newest_generated_at,archived_at,envelope_json FROM rt_live_preview_archive WHERE race_id='$RID' ORDER BY rowid"
-          echo '=== PUBLIC API ==='
-          curl --max-time 20 --fail-with-body -sS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$DATE&_diag=$(date +%s)" -o /tmp/day.json
-          node - <<'NODE'
-          const p=require('/tmp/day.json');
-          console.log(JSON.stringify((p.races||[]).find(x=>x.raceId==='2026-08-23-sapporo-09')||null,null,2));
-          NODE
+          echo '=== NOW UTC ==='; date -u -Iseconds
+          echo '=== SELECTED RACE READINESS ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH selected AS (SELECT je.value->>'$.raceId' AS race_id FROM rt_system_state s, json_each(json_extract(s.state_value,'$.selected')) je WHERE s.state_key='final_daily_selection:$DATE'), finals AS (SELECT race_id,COUNT(*) AS final_rows,MIN(locked_at) AS locked_at FROM rt_public_bets WHERE source_prediction_id=-2 GROUP BY race_id), previews AS (SELECT replace(state_key,'worker_live_preview:','') AS race_id,updated_at AS preview_updated,json_extract(state_value,'$.snapshots[0].generatedAt') AS preview_generated,json_extract(state_value,'$.snapshots[0].oddsSource') AS odds_source FROM rt_system_state WHERE state_key LIKE 'worker_live_preview:$DATE%') SELECT r.race_id,r.venue,r.race_no,r.start_time_jst,r.start_time_utc,r.status,COALESCE(f.final_rows,0) AS final_rows,f.locked_at,p.preview_generated,p.preview_updated,p.odds_source FROM selected s JOIN rt_races r ON r.race_id=s.race_id LEFT JOIN finals f ON f.race_id=r.race_id LEFT JOIN previews p ON p.race_id=r.race_id ORDER BY r.start_time_utc,r.race_id"
+          echo '=== LEASE / DRIVER / LIVE AUDIT ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('live_deadline_driver:$DATE','live_deadline_lease_skip:$DATE','worker_live_lock:$DATE','worker_deadline_guard:$DATE') ORDER BY state_key"
       - name: Mark success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='diagnostic/sapporo09-timeline' -f description='Sapporo 9R timeline captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='diagnostic/live-readiness' -f description='Selected race readiness captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='diagnostic/sapporo09-timeline' -f description='Sapporo 9R timeline diagnostic failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='diagnostic/live-readiness' -f description='Selected race readiness audit failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
