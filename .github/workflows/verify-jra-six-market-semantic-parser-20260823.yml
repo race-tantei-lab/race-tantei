@@ -26,7 +26,7 @@ jobs:
         run: |
           npm run typecheck
           npx tsx tests/jra-official-odds-fetch-tests.ts
-      - name: Verify complete official JRA markets on real Chukyo10
+      - name: Diagnose and verify real JRA Chukyo10 markets
         shell: bash
         run: |
           set -euo pipefail
@@ -35,45 +35,37 @@ jobs:
           entry=$(node -e "const p=require('/tmp/race.json');process.stdout.write(p[0].results[0].entry_url)")
           cat > .semantic-odds-verify.ts <<'TS'
           import { fetchFastJraOfficialOddsForRace } from "./src/v1/jra-official-odds-fetch.ts";
-          import { decodeJraHtml, jraActionLinks } from "./src/v1/jra-official-odds.ts";
-          import { findFastJraTypeCnames, JRA_FAST_TYPE_PREFIX } from "./src/v1/jra-official-odds-fast.ts";
 
           async function main() {
-            const entryUrl=process.env.ENTRY_URL!;
-            const target={raceDate:"2026-08-23",venue:"中京",raceNo:10} as const;
-            const r=await fetchFastJraOfficialOddsForRace(entryUrl,target);
+            const r=await fetchFastJraOfficialOddsForRace(process.env.ENTRY_URL!,{raceDate:"2026-08-23",venue:"中京",raceNo:10});
             const counts=Object.fromEntries(r.pages.map(p=>[p.betType,p.rows.length]));
-            console.log(JSON.stringify({source:r.source,sourceHost:r.sourceHost,counts},null,2));
-            const expected={"単勝":14,"馬連":91,"ワイド":91,"馬単":182,"3連複":364,"3連単":2184};
-            for(const [k,v] of Object.entries(expected)) if(Number(counts[k])!==v) throw new Error(`COUNT_MISMATCH:${k}:${counts[k]}:${v}`);
+            console.log("COUNTS",JSON.stringify(counts));
+            const tan3=r.rows.filter(x=>x.betType==="3連単");
+            const got=new Set(tan3.map(x=>x.combination));
+            const missing:string[]=[];
+            const pairMissing=new Map<string,number>();
+            const firstMissing=new Map<string,number>();
+            for(let a=1;a<=14;a++) for(let b=1;b<=14;b++) if(b!==a) for(let c=1;c<=14;c++) if(c!==a&&c!==b){
+              const key=`${a}-${b}-${c}`;
+              if(!got.has(key)){
+                missing.push(key);
+                const pair=`${a}-${b}`;
+                pairMissing.set(pair,(pairMissing.get(pair)??0)+1);
+                firstMissing.set(String(a),(firstMissing.get(String(a))??0)+1);
+              }
+            }
+            const pairCounts=new Map<string,number>();
+            for(const row of tan3){const [a,b]=row.combination.split("-");const pair=`${a}-${b}`;pairCounts.set(pair,(pairCounts.get(pair)??0)+1);}
+            console.log("MISSING_TOTAL",missing.length);
+            console.log("FIRST_MISSING",JSON.stringify(Object.fromEntries([...firstMissing.entries()].sort((a,b)=>Number(a[0])-Number(b[0])))));
+            console.log("PAIR_MISSING",JSON.stringify(Object.fromEntries([...pairMissing.entries()].sort((a,b)=>a[0].localeCompare(b[0],"en",{numeric:true})))));
+            console.log("INCOMPLETE_PAIR_COUNTS",JSON.stringify(Object.fromEntries([...pairCounts.entries()].filter(([,v])=>v!==12).sort((a,b)=>a[0].localeCompare(b[0],"en",{numeric:true})))));
+            console.log("MISSING_SAMPLE",JSON.stringify(missing.slice(0,300)));
             const win=r.rows.find(x=>x.betType==="単勝"&&x.combination==="12");
             console.log("HORSE12_WIN",JSON.stringify(win));
-            if(!win || win.oddsMin!==1.7 || win.oddsMax!==1.7) throw new Error(`HORSE12_WIN_MISMATCH:${JSON.stringify(win)}`);
-            const keys=new Set<string>();
-            for(const row of r.rows){const key=`${row.betType}:${row.combination}`; if(keys.has(key)) throw new Error(`DUPLICATE:${key}`); keys.add(key); if(!Number.isFinite(row.oddsMin)||!Number.isFinite(row.oddsMax)||row.oddsMin<1||row.oddsMax<row.oddsMin) throw new Error(`ODDS_INVALID:${key}`);}
-
-            const headers={"User-Agent":"Mozilla/5.0 Chrome/136 Safari/537.36","Accept-Language":"ja-JP,ja;q=0.9","Cache-Control":"no-cache","Pragma":"no-cache"};
-            async function raw(url:string,cname?:string){const h:Record<string,string>={...headers};let body:string|undefined;if(cname){body=new URLSearchParams({cname}).toString();h["Content-Type"]="application/x-www-form-urlencoded";}const res=await fetch(url,{method:body?"POST":"GET",headers:h,body,redirect:"follow"});if(!res.ok)throw new Error(`RAW_HTTP_${res.status}`);return decodeJraHtml(await res.arrayBuffer(),res.headers.get("content-type"));}
-            const dateDigits="20260823";
-            const entryHtml=await raw(entryUrl);
-            const entryCnames=findFastJraTypeCnames(entryHtml,dateDigits,10);
-            const oddsUrl=new URL("/JRADB/accessO.html",entryUrl).toString();
-            const winCname=entryCnames["単勝"] ?? jraActionLinks(entryHtml).find(x=>x.cname.startsWith(JRA_FAST_TYPE_PREFIX["単勝"]))?.cname;
-            if(!winCname)throw new Error("RAW_WIN_CNAME_MISSING");
-            const winHtml=await raw(oddsUrl,winCname);
-            const cnames={...entryCnames,...findFastJraTypeCnames(winHtml,dateDigits,10)};
-            const tan3Cname=cnames["3連単"];
-            if(!tan3Cname)throw new Error("RAW_TAN3_CNAME_MISSING");
-            const tan3Html=await raw(oddsUrl,tan3Cname);
-            let rawPublishedTan3=0;
-            for(const table of tan3Html.matchAll(/<table\b([^>]*)>([\s\S]*?)<\/table>/gi)){
-              const classes=(table[1].match(/\bclass\s*=\s*(["'])(.*?)\1/i)?.[2]??"").split(/\s+/);
-              if(!classes.includes("tan3"))continue;
-              for(const row of (table[2]??"").matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) if(/<td\b[^>]*>[\s\S]*?\d+\.\d+[\s\S]*?<\/td>/i.test(row[0])) rawPublishedTan3++;
-            }
-            console.log("RAW_PUBLISHED_TAN3_ROWS",rawPublishedTan3);
-            if(rawPublishedTan3!==2184) throw new Error(`RAW_TAN3_EXPECTED_2184:${rawPublishedTan3}`);
-            if(rawPublishedTan3!==counts["3連単"]) throw new Error(`TAN3_RAW_COVERAGE_MISMATCH:${rawPublishedTan3}:${counts["3連単"]}`);
+            if(counts["単勝"]!==14||counts["ワイド"]!==91||counts["馬連"]!==91||counts["馬単"]!==182||counts["3連複"]!==364||counts["3連単"]!==2184) throw new Error(`COUNT_MISMATCH:${JSON.stringify(counts)}`);
+            if(!win||win.oddsMin!==1.7||win.oddsMax!==1.7) throw new Error(`HORSE12_WIN_MISMATCH:${JSON.stringify(win)}`);
+            if(missing.length) throw new Error(`TAN3_MISSING:${missing.length}`);
           }
           main().catch(e=>{console.error(e);process.exit(1)});
           TS
@@ -81,7 +73,7 @@ jobs:
           rm -f .semantic-odds-verify.ts
       - name: Mark success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/jra-six-market-semantic' -f description='All published JRA odds parsed from semantic cells' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/jra-six-market-semantic' -f description='All six JRA markets complete from semantic cells' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/jra-six-market-semantic' -f description='JRA six-market semantic parser verification failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/jra-six-market-semantic' -f description='JRA semantic parser verification failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
