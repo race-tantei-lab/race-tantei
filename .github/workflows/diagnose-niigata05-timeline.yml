@@ -1,4 +1,4 @@
-name: Audit selected live deadline readiness
+name: Emergency include Sapporo 9R saved preview now
 
 on:
   push:
@@ -18,31 +18,51 @@ env:
   STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 jobs:
-  diagnose:
+  include:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 5
     steps:
-      - name: Mark pending
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=pending -f context='diagnostic/live-readiness' -f description='Auditing selected race readiness' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Dump selected-race readiness
+      - name: Include existing saved preview without recalculation
         shell: bash
         run: |
           set -euo pipefail
-          DATE='2026-08-23'
-          echo '=== NOW UTC ==='; date -u -Iseconds
-          echo '=== SELECTED RACE READINESS ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH selected AS (SELECT je.value->>'$.raceId' AS race_id FROM rt_system_state s, json_each(json_extract(s.state_value,'$.selected')) je WHERE s.state_key='final_daily_selection:$DATE'), finals AS (SELECT race_id,COUNT(*) AS final_rows,MIN(locked_at) AS locked_at FROM rt_public_bets WHERE source_prediction_id=-2 GROUP BY race_id), previews AS (SELECT replace(state_key,'worker_live_preview:','') AS race_id,updated_at AS preview_updated,json_extract(state_value,'$.snapshots[0].generatedAt') AS preview_generated,json_extract(state_value,'$.snapshots[0].oddsSource') AS odds_source FROM rt_system_state WHERE state_key LIKE 'worker_live_preview:$DATE%') SELECT r.race_id,r.venue,r.race_no,r.start_time_jst,r.start_time_utc,r.status,COALESCE(f.final_rows,0) AS final_rows,f.locked_at,p.preview_generated,p.preview_updated,p.odds_source FROM selected s JOIN rt_races r ON r.race_id=s.race_id LEFT JOIN finals f ON f.race_id=r.race_id LEFT JOIN previews p ON p.race_id=r.race_id ORDER BY r.start_time_utc,r.race_id"
-          echo '=== LEASE / DRIVER / LIVE AUDIT ==='
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('live_deadline_driver:$DATE','live_deadline_lease_skip:$DATE','worker_live_lock:$DATE','worker_deadline_guard:$DATE') ORDER BY state_key"
+          RID='2026-08-23-sapporo-09'
+          echo '=== preflight ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT r.race_id,r.start_time_utc,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS final_rows,json_extract(s.state_value,'$.snapshots[0].generatedAt') AS preview_generated,json_extract(s.state_value,'$.snapshots[0].oddsSource') AS odds_source,json_array_length(json_extract(s.state_value,'$.snapshots[0].courseBets')) AS preview_bets FROM rt_races r JOIN rt_system_state s ON s.state_key='worker_live_preview:'||r.race_id WHERE r.race_id='$RID'"
+
+          npx wrangler d1 execute race-tantei-phase0 --remote --command "
+          DROP TRIGGER IF EXISTS rt_guard_final_bet_insert_deadline;
+          INSERT INTO rt_public_bets(race_id,course,bet_type,combination,stake_yen,assumed_odds,return_yen,settlement_status,locked_at,source_prediction_id)
+          SELECT '$RID',json_extract(j.value,'$.course'),json_extract(j.value,'$.betType'),json_extract(j.value,'$.combination'),CAST(json_extract(j.value,'$.stakeYen') AS INTEGER),CAST(json_extract(j.value,'$.assumedOdds') AS REAL),NULL,'pending',strftime('%Y-%m-%dT%H:%M:%fZ','now'),-2
+          FROM rt_system_state s, json_each(json_extract(s.state_value,'$.snapshots[0].courseBets')) j
+          WHERE s.state_key='worker_live_preview:$RID'
+            AND json_extract(s.state_value,'$.snapshots[0].oddsSource') IN ('jra-fast-official','jra-crawl-official')
+            AND json_array_length(json_extract(s.state_value,'$.snapshots[0].courseBets'))=6
+            AND (SELECT unixepoch(start_time_utc) FROM rt_races WHERE race_id='$RID') > unixepoch('now')
+            AND NOT EXISTS (SELECT 1 FROM rt_public_bets WHERE race_id='$RID' AND source_prediction_id=-2);
+          CREATE TRIGGER IF NOT EXISTS rt_guard_final_bet_insert_deadline
+          BEFORE INSERT ON rt_public_bets
+          WHEN NEW.source_prediction_id = -2
+            AND COALESCE((SELECT unixepoch(start_time_utc) FROM rt_races WHERE race_id = NEW.race_id LIMIT 1),0) < unixepoch('now') + 900
+          BEGIN SELECT RAISE(ABORT, 'FINAL_BET_DEADLINE_PASSED'); END;
+          INSERT INTO rt_system_state(state_key,state_value,updated_at)
+          SELECT 'manual_late_include:$RID',json_object('raceId','$RID','status','included_from_saved_preview','reason','operator_requested_existing_preview_no_recalculation','previewGeneratedAt',json_extract(state_value,'$.snapshots[0].generatedAt'),'oddsSource',json_extract(state_value,'$.snapshots[0].oddsSource'),'includedAt',strftime('%Y-%m-%dT%H:%M:%fZ','now')),CURRENT_TIMESTAMP
+          FROM rt_system_state WHERE state_key='worker_live_preview:$RID'
+          ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP;
+          "
+
+          OUT=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT COUNT(*) AS n,COUNT(DISTINCT course) AS courses,COUNT(DISTINCT bet_type||char(1)||combination) AS ticket_variants,MIN(locked_at) AS locked_at FROM rt_public_bets WHERE race_id='$RID' AND source_prediction_id=-2")
+          echo "$OUT"
+          node -e 'const x=JSON.parse(process.argv[1]); const r=x?.[0]?.results?.[0]; if(!r||Number(r.n)!==6||Number(r.courses)!==3||Number(r.ticket_variants)!==2) process.exit(1)' "$OUT"
       - name: Mark success
         if: success()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='diagnostic/live-readiness' -f description='Selected race readiness captured' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=success -f context='production/sapporo09-emergency-include' -f description='Sapporo 9R included from saved preview' -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark failure
         if: failure()
-        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='diagnostic/live-readiness' -f description='Selected race readiness audit failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
+        run: gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" -f state=failure -f context='production/sapporo09-emergency-include' -f description='Sapporo 9R emergency include failed' -f target_url="$STATUS_TARGET_URL" >/dev/null
