@@ -1,0 +1,39 @@
+name: Verify daily performance public UI 20260825
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/verify-daily-performance-public-20260825.yml"]
+permissions:
+  contents: read
+  statuses: write
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for public deployment
+        run: sleep 45
+      - name: Verify daily performance API and home UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          curl -fsS -H 'Cache-Control: no-cache' "$base/api/public/daily-performance?date=2026-08-23&_rt=$(date +%s)" -o /tmp/perf.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync('/tmp/perf.json','utf8'));
+          if(!p.ok) throw new Error('PERF_NOT_OK:'+JSON.stringify(p));
+          if(p.version!=='daily-performance-v1-20260825') throw new Error('PERF_VERSION:'+p.version);
+          if(p.summary?.date!=='2026-08-23') throw new Error('PERF_DATE:'+JSON.stringify(p.summary));
+          for(const key of ['finalizedStakeYen','settledStakeYen','returnYen','pendingStakeYen','profitYen','roiPct']) if(!(key in p.summary)) throw new Error('PERF_FIELD:'+key);
+          if(!Array.isArray(p.summary.courses)||p.summary.courses.length!==3) throw new Error('PERF_COURSES:'+JSON.stringify(p.summary.courses));
+          if(!Array.isArray(p.history)||p.history.length<1) throw new Error('PERF_HISTORY_EMPTY');
+          console.log('DAILY_PERFORMANCE_API_OK',JSON.stringify(p.summary));
+          NODE
+          curl -fsS -H 'Cache-Control: no-cache' "$base/?_rt=$(date +%s)" -o /tmp/home.html
+          grep -F 'data-daily-performance' /tmp/home.html >/dev/null
+          grep -F '本日の集計' /tmp/home.html >/dev/null
+          grep -F '日別回収率' /tmp/home.html >/dev/null
+          grep -F '/api/public/daily-performance' /tmp/home.html >/dev/null
+          echo DAILY_PERFORMANCE_HOME_OK
