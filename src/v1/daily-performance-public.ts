@@ -1,7 +1,6 @@
 import { ensurePublicHistory } from "./public-history-db.js";
-import type { Env } from "./types.js";
 
-export const DAILY_PERFORMANCE_VERSION = "daily-performance-v1-20260825";
+export const DAILY_PERFORMANCE_VERSION = "daily-performance-v2-today-fixed-20260825";
 const COURSES = ["ライト", "スタンダード", "プレミアム"] as const;
 type CourseName = typeof COURSES[number];
 
@@ -167,9 +166,10 @@ function styles(): string {
   </style>`;
 }
 
-function block(): string {
+function block(today: string): string {
+  const [, month, day] = today.split("-");
   return `<section class="daily-performance-wrap" data-daily-performance>
-    <div class="daily-performance-head"><h2 id="daily-performance-title">本日の集計</h2><span>公開買い目・精算済ベース</span></div>
+    <div class="daily-performance-head"><h2 id="daily-performance-title">本日の集計（${Number(month)}/${Number(day)}）</h2><span>JST・公開買い目</span></div>
     <div id="daily-performance-current" class="daily-summary"><div class="daily-summary-loading">集計を読み込み中…</div></div>
     <details class="daily-history" open><summary><b>日別回収率</b><span>直近30開催日</span></summary><div id="daily-performance-history" class="daily-history-list"><div class="daily-summary-loading">日別成績を読み込み中…</div></div></details>
   </section>`;
@@ -178,24 +178,20 @@ function block(): string {
 function script(today: string): string {
   return `<script>(()=>{
     const TODAY=${JSON.stringify(today)};
-    const current=document.getElementById('daily-performance-current'),history=document.getElementById('daily-performance-history'),title=document.getElementById('daily-performance-title'),selectedHeading=document.getElementById('selected-date');
+    const current=document.getElementById('daily-performance-current'),history=document.getElementById('daily-performance-history'),title=document.getElementById('daily-performance-title');
     if(!current||!history||!title)return;
-    let seq=0,lastDate='';
+    let seq=0;
     const yen=(v)=>Math.round(Number(v)||0).toLocaleString('ja-JP')+'円';
     const signed=(v)=>{const n=Math.round(Number(v)||0);return (n>0?'+':'')+n.toLocaleString('ja-JP')+'円';};
     const pct=(v)=>v==null?'—':Number(v).toFixed(1)+'%';
     const tone=(v)=>Number(v)>0?'plus':Number(v)<0?'minus':'';
     const esc=(v)=>String(v??'').replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c));
-    const dateLabel=(d)=>d===TODAY?'本日の集計':d.replaceAll('-','/')+' の集計';
     const shortDate=(d)=>{const p=d.split('-');return Number(p[1])+'/'+Number(p[2]);};
-    const selectedDate=()=>{const text=(selectedHeading?.textContent||'').trim();if(text.includes('今日'))return TODAY;const m=text.match(/(20\\d{2})[\\/-](\\d{2})[\\/-](\\d{2})/);return m?m[1]+'-'+m[2]+'-'+m[3]:TODAY;};
     const courseRows=(rows)=>rows.map((r)=>{const profitClass=r.settledStakeYen>0?tone(r.profitYen):'',profit=r.settledStakeYen>0?signed(r.profitYen):'—';return '<div class="daily-course-row"><b>'+esc(r.course)+'</b><span>購入 '+yen(r.settledStakeYen)+'</span><span>払戻 '+yen(r.returnYen)+'</span><strong class="'+profitClass+'">'+profit+'</strong><em>'+pct(r.roiPct)+'</em></div>';}).join('');
-    const renderCurrent=(s)=>{title.textContent=dateLabel(s.date);if(!s.finalizedStakeYen){current.innerHTML='<div class="daily-summary-empty">この日の公開買い目はありません。</div>';return;}const profitShown=s.settledStakeYen>0?signed(s.profitYen):'—',profitClass=s.settledStakeYen>0?tone(s.profitYen):'',pending=s.pendingStakeYen>0?'未精算 '+yen(s.pendingStakeYen)+'（収支・回収率にはまだ算入していません）':'全て精算済み';current.innerHTML='<div class="daily-summary-top"><div class="daily-summary-metric"><span>精算済購入</span><b>'+yen(s.settledStakeYen)+'</b></div><div class="daily-summary-metric"><span>払戻</span><b>'+yen(s.returnYen)+'</b></div><div class="daily-summary-metric"><span>収支</span><b class="'+profitClass+'">'+profitShown+'</b></div><div class="daily-summary-metric"><span>回収率</span><b>'+pct(s.roiPct)+'</b></div></div><div class="daily-summary-note">3コース合計（比較用）・'+s.settledRaces+'R精算 / '+s.finalizedRaces+'R確定　'+pending+'　確定済み総購入 '+yen(s.finalizedStakeYen)+'</div><div class="daily-course-list">'+courseRows(s.courses)+'</div>';};
+    const renderCurrent=(s)=>{const p=TODAY.split('-');title.textContent='本日の集計（'+Number(p[1])+'/'+Number(p[2])+'）';if(s.date!==TODAY){current.innerHTML='<div class="daily-summary-empty">本日の集計日付を取得できませんでした。</div>';return;}if(!s.finalizedStakeYen){current.innerHTML='<div class="daily-summary-empty">本日（'+Number(p[1])+'/'+Number(p[2])+'）の公開買い目はありません。</div>';return;}const profitShown=s.settledStakeYen>0?signed(s.profitYen):'—',profitClass=s.settledStakeYen>0?tone(s.profitYen):'',pending=s.pendingStakeYen>0?'未精算 '+yen(s.pendingStakeYen)+'（収支・回収率にはまだ算入していません）':'全て精算済み';current.innerHTML='<div class="daily-summary-top"><div class="daily-summary-metric"><span>精算済購入</span><b>'+yen(s.settledStakeYen)+'</b></div><div class="daily-summary-metric"><span>払戻</span><b>'+yen(s.returnYen)+'</b></div><div class="daily-summary-metric"><span>収支</span><b class="'+profitClass+'">'+profitShown+'</b></div><div class="daily-summary-metric"><span>回収率</span><b>'+pct(s.roiPct)+'</b></div></div><div class="daily-summary-note">3コース合計（比較用）・'+s.settledRaces+'R精算 / '+s.finalizedRaces+'R確定　'+pending+'　確定済み総購入 '+yen(s.finalizedStakeYen)+'</div><div class="daily-course-list">'+courseRows(s.courses)+'</div>';};
     const renderHistory=(days)=>{if(!Array.isArray(days)||!days.length){history.innerHTML='<div class="daily-summary-empty">日別成績はまだありません。</div>';return;}history.innerHTML=days.map((d)=>{const profitShown=d.settledStakeYen>0?signed(d.profitYen):'未精算',profitClass=d.settledStakeYen>0?tone(d.profitYen):'';return '<details class="daily-history-day"><summary><b>'+shortDate(d.date)+'</b><span>回収率 '+pct(d.roiPct)+'　購入 '+yen(d.settledStakeYen)+'</span><strong class="'+profitClass+'">'+profitShown+'</strong></summary><div class="daily-history-courses">'+courseRows(d.courses)+'</div></details>';}).join('');};
-    const load=async(date,force=false)=>{if(!force&&date===lastDate)return;lastDate=date;const my=++seq;try{const res=await fetch('/api/public/daily-performance?date='+encodeURIComponent(date)+'&_rt='+Date.now(),{cache:'no-store',headers:{'cache-control':'no-cache'}});if(!res.ok)throw new Error('HTTP_'+res.status);const data=await res.json();if(my!==seq||!data?.ok)return;renderCurrent(data.summary);renderHistory(data.history);}catch(e){if(my!==seq)return;current.innerHTML='<div class="daily-summary-empty">集計を取得できませんでした。</div>';}};
-    const syncSelected=()=>load(selectedDate());
-    if(selectedHeading)new MutationObserver(syncSelected).observe(selectedHeading,{childList:true,subtree:true,characterData:true});
-    setTimeout(syncSelected,0);setInterval(()=>{if(lastDate===TODAY&&document.visibilityState!=='hidden')load(TODAY,true);},15000);window.addEventListener('pageshow',()=>{if(lastDate)load(lastDate,true);});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&lastDate)load(lastDate,true);});
+    const load=async()=>{const my=++seq;try{const res=await fetch('/api/public/daily-performance?date='+encodeURIComponent(TODAY)+'&_rt='+Date.now(),{cache:'no-store',headers:{'cache-control':'no-cache'}});if(!res.ok)throw new Error('HTTP_'+res.status);const data=await res.json();if(my!==seq||!data?.ok)return;if(data.today!==TODAY||data.summary?.date!==TODAY)throw new Error('TODAY_MISMATCH');renderCurrent(data.summary);renderHistory(data.history);}catch(e){if(my!==seq)return;current.innerHTML='<div class="daily-summary-empty">本日の集計を取得できませんでした。</div>';}};
+    setTimeout(load,0);setInterval(()=>{if(document.visibilityState!=='hidden')load();},15000);window.addEventListener('pageshow',load);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')load();});
   })();</script>`;
 }
 
@@ -203,7 +199,7 @@ export async function enhanceDailyPerformanceHome(response: Response, today = js
   if (!response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
   let html = await response.text();
   if (!html.includes("data-daily-performance")) {
-    const section = block();
+    const section = block(today);
     const anchor = /(<div class="section-title"><h2 id="selected-date">)/;
     if (anchor.test(html)) html = html.replace(anchor, `${section}$1`);
     else html = html.replace(/(<div class="section-title"><h2>累計回収率<\/h2>)/, `${section}$1`);
