@@ -1,5 +1,6 @@
 import publicSite from "./public-site-entry-v32.js";
 import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
+import { dailyPerformanceResponse, enhanceDailyPerformanceHome } from "./v1/daily-performance-public.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v33-derived-entry-repair-20260821";
@@ -18,10 +19,15 @@ function scheduleDerivedRepair(env: Env, ctx: ExecutionContext, now: Date, label
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+    const path = url.pathname;
+    if (path === "/api/public/daily-performance") {
+      return dailyPerformanceResponse(env.DB, url.searchParams.get("date") ?? "");
+    }
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
-    const path = new URL(request.url).pathname;
     if (raceDetail(path)) scheduleDerivedRepair(env, ctx, new Date(), "UPCOMING_ENTRY_DERIVED_FETCH_REPAIR");
-    const response = await publicSite.fetch(request, env, ctx);
+    let response = await publicSite.fetch(request, env, ctx);
+    if (path === "/") response = await enhanceDailyPerformanceHome(response);
     const headers = new Headers(response.headers);
     if (response.headers.get("content-type")?.includes("text/html")) headers.set("x-race-ui-version", UI_VERSION);
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
