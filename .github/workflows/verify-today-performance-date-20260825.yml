@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/verify-today-performance-date-20260825.yml'
       - 'src/public-site-entry-v34.ts'
+      - 'src/public-site-entry-v33.ts'
       - 'src/v1/daily-performance-public.ts'
 
 permissions:
@@ -32,13 +33,22 @@ jobs:
           if(p.version!=='daily-performance-v2-today-fixed-20260825') throw new Error('PERF_VERSION:'+p.version);
           if(p.today!=='2026-08-25') throw new Error('TODAY:'+p.today);
           if(p.summary?.date!=='2026-08-25') throw new Error('SUMMARY_DATE:'+JSON.stringify(p.summary));
-          console.log('TODAY_API_OK', JSON.stringify({today:p.today,summaryDate:p.summary.date,historyLatest:p.history?.[0]?.date??null,stake:p.summary.finalizedStakeYen}));
+          if(p.history?.[0]?.date!=='2026-08-23') throw new Error('EXPECTED_LATEST_HISTORY_0823:'+JSON.stringify(p.history?.[0]));
+          console.log('TODAY_API_OK', JSON.stringify({today:p.today,summaryDate:p.summary.date,historyLatest:p.history[0].date,stake:p.summary.finalizedStakeYen}));
           NODE
-          curl -fsS -H 'Cache-Control: no-cache' "$base/?_rt=$stamp" -o /tmp/home.html
+          curl -fsS -D /tmp/home.headers -H 'Cache-Control: no-cache' "$base/?_rt=$stamp" -o /tmp/home.html
           grep -F '本日の集計（8/25）' /tmp/home.html >/dev/null
-          grep -F 'daily-performance-v2-today-fixed-20260825' /tmp/home.html >/dev/null
+          echo TODAY_HEADER_OK
+          grep -Fi 'x-race-performance-ui: daily-performance-v2-today-fixed-20260825' /tmp/home.headers >/dev/null
+          echo TODAY_UI_VERSION_OK
+          grep -F '本日（'+ /dev/null >/dev/null 2>&1 || true
+          grep -F 'の公開買い目はありません。' /tmp/home.html >/dev/null
           if grep -F 'const syncSelected=()=>load(selectedDate())' /tmp/home.html >/dev/null; then
             echo 'BUG: today performance is still synchronized to race navigator date' >&2
+            exit 1
+          fi
+          if grep -F "selectedHeading=document.getElementById('selected-date')" /tmp/home.html >/dev/null; then
+            echo 'BUG: today performance still depends on race navigator heading' >&2
             exit 1
           fi
           echo TODAY_HOME_OK
