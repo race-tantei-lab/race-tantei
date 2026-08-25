@@ -2,6 +2,7 @@ import publicSite from "./public-site-entry-v33.js";
 import maintenanceSite from "./public-site-entry-v25.js";
 import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.js";
 import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
+import { dailyPerformanceResponse, enhanceDailyPerformanceHome } from "./v1/daily-performance-public.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v34-live-deadline-detached-20260822";
@@ -197,15 +198,20 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     // Public requests are display-only. No route, including /_ops/live-tick,
     // can create previews or final race bets from this Worker anymore.
-    const path = new URL(request.url).pathname;
+    const url = new URL(request.url);
+    const path = url.pathname;
     // Canonical verifier marker: pathname === "/_ops/live-tick"; the guard uses the equivalent path variable below.
     if (path === "/_ops/live-tick") {
       return new Response("NOT_FOUND", { status: 404, headers: { "cache-control": "no-store" } });
+    }
+    if (path === "/api/public/daily-performance") {
+      return dailyPerformanceResponse(env.DB, url.searchParams.get("date") ?? "");
     }
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
     let response = await publicSite.fetch(request, env, ctx);
     response = await rewriteHtml(response, path);
     response = await raceTransparency(response, env, path);
+    if (path === "/") response = await enhanceDailyPerformanceHome(response);
     const headers = new Headers(response.headers);
     if (response.headers.get("content-type")?.includes("text/html")) {
       headers.set("x-race-ui-version", UI_VERSION);
