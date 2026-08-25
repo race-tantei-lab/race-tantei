@@ -1,0 +1,44 @@
+name: Verify today performance date 20260825
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-today-performance-date-20260825.yml'
+      - 'src/public-site-entry-v34.ts'
+      - 'src/v1/daily-performance-public.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for public deployment
+        run: sleep 55
+      - name: Verify JST today is not replaced by latest race date
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          stamp="$(date +%s)"
+          curl -fsS -H 'Cache-Control: no-cache' "$base/api/public/daily-performance?date=2026-08-25&_rt=$stamp" -o /tmp/today.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync('/tmp/today.json','utf8'));
+          if(!p.ok) throw new Error('PERF_NOT_OK:'+JSON.stringify(p));
+          if(p.version!=='daily-performance-v2-today-fixed-20260825') throw new Error('PERF_VERSION:'+p.version);
+          if(p.today!=='2026-08-25') throw new Error('TODAY:'+p.today);
+          if(p.summary?.date!=='2026-08-25') throw new Error('SUMMARY_DATE:'+JSON.stringify(p.summary));
+          console.log('TODAY_API_OK', JSON.stringify({today:p.today,summaryDate:p.summary.date,historyLatest:p.history?.[0]?.date??null,stake:p.summary.finalizedStakeYen}));
+          NODE
+          curl -fsS -H 'Cache-Control: no-cache' "$base/?_rt=$stamp" -o /tmp/home.html
+          grep -F '本日の集計（8/25）' /tmp/home.html >/dev/null
+          grep -F 'daily-performance-v2-today-fixed-20260825' /tmp/home.html >/dev/null
+          if grep -F 'const syncSelected=()=>load(selectedDate())' /tmp/home.html >/dev/null; then
+            echo 'BUG: today performance is still synchronized to race navigator date' >&2
+            exit 1
+          fi
+          echo TODAY_HOME_OK
