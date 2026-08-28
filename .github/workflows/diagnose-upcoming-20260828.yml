@@ -43,3 +43,5 @@ jobs:
               raise SystemExit('OLD_DAILY_AMOUNT_SUMMARY_STILL_PRESENT')
           print('ROI_ONLY_HOME_OK')
           PY
+
+# rerun after production deploy completed
