@@ -4,23 +4,23 @@
       {
         "venue": "中京",
         "races": 12,
-        "racesWithEntries": 11,
+        "racesWithEntries": 1,
         "minimumActiveRunners": 1,
-        "maximumActiveRunners": 18
+        "maximumActiveRunners": 9
       },
       {
         "venue": "新潟",
         "races": 12,
-        "racesWithEntries": 12,
-        "minimumActiveRunners": 7,
-        "maximumActiveRunners": 18
+        "racesWithEntries": 1,
+        "minimumActiveRunners": 1,
+        "maximumActiveRunners": 10
       },
       {
         "venue": "札幌",
         "races": 12,
-        "racesWithEntries": 2,
+        "racesWithEntries": 0,
         "minimumActiveRunners": 1,
-        "maximumActiveRunners": 14
+        "maximumActiveRunners": 1
       }
     ],
     "success": true,
@@ -30,14 +30,14 @@
       "served_by_colo": "SIN",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.5419
+        "sql_duration_ms": 0.5374
       },
-      "duration": 0.5419,
+      "duration": 0.5374,
       "changes": 0,
-      "last_row_id": 108398,
+      "last_row_id": 16406,
       "changed_db": false,
-      "size_after": 277708800,
-      "rows_read": 777,
+      "size_after": 285454336,
+      "rows_read": 148,
       "rows_written": 0,
       "total_attempts": 1
     }
