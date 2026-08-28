@@ -1,154 +1,74 @@
-name: Apply v4 home consistency fix
-
-# Registered on main; this follow-up push starts the one-time patch.
+name: Diagnose Aug 30 stored JRA anchors
 on:
   push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/apply-home-performance-consistency-fix.yml"
-
+    branches: [main]
+    paths: ['.github/workflows/apply-home-performance-consistency-fix.yml']
 permissions:
-  contents: write
-
+  contents: read
 jobs:
-  patch:
+  diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
-      - name: Patch data source and labels
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          phase = Path("src/v1/phase-a-dashboard.ts")
-          text = phase.read_text(encoding="utf-8")
-
-          replacements = [
-              (
-                  """          WHEN r.race_date='${AUG1_DATE}' AND p.model_version='${AUG1_MODEL}' THEN 1
-          WHEN r.race_date='${AUG2_DATE}' AND p.model_version=? THEN 1
-          WHEN r.race_date='${AUG2_DATE}' AND p.model_version='${AUG2_MODEL}' THEN 2
-          WHEN r.race_date NOT IN ('${AUG1_DATE}','${AUG2_DATE}') AND p.model_version=? THEN 1""",
-                  """          WHEN r.race_date IN ('${AUG1_DATE}','${AUG2_DATE}') AND p.model_version=? THEN 1
-          WHEN r.race_date='${AUG1_DATE}' AND p.model_version='${AUG1_MODEL}' THEN 2
-          WHEN r.race_date='${AUG2_DATE}' AND p.model_version='${AUG2_MODEL}' THEN 2
-          WHEN r.race_date NOT IN ('${AUG1_DATE}','${AUG2_DATE}') AND p.model_version=? THEN 1""",
-              ),
-              (
-                  """      WHERE EXISTS (
-        SELECT 1 FROM rt_bets b
-        WHERE b.prediction_id=p.id
-          AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')
-      )""",
-                  """      WHERE p.status IN ('draft','locked')""",
-              ),
-              (
-                  """    WITH ${chosenCte()},
-    aug1_done AS (
-      SELECT COUNT(DISTINCT race_id) AS count
-      FROM chosen_prediction
-      WHERE race_date='${AUG1_DATE}' AND model_version='${AUG1_MODEL}'
-    )
-    SELECT CASE""",
-                  """    WITH ${chosenCte()}
-    SELECT CASE""",
-              ),
-              (
-                  """    WHERE b.settlement_status='settled'
-      AND (p.race_date<>'${AUG1_DATE}' OR (SELECT count FROM aug1_done)>=36)
-      AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')""",
-                  """    WHERE b.settlement_status='settled'
-      AND (b.bet_type LIKE 'ライト｜%' OR b.bet_type LIKE 'スタンダード｜%' OR b.bet_type LIKE 'プレミアム｜%')""",
-              ),
-              (
-                  """      WHERE r.race_date=? AND p.model_version=? AND p.status='locked'
-        AND EXISTS (SELECT 1 FROM rt_bets b WHERE b.prediction_id=p.id AND b.settlement_status='settled')
-    `).bind(AUG1_DATE, AUG1_MODEL).first<{ count: number }>()""",
-                  """      WHERE r.race_date=? AND p.model_version=? AND p.status='locked'
-    `).bind(AUG1_DATE, liveModel).first<{ count: number }>()""",
-              ),
-              (
-                  "const retrospective = race.modelVersion === AUG1_MODEL || race.modelVersion === AUG2_MODEL;",
-                  "const retrospective = race.raceDate === AUG1_DATE || race.raceDate === AUG2_DATE;",
-              ),
-              ('<div class="retro">遡及検証</div>', '<div class="retro">8月v4再計算</div>'),
-              ("8月1日検証を集計中", "8月1日v4再計算を反映中"),
-          ]
-
-          for old, new in replacements:
-              if old not in text:
-                  raise RuntimeError(f"PHASE_A_PATCH_TARGET_MISSING: {old[:80]}")
-              text = text.replace(old, new, 1)
-
-          day_anchor = """  const defaultFilter = buyCount > 0 ? "buy" : "all";
-
-  const venueButtons"""
-          day_replacement = """  const defaultFilter = buyCount > 0 ? "buy" : "all";
-  const dailyTotals = COURSES.map(({ name, key }) => {
-    const selectedValues = races.map((race) => courseValues(race, key)).filter((value) => value.count > 0);
-    const stake = selectedValues.reduce((sum, value) => sum + value.stake, 0);
-    const returns = selectedValues.reduce((sum, value) => sum + value.returns, 0);
-    const roi = stake > 0 ? returns / stake * 100 : null;
-    const roiClass = roi !== null && roi >= 100 ? "plus" : "minus";
-    return `<div class="day-total"><b>${escapeHtml(name)}</b><strong class="${roiClass}">${roi === null ? "—" : `${roi.toFixed(1)}%`}</strong><span>${selectedValues.length}R　${formatYen(stake)} → ${formatYen(returns)}</span></div>`;
-  }).join("");
-
-  const venueButtons"""
-          if day_anchor not in text:
-              raise RuntimeError("DAY_TOTAL_LOGIC_TARGET_MISSING")
-          text = text.replace(day_anchor, day_replacement, 1)
-
-          render_anchor = """    <div class="day-summary"><div><h2>${dateLabel(date)}</h2><span>${races.length}R</span></div><p>買い目あり ${buyCount}R　終了 ${finishedCount}R</p></div>
-    <div class="filter-tabs"""
-          render_replacement = """    <div class="day-summary"><div><h2>${dateLabel(date)}</h2><span>${races.length}R</span></div><p>買い目あり ${buyCount}R　終了 ${finishedCount}R</p></div>
-    <div class="day-course-totals">${dailyTotals}</div>
-    <div class="filter-tabs"""
-          if render_anchor not in text:
-              raise RuntimeError("DAY_TOTAL_RENDER_TARGET_MISSING")
-          text = text.replace(render_anchor, render_replacement, 1)
-
-          css_anchor = ".day-summary p{margin:0}.filter-tabs,.venue-tabs{display:flex;gap:7px;overflow:auto}"
-          css_replacement = ".day-summary p{margin:0}.day-course-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 10px}.day-total{border:1px solid var(--line);border-radius:12px;background:#0d1722;padding:9px}.day-total b,.day-total strong,.day-total span{display:block}.day-total strong{margin:3px 0;font-size:18px}.day-total span{color:var(--muted);font-size:10px}.filter-tabs,.venue-tabs{display:flex;gap:7px;overflow:auto}"
-          if css_anchor not in text:
-              raise RuntimeError("DAY_TOTAL_CSS_TARGET_MISSING")
-          text = text.replace(css_anchor, css_replacement, 1)
-          text = text.replace("@media(max-width:720px){.metrics", "@media(max-width:720px){.day-course-totals{grid-template-columns:1fr}.metrics", 1)
-          phase.write_text(text, encoding="utf-8")
-
-          ui = Path("src/production-ui-entry.ts")
-          ui_text = ui.read_text(encoding="utf-8")
-          old_count = "const selected = normalizedMetrics(metrics).reduce((sum, row) => sum + row.settledRaces, 0);"
-          new_count = "const selected = Math.max(0, ...normalizedMetrics(metrics).map((row) => row.settledRaces));"
-          if old_count not in ui_text:
-              raise RuntimeError("PRODUCTION_COUNT_TARGET_MISSING")
-          ui_text = ui_text.replace(old_count, new_count, 1)
-          old_label = "${selected}R／3コース合計"
-          new_label = "${selected}R（3コース共通）"
-          if old_label not in ui_text:
-              raise RuntimeError("PRODUCTION_LABEL_TARGET_MISSING")
-          ui_text = ui_text.replace(old_label, new_label, 1)
-          ui.write_text(ui_text, encoding="utf-8")
-
-          Path(".github/workflows/apply-home-performance-consistency-fix.yml").unlink()
-          PY
+          node-version: '22'
       - run: npm ci
-      - name: Verify source changes
-        run: npm run typecheck && npm run build:test && npm run test:unit && npm run build
-      - name: Commit patched source
+      - run: npm run build:test
+      - name: Diagnose exact stored official anchors
         shell: bash
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/v1/phase-a-dashboard.ts src/production-ui-entry.ts .github/workflows/apply-home-performance-consistency-fix.yml
-          git commit -m "Align home race details with v4 aggregate"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          set -euo pipefail
+          python - <<'PY' > /tmp/anchors.json
+          import json, os, urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
+          sql="""
+          SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.entry_url AS entryUrl,
+                 SUM(CASE WHEN COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners
+          FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
+          WHERE r.race_date='2026-08-30' AND LENGTH(TRIM(COALESCE(r.entry_url,'')))>0
+          GROUP BY r.race_id,r.venue,r.race_no,r.entry_url
+          HAVING activeRunners>=3
+          ORDER BY r.venue,r.race_no
+          """
+          req=urllib.request.Request(url,data=json.dumps({'sql':sql,'params':[]}).encode(),method='POST',headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'})
+          with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
+          print(json.dumps((body.get('result') or [{}])[0].get('results') or [],ensure_ascii=False))
+          PY
+          echo STORED_ANCHORS; cat /tmp/anchors.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { pageLooksLikeEntry, parseEntryPage } from './dist-test/v1/jra.js';
+          const rows=JSON.parse(fs.readFileSync('/tmp/anchors.json','utf8'));
+          const decode=(buf,ct)=>{
+            const declared=ct?.match(/charset\s*=\s*([^;\s]+)/i)?.[1]?.replace(/["']/g,'')??null;
+            const probe=new TextDecoder('windows-1252').decode(buf.slice(0,Math.min(buf.byteLength,8192)));
+            const meta=probe.match(/<meta[^>]+charset=["']?([^"'\s/>]+)/i)?.[1]??probe.match(/content=["'][^"']*charset=([^"';\s]+)/i)?.[1]??null;
+            for(const enc of [declared,meta,'shift_jis','utf-8'].filter(Boolean)){try{return new TextDecoder(enc).decode(buf)}catch{}}
+            return new TextDecoder('utf-8').decode(buf);
+          };
+          for(const row of rows){
+            const u=new URL(row.entryUrl),raw=u.searchParams.get('CNAME')??'',cname=decodeURIComponent(raw);
+            console.log('CNAME_CHECK',JSON.stringify({raceId:row.raceId,entryUrl:row.entryUrl,cname,regex:/^(?:pw|sw)01dde[A-Za-z0-9]+\/[0-9A-Fa-f]{2}$/.test(cname)}));
+            for(const host of ['www.jra.go.jp','sp.jra.jp','app.jra.jp']){
+              const target=`https://${host}/JRADB/accessD.html?CNAME=${encodeURIComponent(cname)}`;
+              const c=new AbortController(),timer=setTimeout(()=>c.abort(),8000);
+              try{
+                const res=await fetch(target,{redirect:'follow',signal:c.signal,headers:{'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136 Safari/537.36','Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8','Accept-Language':'ja-JP,ja;q=0.9','Cache-Control':'no-cache','Pragma':'no-cache','Referer':'https://www.jra.go.jp/','Upgrade-Insecure-Requests':'1'}});
+                const buf=await res.arrayBuffer(); const html=decode(buf,res.headers.get('content-type'));
+                console.log('FETCH',JSON.stringify({raceId:row.raceId,host,status:res.status,bytes:buf.byteLength,contentType:res.headers.get('content-type'),finalUrl:res.url,looks:pageLooksLikeEntry(html)}));
+                try{
+                  const b=parseEntryPage(html,`https://www.jra.go.jp/JRADB/accessD.html?CNAME=${encodeURIComponent(cname)}`);
+                  console.log('PARSE',JSON.stringify({raceId:row.raceId,host,parsedId:b.race.raceId,date:b.race.raceDate,venue:b.race.venue,raceNo:b.race.raceNo,runners:b.runners.length,active:b.runners.filter(x=>(x.runnerStatus||'active')==='active').length}));
+                }catch(e){console.log('PARSE_FAIL',JSON.stringify({raceId:row.raceId,host,error:String(e)}));}
+              }catch(e){console.log('FETCH_FAIL',JSON.stringify({raceId:row.raceId,host,error:String(e)}));}
+              finally{clearTimeout(timer);}
+            }
+          }
+          NODE
