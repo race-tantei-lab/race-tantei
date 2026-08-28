@@ -12,19 +12,22 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - name: Measure production endpoints
         shell: bash
         run: |
-          set -euo pipefail
+          set -u
           base='https://race-tantei-phase0.race-tantei.workers.dev'
+          measure(){ label="$1"; url="$2"; out="$3"; headers="${4:-}"; if [ -n "$headers" ]; then curl --connect-timeout 5 --max-time 15 -sS -D "$headers" -o "$out" -w "$label code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\\n" "$url" || echo "$label CURL_FAILED:$?"; else curl --connect-timeout 5 --max-time 15 -sS -o "$out" -w "$label code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\\n" "$url" || echo "$label CURL_FAILED:$?"; fi; }
           echo '=== HOME ==='
-          curl -sS -o /tmp/home.html -w 'home code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\n' "$base/?_rt=$(date +%s)"
+          measure home "$base/?_rt=$(date +%s%N)" /tmp/home.html
           echo '=== AUG30 DAY API ==='
-          curl -sS -D /tmp/day.headers -o /tmp/day.json -w 'day code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\n' "$base/api/public/day?date=2026-08-30&_rt=$(date +%s)"
-          grep -i 'x-race-current-day-path' /tmp/day.headers || true
-          node - <<'NODE'
+          measure day "$base/api/public/day?date=2026-08-30&_rt=$(date +%s%N)" /tmp/day.json /tmp/day.headers
+          grep -i 'x-race-current-day-path' /tmp/day.headers 2>/dev/null || true
+          : >/tmp/ids.txt
+          if [ -s /tmp/day.json ]; then
+            node - <<'NODE'
           const fs=require('fs');
           const raw=fs.readFileSync('/tmp/day.json','utf8');
           let p; try{p=JSON.parse(raw)}catch(e){console.log('DAY_PARSE_FAILED',raw.slice(0,500));process.exit(0)}
@@ -35,19 +38,18 @@ jobs:
           fs.writeFileSync('/tmp/ids.txt',ids.join('\n'));
           console.log('RACE_IDS',ids);
           NODE
+          fi
           echo '=== AUG30 DAY API REPEATS ==='
-          for n in 1 2 3; do
-            curl -sS -o /dev/null -w "repeat$n code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s\\n" "$base/api/public/day?date=2026-08-30&_rt=$(date +%s%N)"
-          done
+          for n in 1 2 3; do measure "repeat$n" "$base/api/public/day?date=2026-08-30&_rt=$(date +%s%N)" /tmp/repeat.json; done
           echo '=== AUG30 RACE DETAILS ==='
           i=0
           while IFS= read -r rid; do
             [ -z "$rid" ] && continue
             i=$((i+1))
-            curl -sS -o "/tmp/race-$i.html" -w "race $rid code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\\n" "$base/races/$rid?_rt=$(date +%s%N)" || true
+            measure "race$i:$rid" "$base/races/$rid?_rt=$(date +%s%N)" "/tmp/race-$i.html"
           done </tmp/ids.txt
           echo '=== AUG23 DAY API CONTROL ==='
-          curl -sS -o /tmp/day23.json -w 'day23 code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\n' "$base/api/public/day?date=2026-08-23&_rt=$(date +%s)"
+          measure day23 "$base/api/public/day?date=2026-08-23&_rt=$(date +%s%N)" /tmp/day23.json
           echo 'DIAG_COMPLETE'
 
-# one-time rerun after upcoming-day fast-path deployment
+# bounded one-time production diagnostic
