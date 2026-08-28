@@ -13,13 +13,15 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
     steps:
       - uses: actions/checkout@v4
+      - name: Allow deployed cron to bootstrap weekend
+        run: sleep 75
       - name: Query production D1 and public API
         shell: bash
         run: |
@@ -47,13 +49,35 @@ jobs:
                  SUM(CASE WHEN startTimeUtc IS NOT NULL THEN 1 ELSE 0 END) AS startTimes
           FROM per_race GROUP BY raceDate,venue ORDER BY raceDate,venue
           """
-          print('UPCOMING_ROWS',json.dumps(q(sql),ensure_ascii=False))
-          state=q("SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt FROM rt_system_state WHERE state_key IN ('worker_upcoming_entry_repair','worker_upcoming_entry_derived_repair') OR state_key LIKE 'worker_upcoming_entry_probe:%' ORDER BY updated_at DESC LIMIT 20")
+          rows=q(sql)
+          print('UPCOMING_ROWS',json.dumps(rows,ensure_ascii=False))
+          state=q("SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt FROM rt_system_state WHERE state_key IN ('worker_upcoming_calendar_repair','worker_upcoming_entry_repair','worker_upcoming_entry_derived_repair') OR state_key LIKE 'worker_upcoming_calendar_day:%' OR state_key LIKE 'worker_upcoming_entry_probe:%' ORDER BY updated_at DESC LIMIT 30")
           print('REPAIR_STATES',json.dumps(state,ensure_ascii=False))
           counts=q("SELECT race_date AS raceDate,COUNT(*) AS races FROM rt_races WHERE race_date>='2026-08-28' AND race_date<='2026-08-31' GROUP BY race_date ORDER BY race_date")
           print('DATE_COUNTS',json.dumps(counts,ensure_ascii=False))
+          sunday=sum(int(x.get('races') or 0) for x in rows if x.get('raceDate')=='2026-08-30')
+          sunday_venues=sorted(str(x.get('venue')) for x in rows if x.get('raceDate')=='2026-08-30')
+          if sunday != 36 or len(sunday_venues) != 3:
+              raise SystemExit(f'SUNDAY_SCHEDULE_INCOMPLETE races={sunday} venues={sunday_venues}')
           PY
           for d in 2026-08-29 2026-08-30; do
             echo "PUBLIC_DAY $d"
-            curl -fsS -H 'Cache-Control: no-cache' "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$d&_rt=$(date +%s)" | python -c 'import json,sys; p=json.load(sys.stdin); r=p.get("races") or []; print(json.dumps({"ok":p.get("ok"),"date":p.get("date"),"races":len(r),"venues":sorted(set(x.get("venue") for x in r if x.get("venue")))},ensure_ascii=False))'
+            curl -fsS -H 'Cache-Control: no-cache' "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$d&_rt=$(date +%s)" -o "/tmp/day-$d.json"
+            DATE="$d" node - <<'NODE'
+            const fs=require('fs'); const d=process.env.DATE; const p=JSON.parse(fs.readFileSync('/tmp/day-'+d+'.json','utf8')); const r=p.races||[];
+            console.log(JSON.stringify({ok:p.ok,date:p.date,races:r.length,venues:[...new Set(r.map(x=>x.venue).filter(Boolean))].sort()}));
+            if(d==='2026-08-30' && (r.length!==36 || new Set(r.map(x=>x.venue).filter(Boolean)).size!==3)) throw new Error('PUBLIC_SUNDAY_INCOMPLETE');
+            NODE
           done
+      - name: Verify ROI-only collapsed daily history in production
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H 'Cache-Control: no-cache' "https://race-tantei-phase0.race-tantei.workers.dev/?_rt=$(date +%s)" -o /tmp/home.html
+          grep -F 'daily-performance-v3-roi-only-history-20260828' /tmp/home.html >/dev/null
+          grep -F "<span>回収率 '+pct(d.roiPct)+'</span></summary>" /tmp/home.html >/dev/null
+          if grep -F "回収率 '+pct(d.roiPct)+'　購入" /tmp/home.html >/dev/null; then
+            echo 'OLD_DAILY_AMOUNT_SUMMARY_STILL_PRESENT' >&2
+            exit 1
+          fi
+          echo ROI_ONLY_HOME_OK
