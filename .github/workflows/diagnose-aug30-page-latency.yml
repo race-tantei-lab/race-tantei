@@ -22,7 +22,8 @@ jobs:
           echo '=== HOME ==='
           curl -sS -o /tmp/home.html -w 'home code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\n' "$base/?_rt=$(date +%s)"
           echo '=== AUG30 DAY API ==='
-          curl -sS -o /tmp/day.json -w 'day code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\n' "$base/api/public/day?date=2026-08-30&_rt=$(date +%s)"
+          curl -sS -D /tmp/day.headers -o /tmp/day.json -w 'day code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\n' "$base/api/public/day?date=2026-08-30&_rt=$(date +%s)"
+          grep -i 'x-race-current-day-path' /tmp/day.headers || true
           node - <<'NODE'
           const fs=require('fs');
           const raw=fs.readFileSync('/tmp/day.json','utf8');
@@ -34,13 +35,19 @@ jobs:
           fs.writeFileSync('/tmp/ids.txt',ids.join('\n'));
           console.log('RACE_IDS',ids);
           NODE
+          echo '=== AUG30 DAY API REPEATS ==='
+          for n in 1 2 3; do
+            curl -sS -o /dev/null -w "repeat$n code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s\\n" "$base/api/public/day?date=2026-08-30&_rt=$(date +%s%N)"
+          done
           echo '=== AUG30 RACE DETAILS ==='
           i=0
           while IFS= read -r rid; do
             [ -z "$rid" ] && continue
             i=$((i+1))
-            curl -sS -o "/tmp/race-$i.html" -w "race $rid code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\\n" "$base/races/$rid?_rt=$(date +%s)" || true
+            curl -sS -o "/tmp/race-$i.html" -w "race $rid code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\\n" "$base/races/$rid?_rt=$(date +%s%N)" || true
           done </tmp/ids.txt
           echo '=== AUG23 DAY API CONTROL ==='
           curl -sS -o /tmp/day23.json -w 'day23 code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\n' "$base/api/public/day?date=2026-08-23&_rt=$(date +%s)"
           echo 'DIAG_COMPLETE'
+
+# one-time rerun after upcoming-day fast-path deployment
