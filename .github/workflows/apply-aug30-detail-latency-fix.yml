@@ -1,0 +1,71 @@
+name: Apply upcoming race detail latency fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-aug30-detail-latency-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Patch future detail read path
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # v25: future races cannot have a fixed public ticket yet; skip evidence query entirely.
+          p=Path('src/public-site-entry-v25.ts')
+          s=p.read_text(encoding='utf-8')
+          old='''    const date = raceId.slice(0, 10);\n    if (!/^20\\d{2}-\\d{2}-\\d{2}$/.test(date) || date <= CUTOFF) return response;\n    try {\n      const tickets = await loadFixedTicketEvidence(env.DB, raceId);'''
+          new='''    const date = raceId.slice(0, 10);\n    if (!/^20\\d{2}-\\d{2}-\\d{2}$/.test(date) || date <= CUTOFF) return response;\n    if (date > jstDate(new Date())) return response;\n    try {\n      const tickets = await loadFixedTicketEvidence(env.DB, raceId);'''
+          if old not in s: raise RuntimeError('V25_TARGET_MISSING')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+
+          # v20: no future race can be settled/refunded; skip settlement query.
+          p=Path('src/public-site-entry-v20.ts')
+          s=p.read_text(encoding='utf-8')
+          old='''  try {\n    const raceId = decodeURIComponent(path.slice("/races/".length));\n    const view = (await settlementViews(db, [raceId])).get(raceId);'''
+          new='''  try {\n    const raceId = decodeURIComponent(path.slice("/races/".length));\n    const raceDate = raceId.slice(0, 10);\n    if (/^20\\d{2}-\\d{2}-\\d{2}$/.test(raceDate) && raceDate > jstDate()) return response;\n    const view = (await settlementViews(db, [raceId])).get(raceId);'''
+          if old not in s: raise RuntimeError('V20_TARGET_MISSING')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+
+          # v14: no public bet reasons exist for a future race; skip reason query.
+          p=Path('src/public-site-entry-v14.ts')
+          s=p.read_text(encoding='utf-8')
+          old='''  try {\n    const raceId = decodeURIComponent(path.slice("/races/".length));\n    const reasons = await ticketReasons(db, raceId);'''
+          new='''  try {\n    const raceId = decodeURIComponent(path.slice("/races/".length));\n    const raceDate = raceId.slice(0, 10);\n    if (/^20\\d{2}-\\d{2}-\\d{2}$/.test(raceDate) && raceDate > jstDateKey()) return response;\n    const reasons = await ticketReasons(db, raceId);'''
+          if old not in s: raise RuntimeError('V14_TARGET_MISSING')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+
+          # v30: collapse current/previous/next navigation from three D1 calls into one query.
+          p=Path('src/public-site-entry-v30.ts')
+          s=p.read_text(encoding='utf-8')
+          old='''    const current = await env.DB.prepare(`SELECT race_id AS raceId,venue,race_no AS raceNo,race_date AS raceDate FROM rt_races WHERE race_id=? LIMIT 1`).bind(raceId).first<RaceNavRow>();\n    if (!current) return response;\n    const [previous, next] = await Promise.all([\n      env.DB.prepare(`SELECT race_id AS raceId,venue,race_no AS raceNo,race_date AS raceDate FROM rt_races WHERE race_date=? AND venue=? AND race_no<? ORDER BY race_no DESC LIMIT 1`).bind(current.raceDate,current.venue,current.raceNo).first<RaceNavRow>(),\n      env.DB.prepare(`SELECT race_id AS raceId,venue,race_no AS raceNo,race_date AS raceDate FROM rt_races WHERE race_date=? AND venue=? AND race_no>? ORDER BY race_no ASC LIMIT 1`).bind(current.raceDate,current.venue,current.raceNo).first<RaceNavRow>(),\n    ]);'''
+          new='''    const navRows = await env.DB.prepare(`\n      WITH current AS (\n        SELECT race_id,venue,race_no,race_date FROM rt_races WHERE race_id=? LIMIT 1\n      )\n      SELECT 'current' AS navKind,r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.race_date AS raceDate\n      FROM rt_races r JOIN current c ON r.race_id=c.race_id\n      UNION ALL\n      SELECT 'previous' AS navKind,r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.race_date AS raceDate\n      FROM rt_races r JOIN current c ON r.race_date=c.race_date AND r.venue=c.venue\n      WHERE r.race_no=(SELECT MAX(p.race_no) FROM rt_races p JOIN current x ON p.race_date=x.race_date AND p.venue=x.venue WHERE p.race_no<x.race_no)\n      UNION ALL\n      SELECT 'next' AS navKind,r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.race_date AS raceDate\n      FROM rt_races r JOIN current c ON r.race_date=c.race_date AND r.venue=c.venue\n      WHERE r.race_no=(SELECT MIN(n.race_no) FROM rt_races n JOIN current x ON n.race_date=x.race_date AND n.venue=x.venue WHERE n.race_no>x.race_no)\n    `).bind(raceId).all<RaceNavRow & { navKind: string }>();\n    const current = navRows.results.find((row) => row.navKind === "current") ?? null;\n    if (!current) return response;\n    const previous = navRows.results.find((row) => row.navKind === "previous") ?? null;\n    const next = navRows.results.find((row) => row.navKind === "next") ?? null;'''
+          if old not in s: raise RuntimeError('V30_TARGET_MISSING')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+
+          Path('.github/workflows/apply-aug30-detail-latency-fix.yml').unlink()
+          PY
+      - name: Typecheck
+        run: npm ci && npm run typecheck
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/public-site-entry-v25.ts src/public-site-entry-v20.ts src/public-site-entry-v14.ts src/public-site-entry-v30.ts .github/workflows/apply-aug30-detail-latency-fix.yml
+          git commit -m 'Speed up upcoming race detail pages'
+          git pull --rebase origin main
+          git push origin HEAD:main
