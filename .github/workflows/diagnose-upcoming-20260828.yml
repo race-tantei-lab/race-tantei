@@ -1,0 +1,59 @@
+name: Diagnose upcoming races 20260828
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-upcoming-20260828.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - name: Query production D1 and public API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
+          def q(sql):
+              req=urllib.request.Request(url,data=json.dumps({'sql':sql,'params':[]}).encode(),method='POST',headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'})
+              with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
+              if not body.get('success'): raise SystemExit(body)
+              return (body.get('result') or [{}])[0].get('results') or []
+          sql="""
+          WITH per_race AS (
+            SELECT r.race_date AS raceDate,r.venue,r.race_no AS raceNo,r.entry_url AS entryUrl,r.start_time_utc AS startTimeUtc,
+                   SUM(CASE WHEN COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners
+            FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
+            WHERE r.race_date IN ('2026-08-29','2026-08-30')
+            GROUP BY r.race_id,r.race_date,r.venue,r.race_no,r.entry_url,r.start_time_utc
+          )
+          SELECT raceDate,venue,COUNT(*) AS races,MIN(raceNo) AS minRaceNo,MAX(raceNo) AS maxRaceNo,
+                 SUM(CASE WHEN activeRunners>=3 THEN 1 ELSE 0 END) AS readyEntries,
+                 SUM(CASE WHEN length(trim(coalesce(entryUrl,'')))>0 THEN 1 ELSE 0 END) AS entryUrls,
+                 SUM(CASE WHEN startTimeUtc IS NOT NULL THEN 1 ELSE 0 END) AS startTimes
+          FROM per_race GROUP BY raceDate,venue ORDER BY raceDate,venue
+          """
+          print('UPCOMING_ROWS',json.dumps(q(sql),ensure_ascii=False))
+          state=q("SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt FROM rt_system_state WHERE state_key IN ('worker_upcoming_entry_repair','worker_upcoming_entry_derived_repair') OR state_key LIKE 'worker_upcoming_entry_probe:%' ORDER BY updated_at DESC LIMIT 20")
+          print('REPAIR_STATES',json.dumps(state,ensure_ascii=False))
+          counts=q("SELECT race_date AS raceDate,COUNT(*) AS races FROM rt_races WHERE race_date>='2026-08-28' AND race_date<='2026-08-31' GROUP BY race_date ORDER BY race_date")
+          print('DATE_COUNTS',json.dumps(counts,ensure_ascii=False))
+          PY
+          for d in 2026-08-29 2026-08-30; do
+            echo "PUBLIC_DAY $d"
+            curl -fsS -H 'Cache-Control: no-cache' "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$d&_rt=$(date +%s)" | python -c 'import json,sys; p=json.load(sys.stdin); r=p.get("races") or []; print(json.dumps({"ok":p.get("ok"),"date":p.get("date"),"races":len(r),"venues":sorted(set(x.get("venue") for x in r if x.get("venue")))},ensure_ascii=False))'
+          done
