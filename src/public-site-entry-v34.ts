@@ -2,6 +2,7 @@ import publicSite from "./public-site-entry-v33.js";
 import maintenanceSite from "./public-site-entry-v25.js";
 import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.js";
 import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
+import { runUpcomingCalendarRepair } from "./v1/upcoming-calendar-repair.js";
 import { dailyPerformanceResponse, enhanceDailyPerformanceHome } from "./v1/daily-performance-public.js";
 import type { Env } from "./v1/types.js";
 
@@ -29,6 +30,9 @@ type FinalStatePayload = {
 };
 
 function scheduleEntryRepairs(env: Env, ctx: ExecutionContext, now: Date): void {
+  ctx.waitUntil(runUpcomingCalendarRepair(env, now).then((audit) => {
+    if (audit.status !== "ready" && audit.status !== "idle") console.log("UPCOMING_CALENDAR_REPAIR", JSON.stringify(audit));
+  }).catch((error) => console.error("UPCOMING_CALENDAR_REPAIR_FAILED", error)));
   ctx.waitUntil(runUpcomingEntryWorkerRepair(env, now).then((audit) => {
     if (audit.status !== "ready" && audit.status !== "idle") console.log("UPCOMING_ENTRY_WORKER_REPAIR", JSON.stringify(audit));
   }).catch((error) => console.error("UPCOMING_ENTRY_WORKER_REPAIR_FAILED", error)));
