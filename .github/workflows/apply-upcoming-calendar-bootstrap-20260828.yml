@@ -1,0 +1,55 @@
+name: Apply upcoming calendar bootstrap 20260828
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-upcoming-calendar-bootstrap-20260828.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Wire calendar repair
+        shell: bash
+        run: |
+          git pull --rebase origin main
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/public-site-entry-v34.ts')
+          s=p.read_text(encoding='utf-8')
+          old='import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";\n'
+          new=old+'import { runUpcomingCalendarRepair } from "./v1/upcoming-calendar-repair.js";\n'
+          if 'runUpcomingCalendarRepair' not in s:
+            if old not in s: raise SystemExit('IMPORT_ANCHOR_MISSING')
+            s=s.replace(old,new,1)
+          anchor='function scheduleEntryRepairs(env: Env, ctx: ExecutionContext, now: Date): void {\n'
+          block='''function scheduleEntryRepairs(env: Env, ctx: ExecutionContext, now: Date): void {\n  ctx.waitUntil(runUpcomingCalendarRepair(env, now).then((audit) => {\n    if (audit.status !== "ready" && audit.status !== "idle") console.log("UPCOMING_CALENDAR_REPAIR", JSON.stringify(audit));\n  }).catch((error) => console.error("UPCOMING_CALENDAR_REPAIR_FAILED", error)));\n'''
+          if 'UPCOMING_CALENDAR_REPAIR_FAILED' not in s:
+            if anchor not in s: raise SystemExit('SCHEDULE_ANCHOR_MISSING')
+            s=s.replace(anchor,block,1)
+          p.write_text(s,encoding='utf-8')
+          Path('.github/workflows/apply-upcoming-calendar-bootstrap-20260828.yml').unlink()
+          PY
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/public-site-entry-v34.ts src/v1/upcoming-calendar-repair.ts .github/workflows/apply-upcoming-calendar-bootstrap-20260828.yml
+          git commit -m 'Bootstrap upcoming race shells from official calendar'
+          git pull --rebase origin main
+          git push origin HEAD:main
