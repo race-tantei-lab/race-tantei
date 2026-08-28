@@ -49,6 +49,14 @@ jobs:
           FROM per_race GROUP BY venue ORDER BY venue
           """)
           print('AUG30_ENTRY_COUNTS',json.dumps(rows,ensure_ascii=False))
+          details=q("""
+          SELECT r.venue,r.race_no AS raceNo,r.entry_url AS entryUrl,COUNT(rr.horse_no) AS runnerRows
+          FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
+          WHERE r.race_date='2026-08-30'
+          GROUP BY r.race_id,r.venue,r.race_no,r.entry_url
+          ORDER BY r.venue,r.race_no
+          """)
+          print('AUG30_ENTRY_DETAILS',json.dumps(details,ensure_ascii=False))
           states=q("""
           SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt
           FROM rt_system_state
@@ -61,3 +69,5 @@ jobs:
           base='https://race-tantei-phase0.race-tantei.workers.dev'
           curl -sS --max-time 10 -D /tmp/h -o /tmp/d -w 'AUG30_API total=%{time_total}s http=%{http_code}\n' "$base/api/public/day?date=2026-08-30&_rt=$(date +%s%N)"
           grep -i '^x-race-upcoming-day-path: direct-d1-fast-upcoming-v1' /tmp/h
+
+# rerun after same-day official anchor deployment
