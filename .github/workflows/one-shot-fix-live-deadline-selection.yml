@@ -1,0 +1,83 @@
+name: One-shot repair live deadline no-selection crash
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/one-shot-fix-live-deadline-selection.yml"
+
+permissions:
+  contents: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Patch deadline guard to tolerate missing daily selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/v1/completed-worker-deadline-guard.ts')
+          text = p.read_text(encoding='utf-8')
+          old = '''  const date = jstDate(now);\n  const rawIds = await loadSelection(env.DB, date);\n  const ids = await orderSelectedRaceIds(env.DB, date, rawIds);\n'''
+          new = '''  const date = jstDate(now);\n  const selectionExists = await env.DB.prepare("SELECT 1 AS ok FROM rt_system_state WHERE state_key=? LIMIT 1")\n    .bind(`${SELECTION_PREFIX}${date}`)\n    .first<{ ok: number }>();\n  const rawIds = Number(selectionExists?.ok ?? 0) === 1 ? await loadSelection(env.DB, date) : [];\n  const ids = await orderSelectedRaceIds(env.DB, date, rawIds);\n'''
+          if old not in text:
+              raise SystemExit('PATCH_TARGET_NOT_FOUND')
+          p.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          git diff -- src/v1/completed-worker-deadline-guard.ts
+      - name: Validate patched source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          python3 scripts/verify-live-lock-safety.py
+      - name: Deploy patched primary and backup live-deadline Workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy -c wrangler.live-deadline.jsonc
+          npx wrangler deploy -c wrangler.live-deadline-backup.jsonc
+      - name: Prove cron tick now writes fresh priority heartbeat
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 90
+          today=$(TZ=Asia/Tokyo date +%F)
+          state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT state_key AS stateKey,updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok,json_extract(state_value,'$.completedAt') AS completedAt FROM rt_system_state WHERE state_key='live_deadline_priority_guard_success:${today}' LIMIT 1")
+          echo "$state"
+          STATE_JSON="$state" TODAY="$today" node - <<'NODE'
+          const p=JSON.parse(process.env.STATE_JSON||'[]');
+          const r=p?.[0]?.results?.[0];
+          if(!r) throw new Error(`PRIORITY_GUARD_SUCCESS_MISSING_AFTER_REPAIR:${process.env.TODAY}`);
+          const age=Number(r.ageSeconds);
+          if(r.status!=='completed'||Number(r.ok)!==1||!r.completedAt) throw new Error(`PRIORITY_GUARD_NOT_COMPLETED_AFTER_REPAIR:${r.status}:${r.ok}`);
+          if(!Number.isFinite(age)||age < -30||age > 180) throw new Error(`PRIORITY_GUARD_STALE_AFTER_REPAIR:${age}`);
+          console.log(JSON.stringify({priorityGuard:'completed',ageSeconds:age,updatedAt:r.updatedAt}));
+          NODE
+      - name: Commit source repair and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "race-tantei-repair-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/v1/completed-worker-deadline-guard.ts
+          git rm .github/workflows/one-shot-fix-live-deadline-selection.yml
+          git commit -m "Fix live deadline guard before daily selection exists"
+          git push origin HEAD:main
