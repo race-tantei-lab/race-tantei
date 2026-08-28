@@ -1,0 +1,75 @@
+name: Diagnose Aug 30 public load 20260829
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-aug30-load-20260829.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - name: Measure production and inspect D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          echo '=== PUBLIC API TIMINGS ==='
+          for i in 1 2 3; do
+            curl -sS --max-time 30 -H 'Cache-Control: no-cache' -o "/tmp/day-$i.json" -w "day30[$i] http=%{http_code} total=%{time_total}s ttfb=%{time_starttransfer}s size=%{size_download}\n" "$base/api/public/day?date=2026-08-30&_rt=$(date +%s%N)"
+          done
+          curl -sS --max-time 30 -H 'Cache-Control: no-cache' -o /tmp/home.html -w "home http=%{http_code} total=%{time_total}s ttfb=%{time_starttransfer}s size=%{size_download}\n" "$base/?_rt=$(date +%s%N)"
+          node - <<'NODE'
+          const fs=require('fs');
+          for(let i=1;i<=3;i++){
+            const p=JSON.parse(fs.readFileSync('/tmp/day-'+i+'.json','utf8'));
+            const r=p.races||[];
+            console.log('DAY_PAYLOAD',i,JSON.stringify({ok:p.ok,date:p.date,races:r.length,venues:[...new Set(r.map(x=>x.venue).filter(Boolean))].sort(),first:r[0]?.raceId,last:r[r.length-1]?.raceId,path:p.path||null}));
+          }
+          NODE
+          echo '=== D1 ==='
+          python - <<'PY'
+          import json, os, urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
+          def q(sql,params=None):
+              req=urllib.request.Request(url,data=json.dumps({'sql':sql,'params':params or []}).encode(),method='POST',headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'})
+              with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
+              if not body.get('success'): raise SystemExit(body)
+              return (body.get('result') or [{}])[0].get('results') or []
+          rows=q("""
+          WITH per_race AS (
+            SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.entry_url AS entryUrl,r.status,
+                   COUNT(rr.horse_no) AS runners,
+                   SUM(CASE WHEN COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners
+            FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
+            WHERE r.race_date='2026-08-30'
+            GROUP BY r.race_id,r.venue,r.race_no,r.entry_url,r.status
+          )
+          SELECT venue,COUNT(*) AS races,MIN(raceNo) AS minRace,MAX(raceNo) AS maxRace,
+                 SUM(CASE WHEN activeRunners>=3 THEN 1 ELSE 0 END) AS entriesReady,
+                 SUM(CASE WHEN length(trim(coalesce(entryUrl,'')))>0 THEN 1 ELSE 0 END) AS entryUrls,
+                 SUM(runners) AS runnerRows
+          FROM per_race GROUP BY venue ORDER BY venue
+          """)
+          print('AUG30_VENUES',json.dumps(rows,ensure_ascii=False))
+          states=q("""
+          SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt
+          FROM rt_system_state
+          WHERE state_key IN ('worker_upcoming_calendar_repair','worker_upcoming_entry_repair','worker_upcoming_entry_derived_repair')
+             OR state_key LIKE 'worker_upcoming_calendar_day:2026-08-30%'
+             OR state_key LIKE 'worker_upcoming_entry_probe:2026-08-30:%'
+          ORDER BY updated_at DESC LIMIT 20
+          """)
+          print('AUG30_STATES',json.dumps(states,ensure_ascii=False))
+          PY
