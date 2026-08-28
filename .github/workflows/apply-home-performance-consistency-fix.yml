@@ -1,24 +1,50 @@
-name: Diagnose Aug 30 stored JRA anchors
+name: Fix and diagnose Aug 30 entry repair
 on:
   push:
     branches: [main]
     paths: ['.github/workflows/apply-home-performance-consistency-fix.yml']
 permissions:
-  contents: read
+  contents: write
 jobs:
-  diagnose:
+  fix_and_diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Fix probe anchor type narrowing
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/v1/upcoming-entry-worker-repair.ts')
+          s=p.read_text(encoding='utf-8')
+          old='''  if (found) {
+    await saveProbeState(db, group, { modeIndex: state.modeIndex, cursor: 0 });
+    return { ...found, probed: values.length };
+  }
+'''
+          new='''  const resolved = found as { cname: string; html: string } | null;
+  if (resolved) {
+    await saveProbeState(db, group, { modeIndex: state.modeIndex, cursor: 0 });
+    return { cname: resolved.cname, html: resolved.html, probed: values.length };
+  }
+'''
+          if old not in s:
+              raise SystemExit('PROBE_NARROWING_TARGET_MISSING')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
       - run: npm ci
+      - run: npm run typecheck
       - run: npm run build:test
       - name: Diagnose exact stored official anchors
         shell: bash
@@ -72,3 +98,12 @@ jobs:
             }
           }
           NODE
+      - name: Commit source fix
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/v1/upcoming-entry-worker-repair.ts
+          git commit -m 'fix: type-safe upcoming entry anchor resolution'
+          git pull --rebase origin main
+          git push origin HEAD:main
