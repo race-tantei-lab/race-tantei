@@ -20,6 +20,10 @@ function jstDate(now = new Date()): string {
   return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+function validRaceDate(value: string | null): value is string {
+  return Boolean(value && /^20\d{2}-\d{2}-\d{2}$/.test(value));
+}
+
 async function enforceLiveLockSla(db: D1Database, now: Date): Promise<void> {
   const row = await db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
     .bind(`worker_live_lock:${jstDate(now)}`)
@@ -63,11 +67,17 @@ export default {
     const path = url.pathname;
     if (path.startsWith("/_internal/")) return new Response("NOT_FOUND", { status: 404 });
     if (path === "/api/public/today-prediction-sample") return currentPredictionSample(env.DB);
-    if (path === "/api/public/day" && url.searchParams.get("date") === jstDate()) {
-      // Current-day reads are latency-sensitive and must not inherit legacy
-      // settlement/discovery wrappers or any JRA network wait. The authoritative
-      // frozen selection and locked public bets already live in D1.
-      return fastCurrentDayResponse(env.DB, jstDate());
+    if (path === "/api/public/day") {
+      const requestedDate = url.searchParams.get("date");
+      const today = jstDate();
+      if (validRaceDate(requestedDate) && requestedDate >= today) {
+        // Current and upcoming live days are display-only reads. Do not send them
+        // through the historical/legacy wrapper chain: that path performs extra
+        // compatibility work which is unnecessary for a future race list and can
+        // make the next race day very slow to open. D1 already contains the race
+        // rows, frozen selection (when available), and public bets needed here.
+        return fastCurrentDayResponse(env.DB, requestedDate);
+      }
     }
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
     const response = await publicSite.fetch(request, env, ctx);
