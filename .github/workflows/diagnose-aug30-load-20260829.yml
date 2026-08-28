@@ -26,7 +26,7 @@ jobs:
           base='https://race-tantei-phase0.race-tantei.workers.dev'
           echo '=== PUBLIC API TIMINGS ==='
           for i in 1 2 3; do
-            curl -sS --max-time 30 -H 'Cache-Control: no-cache' -o "/tmp/day-$i.json" -w "day30[$i] http=%{http_code} total=%{time_total}s ttfb=%{time_starttransfer}s size=%{size_download}\n" "$base/api/public/day?date=2026-08-30&_rt=$(date +%s%N)"
+            curl -sS --max-time 30 -D "/tmp/day-$i.headers" -H 'Cache-Control: no-cache' -o "/tmp/day-$i.json" -w "day30[$i] http=%{http_code} total=%{time_total}s ttfb=%{time_starttransfer}s size=%{size_download}\n" "$base/api/public/day?date=2026-08-30&_rt=$(date +%s%N)"
           done
           curl -sS --max-time 30 -H 'Cache-Control: no-cache' -o /tmp/home.html -w "home http=%{http_code} total=%{time_total}s ttfb=%{time_starttransfer}s size=%{size_download}\n" "$base/?_rt=$(date +%s%N)"
           node - <<'NODE'
@@ -34,7 +34,11 @@ jobs:
           for(let i=1;i<=3;i++){
             const p=JSON.parse(fs.readFileSync('/tmp/day-'+i+'.json','utf8'));
             const r=p.races||[];
-            console.log('DAY_PAYLOAD',i,JSON.stringify({ok:p.ok,date:p.date,races:r.length,venues:[...new Set(r.map(x=>x.venue).filter(Boolean))].sort(),first:r[0]?.raceId,last:r[r.length-1]?.raceId,path:p.path||null}));
+            const h=fs.readFileSync('/tmp/day-'+i+'.headers','utf8');
+            const fast=/^x-race-upcoming-day-path:\s*(.+)$/mi.exec(h)?.[1]?.trim()||null;
+            console.log('DAY_PAYLOAD',i,JSON.stringify({ok:p.ok,date:p.date,races:r.length,venues:[...new Set(r.map(x=>x.venue).filter(Boolean))].sort(),first:r[0]?.raceId,last:r[r.length-1]?.raceId,path:fast}));
+            if(r.length!==36) throw new Error('AUG30_RACE_COUNT:'+r.length);
+            if(fast!=='direct-d1-fast-upcoming-v1') throw new Error('FAST_PATH_MISSING:'+fast);
           }
           NODE
           echo '=== D1 ==='
@@ -73,3 +77,5 @@ jobs:
           """)
           print('AUG30_STATES',json.dumps(states,ensure_ascii=False))
           PY
+
+# rerun after direct-D1 upcoming-date deployment
