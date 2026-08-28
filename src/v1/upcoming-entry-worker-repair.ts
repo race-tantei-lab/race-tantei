@@ -31,6 +31,7 @@ type MissingGroup = {
 
 type ProbeState = { modeIndex: number; cursor: number };
 type EntryFetch = { html: string; sourceUrl: string };
+type Anchor = { cname: string; html: string; probed: number };
 
 type RepairAudit = {
   checkedAt: string;
@@ -58,6 +59,16 @@ function jstWeekday(now = new Date()): number {
 
 function canonicalEntryUrl(cname: string): string {
   return `https://www.jra.go.jp/JRADB/accessD.html?CNAME=${encodeURIComponent(cname)}`;
+}
+
+function cnameFromEntryUrl(entryUrl: string): string | null {
+  try {
+    const raw = new URL(entryUrl).searchParams.get("CNAME") ?? "";
+    const value = decodeURIComponent(raw);
+    return /^(?:pw|sw)01dde[A-Za-z0-9]+\/[0-9A-Fa-f]{2}$/.test(value) ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 function officialCandidateUrls(cname: string): string[] {
@@ -180,6 +191,35 @@ async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]>
   return rows;
 }
 
+async function existingOfficialAnchor(db: D1Database, group: MissingGroup): Promise<Anchor | null> {
+  const rows = await db.prepare(`
+    SELECT r.race_id AS raceId,r.race_no AS raceNo,r.entry_url AS entryUrl,
+           SUM(CASE WHEN COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners
+    FROM rt_races r
+    LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
+    WHERE r.race_date=? AND r.venue=? AND LENGTH(TRIM(COALESCE(r.entry_url,'')))>0
+    GROUP BY r.race_id,r.race_no,r.entry_url
+    HAVING activeRunners>=3
+    ORDER BY r.race_no
+    LIMIT 4
+  `).bind(group.raceDate, group.venue).all<{ raceId: string; raceNo: number; entryUrl: string; activeRunners: number }>();
+
+  for (const row of rows.results ?? []) {
+    const cname = cnameFromEntryUrl(String(row.entryUrl ?? ""));
+    if (!cname) continue;
+    const page = await fetchOfficialEntry(cname);
+    if (!page) continue;
+    try {
+      const bundle = parseEntryPage(page.html, canonicalEntryUrl(cname));
+      const active = bundle.runners.filter((runner) => (runner.runnerStatus || "active") === "active");
+      if (bundle.race.raceDate === group.raceDate && bundle.race.venue === group.venue && active.length >= 3) {
+        return { cname, html: page.html, probed: 0 };
+      }
+    } catch { /* stale/invalid stored URL; try another stored entry */ }
+  }
+  return null;
+}
+
 async function loadProbeState(db: D1Database, group: MissingGroup): Promise<ProbeState> {
   const key = `${PROBE_PREFIX}${group.raceDate}:${group.venue}`;
   const row = await db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
@@ -200,7 +240,7 @@ async function saveProbeState(db: D1Database, group: MissingGroup, state: ProbeS
   await setState(db, `${PROBE_PREFIX}${group.raceDate}:${group.venue}`, JSON.stringify(state));
 }
 
-async function probeAnchor(db: D1Database, group: MissingGroup): Promise<{ cname: string; html: string; probed: number } | null> {
+async function probeAnchor(db: D1Database, group: MissingGroup): Promise<Anchor | null> {
   const state = await loadProbeState(db, group);
   const mode = PROBE_MODES[state.modeIndex];
   if (!mode) return null;
@@ -313,15 +353,19 @@ export async function runUpcomingEntryWorkerRepair(env: Env, now = new Date()): 
     const group = groups[0];
     audit.targetDate = group.raceDate;
     audit.targetVenue = group.venue;
-    const anchor = await probeAnchor(env.DB, group);
-    audit.probed = PROBE_BATCH;
+
+    // Reuse a verified official page already stored for the same venue/day first.
+    // This is deterministic and lets us follow JRA's own page links instead of
+    // brute-forcing race 1 again when race 7/8/etc. is already known.
+    let anchor = await existingOfficialAnchor(env.DB, group);
+    if (!anchor) anchor = await probeAnchor(env.DB, group);
+    audit.probed = anchor?.probed ?? PROBE_BATCH;
     if (!anchor) {
       audit.status = "probing";
       await setState(env.DB, REPAIR_STATE_KEY, JSON.stringify(audit));
       return audit;
     }
     audit.anchorFound = true;
-    audit.probed = anchor.probed;
     audit.savedRaceIds = await expandAndSave(env.DB, anchor.cname, anchor.html, now);
     audit.status = audit.savedRaceIds.length ? "repaired" : "anchor_without_saved_entries";
   } catch (error) {
