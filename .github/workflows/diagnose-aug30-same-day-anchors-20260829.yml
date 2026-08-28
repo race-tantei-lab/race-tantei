@@ -1,0 +1,54 @@
+name: Diagnose Aug 30 same-day anchors 20260829
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-aug30-same-day-anchors-20260829.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read anchors and test same-day CNAME expansion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os, re, urllib.parse, urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          d1=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
+          def q(sql,params=None):
+              req=urllib.request.Request(d1,data=json.dumps({'sql':sql,'params':params or []}).encode(),method='POST',headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'})
+              with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
+              if not body.get('success'): raise SystemExit(body)
+              return (body.get('result') or [{}])[0].get('results') or []
+          rows=q("SELECT venue,race_no AS raceNo,entry_url AS entryUrl FROM rt_races WHERE race_date='2026-08-30' AND length(trim(coalesce(entry_url,'')))>0 ORDER BY venue,race_no")
+          print('ANCHORS',json.dumps(rows,ensure_ascii=False))
+          TENS=0x52; UNITS=0xB5
+          def cname(url):
+              return urllib.parse.unquote(urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get('CNAME',[''])[0])
+          def to_race(base, base_no, target_no):
+              prefix,sfx=base.split('/')
+              val=int(sfx,16)
+              def delta(n): return (n//10)*TENS + ((n%10)-1)*UNITS
+              target=(val - delta(base_no) + delta(target_no))%256
+              p=prefix[:19]+str(target_no).zfill(2)+prefix[21:]
+              return f'{p}/{target:02X}'
+          for row in rows:
+              base=cname(row['entryUrl']); n=int(row['raceNo'])
+              print('ANCHOR',row['venue'],n,base)
+              for target in range(1,13):
+                  print('CANDIDATE',row['venue'],target,to_race(base,n,target))
+          PY
+
+# one-time diagnostic
