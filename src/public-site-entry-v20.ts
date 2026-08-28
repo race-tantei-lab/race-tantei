@@ -124,6 +124,8 @@ async function fixRaceDetail(db: D1Database, path: string, response: Response): 
   if (!path.startsWith("/races/") || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
   try {
     const raceId = decodeURIComponent(path.slice("/races/".length));
+    const raceDate = raceId.slice(0, 10);
+    if (/^20\d{2}-\d{2}-\d{2}$/.test(raceDate) && raceDate > jstDate()) return response;
     const view = (await settlementViews(db, [raceId])).get(raceId);
     if (!view?.hasBets) return response;
     const state = publicCode(view);

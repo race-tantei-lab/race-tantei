@@ -144,6 +144,7 @@ export default {
     const raceId = decodeURIComponent(path.slice("/races/".length));
     const date = raceId.slice(0, 10);
     if (!/^20\d{2}-\d{2}-\d{2}$/.test(date) || date <= CUTOFF) return response;
+    if (date > jstDate(new Date())) return response;
     try {
       const tickets = await loadFixedTicketEvidence(env.DB, raceId);
       if (tickets.length !== 2) return response;

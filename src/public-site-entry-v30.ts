@@ -250,12 +250,25 @@ async function enhanceRaceNavigation(response: Response, env: Env, path: string)
   if (!path.startsWith("/races/") || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
   try {
     const raceId = decodeURIComponent(path.slice("/races/".length));
-    const current = await env.DB.prepare(`SELECT race_id AS raceId,venue,race_no AS raceNo,race_date AS raceDate FROM rt_races WHERE race_id=? LIMIT 1`).bind(raceId).first<RaceNavRow>();
+    const navRows = await env.DB.prepare(`
+      WITH current AS (
+        SELECT race_id,venue,race_no,race_date FROM rt_races WHERE race_id=? LIMIT 1
+      )
+      SELECT 'current' AS navKind,r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.race_date AS raceDate
+      FROM rt_races r JOIN current c ON r.race_id=c.race_id
+      UNION ALL
+      SELECT 'previous' AS navKind,r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.race_date AS raceDate
+      FROM rt_races r JOIN current c ON r.race_date=c.race_date AND r.venue=c.venue
+      WHERE r.race_no=(SELECT MAX(p.race_no) FROM rt_races p JOIN current x ON p.race_date=x.race_date AND p.venue=x.venue WHERE p.race_no<x.race_no)
+      UNION ALL
+      SELECT 'next' AS navKind,r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.race_date AS raceDate
+      FROM rt_races r JOIN current c ON r.race_date=c.race_date AND r.venue=c.venue
+      WHERE r.race_no=(SELECT MIN(n.race_no) FROM rt_races n JOIN current x ON n.race_date=x.race_date AND n.venue=x.venue WHERE n.race_no>x.race_no)
+    `).bind(raceId).all<RaceNavRow & { navKind: string }>();
+    const current = navRows.results.find((row) => row.navKind === "current") ?? null;
     if (!current) return response;
-    const [previous, next] = await Promise.all([
-      env.DB.prepare(`SELECT race_id AS raceId,venue,race_no AS raceNo,race_date AS raceDate FROM rt_races WHERE race_date=? AND venue=? AND race_no<? ORDER BY race_no DESC LIMIT 1`).bind(current.raceDate,current.venue,current.raceNo).first<RaceNavRow>(),
-      env.DB.prepare(`SELECT race_id AS raceId,venue,race_no AS raceNo,race_date AS raceDate FROM rt_races WHERE race_date=? AND venue=? AND race_no>? ORDER BY race_no ASC LIMIT 1`).bind(current.raceDate,current.venue,current.raceNo).first<RaceNavRow>(),
-    ]);
+    const previous = navRows.results.find((row) => row.navKind === "previous") ?? null;
+    const next = navRows.results.find((row) => row.navKind === "next") ?? null;
     const prevHtml = previous ? `<a href="/races/${encodeURIComponent(previous.raceId)}">← ${esc(previous.venue)} ${Number(previous.raceNo)}R</a>` : `<span>← 前のレースなし</span>`;
     const nextHtml = next ? `<a href="/races/${encodeURIComponent(next.raceId)}">${esc(next.venue)} ${Number(next.raceNo)}R →</a>` : `<span>次のレースなし →</span>`;
     const nav = `<nav class="race-sequence-nav" aria-label="前後のレース">${prevHtml}${nextHtml}</nav>`;

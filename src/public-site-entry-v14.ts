@@ -101,6 +101,8 @@ async function enhanceRaceReasons(request: Request, response: Response, db: D1Da
   if (!path.startsWith("/races/")) return response;
   try {
     const raceId = decodeURIComponent(path.slice("/races/".length));
+    const raceDate = raceId.slice(0, 10);
+    if (/^20\d{2}-\d{2}-\d{2}$/.test(raceDate) && raceDate > jstDateKey()) return response;
     const reasons = await ticketReasons(db, raceId);
     if (!reasons.length) return response;
     let html = await response.text();
