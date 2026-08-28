@@ -1,6 +1,6 @@
 import { ensurePublicHistory } from "./public-history-db.js";
 
-export const DAILY_PERFORMANCE_VERSION = "daily-performance-v3-roi-only-history-20260828";
+export const DAILY_PERFORMANCE_VERSION = "daily-performance-v4-collapsed-history-20260829";
 const COURSES = ["ライト", "スタンダード", "プレミアム"] as const;
 type CourseName = typeof COURSES[number];
 
@@ -171,7 +171,7 @@ function block(today: string): string {
   return `<section class="daily-performance-wrap" data-daily-performance>
     <div class="daily-performance-head"><h2 id="daily-performance-title">本日の集計（${Number(month)}/${Number(day)}）</h2><span>JST・公開買い目</span></div>
     <div id="daily-performance-current" class="daily-summary"><div class="daily-summary-loading">集計を読み込み中…</div></div>
-    <details class="daily-history" open><summary><b>日別回収率</b><span>直近30開催日</span></summary><div id="daily-performance-history" class="daily-history-list"><div class="daily-summary-loading">日別成績を読み込み中…</div></div></details>
+    <details class="daily-history"><summary><b>日別回収率</b><span>直近30開催日</span></summary><div id="daily-performance-history" class="daily-history-list"><div class="daily-summary-loading">日別成績を読み込み中…</div></div></details>
   </section>`;
 }
 
