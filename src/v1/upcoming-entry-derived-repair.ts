@@ -12,7 +12,6 @@ const VENUE_CODES: Record<string, string> = {
   札幌: "01", 函館: "02", 福島: "03", 新潟: "04", 東京: "05",
   中山: "06", 中京: "07", 京都: "08", 阪神: "09", 小倉: "10",
 };
-
 const KNOWN_POSITION_WEIGHTS = new Map<number, number>([
   [10, 0x4A], [16, 0x31], [18, 0x73], [19, 0x52], [20, 0xB5], [27, 0x5A], [28, 0xBD],
 ]);
@@ -126,7 +125,12 @@ async function fetchOfficialEntry(cname: string): Promise<string | null> {
 }
 
 async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]> {
-  const targetDate = jstWeekday(now) === 5 ? jstDate(now, 1) : jstDate(now, 0);
+  const weekday = jstWeekday(now);
+  // Friday prepares Saturday; Saturday prepares Sunday. On race day itself,
+  // continue repairing the current day. This keeps the lightweight derived
+  // repair focused on the next race day instead of re-scanning Saturday while
+  // Sunday's cards are still empty.
+  const targetDate = weekday === 5 || weekday === 6 ? jstDate(now, 1) : jstDate(now, 0);
   const result = await db.prepare(`
     WITH per_race AS (
       SELECT r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no,
