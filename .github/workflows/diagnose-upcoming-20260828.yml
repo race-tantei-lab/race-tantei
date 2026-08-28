@@ -13,71 +13,33 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
-      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Allow deployed cron to bootstrap weekend
-        run: sleep 75
-      - name: Query production D1 and public API
+      - name: Verify public Sunday schedule and ROI-only daily history
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json, os, urllib.request
-          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; db=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
-          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query'
-          def q(sql):
-              req=urllib.request.Request(url,data=json.dumps({'sql':sql,'params':[]}).encode(),method='POST',headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'})
-              with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
-              if not body.get('success'): raise SystemExit(body)
-              return (body.get('result') or [{}])[0].get('results') or []
-          sql="""
-          WITH per_race AS (
-            SELECT r.race_date AS raceDate,r.venue,r.race_no AS raceNo,r.entry_url AS entryUrl,r.start_time_utc AS startTimeUtc,
-                   SUM(CASE WHEN COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners
-            FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
-            WHERE r.race_date IN ('2026-08-29','2026-08-30')
-            GROUP BY r.race_id,r.race_date,r.venue,r.race_no,r.entry_url,r.start_time_utc
-          )
-          SELECT raceDate,venue,COUNT(*) AS races,MIN(raceNo) AS minRaceNo,MAX(raceNo) AS maxRaceNo,
-                 SUM(CASE WHEN activeRunners>=3 THEN 1 ELSE 0 END) AS readyEntries,
-                 SUM(CASE WHEN length(trim(coalesce(entryUrl,'')))>0 THEN 1 ELSE 0 END) AS entryUrls,
-                 SUM(CASE WHEN startTimeUtc IS NOT NULL THEN 1 ELSE 0 END) AS startTimes
-          FROM per_race GROUP BY raceDate,venue ORDER BY raceDate,venue
-          """
-          rows=q(sql)
-          print('UPCOMING_ROWS',json.dumps(rows,ensure_ascii=False))
-          state=q("SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt FROM rt_system_state WHERE state_key IN ('worker_upcoming_calendar_repair','worker_upcoming_entry_repair','worker_upcoming_entry_derived_repair') OR state_key LIKE 'worker_upcoming_calendar_day:%' OR state_key LIKE 'worker_upcoming_entry_probe:%' ORDER BY updated_at DESC LIMIT 30")
-          print('REPAIR_STATES',json.dumps(state,ensure_ascii=False))
-          counts=q("SELECT race_date AS raceDate,COUNT(*) AS races FROM rt_races WHERE race_date>='2026-08-28' AND race_date<='2026-08-31' GROUP BY race_date ORDER BY race_date")
-          print('DATE_COUNTS',json.dumps(counts,ensure_ascii=False))
-          sunday=sum(int(x.get('races') or 0) for x in rows if x.get('raceDate')=='2026-08-30')
-          sunday_venues=sorted(str(x.get('venue')) for x in rows if x.get('raceDate')=='2026-08-30')
-          if sunday != 36 or len(sunday_venues) != 3:
-              raise SystemExit(f'SUNDAY_SCHEDULE_INCOMPLETE races={sunday} venues={sunday_venues}')
+          import json, time, urllib.request
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          def get(path):
+              req=urllib.request.Request(base+path,headers={'Cache-Control':'no-cache','User-Agent':'race-tantei-prod-verifier'})
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  return r.read().decode('utf-8')
+          for d in ['2026-08-29','2026-08-30']:
+              p=json.loads(get(f'/api/public/day?date={d}&_rt={time.time_ns()}'))
+              races=p.get('races') or []
+              venues=sorted({str(x.get('venue')) for x in races if x.get('venue')})
+              print('PUBLIC_DAY',d,json.dumps({'ok':p.get('ok'),'date':p.get('date'),'races':len(races),'venues':venues},ensure_ascii=False))
+              if d=='2026-08-30' and (len(races)!=36 or len(venues)!=3):
+                  raise SystemExit(f'PUBLIC_SUNDAY_INCOMPLETE races={len(races)} venues={venues}')
+          home=get(f'/?_rt={time.time_ns()}')
+          if 'daily-performance-v3-roi-only-history-20260828' not in home:
+              raise SystemExit('ROI_ONLY_VERSION_MISSING')
+          if "<span>回収率 '+pct(d.roiPct)+'</span></summary>" not in home:
+              raise SystemExit('ROI_ONLY_SUMMARY_MISSING')
+          if "回収率 '+pct(d.roiPct)+'　購入" in home:
+              raise SystemExit('OLD_DAILY_AMOUNT_SUMMARY_STILL_PRESENT')
+          print('ROI_ONLY_HOME_OK')
           PY
-          for d in 2026-08-29 2026-08-30; do
-            echo "PUBLIC_DAY $d"
-            curl -fsS -H 'Cache-Control: no-cache' "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$d&_rt=$(date +%s)" -o "/tmp/day-$d.json"
-            DATE="$d" node - <<'NODE'
-            const fs=require('fs'); const d=process.env.DATE; const p=JSON.parse(fs.readFileSync('/tmp/day-'+d+'.json','utf8')); const r=p.races||[];
-            console.log(JSON.stringify({ok:p.ok,date:p.date,races:r.length,venues:[...new Set(r.map(x=>x.venue).filter(Boolean))].sort()}));
-            if(d==='2026-08-30' && (r.length!==36 || new Set(r.map(x=>x.venue).filter(Boolean)).size!==3)) throw new Error('PUBLIC_SUNDAY_INCOMPLETE');
-            NODE
-          done
-      - name: Verify ROI-only collapsed daily history in production
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsS -H 'Cache-Control: no-cache' "https://race-tantei-phase0.race-tantei.workers.dev/?_rt=$(date +%s)" -o /tmp/home.html
-          grep -F 'daily-performance-v3-roi-only-history-20260828' /tmp/home.html >/dev/null
-          grep -F "<span>回収率 '+pct(d.roiPct)+'</span></summary>" /tmp/home.html >/dev/null
-          if grep -F "回収率 '+pct(d.roiPct)+'　購入" /tmp/home.html >/dev/null; then
-            echo 'OLD_DAILY_AMOUNT_SUMMARY_STILL_PRESENT' >&2
-            exit 1
-          fi
-          echo ROI_ONLY_HOME_OK
