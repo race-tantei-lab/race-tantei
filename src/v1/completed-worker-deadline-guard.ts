@@ -324,7 +324,10 @@ async function saveAudit(db: D1Database, audit: DeadlineGuardAudit): Promise<voi
 export async function runCompletedWorkerDeadlineGuard(env: Env, now = new Date()): Promise<DeadlineGuardAudit> {
   await ensureCompletedFinalImmutability(env.DB);
   const date = jstDate(now);
-  const rawIds = await loadSelection(env.DB, date);
+  const selectionExists = await env.DB.prepare("SELECT 1 AS ok FROM rt_system_state WHERE state_key=? LIMIT 1")
+    .bind(`${SELECTION_PREFIX}${date}`)
+    .first<{ ok: number }>();
+  const rawIds = Number(selectionExists?.ok ?? 0) === 1 ? await loadSelection(env.DB, date) : [];
   const ids = await orderSelectedRaceIds(env.DB, date, rawIds);
   const audit: DeadlineGuardAudit = {
     status: "ok",
