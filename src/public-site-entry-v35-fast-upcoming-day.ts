@@ -2,7 +2,7 @@ import publicSite from "./public-site-entry-v34.js";
 import { fastCurrentDayResponse } from "./v1/current-day-public-api.js";
 import type { Env } from "./v1/types.js";
 
-const UI_VERSION = "ten-year-completed-public-v35-fast-upcoming-day-20260829";
+const UI_VERSION = "ten-year-completed-public-v36-fast-upcoming-sunday-entry-20260829";
 
 function jstDate(now = new Date(), offsetDays = 0): string {
   return new Date(now.getTime() + 9 * 60 * 60 * 1000 + offsetDays * 86_400_000).toISOString().slice(0, 10);
