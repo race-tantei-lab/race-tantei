@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Wait for production deployment
-        run: sleep 50
+        run: sleep 20
       - name: Measure production endpoints
         shell: bash
         run: |
@@ -33,7 +33,6 @@ jobs:
           const fs=require('fs');
           const raw=fs.readFileSync('/tmp/day.json','utf8');
           let p; try{p=JSON.parse(raw)}catch(e){console.log('DAY_PARSE_FAILED',raw.slice(0,500));process.exit(0)}
-          console.log('DAY_KEYS',Object.keys(p));
           const races=p.races||p.items||p.day?.races||[];
           console.log('RACE_COUNT',Array.isArray(races)?races.length:'not-array');
           const ids=(Array.isArray(races)?races:[]).map(r=>r.raceId||r.race_id||r.id).filter(Boolean).slice(0,5);
@@ -52,4 +51,4 @@ jobs:
           done </tmp/ids.txt
           echo 'DIAG_COMPLETE'
 
-# rerun after future-detail query pruning
+# final production measurement after canonical-entry deploy
