@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Wait for production deployment
+        run: sleep 50
       - name: Measure production endpoints
         shell: bash
         run: |
@@ -48,8 +50,6 @@ jobs:
             i=$((i+1))
             measure "race$i:$rid" "$base/races/$rid?_rt=$(date +%s%N)" "/tmp/race-$i.html"
           done </tmp/ids.txt
-          echo '=== AUG23 DAY API CONTROL ==='
-          measure day23 "$base/api/public/day?date=2026-08-23&_rt=$(date +%s%N)" /tmp/day23.json
           echo 'DIAG_COMPLETE'
 
-# bounded one-time production diagnostic
+# rerun after future-detail query pruning
