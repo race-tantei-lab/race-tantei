@@ -43,3 +43,4 @@ jobs:
           done </tmp/ids.txt
           echo '=== AUG23 DAY API CONTROL ==='
           curl -sS -o /tmp/day23.json -w 'day23 code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\n' "$base/api/public/day?date=2026-08-23&_rt=$(date +%s)"
+          echo 'DIAG_COMPLETE'
