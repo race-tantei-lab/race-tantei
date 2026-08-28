@@ -1,0 +1,45 @@
+name: Diagnose Aug30 page latency
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-aug30-page-latency.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Measure production endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          echo '=== HOME ==='
+          curl -sS -o /tmp/home.html -w 'home code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\n' "$base/?_rt=$(date +%s)"
+          echo '=== AUG30 DAY API ==='
+          curl -sS -o /tmp/day.json -w 'day code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\n' "$base/api/public/day?date=2026-08-30&_rt=$(date +%s)"
+          node - <<'NODE'
+          const fs=require('fs');
+          const raw=fs.readFileSync('/tmp/day.json','utf8');
+          let p; try{p=JSON.parse(raw)}catch(e){console.log('DAY_PARSE_FAILED',raw.slice(0,500));process.exit(0)}
+          console.log('DAY_KEYS',Object.keys(p));
+          const races=p.races||p.items||p.day?.races||[];
+          console.log('RACE_COUNT',Array.isArray(races)?races.length:'not-array');
+          const ids=(Array.isArray(races)?races:[]).map(r=>r.raceId||r.race_id||r.id).filter(Boolean).slice(0,5);
+          fs.writeFileSync('/tmp/ids.txt',ids.join('\n'));
+          console.log('RACE_IDS',ids);
+          NODE
+          echo '=== AUG30 RACE DETAILS ==='
+          i=0
+          while IFS= read -r rid; do
+            [ -z "$rid" ] && continue
+            i=$((i+1))
+            curl -sS -o "/tmp/race-$i.html" -w "race $rid code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\\n" "$base/races/$rid?_rt=$(date +%s)" || true
+          done </tmp/ids.txt
+          echo '=== AUG23 DAY API CONTROL ==='
+          curl -sS -o /tmp/day23.json -w 'day23 code=%{http_code} ttfb=%{time_starttransfer}s total=%{time_total}s size=%{size_download}\n' "$base/api/public/day?date=2026-08-23&_rt=$(date +%s)"
