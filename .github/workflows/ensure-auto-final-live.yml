@@ -37,7 +37,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='production/auto-final-watchdog' \
-            -f description='Checking current live-deadline Workers and final coverage' \
+            -f description='Checking current live-deadline Workers and preview/final coverage' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -58,6 +58,16 @@ jobs:
           m=re.search(r'const\s+DRIVER_VERSION\s*=\s*"([^"]+)"', text)
           if not m:
               raise SystemExit('LIVE_DEADLINE_DRIVER_VERSION_NOT_FOUND')
+          print(m.group(1))
+          PY
+          )
+          expected_parser=$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text=Path('src/v1/jra-official-odds-fetch.ts').read_text(encoding='utf-8')
+          m=re.search(r'JRA_OFFICIAL_ODDS_PARSER_VERSION\s*=\s*"([^"]+)"', text)
+          if not m:
+              raise SystemExit('JRA_OFFICIAL_ODDS_PARSER_VERSION_NOT_FOUND')
           print(m.group(1))
           PY
           )
@@ -89,7 +99,21 @@ jobs:
           NODE
           }
 
-          if health_ok && heartbeat_ok; then
+          preview_coverage_ok() {
+            local today rows
+            today=$(TZ=Asia/Tokyo date +%F)
+            rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+              "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT json_extract(p.state_value,'$.snapshots[0].oddsParserVersion') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS parserVersion,(SELECT json_extract(p.state_value,'$.snapshots[0].oddsSource') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS oddsSource FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,parserVersion,oddsSource FROM q WHERE minutesToStart > 17 AND minutesToStart <= 40 ORDER BY minutesToStart") || return 1
+            ROWS="$rows" EXPECTED_PARSER="$expected_parser" node - <<'NODE'
+          const p=JSON.parse(process.env.ROWS||'[]');
+          const rows=p?.[0]?.results||[];
+          const bad=rows.filter(r=>r.parserVersion!==process.env.EXPECTED_PARSER || !['jra-fast-official','jra-crawl-official'].includes(r.oddsSource));
+          if(bad.length){ console.error(JSON.stringify({previewT40:'missing',bad})); process.exit(1); }
+          console.log(JSON.stringify({previewT40:'ok',checked:rows.length}));
+          NODE
+          }
+
+          if health_ok && heartbeat_ok && preview_coverage_ok; then
             echo "LIVE_DEADLINE_WATCHDOG_HEALTHY"
           else
             echo "LIVE_DEADLINE_WATCHDOG_REPAIRING"
@@ -99,11 +123,11 @@ jobs:
             repaired=0
             for i in $(seq 1 12); do
               sleep 10
-              if health_ok && heartbeat_ok; then
+              if health_ok && heartbeat_ok && preview_coverage_ok; then
                 repaired=1
                 break
               fi
-              echo "waiting for fresh Worker cron heartbeat attempt=$i"
+              echo "waiting for healthy Worker/heartbeat/T40 preview coverage attempt=$i"
             done
             if [ "$repaired" -ne 1 ]; then
               today=$(TZ=Asia/Tokyo date +%F)
@@ -137,7 +161,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/auto-final-watchdog' \
-            -f description='Workers healthy; active due selected races have six final rows' \
+            -f description='Workers healthy; T40 previews and active due finals covered' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Mark watchdog failure
