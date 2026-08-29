@@ -1,0 +1,33 @@
+name: One-shot audit exact public final shape
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/one-shot-audit-public-final-shape.yml"
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Audit selected public final rows using UI-exact source filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}') SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.start_time_utc AS startTimeUtc,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,COUNT(b.id) AS totalRows,SUM(CASE WHEN b.source_prediction_id=-2 THEN 1 ELSE 0 END) AS uiFinalRows,SUM(CASE WHEN b.course='ライト' AND b.source_prediction_id=-2 THEN 1 ELSE 0 END) AS lightRows,SUM(CASE WHEN b.course='スタンダード' AND b.source_prediction_id=-2 THEN 1 ELSE 0 END) AS standardRows,SUM(CASE WHEN b.course='プレミアム' AND b.source_prediction_id=-2 THEN 1 ELSE 0 END) AS premiumRows,SUM(CASE WHEN b.source_prediction_id=-2 THEN b.stake_yen ELSE 0 END) AS finalStake FROM rt_races r JOIN selected x ON x.raceId=r.race_id LEFT JOIN rt_public_bets b ON b.race_id=r.race_id GROUP BY r.race_id,r.venue,r.race_no,r.start_time_utc ORDER BY r.start_time_utc"
