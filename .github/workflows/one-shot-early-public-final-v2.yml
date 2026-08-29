@@ -1,4 +1,5 @@
 name: One-shot early public final hardening v2
+# corrected starvation regression: stale refresh is outside the T-30 final window
 
 on:
   push:
