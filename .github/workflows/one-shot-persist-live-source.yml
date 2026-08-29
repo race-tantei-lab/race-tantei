@@ -1,0 +1,59 @@
+name: One-shot persist hardened live source
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/one-shot-persist-live-source.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  persist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Reapply audited v8 source hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          src = Path('.github/workflows/one-shot-live-hardening-v2.yml').read_text(encoding='utf-8').splitlines()
+          start = next(i for i, line in enumerate(src) if line.strip() == '- name: Apply structural hardening')
+          run = next(i for i in range(start + 1, len(src)) if src[i].strip() == 'run: |')
+          body=[]
+          for line in src[run+1:]:
+              if line.startswith('      - name:'):
+                  break
+              body.append(line[10:] if line.startswith('          ') else line)
+          script='\n'.join(body)+'\n'
+          script=script.replace("git diff --check\n", "sed -i 's/[[:space:]]\\+$//' scripts/verify-live-lock-safety.py\ngit diff --check\n", 1)
+          Path('/tmp/apply.sh').write_text(script, encoding='utf-8')
+          PY
+          bash /tmp/apply.sh
+      - name: Verify hardened source
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npx --yes tsx tests/jra-official-odds-fetch-tests.ts
+          npx --yes tsx tests/completed-worker-deadline-guard-tests.ts
+      - name: Persist only source and regression test
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'race-tantei-hardening-bot'
+          git config user.email 'race-tantei-hardening-bot@users.noreply.github.com'
+          git add src/v1/jra-official-odds-fetch.ts src/v1/completed-worker-live-lock.ts src/v1/completed-worker-deadline-guard.ts src/live-deadline-entry-v2.ts tests/completed-worker-deadline-guard-tests.ts
+          git commit -m 'Persist hardened live generation core v8'
+          git pull --rebase origin main
+          git push origin HEAD:main
