@@ -58,7 +58,9 @@ def main() -> None:
         'const DEADLINE_MS = 15 * 60 * 1000;',
         'const FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;',
         'new Set(["jra-fast-official", "jra-crawl-official"])',
-        'const ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";',
+        "JRA_OFFICIAL_ODDS_PARSER_VERSION",
+        "livePreviewPriorityRank",
+        "MAX_PREVIEW_GENERATIONS_PER_TICK",
         'cachedWorkerModel',
         'previewMissingUrgentRaceIds',
         'WORKER_HARD_T15_START_MISSED',
@@ -68,6 +70,7 @@ def main() -> None:
     ):
         require(live, needle, "isolated live lock")
     forbid(live, 'probability_fallback', "isolated live lock")
+    forbid(live, "const ODDS_PARSER_VERSION", "isolated live lock parser provenance")
 
     guard = read("src/v1/completed-worker-deadline-guard.ts")
     for needle in (
@@ -78,10 +81,11 @@ def main() -> None:
         "isDeadlineGuardMissed",
         "deadlineMissedRaceIds",
         'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
-        'const ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";',
+        "JRA_OFFICIAL_ODDS_PARSER_VERSION",
         "ensureCompletedFinalImmutability",
     ):
         require(guard, needle, "persistent deadline guard")
+    forbid(guard, "const ODDS_PARSER_VERSION", "persistent deadline guard parser provenance")
     for forbidden in (
         "fetch(",
         "probability_fallback_persistent_deadline_guard",
@@ -130,6 +134,7 @@ def main() -> None:
         "selection_critical",
         "predeadline_critical",
         "LIVE_DEADLINE_HARD_T10_REFLECTION_BREACH",
+        "slaAfter.previewMissingByT40RaceIds",
         'return new Response("NOT_FOUND", { status: 404 });',
     ):
         require(driver, needle, "isolated live deadline driver")
@@ -186,6 +191,7 @@ def main() -> None:
         "const FETCH_BUDGET_MS = 25_000;",
         "JRA_ODDS_FETCH_BUDGET_EXHAUSTED",
         "deadlineMs",
+        'export const JRA_OFFICIAL_ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";',
     ):
         require(fast, needle, "JRA official odds fetch")
     crawl = read("src/v1/jra-official-odds.ts")
@@ -194,6 +200,20 @@ def main() -> None:
         "JRA_ODDS_CRAWL_BUDGET_EXHAUSTED",
     ):
         require(crawl, needle, "JRA official odds crawl")
+
+    watchdog = read(".github/workflows/ensure-auto-final-live.yml")
+    require(watchdog, "preview_coverage_ok", "automatic live watchdog")
+    require(watchdog, "minutesToStart > 17 AND minutesToStart <= 40", "automatic live watchdog")
+    require(readiness, "PREVIEW_T40_COVERAGE_OK", "production readiness audit")
+    for persistent_workflow in (
+        ".github/workflows/ensure-auto-final-live.yml",
+        ".github/workflows/verify-live-deadline-production.yml",
+        ".github/workflows/deploy-live-deadline.yml",
+        ".github/workflows/critical-auto-bet-generation.yml",
+    ):
+        workflow_text = read(persistent_workflow)
+        for obsolete in ("auto-final-live-bets.yml", "drive-live-tick.yml"):
+            forbid(workflow_text, obsolete, persistent_workflow)
 
     critical_workflow = read(".github/workflows/critical-auto-bet-generation.yml")
     require(critical_workflow, "workflow_dispatch:", "critical recovery workflow")
