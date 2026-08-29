@@ -58,6 +58,7 @@ def main() -> None:
         'const DEADLINE_MS = 15 * 60 * 1000;',
         'const FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;',
         'new Set(["jra-fast-official", "jra-crawl-official"])',
+        'const ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";',
         'cachedWorkerModel',
         'previewMissingUrgentRaceIds',
         'WORKER_HARD_T15_START_MISSED',
@@ -77,6 +78,7 @@ def main() -> None:
         "isDeadlineGuardMissed",
         "deadlineMissedRaceIds",
         'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
+        'const ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";',
         "ensureCompletedFinalImmutability",
     ):
         require(guard, needle, "persistent deadline guard")

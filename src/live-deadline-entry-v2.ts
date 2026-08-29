@@ -11,7 +11,7 @@ import {
 } from "./v1/live-preview-safety.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "live-deadline-v6-t15-start-t10-reflect-20260823";
+const DRIVER_VERSION = "live-deadline-v7-rescue-parser-fair-preview-20260829";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
 const PRIORITY_GUARD_SUCCESS_PREFIX = "live_deadline_priority_guard_success:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
