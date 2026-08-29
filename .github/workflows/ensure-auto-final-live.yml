@@ -15,10 +15,13 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 env:
+  GH_TOKEN: ${{ github.token }}
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
 concurrency:
   group: ensure-auto-final-live
@@ -29,6 +32,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
+      - name: Mark watchdog pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending \
+            -f context='production/auto-final-watchdog' \
+            -f description='Checking current live-deadline Workers and final coverage' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -120,3 +130,21 @@ jobs:
           if(bad.length) throw new Error(`DUE_SELECTED_FINAL_ROWS_INVALID:${JSON.stringify(bad)}`);
           console.log(JSON.stringify({dueSelectedFinalCoverage:'ok',checked:rows.length}));
           NODE
+
+      - name: Mark watchdog success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success \
+            -f context='production/auto-final-watchdog' \
+            -f description='Workers healthy; current due selected races have six final rows' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+
+      - name: Mark watchdog failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure \
+            -f context='production/auto-final-watchdog' \
+            -f description='Automatic final live bet watchdog failed; inspect run' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
