@@ -1,0 +1,170 @@
+name: One-shot early public final hardening
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/one-shot-early-public-final.yml"
+
+permissions:
+  contents: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+
+      - name: Move public-final target earlier
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def rep(path, old, new, count=1):
+              p=Path(path); t=p.read_text(encoding='utf-8')
+              if old not in t: raise SystemExit(f'PATCH_MARKER_MISSING:{path}:{old[:100]}')
+              p.write_text(t.replace(old,new,count),encoding='utf-8')
+
+          rep('src/v1/completed-worker-live-lock.ts',
+              'const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;',
+              'const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;')
+
+          rep('src/v1/completed-worker-deadline-guard.ts',
+              'export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;',
+              'export const DEADLINE_GUARD_ARM_MS = 25 * 60 * 1000;')
+
+          p=Path('src/v1/live-preview-safety.ts'); t=p.read_text(encoding='utf-8')
+          t=t.replace('  finalMissingByT17RaceIds: string[];\n  finalMissingByT16RaceIds: string[];',
+                      '  finalMissingByT30RaceIds: string[];\n  finalMissingByT25RaceIds: string[];\n  finalMissingByT17RaceIds: string[];\n  finalMissingByT16RaceIds: string[];',1)
+          t=t.replace('    finalMissingByT17RaceIds: [], finalMissingByT16RaceIds: [], deadlineMissedRaceIds: [],',
+                      '    finalMissingByT30RaceIds: [], finalMissingByT25RaceIds: [],\n    finalMissingByT17RaceIds: [], finalMissingByT16RaceIds: [], deadlineMissedRaceIds: [],',1)
+          marker='    if (remaining > 0 && remaining <= 17 * 60_000 && !finalReady) audit.finalMissingByT17RaceIds.push(raceId);'
+          if marker not in t: raise SystemExit('PATCH_MARKER_MISSING:live-safety-final')
+          t=t.replace(marker,
+                      '    if (remaining > 0 && remaining <= 30 * 60_000 && !finalReady) audit.finalMissingByT30RaceIds.push(raceId);\n'
+                      '    if (remaining > 0 && remaining <= 25 * 60_000 && !finalReady) audit.finalMissingByT25RaceIds.push(raceId);\n'
+                      + marker,1)
+          p.write_text(t,encoding='utf-8')
+
+          rep('src/live-deadline-entry-v2.ts',
+              'const DRIVER_VERSION = "live-deadline-v8-single-source-fair-queue-20260829";',
+              'const DRIVER_VERSION = "live-deadline-v9-t30-public-final-t25-rescue-20260829";')
+          rep('src/live-deadline-entry-v2.ts',
+              '      ...slaAfter.previewMissingByT30RaceIds,\n      ...slaAfter.finalMissingByT16RaceIds,',
+              '      ...slaAfter.previewMissingByT30RaceIds,\n      ...slaAfter.finalMissingByT30RaceIds,\n      ...slaAfter.finalMissingByT25RaceIds,\n      ...slaAfter.finalMissingByT16RaceIds,')
+
+          p=Path('tests/completed-worker-deadline-guard-tests.ts'); t=p.read_text(encoding='utf-8')
+          t=t.replace('assert.equal(DEADLINE_GUARD_ARM_MS, 16 * 60 * 1000, "rescue guard arms before T-15");',
+                      'assert.equal(DEADLINE_GUARD_ARM_MS, 25 * 60 * 1000, "rescue guard arms at T-25 so public picks cannot remain missing near post");',1)
+          t=t.replace('"the T-16 rescue tick may arm the final"','"the T-25 rescue tick may arm the final"',1)
+          t=t.replace('assert.equal(livePreviewPriorityRank({ remainingMs: 16 * minute, hasPreview: true, previewFresh: true }), 0);',
+                      'assert.equal(livePreviewPriorityRank({ remainingMs: 30 * minute, hasPreview: true, previewFresh: true }), 0);',1)
+          t=t.replace('assert.equal(livePreviewPriorityRank({ remainingMs: 25 * minute, hasPreview: false, previewFresh: false }), 1);',
+                      'assert.equal(livePreviewPriorityRank({ remainingMs: 31 * minute, hasPreview: false, previewFresh: false }), 2);',1)
+          t=t.replace('assert.equal(livePreviewPriorityRank({ remainingMs: 25 * minute, hasPreview: true, previewFresh: false }), 3);',
+                      'assert.equal(livePreviewPriorityRank({ remainingMs: 31 * minute, hasPreview: true, previewFresh: false }), 3);',1)
+          t=t.replace('assert.equal(livePreviewPriorityRank({ remainingMs: 25 * minute, hasPreview: true, previewFresh: true }), 4);',
+                      'assert.equal(livePreviewPriorityRank({ remainingMs: 31 * minute, hasPreview: true, previewFresh: true }), 4);',1)
+          p.write_text(t,encoding='utf-8')
+
+          p=Path('scripts/verify-live-lock-safety.py'); t=p.read_text(encoding='utf-8')
+          t=t.replace("'const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;'", "'const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;'",1)
+          t=t.replace('"export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;"', '"export const DEADLINE_GUARD_ARM_MS = 25 * 60 * 1000;"',1)
+          t=t.replace('        "finalMissingByT17RaceIds",', '        "finalMissingByT30RaceIds",\n        "finalMissingByT25RaceIds",\n        "finalMissingByT17RaceIds",',1)
+          t=t.replace('        "slaAfter.previewMissingByT40RaceIds",', '        "slaAfter.previewMissingByT40RaceIds",\n        "slaAfter.finalMissingByT30RaceIds",\n        "slaAfter.finalMissingByT25RaceIds",',1)
+          t=t.replace('"fresh_final_arm=17m",\n        "rescue_guard_arm=16m",', '"public_final_target=30m",\n        "rescue_guard_arm=25m",',1)
+          p.write_text(t,encoding='utf-8')
+
+          p=Path('.github/workflows/ensure-auto-final-live.yml'); t=p.read_text(encoding='utf-8')
+          t=t.replace('minutesToStart > 0 AND minutesToStart <= 15', 'minutesToStart > 0 AND minutesToStart <= 30',1)
+          t=t.replace('Workers healthy; T40 previews and active due finals covered', 'Workers healthy; T40 previews and T30 public finals covered',1)
+          p.write_text(t,encoding='utf-8')
+
+          p=Path('.github/workflows/verify-live-deadline-production.yml'); t=p.read_text(encoding='utf-8')
+          marker='      - name: Verify every T-16 due selected race has exact six final rows\n'
+          if marker not in t: raise SystemExit('PATCH_MARKER_MISSING:readiness-t16-step')
+          step='''      - name: Verify every active T-30 selected race has exact six public final rows\n        shell: bash\n        run: |\n          set -euo pipefail\n          today=$(TZ=Asia/Tokyo date +%F)\n          rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \\\n            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,finalRows FROM q WHERE minutesToStart > 0 AND minutesToStart <= 30 ORDER BY minutesToStart")\n          echo "$rows"\n          ROWS="$rows" node - <<'NODE'\n          const p=JSON.parse(process.env.ROWS||'[]'); const rows=p?.[0]?.results||[];\n          const bad=rows.filter(r=>Number(r.finalRows)!==6);\n          if(bad.length) throw new Error(`T30_PUBLIC_FINAL_NOT_SIX:${JSON.stringify(bad)}`);\n          console.log(JSON.stringify({t30PublicFinalRows:'ok',checked:rows.length}));\n          NODE\n'''
+          t=t.replace(marker,step+marker,1)
+          p.write_text(t,encoding='utf-8')
+
+          for path in [
+            'src/v1/completed-worker-live-lock.ts','src/v1/completed-worker-deadline-guard.ts',
+            'src/v1/live-preview-safety.ts','src/live-deadline-entry-v2.ts',
+            'tests/completed-worker-deadline-guard-tests.ts','scripts/verify-live-lock-safety.py',
+            '.github/workflows/ensure-auto-final-live.yml','.github/workflows/verify-live-deadline-production.yml'
+          ]:
+              p=Path(path); p.write_text('\n'.join(line.rstrip() for line in p.read_text(encoding='utf-8').splitlines())+'\n',encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Verify early-final invariants
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npx --yes tsx tests/jra-official-odds-fetch-tests.ts
+          npx --yes tsx tests/completed-worker-deadline-guard-tests.ts
+          python3 scripts/verify-live-lock-safety.py
+          npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir /tmp/live-primary
+          npx wrangler deploy --dry-run --config wrangler.live-deadline-backup.jsonc --outdir /tmp/live-backup
+
+      - name: Deploy v9 primary and backup
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.live-deadline.jsonc
+          npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
+
+      - name: Prove v9 and current T-30 public coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='live-deadline-v9-t30-public-final-t25-rescue-20260829'
+          for i in $(seq 1 12); do
+            sleep 10
+            good=1
+            for url in \
+              'https://race-tantei-live-deadline.race-tantei.workers.dev/health' \
+              'https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health'; do
+              body=$(curl --max-time 15 --fail-with-body -sS "$url") || { good=0; break; }
+              BODY="$body" EXPECTED="$expected" node - <<'NODE' || { good=0; break; }
+          const b=JSON.parse(process.env.BODY||'{}');
+          if(b.status!=='up'||b.version!==process.env.EXPECTED) process.exit(1);
+          NODE
+            done
+            [ "$good" -eq 1 ] && break
+          done
+          [ "$good" -eq 1 ]
+          today=$(TZ=Asia/Tokyo date +%F)
+          rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,finalRows FROM q WHERE minutesToStart > 0 AND minutesToStart <= 30 ORDER BY minutesToStart")
+          echo "$rows"
+          ROWS="$rows" node - <<'NODE'
+          const p=JSON.parse(process.env.ROWS||'[]'); const rows=p?.[0]?.results||[];
+          const bad=rows.filter(r=>Number(r.finalRows)!==6);
+          if(bad.length) throw new Error(`CURRENT_T30_PUBLIC_FINAL_MISSING:${JSON.stringify(bad)}`);
+          console.log(JSON.stringify({currentT30PublicFinalCoverage:'ok',checked:rows.length}));
+          NODE
+
+      - name: Persist hardening and remove one-shot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'race-tantei-hardening-bot'
+          git config user.email 'race-tantei-hardening-bot@users.noreply.github.com'
+          rm -f .github/workflows/one-shot-early-public-final.yml
+          git add src/v1/completed-worker-live-lock.ts src/v1/completed-worker-deadline-guard.ts src/v1/live-preview-safety.ts src/live-deadline-entry-v2.ts tests/completed-worker-deadline-guard-tests.ts scripts/verify-live-lock-safety.py .github/workflows/ensure-auto-final-live.yml .github/workflows/verify-live-deadline-production.yml .github/workflows/one-shot-early-public-final.yml
+          git commit -m 'Finalize live picks by T-30 with T-25 rescue'
+          git push origin HEAD:main
