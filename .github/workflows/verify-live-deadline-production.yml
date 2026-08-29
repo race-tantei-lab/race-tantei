@@ -13,6 +13,7 @@ on:
       - "src/v1/completed-final-invariants.ts"
       - "src/v1/jra-official-odds-fetch.ts"
       - "src/v1/jra-official-odds.ts"
+      - "tests/completed-worker-deadline-guard-tests.ts"
       - "wrangler.jsonc"
       - "wrangler.live-deadline.jsonc"
       - "wrangler.live-deadline-backup.jsonc"
@@ -45,7 +46,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=pending \
             -f context='production/live-deadline-readiness' \
-            -f description='Verifying T-17 fresh final and T-16 rescue' \
+            -f description='Verifying T-40 previews, T-17 final and T-16 rescue' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -131,6 +132,29 @@ jobs:
           if(!Number.isFinite(age)||age < -30||age > 300) throw new Error(`PRIORITY_GUARD_STALE:${age}`);
           console.log(JSON.stringify({priorityGuard:'completed',ageSeconds:age,updatedAt:r.updatedAt}));
           NODE
+      - name: Verify T-40 selected races have official current previews
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          expected_parser=$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text=Path('src/v1/jra-official-odds-fetch.ts').read_text(encoding='utf-8')
+          m=re.search(r'JRA_OFFICIAL_ODDS_PARSER_VERSION\s*=\s*"([^"]+)"', text)
+          if not m: raise SystemExit('PARSER_VERSION_NOT_FOUND')
+          print(m.group(1))
+          PY
+          )
+          rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT json_extract(p.state_value,'$.snapshots[0].oddsParserVersion') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS parserVersion,(SELECT json_extract(p.state_value,'$.snapshots[0].oddsSource') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS oddsSource FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,parserVersion,oddsSource FROM q WHERE minutesToStart > 17 AND minutesToStart <= 40 ORDER BY minutesToStart")
+          echo "$rows"
+          ROWS="$rows" EXPECTED_PARSER="$expected_parser" node - <<'NODE'
+          const p=JSON.parse(process.env.ROWS||'[]'); const rows=p?.[0]?.results||[];
+          const bad=rows.filter(r=>r.parserVersion!==process.env.EXPECTED_PARSER || !['jra-fast-official','jra-crawl-official'].includes(r.oddsSource));
+          if(bad.length) throw new Error(`PREVIEW_T40_COVERAGE_INVALID:${JSON.stringify(bad)}`);
+          console.log(JSON.stringify({PREVIEW_T40_COVERAGE_OK:true,checked:rows.length}));
+          NODE
       - name: Verify every T-16 due selected race has exact six final rows
         shell: bash
         run: |
@@ -150,7 +174,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/live-deadline-readiness' \
-            -f description='T-17 fresh final, T-16 rescue, T-15 hard boundary verified' \
+            -f description='T-40 preview, T-17 final, T-16 rescue and T-15 boundary verified' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark production readiness failure
         if: failure()
