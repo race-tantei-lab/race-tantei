@@ -1,0 +1,115 @@
+name: One-shot early public final hardening v2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/one-shot-early-public-final-v2.yml"
+
+permissions:
+  contents: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+
+      - name: Apply audited early-final patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('.github/workflows/one-shot-early-public-final.yml').read_text(encoding='utf-8').splitlines()
+          start=next(i for i,l in enumerate(src) if l.strip()=='- name: Move public-final target earlier')
+          run=next(i for i in range(start+1,len(src)) if src[i].strip()=='run: |')
+          body=[]
+          for line in src[run+1:]:
+              if line.startswith('      - name:'):
+                  break
+              body.append(line[10:] if line.startswith('          ') else line)
+          Path('/tmp/apply-early-final.sh').write_text('\n'.join(body)+'\n',encoding='utf-8')
+          PY
+          bash /tmp/apply-early-final.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tests/completed-worker-deadline-guard-tests.ts')
+          t=p.read_text(encoding='utf-8')
+          old='{ raceId: "stale-refresh", remainingMs: 20 * minute, hasPreview: true, previewFresh: false },'
+          new='{ raceId: "stale-refresh", remainingMs: 31 * minute, hasPreview: true, previewFresh: false },'
+          if old not in t: raise SystemExit('STALE_REFRESH_TEST_MARKER_MISSING')
+          p.write_text(t.replace(old,new,1),encoding='utf-8')
+          PY
+          git diff --check
+
+      - name: Verify early-final invariants
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npx --yes tsx tests/jra-official-odds-fetch-tests.ts
+          npx --yes tsx tests/completed-worker-deadline-guard-tests.ts
+          python3 scripts/verify-live-lock-safety.py
+          npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir /tmp/live-primary
+          npx wrangler deploy --dry-run --config wrangler.live-deadline-backup.jsonc --outdir /tmp/live-backup
+
+      - name: Deploy v9 primary and backup
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.live-deadline.jsonc
+          npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
+
+      - name: Prove v9 and current T-30 public coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='live-deadline-v9-t30-public-final-t25-rescue-20260829'
+          good=0
+          for i in $(seq 1 18); do
+            sleep 10
+            ok=1
+            for url in \
+              'https://race-tantei-live-deadline.race-tantei.workers.dev/health' \
+              'https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health'; do
+              body=$(curl --max-time 15 --fail-with-body -sS "$url") || { ok=0; break; }
+              BODY="$body" EXPECTED="$expected" node - <<'NODE' || { ok=0; break; }
+          const b=JSON.parse(process.env.BODY||'{}');
+          if(b.status!=='up'||b.service!=='race-tantei-live-deadline'||b.version!==process.env.EXPECTED) process.exit(1);
+          NODE
+            done
+            if [ "$ok" -eq 1 ]; then good=1; break; fi
+          done
+          test "$good" -eq 1
+
+          today=$(TZ=Asia/Tokyo date +%F)
+          rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,finalRows FROM q WHERE minutesToStart > 0 AND minutesToStart <= 30 ORDER BY minutesToStart")
+          echo "$rows"
+          ROWS="$rows" node - <<'NODE'
+          const p=JSON.parse(process.env.ROWS||'[]'); const rows=p?.[0]?.results||[];
+          const bad=rows.filter(r=>Number(r.finalRows)!==6);
+          if(bad.length) throw new Error(`CURRENT_T30_PUBLIC_FINAL_MISSING:${JSON.stringify(bad)}`);
+          console.log(JSON.stringify({currentT30PublicFinalCoverage:'ok',checked:rows.length}));
+          NODE
+
+      - name: Persist hardening and remove temporary workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'race-tantei-hardening-bot'
+          git config user.email 'race-tantei-hardening-bot@users.noreply.github.com'
+          rm -f .github/workflows/one-shot-early-public-final.yml .github/workflows/one-shot-early-public-final-v2.yml
+          git add src/v1/completed-worker-live-lock.ts src/v1/completed-worker-deadline-guard.ts src/v1/live-preview-safety.ts src/live-deadline-entry-v2.ts tests/completed-worker-deadline-guard-tests.ts scripts/verify-live-lock-safety.py .github/workflows/ensure-auto-final-live.yml .github/workflows/verify-live-deadline-production.yml .github/workflows/one-shot-early-public-final.yml .github/workflows/one-shot-early-public-final-v2.yml
+          git commit -m 'Finalize live picks by T-30 with T-25 rescue'
+          git push origin HEAD:main
