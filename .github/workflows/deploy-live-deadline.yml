@@ -1,5 +1,5 @@
 name: Deploy live deadline Workers
-# Includes parser-provenance hardening so obsolete odds previews can never be finalized.
+# Includes parser-provenance and preview-starvation hardening.
 
 on:
   push:
@@ -16,6 +16,7 @@ on:
       - "src/v1/jra-official-odds-fast.ts"
       - "src/v1/jra-official-odds.ts"
       - "tests/jra-official-odds-fetch-tests.ts"
+      - "tests/completed-worker-deadline-guard-tests.ts"
       - "wrangler.live-deadline.jsonc"
       - "wrangler.live-deadline-backup.jsonc"
       - ".github/workflows/deploy-live-deadline.yml"
@@ -46,8 +47,10 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck
-      - name: Verify JRA official odds parser regression
-        run: npx tsx tests/jra-official-odds-fetch-tests.ts
+      - name: Verify live deadline regression suite
+        run: |
+          npx --yes tsx tests/jra-official-odds-fetch-tests.ts
+          npx --yes tsx tests/completed-worker-deadline-guard-tests.ts
       - name: Validate primary isolated Worker bundle
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
       - name: Validate backup isolated Worker bundle
