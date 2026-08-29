@@ -9,10 +9,10 @@ import {
 import { MAX_PREVIEW_GENERATIONS_PER_TICK, livePreviewPriorityRank } from "../src/v1/completed-worker-live-lock.js";
 
 assert.equal(DEADLINE_GUARD_MS, 15 * 60 * 1000, "the public finalization deadline remains T-15");
-assert.equal(DEADLINE_GUARD_ARM_MS, 16 * 60 * 1000, "rescue guard arms before T-15");
+assert.equal(DEADLINE_GUARD_ARM_MS, 25 * 60 * 1000, "rescue guard arms at T-25 so public picks cannot remain missing near post");
 assert.equal(FINAL_REFLECTION_DEADLINE_MS, 10 * 60 * 1000);
 
-assert.equal(shouldDeadlineGuardLock(DEADLINE_GUARD_ARM_MS), true, "the T-16 rescue tick may arm the final");
+assert.equal(shouldDeadlineGuardLock(DEADLINE_GUARD_ARM_MS), true, "the T-25 rescue tick may arm the final");
 assert.equal(shouldDeadlineGuardLock(15 * 60 * 1000 + 1), true, "the finalization window remains open immediately before T-15");
 assert.equal(shouldDeadlineGuardLock(15 * 60 * 1000), true, "the exact T-15 boundary is the last permitted instant");
 assert.equal(shouldDeadlineGuardLock(15 * 60 * 1000 - 1), false, "no new final may be created after T-15");
@@ -34,17 +34,17 @@ assert.equal(isDeadlineGuardMissed(Number.NaN), false);
 
 const minute = 60 * 1000;
 assert.equal(MAX_PREVIEW_GENERATIONS_PER_TICK, 1);
-assert.equal(livePreviewPriorityRank({ remainingMs: 16 * minute, hasPreview: true, previewFresh: true }), 0);
-assert.equal(livePreviewPriorityRank({ remainingMs: 25 * minute, hasPreview: false, previewFresh: false }), 1);
+assert.equal(livePreviewPriorityRank({ remainingMs: 30 * minute, hasPreview: true, previewFresh: true }), 0);
+assert.equal(livePreviewPriorityRank({ remainingMs: 31 * minute, hasPreview: false, previewFresh: false }), 2);
 assert.equal(livePreviewPriorityRank({ remainingMs: 50 * minute, hasPreview: false, previewFresh: false }), 2);
-assert.equal(livePreviewPriorityRank({ remainingMs: 25 * minute, hasPreview: true, previewFresh: false }), 3);
-assert.equal(livePreviewPriorityRank({ remainingMs: 25 * minute, hasPreview: true, previewFresh: true }), 4);
+assert.equal(livePreviewPriorityRank({ remainingMs: 31 * minute, hasPreview: true, previewFresh: false }), 3);
+assert.equal(livePreviewPriorityRank({ remainingMs: 31 * minute, hasPreview: true, previewFresh: true }), 4);
 
 let missing = Array.from({ length: 15 }, (_, index) => `missing-${index + 1}`);
 for (let tick = 0; tick < 15; tick += 1) {
   const candidates = [
     ...missing.map((raceId, index) => ({ raceId, remainingMs: (90 - index) * minute, hasPreview: false, previewFresh: false })),
-    { raceId: "stale-refresh", remainingMs: 20 * minute, hasPreview: true, previewFresh: false },
+    { raceId: "stale-refresh", remainingMs: 31 * minute, hasPreview: true, previewFresh: false },
   ].sort((a, b) => livePreviewPriorityRank(a) - livePreviewPriorityRank(b) || a.remainingMs - b.remainingMs || a.raceId.localeCompare(b.raceId));
   const chosen = candidates.slice(0, MAX_PREVIEW_GENERATIONS_PER_TICK);
   assert.equal(chosen.length, 1);

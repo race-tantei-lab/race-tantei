@@ -11,7 +11,7 @@ import {
 } from "./v1/live-preview-safety.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "live-deadline-v8-single-source-fair-queue-20260829";
+const DRIVER_VERSION = "live-deadline-v9-t30-public-final-t25-rescue-20260829";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
 const PRIORITY_GUARD_SUCCESS_PREFIX = "live_deadline_priority_guard_success:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
@@ -210,6 +210,8 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
     const preDeadlineCriticalRaceIds = [...new Set([
       ...slaAfter.previewMissingByT40RaceIds,
       ...slaAfter.previewMissingByT30RaceIds,
+      ...slaAfter.finalMissingByT30RaceIds,
+      ...slaAfter.finalMissingByT25RaceIds,
       ...slaAfter.finalMissingByT16RaceIds,
     ])].filter((raceId) => !locked.has(raceId));
 

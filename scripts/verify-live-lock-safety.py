@@ -54,7 +54,7 @@ def main() -> None:
         'const FINAL_PREFIX = "worker_live_final:";',
         'const PREVIEW_OPEN_MS = 90 * 60 * 1000;',
         'const PREVIEW_REQUIRED_MS = 30 * 60 * 1000;',
-        'const FINAL_LOCK_ARM_MS = 17 * 60 * 1000;',
+        'const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;',
         'const DEADLINE_MS = 15 * 60 * 1000;',
         'const FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;',
         'new Set(["jra-fast-official", "jra-crawl-official"])',
@@ -75,7 +75,7 @@ def main() -> None:
     guard = read("src/v1/completed-worker-deadline-guard.ts")
     for needle in (
         "export const DEADLINE_GUARD_MS = 15 * 60 * 1000;",
-        "export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;",
+        "export const DEADLINE_GUARD_ARM_MS = 25 * 60 * 1000;",
         "remainingMs >= DEADLINE_GUARD_MS",
         "remainingMs <= DEADLINE_GUARD_ARM_MS",
         "isDeadlineGuardMissed",
@@ -117,6 +117,8 @@ def main() -> None:
         "restoreNewestOfficialPreviewArchives",
         "previewMissingByT40RaceIds",
         "previewMissingByT30RaceIds",
+        "finalMissingByT30RaceIds",
+        "finalMissingByT25RaceIds",
         "finalMissingByT17RaceIds",
         "finalMissingByT16RaceIds",
         "deadlineMissedRaceIds",
@@ -135,6 +137,8 @@ def main() -> None:
         "predeadline_critical",
         "LIVE_DEADLINE_HARD_T10_REFLECTION_BREACH",
         "slaAfter.previewMissingByT40RaceIds",
+        "slaAfter.finalMissingByT30RaceIds",
+        "slaAfter.finalMissingByT25RaceIds",
         'return new Response("NOT_FOUND", { status: 404 });',
     ):
         require(driver, needle, "isolated live deadline driver")
@@ -225,8 +229,8 @@ def main() -> None:
         "backup_cron=5m_staggered",
         "preview_open=90m",
         "preview_required=30m",
-        "fresh_final_arm=17m",
-        "rescue_guard_arm=16m",
+        "public_final_target=30m",
+        "rescue_guard_arm=25m",
         "generation_start_deadline=15m_hard",
         "fresh_reflection_deadline=10m_hard",
         "official_jra_odds_required=true",

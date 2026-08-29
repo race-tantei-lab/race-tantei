@@ -12,6 +12,8 @@ export type LiveDeadlineSlaAudit = {
   finalReadyRaceIds: string[];
   previewMissingByT40RaceIds: string[];
   previewMissingByT30RaceIds: string[];
+  finalMissingByT30RaceIds: string[];
+  finalMissingByT25RaceIds: string[];
   finalMissingByT17RaceIds: string[];
   finalMissingByT16RaceIds: string[];
   deadlineMissedRaceIds: string[];
@@ -167,6 +169,7 @@ export async function auditLiveDeadlineSla(db: D1Database, date: string, now = n
     checkedAt: iso(now), date, selectedRaceCount: ids.length,
     previewReadyRaceIds: [], finalReadyRaceIds: [],
     previewMissingByT40RaceIds: [], previewMissingByT30RaceIds: [],
+    finalMissingByT30RaceIds: [], finalMissingByT25RaceIds: [],
     finalMissingByT17RaceIds: [], finalMissingByT16RaceIds: [], deadlineMissedRaceIds: [],
   };
   if (!ids.length) return audit;
@@ -188,6 +191,8 @@ export async function auditLiveDeadlineSla(db: D1Database, date: string, now = n
     if (finalReady) audit.finalReadyRaceIds.push(raceId);
     if (remaining > 0 && remaining <= 40 * 60_000 && !previewReady) audit.previewMissingByT40RaceIds.push(raceId);
     if (remaining > 0 && remaining <= 30 * 60_000 && !previewReady) audit.previewMissingByT30RaceIds.push(raceId);
+    if (remaining > 0 && remaining <= 30 * 60_000 && !finalReady) audit.finalMissingByT30RaceIds.push(raceId);
+    if (remaining > 0 && remaining <= 25 * 60_000 && !finalReady) audit.finalMissingByT25RaceIds.push(raceId);
     if (remaining > 0 && remaining <= 17 * 60_000 && !finalReady) audit.finalMissingByT17RaceIds.push(raceId);
     if (remaining > 0 && remaining <= 16 * 60_000 && !finalReady) audit.finalMissingByT16RaceIds.push(raceId);
     if (remaining > 0 && remaining < 10 * 60_000 && !finalReady) audit.deadlineMissedRaceIds.push(raceId);
