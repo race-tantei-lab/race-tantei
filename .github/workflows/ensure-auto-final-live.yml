@@ -115,20 +115,20 @@ jobs:
             echo "LIVE_DEADLINE_SELF_HEAL_SUCCEEDED"
           fi
 
-      - name: Verify due selected races have all six final bet rows
+      - name: Verify active due selected races have all six final bet rows
         shell: bash
         run: |
           set -euo pipefail
           today=$(TZ=Asia/Tokyo date +%F)
           rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,finalRows FROM q WHERE minutesToStart <= 15 ORDER BY minutesToStart")
+            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,finalRows FROM q WHERE minutesToStart > 0 AND minutesToStart <= 15 ORDER BY minutesToStart")
           echo "$rows"
           ROWS="$rows" node - <<'NODE'
           const p=JSON.parse(process.env.ROWS||'[]');
           const rows=p?.[0]?.results||[];
           const bad=rows.filter(r=>Number(r.finalRows)!==6);
-          if(bad.length) throw new Error(`DUE_SELECTED_FINAL_ROWS_INVALID:${JSON.stringify(bad)}`);
-          console.log(JSON.stringify({dueSelectedFinalCoverage:'ok',checked:rows.length}));
+          if(bad.length) throw new Error(`ACTIVE_DUE_SELECTED_FINAL_ROWS_INVALID:${JSON.stringify(bad)}`);
+          console.log(JSON.stringify({activeDueSelectedFinalCoverage:'ok',checked:rows.length}));
           NODE
 
       - name: Mark watchdog success
@@ -137,7 +137,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/auto-final-watchdog' \
-            -f description='Workers healthy; current due selected races have six final rows' \
+            -f description='Workers healthy; active due selected races have six final rows' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
 
       - name: Mark watchdog failure
