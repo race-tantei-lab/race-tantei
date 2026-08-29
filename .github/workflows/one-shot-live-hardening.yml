@@ -1,0 +1,248 @@
+name: One-shot live deadline hardening
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/one-shot-live-hardening.yml"
+
+permissions:
+  contents: write
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+
+      - name: Apply structural live-deadline hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if old not in text:
+                  raise SystemExit(f'PATCH_MARKER_MISSING:{path}:{old[:120]}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # One parser-version source of truth. The fetcher owns the parser provenance;
+          # every producer/consumer imports the same constant so version drift cannot recur.
+          replace_exact(
+              'src/v1/jra-official-odds-fetch.ts',
+              'export type { OfficialOddsRow } from "./completed-ticket-runtime.js";\n\nconst USER_AGENT',
+              'export type { OfficialOddsRow } from "./completed-ticket-runtime.js";\nexport const JRA_OFFICIAL_ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";\n\nconst USER_AGENT',
+          )
+
+          replace_exact(
+              'src/v1/completed-worker-live-lock.ts',
+              'import { fetchFastJraOfficialOddsForRace, type OfficialOddsRow } from "./jra-official-odds-fetch";',
+              'import { JRA_OFFICIAL_ODDS_PARSER_VERSION, fetchFastJraOfficialOddsForRace, type OfficialOddsRow } from "./jra-official-odds-fetch";',
+          )
+          replace_exact(
+              'src/v1/completed-worker-live-lock.ts',
+              'const PREVIEW_HISTORY = 3;\nconst PREVIEW_VERSION = 1;\nconst ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";',
+              'const PREVIEW_HISTORY = 3;\nconst PREVIEW_VERSION = 1;\nexport const MAX_PREVIEW_GENERATIONS_PER_TICK = 1;',
+          )
+          p = Path('src/v1/completed-worker-live-lock.ts')
+          text = p.read_text(encoding='utf-8')
+          text = text.replace('snapshot.oddsParserVersion !== ODDS_PARSER_VERSION', 'snapshot.oddsParserVersion !== JRA_OFFICIAL_ODDS_PARSER_VERSION')
+          text = text.replace('oddsParserVersion: ODDS_PARSER_VERSION,', 'oddsParserVersion: JRA_OFFICIAL_ODDS_PARSER_VERSION,')
+          text = text.replace('if (generatedThisTick >= 1 && remaining > FINAL_LOCK_ARM_MS) continue;', 'if (generatedThisTick >= MAX_PREVIEW_GENERATIONS_PER_TICK && remaining > FINAL_LOCK_ARM_MS) continue;')
+          marker = '''function previewIsFreshEnough(snapshot: PreviewSnapshot, remainingMs: number, now: Date): boolean {\n  const generatedMs = Date.parse(snapshot.generatedAt);\n  if (!Number.isFinite(generatedMs)) return false;\n  return now.getTime() - generatedMs < previewRefreshIntervalMs(remainingMs);\n}\n'''
+          addition = marker + '''\nexport type LivePreviewPriorityInput = {\n  remainingMs: number;\n  hasPreview: boolean;\n  previewFresh: boolean;\n};\n\nexport function livePreviewPriorityRank(row: LivePreviewPriorityInput): number {\n  if (!Number.isFinite(row.remainingMs) || row.remainingMs <= 0) return 99;\n  if (row.remainingMs <= FINAL_LOCK_ARM_MS) return 0;\n  if (!row.hasPreview && row.remainingMs <= PREVIEW_REQUIRED_MS) return 1;\n  if (!row.hasPreview) return 2;\n  if (!row.previewFresh) return 3;\n  return 4;\n}\n\nasync function orderLiveRaceIdsByPreviewPriority(db: D1Database, date: string, ids: string[], now: Date): Promise<string[]> {\n  const result = await db.prepare("SELECT race_id AS raceId,start_time_utc AS startTimeUtc FROM rt_races WHERE race_date=?").bind(date).all<{ raceId: string; startTimeUtc: string | null }>();\n  const starts = new Map((result.results ?? []).map((row) => [String(row.raceId), Date.parse(String(row.startTimeUtc || ""))]));\n  const rows = await Promise.all(ids.map(async (raceId) => {\n    const startMs = starts.get(raceId);\n    const remainingMs = Number.isFinite(startMs) ? Number(startMs) - now.getTime() : Number.POSITIVE_INFINITY;\n    const preview = await latestPreview(db, raceId);\n    return {\n      raceId,\n      remainingMs,\n      hasPreview: Boolean(preview),\n      previewFresh: Boolean(preview && previewIsFreshEnough(preview, remainingMs, now)),\n    };\n  }));\n  return rows\n    .sort((a, b) => livePreviewPriorityRank(a) - livePreviewPriorityRank(b) || a.remainingMs - b.remainingMs || a.raceId.localeCompare(b.raceId))\n    .map((row) => row.raceId);\n}\n'''
+          if marker not in text:
+              raise SystemExit('PATCH_MARKER_MISSING:live-priority-insertion')
+          text = text.replace(marker, addition, 1)
+          old = '  const ids = selectedIds.filter((raceId) => activeSet.has(raceId));'
+          new = '  const ids = await orderLiveRaceIdsByPreviewPriority(env.DB, date, selectedIds.filter((raceId) => activeSet.has(raceId)), now);'
+          if old not in text:
+              raise SystemExit('PATCH_MARKER_MISSING:live-active-order')
+          p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          replace_exact(
+              'src/v1/completed-worker-deadline-guard.ts',
+              'import { ensureCompletedFinalImmutability } from "./completed-final-invariants.js";\nimport { COMPLETED_COURSE_STAKES',
+              'import { ensureCompletedFinalImmutability } from "./completed-final-invariants.js";\nimport { JRA_OFFICIAL_ODDS_PARSER_VERSION } from "./jra-official-odds-fetch.js";\nimport { COMPLETED_COURSE_STAKES',
+          )
+          replace_exact(
+              'src/v1/completed-worker-deadline-guard.ts',
+              'const MAX_OFFICIAL_PREVIEW_AGE_MS = 60 * 60 * 1000;\nconst ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";',
+              'const MAX_OFFICIAL_PREVIEW_AGE_MS = 60 * 60 * 1000;',
+          )
+          p = Path('src/v1/completed-worker-deadline-guard.ts')
+          text = p.read_text(encoding='utf-8').replace('snapshot.oddsParserVersion !== ODDS_PARSER_VERSION', 'snapshot.oddsParserVersion !== JRA_OFFICIAL_ODDS_PARSER_VERSION')
+          p.write_text(text, encoding='utf-8')
+
+          # T-40 must be actionable, not merely recorded. This gives the system
+          # 25 minutes of repair margin before the T-15 generation boundary.
+          replace_exact(
+              'src/live-deadline-entry-v2.ts',
+              'const DRIVER_VERSION = "live-deadline-v7-rescue-parser-fair-preview-20260829";',
+              'const DRIVER_VERSION = "live-deadline-v8-single-source-fair-queue-20260829";',
+          )
+          replace_exact(
+              'src/live-deadline-entry-v2.ts',
+              '    const preDeadlineCriticalRaceIds = [...new Set([\n      ...slaAfter.previewMissingByT30RaceIds,\n      ...slaAfter.finalMissingByT16RaceIds,',
+              '    const preDeadlineCriticalRaceIds = [...new Set([\n      ...slaAfter.previewMissingByT40RaceIds,\n      ...slaAfter.previewMissingByT30RaceIds,\n      ...slaAfter.finalMissingByT16RaceIds,',
+          )
+
+          # Add deterministic 15-race starvation regression coverage to the existing
+          # unit test that already runs in the repository's unit suite.
+          p = Path('tests/completed-worker-deadline-guard-tests.ts')
+          text = p.read_text(encoding='utf-8')
+          import_marker = '} from "../src/v1/completed-worker-deadline-guard.js";\n'
+          import_add = import_marker + 'import { MAX_PREVIEW_GENERATIONS_PER_TICK, livePreviewPriorityRank } from "../src/v1/completed-worker-live-lock.js";\n'
+          if import_marker not in text:
+              raise SystemExit('PATCH_MARKER_MISSING:test-import')
+          text = text.replace(import_marker, import_add, 1)
+          test_marker = '\nconsole.log("completed-worker-deadline-guard-tests: ok");\n'
+          test_add = '''\nconst minute = 60 * 1000;\nassert.equal(MAX_PREVIEW_GENERATIONS_PER_TICK, 1, "one bounded JRA preview generation per cron tick");\nassert.equal(livePreviewPriorityRank({ remainingMs: 16 * minute, hasPreview: true, previewFresh: true }), 0, "T-17 finalization work wins");\nassert.equal(livePreviewPriorityRank({ remainingMs: 25 * minute, hasPreview: false, previewFresh: false }), 1, "urgent missing preview outranks refreshes");\nassert.equal(livePreviewPriorityRank({ remainingMs: 50 * minute, hasPreview: false, previewFresh: false }), 2, "any missing preview outranks stale refreshes");\nassert.equal(livePreviewPriorityRank({ remainingMs: 25 * minute, hasPreview: true, previewFresh: false }), 3, "stale refresh comes only after missing coverage");\nassert.equal(livePreviewPriorityRank({ remainingMs: 25 * minute, hasPreview: true, previewFresh: true }), 4, "fresh preview is last");\n\nlet missing = Array.from({ length: 15 }, (_, index) => `missing-${index + 1}`);\nfor (let tick = 0; tick < 15; tick += 1) {\n  const candidates = [\n    ...missing.map((raceId, index) => ({ raceId, remainingMs: (90 - index) * minute, hasPreview: false, previewFresh: false })),\n    { raceId: "stale-refresh-that-must-not-starve", remainingMs: 20 * minute, hasPreview: true, previewFresh: false },\n  ].sort((a, b) => livePreviewPriorityRank(a) - livePreviewPriorityRank(b) || a.remainingMs - b.remainingMs || a.raceId.localeCompare(b.raceId));\n  const chosen = candidates.slice(0, MAX_PREVIEW_GENERATIONS_PER_TICK);\n  assert.equal(chosen.length, 1);\n  assert.notEqual(chosen[0].raceId, "stale-refresh-that-must-not-starve", "stale refresh must never consume capacity while a selected race has no preview");\n  missing = missing.filter((raceId) => raceId !== chosen[0].raceId);\n}\nassert.equal(missing.length, 0, "all 15 selected races receive first preview within 15 cron ticks, well before the T-30 requirement from a T-90 opening");\n\nconsole.log("completed-worker-deadline-guard-tests: ok");\n'''
+          if test_marker not in text:
+              raise SystemExit('PATCH_MARKER_MISSING:test-tail')
+          p.write_text(text.replace(test_marker, test_add, 1), encoding='utf-8')
+
+          # Watchdog now treats T-40 preview coverage as part of health/self-heal.
+          p = Path('.github/workflows/ensure-auto-final-live.yml')
+          text = p.read_text(encoding='utf-8')
+          heartbeat_end = '''          heartbeat_ok() {\n            local today state\n            today=$(TZ=Asia/Tokyo date +%F)\n            state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \\\n              "SELECT updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok,json_extract(state_value,'$.completedAt') AS completedAt FROM rt_system_state WHERE state_key='live_deadline_priority_guard_success:${today}' LIMIT 1") || return 1\n            STATE_JSON="$state" node - <<'NODE'\n          const p=JSON.parse(process.env.STATE_JSON||'[]');\n          const r=p?.[0]?.results?.[0];\n          const age=Number(r?.ageSeconds);\n          if(!r || r.status!=='completed' || Number(r.ok)!==1 || !r.completedAt || !Number.isFinite(age) || age < -30 || age > 240) process.exit(1);\n          console.log(JSON.stringify({heartbeat:'fresh',ageSeconds:age,updatedAt:r.updatedAt}));\n          NODE\n          }\n'''
+          coverage_func = heartbeat_end + '''\n          preview_coverage_ok() {\n            local today expected_parser rows\n            today=$(TZ=Asia/Tokyo date +%F)\n            expected_parser=$(python3 - <<'PY'\n          import re\n          from pathlib import Path\n          text=Path('src/v1/jra-official-odds-fetch.ts').read_text(encoding='utf-8')\n          m=re.search(r'JRA_OFFICIAL_ODDS_PARSER_VERSION\\s*=\\s*"([^"]+)"', text)\n          if not m: raise SystemExit('PARSER_VERSION_NOT_FOUND')\n          print(m.group(1))\n          PY\n            )\n            rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \\\n              "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT json_extract(p.state_value,'$.snapshots[0].oddsParserVersion') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS parserVersion,(SELECT json_extract(p.state_value,'$.snapshots[0].oddsSource') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS oddsSource FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,parserVersion,oddsSource FROM q WHERE minutesToStart > 17 AND minutesToStart <= 40 ORDER BY minutesToStart") || return 1\n            ROWS="$rows" EXPECTED_PARSER="$expected_parser" node - <<'NODE'\n          const p=JSON.parse(process.env.ROWS||'[]');\n          const rows=p?.[0]?.results||[];\n          const bad=rows.filter(r=>r.parserVersion!==process.env.EXPECTED_PARSER || !['jra-fast-official','jra-crawl-official'].includes(r.oddsSource));\n          if(bad.length){ console.error(JSON.stringify({previewT40:'missing',bad})); process.exit(1); }\n          console.log(JSON.stringify({previewT40:'ok',checked:rows.length}));\n          NODE\n          }\n'''
+          if heartbeat_end not in text:
+              raise SystemExit('PATCH_MARKER_MISSING:watchdog-heartbeat')
+          text = text.replace(heartbeat_end, coverage_func, 1)
+          text = text.replace('if health_ok && heartbeat_ok; then', 'if health_ok && heartbeat_ok && preview_coverage_ok; then')
+          text = text.replace('if health_ok && heartbeat_ok; then', 'if health_ok && heartbeat_ok && preview_coverage_ok; then')
+          p.write_text(text, encoding='utf-8')
+
+          # Readiness independently verifies T-40 preview coverage too.
+          p = Path('.github/workflows/verify-live-deadline-production.yml')
+          text = p.read_text(encoding='utf-8')
+          marker = '''      - name: Verify every T-16 due selected race has exact six final rows\n'''
+          step = '''      - name: Verify T-40 selected races have official current previews\n        shell: bash\n        run: |\n          set -euo pipefail\n          today=$(TZ=Asia/Tokyo date +%F)\n          expected_parser=$(python3 - <<'PY'\n          import re\n          from pathlib import Path\n          text=Path('src/v1/jra-official-odds-fetch.ts').read_text(encoding='utf-8')\n          m=re.search(r'JRA_OFFICIAL_ODDS_PARSER_VERSION\\s*=\\s*"([^"]+)"', text)\n          if not m: raise SystemExit('PARSER_VERSION_NOT_FOUND')\n          print(m.group(1))\n          PY\n          )\n          rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \\\n            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT json_extract(p.state_value,'$.snapshots[0].oddsParserVersion') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS parserVersion,(SELECT json_extract(p.state_value,'$.snapshots[0].oddsSource') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS oddsSource FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,parserVersion,oddsSource FROM q WHERE minutesToStart > 17 AND minutesToStart <= 40 ORDER BY minutesToStart")\n          ROWS="$rows" EXPECTED_PARSER="$expected_parser" node - <<'NODE'\n          const p=JSON.parse(process.env.ROWS||'[]'); const rows=p?.[0]?.results||[];\n          const bad=rows.filter(r=>r.parserVersion!==process.env.EXPECTED_PARSER || !['jra-fast-official','jra-crawl-official'].includes(r.oddsSource));\n          if(bad.length) throw new Error(`PREVIEW_T40_COVERAGE_INVALID:${JSON.stringify(bad)}`);\n          console.log(JSON.stringify({PREVIEW_T40_COVERAGE_OK:true,checked:rows.length}));\n          NODE\n'''
+          if marker not in text:
+              raise SystemExit('PATCH_MARKER_MISSING:readiness-t16')
+          p.write_text(text.replace(marker, step + marker, 1), encoding='utf-8')
+
+          # Deploy workflow must run the starvation/guard regression too.
+          p = Path('.github/workflows/deploy-live-deadline.yml')
+          text = p.read_text(encoding='utf-8')
+          old = '''      - name: Verify JRA official odds parser regression\n        run: npx tsx tests/jra-official-odds-fetch-tests.ts\n'''
+          new = '''      - name: Verify live deadline regression suite\n        run: |\n          npm run build:test\n          node dist-test/tests/jra-official-odds-fetch-tests.js\n          node dist-test/tests/completed-worker-deadline-guard-tests.js\n'''
+          if old not in text:
+              raise SystemExit('PATCH_MARKER_MISSING:deploy-regression')
+          p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          # Static gate now forbids the exact classes of drift that caused the month-long failures.
+          p = Path('scripts/verify-live-lock-safety.py')
+          text = p.read_text(encoding='utf-8')
+          text = text.replace('        \'const ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";\',\n', '        "JRA_OFFICIAL_ODDS_PARSER_VERSION",\n        "livePreviewPriorityRank",\n        "MAX_PREVIEW_GENERATIONS_PER_TICK",\n')
+          text = text.replace('        \'const ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";\',\n        "ensureCompletedFinalImmutability",', '        "JRA_OFFICIAL_ODDS_PARSER_VERSION",\n        "ensureCompletedFinalImmutability",')
+          text = text.replace('    forbid(live, \'probability_fallback\', "isolated live lock")', '    forbid(live, \'probability_fallback\', "isolated live lock")\n    forbid(live, "const ODDS_PARSER_VERSION", "isolated live lock parser provenance")')
+          text = text.replace('    for forbidden in (\n        "fetch(",', '    forbid(guard, "const ODDS_PARSER_VERSION", "persistent deadline guard parser provenance")\n    for forbidden in (\n        "fetch(",')
+          text = text.replace('        "deadlineMs",\n    ):', '        "deadlineMs",\n        \'export const JRA_OFFICIAL_ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";\',\n    ):')
+          text = text.replace('        "LIVE_DEADLINE_HARD_T10_REFLECTION_BREACH",', '        "LIVE_DEADLINE_HARD_T10_REFLECTION_BREACH",\n        "slaAfter.previewMissingByT40RaceIds",')
+          text = text.replace('    critical_workflow = read(".github/workflows/critical-auto-bet-generation.yml")', '''    watchdog = read(".github/workflows/ensure-auto-final-live.yml")\n    require(watchdog, "preview_coverage_ok", "automatic live watchdog")\n    require(watchdog, "minutesToStart > 17 AND minutesToStart <= 40", "automatic live watchdog")\n    require(readiness, "PREVIEW_T40_COVERAGE_OK", "production readiness audit")\n\n    for workflow in (ROOT / ".github/workflows").glob("*.yml"):\n        workflow_text = workflow.read_text(encoding="utf-8")\n        for obsolete in ("auto-final-live-bets.yml", "drive-live-tick.yml"):\n            if obsolete in workflow_text:\n                raise AssertionError(f"{workflow.name} references obsolete live workflow: {obsolete}")\n\n    critical_workflow = read(".github/workflows/critical-auto-bet-generation.yml")''')
+          p.write_text(text, encoding='utf-8')
+          PY
+
+          git diff --check
+
+      - name: Run full structural regression gates
+        run: |
+          set -euo pipefail
+          npm run typecheck
+          npm run build:test
+          node dist-test/tests/jra-official-odds-fetch-tests.js
+          node dist-test/tests/completed-worker-deadline-guard-tests.js
+          python3 scripts/verify-live-lock-safety.py
+          npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir /tmp/live-primary
+          npx wrangler deploy --dry-run --config wrangler.live-deadline-backup.jsonc --outdir /tmp/live-backup
+
+      - name: Deploy hardened primary and backup Workers
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.live-deadline.jsonc
+          npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
+
+      - name: Prove real cron and future preview coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='live-deadline-v8-single-source-fair-queue-20260829'
+          for url in \
+            'https://race-tantei-live-deadline.race-tantei.workers.dev/health' \
+            'https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health'; do
+            body=$(curl --max-time 20 --retry 4 --retry-delay 3 --fail-with-body -sS "$url")
+            BODY="$body" EXPECTED="$expected" node - <<'NODE'
+          const b=JSON.parse(process.env.BODY||'{}');
+          if(b.status!=='up'||b.service!=='race-tantei-live-deadline'||b.version!==process.env.EXPECTED) throw new Error(`BAD_WORKER_HEALTH:${JSON.stringify(b)}`);
+          NODE
+          done
+
+          today=$(TZ=Asia/Tokyo date +%F)
+          heartbeat_ok=0
+          for i in $(seq 1 18); do
+            sleep 10
+            state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+              "SELECT unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.version') AS version FROM rt_system_state WHERE state_key='live_deadline_priority_guard_success:${today}' LIMIT 1")
+            if STATE="$state" EXPECTED="$expected" node - <<'NODE'
+          const p=JSON.parse(process.env.STATE||'[]'); const r=p?.[0]?.results?.[0];
+          const age=Number(r?.ageSeconds); if(!r||r.version!==process.env.EXPECTED||!Number.isFinite(age)||age< -30||age>180) process.exit(1);
+          NODE
+            then heartbeat_ok=1; break; fi
+          done
+          test "$heartbeat_ok" -eq 1
+
+          expected_parser=$(python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text=Path('src/v1/jra-official-odds-fetch.ts').read_text(encoding='utf-8')
+          m=re.search(r'JRA_OFFICIAL_ODDS_PARSER_VERSION\s*=\s*"([^"]+)"', text)
+          if not m: raise SystemExit('PARSER_VERSION_NOT_FOUND')
+          print(m.group(1))
+          PY
+          )
+
+          coverage_ok=0
+          for i in $(seq 1 20); do
+            rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+              "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT json_extract(p.state_value,'$.snapshots[0].oddsParserVersion') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS parserVersion,(SELECT json_extract(p.state_value,'$.snapshots[0].oddsSource') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS oddsSource FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,parserVersion,oddsSource FROM q WHERE minutesToStart > 17 AND minutesToStart <= 40 ORDER BY minutesToStart")
+            if ROWS="$rows" EXPECTED_PARSER="$expected_parser" node - <<'NODE'
+          const p=JSON.parse(process.env.ROWS||'[]'); const rows=p?.[0]?.results||[];
+          const bad=rows.filter(r=>r.parserVersion!==process.env.EXPECTED_PARSER || !['jra-fast-official','jra-crawl-official'].includes(r.oddsSource));
+          if(bad.length){ console.error(JSON.stringify(bad)); process.exit(1); }
+          console.log(JSON.stringify({futureT40Coverage:'ok',checked:rows.length,rows}));
+          NODE
+            then coverage_ok=1; break; fi
+            sleep 10
+          done
+          test "$coverage_ok" -eq 1
+
+      - name: Commit hardening and remove one-shot workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'race-tantei-hardening-bot'
+          git config user.email 'race-tantei-hardening-bot@users.noreply.github.com'
+          rm -f .github/workflows/one-shot-live-hardening.yml
+          git add src/v1/jra-official-odds-fetch.ts src/v1/completed-worker-live-lock.ts src/v1/completed-worker-deadline-guard.ts src/live-deadline-entry-v2.ts tests/completed-worker-deadline-guard-tests.ts scripts/verify-live-lock-safety.py .github/workflows/ensure-auto-final-live.yml .github/workflows/verify-live-deadline-production.yml .github/workflows/deploy-live-deadline.yml .github/workflows/one-shot-live-hardening.yml
+          git commit -m 'Harden live deadline pipeline against recurring generation gaps'
+          git pull --rebase origin main
+          git push origin HEAD:main
