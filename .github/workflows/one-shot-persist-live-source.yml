@@ -1,4 +1,4 @@
-name: One-shot persist hardened live source
+name: One-shot persist live structural safety gate
 
 on:
   push:
@@ -17,42 +17,59 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
-      - name: Reapply audited v8 source hardening
+      - name: Harden static safety gate
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          src = Path('.github/workflows/one-shot-live-hardening-v2.yml').read_text(encoding='utf-8').splitlines()
-          start = next(i for i, line in enumerate(src) if line.strip() == '- name: Apply structural hardening')
-          run = next(i for i in range(start + 1, len(src)) if src[i].strip() == 'run: |')
-          body=[]
-          for line in src[run+1:]:
-              if line.startswith('      - name:'):
-                  break
-              body.append(line[10:] if line.startswith('          ') else line)
-          script='\n'.join(body)+'\n'
-          script=script.replace("git diff --check\n", "sed -i 's/[[:space:]]\\+$//' scripts/verify-live-lock-safety.py\ngit diff --check\n", 1)
-          Path('/tmp/apply.sh').write_text(script, encoding='utf-8')
+          p=Path('scripts/verify-live-lock-safety.py')
+          text=p.read_text(encoding='utf-8')
+
+          old='''        'new Set(["jra-fast-official", "jra-crawl-official"])',\n        'const ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";',\n        'cachedWorkerModel','''
+          new='''        'new Set(["jra-fast-official", "jra-crawl-official"])',\n        "JRA_OFFICIAL_ODDS_PARSER_VERSION",\n        "livePreviewPriorityRank",\n        "MAX_PREVIEW_GENERATIONS_PER_TICK",\n        'cachedWorkerModel','''
+          if old not in text: raise SystemExit('SAFETY_LIVE_MARKER_MISSING')
+          text=text.replace(old,new,1)
+
+          old='''        'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',\n        'const ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";',\n        "ensureCompletedFinalImmutability",'''
+          new='''        'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',\n        "JRA_OFFICIAL_ODDS_PARSER_VERSION",\n        "ensureCompletedFinalImmutability",'''
+          if old not in text: raise SystemExit('SAFETY_GUARD_MARKER_MISSING')
+          text=text.replace(old,new,1)
+
+          old='    forbid(live, \'probability_fallback\', "isolated live lock")'
+          new=old+'\n    forbid(live, "const ODDS_PARSER_VERSION", "isolated live lock parser provenance")'
+          if old not in text: raise SystemExit('SAFETY_LIVE_FORBID_MISSING')
+          text=text.replace(old,new,1)
+
+          old='    for forbidden in (\n        "fetch(",'
+          new='    forbid(guard, "const ODDS_PARSER_VERSION", "persistent deadline guard parser provenance")\n    for forbidden in (\n        "fetch(",'
+          if old not in text: raise SystemExit('SAFETY_GUARD_FORBID_MISSING')
+          text=text.replace(old,new,1)
+
+          old='        "LIVE_DEADLINE_HARD_T10_REFLECTION_BREACH",'
+          new=old+'\n        "slaAfter.previewMissingByT40RaceIds",'
+          if old not in text: raise SystemExit('SAFETY_T40_DRIVER_MISSING')
+          text=text.replace(old,new,1)
+
+          old='''        "const FETCH_BUDGET_MS = 25_000;",\n        "JRA_ODDS_FETCH_BUDGET_EXHAUSTED",\n        "deadlineMs",'''
+          new='''        "const FETCH_BUDGET_MS = 25_000;",\n        "JRA_ODDS_FETCH_BUDGET_EXHAUSTED",\n        "deadlineMs",\n        'export const JRA_OFFICIAL_ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";', '''
+          if old not in text: raise SystemExit('SAFETY_FETCH_MARKER_MISSING')
+          text=text.replace(old,new,1)
+
+          marker='    critical_workflow = read(".github/workflows/critical-auto-bet-generation.yml")'
+          extra='''    watchdog = read(".github/workflows/ensure-auto-final-live.yml")\n    require(watchdog, "preview_coverage_ok", "automatic live watchdog")\n    require(watchdog, "minutesToStart > 17 AND minutesToStart <= 40", "automatic live watchdog")\n    require(readiness, "PREVIEW_T40_COVERAGE_OK", "production readiness audit")\n    for persistent_workflow in (\n        ".github/workflows/ensure-auto-final-live.yml",\n        ".github/workflows/verify-live-deadline-production.yml",\n        ".github/workflows/deploy-live-deadline.yml",\n        ".github/workflows/critical-auto-bet-generation.yml",\n    ):\n        workflow_text = read(persistent_workflow)\n        for obsolete in ("auto-final-live-bets.yml", "drive-live-tick.yml"):\n            forbid(workflow_text, obsolete, persistent_workflow)\n\n'''
+          if marker not in text: raise SystemExit('SAFETY_CRITICAL_MARKER_MISSING')
+          text=text.replace(marker,extra+marker,1)
+          p.write_text('\n'.join(line.rstrip() for line in text.splitlines())+'\n',encoding='utf-8')
           PY
-          bash /tmp/apply.sh
-      - name: Verify hardened source
-        run: |
-          set -euo pipefail
-          npm run typecheck
-          npx --yes tsx tests/jra-official-odds-fetch-tests.ts
-          npx --yes tsx tests/completed-worker-deadline-guard-tests.ts
-      - name: Persist only source and regression test
+          python3 scripts/verify-live-lock-safety.py
+          git diff --check
+      - name: Persist safety gate
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'race-tantei-hardening-bot'
           git config user.email 'race-tantei-hardening-bot@users.noreply.github.com'
-          git add src/v1/jra-official-odds-fetch.ts src/v1/completed-worker-live-lock.ts src/v1/completed-worker-deadline-guard.ts src/live-deadline-entry-v2.ts tests/completed-worker-deadline-guard-tests.ts
-          git commit -m 'Persist hardened live generation core v8'
+          git add scripts/verify-live-lock-safety.py
+          git commit -m 'Enforce live pipeline structural invariants'
           git push origin HEAD:main
