@@ -10,6 +10,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 BASE_PATH = ROOT / "scripts" / "run-auto-final-live.py"
 CANONICAL_PATH = ROOT / "scripts" / "run-ten-year-auto-final-live.py"
 RECOVERY_OPEN_SECONDS = 40 * 60
+MAX_ATTEMPTS_PER_RACE = 3
 
 
 def load(path: pathlib.Path, name: str):
@@ -20,6 +21,10 @@ def load(path: pathlib.Path, name: str):
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def seconds_to_start(starts, race_id: str) -> int:
+    return int((starts[race_id] - dt.datetime.now(dt.timezone.utc)).total_seconds())
 
 
 def main():
@@ -37,6 +42,7 @@ def main():
     payload, state = base.freeze_or_load_selection(collector, date, selection_path)
     if payload is None:
         raise RuntimeError(f"EMERGENCY_SELECTION_NOT_READY:{state}")
+
     ids, _ = canonical.validate_selection(payload)
     starts = base.selected_timing(collector, ids)
     locked = base.locked_races(collector, ids)
@@ -47,49 +53,101 @@ def main():
         print(json.dumps({"status":"no_future_missing_bets","date":date}, ensure_ascii=False))
         return
 
-    rid = missing[0]
-    seconds_until_window = int((starts[rid] - now).total_seconds())
-    if seconds_until_window > RECOVERY_OPEN_SECONDS:
+    eligible = [rid for rid in missing if 0 < int((starts[rid] - now).total_seconds()) <= RECOVERY_OPEN_SECONDS]
+    waiting = [rid for rid in missing if int((starts[rid] - now).total_seconds()) > RECOVERY_OPEN_SECONDS]
+    if not eligible:
         print(json.dumps({
             "status":"waiting_emergency_window",
             "date":date,
-            "raceId":rid,
-            "secondsToStart":seconds_until_window,
+            "eligibleRaceIds":[],
+            "waitingRaceIds":waiting,
+            "nextRaceId":missing[0],
+            "secondsToStart":int((starts[missing[0]] - now).total_seconds()),
             "recoveryOpenSeconds":RECOVERY_OPEN_SECONDS,
         }, ensure_ascii=False))
         return
 
-    for attempt in range(1, 4):
-        if rid in base.locked_races(collector, [rid]):
-            canonical.verify_locked(collector, [rid])
-            print(json.dumps({"status":"already_recovered","raceId":rid,"attempt":attempt}, ensure_ascii=False))
-            return
-        seconds = int((starts[rid] - dt.datetime.now(dt.timezone.utc)).total_seconds())
-        if seconds <= 0:
-            raise RuntimeError(f"EMERGENCY_RACE_ALREADY_STARTED:{rid}")
-        try:
-            report = base.collect_official_odds([rid])
-            out_path = ROOT / "analysis-results" / f"emergency-auto-bet-{date}-{rid}.json"
-            out_path.parent.mkdir(exist_ok=True)
-            canonical.run_generator(date, selection_path, out_path)
-            canonical.verify_locked(collector, [rid])
-            print(json.dumps({
-                "status":"emergency_bet_generated",
-                "raceId":rid,
-                "attempt":attempt,
-                "secondsToStart":seconds,
-                "officialOddsRows":int(report.get("parsedOddsRows") or 0),
-            }, ensure_ascii=False))
-            return
-        except Exception as exc:
+    recovered = []
+    failures = []
+
+    for rid in eligible:
+        done = False
+        last_error = None
+        for attempt in range(1, MAX_ATTEMPTS_PER_RACE + 1):
             if rid in base.locked_races(collector, [rid]):
                 canonical.verify_locked(collector, [rid])
-                print(json.dumps({"status":"recovered_concurrently","raceId":rid,"attempt":attempt}, ensure_ascii=False))
-                return
-            print(json.dumps({"status":"retry","raceId":rid,"attempt":attempt,"secondsToStart":seconds,"error":f"{type(exc).__name__}:{exc}"}, ensure_ascii=False), flush=True)
-            if attempt < 3:
-                time.sleep(5)
-    raise RuntimeError(f"EMERGENCY_BET_GENERATION_FAILED:{rid}")
+                recovered.append({"raceId":rid,"status":"already_recovered","attempt":attempt})
+                done = True
+                break
+
+            seconds = seconds_to_start(starts, rid)
+            if seconds <= 0:
+                last_error = f"EMERGENCY_RACE_ALREADY_STARTED:{rid}"
+                break
+
+            try:
+                report = base.collect_official_odds([rid])
+                out_path = ROOT / "analysis-results" / f"emergency-auto-bet-{date}-{rid}.json"
+                out_path.parent.mkdir(exist_ok=True)
+                canonical.run_generator(date, selection_path, out_path)
+                canonical.verify_locked(collector, [rid])
+                recovered.append({
+                    "raceId":rid,
+                    "status":"emergency_bet_generated",
+                    "attempt":attempt,
+                    "secondsToStart":seconds,
+                    "officialOddsRows":int(report.get("parsedOddsRows") or 0),
+                })
+                done = True
+                break
+            except Exception as exc:
+                if rid in base.locked_races(collector, [rid]):
+                    canonical.verify_locked(collector, [rid])
+                    recovered.append({"raceId":rid,"status":"recovered_concurrently","attempt":attempt})
+                    done = True
+                    break
+                last_error = f"{type(exc).__name__}:{exc}"
+                print(json.dumps({
+                    "status":"retry",
+                    "raceId":rid,
+                    "attempt":attempt,
+                    "secondsToStart":seconds,
+                    "error":last_error,
+                }, ensure_ascii=False), flush=True)
+                if attempt < MAX_ATTEMPTS_PER_RACE:
+                    time.sleep(5)
+
+        if not done:
+            failures.append({"raceId":rid,"error":last_error or "UNKNOWN_EMERGENCY_RECOVERY_FAILURE"})
+
+    now_after = dt.datetime.now(dt.timezone.utc)
+    locked_after = base.locked_races(collector, ids)
+    remaining_eligible = [
+        rid for rid in ids
+        if rid not in locked_after
+        and starts.get(rid)
+        and starts[rid] > now_after
+        and int((starts[rid] - now_after).total_seconds()) <= RECOVERY_OPEN_SECONDS
+    ]
+    remaining_eligible.sort(key=lambda rid: starts[rid])
+
+    summary = {
+        "status":"emergency_batch_complete" if not remaining_eligible and not failures else "emergency_batch_incomplete",
+        "date":date,
+        "eligibleRaceIds":eligible,
+        "recovered":recovered,
+        "failures":failures,
+        "remainingEligibleRaceIds":remaining_eligible,
+        "waitingRaceIds":waiting,
+        "recoveryOpenSeconds":RECOVERY_OPEN_SECONDS,
+    }
+    print(json.dumps(summary, ensure_ascii=False), flush=True)
+
+    if remaining_eligible or failures:
+        raise RuntimeError(
+            "EMERGENCY_BATCH_RECOVERY_INCOMPLETE:"
+            + json.dumps({"remaining":remaining_eligible,"failures":failures}, ensure_ascii=False)
+        )
 
 
 if __name__ == "__main__":
