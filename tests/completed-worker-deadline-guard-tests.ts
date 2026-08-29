@@ -6,6 +6,7 @@ import {
   isDeadlineGuardMissed,
   shouldDeadlineGuardLock,
 } from "../src/v1/completed-worker-deadline-guard.js";
+import { MAX_PREVIEW_GENERATIONS_PER_TICK, livePreviewPriorityRank } from "../src/v1/completed-worker-live-lock.js";
 
 assert.equal(DEADLINE_GUARD_MS, 15 * 60 * 1000, "the public finalization deadline remains T-15");
 assert.equal(DEADLINE_GUARD_ARM_MS, 16 * 60 * 1000, "rescue guard arms before T-15");
@@ -30,5 +31,26 @@ assert.equal(isDeadlineGuardMissed(1), true);
 assert.equal(isDeadlineGuardMissed(0), false, "post-start is handled separately and never recoverable");
 assert.equal(isDeadlineGuardMissed(-1), false);
 assert.equal(isDeadlineGuardMissed(Number.NaN), false);
+
+const minute = 60 * 1000;
+assert.equal(MAX_PREVIEW_GENERATIONS_PER_TICK, 1);
+assert.equal(livePreviewPriorityRank({ remainingMs: 16 * minute, hasPreview: true, previewFresh: true }), 0);
+assert.equal(livePreviewPriorityRank({ remainingMs: 25 * minute, hasPreview: false, previewFresh: false }), 1);
+assert.equal(livePreviewPriorityRank({ remainingMs: 50 * minute, hasPreview: false, previewFresh: false }), 2);
+assert.equal(livePreviewPriorityRank({ remainingMs: 25 * minute, hasPreview: true, previewFresh: false }), 3);
+assert.equal(livePreviewPriorityRank({ remainingMs: 25 * minute, hasPreview: true, previewFresh: true }), 4);
+
+let missing = Array.from({ length: 15 }, (_, index) => `missing-${index + 1}`);
+for (let tick = 0; tick < 15; tick += 1) {
+  const candidates = [
+    ...missing.map((raceId, index) => ({ raceId, remainingMs: (90 - index) * minute, hasPreview: false, previewFresh: false })),
+    { raceId: "stale-refresh", remainingMs: 20 * minute, hasPreview: true, previewFresh: false },
+  ].sort((a, b) => livePreviewPriorityRank(a) - livePreviewPriorityRank(b) || a.remainingMs - b.remainingMs || a.raceId.localeCompare(b.raceId));
+  const chosen = candidates.slice(0, MAX_PREVIEW_GENERATIONS_PER_TICK);
+  assert.equal(chosen.length, 1);
+  assert.ok(chosen[0].raceId !== "stale-refresh", "stale refresh must not starve missing preview coverage");
+  missing = missing.filter((raceId) => raceId !== chosen[0].raceId);
+}
+assert.equal(missing.length, 0, "15 selected races are covered in 15 one-minute ticks, inside the T-90 to T-30 safety margin");
 
 console.log("completed-worker-deadline-guard-tests: ok");

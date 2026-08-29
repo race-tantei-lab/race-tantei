@@ -1,5 +1,6 @@
 import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION } from "./completed-feature-runtime.js";
 import { ensureCompletedFinalImmutability } from "./completed-final-invariants.js";
+import { JRA_OFFICIAL_ODDS_PARSER_VERSION } from "./jra-official-odds-fetch.js";
 import { COMPLETED_COURSE_STAKES, type CompletedCourseBet, type CompletedTicket } from "./completed-ticket-runtime.js";
 import type { Env } from "./types.js";
 
@@ -11,7 +12,6 @@ export const DEADLINE_GUARD_MS = 15 * 60 * 1000;
 export const DEADLINE_GUARD_ARM_MS = 16 * 60 * 1000;
 export const FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;
 const MAX_OFFICIAL_PREVIEW_AGE_MS = 60 * 60 * 1000;
-const ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
 
 type SelectionPayload = { sourceModel?: string; resultDataUsedForTargetDay?: boolean; selected?: Array<{ raceId?: string; venue?: string; raceNo?: number }> };
@@ -171,7 +171,7 @@ function validOfficialPreview(
     || now.getTime() - generatedMs > MAX_OFFICIAL_PREVIEW_AGE_MS
   ) return false;
 
-  if (snapshot.oddsParserVersion !== ODDS_PARSER_VERSION) return false;
+  if (snapshot.oddsParserVersion !== JRA_OFFICIAL_ODDS_PARSER_VERSION) return false;
   if (snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official") return false;
   if (!/^[0-9a-f]{64}$/.test(String(snapshot.oddsSnapshotSha256 || ""))) return false;
   if (!Array.isArray(snapshot.tickets) || snapshot.tickets.length !== 2 || new Set(snapshot.tickets.map((row) => row.betType)).size !== 2) return false;

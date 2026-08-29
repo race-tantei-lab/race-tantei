@@ -15,7 +15,7 @@ import {
   type CompletedCourseBet,
   type CompletedTicket,
 } from "./completed-ticket-runtime";
-import { fetchFastJraOfficialOddsForRace, type OfficialOddsRow } from "./jra-official-odds-fetch";
+import { JRA_OFFICIAL_ODDS_PARSER_VERSION, fetchFastJraOfficialOddsForRace, type OfficialOddsRow } from "./jra-official-odds-fetch";
 import { ensureCompletedFinalImmutability } from "./completed-final-invariants";
 import type { Env, RaceRecord, RunnerRecord } from "./types";
 
@@ -34,7 +34,7 @@ const MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000;
 const NEAR_PREVIEW_REFRESH_MS = 3 * 60 * 1000;
 const PREVIEW_HISTORY = 3;
 const PREVIEW_VERSION = 1;
-const ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";
+export const MAX_PREVIEW_GENERATIONS_PER_TICK = 1;
 const OFFICIAL_ODDS_SOURCES = new Set(["jra-fast-official", "jra-crawl-official"]);
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
 
@@ -263,7 +263,7 @@ function validSnapshot(snapshot: PreviewSnapshot, raceId: string): boolean {
   if (!Number.isFinite(Date.parse(snapshot.generatedAt)) || !Number.isFinite(Date.parse(snapshot.oddsFetchedAt))) return false;
   if (snapshot.generationStartedAt != null && !Number.isFinite(Date.parse(snapshot.generationStartedAt))) return false;
   if (snapshot.bodyWeightApplied === true && !validBodyWeightSnapshot(snapshot.bodyWeightSnapshot, raceId)) return false;
-  if (snapshot.oddsParserVersion !== ODDS_PARSER_VERSION) return false;
+  if (snapshot.oddsParserVersion !== JRA_OFFICIAL_ODDS_PARSER_VERSION) return false;
   if (!OFFICIAL_ODDS_SOURCES.has(snapshot.oddsSource) || !/^[0-9a-f]{64}$/.test(snapshot.oddsSnapshotSha256)) return false;
   if (!Array.isArray(snapshot.tickets) || snapshot.tickets.length !== 2 || new Set(snapshot.tickets.map((ticket) => ticket.betType)).size !== 2) return false;
   if (snapshot.tickets.some((ticket) => !ticket.combination || !Number.isFinite(ticket.officialOdds) || ticket.officialOdds <= 0 || !Number.isFinite(ticket.predictedProbability) || ticket.predictedProbability <= 0)) return false;
@@ -312,6 +312,35 @@ function previewIsFreshEnough(snapshot: PreviewSnapshot, remainingMs: number, no
   const generatedMs = Date.parse(snapshot.generatedAt);
   if (!Number.isFinite(generatedMs)) return false;
   return now.getTime() - generatedMs < previewRefreshIntervalMs(remainingMs);
+}
+
+export type LivePreviewPriorityInput = {
+  remainingMs: number;
+  hasPreview: boolean;
+  previewFresh: boolean;
+};
+
+export function livePreviewPriorityRank(row: LivePreviewPriorityInput): number {
+  if (!Number.isFinite(row.remainingMs) || row.remainingMs <= 0) return 99;
+  if (row.remainingMs <= FINAL_LOCK_ARM_MS) return 0;
+  if (!row.hasPreview && row.remainingMs <= PREVIEW_REQUIRED_MS) return 1;
+  if (!row.hasPreview) return 2;
+  if (!row.previewFresh) return 3;
+  return 4;
+}
+
+async function orderLiveRaceIdsByPreviewPriority(db: D1Database, date: string, ids: string[], now: Date): Promise<string[]> {
+  const result = await db.prepare("SELECT race_id AS raceId,start_time_utc AS startTimeUtc FROM rt_races WHERE race_date=?").bind(date).all<{ raceId: string; startTimeUtc: string | null }>();
+  const starts = new Map((result.results ?? []).map((row) => [String(row.raceId), Date.parse(String(row.startTimeUtc || ""))]));
+  const rows = await Promise.all(ids.map(async (raceId) => {
+    const startMs = starts.get(raceId);
+    const remainingMs = Number.isFinite(startMs) ? Number(startMs) - now.getTime() : Number.POSITIVE_INFINITY;
+    const preview = await latestPreview(db, raceId);
+    return { raceId, remainingMs, hasPreview: Boolean(preview), previewFresh: Boolean(preview && previewIsFreshEnough(preview, remainingMs, now)) };
+  }));
+  return rows
+    .sort((a, b) => livePreviewPriorityRank(a) - livePreviewPriorityRank(b) || a.remainingMs - b.remainingMs || a.raceId.localeCompare(b.raceId))
+    .map((row) => row.raceId);
 }
 
 async function savePreview(db: D1Database, snapshot: PreviewSnapshot): Promise<void> {
@@ -388,7 +417,7 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     bodyWeightError,
     oddsFetchedAt,
     oddsSource: fetched.source,
-    oddsParserVersion: ODDS_PARSER_VERSION,
+    oddsParserVersion: JRA_OFFICIAL_ODDS_PARSER_VERSION,
     oddsSnapshotSha256: await sha256Hex(canonicalOddsRows(fetched.rows)),
     onlineLearning: learning.audit,
     runnerRecencyFactors: learning.runnerDetails,
@@ -512,7 +541,7 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
     WHERE race_date=? AND start_time_utc>? AND start_time_utc<=?
   `).bind(date, iso(now), iso(new Date(now.getTime() + BODY_WEIGHT_REFRESH_OPEN_MS))).all<{ raceId: string }>();
   const activeSet = new Set((activeResult.results ?? []).map((row) => String(row.raceId)));
-  const ids = selectedIds.filter((raceId) => activeSet.has(raceId));
+  const ids = await orderLiveRaceIdsByPreviewPriority(env.DB, date, selectedIds.filter((raceId) => activeSet.has(raceId)), now);
   const beforeStates = await Promise.all(ids.map(async (raceId) => isStrictComplete(await publicBetRows(env.DB, raceId))));
   const completeBefore = beforeStates.filter(Boolean).length;
   const lockedByWorker: string[] = [];
@@ -563,7 +592,7 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       }
       const existingPreview = await latestPreview(env.DB, raceId);
       if (remaining > FINAL_LOCK_ARM_MS && existingPreview && previewIsFreshEnough(existingPreview, remaining, raceNow)) continue;
-      if (generatedThisTick >= 1 && remaining > FINAL_LOCK_ARM_MS) continue;
+      if (generatedThisTick >= MAX_PREVIEW_GENERATIONS_PER_TICK && remaining > FINAL_LOCK_ARM_MS) continue;
       const generationStartedAt = new Date();
       let fresh: PreviewSnapshot | null = null;
       try {

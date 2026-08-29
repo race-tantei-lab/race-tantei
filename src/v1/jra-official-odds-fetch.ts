@@ -14,6 +14,7 @@ import {
 } from "./jra-official-odds-fast.js";
 
 export type { OfficialOddsRow } from "./completed-ticket-runtime.js";
+export const JRA_OFFICIAL_ODDS_PARSER_VERSION = "jra-semantic-table-parser-v3-20260823";
 
 const USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136 Safari/537.36";
 const BET_ORDER: readonly CompletedBetType[] = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"];
