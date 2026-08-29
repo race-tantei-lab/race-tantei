@@ -1,0 +1,61 @@
+name: One-shot live recovery
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/one-shot-live-recovery.yml"
+
+permissions:
+  contents: read
+  statuses: write
+
+env:
+  GH_TOKEN: ${{ github.token }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  STATUS_TARGET_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mark recovery pending
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context='production/one-shot-live-recovery' \
+            -f description='Inspecting live driver state for remaining races' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Dump live production state
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          echo '=== SYSTEM STATE ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('final_daily_selection:${today}','live_deadline_driver:${today}','live_deadline_priority_guard_success:${today}','completed_worker_live_lock:${today}','completed_worker_deadline_guard:${today}') OR state_key LIKE '%${today}%' ORDER BY updated_at DESC LIMIT 40"
+          echo '=== SELECTED RACES / FINAL ROWS ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}') SELECT r.race_id AS raceId,r.start_time_utc AS startTimeUtc,ROUND((julianday(r.start_time_utc)-julianday('now'))*1440.0,2) AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id ORDER BY r.start_time_utc"
+      - name: Mark recovery diagnostic success
+        if: success()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context='production/one-shot-live-recovery' \
+            -f description='Live production state captured' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
+      - name: Mark recovery diagnostic failure
+        if: failure()
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=failure -f context='production/one-shot-live-recovery' \
+            -f description='Live production diagnostic failed' \
+            -f target_url="$STATUS_TARGET_URL" >/dev/null
