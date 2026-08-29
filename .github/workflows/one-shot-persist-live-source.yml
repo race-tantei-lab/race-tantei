@@ -55,5 +55,4 @@ jobs:
           git config user.email 'race-tantei-hardening-bot@users.noreply.github.com'
           git add src/v1/jra-official-odds-fetch.ts src/v1/completed-worker-live-lock.ts src/v1/completed-worker-deadline-guard.ts src/live-deadline-entry-v2.ts tests/completed-worker-deadline-guard-tests.ts
           git commit -m 'Persist hardened live generation core v8'
-          git pull --rebase origin main
           git push origin HEAD:main
