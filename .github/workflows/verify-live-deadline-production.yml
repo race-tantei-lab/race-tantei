@@ -14,6 +14,7 @@ on:
       - "src/v1/jra-official-odds-fetch.ts"
       - "src/v1/jra-official-odds.ts"
       - "tests/completed-worker-deadline-guard-tests.ts"
+      - "scripts/verify-live-lock-safety.py"
       - "wrangler.jsonc"
       - "wrangler.live-deadline.jsonc"
       - "wrangler.live-deadline-backup.jsonc"
