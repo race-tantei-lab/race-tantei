@@ -2,7 +2,7 @@ import publicSite from "./public-site-entry-v30.js";
 import { shell } from "./v1/public-ui.js";
 import type { Env } from "./v1/types.js";
 
-const UI_VERSION = "ten-year-completed-public-v31-current-methodology-20260816";
+const UI_VERSION = "ten-year-completed-public-v31-next-bet-until-post-20260830";
 
 type RaceRow = {
   raceId: string;
@@ -326,14 +326,14 @@ async function rewritePublicHtml(response: Response, env: Env, path: string): Pr
 
   let html = normalizeCurrentOperationalCopy(await response.text());
   if (path === "/") {
-    if (!html.includes('class="home-next-release')) {
-      const state = await loadStableNextBet(env);
-      const slot = stableNextBetHtml(state);
-      if (html.includes('<details class="home-publish-flow home-publish-details">')) {
-        html = html.replace('<details class="home-publish-flow home-publish-details">', `${slot}<details class="home-publish-flow home-publish-details">`);
-      } else {
-        html = html.replace(/(<div class="section-title"><h2>累計回収率<\/h2>)/, `${slot}$1`);
-      }
+    const state = await loadStableNextBet(env);
+    const slot = stableNextBetHtml(state);
+    if (html.includes('class="home-next-release')) {
+      html = html.replace(/<section class="home-next-release[\s\S]*?<\/section>/, slot);
+    } else if (html.includes('<details class="home-publish-flow home-publish-details">')) {
+      html = html.replace('<details class="home-publish-flow home-publish-details">', `${slot}<details class="home-publish-flow home-publish-details">`);
+    } else {
+      html = html.replace(/(<div class="section-title"><h2>累計回収率<\/h2>)/, `${slot}$1`);
     }
     if (!html.includes('class="home-live-learning"')) {
       const strip = homeLiveLearningHtml();
