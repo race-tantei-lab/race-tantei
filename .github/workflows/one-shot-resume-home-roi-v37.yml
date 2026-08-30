@@ -1,0 +1,115 @@
+name: Resume canonical home ROI deployment v37
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/one-shot-resume-home-roi-v37.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Recover v37 source from staged one-shot
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          src=Path('.github/workflows/one-shot-home-roi-canonical-v37.yml').read_text(encoding='utf-8')
+          marker="          cat > src/public-site-entry-v37.ts <<'EOF'\n"
+          start=src.index(marker)+len(marker)
+          end=src.index("\n          EOF\n", start)
+          block=src[start:end]
+          lines=[]
+          for line in block.splitlines():
+              lines.append(line[10:] if line.startswith('          ') else line)
+          Path('src/public-site-entry-v37.ts').write_text('\n'.join(lines)+'\n',encoding='utf-8')
+          PY
+      - name: Point production config at v37
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('wrangler.jsonc')
+          data=json.loads(p.read_text())
+          data['main']='src/public-site-entry-v37.ts'
+          data.setdefault('vars',{})['DEPLOY_REVISION']='ten-year-completed-public-v37-canonical-home-roi-20260830'
+          p.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+          PY
+      - name: Compile production target
+        shell: bash
+        run: |
+          npm run typecheck
+          npx wrangler deploy -c wrangler.jsonc --dry-run
+      - name: Deploy production public Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy -c wrangler.jsonc 2>&1 | tee /tmp/deploy.log
+      - name: Verify production UI and canonical API
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=$(grep -Eo 'https://[^ ]+\.workers\.dev' /tmp/deploy.log | tail -1 || true)
+          if [ -z "$BASE" ]; then
+            ACCOUNT_ID=$(python - <<'PY'
+          import json
+          print(json.load(open('wrangler.jsonc'))['account_id'])
+          PY
+          )
+            SUBDOMAIN=$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/workers/subdomain" | python -c 'import json,sys; print(json.load(sys.stdin)["result"]["subdomain"])')
+            BASE="https://race-tantei-phase0.${SUBDOMAIN}.workers.dev"
+          fi
+          TODAY=$(TZ=Asia/Tokyo date +%F)
+          ok=0
+          for i in $(seq 1 15); do
+            curl -fsS "$BASE/api/public/daily-performance?date=$TODAY&_rt=$(date +%s)" -o /tmp/perf.json || true
+            curl -fsS "$BASE/?_rt=$(date +%s)" -o /tmp/home.html || true
+            if grep -q 'daily-performance-v5-canonical-complete-races-20260830' /tmp/perf.json 2>/dev/null && grep -q '的中レース数' /tmp/home.html 2>/dev/null && ! grep -q '<h2>今日の結果</h2>' /tmp/home.html 2>/dev/null; then ok=1; break; fi
+            sleep 4
+          done
+          test "$ok" = 1
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/perf.json'))
+          assert p['ok'] is True
+          s=p['summary']
+          assert isinstance(s.get('hitRaces'), (int,float))
+          light=next(x for x in s['courses'] if x['course']=='ライト')
+          assert s['roiPct']==light['roiPct']
+          if s['settledStakeYen']:
+              assert abs(s['roiPct'] - s['returnYen']/s['settledStakeYen']*100) < 1e-9
+          for c in s['courses']:
+              if c['settledStakeYen']:
+                  assert abs(c['roiPct'] - c['returnYen']/c['settledStakeYen']*100) < 1e-9
+          html=open('/tmp/home.html',encoding='utf-8').read()
+          assert '<h2>今日の結果</h2>' not in html
+          assert '的中レース数' in html
+          assert 'data-daily-performance' in html
+          recent=p.get('recent30')
+          if recent and recent.get('roiPct') is not None:
+              assert f"{recent['roiPct']:.1f}%" in html
+          print(json.dumps({'ok':True,'date':p['today'],'hitRaces':s['hitRaces'],'roiPct':s['roiPct'],'recent30':recent},ensure_ascii=False))
+          PY
+      - name: Persist verified v37 and clean one-shots
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/public-site-entry-v37.ts wrangler.jsonc
+          git rm .github/workflows/one-shot-home-roi-canonical-v37.yml .github/workflows/one-shot-resume-home-roi-v37.yml
+          git commit -m 'fix: canonicalize home ROI and merge today result summary'
+          git pull --rebase origin main
+          git push origin HEAD:main
