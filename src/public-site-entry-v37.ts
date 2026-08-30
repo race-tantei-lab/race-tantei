@@ -3,8 +3,8 @@ import { ensurePublicHistory } from "./v1/public-history-db.js";
 import { summarizeTodayPerformance, type TodayPerformanceBetRow } from "./v1/today-performance.js";
 import type { Env } from "./v1/types.js";
 
-const UI_VERSION = "ten-year-completed-public-v37-canonical-home-roi-20260830";
-const PERFORMANCE_VERSION = "daily-performance-v5-canonical-complete-races-20260830";
+const UI_VERSION = "ten-year-completed-public-v37-target-race-count-20260830";
+const PERFORMANCE_VERSION = "daily-performance-v6-target-race-count-20260830";
 const COURSES = ["ライト", "スタンダード", "プレミアム"] as const;
 const BASE_COURSE = "ライト";
 
@@ -83,6 +83,24 @@ async function rowsForDate(db: D1Database, date: string): Promise<CanonicalBetRo
   return result.results ?? [];
 }
 
+async function targetRaceCount(db: D1Database, date: string): Promise<number> {
+  const row = await db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
+    .bind(`final_daily_selection:${date}`).first<{ value: string | null }>();
+  if (!row?.value) return 0;
+  try {
+    const parsed = JSON.parse(row.value) as { selected?: Array<{ raceId?: unknown }> };
+    const raceIds = new Set<string>();
+    for (const selected of parsed.selected ?? []) {
+      const raceId = String(selected?.raceId ?? "");
+      if (raceId) raceIds.add(raceId);
+    }
+    return raceIds.size;
+  } catch (error) {
+    console.error("TARGET_RACE_COUNT_PARSE_FAILED", date, error);
+    return 0;
+  }
+}
+
 async function historyRows(db: D1Database, today: string): Promise<CanonicalBetRow[]> {
   const result = await db.prepare(`
     WITH recent_dates AS (
@@ -120,10 +138,11 @@ async function canonicalPerformanceResponse(db: D1Database, requestedDate: strin
   const date = validDate(requestedDate) ? requestedDate : today;
   try {
     await ensurePublicHistory(db);
-    const [selected, allHistory, recent] = await Promise.all([
+    const [selected, allHistory, recent, targetRaces] = await Promise.all([
       rowsForDate(db, date),
       historyRows(db, today),
       recent30(db, today),
+      targetRaceCount(db, date),
     ]);
     const grouped = new Map<string, CanonicalBetRow[]>();
     for (const row of allHistory) {
@@ -141,7 +160,7 @@ async function canonicalPerformanceResponse(db: D1Database, requestedDate: strin
       version: PERFORMANCE_VERSION,
       today,
       roiBasis: "ライト・2点とも精算完了したレースのみ",
-      summary: canonicalDay(date, selected),
+      summary: { ...canonicalDay(date, selected), targetRaces },
       history,
       recent30: recent,
     }, {
@@ -162,7 +181,7 @@ async function canonicalPerformanceResponse(db: D1Database, requestedDate: strin
 function homeStyle(): string {
   return `<style>
     .today-result{display:none!important}
-    .daily-summary-top{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+    .daily-summary-top{grid-template-columns:repeat(6,minmax(0,1fr))!important}
     @media(max-width:760px){.daily-summary-top{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
   </style>`;
 }
@@ -173,7 +192,7 @@ async function canonicalHome(response: Response, db: D1Database, today: string):
   html = html.replace(/<section class="today-result"[^>]*>[\s\S]*?<\/section>/g, "");
 
   const fromMetric = `<div class="daily-summary-metric"><span>回収率</span><b>'+pct(s.roiPct)+'</b></div></div><div class="daily-summary-note">`;
-  const toMetric = `<div class="daily-summary-metric"><span>回収率</span><b>'+pct(s.roiPct)+'</b></div><div class="daily-summary-metric"><span>的中レース数</span><b>'+Number(s.hitRaces||0)+'R</b></div></div><div class="daily-summary-note">`;
+  const toMetric = `<div class="daily-summary-metric"><span>回収率</span><b>'+pct(s.roiPct)+'</b></div><div class="daily-summary-metric"><span>的中レース数</span><b>'+Number(s.hitRaces||0)+'R</b></div><div class="daily-summary-metric"><span>対象レース数</span><b>'+Number(s.targetRaces||0)+'R</b></div></div><div class="daily-summary-note">`;
   html = html.split(fromMetric).join(toMetric);
   html = html.split("3コース合計（比較用）・").join("ライト基準・");
 
