@@ -194,6 +194,7 @@ async function canonicalHome(response: Response, db: D1Database, today: string):
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === "/_ops/live-tick") return new Response("NOT_FOUND", { status: 404 });
     if (url.pathname === "/api/public/daily-performance") {
       return canonicalPerformanceResponse(env.DB, url.searchParams.get("date") ?? "");
     }

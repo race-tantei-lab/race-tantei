@@ -31,7 +31,7 @@ def main() -> None:
     primary_wrangler = json.loads(read("wrangler.live-deadline.jsonc"))
     backup_wrangler = json.loads(read("wrangler.live-deadline-backup.jsonc"))
 
-    if public_wrangler.get("main") != "src/public-site-entry-v34.ts":
+    if public_wrangler.get("main") != "src/public-site-entry-v37.ts":
         raise AssertionError(f"unexpected public Worker entry: {public_wrangler.get('main')!r}")
     if public_wrangler.get("triggers", {}).get("crons", []) != ["* * * * *"]:
         raise AssertionError("public maintenance Worker cron must remain every minute")
