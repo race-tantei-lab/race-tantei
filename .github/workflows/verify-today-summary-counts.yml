@@ -1,0 +1,56 @@
+name: Verify today summary counts
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-today-summary-counts
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify production daily summary counts and labels
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          today=$(TZ=Asia/Tokyo date +%F)
+          expected='daily-performance-v6-target-race-count-20260830'
+          ok=0
+          for attempt in $(seq 1 30); do
+            if curl --retry 2 --retry-delay 1 --retry-all-errors -fsS "$base/api/public/daily-performance?date=$today" -o /tmp/performance.json; then
+              if EXPECTED="$expected" TODAY="$today" node - <<'NODE'
+          const fs = require('fs');
+          const p = JSON.parse(fs.readFileSync('/tmp/performance.json', 'utf8'));
+          const s = p.summary || {};
+          if (p.ok !== true) throw new Error('daily-performance not ok');
+          if (p.version !== process.env.EXPECTED) throw new Error(`version ${p.version} != ${process.env.EXPECTED}`);
+          if (s.date !== process.env.TODAY) throw new Error(`summary date ${s.date} != ${process.env.TODAY}`);
+          const hits = Number(s.hitRaces);
+          const targets = Number(s.targetRaces);
+          if (!Number.isInteger(hits) || hits < 0) throw new Error(`invalid hitRaces ${s.hitRaces}`);
+          if (!Number.isInteger(targets) || targets < 0) throw new Error(`invalid targetRaces ${s.targetRaces}`);
+          if (hits > targets) throw new Error(`hitRaces ${hits} exceeds targetRaces ${targets}`);
+          console.log(`TODAY_SUMMARY_COUNTS_OK date=${s.date} hits=${hits} targets=${targets} version=${p.version}`);
+          NODE
+              then
+                ok=1
+                break
+              fi
+            fi
+            echo "daily-performance not on expected production revision yet: attempt=$attempt"
+            sleep 4
+          done
+          test "$ok" = '1'
+
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS "$base/" -o /tmp/home.html
+          grep -q '的中レース数' /tmp/home.html
+          grep -q '対象レース数' /tmp/home.html
+          echo 'TODAY_SUMMARY_LABELS_OK hit_label=yes target_label=yes'
