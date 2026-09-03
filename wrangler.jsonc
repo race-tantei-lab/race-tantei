@@ -9,7 +9,7 @@
     "command": "test -f worker-assets/_internal/completed-model/model.bin || (python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' && python scripts/build-worker-completed-model-assets.py)"
   },
   "triggers": {
-    "crons": ["* * * * *"]
+    "crons": ["*/15 * * * *"]
   },
   "assets": {
     "directory": "./worker-assets",
