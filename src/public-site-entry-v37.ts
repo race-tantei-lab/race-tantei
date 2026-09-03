@@ -1,6 +1,9 @@
 import publicSite from "./public-site-entry-v34.js";
 import { ensurePublicHistory } from "./v1/public-history-db.js";
 import { summarizeTodayPerformance, type TodayPerformanceBetRow } from "./v1/today-performance.js";
+import { runUpcomingCalendarRepair } from "./v1/upcoming-calendar-repair.js";
+import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.js";
+import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v37-target-race-count-20260830";
@@ -76,7 +79,7 @@ async function rowsForDate(db: D1Database, date: string): Promise<CanonicalBetRo
     SELECT r.race_date AS raceDate,b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,
            b.stake_yen AS stakeYen,b.return_yen AS returnYen,b.settlement_status AS settlementStatus,
            r.refund_horse_nos_json AS refundsJson
-    FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
+    FROM rt_races r JOIN rt_public_bets b ON b.race_id=r.race_id
     WHERE r.race_date=?
     ORDER BY b.course,b.race_id,b.id
   `).bind(date).all<CanonicalBetRow>();
@@ -104,16 +107,19 @@ async function targetRaceCount(db: D1Database, date: string): Promise<number> {
 async function historyRows(db: D1Database, today: string): Promise<CanonicalBetRow[]> {
   const result = await db.prepare(`
     WITH recent_dates AS (
-      SELECT DISTINCT r.race_date AS raceDate
-      FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
-      WHERE r.race_date<=?
-      ORDER BY r.race_date DESC LIMIT 30
+      SELECT race_date AS raceDate
+      FROM rt_races
+      WHERE race_date<=?
+      GROUP BY race_date
+      ORDER BY race_date DESC
+      LIMIT 30
     )
     SELECT r.race_date AS raceDate,b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,
            b.stake_yen AS stakeYen,b.return_yen AS returnYen,b.settlement_status AS settlementStatus,
            r.refund_horse_nos_json AS refundsJson
-    FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
-    JOIN recent_dates d ON d.raceDate=r.race_date
+    FROM recent_dates d
+    JOIN rt_races r ON r.race_date=d.raceDate
+    JOIN rt_public_bets b ON b.race_id=r.race_id
     ORDER BY r.race_date DESC,b.course,b.race_id,b.id
   `).bind(today).all<CanonicalBetRow>();
   return result.results ?? [];
@@ -124,7 +130,7 @@ async function recent30(db: D1Database, today: string): Promise<RecentView | nul
     SELECT r.race_date AS raceDate,b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,
            b.stake_yen AS stakeYen,b.return_yen AS returnYen,b.settlement_status AS settlementStatus,
            r.refund_horse_nos_json AS refundsJson
-    FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
+    FROM rt_races r JOIN rt_public_bets b ON b.race_id=r.race_id
     WHERE r.race_date>=date(?,'-29 days') AND r.race_date<=? AND b.course=?
     ORDER BY r.race_date,b.race_id,b.id
   `).bind(today, today, BASE_COURSE).all<CanonicalBetRow>();
@@ -210,6 +216,15 @@ async function canonicalHome(response: Response, db: D1Database, today: string):
   return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
+async function runPublicMaintenance(env: Env, now: Date): Promise<void> {
+  // Live race selection/finalization is deliberately excluded here. The isolated
+  // primary/backup live-deadline Workers own that path. The public Worker only
+  // maintains upcoming calendar/entry data on its reduced-frequency cron.
+  await runUpcomingCalendarRepair(env, now);
+  await runUpcomingEntryWorkerRepair(env, now);
+  await runUpcomingEntryDerivedRepair(env, now);
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -222,7 +237,7 @@ export default {
     if (url.pathname === "/") response = await canonicalHome(response, env.DB, jstDate());
     return response;
   },
-  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    await runPublicMaintenance(env, new Date(controller.scheduledTime || Date.now()));
   },
 } satisfies ExportedHandler<Env>;
