@@ -33,8 +33,8 @@ def main() -> None:
 
     if public_wrangler.get("main") != "src/public-site-entry-v37.ts":
         raise AssertionError(f"unexpected public Worker entry: {public_wrangler.get('main')!r}")
-    if public_wrangler.get("triggers", {}).get("crons", []) != ["* * * * *"]:
-        raise AssertionError("public maintenance Worker cron must remain every minute")
+    if public_wrangler.get("triggers", {}).get("crons", []) != ["*/15 * * * *"]:
+        raise AssertionError("public maintenance Worker cron must remain every fifteen minutes")
     if primary_wrangler.get("name") != "race-tantei-live-deadline":
         raise AssertionError("primary live deadline Worker name mismatch")
     if primary_wrangler.get("main") != "src/live-deadline-entry-v2.ts":
@@ -166,6 +166,13 @@ def main() -> None:
     require(public34, 'pathname === "/_ops/live-tick"', "public v34")
     require(public34, 'status: 404', "public v34")
 
+    public37 = read("src/public-site-entry-v37.ts")
+    require(public37, "runPublicMaintenance", "public v37")
+    require(public37, "runUpcomingCalendarRepair", "public v37 maintenance")
+    require(public37, "runUpcomingEntryWorkerRepair", "public v37 maintenance")
+    require(public37, "runUpcomingEntryDerivedRepair", "public v37 maintenance")
+    forbid(public37, "if (publicSite.scheduled) await publicSite.scheduled", "public v37 live isolation")
+
     require_missing(".github/workflows/drive-live-tick.yml", "obsolete public live driver")
     require_missing(".github/workflows/auto-final-live-bets.yml", "obsolete stored-preview finalizer")
 
@@ -225,6 +232,7 @@ def main() -> None:
 
     print(
         "LIVE_LOCK_SAFETY_OK",
+        "public_maintenance_cron=15m",
         "primary_cron=1m",
         "backup_cron=5m_staggered",
         "preview_open=90m",
