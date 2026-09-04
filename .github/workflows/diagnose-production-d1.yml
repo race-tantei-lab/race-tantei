@@ -1,87 +1,51 @@
-name: Diagnose post-Aug9 production history
+name: Diagnose production D1
 
 on:
   push:
-    branches: [audit-post-aug9-history-20260904]
+    branches: [main]
     paths:
       - ".github/workflows/diagnose-production-d1.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - name: Export relevant D1 tables and build exact snapshot
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Probe remote D1
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
-          CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import json, os, sqlite3, time, urllib.request
-          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; dbid=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
-          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{dbid}/export'
-          headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'}
-          tables=['rt_races','rt_public_bets','rt_system_state']
-          dates=['2026-08-09','2026-08-15','2026-08-16','2026-08-22','2026-08-23','2026-08-29','2026-08-30']
-          def post(payload):
-              req=urllib.request.Request(url,data=json.dumps(payload).encode(),method='POST',headers=headers)
-              with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
-              if not body.get('success'): raise RuntimeError(json.dumps(body,ensure_ascii=False))
-              return body.get('result') or {}
-          result=post({'output_format':'polling','dump_options':{'tables':tables}})
-          bookmark=result.get('at_bookmark')
-          for _ in range(60):
-              signed=(result.get('result') or {}).get('signed_url')
-              if signed: break
-              if result.get('status')=='error': raise RuntimeError('EXPORT_ERROR:'+str(result.get('error')))
-              if not bookmark: raise RuntimeError('EXPORT_BOOKMARK_MISSING')
-              time.sleep(2)
-              result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':{'tables':tables}})
-          signed=(result.get('result') or {}).get('signed_url')
-          if not signed: raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
-          with urllib.request.urlopen(signed,timeout=180) as r: sql=r.read().decode('utf-8')
-          print('EXPORT_BYTES',len(sql.encode()))
-          con=sqlite3.connect(':memory:')
-          con.executescript(sql)
-          con.row_factory=sqlite3.Row
-          ph=','.join('?' for _ in dates)
-          counts={}
-          snapshot={'version':'post-aug9-public-snapshot-v1','exportBookmark':bookmark,'dates':{}}
-          for d in dates:
-              races=[dict(r) for r in con.execute('''SELECT race_id,race_date,venue,race_no,race_name,start_time_jst,start_time_utc,surface,distance_m,status,refund_horse_nos_json FROM rt_races WHERE race_date=? ORDER BY venue,race_no''',(d,))]
-              bets=[dict(r) for r in con.execute('''SELECT race_id,course,bet_type,combination,stake_yen,return_yen,settlement_status,source_prediction_id,locked_at FROM rt_public_bets WHERE substr(race_id,1,10)=? ORDER BY race_id,id''',(d,))]
-              sel=con.execute('SELECT state_value FROM rt_system_state WHERE state_key=? LIMIT 1',(f'final_daily_selection:{d}',)).fetchone()
-              final_states=con.execute("SELECT COUNT(*) AS n FROM rt_system_state WHERE state_key LIKE ?",(f'worker_live_final:{d}-%',)).fetchone()['n']
-              live=sum(1 for r in bets if r['source_prediction_id']==-2)
-              settled=sum(1 for r in bets if r['settlement_status']=='settled')
-              pending=sum(1 for r in bets if r['settlement_status']=='pending')
-              race_ids=len({r['race_id'] for r in bets})
-              counts[d]={'races':len(races),'publicBetRaces':race_ids,'publicBetRows':len(bets),'liveRows':live,'settledRows':settled,'pendingRows':pending,'finalStates':final_states,'selection':bool(sel)}
-              snapshot['dates'][d]={'races':races,'bets':bets,'selection':sel['state_value'] if sel else None}
-          print('EXACT_POST_AUG9_COUNTS',json.dumps(counts,ensure_ascii=False,sort_keys=True))
-          out='src/v1/post-aug9-public-snapshot.ts'
-          payload=json.dumps(snapshot,ensure_ascii=False,separators=(',',':'))
-          open(out,'w',encoding='utf-8').write('export const POST_AUG9_PUBLIC_SNAPSHOT = '+payload+' as const;\n')
-          print('SNAPSHOT_BYTES',len(payload.encode()))
-          PY
-      - name: Commit snapshot to audit branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/v1/post-aug9-public-snapshot.ts
-          if git diff --cached --quiet; then
-            echo 'Snapshot unchanged.'
-          else
-            git commit -m 'Save exact post-Aug9 public fallback snapshot'
-            git push origin HEAD:audit-post-aug9-history-20260904
-          fi
+          runq() {
+            local label="$1" sql="$2"
+            echo "===== ${label} ====="
+            start=$(date +%s%3N)
+            if npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$sql" >"/tmp/${label}.json" 2>"/tmp/${label}.err"; then
+              end=$(date +%s%3N)
+              echo "status=ok ms=$((end-start))"
+              cat "/tmp/${label}.json"
+            else
+              end=$(date +%s%3N)
+              echo "status=error ms=$((end-start))"
+              cat "/tmp/${label}.err"
+            fi
+          }
+          runq ping "SELECT 1 AS ok;"
+          runq race_total "SELECT COUNT(*) AS n FROM rt_races;"
+          runq today "SELECT COUNT(*) AS n FROM rt_races WHERE race_date='2026-09-04';"
+          runq tomorrow "SELECT COUNT(*) AS n FROM rt_races WHERE race_date='2026-09-05';"
+          runq tomorrow_rows "SELECT race_id,race_date,venue,race_no,start_time_jst FROM rt_races WHERE race_date='2026-09-05' ORDER BY venue,race_no LIMIT 12;"
+          runq state_today "SELECT state_key,length(state_value) AS bytes FROM rt_system_state WHERE state_key='final_daily_selection:2026-09-04' LIMIT 1;"
+          runq index_list "PRAGMA index_list('rt_races');"
