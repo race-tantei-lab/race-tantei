@@ -19,7 +19,6 @@ test('race-day scheduler repairs the production bounded-read indexes first', () 
   assert.match(entry, /await ensureRaceDayIndexes\(env\.DB\)/);
 });
 
-test('the D1-quota emergency page no longer reloads every 30 seconds', () => {
-  assert.match(entry, /120000/);
-  assert.doesNotMatch(entry, /location\.reload\(\),30000/);
+test('the D1-quota emergency page retry is rewritten from 30s to 120s', () => {
+  assert.match(entry, /\.replace\("setTimeout\(\(\)=>location\.reload\(\),30000\)", "setTimeout\(\(\)=>location\.reload\(\),120000\)"\)/);
 });
