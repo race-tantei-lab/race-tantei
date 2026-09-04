@@ -16,6 +16,12 @@ jobs:
         run: |
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev'
+          code=$(curl --silent --show-error --connect-timeout 3 --max-time 12 -o /tmp/day9.json -w '%{http_code}' "$base/api/public/day?date=2026-08-09" || true)
+          DATE=2026-08-09 CODE="$code" node - <<'NODE'
+          const fs=require('fs'); const code=process.env.CODE; let p={}; try{p=JSON.parse(fs.readFileSync('/tmp/day9.json','utf8'))}catch{}
+          console.log('AUG9_BOUNDARY','code='+code,'races='+(Array.isArray(p.races)?p.races.length:'n/a'));
+          if(code!=='200'||!Array.isArray(p.races)||p.races.length!==36) throw new Error('Aug9 boundary unavailable');
+          NODE
           for d in 2026-08-15 2026-08-16 2026-08-22 2026-08-23 2026-08-29 2026-08-30; do
             curl --fail --silent --show-error --connect-timeout 3 --max-time 12 -D /tmp/h -o /tmp/day.json "$base/api/public/day?date=$d"
             source=$(tr -d '\r' </tmp/h | awk -F': ' 'tolower($1)=="x-race-history-source"{print $2}' | tail -1)
