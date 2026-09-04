@@ -10,6 +10,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 BASE_PATH = ROOT / "scripts" / "run-auto-final-live.py"
 CANONICAL_PATH = ROOT / "scripts" / "run-ten-year-auto-final-live.py"
 RECOVERY_OPEN_SECONDS = 40 * 60
+HARD_DEADLINE_SECONDS = 15 * 60
 MAX_ATTEMPTS_PER_RACE = 3
 
 
@@ -53,17 +54,23 @@ def main():
         print(json.dumps({"status":"no_future_missing_bets","date":date}, ensure_ascii=False))
         return
 
-    eligible = [rid for rid in missing if 0 < int((starts[rid] - now).total_seconds()) <= RECOVERY_OPEN_SECONDS]
-    waiting = [rid for rid in missing if int((starts[rid] - now).total_seconds()) > RECOVERY_OPEN_SECONDS]
+    def remaining(rid: str) -> int:
+        return int((starts[rid] - now).total_seconds())
+
+    eligible = [rid for rid in missing if HARD_DEADLINE_SECONDS <= remaining(rid) <= RECOVERY_OPEN_SECONDS]
+    deadline_missed = [rid for rid in missing if 0 < remaining(rid) < HARD_DEADLINE_SECONDS]
+    waiting = [rid for rid in missing if remaining(rid) > RECOVERY_OPEN_SECONDS]
     if not eligible:
         print(json.dumps({
-            "status":"waiting_emergency_window",
+            "status":"waiting_emergency_window" if waiting else "hard_deadline_closed",
             "date":date,
             "eligibleRaceIds":[],
+            "deadlineMissedRaceIds":deadline_missed,
             "waitingRaceIds":waiting,
             "nextRaceId":missing[0],
-            "secondsToStart":int((starts[missing[0]] - now).total_seconds()),
+            "secondsToStart":remaining(missing[0]),
             "recoveryOpenSeconds":RECOVERY_OPEN_SECONDS,
+            "hardDeadlineSeconds":HARD_DEADLINE_SECONDS,
         }, ensure_ascii=False))
         return
 
@@ -81,8 +88,8 @@ def main():
                 break
 
             seconds = seconds_to_start(starts, rid)
-            if seconds <= 0:
-                last_error = f"EMERGENCY_RACE_ALREADY_STARTED:{rid}"
+            if seconds < HARD_DEADLINE_SECONDS:
+                last_error = f"EMERGENCY_HARD_T15_CLOSED:{rid}:{seconds}"
                 break
 
             try:
@@ -127,7 +134,7 @@ def main():
         if rid not in locked_after
         and starts.get(rid)
         and starts[rid] > now_after
-        and int((starts[rid] - now_after).total_seconds()) <= RECOVERY_OPEN_SECONDS
+        and HARD_DEADLINE_SECONDS <= int((starts[rid] - now_after).total_seconds()) <= RECOVERY_OPEN_SECONDS
     ]
     remaining_eligible.sort(key=lambda rid: starts[rid])
 
@@ -135,11 +142,13 @@ def main():
         "status":"emergency_batch_complete" if not remaining_eligible and not failures else "emergency_batch_incomplete",
         "date":date,
         "eligibleRaceIds":eligible,
+        "deadlineMissedRaceIds":deadline_missed,
         "recovered":recovered,
         "failures":failures,
         "remainingEligibleRaceIds":remaining_eligible,
         "waitingRaceIds":waiting,
         "recoveryOpenSeconds":RECOVERY_OPEN_SECONDS,
+        "hardDeadlineSeconds":HARD_DEADLINE_SECONDS,
     }
     print(json.dumps(summary, ensure_ascii=False), flush=True)
 
