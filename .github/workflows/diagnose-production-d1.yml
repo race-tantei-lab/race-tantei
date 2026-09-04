@@ -2,7 +2,7 @@ name: Diagnose production D1
 
 on:
   push:
-    branches: [fix-race-day-20260905]
+    branches: [main]
     paths:
       - ".github/workflows/diagnose-production-d1.yml"
   workflow_dispatch:
@@ -15,48 +15,37 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Export D1 and inspect Sep 5 state
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Wrangler
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Probe remote D1
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
-          CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import json, os, sqlite3, time, urllib.request
-          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; dbid=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
-          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{dbid}/export'
-          headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'}
-          def post(payload):
-              req=urllib.request.Request(url,data=json.dumps(payload).encode(),method='POST',headers=headers)
-              with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
-              if not body.get('success'): raise RuntimeError(json.dumps(body,ensure_ascii=False))
-              return body.get('result') or {}
-          tables=['rt_races','rt_public_bets','rt_system_state']
-          result=post({'output_format':'polling','dump_options':{'tables':tables}}); bookmark=result.get('at_bookmark')
-          for _ in range(60):
-              signed=(result.get('result') or {}).get('signed_url')
-              if signed: break
-              if not bookmark: raise RuntimeError('EXPORT_BOOKMARK_MISSING')
-              time.sleep(2); result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':{'tables':tables}})
-          signed=(result.get('result') or {}).get('signed_url')
-          if not signed: raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
-          with urllib.request.urlopen(signed,timeout=180) as r: sql=r.read().decode('utf-8')
-          con=sqlite3.connect(':memory:'); con.executescript(sql); con.row_factory=sqlite3.Row
-          d='2026-09-05'
-          races=[dict(x) for x in con.execute('SELECT race_id,venue,race_no,race_name,start_time_jst,start_time_utc,status FROM rt_races WHERE race_date=? ORDER BY start_time_utc,venue,race_no',(d,))]
-          sel=con.execute('SELECT state_value,updated_at FROM rt_system_state WHERE state_key=?',(f'final_daily_selection:{d}',)).fetchone()
-          bets=[dict(x) for x in con.execute('SELECT race_id,course,bet_type,combination,settlement_status,source_prediction_id,locked_at FROM rt_public_bets WHERE substr(race_id,1,10)=? ORDER BY race_id,id',(d,))]
-          selected=[]
-          if sel:
-              try: selected=[str(x.get('raceId')) for x in json.loads(sel['state_value']).get('selected',[]) if x.get('raceId')]
-              except Exception: pass
-          indexes={t:[dict(x) for x in con.execute(f"PRAGMA index_list('{t}')")] for t in tables}
-          print('TODAY_RACES',len(races))
-          print('TODAY_VENUES',json.dumps({v:sum(1 for r in races if r['venue']==v) for v in sorted({r['venue'] for r in races})},ensure_ascii=False))
-          print('TODAY_FIRST_LAST',json.dumps({'first':races[0] if races else None,'last':races[-1] if races else None},ensure_ascii=False))
-          print('TODAY_SELECTION',json.dumps({'exists':bool(sel),'updatedAt':sel['updated_at'] if sel else None,'count':len(set(selected)),'raceIds':selected},ensure_ascii=False))
-          print('TODAY_BETS',json.dumps({'raceCount':len({x['race_id'] for x in bets}),'rows':len(bets),'liveRows':sum(1 for x in bets if x['source_prediction_id']==-2),'pendingRows':sum(1 for x in bets if x['settlement_status']=='pending')},ensure_ascii=False))
-          print('INDEXES',json.dumps(indexes,ensure_ascii=False))
-          PY
+          runq() {
+            local label="$1" sql="$2"
+            echo "===== ${label} ====="
+            start=$(date +%s%3N)
+            if npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$sql" >"/tmp/${label}.json" 2>"/tmp/${label}.err"; then
+              end=$(date +%s%3N)
+              echo "status=ok ms=$((end-start))"
+              cat "/tmp/${label}.json"
+            else
+              end=$(date +%s%3N)
+              echo "status=error ms=$((end-start))"
+              cat "/tmp/${label}.err"
+            fi
+          }
+          runq ping "SELECT 1 AS ok;"
+          runq race_total "SELECT COUNT(*) AS n FROM rt_races;"
+          runq today "SELECT COUNT(*) AS n FROM rt_races WHERE race_date='2026-09-04';"
+          runq tomorrow "SELECT COUNT(*) AS n FROM rt_races WHERE race_date='2026-09-05';"
+          runq tomorrow_rows "SELECT race_id,race_date,venue,race_no,start_time_jst FROM rt_races WHERE race_date='2026-09-05' ORDER BY venue,race_no LIMIT 12;"
+          runq state_today "SELECT state_key,length(state_value) AS bytes FROM rt_system_state WHERE state_key='final_daily_selection:2026-09-04' LIMIT 1;"
+          runq index_list "PRAGMA index_list('rt_races');"
