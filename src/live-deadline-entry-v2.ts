@@ -93,9 +93,6 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
   }
 
   try {
-    // Priority path: rescue from an already-persisted official preview before any
-    // selection repair, archive restore, JRA fetch/model inference, or SLA audit.
-    // This keeps T-16 -> T-15 rescue finalization alive even if the heavier pipeline fails.
     const priorityGuardNow = new Date();
     const priorityGuard = await runCompletedWorkerDeadlineGuard(env, priorityGuardNow);
     const priorityGuardPayload = {
@@ -258,7 +255,7 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
     };
     await saveDriverState(env.DB, date, result);
 
-    if (hardDeadlineBreachRaceIds.length) throw new Error(`LIVE_DEADLINE_HARD_T10_REFLECTION_BREACH:${hardDeadlineBreachRaceIds.join(",")}`);
+    if (hardDeadlineBreachRaceIds.length) throw new Error(`LIVE_DEADLINE_HARD_T15_BREACH:${hardDeadlineBreachRaceIds.join(",")}`);
     if (preDeadlineCriticalRaceIds.length) throw new Error(`LIVE_DEADLINE_PREDEADLINE_CRITICAL:${preDeadlineCriticalRaceIds.join(",")}`);
     if (unresolvedDueRaceIds.length || unresolvedGuardErrors.length) {
       throw new Error(`LIVE_DEADLINE_DUE_UNRESOLVED:${unresolvedDueRaceIds.join(",")}:guards=${JSON.stringify(unresolvedGuardErrors)}`);
@@ -272,7 +269,7 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       const row = await env.DB.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
         .bind(`${DRIVER_STATE_PREFIX}${date}`).first<{ value: string }>();
       previousState = row?.value ? JSON.parse(row.value) : null;
-    } catch { /* preserve the primary failure even if audit recovery fails */ }
+    } catch { }
     const failure = {
       ...base,
       status: "error",
