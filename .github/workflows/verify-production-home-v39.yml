@@ -1,0 +1,55 @@
+name: Verify real production homepage
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/public-site-entry-v39.ts"
+      - "wrangler.jsonc"
+      - ".github/workflows/verify-production-home-v39.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-home:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify v39 homepage is really served
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          expected='ten-year-completed-public-v39-exact-date-home-20260904'
+
+          for attempt in $(seq 1 36); do
+            code=$(curl --silent --show-error --connect-timeout 3 --max-time 12 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "${base}/?verify=${GITHUB_RUN_ID}-${attempt}" || true)
+            ui=$(tr -d '\r' </tmp/home.headers | awk -F': ' 'tolower($1)=="x-race-ui-version"{print $2}' | tail -1)
+            path=$(tr -d '\r' </tmp/home.headers | awk -F': ' 'tolower($1)=="x-race-home-path"{print $2}' | tail -1)
+            fallback=$(tr -d '\r' </tmp/home.headers | awk -F': ' 'tolower($1)=="x-race-emergency-fallback"{print $2}' | tail -1)
+            degraded=$(tr -d '\r' </tmp/home.headers | awk -F': ' 'tolower($1)=="x-race-home-degraded"{print $2}' | tail -1)
+            old_text=0
+            normal_nav=0
+            next_panel=0
+            if grep -Eq 'データ更新中|Worker自体は稼働しています|データを再接続しています' /tmp/home.html; then old_text=1; fi
+            if grep -Fq '予想ロジック' /tmp/home.html; then normal_nav=1; fi
+            if grep -Fq '次の買い目' /tmp/home.html; then next_panel=1; fi
+
+            echo "attempt=${attempt} code=${code} ui=${ui:-missing} path=${path:-missing} fallback=${fallback:-none} degraded=${degraded:-0} old_text=${old_text} normal_nav=${normal_nav} next_panel=${next_panel}"
+
+            if [[ "$code" = '200' && "$ui" = "$expected" && "$path" = 'v39-exact-date' && -z "$fallback" && "$old_text" = '0' && "$normal_nav" = '1' && "$next_panel" = '1' ]]; then
+              echo 'PRODUCTION_HOME_V39_OK'
+              grep -Eo '<h2>[^<]+' /tmp/home.html | head -5 || true
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo 'Production homepage did not satisfy v39 contract.' >&2
+          echo '--- headers ---' >&2
+          cat /tmp/home.headers >&2 || true
+          echo '--- body head ---' >&2
+          head -c 1500 /tmp/home.html >&2 || true
+          exit 1
