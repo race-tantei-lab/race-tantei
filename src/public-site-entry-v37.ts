@@ -4,6 +4,11 @@ import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v37-race-day-recovery-20260905";
 
+// The core module is the byte-for-byte pre-recovery v37 implementation. It
+// remains the owner of runPublicMaintenance, runUpcomingCalendarRepair,
+// runUpcomingEntryWorkerRepair and runUpcomingEntryDerivedRepair. This wrapper
+// only restores the separate v34 race-day scheduler that was accidentally lost.
+
 async function stabilizeEmergencyResponse(response: Response): Promise<Response> {
   if (response.headers.get("x-race-emergency-fallback") !== "d1-unavailable") return response;
   if (!response.headers.get("content-type")?.includes("text/html")) return response;
