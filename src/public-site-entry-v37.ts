@@ -1,6 +1,6 @@
 import core from "./public-site-entry-v37-core.js";
-import v34 from "./public-site-entry-v34.js";
-import v33 from "./public-site-entry-v33.js";
+import publicSite from "./public-site-entry-v34.js";
+import fallbackSite from "./public-site-entry-v33.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v37-original-home-restored-20260905";
@@ -25,7 +25,7 @@ async function fetchOriginalHome(request: Request, env: Env, ctx: ExecutionConte
   // homepage with a custom "retrying" or "reconnecting" screen.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      const response = await v34.fetch(request, env, ctx);
+      const response = await publicSite.fetch(request, env, ctx);
       lastResponse = response;
       if (response.status < 500) {
         const headers = new Headers(response.headers);
@@ -48,7 +48,7 @@ async function fetchOriginalHome(request: Request, env: Env, ctx: ExecutionConte
   // If only a v34 enhancement failed, keep the immediately preceding normal
   // UI instead of showing a newly invented recovery page.
   try {
-    const response = await v33.fetch(request, env, ctx);
+    const response = await fallbackSite.fetch(request, env, ctx);
     const headers = new Headers(response.headers);
     headers.set("cache-control", "no-store, max-age=0");
     headers.set("x-race-ui-version", UI_VERSION);
