@@ -1,8 +1,8 @@
-name: Diagnose production D1
+name: Diagnose post-Aug9 production history
 
 on:
   push:
-    branches: [main]
+    branches: [audit-post-aug9-history-20260904]
     paths:
       - ".github/workflows/diagnose-production-d1.yml"
   workflow_dispatch:
@@ -21,31 +21,22 @@ jobs:
           node-version: 22
       - name: Install Wrangler
         run: npm ci --prefer-offline --no-audit --no-fund
-      - name: Probe remote D1
+      - name: Audit exact post-Aug9 dates in remote D1
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
         shell: bash
         run: |
           set -euo pipefail
+          DATES="'2026-08-09','2026-08-15','2026-08-16','2026-08-22','2026-08-23','2026-08-29','2026-08-30'"
           runq() {
             local label="$1" sql="$2"
             echo "===== ${label} ====="
-            start=$(date +%s%3N)
-            if npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$sql" >"/tmp/${label}.json" 2>"/tmp/${label}.err"; then
-              end=$(date +%s%3N)
-              echo "status=ok ms=$((end-start))"
-              cat "/tmp/${label}.json"
-            else
-              end=$(date +%s%3N)
-              echo "status=error ms=$((end-start))"
-              cat "/tmp/${label}.err"
-            fi
+            npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$sql"
           }
-          runq ping "SELECT 1 AS ok;"
-          runq race_total "SELECT COUNT(*) AS n FROM rt_races;"
-          runq today "SELECT COUNT(*) AS n FROM rt_races WHERE race_date='2026-09-04';"
-          runq tomorrow "SELECT COUNT(*) AS n FROM rt_races WHERE race_date='2026-09-05';"
-          runq tomorrow_rows "SELECT race_id,race_date,venue,race_no,start_time_jst FROM rt_races WHERE race_date='2026-09-05' ORDER BY venue,race_no LIMIT 12;"
-          runq state_today "SELECT state_key,length(state_value) AS bytes FROM rt_system_state WHERE state_key='final_daily_selection:2026-09-04' LIMIT 1;"
-          runq index_list "PRAGMA index_list('rt_races');"
+          runq races "SELECT race_date,COUNT(*) AS races FROM rt_races WHERE race_date IN (${DATES}) GROUP BY race_date ORDER BY race_date;"
+          runq public_bets "SELECT r.race_date,COUNT(DISTINCT b.race_id) AS publicBetRaces,COUNT(b.id) AS publicBetRows,SUM(CASE WHEN b.source_prediction_id=-2 THEN 1 ELSE 0 END) AS liveRows,SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END) AS settledRows,SUM(CASE WHEN b.settlement_status='pending' THEN 1 ELSE 0 END) AS pendingRows FROM rt_races r LEFT JOIN rt_public_bets b ON b.race_id=r.race_id WHERE r.race_date IN (${DATES}) GROUP BY r.race_date ORDER BY r.race_date;"
+          runq legacy_bets "SELECT r.race_date,COUNT(DISTINCT b.race_id) AS legacyBetRaces,COUNT(*) AS legacyBetRows FROM rt_races r JOIN rt_bets b ON b.race_id=r.race_id WHERE r.race_date IN (${DATES}) GROUP BY r.race_date ORDER BY r.race_date;"
+          runq final_states "SELECT r.race_date,COUNT(*) AS finalStates FROM rt_system_state s JOIN rt_races r ON r.race_id=substr(s.state_key,19) WHERE s.state_key LIKE 'worker_live_final:%' AND r.race_date IN (${DATES}) GROUP BY r.race_date ORDER BY r.race_date;"
+          runq selections "SELECT state_key,length(state_value) AS bytes FROM rt_system_state WHERE state_key IN ('final_daily_selection:2026-08-09','final_daily_selection:2026-08-15','final_daily_selection:2026-08-16','final_daily_selection:2026-08-22','final_daily_selection:2026-08-23','final_daily_selection:2026-08-29','final_daily_selection:2026-08-30') ORDER BY state_key;"
+          runq public_dates_after_aug9 "SELECT r.race_date,COUNT(DISTINCT b.race_id) AS publicBetRaces,COUNT(*) AS publicBetRows FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date>='2026-08-09' GROUP BY r.race_date ORDER BY r.race_date;"
