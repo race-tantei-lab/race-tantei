@@ -1,0 +1,20 @@
+name: Check post-Aug9 fallback
+on:
+  push:
+    branches: [audit-post-aug9-history-20260904]
+    paths:
+      - '.github/workflows/check-post-aug9-fallback.yml'
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - run: npm run typecheck
+      - run: node --test tests/post-aug9-public-fallback-static.test.mjs
