@@ -1,5 +1,4 @@
 import publicSite from "./public-site-entry-v34.js";
-import { ensurePublicHistory } from "./v1/public-history-db.js";
 import { summarizeTodayPerformance, type TodayPerformanceBetRow } from "./v1/today-performance.js";
 import { runUpcomingCalendarRepair } from "./v1/upcoming-calendar-repair.js";
 import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.js";
@@ -143,7 +142,6 @@ async function canonicalPerformanceResponse(db: D1Database, requestedDate: strin
   const today = jstDate();
   const date = validDate(requestedDate) ? requestedDate : today;
   try {
-    await ensurePublicHistory(db);
     const [selected, allHistory, recent, targetRaces] = await Promise.all([
       rowsForDate(db, date),
       historyRows(db, today),
@@ -178,7 +176,7 @@ async function canonicalPerformanceResponse(db: D1Database, requestedDate: strin
   } catch (error) {
     console.error("CANONICAL_DAILY_PERFORMANCE_FAILED", error);
     return Response.json({ ok: false, error: "DAILY_PERFORMANCE_UNAVAILABLE" }, {
-      status: 500,
+      status: 503,
       headers: { "cache-control": "no-store" },
     });
   }
@@ -202,11 +200,16 @@ async function canonicalHome(response: Response, db: D1Database, today: string):
   html = html.split(fromMetric).join(toMetric);
   html = html.split("3コース合計（比較用）・").join("ライト基準・");
 
-  const recent = await recent30(db, today);
-  if (recent?.roiPct != null) {
-    const replacement = `<div class="recent-roi-strip"><span>直近30日（ライト・精算済）</span><strong>${recent.roiPct.toFixed(1)}%</strong><small>${recent.races}R</small></div>`;
-    html = html.replace(/<div class="recent-roi-strip">[\s\S]*?<\/div>/, replacement);
+  try {
+    const recent = await recent30(db, today);
+    if (recent?.roiPct != null) {
+      const replacement = `<div class="recent-roi-strip"><span>直近30日（ライト・精算済）</span><strong>${recent.roiPct.toFixed(1)}%</strong><small>${recent.races}R</small></div>`;
+      html = html.replace(/<div class="recent-roi-strip">[\s\S]*?<\/div>/, replacement);
+    }
+  } catch (error) {
+    console.error("HOME_RECENT30_SKIPPED", error);
   }
+
   html = html.replace("</head>", `${homeStyle()}</head>`);
   const headers = new Headers(response.headers);
   headers.delete("content-length");
@@ -216,10 +219,20 @@ async function canonicalHome(response: Response, db: D1Database, today: string):
   return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
+function emergencyHome(): Response {
+  const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>レース探偵</title><style>body{margin:0;background:#07111f;color:#eaf3ff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:720px;margin:0 auto;padding:32px 20px}.card{margin-top:22px;padding:22px;border:1px solid #28445f;border-radius:18px;background:#0d1d2d}h1{margin:0;font-size:28px}p{line-height:1.8;color:#c7d6e6}.badge{display:inline-block;margin-top:10px;padding:6px 10px;border-radius:999px;background:#153428;color:#aef1d2;font-size:13px;font-weight:700}</style><script>setTimeout(()=>location.reload(),30000)</script></head><body><main class="wrap"><h1>レース探偵</h1><section class="card"><h2>データを再接続しています</h2><p>一時的にデータベースへ接続できないため、表示を自動復旧中です。30秒ごとに再試行します。</p><span class="badge">Workerは稼働中</span></section></main></body></html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "no-store, max-age=0",
+      "x-race-ui-version": UI_VERSION,
+      "x-race-emergency-fallback": "d1-unavailable",
+    },
+  });
+}
+
 async function runPublicMaintenance(env: Env, now: Date): Promise<void> {
-  // Live race selection/finalization is deliberately excluded here. The isolated
-  // primary/backup live-deadline Workers own that path. The public Worker only
-  // maintains upcoming calendar/entry data on its reduced-frequency cron.
   await runUpcomingCalendarRepair(env, now);
   await runUpcomingEntryWorkerRepair(env, now);
   await runUpcomingEntryDerivedRepair(env, now);
@@ -233,11 +246,30 @@ export default {
       return canonicalPerformanceResponse(env.DB, url.searchParams.get("date") ?? "");
     }
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
-    let response = await publicSite.fetch(request, env, ctx);
-    if (url.pathname === "/") response = await canonicalHome(response, env.DB, jstDate());
-    return response;
+
+    try {
+      let response = await publicSite.fetch(request, env, ctx);
+      if (url.pathname === "/") response = await canonicalHome(response, env.DB, jstDate());
+      return response;
+    } catch (error) {
+      console.error("PUBLIC_SITE_FETCH_FAILED", url.pathname, error);
+      if (url.pathname === "/") return emergencyHome();
+      return new Response("データ取得を一時的に再試行しています。", {
+        status: 503,
+        headers: {
+          "content-type": "text/plain; charset=utf-8",
+          "cache-control": "no-store, max-age=0",
+          "retry-after": "30",
+          "x-race-emergency-fallback": "d1-unavailable",
+        },
+      });
+    }
   },
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
-    await runPublicMaintenance(env, new Date(controller.scheduledTime || Date.now()));
+    try {
+      await runPublicMaintenance(env, new Date(controller.scheduledTime || Date.now()));
+    } catch (error) {
+      console.error("PUBLIC_MAINTENANCE_FAILED", error);
+    }
   },
 } satisfies ExportedHandler<Env>;
