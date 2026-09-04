@@ -1,0 +1,42 @@
+name: Verify normal production home
+
+on:
+  workflow_run:
+    workflows: ["Deploy Cloudflare Worker"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-normal-production-home
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify normal homepage is served
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          ok=0
+          for attempt in $(seq 1 12); do
+            code=$(curl --connect-timeout 5 --max-time 25 -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$base/?home-check=$RANDOM") || code=000
+            if [[ "$code" == '200' ]] && grep -q 'レース探偵' /tmp/home.html; then
+              if grep -Eq 'データ取得を再試行しています|データを再接続しています|データベースへ接続できない|表示データの読み込みに失敗しました' /tmp/home.html; then
+                echo 'Forbidden recovery screen is visible on production homepage.' >&2
+                cat /tmp/home.headers >&2 || true
+                exit 1
+              fi
+              echo 'NORMAL_PRODUCTION_HOME_OK'
+              grep -Ei '^(x-race-ui-version|x-race-home-path|http/)' /tmp/home.headers || true
+              ok=1
+              break
+            fi
+            echo "normal homepage not ready attempt=$attempt http=$code"
+            sleep 5
+          done
+          test "$ok" = '1'
