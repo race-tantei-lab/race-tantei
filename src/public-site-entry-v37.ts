@@ -18,6 +18,18 @@ async function stabilizeEmergencyResponse(response: Response): Promise<Response>
   return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
+async function ensureRaceDayIndexes(db: D1Database): Promise<void> {
+  // Production was missing the race-date index even though the schema source
+  // declares it. Without it, every current-day lookup scans historical races
+  // and burns the D1 rows-read allowance. Create the bounded-read indexes before
+  // the first race-day scheduler work after the daily quota reset.
+  await db.batch([
+    db.prepare("CREATE INDEX IF NOT EXISTS rt_idx_races_date ON rt_races(race_date DESC, venue, race_no)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS rt_idx_public_bets_race ON rt_public_bets(race_id, id)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS rt_idx_public_bets_settlement ON rt_public_bets(settlement_status, course, race_id)"),
+  ]);
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
@@ -25,6 +37,12 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    try {
+      await ensureRaceDayIndexes(env.DB);
+    } catch (error) {
+      console.error("PUBLIC_RACE_DAY_INDEX_REPAIR_FAILED", error);
+    }
+
     // The original v37 implementation added public-maintenance work but stopped
     // delegating to the v34 race-day scheduler chain. Restore the chain while
     // preserving the existing v37 fetch/UI implementation byte-for-byte in the
