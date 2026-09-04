@@ -1,18 +1,6 @@
 name: Deploy Cloudflare Worker
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "wrangler.jsonc"
-      - "package.json"
-      - "package-lock.json"
-      - "scripts/build-worker-completed-model-assets.py"
-      - "scripts/verify-worker-model-parity.ts"
-      - "models/ten-year-completed-model.txt"
-      - "config/ten-year-completed-model.json"
-      - ".github/workflows/deploy-worker.yml"
   workflow_dispatch:
 
 permissions:
