@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   diagnose:
@@ -16,7 +16,7 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
-      - name: Export relevant D1 tables despite query quota
+      - name: Export relevant D1 tables and build exact snapshot
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
@@ -25,67 +25,63 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, os, re, time, urllib.request
-          account=os.environ['CLOUDFLARE_ACCOUNT_ID']
-          db=os.environ['CLOUDFLARE_D1_DATABASE_ID']
-          token=os.environ['CLOUDFLARE_API_TOKEN']
-          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/export'
+          import json, os, sqlite3, time, urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; dbid=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{dbid}/export'
           headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'}
           tables=['rt_races','rt_public_bets','rt_system_state']
+          dates=['2026-08-09','2026-08-15','2026-08-16','2026-08-22','2026-08-23','2026-08-29','2026-08-30']
           def post(payload):
               req=urllib.request.Request(url,data=json.dumps(payload).encode(),method='POST',headers=headers)
-              with urllib.request.urlopen(req,timeout=60) as r:
-                  body=json.load(r)
-              if not body.get('success'):
-                  raise RuntimeError(json.dumps(body,ensure_ascii=False))
+              with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
+              if not body.get('success'): raise RuntimeError(json.dumps(body,ensure_ascii=False))
               return body.get('result') or {}
-          first=post({'output_format':'polling','dump_options':{'no_schema':True,'tables':tables}})
-          bookmark=first.get('at_bookmark')
-          print('EXPORT_START',json.dumps({'status':first.get('status'),'bookmark':bookmark,'messages':first.get('messages')},ensure_ascii=False))
-          result=first
-          for attempt in range(60):
+          result=post({'output_format':'polling','dump_options':{'tables':tables}})
+          bookmark=result.get('at_bookmark')
+          for _ in range(60):
               signed=(result.get('result') or {}).get('signed_url')
-              if signed:
-                  break
-              if result.get('status')=='error':
-                  raise RuntimeError('EXPORT_ERROR:'+str(result.get('error')))
-              if not bookmark:
-                  raise RuntimeError('EXPORT_BOOKMARK_MISSING')
+              if signed: break
+              if result.get('status')=='error': raise RuntimeError('EXPORT_ERROR:'+str(result.get('error')))
+              if not bookmark: raise RuntimeError('EXPORT_BOOKMARK_MISSING')
               time.sleep(2)
-              result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':{'no_schema':True,'tables':tables}})
-              print('EXPORT_POLL',attempt+1,result.get('status'),result.get('messages'))
+              result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':{'tables':tables}})
           signed=(result.get('result') or {}).get('signed_url')
-          if not signed:
-              raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
-          with urllib.request.urlopen(signed,timeout=180) as r:
-              data=r.read()
-          open('/tmp/postaug9.sql','wb').write(data)
-          print('EXPORT_BYTES',len(data))
-          text=data.decode('utf-8','replace')
-          dates=['2026-08-09','2026-08-15','2026-08-16','2026-08-22','2026-08-23','2026-08-29','2026-08-30']
-          counts={d:{'rt_races':0,'rt_public_bets':0,'rt_system_state':0} for d in dates}
-          selected_lines=[]
-          for line in text.splitlines():
-              table=None
-              if 'INSERT INTO "rt_races"' in line or 'INSERT INTO rt_races' in line: table='rt_races'
-              elif 'INSERT INTO "rt_public_bets"' in line or 'INSERT INTO rt_public_bets' in line: table='rt_public_bets'
-              elif 'INSERT INTO "rt_system_state"' in line or 'INSERT INTO rt_system_state' in line: table='rt_system_state'
-              if not table: continue
-              matched=False
-              for d in dates:
-                  if d in line:
-                      counts[d][table]+=1
-                      matched=True
-              if matched: selected_lines.append(line)
-          open('/tmp/postaug9-filtered.sql','w',encoding='utf-8').write('\n'.join(selected_lines)+'\n')
-          print('POST_AUG9_EXPORT_COUNTS',json.dumps(counts,ensure_ascii=False,sort_keys=True))
-          print('FILTERED_LINES',len(selected_lines))
-          if not any(counts[d]['rt_public_bets'] for d in dates):
-              raise RuntimeError('NO_POST_AUG9_PUBLIC_BETS_IN_EXPORT')
+          if not signed: raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
+          with urllib.request.urlopen(signed,timeout=180) as r: sql=r.read().decode('utf-8')
+          print('EXPORT_BYTES',len(sql.encode()))
+          con=sqlite3.connect(':memory:')
+          con.executescript(sql)
+          con.row_factory=sqlite3.Row
+          ph=','.join('?' for _ in dates)
+          counts={}
+          snapshot={'version':'post-aug9-public-snapshot-v1','exportBookmark':bookmark,'dates':{}}
+          for d in dates:
+              races=[dict(r) for r in con.execute('''SELECT race_id,race_date,venue,race_no,race_name,start_time_jst,start_time_utc,surface,distance_m,status,refund_horse_nos_json FROM rt_races WHERE race_date=? ORDER BY venue,race_no''',(d,))]
+              bets=[dict(r) for r in con.execute('''SELECT race_id,course,bet_type,combination,stake_yen,return_yen,settlement_status,source_prediction_id,locked_at FROM rt_public_bets WHERE substr(race_id,1,10)=? ORDER BY race_id,id''',(d,))]
+              sel=con.execute('SELECT state_value FROM rt_system_state WHERE state_key=? LIMIT 1',(f'final_daily_selection:{d}',)).fetchone()
+              final_states=con.execute("SELECT COUNT(*) AS n FROM rt_system_state WHERE state_key LIKE ?",(f'worker_live_final:{d}-%',)).fetchone()['n']
+              live=sum(1 for r in bets if r['source_prediction_id']==-2)
+              settled=sum(1 for r in bets if r['settlement_status']=='settled')
+              pending=sum(1 for r in bets if r['settlement_status']=='pending')
+              race_ids=len({r['race_id'] for r in bets})
+              counts[d]={'races':len(races),'publicBetRaces':race_ids,'publicBetRows':len(bets),'liveRows':live,'settledRows':settled,'pendingRows':pending,'finalStates':final_states,'selection':bool(sel)}
+              snapshot['dates'][d]={'races':races,'bets':bets,'selection':sel['state_value'] if sel else None}
+          print('EXACT_POST_AUG9_COUNTS',json.dumps(counts,ensure_ascii=False,sort_keys=True))
+          out='src/v1/post-aug9-public-snapshot.ts'
+          payload=json.dumps(snapshot,ensure_ascii=False,separators=(',',':'))
+          open(out,'w',encoding='utf-8').write('export const POST_AUG9_PUBLIC_SNAPSHOT = '+payload+' as const;\n')
+          print('SNAPSHOT_BYTES',len(payload.encode()))
           PY
-      - name: Summarize filtered export
+      - name: Commit snapshot to audit branch
         shell: bash
         run: |
           set -euo pipefail
-          wc -l /tmp/postaug9-filtered.sql
-          grep -E "2026-08-(09|15|16|22|23|29|30)" /tmp/postaug9-filtered.sql | head -20 || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/v1/post-aug9-public-snapshot.ts
+          if git diff --cached --quiet; then
+            echo 'Snapshot unchanged.'
+          else
+            git commit -m 'Save exact post-Aug9 public fallback snapshot'
+            git push origin HEAD:audit-post-aug9-history-20260904
+          fi
