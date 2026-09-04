@@ -1,16 +1,10 @@
 name: Emergency earliest missing bet
 
 on:
+  # Manual-only legacy fallback. Normal race-day mutation belongs exclusively to
+  # the isolated primary/backup live-deadline Workers so parser/deadline policy
+  # cannot diverge between independent schedulers.
   workflow_dispatch:
-  schedule:
-    # Independent deadline guard: retry the nearest missing selected race every five minutes.
-    - cron: "*/5 23 * * 5,6,0"
-    - cron: "*/5 0-10 * * 6,0,1"
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/emergency-earliest-missing-bet.yml"
-      - "scripts/run-emergency-earliest-missing-bet.py"
 
 concurrency:
   group: emergency-earliest-missing-bet-live
