@@ -1,5 +1,6 @@
 import publicSite from "./public-site-entry-v34.js";
 import { summarizeTodayPerformance, type TodayPerformanceBetRow } from "./v1/today-performance.js";
+import { hasPostAug9SnapshotDate, postAug9DayResponse, postAug9PerformanceResponse } from "./v1/post-aug9-public-fallback.js";
 import { runUpcomingCalendarRepair } from "./v1/upcoming-calendar-repair.js";
 import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.js";
 import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
@@ -175,10 +176,7 @@ async function canonicalPerformanceResponse(db: D1Database, requestedDate: strin
     });
   } catch (error) {
     console.error("CANONICAL_DAILY_PERFORMANCE_FAILED", error);
-    return Response.json({ ok: false, error: "DAILY_PERFORMANCE_UNAVAILABLE" }, {
-      status: 503,
-      headers: { "cache-control": "no-store" },
-    });
+    return postAug9PerformanceResponse(requestedDate, today);
   }
 }
 
@@ -242,8 +240,17 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/_ops/live-tick") return new Response("NOT_FOUND", { status: 404 });
+    if (url.pathname === "/api/public/day") {
+      const requestedDate = url.searchParams.get("date") ?? "";
+      if (hasPostAug9SnapshotDate(requestedDate)) {
+        const frozen = postAug9DayResponse(requestedDate);
+        if (frozen) return frozen;
+      }
+    }
     if (url.pathname === "/api/public/daily-performance") {
-      return canonicalPerformanceResponse(env.DB, url.searchParams.get("date") ?? "");
+      const requestedDate = url.searchParams.get("date") ?? "";
+      if (hasPostAug9SnapshotDate(requestedDate)) return postAug9PerformanceResponse(requestedDate, jstDate());
+      return canonicalPerformanceResponse(env.DB, requestedDate);
     }
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
 
