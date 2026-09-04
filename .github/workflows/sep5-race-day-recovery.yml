@@ -1,0 +1,237 @@
+name: Sep 5 race-day recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/sep5-race-day-recovery.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sep5-race-day-recovery
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+
+jobs:
+  recover-and-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install runtime
+        run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Wait for D1 daily quota reset
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=$(date -u -d '2026-09-05 00:01:00' +%s)
+          now=$(date -u +%s)
+          if [ "$now" -lt "$target" ]; then
+            wait=$((target-now))
+            echo "Waiting ${wait}s for 09:01 JST / D1 daily reset"
+            sleep "$wait"
+          fi
+
+      - name: Repair production indexes first
+        shell: bash
+        run: |
+          set -euo pipefail
+          sql="CREATE INDEX IF NOT EXISTS rt_idx_races_date ON rt_races(race_date DESC, venue, race_no); CREATE INDEX IF NOT EXISTS rt_idx_public_bets_race ON rt_public_bets(race_id, id); CREATE INDEX IF NOT EXISTS rt_idx_public_bets_settlement ON rt_public_bets(settlement_status, course, race_id);"
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$sql" | tee /tmp/index-repair.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT name FROM sqlite_master WHERE type='index' AND name IN ('rt_idx_races_date','rt_idx_public_bets_race','rt_idx_public_bets_settlement') ORDER BY name;" | tee /tmp/index-check.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/index-check.json'))
+          rows=[]
+          def walk(v):
+              if isinstance(v,dict):
+                  if isinstance(v.get('results'),list): rows.extend(v['results'])
+                  for x in v.values(): walk(x)
+              elif isinstance(v,list):
+                  for x in v: walk(x)
+          walk(data)
+          names={str(x.get('name')) for x in rows if isinstance(x,dict) and x.get('name')}
+          need={'rt_idx_races_date','rt_idx_public_bets_race','rt_idx_public_bets_settlement'}
+          print('INDEXES',sorted(names))
+          if not need.issubset(names): raise SystemExit(f'INDEX_REPAIR_INCOMPLETE:{sorted(need-names)}')
+          PY
+
+      - name: Wait for canonical 15-race selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for attempt in $(seq 1 48); do
+            npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_value AS value,updated_at AS updatedAt FROM rt_system_state WHERE state_key='final_daily_selection:2026-09-05' LIMIT 1;" > /tmp/selection.json 2>/tmp/selection.err || true
+            if python3 - <<'PY'
+          import json,sys
+          try: data=json.load(open('/tmp/selection.json'))
+          except Exception: sys.exit(1)
+          rows=[]
+          def walk(v):
+              if isinstance(v,dict):
+                  if isinstance(v.get('results'),list): rows.extend(v['results'])
+                  for x in v.values(): walk(x)
+              elif isinstance(v,list):
+                  for x in v: walk(x)
+          walk(data)
+          row=next((x for x in rows if isinstance(x,dict) and x.get('value')),None)
+          if not row: sys.exit(1)
+          try: p=json.loads(row['value'])
+          except Exception: sys.exit(1)
+          ids=[str(x.get('raceId') or '') for x in p.get('selected',[]) if x.get('raceId')]
+          print('SELECTION_COUNT',len(set(ids)),'UPDATED_AT',row.get('updatedAt'))
+          if len(set(ids))!=15: sys.exit(1)
+          open('/tmp/selected-ids.txt','w').write('\n'.join(ids))
+          PY
+            then ok=1; echo "Selection ready on attempt ${attempt}"; break; fi
+            echo "selection not ready attempt=${attempt}"
+            sleep 15
+          done
+          if [ "$ok" != 1 ]; then
+            cat /tmp/selection.err || true
+            exit 1
+          fi
+
+      - name: Verify 5 targets per venue and 36-race program
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH s AS (SELECT json_extract(j.value,'$.raceId') AS race_id FROM rt_system_state st,json_each(st.state_value,'$.selected') j WHERE st.state_key='final_daily_selection:2026-09-05') SELECT r.venue,COUNT(*) AS selectedCount,MIN(r.start_time_utc) AS firstStart,MAX(r.start_time_utc) AS lastStart FROM s JOIN rt_races r ON r.race_id=s.race_id GROUP BY r.venue ORDER BY r.venue; SELECT venue,COUNT(*) AS raceCount FROM rt_races WHERE race_date='2026-09-05' GROUP BY venue ORDER BY venue;" | tee /tmp/program.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/program.json'))
+          groups=[]
+          def walk(v):
+              if isinstance(v,dict):
+                  if isinstance(v.get('results'),list) and v['results']: groups.append(v['results'])
+                  for x in v.values(): walk(x)
+              elif isinstance(v,list):
+                  for x in v: walk(x)
+          walk(data)
+          sel=[]; prog=[]
+          for g in groups:
+              if all(isinstance(x,dict) and 'selectedCount' in x for x in g): sel=g
+              if all(isinstance(x,dict) and 'raceCount' in x for x in g): prog=g
+          print('SELECTED_BY_VENUE',sel)
+          print('PROGRAM_BY_VENUE',prog)
+          if len(sel)!=3 or any(int(x['selectedCount'])!=5 for x in sel): raise SystemExit('SELECTION_NOT_5_PER_VENUE')
+          if len(prog)!=3 or any(int(x['raceCount'])!=12 for x in prog): raise SystemExit('PROGRAM_NOT_36_RACES')
+          PY
+
+      - name: Verify isolated live workers and public projection
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 https://race-tantei-live-deadline.race-tantei.workers.dev/health | tee /tmp/primary-health.json
+          echo
+          curl --fail --silent --show-error --max-time 20 https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health | tee /tmp/backup-health.json
+          echo
+          ok=0
+          for attempt in $(seq 1 20); do
+            code=$(curl --silent --show-error --max-time 30 -o /tmp/public-day.json -w '%{http_code}' 'https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-09-05' || true)
+            echo "public attempt=${attempt} http=${code}"
+            if [ "$code" = 200 ] && python3 - <<'PY'
+          import collections,json,sys
+          data=json.load(open('/tmp/public-day.json'))
+          rows=data.get('races') if isinstance(data,dict) else None
+          if not isinstance(rows,list): sys.exit(1)
+          venues=collections.Counter(str(r.get('venue') or '') for r in rows if r.get('venue'))
+          states=collections.Counter(str((r.get('publicState') or {}).get('code') or '') for r in rows)
+          selected_codes={'target','buy','hit','miss','overdue','missing'}
+          selected=[r for r in rows if str((r.get('publicState') or {}).get('code') or '') in selected_codes]
+          selected_by=collections.Counter(str(r.get('venue') or '') for r in selected)
+          skips=collections.Counter(str(r.get('venue') or '') for r in rows if (r.get('publicState') or {}).get('code')=='skip')
+          print('PUBLIC',{'rows':len(rows),'venues':dict(venues),'states':dict(states),'selectedByVenue':dict(selected_by),'skipByVenue':dict(skips)})
+          good=len(rows)==36 and len(venues)==3 and all(v==12 for v in venues.values()) and all(selected_by.get(v)==5 for v in venues) and all(skips.get(v)==7 for v in venues)
+          if not good: sys.exit(1)
+          PY
+            then ok=1; break; fi
+            sleep 15
+          done
+          test "$ok" = 1
+
+      - name: Audit real previews finals and bet rows
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Give the minute Worker several cycles after selection freeze.
+          sleep 180
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key='live_deadline_driver:2026-09-05' OR state_key LIKE 'worker_live_preview:2026-09-05-%' OR state_key LIKE 'worker_live_final:2026-09-05-%' ORDER BY updated_at DESC LIMIT 80; SELECT b.race_id,COUNT(*) AS rows,COUNT(DISTINCT b.course) AS courses,SUM(CASE WHEN b.source_prediction_id=-2 THEN 1 ELSE 0 END) AS liveRows,MIN(b.locked_at) AS lockedAt FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date='2026-09-05' GROUP BY b.race_id ORDER BY MIN(r.start_time_utc);" | tee /tmp/live-audit.json
+          python3 - <<'PY'
+          import json,datetime as dt
+          data=json.load(open('/tmp/live-audit.json'))
+          groups=[]
+          def walk(v):
+              if isinstance(v,dict):
+                  if isinstance(v.get('results'),list): groups.append(v['results'])
+                  for x in v.values(): walk(x)
+              elif isinstance(v,list):
+                  for x in v: walk(x)
+          walk(data)
+          states=[]; bets=[]
+          for g in groups:
+              if any(isinstance(x,dict) and 'state_key' in x for x in g): states.extend(g)
+              if any(isinstance(x,dict) and 'liveRows' in x for x in g): bets.extend(g)
+          previews=[x for x in states if str(x.get('state_key','')).startswith('worker_live_preview:')]
+          finals=[x for x in states if str(x.get('state_key','')).startswith('worker_live_final:')]
+          drivers=[x for x in states if x.get('state_key')=='live_deadline_driver:2026-09-05']
+          bad_bets=[x for x in bets if int(x.get('rows') or 0)!=6 or int(x.get('courses') or 0)!=3 or int(x.get('liveRows') or 0)!=6]
+          official_bad=[]
+          for x in previews+finals:
+              try: p=json.loads(x.get('state_value') or '{}')
+              except Exception: continue
+              source=str(p.get('oddsSource') or '')
+              if source and source not in {'jra-fast-official','jra-crawl-official'}: official_bad.append((x.get('state_key'),source))
+          print('DRIVER_ROWS',len(drivers))
+          print('PREVIEW_ROWS',len(previews),'FINAL_ROWS',len(finals))
+          print('BET_RACES',len(bets),'BET_ROWS',bets)
+          if bad_bets: raise SystemExit(f'INVALID_BET_SHAPE:{bad_bets}')
+          if official_bad: raise SystemExit(f'NON_OFFICIAL_ODDS:{official_bad}')
+          if not drivers: raise SystemExit('LIVE_DRIVER_STATE_MISSING')
+          # A final is not required yet unless a target has entered its final window;
+          # preview/final presence is assessed against current timing below.
+          PY
+
+      - name: Timing-aware lifecycle check
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH s AS (SELECT json_extract(j.value,'$.raceId') AS race_id FROM rt_system_state st,json_each(st.state_value,'$.selected') j WHERE st.state_key='final_daily_selection:2026-09-05') SELECT r.race_id AS raceId,r.start_time_utc AS startTime,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS betRows,(SELECT COUNT(*) FROM rt_system_state st WHERE st.state_key='worker_live_preview:'||r.race_id) AS hasPreview,(SELECT COUNT(*) FROM rt_system_state st WHERE st.state_key='worker_live_final:'||r.race_id) AS hasFinal FROM s JOIN rt_races r ON r.race_id=s.race_id ORDER BY r.start_time_utc;" | tee /tmp/lifecycle.json
+          python3 - <<'PY'
+          import json,datetime as dt
+          data=json.load(open('/tmp/lifecycle.json'))
+          rows=[]
+          def walk(v):
+              if isinstance(v,dict):
+                  if isinstance(v.get('results'),list): rows.extend(v['results'])
+                  for x in v.values(): walk(x)
+              elif isinstance(v,list):
+                  for x in v: walk(x)
+          walk(data)
+          rows=[x for x in rows if isinstance(x,dict) and x.get('raceId')]
+          now=dt.datetime.now(dt.timezone.utc)
+          problems=[]
+          for r in rows:
+              start=dt.datetime.fromisoformat(str(r['startTime']).replace('Z','+00:00'))
+              mins=(start-now).total_seconds()/60
+              preview=int(r.get('hasPreview') or 0)>0
+              final=int(r.get('hasFinal') or 0)>0
+              betrows=int(r.get('betRows') or 0)
+              if 15 < mins <= 30 and (not final or betrows!=6): problems.append((r['raceId'],'final_due',round(mins,1),betrows,final))
+              elif 30 < mins <= 90 and not preview: problems.append((r['raceId'],'preview_due',round(mins,1),betrows,preview))
+              if mins < 15 and betrows not in (0,6): problems.append((r['raceId'],'partial_after_t15',round(mins,1),betrows))
+          print('LIFECYCLE',rows)
+          print('TIMING_PROBLEMS',problems)
+          if problems: raise SystemExit('RACE_DAY_LIFECYCLE_NOT_READY')
+          print('SEP5_RACE_DAY_RECOVERY_OK')
+          PY
