@@ -1,0 +1,37 @@
+name: Verify post-Aug9 production fallback
+on:
+  push:
+    branches: [audit-post-aug9-history-20260904]
+    paths:
+      - '.github/workflows/verify-post-aug9-production.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify frozen production history while D1 is quota-blocked
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          for d in 2026-08-15 2026-08-16 2026-08-22 2026-08-23 2026-08-29 2026-08-30; do
+            curl --fail --silent --show-error --connect-timeout 3 --max-time 12 -D /tmp/h -o /tmp/day.json "$base/api/public/day?date=$d"
+            source=$(tr -d '\r' </tmp/h | awk -F': ' 'tolower($1)=="x-race-history-source"{print $2}' | tail -1)
+            DATE="$d" SOURCE="$source" node - <<'NODE'
+          const fs=require('fs');
+          const p=JSON.parse(fs.readFileSync('/tmp/day.json','utf8'));
+          if(p.ok!==true||p.date!==process.env.DATE||!Array.isArray(p.races)||p.races.length!==36) throw new Error('bad day '+process.env.DATE);
+          if(process.env.SOURCE!=='post-aug9-public-snapshot-v1') throw new Error('not snapshot '+process.env.SOURCE);
+          const counts={}; for(const r of p.races){const c=r.publicState?.code||'none';counts[c]=(counts[c]||0)+1;}
+          console.log('DAY_OK',process.env.DATE,'races='+p.races.length,'states='+JSON.stringify(counts),'source='+process.env.SOURCE);
+          NODE
+          done
+          curl --fail --silent --show-error --connect-timeout 3 --max-time 12 -D /tmp/ph -o /tmp/perf.json "$base/api/public/daily-performance?date=2026-08-30"
+          node - <<'NODE'
+          const fs=require('fs'); const p=JSON.parse(fs.readFileSync('/tmp/perf.json','utf8'));
+          if(p.ok!==true||p.summary?.date!=='2026-08-30'||Number(p.summary?.targetRaces)!==15) throw new Error('bad performance fallback '+JSON.stringify(p.summary));
+          if(!Array.isArray(p.history)||!p.history.some(x=>x.date==='2026-08-15')||!p.history.some(x=>x.date==='2026-08-30')) throw new Error('history missing');
+          console.log('PERFORMANCE_OK','history='+p.history.map(x=>x.date).join(','),'targets='+p.summary.targetRaces,'hits='+p.summary.hitRaces,'source='+p.fallbackSource);
+          NODE
