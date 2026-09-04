@@ -13,30 +13,79 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install Wrangler
-        run: npm ci --prefer-offline --no-audit --no-fund
-      - name: Audit exact post-Aug9 dates in remote D1
+      - name: Export relevant D1 tables despite query quota
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+          CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
         shell: bash
         run: |
           set -euo pipefail
-          DATES="'2026-08-09','2026-08-15','2026-08-16','2026-08-22','2026-08-23','2026-08-29','2026-08-30'"
-          runq() {
-            local label="$1" sql="$2"
-            echo "===== ${label} ====="
-            npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$sql"
-          }
-          runq races "SELECT race_date,COUNT(*) AS races FROM rt_races WHERE race_date IN (${DATES}) GROUP BY race_date ORDER BY race_date;"
-          runq public_bets "SELECT r.race_date,COUNT(DISTINCT b.race_id) AS publicBetRaces,COUNT(b.id) AS publicBetRows,SUM(CASE WHEN b.source_prediction_id=-2 THEN 1 ELSE 0 END) AS liveRows,SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END) AS settledRows,SUM(CASE WHEN b.settlement_status='pending' THEN 1 ELSE 0 END) AS pendingRows FROM rt_races r LEFT JOIN rt_public_bets b ON b.race_id=r.race_id WHERE r.race_date IN (${DATES}) GROUP BY r.race_date ORDER BY r.race_date;"
-          runq legacy_bets "SELECT r.race_date,COUNT(DISTINCT b.race_id) AS legacyBetRaces,COUNT(*) AS legacyBetRows FROM rt_races r JOIN rt_bets b ON b.race_id=r.race_id WHERE r.race_date IN (${DATES}) GROUP BY r.race_date ORDER BY r.race_date;"
-          runq final_states "SELECT r.race_date,COUNT(*) AS finalStates FROM rt_system_state s JOIN rt_races r ON r.race_id=substr(s.state_key,19) WHERE s.state_key LIKE 'worker_live_final:%' AND r.race_date IN (${DATES}) GROUP BY r.race_date ORDER BY r.race_date;"
-          runq selections "SELECT state_key,length(state_value) AS bytes FROM rt_system_state WHERE state_key IN ('final_daily_selection:2026-08-09','final_daily_selection:2026-08-15','final_daily_selection:2026-08-16','final_daily_selection:2026-08-22','final_daily_selection:2026-08-23','final_daily_selection:2026-08-29','final_daily_selection:2026-08-30') ORDER BY state_key;"
-          runq public_dates_after_aug9 "SELECT r.race_date,COUNT(DISTINCT b.race_id) AS publicBetRaces,COUNT(*) AS publicBetRows FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date>='2026-08-09' GROUP BY r.race_date ORDER BY r.race_date;"
+          python3 - <<'PY'
+          import json, os, re, time, urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']
+          db=os.environ['CLOUDFLARE_D1_DATABASE_ID']
+          token=os.environ['CLOUDFLARE_API_TOKEN']
+          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/export'
+          headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'}
+          tables=['rt_races','rt_public_bets','rt_system_state']
+          def post(payload):
+              req=urllib.request.Request(url,data=json.dumps(payload).encode(),method='POST',headers=headers)
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  body=json.load(r)
+              if not body.get('success'):
+                  raise RuntimeError(json.dumps(body,ensure_ascii=False))
+              return body.get('result') or {}
+          first=post({'output_format':'polling','dump_options':{'no_schema':True,'tables':tables}})
+          bookmark=first.get('at_bookmark')
+          print('EXPORT_START',json.dumps({'status':first.get('status'),'bookmark':bookmark,'messages':first.get('messages')},ensure_ascii=False))
+          result=first
+          for attempt in range(60):
+              signed=(result.get('result') or {}).get('signed_url')
+              if signed:
+                  break
+              if result.get('status')=='error':
+                  raise RuntimeError('EXPORT_ERROR:'+str(result.get('error')))
+              if not bookmark:
+                  raise RuntimeError('EXPORT_BOOKMARK_MISSING')
+              time.sleep(2)
+              result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':{'no_schema':True,'tables':tables}})
+              print('EXPORT_POLL',attempt+1,result.get('status'),result.get('messages'))
+          signed=(result.get('result') or {}).get('signed_url')
+          if not signed:
+              raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
+          with urllib.request.urlopen(signed,timeout=180) as r:
+              data=r.read()
+          open('/tmp/postaug9.sql','wb').write(data)
+          print('EXPORT_BYTES',len(data))
+          text=data.decode('utf-8','replace')
+          dates=['2026-08-09','2026-08-15','2026-08-16','2026-08-22','2026-08-23','2026-08-29','2026-08-30']
+          counts={d:{'rt_races':0,'rt_public_bets':0,'rt_system_state':0} for d in dates}
+          selected_lines=[]
+          for line in text.splitlines():
+              table=None
+              if 'INSERT INTO "rt_races"' in line or 'INSERT INTO rt_races' in line: table='rt_races'
+              elif 'INSERT INTO "rt_public_bets"' in line or 'INSERT INTO rt_public_bets' in line: table='rt_public_bets'
+              elif 'INSERT INTO "rt_system_state"' in line or 'INSERT INTO rt_system_state' in line: table='rt_system_state'
+              if not table: continue
+              matched=False
+              for d in dates:
+                  if d in line:
+                      counts[d][table]+=1
+                      matched=True
+              if matched: selected_lines.append(line)
+          open('/tmp/postaug9-filtered.sql','w',encoding='utf-8').write('\n'.join(selected_lines)+'\n')
+          print('POST_AUG9_EXPORT_COUNTS',json.dumps(counts,ensure_ascii=False,sort_keys=True))
+          print('FILTERED_LINES',len(selected_lines))
+          if not any(counts[d]['rt_public_bets'] for d in dates):
+              raise RuntimeError('NO_POST_AUG9_PUBLIC_BETS_IN_EXPORT')
+          PY
+      - name: Summarize filtered export
+        shell: bash
+        run: |
+          set -euo pipefail
+          wc -l /tmp/postaug9-filtered.sql
+          grep -E "2026-08-(09|15|16|22|23|29|30)" /tmp/postaug9-filtered.sql | head -20 || true
