@@ -1,12 +1,6 @@
 name: Verify real production homepage
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "src/public-site-entry-v40.ts"
-      - "wrangler.jsonc"
-      - ".github/workflows/verify-production-home-v39.yml"
   workflow_dispatch:
 
 permissions:
