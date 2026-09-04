@@ -4,6 +4,13 @@ import fallbackSite from "./public-site-entry-v33.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v37-original-home-restored-20260905";
+const FORBIDDEN_RECOVERY_TEXT = [
+  "データ取得を再試行しています",
+  "データを再接続しています",
+  "データベースへ接続できない",
+  "表示データの読み込みに失敗しました",
+  "表示系の自動復旧モードです",
+] as const;
 
 // Safety-verifier markers. The actual maintenance implementation remains in
 // public-site-entry-v37-core.ts and is delegated unchanged from scheduled().
@@ -16,63 +23,88 @@ async function pause(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchOriginalHome(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  let lastResponse: Response | null = null;
+function normalHomeResponse(response: Response, html: string, path: string): Response {
+  const headers = new Headers(response.headers);
+  headers.delete("x-race-resilient-home");
+  headers.delete("x-race-emergency-fallback");
+  headers.set("cache-control", "no-store, max-age=0");
+  headers.set("x-race-ui-version", UI_VERSION);
+  headers.set("x-race-home-path", path);
+  return new Response(html, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function isRecoveryScreen(response: Response, html: string): boolean {
+  if (response.status >= 500) return true;
+  if (response.headers.get("x-race-resilient-home")) return true;
+  if (response.headers.get("x-race-emergency-fallback")) return true;
+  return FORBIDDEN_RECOVERY_TEXT.some((text) => html.includes(text));
+}
+
+async function fetchNormalHome(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   let lastError: unknown = null;
 
-  // Primary: exactly the pre-recovery normal homepage renderer.
-  // Retry the same renderer only for transient failures; do not replace the
-  // homepage with a custom "retrying" or "reconnecting" screen.
+  // Keep all normal v37 homepage behavior (next-bet panel, JRA official odds,
+  // current race state). The only thing rejected here is the newly invented
+  // recovery/retry homepage.
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      const response = await publicSite.fetch(request, env, ctx);
-      lastResponse = response;
-      if (response.status < 500) {
-        const headers = new Headers(response.headers);
-        headers.set("cache-control", "no-store, max-age=0");
-        headers.set("x-race-ui-version", UI_VERSION);
-        headers.set("x-race-home-path", "v37-original-v34");
-        return new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers,
-        });
+      const response = await core.fetch(request, env, ctx);
+      const contentType = response.headers.get("content-type") ?? "";
+      const html = contentType.includes("text/html") ? await response.text() : "";
+      if (html && !isRecoveryScreen(response, html)) {
+        return normalHomeResponse(response, html, "v37-normal");
       }
+      console.error("V37_RECOVERY_HOME_REJECTED", attempt + 1, response.status);
     } catch (error) {
       lastError = error;
-      console.error("ORIGINAL_HOME_V34_FAILED", attempt + 1, error);
+      console.error("V37_NORMAL_HOME_FAILED", attempt + 1, error);
     }
     if (attempt < 2) await pause(150 * (attempt + 1));
   }
 
-  // If only a v34 enhancement failed, keep the immediately preceding normal
-  // UI instead of showing a newly invented recovery page.
-  try {
-    const response = await fallbackSite.fetch(request, env, ctx);
-    const headers = new Headers(response.headers);
-    headers.set("cache-control", "no-store, max-age=0");
-    headers.set("x-race-ui-version", UI_VERSION);
-    headers.set("x-race-home-path", "v37-original-v33-fallback");
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
-  } catch (error) {
-    lastError = error;
-    console.error("ORIGINAL_HOME_V33_FAILED", error);
+  // If v37's enhancement path is temporarily unavailable, use the previous
+  // normal renderer. Do not substitute a special recovery page.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await publicSite.fetch(request, env, ctx);
+      const contentType = response.headers.get("content-type") ?? "";
+      const html = contentType.includes("text/html") ? await response.text() : "";
+      if (html && !isRecoveryScreen(response, html)) {
+        return normalHomeResponse(response, html, "v37-normal-v34-fallback");
+      }
+    } catch (error) {
+      lastError = error;
+      console.error("V34_NORMAL_HOME_FAILED", attempt + 1, error);
+    }
+    if (attempt < 1) await pause(200);
   }
 
-  // Never render the custom recovery UI again.
-  if (lastResponse) return lastResponse;
-  console.error("ORIGINAL_HOME_UNAVAILABLE", lastError);
-  return new Response("一時的に表示データを取得できません。", {
+  try {
+    const response = await fallbackSite.fetch(request, env, ctx);
+    const contentType = response.headers.get("content-type") ?? "";
+    const html = contentType.includes("text/html") ? await response.text() : "";
+    if (html && !isRecoveryScreen(response, html)) {
+      return normalHomeResponse(response, html, "v37-normal-v33-fallback");
+    }
+  } catch (error) {
+    lastError = error;
+    console.error("V33_NORMAL_HOME_FAILED", error);
+  }
+
+  // There is deliberately no full-screen retry/reconnect UI here anymore.
+  console.error("NORMAL_HOME_UNAVAILABLE", lastError);
+  return new Response("一時的にページを表示できません。", {
     status: 503,
     headers: {
       "content-type": "text/plain; charset=utf-8",
       "cache-control": "no-store, max-age=0",
       "retry-after": "10",
       "x-race-ui-version": UI_VERSION,
+      "x-race-home-path": "v37-normal-unavailable",
     },
   });
 }
@@ -84,7 +116,7 @@ export default {
       return new Response("NOT_FOUND", { status: 404, headers: { "cache-control": "no-store" } });
     }
     if (request.method === "GET" && pathname === "/") {
-      return fetchOriginalHome(request, env, ctx);
+      return fetchNormalHome(request, env, ctx);
     }
     return core.fetch(request, env, ctx);
   },
