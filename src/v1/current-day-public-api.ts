@@ -143,8 +143,25 @@ export function projectCurrentPublicState(
   return { code: "pending", label: "判定中", deadline: "対象レースを判定中" };
 }
 
+async function selectedBetRows(db: D1Database, raceIds: string[]): Promise<CurrentBetRow[]> {
+  if (!raceIds.length) return [];
+  const placeholders = raceIds.map(() => "?").join(",");
+  const result = await db.prepare(`
+    SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,b.return_yen AS returnYen,
+           b.settlement_status AS settlementStatus,r.refund_horse_nos_json AS refundsJson
+    FROM rt_public_bets b
+    JOIN rt_races r ON r.race_id=b.race_id
+    WHERE b.race_id IN (${placeholders})
+    ORDER BY b.race_id,b.id
+  `).bind(...raceIds).all<CurrentBetRow>();
+  return result.results ?? [];
+}
+
 export async function fastCurrentDayResponse(db: D1Database, date: string, now = new Date()): Promise<Response> {
-  const [raceResult, selectionRow, betResult] = await Promise.all([
+  // The race list and frozen selection are the minimum data required to render a
+  // race day. Bet rows are an optional enrichment: a slow/temporarily failing bet
+  // lookup must never take the entire current-day API or home screen offline.
+  const [raceResult, selectionRow] = await Promise.all([
     db.prepare(`
       SELECT race_id AS raceId,race_date AS raceDate,venue,race_no AS raceNo,race_name AS raceName,
              start_time_jst AS startTimeJst,start_time_utc AS startTimeUtc,surface,distance_m AS distanceM,status
@@ -152,17 +169,22 @@ export async function fastCurrentDayResponse(db: D1Database, date: string, now =
     `).bind(date).all<CurrentRaceRow>(),
     db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
       .bind(`final_daily_selection:${date}`).first<{ value: string | null }>(),
-    db.prepare(`
-      SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,b.return_yen AS returnYen,
-             b.settlement_status AS settlementStatus,r.refund_horse_nos_json AS refundsJson
-      FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
-      WHERE r.race_date=? ORDER BY b.race_id,b.id
-    `).bind(date).all<CurrentBetRow>(),
   ]);
 
   const frozen = selectedIds(selectionRow?.value);
+  let betRows: CurrentBetRow[] = [];
+  let betStateAvailable = true;
+  if (frozen) {
+    try {
+      betRows = await selectedBetRows(db, [...frozen]);
+    } catch (error) {
+      betStateAvailable = false;
+      console.error("CURRENT_DAY_BET_ENRICHMENT_FAILED", date, error);
+    }
+  }
+
   const byRace = new Map<string, CurrentBetRow[]>();
-  for (const row of betResult.results ?? []) {
+  for (const row of betRows) {
     const list = byRace.get(String(row.raceId)) ?? [];
     list.push({ ...row, returnYen: row.returnYen === null ? null : Number(row.returnYen) });
     byRace.set(String(row.raceId), list);
@@ -174,10 +196,16 @@ export async function fastCurrentDayResponse(db: D1Database, date: string, now =
     publicState: projectCurrentPublicState(row, frozen, byRace.get(String(row.raceId)) ?? [], now.getTime()),
   }));
 
-  return Response.json({ ok: true, date, races }, {
+  return Response.json({
+    ok: true,
+    date,
+    races,
+    betStateAvailable: frozen ? betStateAvailable : true,
+  }, {
     headers: {
       "cache-control": "no-store, max-age=0",
-      "x-race-current-day-path": "direct-d1-v2-t15-start-t10-final",
+      "x-race-current-day-path": "direct-d1-v3-resilient-bet-enrichment",
+      "x-race-current-day-bet-state": frozen ? (betStateAvailable ? "loaded" : "degraded") : "not-needed",
     },
   });
 }
