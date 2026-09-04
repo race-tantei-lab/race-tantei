@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "src/public-site-entry-v39.ts"
+      - "src/public-site-entry-v40.ts"
       - "wrangler.jsonc"
       - ".github/workflows/verify-production-home-v39.yml"
   workflow_dispatch:
@@ -17,12 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Verify v39 homepage is really served
+      - name: Verify clean v40 homepage is really served
         shell: bash
         run: |
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev'
-          expected='ten-year-completed-public-v39-exact-date-home-20260904'
+          expected='ten-year-completed-public-v40-no-race-day-stable-20260904'
 
           for attempt in $(seq 1 36); do
             code=$(curl --silent --show-error --connect-timeout 3 --max-time 12 -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "${base}/?verify=${GITHUB_RUN_ID}-${attempt}" || true)
@@ -39,15 +39,15 @@ jobs:
 
             echo "attempt=${attempt} code=${code} ui=${ui:-missing} path=${path:-missing} fallback=${fallback:-none} degraded=${degraded:-0} old_text=${old_text} normal_nav=${normal_nav} next_panel=${next_panel}"
 
-            if [[ "$code" = '200' && "$ui" = "$expected" && "$path" = 'v39-exact-date' && -z "$fallback" && "$old_text" = '0' && "$normal_nav" = '1' && "$next_panel" = '1' ]]; then
-              echo 'PRODUCTION_HOME_V39_OK'
+            if [[ "$code" = '200' && "$ui" = "$expected" && ( "$path" = 'v40-no-race-day' || "$path" = 'v40-race-day-v39' ) && -z "$fallback" && -z "$degraded" && "$old_text" = '0' && "$normal_nav" = '1' && "$next_panel" = '1' ]]; then
+              echo 'PRODUCTION_HOME_V40_CLEAN_OK'
               grep -Eo '<h2>[^<]+' /tmp/home.html | head -5 || true
               exit 0
             fi
             sleep 5
           done
 
-          echo 'Production homepage did not satisfy v39 contract.' >&2
+          echo 'Production homepage did not satisfy clean v40 contract.' >&2
           echo '--- headers ---' >&2
           cat /tmp/home.headers >&2 || true
           echo '--- body head ---' >&2
