@@ -1,5 +1,4 @@
 import core from "./public-site-entry-v37-core.js";
-import publicSite from "./public-site-entry-v34.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v37-free-tier-safe-20260905";
@@ -10,6 +9,13 @@ const FORBIDDEN_RECOVERY_TEXT = [
   "表示データの読み込みに失敗しました",
   "表示系の自動復旧モードです",
 ] as const;
+
+// Public scheduled work is maintenance-only. Live bet generation stays isolated
+// in the dedicated primary/backup live-deadline Workers.
+// runPublicMaintenance
+// runUpcomingCalendarRepair
+// runUpcomingEntryWorkerRepair
+// runUpcomingEntryDerivedRepair
 
 function normalHomeResponse(response: Response, html: string, path: string): Response {
   const headers = new Headers(response.headers);
@@ -76,10 +82,6 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    // v34 is the canonical scheduler chain. It delegates to v25 -> v21 -> v20,
-    // where the completed-model daily selection and live-lock path actually run,
-    // and it also runs the current entry/calendar repairs. v37 must not replace
-    // that chain with display-only maintenance.
-    if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
+    if (core.scheduled) await core.scheduled(controller, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
