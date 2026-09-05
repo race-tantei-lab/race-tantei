@@ -1,0 +1,7 @@
+name: last marker
+on: workflow_dispatch
+jobs:
+  last:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo last
