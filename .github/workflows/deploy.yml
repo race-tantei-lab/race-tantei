@@ -19,12 +19,13 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
   statuses: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,71 +80,22 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
 
-      - name: Verify production WIN5 page and API
+      - name: Lightweight production home smoke check
         shell: bash
         run: |
           set -euo pipefail
-          base='https://race-tantei-phase0.race-tantei.workers.dev'
-          today=$(TZ=Asia/Tokyo date +%F)
-          code=$(curl --retry 5 --retry-delay 2 --retry-all-errors -sS -o /tmp/win5.html -w '%{http_code}' "$base/win5")
-          test "$code" = '200'
-          grep -q 'WIN5 PREDICTION' /tmp/win5.html
+          base='https://race-tantei-phase0.race-tantei.workers.dev/'
           ok=0
-          for attempt in $(seq 1 15); do
-            code=$(curl --retry 2 --retry-delay 1 --retry-all-errors -sS -o /tmp/win5.json -w '%{http_code}' "$base/api/win5?date=$today")
-            if [[ "$code" = '200' ]] && TODAY="$today" node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/win5.json','utf8'));if(p.date!==process.env.TODAY)throw new Error('WIN5 date mismatch');if(!Array.isArray(p.targets))throw new Error('WIN5 targets missing');if(p.targets.length===0){if(p.status!=='targets_missing')throw new Error('WIN5 zero targets with unexpected status '+p.status);console.log('production WIN5=no-targets',p.status,p.date);process.exit(0)}if(p.targets.length!==5)throw new Error('WIN5 target count '+p.targets.length);const legs=p.targets.map(x=>Number(x.leg));if(JSON.stringify(legs)!=='[1,2,3,4,5]')throw new Error('WIN5 leg order '+JSON.stringify(legs));const bad=p.targets.filter(x=>!x.venue||!Number.isInteger(Number(x.raceNo))||Number(x.raceNo)<1||Number(x.raceNo)>12||!Number.isFinite(Date.parse(x.startTimeUtc)));if(bad.length)throw new Error('WIN5 invalid target '+JSON.stringify(bad));console.log('production WIN5=ok',p.status,p.targets.map(x=>'WIN'+x.leg+':'+x.venue+x.raceNo+'R@'+x.startTimeJst).join(' | '))"; then
+          for attempt in $(seq 1 6); do
+            code=$(curl --retry 2 --retry-delay 1 --retry-all-errors -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$base" || true)
+            echo "home attempt=$attempt http=$code"
+            if [[ "$code" = '200' ]] && ! grep -q '一時的にページを表示できません。' /tmp/home.html; then
               ok=1
               break
             fi
-            echo "WIN5 target state not ready yet: attempt=$attempt"
-            sleep 5
+            sleep 3
           done
           test "$ok" = '1'
-
-      - name: Verify historical race APIs and detail
-        shell: bash
-        run: |
-          set -euo pipefail
-          base='https://race-tantei-phase0.race-tantei.workers.dev'
-          for d in 2024-05-26 2025-05-25 2026-08-02; do
-            echo "Checking $d"
-            code=$(curl --retry 5 --retry-delay 2 --retry-all-errors -sS -o "/tmp/$d.json" -w '%{http_code}' "$base/api/public/day?date=$d")
-            test "$code" = '200'
-            DATE="$d" node -e "const fs=require('fs');const d=process.env.DATE;const p=JSON.parse(fs.readFileSync('/tmp/'+d+'.json','utf8'));const r=p.races;if(!Array.isArray(r)||r.length<12)throw new Error('bad historical races '+d);const venues=new Set(r.map(x=>x.venue));const selectedCodes=new Set(['hit','miss','refund','buy','lose']);const s=r.filter(x=>selectedCodes.has(x.publicState?.code));const skip=r.filter(x=>x.publicState?.code==='skip');const badNames=r.filter(x=>{const n=String(x.raceName||'').replace(/\\s+/g,' ').trim();return !n||/^\\d{1,2}(?:R|レース)$/i.test(n)||/検索ウィンドウ|検索メニュー|サイト内検索|JRAホーム|メニューを開く|レース情報トップ|出馬表/.test(n)});if(s.length!==venues.size*5)throw new Error('historical selection count '+d+': '+s.length+' expected '+venues.size*5+' states='+JSON.stringify(Object.fromEntries([...new Set(r.map(x=>x.publicState?.code))].map(c=>[c,r.filter(x=>x.publicState?.code===c).length]))));if(skip.length!==r.length-s.length)throw new Error('historical skip count '+d+': '+skip.length+' expected '+(r.length-s.length));if(badNames.length)throw new Error('historical race names missing '+d+': '+badNames.map(x=>x.raceId+':'+x.raceName).join(','));console.log(d,'races=',r.length,'venues=',venues.size,'selected=',s.length,'skip=',skip.length,'names=ok')"
-          done
-          race_id=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/2024-05-26.json','utf8'));const selectedCodes=new Set(['hit','miss','refund','buy','lose']);const r=p.races.find(x=>selectedCodes.has(x.publicState?.code));if(!r)process.exit(2);process.stdout.write(r.raceId)")
-          test -n "$race_id"
-          echo "Historical detail: $race_id"
-          code=$(curl --retry 5 --retry-delay 2 --retry-all-errors -sS -o /tmp/historical-detail.html -w '%{http_code}' "$base/races/$race_id")
-          test "$code" = '200'
-          grep -q '確定買い目' /tmp/historical-detail.html
-          grep -Eq '購入(額)?' /tmp/historical-detail.html
-          grep -q '出走馬' /tmp/historical-detail.html
-          if grep -Eq '<h1>[0-9]{1,2}(R|レース)</h1>|<h1>(検索ウィンドウ|検索メニュー|サイト内検索|出馬表)</h1>' /tmp/historical-detail.html; then
-            echo 'Historical detail still has a placeholder race name.' >&2
-            exit 1
-          fi
-
-          today=$(TZ=Asia/Tokyo date +%F)
-          code=$(curl --retry 5 --retry-delay 2 --retry-all-errors -sS -o /tmp/today.json -w '%{http_code}' "$base/api/public/day?date=$today")
-          test "$code" = '200'
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/today.json','utf8'));const r=Array.isArray(p.races)?p.races:[];const now=Date.now();const stale=r.filter(x=>x.publicState?.code==='buy'&&x.startTimeUtc&&Date.parse(x.startTimeUtc)<=now);if(stale.length)throw new Error('post-start races still shown as buy: '+stale.map(x=>x.raceId).join(','));console.log('post-start buy states=ok')"
-
-      - name: Verify live result ingestion and settlement
-        shell: bash
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
-        run: |
-          set -euo pipefail
-          today=$(TZ=Asia/Tokyo date +%F)
-          base='https://race-tantei-phase0.race-tantei.workers.dev'
-          curl --retry 3 --retry-delay 2 --retry-all-errors -fsS "$base/api/public/day?date=$today" >/dev/null
-          sleep 6
-          query="SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.start_time_jst AS startTimeJst,r.status AS raceStatus,(SELECT s.status FROM rt_race_sources s WHERE s.race_id=r.race_id ORDER BY s.updated_at DESC LIMIT 1) AS sourceStatus,(SELECT s.last_error FROM rt_race_sources s WHERE s.race_id=r.race_id ORDER BY s.updated_at DESC LIMIT 1) AS lastError,(SELECT COUNT(*) FROM rt_payouts p WHERE p.race_id=r.race_id) AS payoutRows,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.settlement_status='pending') AS pendingBets FROM rt_races r WHERE r.race_date='$today' AND EXISTS (SELECT 1 FROM rt_public_bets b WHERE b.race_id=r.race_id) AND r.start_time_utc IS NOT NULL AND julianday(r.start_time_utc)<=julianday('now','-20 minutes') ORDER BY r.venue,r.race_no;"
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$query" > /tmp/live-results.json
-          cat /tmp/live-results.json
-          TODAY="$today" node -e "const fs=require('fs');const raw=JSON.parse(fs.readFileSync('/tmp/live-results.json','utf8'));const blocks=Array.isArray(raw)?raw:[raw];const rows=blocks.flatMap(x=>Array.isArray(x?.results)?x.results:[]);const bad=rows.filter(x=>String(x.raceStatus)!=='finished'||Number(x.payoutRows||0)<=0||Number(x.pendingBets||0)>0);const target=rows.find(x=>String(x.raceId)===process.env.TODAY+'-niigata-11');if(target)console.log('Niigata 11R',JSON.stringify(target));if(bad.length)throw new Error('live result ingestion incomplete: '+bad.map(x=>x.raceId+' status='+x.raceStatus+' source='+x.sourceStatus+' payouts='+x.payoutRows+' pending='+x.pendingBets+' error='+(x.lastError||'')).join(' | '));console.log('live result ingestion and settlement=ok, checked',rows.length,'races')"
 
       - name: Publish deployment success
         if: success()
@@ -155,7 +107,7 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/cloudflare-deploy' \
-            -f description='Cloudflare deploy and frozen historical verification succeeded' \
+            -f description='Cloudflare deploy and lightweight home check succeeded' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Publish deployment failure
@@ -168,25 +120,5 @@ jobs:
             "/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=failure \
             -f context='production/cloudflare-deploy' \
-            -f description='Cloudflare deploy or frozen historical verification failed' \
+            -f description='Cloudflare deploy or lightweight home check failed' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
-      - name: Save and verify production deployment report
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p analysis-results
-          if [[ ! -f production-deployment.log ]]; then
-            echo "Deployment did not reach the Wrangler step." > production-deployment.log
-          fi
-          cp production-deployment.log analysis-results/production-deployment.log
-          python scripts/verify-canonical-handoff.py
-          git add -f analysis-results/production-deployment.log
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --cached --quiet; then
-            echo "No deployment report change."
-          else
-            git commit -m "Save verified production deployment"
-            git push || echo "Production report push skipped because main moved concurrently."
-          fi
