@@ -1,0 +1,83 @@
+name: Diagnose free-tier D1 via export
+
+on:
+  push:
+    branches: [diagnose-free-tier-20260905]
+    paths:
+      - '.github/workflows/diagnose-free-tier-export.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Export production D1 and inspect indexes/query plans
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+          CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, sqlite3, time, urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; dbid=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{dbid}/export'
+          headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'}
+          tables=['rt_races','rt_runners','rt_results','rt_public_bets','rt_system_state','rt_race_sources','rt_ml_feature_meta','rt_ml_feature_chunk','rt_ml_model_meta','rt_ml_model_chunk','rt_selection_state_meta','rt_selection_state_chunk']
+          def post(payload):
+              req=urllib.request.Request(url,data=json.dumps(payload).encode(),method='POST',headers=headers)
+              with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
+              if not body.get('success'): raise RuntimeError(json.dumps(body,ensure_ascii=False))
+              return body.get('result') or {}
+          result=post({'output_format':'polling','dump_options':{'tables':tables}}); bookmark=result.get('at_bookmark')
+          for _ in range(90):
+              signed=(result.get('result') or {}).get('signed_url')
+              if signed: break
+              if not bookmark: raise RuntimeError('EXPORT_BOOKMARK_MISSING')
+              time.sleep(2)
+              result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':{'tables':tables}})
+          signed=(result.get('result') or {}).get('signed_url')
+          if not signed: raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
+          with urllib.request.urlopen(signed,timeout=240) as r: sql=r.read().decode('utf-8')
+          print('EXPORT_SQL_BYTES',len(sql.encode()))
+          con=sqlite3.connect(':memory:'); con.executescript(sql); con.row_factory=sqlite3.Row
+          def exists(t): return con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(t,)).fetchone() is not None
+          for t in tables:
+              if not exists(t):
+                  print('TABLE_MISSING',t); continue
+              n=con.execute(f'SELECT COUNT(*) AS n FROM {t}').fetchone()['n']
+              idx=[dict(x) for x in con.execute(f"PRAGMA index_list('{t}')")]
+              print('TABLE',t,'ROWS',n,'INDEXES',json.dumps(idx,ensure_ascii=False))
+          d='2026-09-05'
+          races=[dict(x) for x in con.execute("SELECT race_id,venue,race_no,start_time_utc,status FROM rt_races WHERE race_date=? ORDER BY start_time_utc",(d,))]
+          sel=con.execute("SELECT state_value,updated_at FROM rt_system_state WHERE state_key=?",(f'final_daily_selection:{d}',)).fetchone()
+          selected=[]
+          if sel:
+              try: selected=[str(x.get('raceId')) for x in json.loads(sel['state_value']).get('selected',[]) if x.get('raceId')]
+              except Exception as e: print('SELECTION_PARSE_ERROR',repr(e))
+          print('TODAY_RACES',len(races),json.dumps(races[:3]+races[-3:] if races else [],ensure_ascii=False))
+          print('TODAY_SELECTION',json.dumps({'exists':bool(sel),'updatedAt':sel['updated_at'] if sel else None,'count':len(selected),'ids':selected},ensure_ascii=False))
+          if exists('rt_public_bets'):
+              bets=[dict(x) for x in con.execute("SELECT race_id,course,bet_type,combination,settlement_status,source_prediction_id,locked_at FROM rt_public_bets WHERE race_id LIKE ? ORDER BY race_id,id",(d+'%',))]
+              print('TODAY_BETS',json.dumps({'rows':len(bets),'raceCount':len({x['race_id'] for x in bets}),'finalRows':sum(1 for x in bets if x['source_prediction_id']==-2),'races':sorted({x['race_id'] for x in bets})},ensure_ascii=False))
+          sample=(selected[0] if selected else (races[0]['race_id'] if races else ''))
+          plans=[]
+          if sample:
+              queries=[
+                ('public_by_race',"SELECT course,bet_type,combination FROM rt_public_bets WHERE race_id=?",(sample,)),
+                ('runners_by_race',"SELECT horse_no FROM rt_runners WHERE race_id=? ORDER BY horse_no",(sample,)),
+                ('results_by_race',"SELECT horse_no FROM rt_results WHERE race_id=?",(sample,)),
+                ('race_by_date',"SELECT race_id,start_time_utc FROM rt_races WHERE race_date=?",(d,)),
+              ]
+              for name,q,args in queries:
+                  if all(exists(t) for t in []): pass
+                  try: plans.append((name,[tuple(x) for x in con.execute('EXPLAIN QUERY PLAN '+q,args)]))
+                  except Exception as e: plans.append((name,[('ERROR',repr(e))]))
+          try: plans.append(('due_sources',[tuple(x) for x in con.execute("EXPLAIN QUERY PLAN SELECT entry_url FROM rt_race_sources WHERE status!='complete' AND next_fetch_at<=? ORDER BY CASE status WHEN 'awaiting_result' THEN 0 WHEN 'active' THEN 1 ELSE 2 END,next_fetch_at LIMIT 12",('9999-12-31T00:00:00Z',))]))
+          except Exception as e: plans.append(('due_sources',[('ERROR',repr(e))]))
+          for name,plan in plans: print('PLAN',name,json.dumps(plan,ensure_ascii=False))
+          PY
