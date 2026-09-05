@@ -12,48 +12,70 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
-      - name: Probe real race ids from public day API
+      - name: Require all current weekend race details
         shell: bash
         run: |
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev'
-          : > /tmp/detail-links.txt
+          : > /tmp/race-ids.txt
           for date in 2026-09-05 2026-09-06; do
-            curl -sS "$base/api/public/day?date=$date" -o "/tmp/day-$date.json"
+            code=$(curl -sS -o "/tmp/day-$date.json" -w '%{http_code}' "$base/api/public/day?date=$date")
+            [ "$code" = 200 ] || { echo "DAY_API_HTTP_${code}:$date"; exit 1; }
             python3 - "$date" <<'PY'
           import json,sys
           d=sys.argv[1]
           o=json.load(open(f'/tmp/day-{d}.json',encoding='utf-8'))
           races=o.get('races') or []
-          ids=[str(r.get('raceId') or '') for r in races if r.get('raceId')]
-          picks=[]
-          for rid in ids:
-            if rid.endswith('-01') or rid.endswith('-02') or rid.endswith('-12'):
-              picks.append(rid)
-          print('API_RACE_IDS',d,len(ids),'PICKS',picks[:9])
-          with open('/tmp/detail-links.txt','a') as f:
-            for rid in picks[:9]: f.write('/races/'+rid+'\n')
+          if o.get('ok') is not True or len(races)!=36:
+              raise SystemExit(f'DAY_API_INVALID:{d}:ok={o.get("ok")}:races={len(races)}')
+          ids=[str(r.get('raceId') or '') for r in races]
+          if len(set(ids))!=36 or any(not x for x in ids):
+              raise SystemExit(f'RACE_IDS_INVALID:{d}')
+          with open('/tmp/race-ids.txt','a') as f:
+              for rid in ids: f.write(rid+'\n')
+          print('DAY_OK',d,'RACES',len(ids))
           PY
           done
 
-          sort -u /tmp/detail-links.txt -o /tmp/detail-links.txt
-          while IFS= read -r path; do
-            [ -n "$path" ] || continue
-            echo "=== DETAIL $path ==="
+          total=$(wc -l < /tmp/race-ids.txt)
+          [ "$total" -eq 72 ] || { echo "DETAIL_EXPECTED_72_GOT_$total"; exit 1; }
+          failures=0
+          checked=0
+          while IFS= read -r rid; do
+            [ -n "$rid" ] || continue
+            path="/races/$rid"
             code=$(curl -L -sS -D /tmp/detail.h -o /tmp/detail.html -w '%{http_code}' "$base$path" || true)
-            echo "HTTP=$code BYTES=$(wc -c </tmp/detail.html)"
-            grep -iE '^(location|content-type|cache-control|x-race|cf-ray|server):' /tmp/detail.h || true
-            python3 - "$path" <<'PY'
+            checked=$((checked+1))
+            if [ "$code" != 200 ]; then
+              echo "DETAIL_HTTP_FAIL $rid HTTP=$code"
+              failures=$((failures+1))
+              continue
+            fi
+            python3 - "$rid" <<'PY' || failures=$((failures+1))
           import re,sys
-          p=sys.argv[1]
+          rid=sys.argv[1]
           s=open('/tmp/detail.html',encoding='utf-8',errors='replace').read()
-          print('PATH',p)
-          print('TITLE',re.findall(r'<title>(.*?)</title>',s,re.I|re.S)[:1])
-          phrases=['データ取得を一時的に再試行しています。','データ取得を一時的に再試行しています','データ取得を再試行しています','データを再接続しています','一時的にページを表示できません。','レースが見つかりません']
-          for x in phrases: print('PHRASE',x, x in s)
-          print('HAS_NORMAL_RACE',('race-title' in s) or ('確定買い目' in s) or ('予想買い目' in s) or ('出走馬' in s))
-          print('HEAD',repr(s[:500]))
+          forbidden=[
+            'データ取得を一時的に再試行しています。',
+            'データ取得を一時的に再試行しています',
+            'データ取得を再試行しています',
+            'データを再接続しています',
+            '一時的にページを表示できません。',
+            'レースが見つかりません',
+          ]
+          hits=[x for x in forbidden if x in s]
+          title=re.findall(r'<title>(.*?)</title>',s,re.I|re.S)
+          normal=('race-title' in s) and ('予想買い目' in s or '確定買い目' in s or '出走馬' in s or '見送り' in s)
+          if hits or not title or not normal:
+              print('DETAIL_BODY_FAIL',rid,'hits=',hits,'title=',title[:1],'normal=',normal)
+              raise SystemExit(1)
+          print('DETAIL_OK',rid,title[0])
           PY
-          done < /tmp/detail-links.txt
+          done < /tmp/race-ids.txt
+
+          echo "DETAIL_CHECKED=$checked FAILURES=$failures"
+          [ "$checked" -eq 72 ] || exit 1
+          [ "$failures" -eq 0 ] || exit 1
+          echo 'ALL_72_RACE_DETAILS_OK'
