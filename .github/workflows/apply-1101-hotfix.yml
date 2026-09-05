@@ -58,6 +58,7 @@ jobs:
           day='2026-09-05'
           now=datetime.now(timezone.utc)
 
+          total_rows={t:con.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0] for t in tables}
           races=[dict(r) for r in con.execute('SELECT race_id,race_date,venue,race_no,race_name,start_time_utc,status FROM rt_races WHERE race_date=? ORDER BY start_time_utc,venue,race_no',(day,))]
           sel=con.execute('SELECT state_value,updated_at FROM rt_system_state WHERE state_key=?',(f'final_daily_selection:{day}',)).fetchone()
           selected=[]
@@ -98,6 +99,7 @@ jobs:
 
           indexes={t:[dict(x) for x in con.execute(f"PRAGMA index_list('{t}')")] for t in tables}
           print('AUDIT_AT_UTC',now.isoformat())
+          print('TOTAL_TABLE_ROWS',json.dumps(total_rows,ensure_ascii=False))
           print('TODAY_RACES',len(races))
           print('TODAY_VENUES',json.dumps({v:sum(1 for r in races if r['venue']==v) for v in sorted({r['venue'] for r in races})},ensure_ascii=False))
           print('SELECTION',json.dumps({'exists':bool(sel),'updatedAt':sel['updated_at'] if sel else None,'count':len(selected),'raceIds':selected},ensure_ascii=False))
