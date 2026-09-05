@@ -20,11 +20,7 @@ function dateKey(ms) {
 export function currentWeekendDates(now = new Date()) {
   const jst = new Date(now.getTime() + 9 * 3600_000);
   const base = Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate());
-  const day = jst.getUTCDay();
-  if (day === 0) return [dateKey(base)];
-  const toSat = (6 - day + 7) % 7;
-  const sat = base + toSat * 86400_000;
-  return [dateKey(sat), dateKey(sat + 86400_000)];
+  return Array.from({ length: 4 }, (_, offset) => dateKey(base + offset * 86400_000));
 }
 
 async function d1(sql, params = []) {
@@ -63,36 +59,52 @@ async function saveRace(race) {
 
 export async function syncCurrentWeekendCalendarDirect(now = new Date(), options = {}) {
   const persist = options.persist !== false && process.env.JRA_CALENDAR_DISCOVERY_ONLY !== "1";
-  const dates = currentWeekendDates(now);
+  const candidates = currentWeekendDates(now);
+  const dates = [];
   const days = [];
   const meetings = [];
-  for (const raceDate of dates) {
-    const page = await fetchJraPage(officialCalendarUrl(raceDate));
-    const races = parseOfficialCalendar(page.html, raceDate, page.url);
-    const venues = new Set(races.map((race) => race.venue));
-    if (!races.length || races.length !== venues.size * 12) throw new Error(`JRA_CALENDAR_INCOMPLETE:${raceDate}:${races.length}:${venues.size}`);
-    if (persist) {
-      for (const race of races) await saveRace(race);
+  const skipped = [];
+  for (const raceDate of candidates) {
+    try {
+      const page = await fetchJraPage(officialCalendarUrl(raceDate));
+      const races = parseOfficialCalendar(page.html, raceDate, page.url);
+      const venues = new Set(races.map((race) => race.venue));
+      if (!races.length) {
+        skipped.push({ raceDate, reason: "NO_RACES" });
+        continue;
+      }
+      if (races.length !== venues.size * 12) throw new Error(`JRA_CALENDAR_INCOMPLETE:${raceDate}:${races.length}:${venues.size}`);
+      dates.push(raceDate);
+      if (persist) {
+        for (const race of races) await saveRace(race);
+      }
+      const seen = new Set();
+      for (const race of races) {
+        const key = `${race.raceDate}:${race.venue}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const venueCode = VENUE_CODES[race.venue];
+        if (!venueCode) throw new Error(`JRA_CALENDAR_UNKNOWN_VENUE:${race.venue}`);
+        meetings.push({
+          date: race.raceDate,
+          venue: race.venue,
+          venueCode,
+          meetingNo: Number(race.meetingNo),
+          meetingDay: Number(race.meetingDay),
+          calendarUrl: page.url,
+        });
+      }
+      days.push({ raceDate, races: races.length, venues: venues.size });
+    } catch (error) {
+      const text = error instanceof Error ? `${error.name}:${error.message}` : String(error);
+      if (/HTTP_404|NO_RACES|calendar/i.test(text) && !/INCOMPLETE/.test(text)) {
+        skipped.push({ raceDate, reason: text });
+        continue;
+      }
+      throw error;
     }
-    const seen = new Set();
-    for (const race of races) {
-      const key = `${race.raceDate}:${race.venue}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const venueCode = VENUE_CODES[race.venue];
-      if (!venueCode) throw new Error(`JRA_CALENDAR_UNKNOWN_VENUE:${race.venue}`);
-      meetings.push({
-        date: race.raceDate,
-        venue: race.venue,
-        venueCode,
-        meetingNo: Number(race.meetingNo),
-        meetingDay: Number(race.meetingDay),
-        calendarUrl: page.url,
-      });
-    }
-    days.push({ raceDate, races: races.length, venues: venues.size });
   }
-  const report = { generatedAtUtc: new Date().toISOString(), dates, days, meetings, persisted: persist };
+  const report = { generatedAtUtc: new Date().toISOString(), candidates, dates, days, meetings, skipped, persisted: persist };
   await globalThis.Bun?.write?.("current-weekend-calendar-sync.json", JSON.stringify(report, null, 2));
   return report;
 }
