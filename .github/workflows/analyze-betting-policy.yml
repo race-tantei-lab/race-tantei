@@ -2,18 +2,6 @@ name: Analyze 5R-plus betting policy
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/analyze-betting-policy.yml"
-      - "scripts/analyze-betting-policy.mjs"
-      - "scripts/analyze-betting-factors.mjs"
-      - "scripts/search-betting-policy-v2.mjs"
-      - "scripts/train-realized-ticket-edge.mjs"
-      - "scripts/train-runner-ranking-v2.mjs"
-      - "src/v1/**"
-      - "package.json"
 
 concurrency:
   group: analyze-5r-plus-betting-policy
@@ -126,7 +114,7 @@ jobs:
             fi
           done
           git config user.name "github-actions[bot]"
-          git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git diff --cached --quiet; then
             echo "No result change to commit."
           else
