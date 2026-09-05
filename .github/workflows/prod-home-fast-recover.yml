@@ -5,6 +5,9 @@ on:
     paths:
       - '.github/workflows/prod-home-fast-recover.yml'
   workflow_dispatch:
+  schedule:
+    - cron: '45 23 * * *'
+    - cron: '50 0 * * *'
 
 permissions:
   contents: write
@@ -16,7 +19,7 @@ concurrency:
 jobs:
   recover:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 8
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
@@ -32,7 +35,7 @@ jobs:
           cache: npm
       - run: npm ci --prefer-offline --no-audit --no-fund
 
-      - name: Export production race calendar without rows_read
+      - name: Export public production snapshot without rows_read
         shell: bash
         run: |
           set -euo pipefail
@@ -46,7 +49,7 @@ jobs:
             with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
             if not body.get('success'): raise RuntimeError(json.dumps(body,ensure_ascii=False))
             return body.get('result') or {}
-          opts={'tables':['rt_races']}
+          opts={'tables':['rt_races','rt_system_state','rt_public_bets']}
           result=post({'output_format':'polling','dump_options':opts}); bookmark=result.get('at_bookmark')
           for _ in range(90):
             signed=(result.get('result') or {}).get('signed_url')
@@ -56,19 +59,19 @@ jobs:
             result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':opts})
           signed=(result.get('result') or {}).get('signed_url')
           if not signed: raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
-          with urllib.request.urlopen(signed,timeout=120) as r: open('/tmp/prod-races.sql','wb').write(r.read())
-          print('EXPORT_BYTES',os.path.getsize('/tmp/prod-races.sql'))
+          with urllib.request.urlopen(signed,timeout=120) as r: open('/tmp/prod-public.sql','wb').write(r.read())
+          print('EXPORT_BYTES',os.path.getsize('/tmp/prod-public.sql'))
           PY
 
-      - name: Extend existing normal UI calendar with production races
+      - name: Extend normal UI calendar and build current-day fallback
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json,sqlite3
-          con=sqlite3.connect('/tmp/races.sqlite')
-          con.executescript(open('/tmp/prod-races.sql',encoding='utf-8').read())
-          rows=[
+          con=sqlite3.connect('/tmp/public.sqlite')
+          con.executescript(open('/tmp/prod-public.sql',encoding='utf-8').read())
+          calendar=[
             {'raceDate':r[0],'venue':r[1],'raceCount':int(r[2])}
             for r in con.execute("""
               SELECT race_date, venue, COUNT(*)
@@ -78,9 +81,8 @@ jobs:
               ORDER BY race_date, venue
             """).fetchall()
           ]
-          con.close()
-          if not rows: raise SystemExit('RECENT_CALENDAR_EMPTY')
-          dates=sorted({r['raceDate'] for r in rows})
+          if not calendar: raise SystemExit('RECENT_CALENDAR_EMPTY')
+          dates=sorted({r['raceDate'] for r in calendar})
           if '2026-09-05' not in dates: raise SystemExit('RECENT_CALENDAR_MISSING_2026_09_05')
 
           path='src/normal-home-snapshot.ts'
@@ -95,7 +97,7 @@ jobs:
           if start < 0 or end < 0: raise SystemExit('HOME_CALENDAR_MARKER_MISSING')
           existing=html[start:end]
           extra=[]
-          for row in rows:
+          for row in calendar:
             token=f'"raceDate":"{row["raceDate"]}","venue":"{row["venue"]}"'
             if token not in existing: extra.append(row)
           if extra:
@@ -105,18 +107,62 @@ jobs:
           if '"raceDate":"2026-09-05"' not in calendar_segment: raise SystemExit('PATCHED_CALENDAR_MISSING_2026_09_05')
           open(path,'w',encoding='utf-8').write('export const NORMAL_HOME_SNAPSHOT = '+json.dumps(html,ensure_ascii=False)+';\n')
           open('src/recent-home-calendar-snapshot.ts','w',encoding='utf-8').write(
-            'export const RECENT_HOME_CALENDAR_SNAPSHOT = '+json.dumps(rows,ensure_ascii=False,separators=(',',':'))+' as const;\n'
+            'export const RECENT_HOME_CALENDAR_SNAPSHOT = '+json.dumps(calendar,ensure_ascii=False,separators=(',',':'))+' as const;\n'
           )
-          print('RECENT_CALENDAR_ROWS',len(rows),'FIRST',dates[0],'LAST',dates[-1],'ADDED',len(extra))
+
+          recent_dates=[r[0] for r in con.execute("""
+            SELECT DISTINCT race_date
+            FROM rt_races
+            WHERE race_date >= date('now','-21 days') AND race_date <= date('now','+14 days')
+            ORDER BY race_date
+          """).fetchall()]
+          day_snapshot={}
+          for date in recent_dates:
+            races=[]
+            race_ids=[]
+            for r in con.execute("""
+              SELECT race_id,race_date,venue,race_no,race_name,start_time_jst,start_time_utc,surface,distance_m,status,refund_horse_nos_json
+              FROM rt_races WHERE race_date=? ORDER BY venue,race_no
+            """,(date,)).fetchall():
+              race_ids.append(str(r[0]))
+              races.append({
+                'raceId':str(r[0]),'raceDate':str(r[1]),'venue':str(r[2]),'raceNo':int(r[3]),
+                'raceName':r[4],'startTimeJst':r[5],'startTimeUtc':r[6],'surface':r[7],
+                'distanceM':None if r[8] is None else int(r[8]),'status':str(r[9]),'refundsJson':r[10],
+              })
+            state=con.execute("SELECT state_value FROM rt_system_state WHERE state_key=? LIMIT 1",(f'final_daily_selection:{date}',)).fetchone()
+            selection=state[0] if state else None
+            bets=[]
+            if race_ids:
+              marks=','.join('?' for _ in race_ids)
+              for b in con.execute(f"""
+                SELECT race_id,course,bet_type,combination,return_yen,settlement_status
+                FROM rt_public_bets WHERE race_id IN ({marks}) ORDER BY race_id,id
+              """,race_ids).fetchall():
+                bets.append({
+                  'raceId':str(b[0]),'course':str(b[1]),'betType':str(b[2]),'combination':str(b[3]),
+                  'returnYen':None if b[4] is None else int(b[4]),'settlementStatus':str(b[5]),
+                })
+            day_snapshot[date]={'selection':selection,'races':races,'bets':bets}
+          con.close()
+          if '2026-09-05' not in day_snapshot or len(day_snapshot['2026-09-05']['races']) != 36:
+            raise SystemExit('DAY_SNAPSHOT_0905_NOT_36')
+          open('src/recent-public-day-snapshot.ts','w',encoding='utf-8').write(
+            'export const RECENT_PUBLIC_DAY_SNAPSHOT = '+json.dumps(day_snapshot,ensure_ascii=False,separators=(',',':'))+' as const;\n'
+          )
+          print('RECENT_CALENDAR_ROWS',len(calendar),'FIRST',dates[0],'LAST',dates[-1],'ADDED',len(extra))
+          print('DAY_SNAPSHOT_DATES',recent_dates,'0905_RACES',len(day_snapshot['2026-09-05']['races']))
           PY
 
-      - name: Keep existing UI and merge current calendar at runtime
+      - name: Keep existing UI and add quota-safe race-day API fallback
         shell: bash
         run: |
           cat > src/public-site-entry-v37.ts <<'TS'
           import core from "./public-site-entry-v37-core.js";
           import { NORMAL_HOME_SNAPSHOT } from "./normal-home-snapshot.js";
           import { RECENT_HOME_CALENDAR_SNAPSHOT } from "./recent-home-calendar-snapshot.js";
+          import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
+          import { projectCurrentPublicState } from "./v1/current-day-public-api.js";
           import type { Env } from "./v1/types.js";
 
           const UI_VERSION = "ten-year-completed-public-v37-free-tier-safe-snapshot-20260905";
@@ -131,13 +177,20 @@ jobs:
           ] as const;
 
           type CalendarRow = { raceDate: string; venue: string; raceCount: number };
+          type SnapshotRace = {
+            raceId: string; raceDate: string; venue: string; raceNo: number; raceName: string | null;
+            startTimeJst: string | null; startTimeUtc: string | null; surface: string | null;
+            distanceM: number | null; status: string; refundsJson: string | null;
+          };
+          type SnapshotBet = {
+            raceId: string; course: string; betType: string; combination: string;
+            returnYen: number | null; settlementStatus: string;
+          };
+          type SnapshotDay = { selection: string | null; races: SnapshotRace[]; bets: SnapshotBet[] };
+          const DAY_SNAPSHOT = RECENT_PUBLIC_DAY_SNAPSHOT as unknown as Record<string, SnapshotDay>;
 
           // Public scheduled work remains maintenance-only. Race-bet generation is
           // owned exclusively by the isolated primary/backup live-deadline Workers.
-          // runPublicMaintenance
-          // runUpcomingCalendarRepair
-          // runUpcomingEntryWorkerRepair
-          // runUpcomingEntryDerivedRepair
 
           function hasForbidden(text: string): boolean {
             return FORBIDDEN_RECOVERY_TEXT.some((value) => text.includes(value));
@@ -206,6 +259,67 @@ jobs:
             });
           }
 
+          function parseSelection(raw: string | null): Set<string> | null {
+            if (!raw) return null;
+            try {
+              const parsed = JSON.parse(raw) as { selected?: Array<{ raceId?: unknown }> };
+              const ids = Array.isArray(parsed.selected) ? parsed.selected.map((row) => String(row?.raceId ?? "")).filter(Boolean) : [];
+              return ids.length ? new Set(ids) : null;
+            } catch { return null; }
+          }
+
+          function staticPublicDay(date: string): Response | null {
+            const day = DAY_SNAPSHOT[date];
+            if (!day?.races?.length) return null;
+            const frozen = parseSelection(day.selection);
+            const refundByRace = new Map(day.races.map((race) => [race.raceId, race.refundsJson]));
+            const byRace = new Map<string, Array<SnapshotBet & { refundsJson: string | null }>>();
+            for (const bet of day.bets) {
+              const list = byRace.get(bet.raceId) ?? [];
+              list.push({ ...bet, refundsJson: refundByRace.get(bet.raceId) ?? null });
+              byRace.set(bet.raceId, list);
+            }
+            const nowMs = Date.now();
+            const races = day.races.map((race) => ({
+              raceId: race.raceId,
+              raceDate: race.raceDate,
+              venue: race.venue,
+              raceNo: Number(race.raceNo),
+              raceName: race.raceName,
+              startTimeJst: race.startTimeJst,
+              startTimeUtc: race.startTimeUtc,
+              surface: race.surface,
+              distanceM: race.distanceM === null ? null : Number(race.distanceM),
+              status: race.status,
+              publicState: projectCurrentPublicState(race, frozen, byRace.get(race.raceId) ?? [], nowMs),
+            }));
+            return Response.json({ ok: true, date, races, betStateAvailable: true, fallbackSource: "recent-public-day-snapshot-v1" }, {
+              headers: {
+                "cache-control": "no-store, max-age=0",
+                "x-race-current-day-path": "recent-public-day-snapshot-v1",
+              },
+            });
+          }
+
+          async function fetchPublicDay(request: Request, env: Env, ctx: ExecutionContext, date: string): Promise<Response> {
+            let live: Response | null = null;
+            try {
+              live = await core.fetch(request, env, ctx);
+              const text = await live.text();
+              let payload: { races?: unknown } | null = null;
+              try { payload = JSON.parse(text) as { races?: unknown }; } catch { /* handled below */ }
+              if (live.ok && Array.isArray(payload?.races) && payload.races.length > 0) {
+                return new Response(text, { status: live.status, statusText: live.statusText, headers: live.headers });
+              }
+              const fallback = staticPublicDay(date);
+              if (fallback) return fallback;
+              return new Response(text, { status: live.status, statusText: live.statusText, headers: live.headers });
+            } catch (error) {
+              console.error("V37_PUBLIC_DAY_USING_SNAPSHOT", date, error);
+              return staticPublicDay(date) ?? new Response("NOT_FOUND", { status: 404 });
+            }
+          }
+
           async function fetchNormalHome(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
             const recentCalendar = await loadRecentCalendar(env);
             try {
@@ -225,8 +339,10 @@ jobs:
 
           export default {
             async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-              const pathname = new URL(request.url).pathname;
+              const url = new URL(request.url);
+              const pathname = url.pathname;
               if (pathname === "/_ops/live-tick") return new Response("NOT_FOUND", { status: 404, headers: { "cache-control": "no-store" } });
+              if (request.method === "GET" && pathname === "/api/public/day") return fetchPublicDay(request, env, ctx, url.searchParams.get("date") ?? "");
               if (request.method === "GET" && (pathname === "/" || pathname === "/index.html")) return fetchNormalHome(request, env, ctx);
               return core.fetch(request, env, ctx);
             },
@@ -241,7 +357,7 @@ jobs:
         shell: bash
         run: npx wrangler deploy --config wrangler.jsonc
 
-      - name: Verify production normal HTML and current calendar
+      - name: Verify production normal HTML and current race-day API
         shell: bash
         run: |
           set -euo pipefail
@@ -269,9 +385,28 @@ jobs:
           if venues != ['中山','札幌','阪神']: raise SystemExit(f'PROD_0905_VENUES_MISMATCH:{venues}')
           print('PRODUCTION_CALENDAR_LAST',dates[-1],'ROWS',len(calendar),'0905_VENUES',venues)
           PY
-          echo 'PRODUCTION_HOME_OK'
+          curl --max-time 10 -fsS -D /tmp/day.headers -o /tmp/day.json 'https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-09-05'
+          python3 - <<'PY'
+          import json
+          body=json.load(open('/tmp/day.json',encoding='utf-8'))
+          races=body.get('races') or []
+          if len(races) != 36: raise SystemExit(f'PROD_DAY_0905_RACE_COUNT:{len(races)}')
+          venues=sorted({r.get('venue','') for r in races})
+          if venues != ['中山','札幌','阪神']: raise SystemExit(f'PROD_DAY_0905_VENUES:{venues}')
+          print('PRODUCTION_DAY_0905_OK','RACES',len(races),'VENUES',venues,'SOURCE',body.get('fallbackSource','live-d1'))
+          PY
+          curl --max-time 10 -fsS -o /tmp/day-next.json 'https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-09-06'
+          python3 - <<'PY'
+          import json
+          body=json.load(open('/tmp/day-next.json',encoding='utf-8'))
+          races=body.get('races') or []
+          if len(races) != 36: raise SystemExit(f'PROD_DAY_0906_RACE_COUNT:{len(races)}')
+          print('PRODUCTION_DAY_0906_OK','RACES',len(races),'SOURCE',body.get('fallbackSource','live-d1'))
+          PY
+          echo 'PRODUCTION_HOME_AND_DAY_API_OK'
           grep -i '^x-race-home-path:' /tmp/prod.headers || true
-          wc -c /tmp/prod.html
+          grep -i '^x-race-current-day-path:' /tmp/day.headers || true
+          wc -c /tmp/prod.html /tmp/day.json
 
       - name: Persist verified recovery source
         shell: bash
@@ -279,8 +414,8 @@ jobs:
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/public-site-entry-v37.ts src/normal-home-snapshot.ts src/recent-home-calendar-snapshot.ts
+          git add src/public-site-entry-v37.ts src/normal-home-snapshot.ts src/recent-home-calendar-snapshot.ts src/recent-public-day-snapshot.ts
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'fix: include current production races in normal home calendar'
+          git commit -m 'fix: preserve current race-day display when D1 reads are capped'
           git pull --rebase origin main
           git push origin HEAD:main
