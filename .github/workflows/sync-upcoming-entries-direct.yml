@@ -3,16 +3,17 @@ run-name: Sync upcoming JRA entries directly · ${{ github.sha }}
 
 on:
   schedule:
-    - cron: "30 7 * * 4"          # Thu 16:30 JST: first published weekend entries
+    - cron: "30 7 * * 4"          # Thu 16:30 JST: first published upcoming entries
     - cron: "30 1,4,7,10 * * 5"  # Fri 10:30/13:30/16:30/19:30 JST
     - cron: "30 1,4,7,10 * * 6"  # Sat 10:30/13:30/16:30/19:30 JST
-    - cron: "30 1,4,7,10 * * 0"  # Sun 10:30/13:30/16:30/19:30 JST: prepare holiday Monday
-    - cron: "0 22 * * *"         # Daily 07:00 JST: same-day safety refresh; no-op when no race data is published
+    - cron: "30 1,4,7,10 * * 0"  # Sun 10:30/13:30/16:30/19:30 JST incl. holiday Monday
+    - cron: "0 22 * * *"         # Daily 07:00 JST: same-day safety refresh
   push:
     branches: [main]
     paths:
       - "src/v1/upcoming-entry-worker-repair.ts"
       - "scripts/find-current-jra-entry-anchor.mjs"
+      - "scripts/sync-current-weekend-calendar-direct.mjs"
       - "scripts/sync-upcoming-entries-direct.mjs"
       - "scripts/run-upcoming-entry-direct-sync.mjs"
       - "scripts/audit-upcoming-entry-readiness.py"
@@ -48,7 +49,7 @@ jobs:
         run: |
           npm ci
           npm run build:test
-      - name: Discover current weekend anchor and save entries
+      - name: Discover upcoming official JRA entries and save them
         run: node scripts/run-upcoming-entry-direct-sync.mjs
       - name: Audit saved races
         if: always()
