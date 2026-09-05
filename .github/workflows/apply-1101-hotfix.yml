@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/apply-1101-hotfix.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -14,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Export full production D1 and inspect scan risks
+      - name: Export production D1 without rows_read
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
@@ -23,72 +24,61 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p audit-output
-          python3 - <<'PY' | tee audit-output/prod-live-audit-20260905.txt
+          python3 - <<'PY'
           import json, os, sqlite3, time, urllib.request
-          from datetime import datetime, timezone
           account=os.environ['CLOUDFLARE_ACCOUNT_ID']; dbid=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
           url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{dbid}/export'
           headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'}
           def post(payload):
               req=urllib.request.Request(url,data=json.dumps(payload).encode(),method='POST',headers=headers)
               with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
-              if not body.get('success'): raise RuntimeError(json.dumps(body,ensure_ascii=False))
+              if not body.get('success'): raise RuntimeError(body)
               return body.get('result') or {}
-          opts={}
-          result=post({'output_format':'polling','dump_options':opts}); bookmark=result.get('at_bookmark')
+          tables=['rt_races','rt_public_bets','rt_system_state','rt_live_preview_archive','rt_official_odds_latest','rt_official_odds_snapshots']
+          result=post({'output_format':'polling','dump_options':{'tables':tables}}); bookmark=result.get('at_bookmark')
           for _ in range(120):
               signed=(result.get('result') or {}).get('signed_url')
               if signed: break
-              if not bookmark: raise RuntimeError('EXPORT_BOOKMARK_MISSING')
-              time.sleep(2); result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':opts})
+              time.sleep(2); result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':{'tables':tables}})
           signed=(result.get('result') or {}).get('signed_url')
           if not signed: raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
           with urllib.request.urlopen(signed,timeout=240) as r: sql=r.read().decode('utf-8')
           con=sqlite3.connect(':memory:'); con.executescript(sql); con.row_factory=sqlite3.Row
-          day='2026-09-05'; now=datetime.now(timezone.utc)
-          tables=[r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")]
-          counts={}
-          for t in tables:
-              try: counts[t]=con.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0]
-              except Exception as e: counts[t]=f'ERR:{e}'
-          key_tables=[t for t in ['rt_races','rt_runners','rt_results','rt_payouts','rt_public_bets','rt_system_state','rt_selection_state_meta','rt_selection_state_chunk'] if t in tables]
-          indexes={t:[dict(x) for x in con.execute(f"PRAGMA index_list('{t}')")] for t in key_tables}
-          plans={}
-          q={
-            'selection_structure':("SELECT venue,COUNT(*) AS races,SUM(CASE WHEN start_time_utc IS NOT NULL THEN 1 ELSE 0 END) AS timed,SUM(CASE WHEN EXISTS(SELECT 1 FROM rt_runners u WHERE u.race_id=r.race_id AND COALESCE(u.runner_status,'active')='active') THEN 1 ELSE 0 END) AS withRunners FROM rt_races r WHERE race_date=? GROUP BY venue ORDER BY venue",(day,)),
-            'public_bets_by_race':("SELECT course,bet_type,combination FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type,combination",('2026-09-05-hanshin-09',)),
-            'races_by_date':("SELECT race_id,start_time_utc FROM rt_races WHERE race_date=?",(day,)),
-            'upcoming_entry_join':("WITH per_race AS (SELECT r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no,SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS activeRunners,MAX(CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END) AS hasEntryUrl FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date=? GROUP BY r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no) SELECT * FROM per_race",('2026-09-06',)),
+          day='2026-09-05'; sel=con.execute('SELECT state_value FROM rt_system_state WHERE state_key=?',(f'final_daily_selection:{day}',)).fetchone()
+          selected=[]
+          if sel: selected=[str(x.get('raceId')) for x in json.loads(sel['state_value']).get('selected',[]) if x.get('raceId')]
+          selected=list(dict.fromkeys(selected)); ph=','.join('?' for _ in selected) or "''"
+          def schema(t): return [dict(x) for x in con.execute(f"PRAGMA table_info('{t}')")]
+          def rows_for(t):
+              cols={x['name'] for x in schema(t)}
+              if 'race_id' not in cols or not selected: return []
+              return [dict(x) for x in con.execute(f'SELECT * FROM {t} WHERE race_id IN ({ph}) ORDER BY race_id',selected)]
+          payload={
+            'selected':selected,
+            'races':[dict(x) for x in con.execute(f'SELECT race_id,venue,race_no,start_time_utc FROM rt_races WHERE race_id IN ({ph}) ORDER BY start_time_utc',selected)] if selected else [],
+            'publicBets':rows_for('rt_public_bets'),
+            'previewArchives':rows_for('rt_live_preview_archive'),
+            'officialOddsLatest':rows_for('rt_official_odds_latest'),
+            'officialOddsSnapshots':rows_for('rt_official_odds_snapshots'),
+            'schemas':{t:schema(t) for t in ['rt_live_preview_archive','rt_official_odds_latest','rt_official_odds_snapshots']},
+            'indexes':{t:[dict(x) for x in con.execute(f"PRAGMA index_list('{t}')")] for t in ['rt_races','rt_public_bets','rt_live_preview_archive']},
+            'driverStates':[dict(x) for x in con.execute("SELECT state_key,state_value,updated_at FROM rt_system_state WHERE state_key LIKE 'live_deadline_driver:%' OR state_key LIKE 'worker_live_preview:%' OR state_key LIKE 'worker_live_final:%' ORDER BY state_key")],
           }
-          for name,(query,args) in q.items():
-              try: plans[name]=[dict(r) for r in con.execute('EXPLAIN QUERY PLAN '+query,args)]
-              except Exception as e: plans[name]=[{'error':str(e)}]
-          races=[dict(r) for r in con.execute('SELECT race_id,race_date,venue,race_no,race_name,start_time_utc,status FROM rt_races WHERE race_date=? ORDER BY start_time_utc,venue,race_no',(day,))]
-          sel=con.execute('SELECT state_value,updated_at FROM rt_system_state WHERE state_key=?',(f'final_daily_selection:{day}',)).fetchone(); selected=[]
-          if sel:
-              try: selected=[str(x.get('raceId')) for x in json.loads(sel['state_value']).get('selected',[]) if x.get('raceId')]
-              except Exception as e: print('SELECTION_PARSE_ERROR',repr(e))
-          selected=list(dict.fromkeys(selected)); race_by={str(r['race_id']):r for r in races}
-          bets=[dict(r) for r in con.execute("SELECT race_id,course,bet_type,combination,source_prediction_id,settlement_status,locked_at FROM rt_public_bets WHERE race_id IN (SELECT race_id FROM rt_races WHERE race_date=?) ORDER BY race_id,id",(day,))]
-          by={}
-          for b in bets: by.setdefault(str(b['race_id']),[]).append(b)
-          def parse_iso(v):
-              try: return datetime.fromisoformat(str(v).replace('Z','+00:00')).astimezone(timezone.utc) if v else None
-              except: return None
-          detail=[]; missed=[]; upcoming=[]
-          for rid in selected:
-              r=race_by.get(rid,{}); start=parse_iso(r.get('start_time_utc')); rows=by.get(rid,[]); finals=sum(1 for x in rows if int(x.get('source_prediction_id') or 0)==-2)
-              item={'raceId':rid,'venue':r.get('venue'),'raceNo':r.get('race_no'),'start':r.get('start_time_utc'),'finalRows':finals,'allRows':len(rows)}; detail.append(item)
-              if start and start<=now and finals!=6: missed.append(item)
-              if start and start>now and finals!=6: upcoming.append(item)
-          states=[dict(r) for r in con.execute("SELECT state_key,updated_at FROM rt_system_state WHERE state_key LIKE ? OR state_key LIKE ? OR state_key LIKE ? OR state_key LIKE ? ORDER BY state_key",(f'live_deadline_driver:{day}%',f'live_deadline_priority_guard_success:{day}%','worker_live_preview:%','worker_live_final:%'))]
-          preview={x['state_key'].split(':',1)[1]:x['updated_at'] for x in states if str(x['state_key']).startswith('worker_live_preview:')}; final={x['state_key'].split(':',1)[1]:x['updated_at'] for x in states if str(x['state_key']).startswith('worker_live_final:')}
-          print('AUDIT_AT_UTC',now.isoformat()); print('TABLE_COUNTS',json.dumps(counts,ensure_ascii=False,sort_keys=True)); print('KEY_INDEXES',json.dumps(indexes,ensure_ascii=False)); print('QUERY_PLANS',json.dumps(plans,ensure_ascii=False)); print('TODAY_RACES',len(races)); print('SELECTION',json.dumps({'exists':bool(sel),'updatedAt':sel['updated_at'] if sel else None,'count':len(selected),'raceIds':selected},ensure_ascii=False)); print('BET_ROWS',json.dumps({'rows':len(bets),'raceCount':len(by),'selectedWithSixFinal':sum(1 for rid in selected if sum(1 for x in by.get(rid,[]) if int(x.get('source_prediction_id') or 0)==-2)==6)},ensure_ascii=False)); print('SELECTED_DETAIL',json.dumps(detail,ensure_ascii=False)); print('MISSED_SELECTED',json.dumps(missed,ensure_ascii=False)); print('UPCOMING_SELECTED_MISSING',json.dumps(upcoming,ensure_ascii=False)); print('PREVIEW_SELECTED',json.dumps({rid:preview.get(rid) for rid in selected},ensure_ascii=False)); print('FINAL_STATE_SELECTED',json.dumps({rid:final.get(rid) for rid in selected},ensure_ascii=False)); print('DRIVER_STATES',json.dumps([x for x in states if str(x['state_key']).startswith('live_deadline_')],ensure_ascii=False))
+          open('audit-output/emergency-live-export.json','w',encoding='utf-8').write(json.dumps(payload,ensure_ascii=False,indent=2))
+          print(json.dumps({
+            'selected':len(selected),
+            'publicBetRows':len(payload['publicBets']),
+            'archiveRows':len(payload['previewArchives']),
+            'oddsLatestRows':len(payload['officialOddsLatest']),
+            'oddsSnapshotRows':len(payload['officialOddsSnapshots']),
+            'archiveRaceIds':sorted(set(str(x.get('race_id')) for x in payload['previewArchives'])),
+            'oddsLatestRaceIds':sorted(set(str(x.get('race_id')) for x in payload['officialOddsLatest'])),
+          },ensure_ascii=False))
           PY
       - name: Upload audit artifact
         uses: actions/upload-artifact@v4
         with:
-          name: prod-live-audit-20260905
-          path: audit-output/prod-live-audit-20260905.txt
+          name: emergency-live-export-20260905
+          path: audit-output/emergency-live-export.json
           if-no-files-found: error
           retention-days: 1
