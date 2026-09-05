@@ -12,6 +12,7 @@ const VENUE_CODES: Record<string, string> = {
   札幌: "01", 函館: "02", 福島: "03", 新潟: "04", 東京: "05",
   中山: "06", 中京: "07", 京都: "08", 阪神: "09", 小倉: "10",
 };
+const VENUES_BY_CODE = new Map(Object.entries(VENUE_CODES).map(([venue, code]) => [code, venue]));
 const KNOWN_POSITION_WEIGHTS = new Map<number, number>([
   [10, 0x4A], [16, 0x31], [18, 0x73], [19, 0x52], [20, 0xB5], [27, 0x5A], [28, 0xBD],
 ]);
@@ -20,6 +21,7 @@ const RACE_UNITS_WEIGHT = 0xB5;
 
 type MissingGroup = { raceDate: string; venue: string; meetingNo: number; meetingDay: number; readyRaces: number };
 type PriorAnchor = { raceDate: string; entryUrl: string };
+type SeedMeta = PriorAnchor & { venue: string; raceNo: number };
 type GroupAudit = {
   raceDate: string; venue: string; priorRaceDate: string | null; priorCname: string | null;
   derivedRace1Cname: string | null; requestedRaceNos: number[]; savedRaceIds: string[]; status: string; errors: string[];
@@ -37,20 +39,53 @@ function suffixHex(value: number): string { return mod256(value).toString(16).to
 function extractCname(entryUrl: string): string | null {
   try {
     const cname = decodeURIComponent(new URL(entryUrl).searchParams.get("CNAME") ?? "");
-    return /^pw01dde01[A-Za-z0-9]+\/[0-9A-Fa-f]{2}$/.test(cname) ? cname : null;
+    return /^pw01dde(?:01|10)[A-Za-z0-9]+\/[0-9A-Fa-f]{2}$/.test(cname) ? cname : null;
   } catch { return null; }
 }
 
-function buildRace1Prefix(group: MissingGroup): string {
+function cnameSeedMeta(entryUrl: string): SeedMeta | null {
+  const cname = extractCname(entryUrl);
+  if (!cname) return null;
+  const prefix = cname.split("/")[0] ?? "";
+  if (!/^pw01dde(?:01|10)\d{20}$/.test(prefix) || prefix.length !== 29) return null;
+  const venue = VENUES_BY_CODE.get(prefix.slice(9, 11));
+  const raceNo = Number(prefix.slice(19, 21));
+  const compactDate = prefix.slice(21, 29);
+  if (!venue || raceNo < 1 || raceNo > 12 || !/^20\d{6}$/.test(compactDate)) return null;
+  return {
+    raceDate: `${compactDate.slice(0, 4)}-${compactDate.slice(4, 6)}-${compactDate.slice(6, 8)}`,
+    venue,
+    raceNo,
+    entryUrl,
+  };
+}
+
+function configuredSeedAnchor(env: Env, group: MissingGroup, exactDate: boolean): PriorAnchor | null {
+  const seeds = String(env.JRA_SEED_ENTRY_URLS || "")
+    .split(/[\s,;]+/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map(cnameSeedMeta)
+    .filter((row): row is SeedMeta => Boolean(row))
+    .filter((row) => row.venue === group.venue && row.raceNo === 1)
+    .filter((row) => exactDate ? row.raceDate === group.raceDate : row.raceDate < group.raceDate)
+    .sort((a, b) => b.raceDate.localeCompare(a.raceDate));
+  const seed = seeds[0];
+  return seed ? { raceDate: seed.raceDate, entryUrl: seed.entryUrl } : null;
+}
+
+function buildRace1Prefix(group: MissingGroup, modePrefix: string): string {
+  if (!/^pw01dde(?:01|10)$/.test(modePrefix)) throw new Error(`INVALID_ENTRY_MODE:${modePrefix}`);
   const venueCode = VENUE_CODES[group.venue];
   if (!venueCode) throw new Error(`UNKNOWN_VENUE:${group.venue}`);
-  return `pw01dde01${venueCode}${group.raceDate.slice(0, 4)}${String(group.meetingNo).padStart(2, "0")}${String(group.meetingDay).padStart(2, "0")}01${group.raceDate.replaceAll("-", "")}`;
+  return `${modePrefix}${venueCode}${group.raceDate.slice(0, 4)}${String(group.meetingNo).padStart(2, "0")}${String(group.meetingDay).padStart(2, "0")}01${group.raceDate.replaceAll("-", "")}`;
 }
 
 function deriveRace1Cname(priorCname: string, targetPrefix: string): string | null {
   const [priorPrefix, suffixRaw] = priorCname.split("/");
   if (!priorPrefix || !suffixRaw || priorPrefix.length !== 29 || targetPrefix.length !== 29) return null;
-  if (!/^pw01dde01/.test(priorPrefix) || !/^pw01dde01/.test(targetPrefix)) return null;
+  const priorMode = priorPrefix.slice(0, 9);
+  if (!/^pw01dde(?:01|10)$/.test(priorMode) || !targetPrefix.startsWith(priorMode)) return null;
   let suffix = Number.parseInt(suffixRaw, 16);
   if (!Number.isFinite(suffix)) return null;
   for (let index = 0; index < targetPrefix.length; index += 1) {
@@ -165,7 +200,7 @@ async function missingRaceNos(db: D1Database, group: MissingGroup): Promise<numb
 async function priorAnchor(db: D1Database, group: MissingGroup): Promise<PriorAnchor | null> {
   const row = await db.prepare(`
     SELECT race_date AS raceDate,entry_url AS entryUrl FROM rt_races
-    WHERE venue=? AND race_no=1 AND race_date<? AND entry_url LIKE '%/JRADB/accessD.html?CNAME=pw01dde01%'
+    WHERE venue=? AND race_no=1 AND race_date<? AND entry_url LIKE '%/JRADB/accessD.html?CNAME=pw01dde%'
     ORDER BY race_date DESC LIMIT 1
   `).bind(group.venue, group.raceDate).first<PriorAnchor>();
   return row ? { raceDate: String(row.raceDate), entryUrl: String(row.entryUrl) } : null;
@@ -190,13 +225,17 @@ async function repairGroup(env: Env, group: MissingGroup): Promise<GroupAudit> {
     raceDate: group.raceDate, venue: group.venue, priorRaceDate: null, priorCname: null,
     derivedRace1Cname: null, requestedRaceNos: [], savedRaceIds: [], status: "idle", errors: [],
   };
-  const prior = await priorAnchor(env.DB, group);
+  const exactSeed = configuredSeedAnchor(env, group, true);
+  const prior = exactSeed ?? await priorAnchor(env.DB, group) ?? configuredSeedAnchor(env, group, false);
   if (!prior) { audit.status = "prior_anchor_missing"; return audit; }
   audit.priorRaceDate = prior.raceDate;
   const priorCname = extractCname(prior.entryUrl);
   audit.priorCname = priorCname;
   if (!priorCname) { audit.status = "prior_cname_invalid"; return audit; }
-  const race1Cname = deriveRace1Cname(priorCname, buildRace1Prefix(group));
+  const modePrefix = priorCname.slice(0, 9);
+  const race1Cname = prior.raceDate === group.raceDate
+    ? priorCname
+    : deriveRace1Cname(priorCname, buildRace1Prefix(group, modePrefix));
   audit.derivedRace1Cname = race1Cname;
   if (!race1Cname) { audit.status = "derivation_not_safe"; return audit; }
 
