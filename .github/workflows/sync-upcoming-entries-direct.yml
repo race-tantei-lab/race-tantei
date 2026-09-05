@@ -3,10 +3,11 @@ run-name: Sync upcoming JRA entries directly · ${{ github.sha }}
 
 on:
   schedule:
-    - cron: "30 7 * * 4"       # Thu 16:30 JST: first published weekend entries
-    - cron: "30 1,4,7,10 * * 5" # Fri 10:30/13:30/16:30/19:30 JST: Saturday entries + retry
-    - cron: "30 1,4,7,10 * * 6" # Sat 10:30/13:30/16:30/19:30 JST: Sunday entries + retry
-    - cron: "0 22 * * 6"       # Sun 07:00 JST: same-day safety refresh
+    - cron: "30 7 * * 4"          # Thu 16:30 JST: first published weekend entries
+    - cron: "30 1,4,7,10 * * 5"  # Fri 10:30/13:30/16:30/19:30 JST
+    - cron: "30 1,4,7,10 * * 6"  # Sat 10:30/13:30/16:30/19:30 JST
+    - cron: "30 1,4,7,10 * * 0"  # Sun 10:30/13:30/16:30/19:30 JST: prepare holiday Monday
+    - cron: "0 22 * * *"         # Daily 07:00 JST: same-day safety refresh; no-op when no race data is published
   push:
     branches: [main]
     paths:
@@ -61,7 +62,7 @@ jobs:
           done
           git add -f analysis-results/jra-entry-anchor-discovery.json analysis-results/upcoming-entry-direct-sync.json analysis-results/upcoming-entry-readiness.json 2>/dev/null || true
           git config user.name "github-actions[bot]"
-          git config user.email "4189824+github-actions[bot]@users.noreply.github.com"
+          git config user.email 4189824+github-actions[bot]@users.noreply.github.com
           git commit -m "Save upcoming JRA entry direct sync result" || true
           git pull --rebase origin main
           git push origin HEAD:main
