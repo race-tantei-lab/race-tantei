@@ -1,5 +1,4 @@
-import { saveEntryBundle, upsertRaceSources } from "./db.js";
-import { pageLooksLikeEntry, parseEntryPage, toResultUrl } from "./jra.js";
+import { pageLooksLikeEntry, parseEntryPage } from "./jra.js";
 import type { Env, RaceBundle } from "./types.js";
 
 const FETCH_TIMEOUT_MS = 6_000;
@@ -131,6 +130,26 @@ export async function loadConfiguredOfficialRace(env: Env, raceId: string): Prom
   return null;
 }
 
+async function saveRunnerBundleWriteOnly(db: D1Database, bundle: RaceBundle): Promise<void> {
+  const statements = bundle.runners.map((runner) => db.prepare(`
+    INSERT INTO rt_runners (
+      race_id, horse_no, frame_no, horse_name, sex_age, coat_color, horse_weight, weight_change,
+      jockey, assigned_weight, trainer, stable, win_odds, popularity, runner_status, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(race_id, horse_no) DO UPDATE SET
+      frame_no=excluded.frame_no, horse_name=excluded.horse_name, sex_age=excluded.sex_age,
+      coat_color=excluded.coat_color, horse_weight=excluded.horse_weight, weight_change=excluded.weight_change,
+      jockey=excluded.jockey, assigned_weight=excluded.assigned_weight, trainer=excluded.trainer,
+      stable=excluded.stable, win_odds=excluded.win_odds, popularity=excluded.popularity,
+      runner_status=excluded.runner_status, updated_at=CURRENT_TIMESTAMP
+  `).bind(
+    bundle.race.raceId, runner.horseNo, runner.frameNo, runner.horseName, runner.sexAge, runner.coatColor,
+    runner.horseWeight, runner.weightChange, runner.jockey, runner.assignedWeight, runner.trainer,
+    runner.stable, runner.winOdds, runner.popularity, runner.runnerStatus
+  ));
+  if (statements.length) await db.batch(statements);
+}
+
 async function recoverSeed(env: Env, seed: Seed): Promise<SeedResult> {
   const result: SeedResult = { seed: seed.cname, savedRaceIds: [], errors: [] };
   const pending = Array.from({ length: 12 }, (_, index) => index + 1);
@@ -153,8 +172,7 @@ async function recoverSeed(env: Env, seed: Seed): Promise<SeedResult> {
           result.errors.push(`${raceNo}R:ENTRY_VALIDATION_FAILED:${bundle.race.raceDate}:${bundle.race.raceNo}:${active.length}`);
           continue;
         }
-        await saveEntryBundle(env.DB, bundle);
-        await upsertRaceSources(env.DB, [page.canonical], toResultUrl);
+        await saveRunnerBundleWriteOnly(env.DB, bundle);
         result.savedRaceIds.push(bundle.race.raceId);
       } catch (error) {
         result.errors.push(`${raceNo}R:${error instanceof Error ? error.message : String(error)}`);
