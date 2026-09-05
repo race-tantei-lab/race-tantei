@@ -1,0 +1,43 @@
+name: Probe production races page direct now
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-races-direct-now2.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          for path in '/' '/races/' '/api/public/day?date=2026-09-05' '/api/public/day?date=2026-09-06'; do
+            echo "=== $path ==="
+            code=$(curl -L -sS -D /tmp/h -o /tmp/b -w '%{http_code}' "$base$path" || true)
+            echo "HTTP=$code BYTES=$(wc -c </tmp/b)"
+            grep -iE '^(location|content-type|cache-control|x-race|cf-ray|server):' /tmp/h || true
+            python3 - "$path" <<'PY'
+          import json,re,sys
+          p=sys.argv[1]
+          s=open('/tmp/b','rb').read().decode('utf-8','replace')
+          print('HEAD',repr(s[:600]))
+          print('FORBIDDEN', '一時的にページを表示できません。' in s)
+          if p=='/races/':
+            print('HAS_DAY_API', '/api/public/day' in s)
+            print('SCRIPT_SRCS',re.findall(r'<script[^>]*src=["\']([^"\']+)',s,re.I)[:20])
+            print('BUTTONS',re.findall(r'<button[^>]*>(.*?)</button>',s,re.I|re.S)[:10])
+          if p.startswith('/api/'):
+            try:
+              o=json.loads(s); r=o.get('races') if isinstance(o,dict) else None
+              print('JSON_OK',o.get('ok') if isinstance(o,dict) else None,'RACES',len(r) if isinstance(r,list) else None)
+            except Exception as e: print('JSON_ERROR',repr(e))
+          PY
+          done
