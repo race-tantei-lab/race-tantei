@@ -1,0 +1,4 @@
+Error: D1_400:[{"code":7500,"message":"Your account has exceeded D1's free tier daily row read limit. Upgrade to a paid plan or wait until tomorrow (midnight UTC) to continue. See https://developers.cloudflare.com/d1/platform/limits/ for more details."}]
+    at sql (file:///home/runner/work/race-tantei/race-tantei/scripts/.generated-light-specialized-search.mjs?v=1788607007059:61:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async main (file:///home/runner/work/race-tantei/race-tantei/scripts/.generated-light-specialized-search.mjs?v=1788607007059:469:17)
