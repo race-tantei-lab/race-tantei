@@ -1,25 +1,26 @@
-name: Fast production home recovery
+name: Fast production home snapshot
 
 on:
   push:
+    branches: [main]
     paths:
       - '.github/workflows/prod-home-fast-recover.yml'
   workflow_dispatch:
   schedule:
-    - cron: '45 23 * * *'
-    - cron: '50 0 * * *'
+    - cron: '45 23 * * *' # 08:45 JST
+    - cron: '50 0 * * *'  # 09:50 JST
 
 permissions:
   contents: write
 
 concurrency:
-  group: fast-production-home-recovery
+  group: fast-production-home-snapshot
   cancel-in-progress: true
 
 jobs:
-  recover:
+  snapshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
@@ -63,27 +64,28 @@ jobs:
           print('EXPORT_BYTES',os.path.getsize('/tmp/prod-public.sql'))
           PY
 
-      - name: Extend normal UI calendar and build current-day fallback
+      - name: Build rolling calendar and race-day fallback
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json,sqlite3
+          import datetime as dt,json,sqlite3
+          utc=dt.datetime.now(dt.timezone.utc)
+          jst=(utc+dt.timedelta(hours=9)).date()
+          recent_start=(jst-dt.timedelta(days=45)).isoformat()
+          snapshot_start=(jst-dt.timedelta(days=21)).isoformat()
+          snapshot_end=(jst+dt.timedelta(days=14)).isoformat()
           con=sqlite3.connect('/tmp/public.sqlite')
           con.executescript(open('/tmp/prod-public.sql',encoding='utf-8').read())
           calendar=[
             {'raceDate':r[0],'venue':r[1],'raceCount':int(r[2])}
-            for r in con.execute("""
-              SELECT race_date, venue, COUNT(*)
-              FROM rt_races
-              WHERE race_date > '2026-08-09'
-              GROUP BY race_date, venue
-              ORDER BY race_date, venue
-            """).fetchall()
+            for r in con.execute('''
+              SELECT race_date,venue,COUNT(*) FROM rt_races
+              WHERE race_date>=? AND race_date<=?
+              GROUP BY race_date,venue ORDER BY race_date,venue
+            ''',(recent_start,snapshot_end)).fetchall()
           ]
           if not calendar: raise SystemExit('RECENT_CALENDAR_EMPTY')
-          dates=sorted({r['raceDate'] for r in calendar})
-          if '2026-09-05' not in dates: raise SystemExit('RECENT_CALENDAR_MISSING_2026_09_05')
 
           path='src/normal-home-snapshot.ts'
           source=open(path,encoding='utf-8').read().strip()
@@ -92,9 +94,8 @@ jobs:
           payload=source[len(prefix):]
           if payload.endswith(';'): payload=payload[:-1]
           html=json.loads(payload)
-          start=html.find('const calendar=[')
-          end=html.find('];const today=',start)
-          if start < 0 or end < 0: raise SystemExit('HOME_CALENDAR_MARKER_MISSING')
+          start=html.find('const calendar=['); end=html.find('];const today=',start)
+          if start<0 or end<0: raise SystemExit('HOME_CALENDAR_MARKER_MISSING')
           existing=html[start:end]
           extra=[]
           for row in calendar:
@@ -102,320 +103,98 @@ jobs:
             if token not in existing: extra.append(row)
           if extra:
             html=html[:end]+','+','.join(json.dumps(r,ensure_ascii=False,separators=(',',':')) for r in extra)+html[end:]
-          cal_end=html.find('];const today=',start)
-          calendar_segment=html[start:cal_end]
-          if '"raceDate":"2026-09-05"' not in calendar_segment: raise SystemExit('PATCHED_CALENDAR_MISSING_2026_09_05')
           open(path,'w',encoding='utf-8').write('export const NORMAL_HOME_SNAPSHOT = '+json.dumps(html,ensure_ascii=False)+';\n')
           open('src/recent-home-calendar-snapshot.ts','w',encoding='utf-8').write(
             'export const RECENT_HOME_CALENDAR_SNAPSHOT = '+json.dumps(calendar,ensure_ascii=False,separators=(',',':'))+' as const;\n'
           )
 
-          recent_dates=[r[0] for r in con.execute("""
-            SELECT DISTINCT race_date
-            FROM rt_races
-            WHERE race_date >= date('now','-21 days') AND race_date <= date('now','+14 days')
-            ORDER BY race_date
-          """).fetchall()]
+          dates=[r[0] for r in con.execute('''
+            SELECT DISTINCT race_date FROM rt_races
+            WHERE race_date>=? AND race_date<=? ORDER BY race_date
+          ''',(snapshot_start,snapshot_end)).fetchall()]
           day_snapshot={}
-          for date in recent_dates:
-            races=[]
-            race_ids=[]
-            for r in con.execute("""
+          for date in dates:
+            races=[]; race_ids=[]
+            for r in con.execute('''
               SELECT race_id,race_date,venue,race_no,race_name,start_time_jst,start_time_utc,surface,distance_m,status,refund_horse_nos_json
               FROM rt_races WHERE race_date=? ORDER BY venue,race_no
-            """,(date,)).fetchall():
+            ''',(date,)).fetchall():
               race_ids.append(str(r[0]))
-              races.append({
-                'raceId':str(r[0]),'raceDate':str(r[1]),'venue':str(r[2]),'raceNo':int(r[3]),
-                'raceName':r[4],'startTimeJst':r[5],'startTimeUtc':r[6],'surface':r[7],
-                'distanceM':None if r[8] is None else int(r[8]),'status':str(r[9]),'refundsJson':r[10],
-              })
-            state=con.execute("SELECT state_value FROM rt_system_state WHERE state_key=? LIMIT 1",(f'final_daily_selection:{date}',)).fetchone()
+              races.append({'raceId':str(r[0]),'raceDate':str(r[1]),'venue':str(r[2]),'raceNo':int(r[3]),'raceName':r[4],
+                'startTimeJst':r[5],'startTimeUtc':r[6],'surface':r[7],'distanceM':None if r[8] is None else int(r[8]),
+                'status':str(r[9]),'refundsJson':r[10]})
+            state=con.execute('SELECT state_value FROM rt_system_state WHERE state_key=? LIMIT 1',(f'final_daily_selection:{date}',)).fetchone()
             selection=state[0] if state else None
             bets=[]
             if race_ids:
               marks=','.join('?' for _ in race_ids)
-              for b in con.execute(f"""
-                SELECT race_id,course,bet_type,combination,return_yen,settlement_status
-                FROM rt_public_bets WHERE race_id IN ({marks}) ORDER BY race_id,id
-              """,race_ids).fetchall():
-                bets.append({
-                  'raceId':str(b[0]),'course':str(b[1]),'betType':str(b[2]),'combination':str(b[3]),
-                  'returnYen':None if b[4] is None else int(b[4]),'settlementStatus':str(b[5]),
-                })
+              for b in con.execute(f'''SELECT race_id,course,bet_type,combination,return_yen,settlement_status
+                FROM rt_public_bets WHERE race_id IN ({marks}) ORDER BY race_id,id''',race_ids).fetchall():
+                bets.append({'raceId':str(b[0]),'course':str(b[1]),'betType':str(b[2]),'combination':str(b[3]),
+                  'returnYen':None if b[4] is None else int(b[4]),'settlementStatus':str(b[5])})
             day_snapshot[date]={'selection':selection,'races':races,'bets':bets}
           con.close()
-          if '2026-09-05' not in day_snapshot or len(day_snapshot['2026-09-05']['races']) != 36:
-            raise SystemExit('DAY_SNAPSHOT_0905_NOT_36')
+          today=jst.isoformat()
+          if today in day_snapshot:
+            races=day_snapshot[today]['races']
+            by={}
+            for r in races: by[r['venue']]=by.get(r['venue'],0)+1
+            if any(v!=12 for v in by.values()): raise SystemExit('TODAY_PROGRAM_INCOMPLETE:'+json.dumps(by,ensure_ascii=False))
+            print('TODAY_SNAPSHOT',today,'RACES',len(races),'VENUES',by)
           open('src/recent-public-day-snapshot.ts','w',encoding='utf-8').write(
             'export const RECENT_PUBLIC_DAY_SNAPSHOT = '+json.dumps(day_snapshot,ensure_ascii=False,separators=(',',':'))+' as const;\n'
           )
-          print('RECENT_CALENDAR_ROWS',len(calendar),'FIRST',dates[0],'LAST',dates[-1],'ADDED',len(extra))
-          print('DAY_SNAPSHOT_DATES',recent_dates,'0905_RACES',len(day_snapshot['2026-09-05']['races']))
+          print('ROLLING_CALENDAR_ROWS',len(calendar),'DATES',dates,'ADDED',len(extra))
           PY
-
-      - name: Keep existing UI and add quota-safe race-day API fallback
-        shell: bash
-        run: |
-          cat > src/public-site-entry-v37.ts <<'TS'
-          import core from "./public-site-entry-v37-core.js";
-          import { NORMAL_HOME_SNAPSHOT } from "./normal-home-snapshot.js";
-          import { RECENT_HOME_CALENDAR_SNAPSHOT } from "./recent-home-calendar-snapshot.js";
-          import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
-          import { projectCurrentPublicState } from "./v1/current-day-public-api.js";
-          import type { Env } from "./v1/types.js";
-
-          const UI_VERSION = "ten-year-completed-public-v37-free-tier-safe-snapshot-20260905";
-          const RECENT_CALENDAR_START = "2026-08-09";
-          const FORBIDDEN_RECOVERY_TEXT = [
-            "データ取得を再試行しています",
-            "データを再接続しています",
-            "データベースへ接続できない",
-            "表示データの読み込みに失敗しました",
-            "表示系の自動復旧モードです",
-            "一時的にページを表示できません。",
-          ] as const;
-
-          type CalendarRow = { raceDate: string; venue: string; raceCount: number };
-          type SnapshotRace = {
-            raceId: string; raceDate: string; venue: string; raceNo: number; raceName: string | null;
-            startTimeJst: string | null; startTimeUtc: string | null; surface: string | null;
-            distanceM: number | null; status: string; refundsJson: string | null;
-          };
-          type SnapshotBet = {
-            raceId: string; course: string; betType: string; combination: string;
-            returnYen: number | null; settlementStatus: string;
-          };
-          type SnapshotDay = { selection: string | null; races: SnapshotRace[]; bets: SnapshotBet[] };
-          const DAY_SNAPSHOT = RECENT_PUBLIC_DAY_SNAPSHOT as unknown as Record<string, SnapshotDay>;
-
-          // Public scheduled work remains maintenance-only. Race-bet generation is
-          // owned exclusively by the isolated primary/backup live-deadline Workers.
-
-          function hasForbidden(text: string): boolean {
-            return FORBIDDEN_RECOVERY_TEXT.some((value) => text.includes(value));
-          }
-
-          function staticRecentCalendar(): CalendarRow[] {
-            return RECENT_HOME_CALENDAR_SNAPSHOT.map((row) => ({
-              raceDate: String(row.raceDate),
-              venue: String(row.venue),
-              raceCount: Number(row.raceCount),
-            }));
-          }
-
-          async function loadRecentCalendar(env: Env): Promise<CalendarRow[]> {
-            try {
-              const result = await env.DB.prepare(`
-                SELECT race_date AS raceDate, venue, COUNT(*) AS raceCount
-                FROM rt_races
-                WHERE race_date > ?
-                GROUP BY race_date, venue
-                ORDER BY race_date, venue
-              `).bind(RECENT_CALENDAR_START).all<CalendarRow>();
-              const rows = (result.results ?? []).filter((row) => row.raceDate && row.venue && Number(row.raceCount) > 0);
-              if (rows.length) return rows.map((row) => ({ ...row, raceCount: Number(row.raceCount) }));
-            } catch (error) {
-              console.error("V37_RECENT_CALENDAR_DB_FAILED", error);
-            }
-            return staticRecentCalendar();
-          }
-
-          function mergeRecentCalendar(html: string, rows: CalendarRow[]): string {
-            const start = html.indexOf("const calendar=[");
-            const end = html.indexOf("];const today=", start);
-            if (start < 0 || end < 0 || !rows.length) return html;
-            const existing = html.slice(start, end);
-            const extra = rows.filter((row) => {
-              const token = `\"raceDate\":\"${row.raceDate}\",\"venue\":\"${row.venue}\"`;
-              return !existing.includes(token);
-            });
-            if (!extra.length) return html;
-            return `${html.slice(0, end)},${extra.map((row) => JSON.stringify(row)).join(",")}${html.slice(end)}`;
-          }
-
-          function normalResponse(response: Response, html: string, path: string): Response {
-            const headers = new Headers(response.headers);
-            headers.delete("x-race-resilient-home");
-            headers.delete("x-race-emergency-fallback");
-            headers.delete("content-length");
-            headers.set("content-type", "text/html; charset=utf-8");
-            headers.set("cache-control", "no-store, max-age=0");
-            headers.set("x-race-ui-version", UI_VERSION);
-            headers.set("x-race-home-path", path);
-            return new Response(html, { status: 200, headers });
-          }
-
-          function embeddedNormalHome(): Response {
-            const html = mergeRecentCalendar(NORMAL_HOME_SNAPSHOT, staticRecentCalendar());
-            return new Response(html, {
-              status: 200,
-              headers: {
-                "content-type": "text/html; charset=utf-8",
-                "cache-control": "no-store, max-age=0",
-                "x-race-ui-version": UI_VERSION,
-                "x-race-home-path": "v37-normal-snapshot",
-              },
-            });
-          }
-
-          function parseSelection(raw: string | null): Set<string> | null {
-            if (!raw) return null;
-            try {
-              const parsed = JSON.parse(raw) as { selected?: Array<{ raceId?: unknown }> };
-              const ids = Array.isArray(parsed.selected) ? parsed.selected.map((row) => String(row?.raceId ?? "")).filter(Boolean) : [];
-              return ids.length ? new Set(ids) : null;
-            } catch { return null; }
-          }
-
-          function staticPublicDay(date: string): Response | null {
-            const day = DAY_SNAPSHOT[date];
-            if (!day?.races?.length) return null;
-            const frozen = parseSelection(day.selection);
-            const refundByRace = new Map(day.races.map((race) => [race.raceId, race.refundsJson]));
-            const byRace = new Map<string, Array<SnapshotBet & { refundsJson: string | null }>>();
-            for (const bet of day.bets) {
-              const list = byRace.get(bet.raceId) ?? [];
-              list.push({ ...bet, refundsJson: refundByRace.get(bet.raceId) ?? null });
-              byRace.set(bet.raceId, list);
-            }
-            const nowMs = Date.now();
-            const races = day.races.map((race) => ({
-              raceId: race.raceId,
-              raceDate: race.raceDate,
-              venue: race.venue,
-              raceNo: Number(race.raceNo),
-              raceName: race.raceName,
-              startTimeJst: race.startTimeJst,
-              startTimeUtc: race.startTimeUtc,
-              surface: race.surface,
-              distanceM: race.distanceM === null ? null : Number(race.distanceM),
-              status: race.status,
-              publicState: projectCurrentPublicState(race, frozen, byRace.get(race.raceId) ?? [], nowMs),
-            }));
-            return Response.json({ ok: true, date, races, betStateAvailable: true, fallbackSource: "recent-public-day-snapshot-v1" }, {
-              headers: {
-                "cache-control": "no-store, max-age=0",
-                "x-race-current-day-path": "recent-public-day-snapshot-v1",
-              },
-            });
-          }
-
-          async function fetchPublicDay(request: Request, env: Env, ctx: ExecutionContext, date: string): Promise<Response> {
-            let live: Response | null = null;
-            try {
-              live = await core.fetch(request, env, ctx);
-              const text = await live.text();
-              let payload: { races?: unknown } | null = null;
-              try { payload = JSON.parse(text) as { races?: unknown }; } catch { /* handled below */ }
-              if (live.ok && Array.isArray(payload?.races) && payload.races.length > 0) {
-                return new Response(text, { status: live.status, statusText: live.statusText, headers: live.headers });
-              }
-              const fallback = staticPublicDay(date);
-              if (fallback) return fallback;
-              return new Response(text, { status: live.status, statusText: live.statusText, headers: live.headers });
-            } catch (error) {
-              console.error("V37_PUBLIC_DAY_USING_SNAPSHOT", date, error);
-              return staticPublicDay(date) ?? new Response("NOT_FOUND", { status: 404 });
-            }
-          }
-
-          async function fetchNormalHome(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-            const recentCalendar = await loadRecentCalendar(env);
-            try {
-              const response = await core.fetch(request, env, ctx);
-              const contentType = response.headers.get("content-type") ?? "";
-              const html = contentType.includes("text/html") ? await response.text() : "";
-              const recoveryHeader = Boolean(response.headers.get("x-race-resilient-home") || response.headers.get("x-race-emergency-fallback"));
-              if (response.status < 500 && html && !recoveryHeader && !hasForbidden(html)) {
-                return normalResponse(response, mergeRecentCalendar(html, recentCalendar), "v37-normal");
-              }
-              console.error("V37_NORMAL_HOME_USING_SNAPSHOT", response.status);
-            } catch (error) {
-              console.error("V37_NORMAL_HOME_USING_SNAPSHOT_AFTER_ERROR", error);
-            }
-            return embeddedNormalHome();
-          }
-
-          export default {
-            async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-              const url = new URL(request.url);
-              const pathname = url.pathname;
-              if (pathname === "/_ops/live-tick") return new Response("NOT_FOUND", { status: 404, headers: { "cache-control": "no-store" } });
-              if (request.method === "GET" && pathname === "/api/public/day") return fetchPublicDay(request, env, ctx, url.searchParams.get("date") ?? "");
-              if (request.method === "GET" && (pathname === "/" || pathname === "/index.html")) return fetchNormalHome(request, env, ctx);
-              return core.fetch(request, env, ctx);
-            },
-            async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-              if (core.scheduled) await core.scheduled(controller, env, ctx);
-            },
-          } satisfies ExportedHandler<Env>;
-          TS
           npm run typecheck
 
-      - name: Deploy public Worker now
+      - name: Detect snapshot changes
+        id: diff
+        shell: bash
+        run: |
+          if git diff --quiet -- src/normal-home-snapshot.ts src/recent-home-calendar-snapshot.ts src/recent-public-day-snapshot.ts; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy public Worker only when snapshot changed
+        if: steps.diff.outputs.changed == 'true'
         shell: bash
         run: npx wrangler deploy --config wrangler.jsonc
 
-      - name: Verify production normal HTML and current race-day API
+      - name: Verify production normal HTML and current day when present
         shell: bash
         run: |
           set -euo pipefail
-          ok=0
-          for i in $(seq 1 12); do
-            code=$(curl --max-time 10 -sS -D /tmp/prod.headers -o /tmp/prod.html -w '%{http_code}' https://race-tantei-phase0.race-tantei.workers.dev/ || true)
-            path=$(tr -d '\r' </tmp/prod.headers 2>/dev/null | awk 'BEGIN{IGNORECASE=1}/^x-race-home-path:/{print $2}' | tail -1)
-            echo "PROD_ATTEMPT=$i HTTP=$code PATH=$path"
-            if [ "$code" = "200" ] && grep -qi '<html' /tmp/prod.html && ! grep -q '一時的にページを表示できません。' /tmp/prod.html; then ok=1; break; fi
-            sleep 2
-          done
-          test "$ok" = "1"
+          today=$(TZ=Asia/Tokyo date +%F)
+          code=$(curl --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' https://race-tantei-phase0.race-tantei.workers.dev/ || true)
+          test "$code" = '200'
+          grep -qi '<html' /tmp/home.html
           for marker in 'データを再接続しています' 'データ取得を再試行しています' 'データベースへ接続できない' '表示データの読み込みに失敗しました' '表示系の自動復旧モードです' '一時的にページを表示できません。'; do
-            if grep -q "$marker" /tmp/prod.html; then echo "BANNED_PROD=$marker"; exit 1; fi
+            ! grep -q "$marker" /tmp/home.html
           done
-          python3 - <<'PY'
-          import json,re
-          html=open('/tmp/prod.html',encoding='utf-8').read()
-          m=re.search(r'const calendar=(\[[\s\S]*?\]);const today=',html)
-          if not m: raise SystemExit('PROD_CALENDAR_PARSE_FAILED')
-          calendar=json.loads(m.group(1))
-          dates=sorted({r.get('raceDate','') for r in calendar})
-          if '2026-09-05' not in dates: raise SystemExit('PROD_CALENDAR_MISSING_2026_09_05')
-          venues=sorted({r.get('venue','') for r in calendar if r.get('raceDate')=='2026-09-05'})
-          if venues != ['中山','札幌','阪神']: raise SystemExit(f'PROD_0905_VENUES_MISMATCH:{venues}')
-          print('PRODUCTION_CALENDAR_LAST',dates[-1],'ROWS',len(calendar),'0905_VENUES',venues)
+          if grep -q "\"$today\"" src/recent-public-day-snapshot.ts; then
+            curl --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -fsS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$today" -o /tmp/day.json
+            python3 - <<'PY'
+          import datetime as dt,json
+          today=(dt.datetime.now(dt.timezone.utc)+dt.timedelta(hours=9)).date().isoformat()
+          body=json.load(open('/tmp/day.json',encoding='utf-8')); races=body.get('races') or []
+          by={}
+          for r in races: by[str(r.get('venue'))]=by.get(str(r.get('venue')),0)+1
+          if not races or any(v!=12 for v in by.values()): raise SystemExit(f'PROD_DAY_INVALID:{today}:{len(races)}:{by}')
+          print('PRODUCTION_DAY_OK',today,'RACES',len(races),'VENUES',by,'SOURCE',body.get('fallbackSource','live-d1'))
           PY
-          curl --max-time 10 -fsS -D /tmp/day.headers -o /tmp/day.json 'https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-09-05'
-          python3 - <<'PY'
-          import json
-          body=json.load(open('/tmp/day.json',encoding='utf-8'))
-          races=body.get('races') or []
-          if len(races) != 36: raise SystemExit(f'PROD_DAY_0905_RACE_COUNT:{len(races)}')
-          venues=sorted({r.get('venue','') for r in races})
-          if venues != ['中山','札幌','阪神']: raise SystemExit(f'PROD_DAY_0905_VENUES:{venues}')
-          print('PRODUCTION_DAY_0905_OK','RACES',len(races),'VENUES',venues,'SOURCE',body.get('fallbackSource','live-d1'))
-          PY
-          curl --max-time 10 -fsS -o /tmp/day-next.json 'https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-09-06'
-          python3 - <<'PY'
-          import json
-          body=json.load(open('/tmp/day-next.json',encoding='utf-8'))
-          races=body.get('races') or []
-          if len(races) != 36: raise SystemExit(f'PROD_DAY_0906_RACE_COUNT:{len(races)}')
-          print('PRODUCTION_DAY_0906_OK','RACES',len(races),'SOURCE',body.get('fallbackSource','live-d1'))
-          PY
-          echo 'PRODUCTION_HOME_AND_DAY_API_OK'
-          grep -i '^x-race-home-path:' /tmp/prod.headers || true
-          grep -i '^x-race-current-day-path:' /tmp/day.headers || true
-          wc -c /tmp/prod.html /tmp/day.json
+          fi
 
-      - name: Persist verified recovery source
+      - name: Persist verified snapshots
+        if: steps.diff.outputs.changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/public-site-entry-v37.ts src/normal-home-snapshot.ts src/recent-home-calendar-snapshot.ts src/recent-public-day-snapshot.ts
-          if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'fix: preserve current race-day display when D1 reads are capped'
+          git add src/normal-home-snapshot.ts src/recent-home-calendar-snapshot.ts src/recent-public-day-snapshot.ts
+          git commit -m 'ops: refresh rolling public race-day snapshot'
           git pull --rebase origin main
           git push origin HEAD:main
