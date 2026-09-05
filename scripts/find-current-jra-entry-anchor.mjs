@@ -16,21 +16,24 @@ function formatDateUtc(ms) {
   const d = new Date(ms);
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
-function currentWeekendDates(now = new Date()) {
+function jstClock(now = new Date()) {
   const jst = new Date(now.getTime() + 9 * 3600_000);
   const base = Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate());
-  const day = jst.getUTCDay();
-  if (day === 0) return [formatDateUtc(base)];
-  const daysToSaturday = (6 - day + 7) % 7;
-  const saturday = base + daysToSaturday * 86400_000;
-  return [formatDateUtc(saturday), formatDateUtc(saturday + 86400_000)];
+  return { today: formatDateUtc(base), hour: jst.getUTCHours(), base };
+}
+function currentWeekendDates(now = new Date()) {
+  const { base } = jstClock(now);
+  return Array.from({ length: 4 }, (_, offset) => formatDateUtc(base + offset * 86400_000));
 }
 function datesRequiringProbe(targetDates, now = new Date()) {
-  const jst = new Date(now.getTime() + 9 * 3600_000);
-  const day = jst.getUTCDay();
-  if (day === 5) return targetDates.slice(0, 1);
-  if (day === 6 || day === 0) return targetDates;
-  return targetDates.slice(0, 1);
+  const { today, hour } = jstClock(now);
+  const dates = [...new Set(targetDates)].sort();
+  if (dates.includes(today)) {
+    return dates.filter((date) => hour >= 17 ? date > today : date >= today);
+  }
+  // Before a race weekend starts, first secure the nearest published race day.
+  // Subsequent scheduled runs pick up the following race days as JRA publishes them.
+  return dates.slice(0, 1);
 }
 function calendarUrl(date) {
   const [year, month, day] = date.split("-");
@@ -204,17 +207,29 @@ async function probeMeeting(meeting, errors) {
   return null;
 }
 export async function findCurrentEntryAnchor(now = new Date(), fallbackMeetings = []) {
-  const errors = [], targetDates = currentWeekendDates(now), dynamicallyParsed = [];
+  const errors = [];
+  const normalizedFallback = (Array.isArray(fallbackMeetings) ? fallbackMeetings : []).map(normalizeMeeting).filter(Boolean);
+  const fallbackDates = [...new Set(normalizedFallback.map((row) => row.date))].sort();
+  const targetDates = fallbackDates.length ? fallbackDates : currentWeekendDates(now);
+  const dynamicallyParsed = [];
   for (const date of targetDates) {
     try { dynamicallyParsed.push(...await calendarMeetings(date)); }
     catch (error) { errors.push(`${date}:CALENDAR:${error?.name || "Error"}:${error?.message || String(error)}`); }
   }
-  const meetings = mergeMeetings(dynamicallyParsed, Array.isArray(fallbackMeetings) ? fallbackMeetings : []);
-  const anchors = await discoverPublishedAnchors(targetDates, errors);
-  const foundDates = new Set(anchors.map((row) => row.targetDate));
+  const meetings = mergeMeetings(dynamicallyParsed, normalizedFallback);
   const probeDates = new Set(datesRequiringProbe(targetDates, now));
-  for (const date of targetDates) {
-    if (foundDates.has(date) || !probeDates.has(date)) continue;
+  if (probeDates.size === 0) {
+    return {
+      found: true, targetDates, requiredProbeDates: [], calendarMeetings: meetings, anchors: [],
+      anchorUrl: null, raceId: null, targetDate: null, venue: null, meetingNo: null, meetingDay: null,
+      family: null, viewMode: null, prefix: null, suffix: null, runnerCount: 0, probes: 0,
+      discoveredLinks: [], errors,
+    };
+  }
+  const anchors = await discoverPublishedAnchors([...probeDates], errors);
+  const foundDates = new Set(anchors.map((row) => row.targetDate));
+  for (const date of [...probeDates]) {
+    if (foundDates.has(date)) continue;
     let dateAnchor = null;
     for (const meeting of meetings.filter((row) => row.date === date)) {
       dateAnchor = await probeMeeting(meeting, errors);
@@ -230,7 +245,7 @@ export async function findCurrentEntryAnchor(now = new Date(), fallbackMeetings 
   const discoveredLinks = [...new Set(anchors.flatMap((anchor) => anchor.discoveredLinks || []))];
   const first = anchors[0] || null;
   return {
-    found: [...probeDates].every((date) => foundDates.has(date)) && probeDates.size > 0,
+    found: [...probeDates].every((date) => foundDates.has(date)),
     targetDates,
     requiredProbeDates: [...probeDates],
     calendarMeetings: meetings,
