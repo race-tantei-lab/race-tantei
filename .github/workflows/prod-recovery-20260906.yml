@@ -1,0 +1,58 @@
+name: Production recovery after D1 reset
+
+on:
+  schedule:
+    - cron: '1 0 6 9 *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover-after-reset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Create required live lookup indexes
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        run: |
+          set -e
+          for q in \
+            "CREATE INDEX IF NOT EXISTS rt_idx_races_date ON rt_races(race_date DESC, venue, race_no)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_public_bets_race ON rt_public_bets(race_id, id)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_public_bets_settlement ON rt_public_bets(settlement_status, course, race_id)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_hist_lookup ON rt_ml_horse_hist(generation, horse_name, seq)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_total_lookup ON rt_ml_horse_total(generation, horse_name)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_surface_lookup ON rt_ml_horse_surface(generation, horse_name)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_dist_lookup ON rt_ml_horse_dist(generation, horse_name)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_venue_lookup ON rt_ml_horse_venue(generation, horse_name)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_jockey_lookup ON rt_ml_jockey(generation, name)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_trainer_lookup ON rt_ml_trainer(generation, name)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_pair_lookup ON rt_ml_pair(generation, horse_name, jockey)"; do
+            npx wrangler d1 execute race-tantei-phase0 --remote --command "$q"
+          done
+      - name: Deploy isolated live workers then public worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        run: |
+          npx wrangler deploy --config wrangler.live-deadline.jsonc
+          npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
+          npx wrangler deploy --config wrangler.jsonc
+      - name: Verify home is normal
+        run: |
+          set -e
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -sS -o /tmp/home.html -w '%{http_code}' https://race-tantei-phase0.race-tantei.workers.dev/ || true)
+            echo "HTTP=$code"
+            if [ "$code" = "200" ] && ! grep -q '一時的にページを表示できません。' /tmp/home.html; then exit 0; fi
+            sleep 10
+          done
+          exit 1
