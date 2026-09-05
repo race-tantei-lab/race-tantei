@@ -65,9 +65,6 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf .wrangler/state
-          # Ask Wrangler only to create its local D1 sqlite file. Importing the
-          # 16MB SQL through Wrangler is extremely slow; Python sqlite executes
-          # the exact same export in seconds without changing any data.
           timeout 20s npx wrangler d1 execute race-tantei-phase0 --local --config wrangler.jsonc --command "CREATE TABLE IF NOT EXISTS __home_bootstrap(x INTEGER)" >/tmp/bootstrap.log 2>&1
           dbfile=$(find .wrangler/state -type f \( -name '*.sqlite' -o -name '*.sqlite3' \) | head -1)
           if [ -z "$dbfile" ]; then echo LOCAL_SQLITE_NOT_FOUND; find .wrangler/state -maxdepth 8 -type f -print; cat /tmp/bootstrap.log; exit 1; fi
@@ -107,11 +104,62 @@ jobs:
           for marker in 'データを再接続しています' 'データ取得を再試行しています' 'データベースへ接続できない' '表示データの読み込みに失敗しました' '表示系の自動復旧モードです' '一時的にページを表示できません。'; do
             if grep -q "$marker" /tmp/home.html; then echo "BANNED=$marker"; exit 1; fi
           done
-          python3 - <<'PY'
-          import json
+
+          # The frozen ten-year home calendar ends at 2026-08-09. Extend only its
+          # existing calendar data with actual production rt_races rows; do not
+          # change layout, labels, prediction rules, or any historical picks.
+          python3 - "$dbfile" <<'PY'
+          import json,sqlite3,sys
+          db=sys.argv[1]
+          con=sqlite3.connect(db)
+          rows=[
+            {'raceDate':r[0],'venue':r[1],'raceCount':int(r[2])}
+            for r in con.execute("""
+              SELECT race_date, venue, COUNT(*)
+              FROM rt_races
+              WHERE race_date > '2026-08-09'
+              GROUP BY race_date, venue
+              ORDER BY race_date, venue
+            """).fetchall()
+          ]
+          con.close()
+          if not rows:
+            raise SystemExit('RECENT_CALENDAR_EMPTY')
+          dates=sorted({r['raceDate'] for r in rows})
+          if '2026-09-05' not in dates:
+            raise SystemExit('RECENT_CALENDAR_MISSING_2026_09_05')
           html=open('/tmp/home.html',encoding='utf-8').read()
+          start=html.find('const calendar=[')
+          end=html.find('];const today=',start)
+          if start < 0 or end < 0:
+            raise SystemExit('HOME_CALENDAR_MARKER_MISSING')
+          existing=html[start:end]
+          extra=[]
+          for row in rows:
+            token=f'"raceDate":"{row["raceDate"]}","venue":"{row["venue"]}"'
+            if token not in existing:
+              extra.append(row)
+          if extra:
+            html=html[:end]+','+','.join(json.dumps(r,ensure_ascii=False,separators=(',',':')) for r in extra)+html[end:]
+          if '"raceDate":"2026-09-05"' not in html[start:html.find('];const today=',start)]:
+            raise SystemExit('PATCHED_HOME_CALENDAR_MISSING_2026_09_05')
+          open('/tmp/home.html','w',encoding='utf-8').write(html)
+          open('src/recent-home-calendar-snapshot.ts','w',encoding='utf-8').write(
+            'export const RECENT_HOME_CALENDAR_SNAPSHOT = '+json.dumps(rows,ensure_ascii=False,separators=(',',':'))+' as const;\n'
+          )
+          print('RECENT_CALENDAR_ROWS',len(rows),'FIRST',dates[0],'LAST',dates[-1])
+          PY
+
+          python3 - <<'PY'
+          import json,re
+          html=open('/tmp/home.html',encoding='utf-8').read()
+          m=re.search(r'const calendar=(\[[\s\S]*?\]);const today=',html)
+          if not m: raise SystemExit('CALENDAR_PARSE_FAILED')
+          calendar=json.loads(m.group(1))
+          dates=sorted({r.get('raceDate','') for r in calendar})
+          if '2026-09-05' not in dates: raise SystemExit('SNAPSHOT_CALENDAR_MISSING_2026_09_05')
           open('src/normal-home-snapshot.ts','w',encoding='utf-8').write('export const NORMAL_HOME_SNAPSHOT = '+json.dumps(html,ensure_ascii=False)+';\n')
-          print('HOME_BYTES',len(html.encode()))
+          print('HOME_BYTES',len(html.encode()),'CALENDAR_LAST',dates[-1])
           PY
 
       - name: Replace assistant-added 503 with exact normal snapshot fallback
@@ -201,7 +249,7 @@ jobs:
         shell: bash
         run: npx wrangler deploy --config wrangler.jsonc
 
-      - name: Verify production normal HTML
+      - name: Verify production normal HTML and current calendar
         shell: bash
         run: |
           set -euo pipefail
@@ -217,6 +265,16 @@ jobs:
           for marker in 'データを再接続しています' 'データ取得を再試行しています' 'データベースへ接続できない' '表示データの読み込みに失敗しました' '表示系の自動復旧モードです' '一時的にページを表示できません。'; do
             if grep -q "$marker" /tmp/prod.html; then echo "BANNED_PROD=$marker"; exit 1; fi
           done
+          python3 - <<'PY'
+          import json,re
+          html=open('/tmp/prod.html',encoding='utf-8').read()
+          m=re.search(r'const calendar=(\[[\s\S]*?\]);const today=',html)
+          if not m: raise SystemExit('PROD_CALENDAR_PARSE_FAILED')
+          calendar=json.loads(m.group(1))
+          dates=sorted({r.get('raceDate','') for r in calendar})
+          if '2026-09-05' not in dates: raise SystemExit('PROD_CALENDAR_MISSING_2026_09_05')
+          print('PRODUCTION_CALENDAR_LAST',dates[-1],'ROWS',len(calendar))
+          PY
           echo 'PRODUCTION_HOME_OK'
           grep -i '^x-race-home-path:' /tmp/prod.headers || true
           wc -c /tmp/prod.html
@@ -227,8 +285,8 @@ jobs:
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add src/public-site-entry-v37.ts src/normal-home-snapshot.ts
+          git add src/public-site-entry-v37.ts src/normal-home-snapshot.ts src/recent-home-calendar-snapshot.ts
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m 'fix: serve exact normal home when D1 read budget is exhausted'
+          git commit -m 'fix: include current production races in normal home calendar'
           git pull --rebase origin main
           git push origin HEAD:main
