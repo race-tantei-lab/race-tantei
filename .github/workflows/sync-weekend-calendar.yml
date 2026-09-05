@@ -2,17 +2,6 @@ name: Sync weekend calendar
 run-name: Sync weekend calendar · ${{ github.sha }}
 
 on:
-  schedule:
-    - cron: "10 7 * * 4"   # Thu 16:10 JST
-    - cron: "10 1 * * 5"   # Fri 10:10 JST
-    - cron: "10 1 * * 6"   # Sat 10:10 JST
-  push:
-    branches: [main]
-    paths:
-      - "scripts/sync-current-weekend-calendar-direct.mjs"
-      - "scripts/run-current-weekend-calendar-direct.mjs"
-      - "scripts/audit-current-weekend-calendar.py"
-      - ".github/workflows/sync-weekend-calendar.yml"
   workflow_dispatch:
 
 permissions:
@@ -44,7 +33,7 @@ jobs:
         run: |
           npm ci
           npm run build:test
-      - name: Sync official weekend calendar
+      - name: Diagnostic official weekend calendar sync
         run: node scripts/run-current-weekend-calendar-direct.mjs
       - name: Verify weekend calendar in D1
         run: python scripts/audit-current-weekend-calendar.py
