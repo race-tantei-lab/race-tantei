@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { findCurrentEntryAnchor } from "./find-current-jra-entry-anchor.mjs";
 import { syncCurrentWeekendCalendarDirect } from "./sync-current-weekend-calendar-direct.mjs";
 
@@ -8,11 +8,29 @@ globalThis.Bun = {
   }
 };
 
-// Entry discovery only needs the authoritative JRA meeting metadata. Do not
-// rewrite rt_races before entry acquisition; race-day bootstrap separately
-// repairs the calendar if it is actually incomplete.
+async function meetingReport(now) {
+  const path = process.env.JRA_MEETING_DISCOVERY_FILE || "";
+  if (path) {
+    try {
+      const parsed = JSON.parse(await readFile(path, "utf8"));
+      const meetings = Array.isArray(parsed.meetings) ? parsed.meetings : [];
+      const dates = [...new Set(meetings.map((row) => String(row?.date || "")).filter(Boolean))].sort();
+      if (meetings.length && dates.length) {
+        console.log("JRA_MEETINGS_FROM_D1_EXPORT", JSON.stringify({ dates, meetings: meetings.length }));
+        return { generatedAtUtc: new Date().toISOString(), dates, meetings, source: "d1-export", persisted: false };
+      }
+    } catch (error) {
+      console.warn("JRA_MEETING_DISCOVERY_FILE_FAILED", error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  // Fallback only. GitHub-hosted runners may be blocked by JRA calendar pages,
+  // so scheduled production sync supplies meeting metadata from a D1 export.
+  return syncCurrentWeekendCalendarDirect(now, { persist: false });
+}
+
 const now = new Date();
-const calendarReport = await syncCurrentWeekendCalendarDirect(now, { persist: false });
+const calendarReport = await meetingReport(now);
 const discovery = await findCurrentEntryAnchor(now, calendarReport.meetings || []);
 await writeFile("jra-entry-anchor-discovery.json", `${JSON.stringify({ ...discovery, calendarReport }, null, 2)}\n`, "utf8");
 
