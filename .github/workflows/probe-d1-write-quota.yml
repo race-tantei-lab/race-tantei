@@ -28,5 +28,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # This statement intentionally performs no SELECT and tests whether write quota remains available.
           npx wrangler d1 execute race-tantei-phase0 --remote --command "INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES('ops_write_probe_20260906','ok',CURRENT_TIMESTAMP) ON CONFLICT(state_key) DO UPDATE SET state_value='ok',updated_at=CURRENT_TIMESTAMP"
           echo WRITE_PROBE_OK
