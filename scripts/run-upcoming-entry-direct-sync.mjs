@@ -8,7 +8,10 @@ globalThis.Bun = {
   }
 };
 
-const calendarReport = await syncCurrentWeekendCalendarDirect();
+// Entry discovery only needs the authoritative JRA meeting metadata. Do not
+// rewrite rt_races before entry acquisition; race-day bootstrap separately
+// repairs the calendar if it is actually incomplete.
+const calendarReport = await syncCurrentWeekendCalendarDirect(new Date(), { persist: false });
 const discovery = await findCurrentEntryAnchor(new Date(), calendarReport.meetings || []);
 await writeFile("jra-entry-anchor-discovery.json", `${JSON.stringify({ ...discovery, calendarReport }, null, 2)}\n`, "utf8");
 
