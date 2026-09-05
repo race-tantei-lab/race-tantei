@@ -56,4 +56,5 @@ const seeds = [...new Set(anchors.flatMap((anchor) => [anchor.anchorUrl, ...(anc
 if (!seeds.length) throw new Error("JRA_ENTRY_SEEDS_EMPTY");
 process.env.JRA_SEED_ENTRY_URLS = seeds.join(",");
 
+// Saving remains a separate step so a JRA fetch success is not hidden by a D1 quota failure.
 await import("./sync-upcoming-entries-direct.mjs");
