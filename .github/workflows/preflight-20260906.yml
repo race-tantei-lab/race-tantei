@@ -44,7 +44,7 @@ jobs:
             with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
             if not body.get('success'): raise RuntimeError(json.dumps(body,ensure_ascii=False))
             return body.get('result') or {}
-          opts={'tables':['rt_races','rt_runners','rt_selection_state_meta']}
+          opts={'tables':['rt_races','rt_runners','rt_selection_state_meta','rt_system_state']}
           result=post({'output_format':'polling','dump_options':opts});bookmark=result.get('at_bookmark')
           for _ in range(120):
             signed=(result.get('result') or {}).get('signed_url')
@@ -57,7 +57,7 @@ jobs:
           print('EXPORT_BYTES',os.path.getsize('/tmp/preflight.sql'))
           PY
 
-      - name: Prepare 9/6 meeting metadata and stored 9/5 entry URL
+      - name: Prepare 9/6 metadata and inspect Cloudflare maintenance state
         shell: bash
         run: |
           python3 - <<'PY'
@@ -69,10 +69,16 @@ jobs:
           open('/tmp/jra-meetings.json','w',encoding='utf-8').write(json.dumps({'meetings':meetings},ensure_ascii=False))
           row=con.execute("SELECT entry_url FROM rt_races WHERE race_date='2026-09-05' AND length(trim(coalesce(entry_url,'')))>0 ORDER BY race_id LIMIT 1").fetchone()
           open('/tmp/stored-entry-url','w',encoding='utf-8').write(str(row[0]) if row else '')
-          con.close();print('MEETINGS_0906',json.dumps(meetings,ensure_ascii=False));print('STORED_ENTRY_URL_PRESENT',bool(row))
+          states=dict(con.execute("SELECT state_key,state_value FROM rt_system_state WHERE state_key IN ('worker_upcoming_calendar_repair','worker_upcoming_entry_repair')").fetchall())
+          print('MEETINGS_0906',json.dumps(meetings,ensure_ascii=False))
+          print('STORED_ENTRY_URL_PRESENT',bool(row))
+          for key in ('worker_upcoming_calendar_repair','worker_upcoming_entry_repair'):
+            print('CLOUDFLARE_MAINTENANCE_STATE',key,states.get(key,'MISSING'))
+          con.close()
           PY
 
-      - name: Probe JRA entry page access and discover 9/6 anchor
+      - name: Diagnostic only - probe JRA from GitHub runner
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -85,15 +91,15 @@ jobs:
             const page=await fetchJraPage(stored);
             if (!pageLooksLikeEntry(page.html)) throw new Error('STORED_ENTRY_PAGE_NOT_ENTRY');
             const bundle=parseEntryPage(page.html,stored);
-            console.log('JRA_STORED_ENTRY_ACCESS_OK',bundle.race.raceId,bundle.runners.length);
+            console.log('GITHUB_JRA_STORED_ENTRY_ACCESS_OK',bundle.race.raceId,bundle.runners.length);
           }
           const meetings=JSON.parse(await readFile('/tmp/jra-meetings.json','utf8')).meetings;
           const discovery=await findCurrentEntryAnchor(new Date(),meetings);
-          console.log('JRA_0906_DISCOVERY',JSON.stringify({found:discovery.found,requiredProbeDates:discovery.requiredProbeDates,anchors:(discovery.anchors||[]).map(a=>({date:a.targetDate,venue:a.venue,raceId:a.raceId,runners:a.runnerCount,mode:a.discoveryMode})),errors:(discovery.errors||[]).slice(0,8)}));
-          if (!discovery.found || !(discovery.anchors||[]).some(a=>a.targetDate==='2026-09-06')) throw new Error('JRA_0906_ENTRY_ANCHOR_NOT_FOUND');
+          console.log('GITHUB_JRA_0906_DIAGNOSTIC',JSON.stringify({found:discovery.found,requiredProbeDates:discovery.requiredProbeDates,anchors:(discovery.anchors||[]).map(a=>({date:a.targetDate,venue:a.venue,raceId:a.raceId,runners:a.runnerCount,mode:a.discoveryMode})),errors:(discovery.errors||[]).slice(0,8)}));
+          if (!discovery.found || !(discovery.anchors||[]).some(a=>a.targetDate==='2026-09-06')) throw new Error('GITHUB_JRA_0906_ENTRY_ANCHOR_NOT_FOUND');
           JS
 
-      - name: Verify 9/6 program, runners and selection model state
+      - name: Verify 9/6 program, real runners and selection model state
         shell: bash
         run: |
           python3 - <<'PY'
@@ -103,7 +109,7 @@ jobs:
           by=collections.Counter(str(r[1]) for r in races)
           if len(races)!=36 or set(by.values())!={12}: raise SystemExit('PROGRAM_NOT_36:'+json.dumps(dict(by),ensure_ascii=False))
           if any(not r[3] for r in races): raise SystemExit('START_TIME_MISSING')
-          readiness=con.execute('''SELECT r.race_id,r.venue,r.race_no,SUM(CASE WHEN COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS active
+          readiness=con.execute('''SELECT r.race_id,r.venue,r.race_no,SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS active
             FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date=? GROUP BY r.race_id,r.venue,r.race_no ORDER BY r.venue,r.race_no''',(date,)).fetchall()
           bad=[{'raceId':r[0],'venue':r[1],'raceNo':r[2],'active':r[3]} for r in readiness if int(r[3] or 0)<3]
           if len(readiness)!=36 or bad: raise SystemExit('RUNNERS_INCOMPLETE:'+json.dumps(bad,ensure_ascii=False))
@@ -126,6 +132,7 @@ jobs:
           if len(races)!=36 or len(by)!=3 or any(v!=12 for v in by.values()): raise SystemExit('PUBLIC_0906_NOT_36:'+json.dumps(dict(by),ensure_ascii=False))
           print('PREFLIGHT_PUBLIC_OK','RACES',len(races),'VENUES',dict(by),'SOURCE',body.get('fallbackSource','live-d1'))
           PY
+
       - name: Verify permanent configs point to v3 gate
         shell: bash
         run: |
