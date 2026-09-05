@@ -3,8 +3,15 @@ name: Deploy Cloudflare Worker
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "analysis-results/**"
+    paths:
+      - "src/**"
+      - "config/**"
+      - "scripts/**"
+      - "migrations/**"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "wrangler*.jsonc"
   workflow_dispatch:
 
 concurrency:
