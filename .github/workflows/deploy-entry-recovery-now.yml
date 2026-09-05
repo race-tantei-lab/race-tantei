@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # GET must stay closed; only the one-shot POST path is enabled. Race details are verified separately.
+          # GET remains closed; POST performs the one-shot official runner persistence.
           code=$(curl --max-time 10 -sS -o /tmp/body -w '%{http_code}' 'https://race-tantei-phase0.race-tantei.workers.dev/_ops/entry-seed-sync-20260906-7f4c9d2a')
           test "$code" = 404
           echo RECOVERY_WORKER_DEPLOYED
