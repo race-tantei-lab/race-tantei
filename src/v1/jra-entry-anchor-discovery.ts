@@ -29,7 +29,7 @@ export type PublishedEntryAnchor = {
   sourceUrl: string;
 };
 
-function canonicalUrl(cname: string): string {
+export function canonicalPublishedEntryUrl(cname: string): string {
   return `https://www.jra.go.jp/JRADB/accessD.html?CNAME=${encodeURIComponent(cname)}`;
 }
 
@@ -80,7 +80,7 @@ async function fetchOfficial(rawUrl: string): Promise<{ html: string; url: strin
   }
 }
 
-function cnameCandidates(html: string): string[] {
+export function extractPublishedEntryCnames(html: string): string[] {
   const normalized = html.replace(/&amp;/gi, "&").replace(/\\u0026/gi, "&").replace(/\\\//g, "/");
   const found = new Set<string>();
   for (const match of normalized.matchAll(/((?:pw|sw)01(?:dde|ddd)[A-Za-z0-9%/]+)/gi)) {
@@ -89,6 +89,15 @@ function cnameCandidates(html: string): string[] {
     if (/(?:pw|sw)01dde/i.test(cname)) found.add(cname);
   }
   return [...found];
+}
+
+export async function fetchPublishedEntryByCname(cname: string): Promise<PublishedEntryAnchor | null> {
+  for (const url of [canonicalPublishedEntryUrl(cname), appUrl(cname)]) {
+    const page = await fetchOfficial(url);
+    if (!page || !pageLooksLikeEntry(page.html)) continue;
+    return { cname, html: page.html, sourceUrl: page.url };
+  }
+  return null;
 }
 
 function candidateMatchesMeeting(cname: string, meeting: Meeting): boolean {
@@ -103,24 +112,21 @@ function candidateMatchesMeeting(cname: string, meeting: Meeting): boolean {
 }
 
 async function validateCandidate(cname: string, meeting: Meeting): Promise<PublishedEntryAnchor | null> {
-  for (const url of [canonicalUrl(cname), appUrl(cname)]) {
-    const page = await fetchOfficial(url);
-    if (!page || !pageLooksLikeEntry(page.html)) continue;
-    try {
-      const bundle = parseEntryPage(page.html, canonicalUrl(cname));
-      const active = bundle.runners.filter((runner) => (runner.runnerStatus || "active") === "active");
-      if (bundle.race.raceDate !== meeting.raceDate || bundle.race.venue !== meeting.venue || active.length < 3) continue;
-      return { cname, html: page.html, sourceUrl: page.url };
-    } catch {
-      // Try the alternate official host/candidate.
-    }
+  const page = await fetchPublishedEntryByCname(cname);
+  if (!page) return null;
+  try {
+    const bundle = parseEntryPage(page.html, canonicalPublishedEntryUrl(cname));
+    const active = bundle.runners.filter((runner) => (runner.runnerStatus || "active") === "active");
+    if (bundle.race.raceDate !== meeting.raceDate || bundle.race.venue !== meeting.venue || active.length < 3) return null;
+    return page;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export async function discoverPublishedEntryAnchor(meeting: Meeting): Promise<PublishedEntryAnchor | null> {
   const landingPages = await Promise.all(LANDING_URLS.map((url) => fetchOfficial(url)));
-  const candidates = [...new Set(landingPages.flatMap((page) => page ? cnameCandidates(page.html) : []))]
+  const candidates = [...new Set(landingPages.flatMap((page) => page ? extractPublishedEntryCnames(page.html) : []))]
     .filter((cname) => candidateMatchesMeeting(cname, meeting))
     .slice(0, MAX_VALIDATE);
   if (!candidates.length) return null;
