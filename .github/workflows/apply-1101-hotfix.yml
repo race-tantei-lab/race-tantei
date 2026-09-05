@@ -1,4 +1,4 @@
-name: One-time D1 export audit
+name: One-time D1 index hotfix
 
 on:
   push:
@@ -11,11 +11,11 @@ permissions:
   contents: read
 
 jobs:
-  audit:
+  hotfix:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Export production D1 without rows_read
+      - name: Apply bounded production D1 indexes
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
@@ -24,61 +24,81 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p audit-output
-          python3 - <<'PY'
-          import json, os, sqlite3, time, urllib.request
+          python3 - <<'PY' | tee audit-output/index-hotfix.txt
+          import json, os, time, urllib.request, urllib.error, sqlite3
           account=os.environ['CLOUDFLARE_ACCOUNT_ID']; dbid=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
-          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{dbid}/export'
+          base=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{dbid}'
           headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'}
-          def post(payload):
-              req=urllib.request.Request(url,data=json.dumps(payload).encode(),method='POST',headers=headers)
+          statements=[
+            'CREATE INDEX IF NOT EXISTS rt_idx_races_date ON rt_races(race_date DESC, venue, race_no)',
+            'CREATE INDEX IF NOT EXISTS rt_idx_public_bets_race ON rt_public_bets(race_id, id)',
+            'CREATE INDEX IF NOT EXISTS rt_idx_public_bets_settlement ON rt_public_bets(settlement_status, course, race_id)',
+            'CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_hist_lookup ON rt_ml_horse_hist(generation, horse_name, seq)',
+            'CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_total_lookup ON rt_ml_horse_total(generation, horse_name)',
+            'CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_surface_lookup ON rt_ml_horse_surface(generation, horse_name)',
+            'CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_dist_lookup ON rt_ml_horse_dist(generation, horse_name)',
+            'CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_venue_lookup ON rt_ml_horse_venue(generation, horse_name)',
+            'CREATE INDEX IF NOT EXISTS rt_idx_ml_jockey_lookup ON rt_ml_jockey(generation, name)',
+            'CREATE INDEX IF NOT EXISTS rt_idx_ml_trainer_lookup ON rt_ml_trainer(generation, name)',
+            'CREATE INDEX IF NOT EXISTS rt_idx_ml_pair_lookup ON rt_ml_pair(generation, horse_name, jockey)',
+          ]
+          def call(path,payload):
+              req=urllib.request.Request(base+path,data=json.dumps(payload).encode(),method='POST',headers=headers)
+              try:
+                  with urllib.request.urlopen(req,timeout=180) as r: return json.load(r)
+              except urllib.error.HTTPError as e:
+                  body=e.read().decode('utf-8','replace')
+                  raise RuntimeError(f'HTTP {e.code}: {body}')
+          for sql in statements:
+              body=call('/query',{'sql':sql})
+              print('DDL',sql,'=>',json.dumps(body,ensure_ascii=False))
+              if not body.get('success'): raise RuntimeError(body)
+
+          # Export only the affected schema/tables; export does not spend rows_read.
+          export_url=base+'/export'
+          def exp(payload):
+              req=urllib.request.Request(export_url,data=json.dumps(payload).encode(),method='POST',headers=headers)
               with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
               if not body.get('success'): raise RuntimeError(body)
               return body.get('result') or {}
-          tables=['rt_races','rt_public_bets','rt_system_state','rt_live_preview_archive','rt_official_odds_latest','rt_official_odds_snapshots']
-          result=post({'output_format':'polling','dump_options':{'tables':tables}}); bookmark=result.get('at_bookmark')
+          tables=['rt_races','rt_public_bets','rt_ml_horse_hist','rt_ml_horse_total','rt_ml_horse_surface','rt_ml_horse_dist','rt_ml_horse_venue','rt_ml_jockey','rt_ml_trainer','rt_ml_pair']
+          result=exp({'output_format':'polling','dump_options':{'tables':tables}}); bookmark=result.get('at_bookmark')
           for _ in range(120):
               signed=(result.get('result') or {}).get('signed_url')
               if signed: break
-              time.sleep(2); result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':{'tables':tables}})
+              time.sleep(2); result=exp({'output_format':'polling','current_bookmark':bookmark,'dump_options':{'tables':tables}})
           signed=(result.get('result') or {}).get('signed_url')
           if not signed: raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
-          with urllib.request.urlopen(signed,timeout=240) as r: sql=r.read().decode('utf-8')
-          con=sqlite3.connect(':memory:'); con.executescript(sql); con.row_factory=sqlite3.Row
-          day='2026-09-05'; sel=con.execute('SELECT state_value FROM rt_system_state WHERE state_key=?',(f'final_daily_selection:{day}',)).fetchone()
-          selected=[]
-          if sel: selected=[str(x.get('raceId')) for x in json.loads(sel['state_value']).get('selected',[]) if x.get('raceId')]
-          selected=list(dict.fromkeys(selected)); ph=','.join('?' for _ in selected) or "''"
-          def schema(t): return [dict(x) for x in con.execute(f"PRAGMA table_info('{t}')")]
-          def rows_for(t):
-              cols={x['name'] for x in schema(t)}
-              if 'race_id' not in cols or not selected: return []
-              return [dict(x) for x in con.execute(f'SELECT * FROM {t} WHERE race_id IN ({ph}) ORDER BY race_id',selected)]
-          payload={
-            'selected':selected,
-            'races':[dict(x) for x in con.execute(f'SELECT race_id,venue,race_no,start_time_utc FROM rt_races WHERE race_id IN ({ph}) ORDER BY start_time_utc',selected)] if selected else [],
-            'publicBets':rows_for('rt_public_bets'),
-            'previewArchives':rows_for('rt_live_preview_archive'),
-            'officialOddsLatest':rows_for('rt_official_odds_latest'),
-            'officialOddsSnapshots':rows_for('rt_official_odds_snapshots'),
-            'schemas':{t:schema(t) for t in ['rt_live_preview_archive','rt_official_odds_latest','rt_official_odds_snapshots']},
-            'indexes':{t:[dict(x) for x in con.execute(f"PRAGMA index_list('{t}')")] for t in ['rt_races','rt_public_bets','rt_live_preview_archive']},
-            'driverStates':[dict(x) for x in con.execute("SELECT state_key,state_value,updated_at FROM rt_system_state WHERE state_key LIKE 'live_deadline_driver:%' OR state_key LIKE 'worker_live_preview:%' OR state_key LIKE 'worker_live_final:%' ORDER BY state_key")],
+          with urllib.request.urlopen(signed,timeout=240) as r: dump=r.read().decode('utf-8')
+          con=sqlite3.connect(':memory:'); con.executescript(dump); con.row_factory=sqlite3.Row
+          check_tables=['rt_races','rt_public_bets','rt_ml_horse_hist','rt_ml_horse_total','rt_ml_horse_surface','rt_ml_horse_dist','rt_ml_horse_venue','rt_ml_jockey','rt_ml_trainer','rt_ml_pair']
+          indexes={t:[dict(x) for x in con.execute(f"PRAGMA index_list('{t}')")] for t in check_tables}
+          plans={
+            'horse_hist':[dict(x) for x in con.execute("EXPLAIN QUERY PLAN SELECT horse_name,seq FROM rt_ml_horse_hist WHERE generation=? AND horse_name IN (SELECT value FROM json_each(?)) ORDER BY horse_name,seq",('g','[\"x\"]'))],
+            'horse_total':[dict(x) for x in con.execute("EXPLAIN QUERY PLAN SELECT horse_name,n,w,t FROM rt_ml_horse_total WHERE generation=? AND horse_name IN (SELECT value FROM json_each(?))",('g','[\"x\"]'))],
+            'horse_surface':[dict(x) for x in con.execute("EXPLAIN QUERY PLAN SELECT horse_name,surface,n,w,t FROM rt_ml_horse_surface WHERE generation=? AND horse_name IN (SELECT value FROM json_each(?))",('g','[\"x\"]'))],
+            'horse_dist':[dict(x) for x in con.execute("EXPLAIN QUERY PLAN SELECT horse_name,dist_bin,n,w,t FROM rt_ml_horse_dist WHERE generation=? AND horse_name IN (SELECT value FROM json_each(?))",('g','[\"x\"]'))],
+            'horse_venue':[dict(x) for x in con.execute("EXPLAIN QUERY PLAN SELECT horse_name,venue,n,w,t FROM rt_ml_horse_venue WHERE generation=? AND horse_name IN (SELECT value FROM json_each(?))",('g','[\"x\"]'))],
+            'jockey':[dict(x) for x in con.execute("EXPLAIN QUERY PLAN SELECT name,n,w,t FROM rt_ml_jockey WHERE generation=? AND name IN (SELECT value FROM json_each(?))",('g','[\"x\"]'))],
+            'trainer':[dict(x) for x in con.execute("EXPLAIN QUERY PLAN SELECT name,n,w,t FROM rt_ml_trainer WHERE generation=? AND name IN (SELECT value FROM json_each(?))",('g','[\"x\"]'))],
+            'pair':[dict(x) for x in con.execute("EXPLAIN QUERY PLAN SELECT horse_name,jockey,n,w,t FROM rt_ml_pair WHERE generation=? AND horse_name IN (SELECT value FROM json_each(?)) AND jockey IN (SELECT value FROM json_each(?))",('g','[\"x\"]','[\"j\"]'))],
           }
-          open('audit-output/emergency-live-export.json','w',encoding='utf-8').write(json.dumps(payload,ensure_ascii=False,indent=2))
-          print(json.dumps({
-            'selected':len(selected),
-            'publicBetRows':len(payload['publicBets']),
-            'archiveRows':len(payload['previewArchives']),
-            'oddsLatestRows':len(payload['officialOddsLatest']),
-            'oddsSnapshotRows':len(payload['officialOddsSnapshots']),
-            'archiveRaceIds':sorted(set(str(x.get('race_id')) for x in payload['previewArchives'])),
-            'oddsLatestRaceIds':sorted(set(str(x.get('race_id')) for x in payload['officialOddsLatest'])),
-          },ensure_ascii=False))
+          print('INDEXES',json.dumps(indexes,ensure_ascii=False))
+          print('PLANS',json.dumps(plans,ensure_ascii=False))
+          required={
+            'rt_ml_horse_hist':'rt_idx_ml_horse_hist_lookup','rt_ml_horse_total':'rt_idx_ml_horse_total_lookup','rt_ml_horse_surface':'rt_idx_ml_horse_surface_lookup','rt_ml_horse_dist':'rt_idx_ml_horse_dist_lookup','rt_ml_horse_venue':'rt_idx_ml_horse_venue_lookup','rt_ml_jockey':'rt_idx_ml_jockey_lookup','rt_ml_trainer':'rt_idx_ml_trainer_lookup','rt_ml_pair':'rt_idx_ml_pair_lookup'
+          }
+          for table,name in required.items():
+              if name not in {x['name'] for x in indexes[table]}: raise RuntimeError(f'INDEX_MISSING:{table}:{name}')
+          if any(any('SCAN rt_ml_' in str(x.get('detail','')) for x in rows) for rows in plans.values()):
+              raise RuntimeError('ML_QUERY_PLAN_STILL_FULL_SCAN')
+          print('INDEX_HOTFIX_VERIFIED')
           PY
-      - name: Upload audit artifact
+      - name: Upload verification
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: emergency-live-export-20260905
-          path: audit-output/emergency-live-export.json
+          name: d1-index-hotfix-20260905
+          path: audit-output/index-hotfix.txt
           if-no-files-found: error
           retention-days: 1
