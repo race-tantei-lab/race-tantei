@@ -176,6 +176,13 @@ async function fetchNormalHome(request: Request, env: Env, ctx: ExecutionContext
   return embeddedNormalHome();
 }
 
+async function fetchRaceList(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const homeUrl = new URL(request.url);
+  homeUrl.pathname = "/";
+  const homeRequest = new Request(homeUrl.toString(), request);
+  return fetchNormalHome(homeRequest, env, ctx);
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -183,6 +190,7 @@ export default {
     if (pathname === "/_ops/live-tick") return new Response("NOT_FOUND", { status: 404, headers: { "cache-control": "no-store" } });
     if (request.method === "GET" && pathname === "/api/public/day") return fetchPublicDay(request, env, ctx, url.searchParams.get("date") ?? "");
     if (request.method === "GET" && (pathname === "/" || pathname === "/index.html")) return fetchNormalHome(request, env, ctx);
+    if (request.method === "GET" && (pathname === "/races" || pathname === "/races/")) return fetchRaceList(request, env, ctx);
     return core.fetch(request, env, ctx);
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
