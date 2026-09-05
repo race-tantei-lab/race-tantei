@@ -1,0 +1,7 @@
+name: probe current time
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: date -u
