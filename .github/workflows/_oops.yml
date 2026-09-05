@@ -1,0 +1,7 @@
+name: oops
+on: workflow_dispatch
+jobs:
+  oops:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo oops
