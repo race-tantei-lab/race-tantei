@@ -12,7 +12,10 @@ const REQUIRED_LIVE_INDEXES = [
   "rt_idx_ml_pair_lookup",
 ] as const;
 
-const RECHECK_MS = 5 * 60_000;
+// While indexes are missing, recheck every minute so the live workers resume
+// immediately after the daily D1 reset/bootstrap creates them. Once ready,
+// the in-memory state stays ready and no further sqlite_master reads are made.
+const RECHECK_MS = 60_000;
 let indexState: { ready: boolean; checkedAt: number; missing: string[] } | null = null;
 
 async function requiredLiveIndexesReady(db: D1Database): Promise<{ ready: boolean; missing: string[] }> {
