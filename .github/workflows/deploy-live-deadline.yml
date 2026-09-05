@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "src/live-deadline-entry-v2.ts"
+      - "src/live-deadline-entry-v3.ts"
       - "src/v1/live-preview-safety.ts"
       - "src/v1/completed-worker-live-lock.ts"
       - "src/v1/completed-worker-deadline-guard.ts"
