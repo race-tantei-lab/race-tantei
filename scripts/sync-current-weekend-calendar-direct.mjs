@@ -34,9 +34,11 @@ async function d1(sql, params = []) {
     body: JSON.stringify({ sql, params })
   });
   const body = await response.json();
-  if (!response.ok || body?.success !== true) throw new Error(`D1_HTTP_${response.status}`);
+  if (!response.ok || body?.success !== true) {
+    throw new Error(`D1_HTTP_${response.status}:${JSON.stringify(body?.errors || [])}`);
+  }
   const result = Array.isArray(body.result) ? body.result[0] : null;
-  if (result?.success === false) throw new Error("D1_QUERY_FAILED");
+  if (result?.success === false) throw new Error(`D1_QUERY_FAILED:${JSON.stringify(result)}`);
   return result?.results || [];
 }
 
@@ -59,7 +61,8 @@ async function saveRace(race) {
   ]);
 }
 
-export async function syncCurrentWeekendCalendarDirect(now = new Date()) {
+export async function syncCurrentWeekendCalendarDirect(now = new Date(), options = {}) {
+  const persist = options.persist !== false && process.env.JRA_CALENDAR_DISCOVERY_ONLY !== "1";
   const dates = currentWeekendDates(now);
   const days = [];
   const meetings = [];
@@ -68,7 +71,9 @@ export async function syncCurrentWeekendCalendarDirect(now = new Date()) {
     const races = parseOfficialCalendar(page.html, raceDate, page.url);
     const venues = new Set(races.map((race) => race.venue));
     if (!races.length || races.length !== venues.size * 12) throw new Error(`JRA_CALENDAR_INCOMPLETE:${raceDate}:${races.length}:${venues.size}`);
-    for (const race of races) await saveRace(race);
+    if (persist) {
+      for (const race of races) await saveRace(race);
+    }
     const seen = new Set();
     for (const race of races) {
       const key = `${race.raceDate}:${race.venue}`;
@@ -87,7 +92,7 @@ export async function syncCurrentWeekendCalendarDirect(now = new Date()) {
     }
     days.push({ raceDate, races: races.length, venues: venues.size });
   }
-  const report = { generatedAtUtc: new Date().toISOString(), dates, days, meetings };
+  const report = { generatedAtUtc: new Date().toISOString(), dates, days, meetings, persisted: persist };
   await globalThis.Bun?.write?.("current-weekend-calendar-sync.json", JSON.stringify(report, null, 2));
   return report;
 }
