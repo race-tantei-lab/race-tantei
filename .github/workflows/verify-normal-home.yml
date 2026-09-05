@@ -1,9 +1,8 @@
 name: Verify normal production home
 
+# Manual-only: production polling from Actions must not consume the D1 free-tier
+# allowance. UI regression checks remain available on demand.
 on:
-  workflow_run:
-    workflows: ["Deploy Cloudflare Worker"]
-    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -23,7 +22,7 @@ jobs:
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev'
           ok=0
-          for attempt in $(seq 1 12); do
+          for attempt in $(seq 1 3); do
             code=$(curl --connect-timeout 5 --max-time 25 -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$base/?home-check=$RANDOM") || code=000
             if [[ "$code" == '200' ]] && grep -q 'レース探偵' /tmp/home.html; then
               if grep -Eq 'データ取得を再試行しています|データを再接続しています|データベースへ接続できない|表示データの読み込みに失敗しました' /tmp/home.html; then
