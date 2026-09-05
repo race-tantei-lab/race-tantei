@@ -22,7 +22,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          mkdir -p audit-output
+          python3 - <<'PY' | tee audit-output/prod-live-audit-20260905.txt
           import json, os, sqlite3, time, urllib.request
           from datetime import datetime, timezone
 
@@ -109,3 +110,11 @@ jobs:
           print('DRIVER_STATES',json.dumps([x for x in states if str(x['state_key']).startswith('live_deadline_')],ensure_ascii=False))
           print('INDEXES',json.dumps(indexes,ensure_ascii=False))
           PY
+
+      - name: Upload audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-live-audit-20260905
+          path: audit-output/prod-live-audit-20260905.txt
+          if-no-files-found: error
+          retention-days: 1
