@@ -6,7 +6,6 @@ import { projectCurrentPublicState } from "./v1/current-day-public-api.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v37-free-tier-safe-snapshot-20260905";
-const RECENT_CALENDAR_START = "2026-08-09";
 const FORBIDDEN_RECOVERY_TEXT = [
   "データ取得を再試行しています",
   "データを再接続しています",
@@ -49,10 +48,10 @@ async function loadRecentCalendar(env: Env): Promise<CalendarRow[]> {
     const result = await env.DB.prepare(`
       SELECT race_date AS raceDate, venue, COUNT(*) AS raceCount
       FROM rt_races
-      WHERE race_date > ?
+      WHERE race_date >= date('now','-45 days')
       GROUP BY race_date, venue
       ORDER BY race_date, venue
-    `).bind(RECENT_CALENDAR_START).all<CalendarRow>();
+    `).all<CalendarRow>();
     const rows = (result.results ?? []).filter((row) => row.raceDate && row.venue && Number(row.raceCount) > 0);
     if (rows.length) return rows.map((row) => ({ ...row, raceCount: Number(row.raceCount) }));
   } catch (error) {
