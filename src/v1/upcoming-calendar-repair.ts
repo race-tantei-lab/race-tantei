@@ -38,8 +38,9 @@ function targetDates(now: Date): string[] {
   const weekday = jstWeekday(now); // Sun=0 ... Sat=6
   if (weekday === 4) return [jstDate(now, 2), jstDate(now, 3)]; // Thu -> Sat/Sun
   if (weekday === 5) return [jstDate(now, 1), jstDate(now, 2)]; // Fri -> Sat/Sun
-  if (weekday === 6) return [jstDate(now, 0), jstDate(now, 1)]; // Sat -> Sat/Sun
-  if (weekday === 0) return [jstDate(now, 0)]; // Sun
+  if (weekday === 6) return [jstDate(now, 0), jstDate(now, 1), jstDate(now, 2)]; // Sat -> Sat/Sun/Mon holiday
+  if (weekday === 0) return [jstDate(now, 0), jstDate(now, 1)]; // Sun -> Sun/Mon holiday
+  if (weekday === 1) return [jstDate(now, 0)]; // Mon -> holiday Monday when applicable
   return [];
 }
 
