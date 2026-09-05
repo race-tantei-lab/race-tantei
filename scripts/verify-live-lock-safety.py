@@ -183,11 +183,26 @@ def main() -> None:
     require(public34, 'status: 404', "public v34")
 
     public37 = read("src/public-site-entry-v37.ts")
-    require(public37, "runPublicMaintenance", "public v37")
-    require(public37, "runUpcomingCalendarRepair", "public v37 maintenance")
-    require(public37, "runUpcomingEntryWorkerRepair", "public v37 maintenance")
-    require(public37, "runUpcomingEntryDerivedRepair", "public v37 maintenance")
-    forbid(public37, "if (publicSite.scheduled) await publicSite.scheduled", "public v37 live isolation")
+    public37_core = read("src/public-site-entry-v37-core.ts")
+    require(public37, 'import core from "./public-site-entry-v37-core.js";', "public v37 wrapper")
+    require(public37, "if (core.scheduled) await core.scheduled(controller, env, ctx);", "public v37 maintenance delegation")
+    require(public37, 'pathname === "/_ops/live-tick"', "public v37 live isolation")
+    require(public37, 'status: 404', "public v37 live isolation")
+    for needle in (
+        "runPublicMaintenance",
+        "runUpcomingCalendarRepair",
+        "runUpcomingEntryWorkerRepair",
+        "runUpcomingEntryDerivedRepair",
+    ):
+        require(public37_core, needle, "public v37 core maintenance")
+    for forbidden in (
+        "runCompletedWorkerLiveLock",
+        "runCompletedWorkerDeadlineGuard",
+        "runDirectLiveTick",
+        "shouldOpportunisticallyDrive",
+    ):
+        forbid(public37, forbidden, "public v37 wrapper live isolation")
+        forbid(public37_core, forbidden, "public v37 core live isolation")
 
     require_missing(".github/workflows/drive-live-tick.yml", "obsolete public live driver")
     require_missing(".github/workflows/auto-final-live-bets.yml", "obsolete stored-preview finalizer")
