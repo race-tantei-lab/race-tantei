@@ -14,30 +14,39 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Probe
+      - name: Probe list and individual race details
         shell: bash
         run: |
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev'
-          for path in '/' '/races/' '/api/public/day?date=2026-09-05' '/api/public/day?date=2026-09-06'; do
-            echo "=== $path ==="
-            code=$(curl -L -sS -D /tmp/h -o /tmp/b -w '%{http_code}' "$base$path" || true)
-            echo "HTTP=$code BYTES=$(wc -c </tmp/b)"
-            grep -iE '^(location|content-type|cache-control|x-race|cf-ray|server):' /tmp/h || true
-            python3 - "$path" <<'PY'
-          import json,re,sys
-          p=sys.argv[1]
-          s=open('/tmp/b','rb').read().decode('utf-8','replace')
-          print('HEAD',repr(s[:600]))
-          print('FORBIDDEN', '一時的にページを表示できません。' in s)
-          if p=='/races/':
-            print('HAS_DAY_API', '/api/public/day' in s)
-            print('SCRIPT_SRCS',re.findall(r'<script[^>]*src=["\']([^"\']+)',s,re.I)[:20])
-            print('BUTTONS',re.findall(r'<button[^>]*>(.*?)</button>',s,re.I|re.S)[:10])
-          if p.startswith('/api/'):
-            try:
-              o=json.loads(s); r=o.get('races') if isinstance(o,dict) else None
-              print('JSON_OK',o.get('ok') if isinstance(o,dict) else None,'RACES',len(r) if isinstance(r,list) else None)
-            except Exception as e: print('JSON_ERROR',repr(e))
+          curl -L -sS -D /tmp/list.h -o /tmp/list.html "$base/races/"
+          python3 - <<'PY'
+          import re
+          s=open('/tmp/list.html',encoding='utf-8',errors='replace').read()
+          links=[]
+          for h in re.findall(r'href=["\']([^"\']+)["\']',s):
+            if re.match(r'^/races/20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}/?$',h,re.I) and h not in links:
+              links.append(h)
+          print('DETAIL_LINK_COUNT',len(links))
+          for h in links[:12]: print('DETAIL_LINK',h)
+          open('/tmp/detail-links.txt','w').write('\n'.join(links[:12]))
           PY
-          done
+
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            echo "=== DETAIL $path ==="
+            code=$(curl -L -sS -D /tmp/detail.h -o /tmp/detail.html -w '%{http_code}' "$base$path" || true)
+            echo "HTTP=$code BYTES=$(wc -c </tmp/detail.html)"
+            grep -iE '^(location|content-type|cache-control|x-race|cf-ray|server):' /tmp/detail.h || true
+            python3 - "$path" <<'PY'
+          import re,sys
+          p=sys.argv[1]
+          s=open('/tmp/detail.html',encoding='utf-8',errors='replace').read()
+          print('PATH',p)
+          print('TITLE',re.findall(r'<title>(.*?)</title>',s,re.I|re.S)[:1])
+          phrases=['データ取得を一時的に再試行しています。','データ取得を再試行しています','データを再接続しています','一時的にページを表示できません。','レースが見つかりません']
+          for x in phrases: print('PHRASE',x, x in s)
+          print('API_PATHS',sorted(set(re.findall(r'["\'](/api/[^"\']+)',s)))[:20])
+          print('HEAD',repr(s[:400]))
+          PY
+          done < /tmp/detail-links.txt
