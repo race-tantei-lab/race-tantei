@@ -13,13 +13,13 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
     steps:
-      - name: Export race URL metadata without rows_read
+      - name: Export runner table without rows_read
         shell: bash
         run: |
           set -euo pipefail
@@ -33,38 +33,37 @@ jobs:
             with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
             if not body.get('success'): raise RuntimeError(json.dumps(body,ensure_ascii=False))
             return body.get('result') or {}
-          opts={'tables':['rt_races']}
+          opts={'tables':['rt_runners']}
           result=post({'output_format':'polling','dump_options':opts});bookmark=result.get('at_bookmark')
-          for _ in range(60):
+          for _ in range(90):
             signed=(result.get('result') or {}).get('signed_url')
             if signed: break
+            if not bookmark: raise RuntimeError('EXPORT_BOOKMARK_MISSING')
             time.sleep(1);result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':opts})
           signed=(result.get('result') or {}).get('signed_url')
           if not signed: raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
-          with urllib.request.urlopen(signed,timeout=120) as r: open('/tmp/races.sql','wb').write(r.read())
-          print('EXPORT_BYTES',os.path.getsize('/tmp/races.sql'))
+          with urllib.request.urlopen(signed,timeout=180) as r: open('/tmp/runners.sql','wb').write(r.read())
+          print('EXPORT_BYTES',os.path.getsize('/tmp/runners.sql'))
           PY
 
-      - name: Print usable anchors and current entry URLs
+      - name: Require every 9/6 race to have active runners
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json,sqlite3
-          con=sqlite3.connect('/tmp/races.sqlite')
-          con.executescript(open('/tmp/races.sql',encoding='utf-8').read())
-          current=con.execute("""
-            SELECT venue,race_no,entry_url FROM rt_races
-            WHERE race_date='2026-09-06' AND length(trim(coalesce(entry_url,'')))>0
-            ORDER BY venue,race_no
-          """).fetchall()
-          print('CURRENT_0906_ENTRY_URLS',json.dumps([{'venue':v,'raceNo':n,'url':u} for v,n,u in current],ensure_ascii=False))
+          import collections,json,sqlite3
+          con=sqlite3.connect('/tmp/runners.sqlite')
+          con.executescript(open('/tmp/runners.sql',encoding='utf-8').read())
           rows=con.execute("""
-            SELECT race_date,venue,race_no,meeting_no,meeting_day,entry_url FROM rt_races
-            WHERE race_no=1 AND race_date>='2026-06-01' AND race_date<'2026-09-06'
-              AND entry_url LIKE '%/JRADB/accessD.html?CNAME=pw01dde01%'
-            ORDER BY race_date DESC,venue LIMIT 160
+            SELECT race_id,SUM(CASE WHEN runner_status='active' THEN 1 ELSE 0 END) AS active
+            FROM rt_runners WHERE race_id LIKE '2026-09-06-%'
+            GROUP BY race_id ORDER BY race_id
           """).fetchall()
-          print('ALL_RACE1_HISTORY',json.dumps([{'date':d,'venue':v,'raceNo':n,'meetingNo':m,'meetingDay':md,'url':u} for d,v,n,m,md,u in rows],ensure_ascii=False))
-          con.close()
+          bad=[{'raceId':rid,'active':int(active or 0)} for rid,active in rows if int(active or 0)<3]
+          counts=collections.Counter('-'.join(str(rid).split('-')[3:-1]) for rid,_ in rows)
+          print('RACE_IDS',len(rows),'VENUES',dict(counts),'BAD',json.dumps(bad,ensure_ascii=False))
+          for rid,active in rows: print(rid,int(active or 0))
+          if len(rows)!=36 or sorted(counts.values()) != [12,12,12] or bad:
+            raise SystemExit('D1_0906_RUNNERS_INCOMPLETE')
+          print('D1_0906_ALL_36_RUNNERS_READY')
           PY
