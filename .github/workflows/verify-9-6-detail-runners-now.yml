@@ -1,0 +1,42 @@
+name: Verify all 9/6 detail runners now
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-9-6-detail-runners-now.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check all 36 production race details
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          : > /tmp/ids
+          for venue in nakayama sapporo hanshin; do
+            for n in $(seq -w 1 12); do echo "2026-09-06-${venue}-${n}" >> /tmp/ids; done
+          done
+          check_one() {
+            id="$1"
+            out="/tmp/${id}.html"; hdr="/tmp/${id}.hdr"
+            code=$(curl --retry 2 --retry-delay 1 --retry-all-errors --max-time 30 -sS -D "$hdr" -o "$out" -w '%{http_code}' "$base/races/$id")
+            test "$code" = 200 || { echo "$id HTTP=$code" >&2; return 1; }
+            grep -Fq 'id="official-runners"' "$out" || { echo "$id NO_OFFICIAL_RUNNERS" >&2; return 1; }
+            grep -Fq 'JRA公式出馬表の現在情報' "$out" || { echo "$id NO_JRA_SOURCE_NOTE" >&2; return 1; }
+            ! grep -Fq 'データ取得を一時的に再試行しています' "$out" || { echo "$id FORBIDDEN_RETRY_UI" >&2; return 1; }
+            count=$(grep -o 'class="horse-no"' "$out" | wc -l | tr -d ' ')
+            test "$count" -ge 3 || { echo "$id RUNNER_ROWS=$count" >&2; return 1; }
+            echo "$id OK runners=$count"
+          }
+          export -f check_one
+          export base
+          cat /tmp/ids | xargs -n1 -P6 -I{} bash -c 'check_one "$1"' _ {}
+          echo ALL_36_PRODUCTION_DETAILS_HAVE_OFFICIAL_RUNNERS
