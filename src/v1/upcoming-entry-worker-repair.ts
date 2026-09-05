@@ -161,7 +161,7 @@ async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]>
   const result = await db.prepare(`
     WITH per_race AS (
       SELECT r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no,
-             SUM(CASE WHEN COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners
+             SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners
       FROM rt_races r
       LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
       WHERE r.race_date>=? AND r.race_date<=?
@@ -194,7 +194,7 @@ async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]>
 async function existingOfficialAnchor(db: D1Database, group: MissingGroup): Promise<Anchor | null> {
   const rows = await db.prepare(`
     SELECT r.race_id AS raceId,r.race_no AS raceNo,r.entry_url AS entryUrl,
-           SUM(CASE WHEN COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners
+           SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners
     FROM rt_races r
     LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
     WHERE r.race_date=? AND r.venue=? AND LENGTH(TRIM(COALESCE(r.entry_url,'')))>0
