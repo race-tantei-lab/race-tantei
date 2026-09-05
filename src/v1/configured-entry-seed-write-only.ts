@@ -1,6 +1,6 @@
 import { saveEntryBundle, upsertRaceSources } from "./db.js";
 import { pageLooksLikeEntry, parseEntryPage, toResultUrl } from "./jra.js";
-import type { Env } from "./types.js";
+import type { Env, RaceBundle } from "./types.js";
 
 const FETCH_TIMEOUT_MS = 6_000;
 const FETCH_CONCURRENCY = 4;
@@ -105,6 +105,27 @@ async function fetchOfficialEntry(cname: string): Promise<{ html: string; canoni
       // try next official JRA host
     } finally {
       clearTimeout(timer);
+    }
+  }
+  return null;
+}
+
+export async function loadConfiguredOfficialRace(env: Env, raceId: string): Promise<RaceBundle | null> {
+  const match = raceId.match(/^(20\d{2}-\d{2}-\d{2})-[a-z0-9-]+-(\d{2})$/i);
+  if (!match) return null;
+  const targetDate = match[1];
+  const raceNo = Number(match[2]);
+  if (!Number.isInteger(raceNo) || raceNo < 1 || raceNo > 12) return null;
+  for (const seed of configuredSeeds(env, targetDate)) {
+    const cname = cnameForRace(seed.cname, raceNo);
+    const page = await fetchOfficialEntry(cname);
+    if (!page) continue;
+    try {
+      const bundle = parseEntryPage(page.html, page.canonical);
+      const active = bundle.runners.filter((row) => (row.runnerStatus || "active") === "active");
+      if (bundle.race.raceId === raceId && active.length >= 3) return bundle;
+    } catch {
+      // try the next configured venue seed
     }
   }
   return null;
