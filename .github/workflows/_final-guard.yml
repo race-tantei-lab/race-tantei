@@ -1,0 +1,7 @@
+name: final guard
+on: workflow_dispatch
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo final
