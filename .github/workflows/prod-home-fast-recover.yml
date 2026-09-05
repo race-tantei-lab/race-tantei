@@ -16,7 +16,7 @@ concurrency:
 jobs:
   recover:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 6
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
@@ -32,7 +32,7 @@ jobs:
           cache: npm
       - run: npm ci --prefer-offline --no-audit --no-fund
 
-      - name: Export only three home tables without rows_read
+      - name: Export production race calendar without rows_read
         shell: bash
         run: |
           set -euo pipefail
@@ -46,7 +46,7 @@ jobs:
             with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
             if not body.get('success'): raise RuntimeError(json.dumps(body,ensure_ascii=False))
             return body.get('result') or {}
-          opts={'tables':['rt_races','rt_public_bets','rt_system_state']}
+          opts={'tables':['rt_races']}
           result=post({'output_format':'polling','dump_options':opts}); bookmark=result.get('at_bookmark')
           for _ in range(90):
             signed=(result.get('result') or {}).get('signed_url')
@@ -56,62 +56,18 @@ jobs:
             result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':opts})
           signed=(result.get('result') or {}).get('signed_url')
           if not signed: raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
-          with urllib.request.urlopen(signed,timeout=120) as r: open('/tmp/prod-home.sql','wb').write(r.read())
-          print('EXPORT_BYTES',os.path.getsize('/tmp/prod-home.sql'))
+          with urllib.request.urlopen(signed,timeout=120) as r: open('/tmp/prod-races.sql','wb').write(r.read())
+          print('EXPORT_BYTES',os.path.getsize('/tmp/prod-races.sql'))
           PY
 
-      - name: Render exact current normal home locally
+      - name: Extend existing normal UI calendar with production races
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf .wrangler/state
-          timeout 20s npx wrangler d1 execute race-tantei-phase0 --local --config wrangler.jsonc --command "CREATE TABLE IF NOT EXISTS __home_bootstrap(x INTEGER)" >/tmp/bootstrap.log 2>&1
-          dbfile=$(find .wrangler/state -type f \( -name '*.sqlite' -o -name '*.sqlite3' \) | head -1)
-          if [ -z "$dbfile" ]; then echo LOCAL_SQLITE_NOT_FOUND; find .wrangler/state -maxdepth 8 -type f -print; cat /tmp/bootstrap.log; exit 1; fi
-          echo "LOCAL_DB=$dbfile"
-          python3 - "$dbfile" <<'PY'
-          import sqlite3,sys,time
-          db=sys.argv[1]
-          sql=open('/tmp/prod-home.sql',encoding='utf-8').read()
-          con=sqlite3.connect(db)
-          started=time.time()
-          con.executescript(sql)
-          con.execute('DROP TABLE IF EXISTS __home_bootstrap')
-          con.commit()
-          print('SQLITE_IMPORT_SECONDS',round(time.time()-started,3))
-          for table in ('rt_races','rt_public_bets','rt_system_state'):
-            print(table,con.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0])
-          con.close()
-          PY
-          npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 8787 >/tmp/dev.log 2>&1 &
-          pid=$!
-          trap 'kill $pid 2>/dev/null || true' EXIT
-          ok=0
-          for i in $(seq 1 30); do
-            code=$(curl --max-time 5 -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' http://127.0.0.1:8787/ || true)
-            path=$(tr -d '\r' </tmp/home.headers 2>/dev/null | awk 'BEGIN{IGNORECASE=1}/^x-race-home-path:/{print $2}' | tail -1)
-            echo "LOCAL_ATTEMPT=$i HTTP=$code PATH=$path"
-            if [ "$code" = "200" ] && grep -qi '<html' /tmp/home.html && [ "$path" = "v37-normal" ]; then ok=1; break; fi
-            sleep 1
-          done
-          if [ "$ok" != "1" ]; then
-            echo '--- bootstrap ---'; cat /tmp/bootstrap.log || true
-            echo '--- dev ---'; tail -200 /tmp/dev.log || true
-            echo '--- headers ---'; cat /tmp/home.headers || true
-            echo '--- body ---'; head -c 2000 /tmp/home.html || true
-            exit 1
-          fi
-          for marker in 'データを再接続しています' 'データ取得を再試行しています' 'データベースへ接続できない' '表示データの読み込みに失敗しました' '表示系の自動復旧モードです' '一時的にページを表示できません。'; do
-            if grep -q "$marker" /tmp/home.html; then echo "BANNED=$marker"; exit 1; fi
-          done
-
-          # The frozen ten-year home calendar ends at 2026-08-09. Extend only its
-          # existing calendar data with actual production rt_races rows; do not
-          # change layout, labels, prediction rules, or any historical picks.
-          python3 - "$dbfile" <<'PY'
-          import json,sqlite3,sys
-          db=sys.argv[1]
-          con=sqlite3.connect(db)
+          python3 - <<'PY'
+          import json,sqlite3
+          con=sqlite3.connect('/tmp/races.sqlite')
+          con.executescript(open('/tmp/prod-races.sql',encoding='utf-8').read())
           rows=[
             {'raceDate':r[0],'venue':r[1],'raceCount':int(r[2])}
             for r in con.execute("""
@@ -123,54 +79,48 @@ jobs:
             """).fetchall()
           ]
           con.close()
-          if not rows:
-            raise SystemExit('RECENT_CALENDAR_EMPTY')
+          if not rows: raise SystemExit('RECENT_CALENDAR_EMPTY')
           dates=sorted({r['raceDate'] for r in rows})
-          if '2026-09-05' not in dates:
-            raise SystemExit('RECENT_CALENDAR_MISSING_2026_09_05')
-          html=open('/tmp/home.html',encoding='utf-8').read()
+          if '2026-09-05' not in dates: raise SystemExit('RECENT_CALENDAR_MISSING_2026_09_05')
+
+          path='src/normal-home-snapshot.ts'
+          source=open(path,encoding='utf-8').read().strip()
+          prefix='export const NORMAL_HOME_SNAPSHOT = '
+          if not source.startswith(prefix): raise SystemExit('SNAPSHOT_PREFIX_MISSING')
+          payload=source[len(prefix):]
+          if payload.endswith(';'): payload=payload[:-1]
+          html=json.loads(payload)
           start=html.find('const calendar=[')
           end=html.find('];const today=',start)
-          if start < 0 or end < 0:
-            raise SystemExit('HOME_CALENDAR_MARKER_MISSING')
+          if start < 0 or end < 0: raise SystemExit('HOME_CALENDAR_MARKER_MISSING')
           existing=html[start:end]
           extra=[]
           for row in rows:
             token=f'"raceDate":"{row["raceDate"]}","venue":"{row["venue"]}"'
-            if token not in existing:
-              extra.append(row)
+            if token not in existing: extra.append(row)
           if extra:
             html=html[:end]+','+','.join(json.dumps(r,ensure_ascii=False,separators=(',',':')) for r in extra)+html[end:]
-          if '"raceDate":"2026-09-05"' not in html[start:html.find('];const today=',start)]:
-            raise SystemExit('PATCHED_HOME_CALENDAR_MISSING_2026_09_05')
-          open('/tmp/home.html','w',encoding='utf-8').write(html)
+          cal_end=html.find('];const today=',start)
+          calendar_segment=html[start:cal_end]
+          if '"raceDate":"2026-09-05"' not in calendar_segment: raise SystemExit('PATCHED_CALENDAR_MISSING_2026_09_05')
+          open(path,'w',encoding='utf-8').write('export const NORMAL_HOME_SNAPSHOT = '+json.dumps(html,ensure_ascii=False)+';\n')
           open('src/recent-home-calendar-snapshot.ts','w',encoding='utf-8').write(
             'export const RECENT_HOME_CALENDAR_SNAPSHOT = '+json.dumps(rows,ensure_ascii=False,separators=(',',':'))+' as const;\n'
           )
-          print('RECENT_CALENDAR_ROWS',len(rows),'FIRST',dates[0],'LAST',dates[-1])
+          print('RECENT_CALENDAR_ROWS',len(rows),'FIRST',dates[0],'LAST',dates[-1],'ADDED',len(extra))
           PY
 
-          python3 - <<'PY'
-          import json,re
-          html=open('/tmp/home.html',encoding='utf-8').read()
-          m=re.search(r'const calendar=(\[[\s\S]*?\]);const today=',html)
-          if not m: raise SystemExit('CALENDAR_PARSE_FAILED')
-          calendar=json.loads(m.group(1))
-          dates=sorted({r.get('raceDate','') for r in calendar})
-          if '2026-09-05' not in dates: raise SystemExit('SNAPSHOT_CALENDAR_MISSING_2026_09_05')
-          open('src/normal-home-snapshot.ts','w',encoding='utf-8').write('export const NORMAL_HOME_SNAPSHOT = '+json.dumps(html,ensure_ascii=False)+';\n')
-          print('HOME_BYTES',len(html.encode()),'CALENDAR_LAST',dates[-1])
-          PY
-
-      - name: Replace assistant-added 503 with exact normal snapshot fallback
+      - name: Keep existing UI and merge current calendar at runtime
         shell: bash
         run: |
           cat > src/public-site-entry-v37.ts <<'TS'
           import core from "./public-site-entry-v37-core.js";
           import { NORMAL_HOME_SNAPSHOT } from "./normal-home-snapshot.js";
+          import { RECENT_HOME_CALENDAR_SNAPSHOT } from "./recent-home-calendar-snapshot.js";
           import type { Env } from "./v1/types.js";
 
           const UI_VERSION = "ten-year-completed-public-v37-free-tier-safe-snapshot-20260905";
+          const RECENT_CALENDAR_START = "2026-08-09";
           const FORBIDDEN_RECOVERY_TEXT = [
             "データ取得を再試行しています",
             "データを再接続しています",
@@ -179,6 +129,8 @@ jobs:
             "表示系の自動復旧モードです",
             "一時的にページを表示できません。",
           ] as const;
+
+          type CalendarRow = { raceDate: string; venue: string; raceCount: number };
 
           // Public scheduled work remains maintenance-only. Race-bet generation is
           // owned exclusively by the isolated primary/backup live-deadline Workers.
@@ -189,6 +141,44 @@ jobs:
 
           function hasForbidden(text: string): boolean {
             return FORBIDDEN_RECOVERY_TEXT.some((value) => text.includes(value));
+          }
+
+          function staticRecentCalendar(): CalendarRow[] {
+            return RECENT_HOME_CALENDAR_SNAPSHOT.map((row) => ({
+              raceDate: String(row.raceDate),
+              venue: String(row.venue),
+              raceCount: Number(row.raceCount),
+            }));
+          }
+
+          async function loadRecentCalendar(env: Env): Promise<CalendarRow[]> {
+            try {
+              const result = await env.DB.prepare(`
+                SELECT race_date AS raceDate, venue, COUNT(*) AS raceCount
+                FROM rt_races
+                WHERE race_date > ?
+                GROUP BY race_date, venue
+                ORDER BY race_date, venue
+              `).bind(RECENT_CALENDAR_START).all<CalendarRow>();
+              const rows = (result.results ?? []).filter((row) => row.raceDate && row.venue && Number(row.raceCount) > 0);
+              if (rows.length) return rows.map((row) => ({ ...row, raceCount: Number(row.raceCount) }));
+            } catch (error) {
+              console.error("V37_RECENT_CALENDAR_DB_FAILED", error);
+            }
+            return staticRecentCalendar();
+          }
+
+          function mergeRecentCalendar(html: string, rows: CalendarRow[]): string {
+            const start = html.indexOf("const calendar=[");
+            const end = html.indexOf("];const today=", start);
+            if (start < 0 || end < 0 || !rows.length) return html;
+            const existing = html.slice(start, end);
+            const extra = rows.filter((row) => {
+              const token = `\"raceDate\":\"${row.raceDate}\",\"venue\":\"${row.venue}\"`;
+              return !existing.includes(token);
+            });
+            if (!extra.length) return html;
+            return `${html.slice(0, end)},${extra.map((row) => JSON.stringify(row)).join(",")}${html.slice(end)}`;
           }
 
           function normalResponse(response: Response, html: string, path: string): Response {
@@ -204,7 +194,8 @@ jobs:
           }
 
           function embeddedNormalHome(): Response {
-            return new Response(NORMAL_HOME_SNAPSHOT, {
+            const html = mergeRecentCalendar(NORMAL_HOME_SNAPSHOT, staticRecentCalendar());
+            return new Response(html, {
               status: 200,
               headers: {
                 "content-type": "text/html; charset=utf-8",
@@ -216,13 +207,14 @@ jobs:
           }
 
           async function fetchNormalHome(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+            const recentCalendar = await loadRecentCalendar(env);
             try {
               const response = await core.fetch(request, env, ctx);
               const contentType = response.headers.get("content-type") ?? "";
               const html = contentType.includes("text/html") ? await response.text() : "";
               const recoveryHeader = Boolean(response.headers.get("x-race-resilient-home") || response.headers.get("x-race-emergency-fallback"));
               if (response.status < 500 && html && !recoveryHeader && !hasForbidden(html)) {
-                return normalResponse(response, html, "v37-normal");
+                return normalResponse(response, mergeRecentCalendar(html, recentCalendar), "v37-normal");
               }
               console.error("V37_NORMAL_HOME_USING_SNAPSHOT", response.status);
             } catch (error) {
@@ -235,7 +227,7 @@ jobs:
             async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
               const pathname = new URL(request.url).pathname;
               if (pathname === "/_ops/live-tick") return new Response("NOT_FOUND", { status: 404, headers: { "cache-control": "no-store" } });
-              if (request.method === "GET" && pathname === "/") return fetchNormalHome(request, env, ctx);
+              if (request.method === "GET" && (pathname === "/" || pathname === "/index.html")) return fetchNormalHome(request, env, ctx);
               return core.fetch(request, env, ctx);
             },
             async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
@@ -273,7 +265,9 @@ jobs:
           calendar=json.loads(m.group(1))
           dates=sorted({r.get('raceDate','') for r in calendar})
           if '2026-09-05' not in dates: raise SystemExit('PROD_CALENDAR_MISSING_2026_09_05')
-          print('PRODUCTION_CALENDAR_LAST',dates[-1],'ROWS',len(calendar))
+          venues=sorted({r.get('venue','') for r in calendar if r.get('raceDate')=='2026-09-05'})
+          if venues != ['中山','札幌','阪神']: raise SystemExit(f'PROD_0905_VENUES_MISMATCH:{venues}')
+          print('PRODUCTION_CALENDAR_LAST',dates[-1],'ROWS',len(calendar),'0905_VENUES',venues)
           PY
           echo 'PRODUCTION_HOME_OK'
           grep -i '^x-race-home-path:' /tmp/prod.headers || true
