@@ -14,24 +14,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Probe list and individual race details
+      - name: Probe real race ids from public day API
         shell: bash
         run: |
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev'
-          curl -L -sS -D /tmp/list.h -o /tmp/list.html "$base/races/"
-          python3 - <<'PY'
-          import re
-          s=open('/tmp/list.html',encoding='utf-8',errors='replace').read()
-          links=[]
-          for h in re.findall(r'href=["\']([^"\']+)["\']',s):
-            if re.match(r'^/races/20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}/?$',h,re.I) and h not in links:
-              links.append(h)
-          print('DETAIL_LINK_COUNT',len(links))
-          for h in links[:12]: print('DETAIL_LINK',h)
-          open('/tmp/detail-links.txt','w').write('\n'.join(links[:12]))
+          : > /tmp/detail-links.txt
+          for date in 2026-09-05 2026-09-06; do
+            curl -sS "$base/api/public/day?date=$date" -o "/tmp/day-$date.json"
+            python3 - "$date" <<'PY'
+          import json,sys
+          d=sys.argv[1]
+          o=json.load(open(f'/tmp/day-{d}.json',encoding='utf-8'))
+          races=o.get('races') or []
+          ids=[str(r.get('raceId') or '') for r in races if r.get('raceId')]
+          picks=[]
+          for rid in ids:
+            if rid.endswith('-01') or rid.endswith('-02') or rid.endswith('-12'):
+              picks.append(rid)
+          print('API_RACE_IDS',d,len(ids),'PICKS',picks[:9])
+          with open('/tmp/detail-links.txt','a') as f:
+            for rid in picks[:9]: f.write('/races/'+rid+'\n')
           PY
+          done
 
+          sort -u /tmp/detail-links.txt -o /tmp/detail-links.txt
           while IFS= read -r path; do
             [ -n "$path" ] || continue
             echo "=== DETAIL $path ==="
@@ -44,9 +51,9 @@ jobs:
           s=open('/tmp/detail.html',encoding='utf-8',errors='replace').read()
           print('PATH',p)
           print('TITLE',re.findall(r'<title>(.*?)</title>',s,re.I|re.S)[:1])
-          phrases=['データ取得を一時的に再試行しています。','データ取得を再試行しています','データを再接続しています','一時的にページを表示できません。','レースが見つかりません']
+          phrases=['データ取得を一時的に再試行しています。','データ取得を一時的に再試行しています','データ取得を再試行しています','データを再接続しています','一時的にページを表示できません。','レースが見つかりません']
           for x in phrases: print('PHRASE',x, x in s)
-          print('API_PATHS',sorted(set(re.findall(r'["\'](/api/[^"\']+)',s)))[:20])
-          print('HEAD',repr(s[:400]))
+          print('HAS_NORMAL_RACE',('race-title' in s) or ('確定買い目' in s) or ('予想買い目' in s) or ('出走馬' in s))
+          print('HEAD',repr(s[:500]))
           PY
           done < /tmp/detail-links.txt
