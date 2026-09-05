@@ -1,0 +1,7 @@
+name: sanity check
+on: workflow_dispatch
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo sanity
