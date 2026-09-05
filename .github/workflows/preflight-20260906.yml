@@ -15,21 +15,13 @@ permissions:
 jobs:
   preflight:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 12
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Build JRA parser
-        run: |
-          npm ci --prefer-offline --no-audit --no-fund
-          npm run build:test
 
       - name: Export tomorrow readiness without rows_read
         shell: bash
@@ -46,7 +38,7 @@ jobs:
             return body.get('result') or {}
           opts={'tables':['rt_races','rt_runners','rt_selection_state_meta','rt_system_state']}
           result=post({'output_format':'polling','dump_options':opts});bookmark=result.get('at_bookmark')
-          for _ in range(120):
+          for _ in range(90):
             signed=(result.get('result') or {}).get('signed_url')
             if signed: break
             if not bookmark: raise RuntimeError('EXPORT_BOOKMARK_MISSING')
@@ -57,54 +49,42 @@ jobs:
           print('EXPORT_BYTES',os.path.getsize('/tmp/preflight.sql'))
           PY
 
-      - name: Prepare 9/6 metadata and inspect Cloudflare maintenance state
+      - name: Build local export database and inspect recovery readiness
         shell: bash
         run: |
+          rm -f /tmp/preflight.sqlite
           python3 - <<'PY'
           import json,sqlite3
           con=sqlite3.connect('/tmp/preflight.sqlite');con.executescript(open('/tmp/preflight.sql',encoding='utf-8').read())
           rows=con.execute("SELECT race_date,venue,meeting_no,meeting_day,COUNT(*) FROM rt_races WHERE race_date='2026-09-06' GROUP BY race_date,venue,meeting_no,meeting_day HAVING COUNT(*)=12 ORDER BY venue").fetchall()
           meetings=[{'date':r[0],'venue':r[1],'meetingNo':int(r[2]),'meetingDay':int(r[3]),'raceCount':int(r[4])} for r in rows]
           if len(meetings)!=3: raise SystemExit('MEETING_0906_NOT_THREE:'+json.dumps(meetings,ensure_ascii=False))
-          open('/tmp/jra-meetings.json','w',encoding='utf-8').write(json.dumps({'meetings':meetings},ensure_ascii=False))
-          row=con.execute("SELECT entry_url FROM rt_races WHERE race_date='2026-09-05' AND length(trim(coalesce(entry_url,'')))>0 ORDER BY race_id LIMIT 1").fetchone()
-          open('/tmp/stored-entry-url','w',encoding='utf-8').write(str(row[0]) if row else '')
-          states=dict(con.execute("SELECT state_key,state_value FROM rt_system_state WHERE state_key IN ('worker_upcoming_calendar_repair','worker_upcoming_entry_repair')").fetchall())
+          states=dict(con.execute("SELECT state_key,state_value FROM rt_system_state WHERE state_key IN ('worker_upcoming_calendar_repair','worker_upcoming_entry_repair','worker_upcoming_entry_derived_repair')").fetchall())
+          anchors=con.execute("""
+            SELECT venue,race_date,entry_url FROM rt_races
+            WHERE race_no=1 AND race_date<'2026-09-06'
+              AND entry_url LIKE '%/JRADB/accessD.html?CNAME=pw01dde01%'
+              AND venue IN ('中山','札幌','阪神')
+            ORDER BY venue,race_date DESC
+          """).fetchall()
+          latest={}
+          for venue,date,url in anchors:
+            latest.setdefault(str(venue),{'raceDate':str(date),'entryUrl':str(url)})
           print('MEETINGS_0906',json.dumps(meetings,ensure_ascii=False))
-          print('STORED_ENTRY_URL_PRESENT',bool(row))
-          for key in ('worker_upcoming_calendar_repair','worker_upcoming_entry_repair'):
+          print('DERIVED_RECOVERY_ANCHORS',json.dumps(latest,ensure_ascii=False))
+          missing=sorted({'中山','札幌','阪神'}-set(latest))
+          if missing: print('DERIVED_RECOVERY_ANCHORS_MISSING',','.join(missing))
+          for key in ('worker_upcoming_calendar_repair','worker_upcoming_entry_repair','worker_upcoming_entry_derived_repair'):
             print('CLOUDFLARE_MAINTENANCE_STATE',key,states.get(key,'MISSING'))
           con.close()
           PY
-
-      - name: Diagnostic only - probe JRA from GitHub runner
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'JS'
-          import { readFile } from 'node:fs/promises';
-          import { fetchJraPage, pageLooksLikeEntry, parseEntryPage } from './dist-test/src/v1/jra.js';
-          import { findCurrentEntryAnchor } from './scripts/find-current-jra-entry-anchor.mjs';
-          const stored=(await readFile('/tmp/stored-entry-url','utf8')).trim();
-          if (stored) {
-            const page=await fetchJraPage(stored);
-            if (!pageLooksLikeEntry(page.html)) throw new Error('STORED_ENTRY_PAGE_NOT_ENTRY');
-            const bundle=parseEntryPage(page.html,stored);
-            console.log('GITHUB_JRA_STORED_ENTRY_ACCESS_OK',bundle.race.raceId,bundle.runners.length);
-          }
-          const meetings=JSON.parse(await readFile('/tmp/jra-meetings.json','utf8')).meetings;
-          const discovery=await findCurrentEntryAnchor(new Date(),meetings);
-          console.log('GITHUB_JRA_0906_DIAGNOSTIC',JSON.stringify({found:discovery.found,requiredProbeDates:discovery.requiredProbeDates,anchors:(discovery.anchors||[]).map(a=>({date:a.targetDate,venue:a.venue,raceId:a.raceId,runners:a.runnerCount,mode:a.discoveryMode})),errors:(discovery.errors||[]).slice(0,8)}));
-          if (!discovery.found || !(discovery.anchors||[]).some(a=>a.targetDate==='2026-09-06')) throw new Error('GITHUB_JRA_0906_ENTRY_ANCHOR_NOT_FOUND');
-          JS
 
       - name: Verify 9/6 program, real runners and selection model state
         shell: bash
         run: |
           python3 - <<'PY'
           import collections,json,sqlite3
-          date='2026-09-06';con=sqlite3.connect('/tmp/preflight.sqlite');con.executescript(open('/tmp/preflight.sql',encoding='utf-8').read())
+          date='2026-09-06';con=sqlite3.connect('/tmp/preflight.sqlite')
           races=con.execute('SELECT race_id,venue,race_no,start_time_utc FROM rt_races WHERE race_date=? ORDER BY venue,race_no',(date,)).fetchall()
           by=collections.Counter(str(r[1]) for r in races)
           if len(races)!=36 or set(by.values())!={12}: raise SystemExit('PROGRAM_NOT_36:'+json.dumps(dict(by),ensure_ascii=False))
