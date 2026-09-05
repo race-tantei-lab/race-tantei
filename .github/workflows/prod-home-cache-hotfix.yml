@@ -1,0 +1,18 @@
+name: Public home cache hotfix
+
+on:
+  push:
+    paths:
+      - '.github/workflows/prod-home-cache-hotfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print current public wrapper
+        run: sed -n '1,220p' src/public-site-entry-v37.ts
