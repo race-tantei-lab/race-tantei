@@ -1,0 +1,46 @@
+name: Diagnose production day API now
+
+on:
+  push:
+    paths:
+      - '.github/workflows/diagnose-prod-day-api-now.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Probe 9/5 and 9/6 day API
+        shell: bash
+        run: |
+          set -euo pipefail
+          for date in 2026-09-05 2026-09-06; do
+            echo "=== $date ==="
+            success=0
+            for i in $(seq 1 8); do
+              code=$(curl --max-time 10 -sS -D /tmp/h -o /tmp/b -w '%{http_code}' "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$date" || true)
+              echo "ATTEMPT=$i HTTP=$code"
+              tr -d '\r' </tmp/h | grep -Ei '^(x-race-current-day-path|x-race-history-source|content-type):' || true
+              head -c 400 /tmp/b || true
+              echo
+              if [ "$code" = "200" ]; then
+                python3 - "$date" <<'PY'
+          import json,sys
+          date=sys.argv[1]
+          body=json.load(open('/tmp/b',encoding='utf-8'))
+          races=body.get('races') or []
+          print('RACES',len(races),'VENUES',sorted({r.get('venue','') for r in races}),'SOURCE',body.get('fallbackSource','live-d1'))
+          if len(races)==36: raise SystemExit(0)
+          raise SystemExit(2)
+          PY
+                success=1
+                break
+              fi
+              sleep 3
+            done
+            test "$success" = "1"
+          done
