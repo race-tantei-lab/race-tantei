@@ -2,7 +2,7 @@ name: Race-day automatic bootstrap
 
 on:
   schedule:
-    - cron: '1 0 * * *' # 09:01 JST every day; exits immediately when no JRA races exist
+    - cron: '1 0 * * *' # 09:01 JST every day; exits immediately when no stored race day exists
   workflow_dispatch:
 
 permissions:
@@ -15,12 +15,11 @@ concurrency:
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
-    timeout-minutes: 28
+    timeout-minutes: 55
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
       CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
-      JRA_HOME_URL: https://www.jra.go.jp/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,32 +28,48 @@ jobs:
           cache: npm
       - run: npm ci --prefer-offline --no-audit --no-fund
 
-      - name: Detect and repair today's JRA program
+      - name: Detect today's production JRA program
         id: program
         shell: bash
         run: |
           set -euo pipefail
           today=$(TZ=Asia/Tokyo date +%F)
+          weekday=$(TZ=Asia/Tokyo date +%u) # 1=Mon ... 7=Sun
           echo "date=$today" >> "$GITHUB_OUTPUT"
           query_program() {
             npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
               "SELECT venue,COUNT(*) AS races,SUM(CASE WHEN start_time_utc IS NOT NULL THEN 1 ELSE 0 END) AS timed FROM rt_races WHERE race_date='$today' GROUP BY venue ORDER BY venue" \
               > /tmp/program.json
           }
-          query_program
-          if ! python3 - <<'PY'
-          import json,sys
+          classify_program() {
+            python3 - <<'PY'
+          import json
           raw=json.load(open('/tmp/program.json')); rows=[]
           for block in raw if isinstance(raw,list) else [raw]:
             if isinstance(block,dict): rows += block.get('results') or []
-          print('PROGRAM_BEFORE',rows)
-          sys.exit(0 if rows and all(int(r.get('races') or 0)==12 and int(r.get('timed') or 0)==12 for r in rows) else 1)
+          print('PROGRAM_ROWS',rows)
+          if not rows:
+            print('EMPTY')
+          elif len(rows)==3 and all(int(r.get('races') or 0)==12 and int(r.get('timed') or 0)==12 for r in rows):
+            print('READY')
+          else:
+            print('INCOMPLETE')
           PY
-          then
-            echo 'Program absent/incomplete; running official calendar sync once.'
-            node scripts/run-current-weekend-calendar-direct.mjs || true
+          }
+
+          # JRA acquisition belongs to the Cloudflare public Worker. GitHub never
+          # fetches JRA as the production path; it only observes D1 after reset.
+          state=''
+          for attempt in $(seq 1 11); do
             query_program
-          fi
+            state=$(classify_program | tail -n 1)
+            echo "PROGRAM_ATTEMPT=$attempt STATE=$state"
+            if [ "$state" = READY ]; then break; fi
+            if [ "$state" = EMPTY ] && [ "$weekday" -ge 1 ] && [ "$weekday" -le 5 ]; then break; fi
+            if [ "$attempt" -lt 11 ]; then sleep 120; fi
+          done
+
+          query_program
           python3 - <<'PY' > /tmp/program-state
           import json
           raw=json.load(open('/tmp/program.json')); rows=[]
@@ -62,7 +77,7 @@ jobs:
             if isinstance(block,dict): rows += block.get('results') or []
           if not rows:
             print('NO_RACE_DAY')
-          elif any(int(r.get('races') or 0)!=12 or int(r.get('timed') or 0)!=12 for r in rows):
+          elif len(rows)!=3 or any(int(r.get('races') or 0)!=12 or int(r.get('timed') or 0)!=12 for r in rows):
             raise SystemExit('RACE_DAY_PROGRAM_INCOMPLETE:'+json.dumps(rows,ensure_ascii=False))
           else:
             print('RACE_DAY')
@@ -70,6 +85,10 @@ jobs:
           PY
           cat /tmp/program-state
           if grep -q '^NO_RACE_DAY$' /tmp/program-state; then
+            if [ "$weekday" = 6 ] || [ "$weekday" = 7 ]; then
+              echo 'Weekend program remained empty after Cloudflare maintenance window.' >&2
+              exit 1
+            fi
             echo 'race_day=false' >> "$GITHUB_OUTPUT"
           else
             echo 'race_day=true' >> "$GITHUB_OUTPUT"
@@ -114,7 +133,7 @@ jobs:
           if missing: raise SystemExit('LIVE_INDEXES_MISSING:'+','.join(missing))
           PY
 
-      - name: Verify all race entries; repair once if incomplete
+      - name: Wait for all real race entries from Cloudflare maintenance
         if: steps.program.outputs.race_day == 'true'
         shell: bash
         run: |
@@ -122,29 +141,32 @@ jobs:
           today='${{ steps.program.outputs.date }}'
           query_entries() {
             npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-              "WITH p AS (SELECT r.race_id,r.venue,r.race_no,COUNT(CASE WHEN COALESCE(rr.runner_status,'active')='active' THEN 1 END) AS active FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date='$today' GROUP BY r.race_id,r.venue,r.race_no) SELECT venue,COUNT(*) AS races,SUM(CASE WHEN active>=3 THEN 1 ELSE 0 END) AS ready FROM p GROUP BY venue ORDER BY venue" \
+              "WITH p AS (SELECT r.race_id,r.venue,r.race_no,SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS active FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date='$today' GROUP BY r.race_id,r.venue,r.race_no) SELECT venue,COUNT(*) AS races,SUM(CASE WHEN active>=3 THEN 1 ELSE 0 END) AS ready,MIN(active) AS min_active FROM p GROUP BY venue ORDER BY venue" \
               > /tmp/entries.json
           }
-          query_entries
-          if ! python3 - <<'PY'
+          ready=0
+          for attempt in $(seq 1 11); do
+            query_entries
+            if python3 - <<'PY'
           import json,sys
           raw=json.load(open('/tmp/entries.json')); rows=[]
           for block in raw if isinstance(raw,list) else [raw]:
             if isinstance(block,dict): rows += block.get('results') or []
-          print('ENTRY_READINESS_BEFORE',rows)
-          sys.exit(0 if rows and all(int(r.get('races') or 0)==12 and int(r.get('ready') or 0)==12 for r in rows) else 1)
+          print('ENTRY_READINESS',rows)
+          sys.exit(0 if len(rows)==3 and all(int(r.get('races') or 0)==12 and int(r.get('ready') or 0)==12 for r in rows) else 1)
           PY
-          then
-            node scripts/run-upcoming-entry-direct-sync.mjs
-            query_entries
-          fi
+            then ready=1; break; fi
+            echo "ENTRY_WAIT_ATTEMPT=$attempt"
+            if [ "$attempt" -lt 11 ]; then sleep 120; fi
+          done
+          test "$ready" = 1
           python3 - <<'PY'
           import json
           raw=json.load(open('/tmp/entries.json')); rows=[]
           for block in raw if isinstance(raw,list) else [raw]:
             if isinstance(block,dict): rows += block.get('results') or []
           print('ENTRY_READINESS_FINAL',rows)
-          if not rows or any(int(r.get('races') or 0)!=12 or int(r.get('ready') or 0)!=12 for r in rows):
+          if len(rows)!=3 or any(int(r.get('races') or 0)!=12 or int(r.get('ready') or 0)!=12 for r in rows):
             raise SystemExit('RACE_DAY_ENTRIES_INCOMPLETE:'+json.dumps(rows,ensure_ascii=False))
           PY
 
@@ -182,9 +204,10 @@ jobs:
             if isinstance(block,dict): rows += block.get('results') or []
           if not rows or not rows[0].get('value'): sys.exit(1)
           p=json.loads(str(rows[0]['value'])); selected=p.get('selected') or []
+          ids=[str(x.get('raceId') or '') for x in selected]
           by=collections.Counter(str(x.get('venue') or '') for x in selected)
           if p.get('sourceModel')!='ten-year-completed-model' or p.get('resultDataUsedForTargetDay') is not False: raise SystemExit('SELECTION_SOURCE_INVALID')
-          if len(selected)!=15 or len(by)!=3 or any(v!=5 for v in by.values()): raise SystemExit('SELECTION_COUNT_INVALID:'+json.dumps(dict(by),ensure_ascii=False))
+          if len(selected)!=15 or len(set(ids))!=15 or '' in ids or len(by)!=3 or any(v!=5 for v in by.values()): raise SystemExit('SELECTION_COUNT_INVALID:'+json.dumps({'venues':dict(by),'ids':ids},ensure_ascii=False))
           print('SELECTION_OK',len(selected),dict(by))
           PY
             then found=1; break; fi
@@ -193,19 +216,25 @@ jobs:
           done
           test "$found" = 1
 
-      - name: Verify production day API after bootstrap
+      - name: Verify production day API and normal home after bootstrap
         if: steps.program.outputs.race_day == 'true'
         shell: bash
         run: |
           set -euo pipefail
           today='${{ steps.program.outputs.date }}'
-          curl --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -fsS \
-            "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=$today" -o /tmp/day.json
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          curl --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -fsS "$base/api/public/day?date=$today" -o /tmp/day.json
           python3 - <<'PY'
           import json
           body=json.load(open('/tmp/day.json',encoding='utf-8')); races=body.get('races') or []
           by={}
           for r in races: by[str(r.get('venue'))]=by.get(str(r.get('venue')),0)+1
           if len(races)!=36 or len(by)!=3 or any(v!=12 for v in by.values()): raise SystemExit('PRODUCTION_DAY_NOT_36:'+json.dumps(by,ensure_ascii=False))
-          print('RACE_DAY_BOOTSTRAP_OK','RACES',len(races),'VENUES',by,'SOURCE',body.get('fallbackSource','live-d1'))
+          print('PRODUCTION_DAY_OK','RACES',len(races),'VENUES',by,'SOURCE',body.get('fallbackSource','live-d1'))
           PY
+          code=$(curl --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$base/")
+          test "$code" = 200
+          for phrase in 'データを再接続しています' 'データ取得を再試行しています' 'データベースへ接続できない' '表示データの読み込みに失敗しました' '表示系の自動復旧モードです' '一時的にページを表示できません。'; do
+            if grep -Fq "$phrase" /tmp/home.html; then echo "FORBIDDEN_UI:$phrase" >&2; exit 1; fi
+          done
+          echo 'RACE_DAY_BOOTSTRAP_OK'
