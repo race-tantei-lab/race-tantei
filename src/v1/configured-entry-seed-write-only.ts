@@ -38,7 +38,7 @@ function configuredSeeds(env: Env, targetDate: string): Seed[] {
     .map((value) => value.trim())
     .filter(Boolean)
     .map(extractSeed)
-    .filter((seed): seed is Seed => Boolean(seed) && seed.raceDate === targetDate);
+    .filter((seed): seed is Seed => seed !== null && seed.raceDate === targetDate);
 }
 
 function cnameForRace(race1Cname: string, raceNo: number): string {
