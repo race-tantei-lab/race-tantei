@@ -37,16 +37,32 @@ def main() -> None:
         raise AssertionError("public maintenance Worker cron must remain every fifteen minutes")
     if primary_wrangler.get("name") != "race-tantei-live-deadline":
         raise AssertionError("primary live deadline Worker name mismatch")
-    if primary_wrangler.get("main") != "src/live-deadline-entry-v2.ts":
-        raise AssertionError("primary live deadline Worker must use v2 entry")
+    if primary_wrangler.get("main") != "src/live-deadline-entry-v3.ts":
+        raise AssertionError("primary live deadline Worker must use v3 index-gated entry")
     if primary_wrangler.get("triggers", {}).get("crons", []) != ["* * * * *"]:
         raise AssertionError("primary live deadline Worker must run every minute")
     if backup_wrangler.get("name") != "race-tantei-live-deadline-backup":
         raise AssertionError("backup live deadline Worker name mismatch")
-    if backup_wrangler.get("main") != "src/live-deadline-entry-v2.ts":
-        raise AssertionError("backup live deadline Worker must use v2 entry")
+    if backup_wrangler.get("main") != "src/live-deadline-entry-v3.ts":
+        raise AssertionError("backup live deadline Worker must use v3 index-gated entry")
     if backup_wrangler.get("triggers", {}).get("crons", []) != ["2-59/5 * * * *"]:
         raise AssertionError("backup live deadline Worker must be staggered every five minutes")
+
+    gate = read("src/live-deadline-entry-v3.ts")
+    for needle in (
+        "rt_idx_ml_horse_hist_lookup",
+        "rt_idx_ml_horse_total_lookup",
+        "rt_idx_ml_horse_surface_lookup",
+        "rt_idx_ml_horse_dist_lookup",
+        "rt_idx_ml_horse_venue_lookup",
+        "rt_idx_ml_jockey_lookup",
+        "rt_idx_ml_trainer_lookup",
+        "rt_idx_ml_pair_lookup",
+        "LIVE_DEADLINE_WAITING_FOR_INDEXES",
+        "if (!state.ready)",
+        "await liveDeadlineV2.scheduled(controller, env);",
+    ):
+        require(gate, needle, "v3 live index gate")
 
     live = read("src/v1/completed-worker-live-lock.ts")
     for needle in (
@@ -180,6 +196,7 @@ def main() -> None:
     for needle in (
         "Deploy primary live deadline Worker",
         "Deploy backup live deadline Worker",
+        "src/live-deadline-entry-v3.ts",
         "wrangler.live-deadline.jsonc",
         "wrangler.live-deadline-backup.jsonc",
         "production/live-deadline",
