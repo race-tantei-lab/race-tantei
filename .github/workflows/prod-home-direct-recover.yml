@@ -1,0 +1,152 @@
+name: Direct production home recovery
+
+on:
+  push:
+    paths:
+      - '.github/workflows/prod-home-direct-recover.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-production-home-recovery
+  cancel-in-progress: true
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Export only public-render tables without rows_read
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+          CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+        run: |
+          python3 - <<'PY'
+          import json,os,time,urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; dbid=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          tables=[
+            'phase0_state','probe_runs','race_sources','system_state','sync_runs',
+            'rt_bets','rt_live_deadline_lease','rt_live_preview_archive','rt_ml_feature_meta','rt_ml_model_chunk','rt_ml_model_meta',
+            'rt_official_odds_latest','rt_official_odds_snapshots','rt_official_value_candidates','rt_payouts','rt_prediction_runners','rt_predictions',
+            'rt_public_bets','rt_race_sources','rt_races','rt_results','rt_runners','rt_selection_state_chunk','rt_selection_state_meta','rt_sync_runs','rt_system_state','rt_win5_driver_lease'
+          ]
+          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{dbid}/export'
+          headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'}
+          def post(payload):
+            req=urllib.request.Request(url,data=json.dumps(payload).encode(),method='POST',headers=headers)
+            with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
+            if not body.get('success'): raise RuntimeError(json.dumps(body,ensure_ascii=False))
+            return body.get('result') or {}
+          opts={'tables':tables}
+          result=post({'output_format':'polling','dump_options':opts}); bookmark=result.get('at_bookmark')
+          for _ in range(120):
+            signed=(result.get('result') or {}).get('signed_url')
+            if signed: break
+            if not bookmark: raise RuntimeError('EXPORT_BOOKMARK_MISSING')
+            time.sleep(1)
+            result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':opts})
+          signed=(result.get('result') or {}).get('signed_url')
+          if not signed: raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
+          with urllib.request.urlopen(signed,timeout=180) as r: open('/tmp/prod-public.sql','wb').write(r.read())
+          print('EXPORT_BYTES',os.path.getsize('/tmp/prod-public.sql'))
+          PY
+
+      - name: Render current exact normal home locally
+        run: |
+          set -euo pipefail
+          rm -rf .wrangler/state
+          npx wrangler d1 execute race-tantei-phase0 --local --config wrangler.jsonc --file=/tmp/prod-public.sql >/tmp/import.log 2>&1
+          npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 8787 >/tmp/dev.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+          ok=0
+          for i in $(seq 1 30); do
+            code=$(curl -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' http://127.0.0.1:8787/ || true)
+            if [ "$code" = "200" ] && grep -qi '^x-race-home-path: v37-normal' /tmp/home.headers; then ok=1; break; fi
+            sleep 1
+          done
+          if [ "$ok" != "1" ]; then cat /tmp/dev.log; cat /tmp/home.headers || true; head -c 1200 /tmp/home.html || true; exit 1; fi
+          for marker in 'データを再接続しています' 'データ取得を再試行しています' 'データベースへ接続できない' '表示データの読み込みに失敗しました' '表示系の自動復旧モードです' '一時的にページを表示できません。'; do
+            if grep -q "$marker" /tmp/home.html; then echo "BANNED=$marker"; exit 1; fi
+          done
+          python3 - <<'PY'
+          import json
+          html=open('/tmp/home.html',encoding='utf-8').read()
+          open('src/normal-home-snapshot.ts','w',encoding='utf-8').write('export const NORMAL_HOME_SNAPSHOT = '+json.dumps(html,ensure_ascii=False)+';\n')
+          print('HOME_BYTES',len(html.encode()))
+          PY
+
+      - name: Replace 503 fallback with exact normal cache/snapshot fallback
+        run: |
+          cat > src/public-site-entry-v37.ts <<'TS'
+          import core from "./public-site-entry-v37-core.js";
+          import { NORMAL_HOME_SNAPSHOT } from "./normal-home-snapshot.js";
+
+          type AnyEnv = Record<string, unknown>;
+          const RECOVERY_MARKERS = [
+            "データを再接続しています","データ取得を再試行しています","データベースへ接続できない",
+            "表示データの読み込みに失敗しました","表示系の自動復旧モードです","一時的にページを表示できません。",
+          ];
+          const NORMAL_HOME_PATH = "v37-normal";
+          const CACHE_URL = "https://race-tantei.internal/__normal_home_snapshot__";
+          function hasRecoveryMarker(text:string){return RECOVERY_MARKERS.some((m)=>text.includes(m));}
+          function isRecoveryResponse(r:Response){const p=String(r.headers.get('x-race-home-path')||'').toLowerCase();return p.includes('recovery')||p.includes('failed');}
+          async function fetchNormalHome(request:Request,env:AnyEnv,ctx:ExecutionContext):Promise<Response|null>{
+            try{
+              const r=await core.fetch(request,env,ctx);
+              if(r.status>=500||isRecoveryResponse(r))return null;
+              const body=await r.text(); if(hasRecoveryMarker(body))return null;
+              const h=new Headers(r.headers);h.set('x-race-home-path',NORMAL_HOME_PATH);
+              return new Response(body,{status:r.status,statusText:r.statusText,headers:h});
+            }catch{return null;}
+          }
+          async function saveCache(r:Response){
+            try{if(typeof caches==='undefined'||!caches.default)return;const h=new Headers(r.headers);h.set('cache-control','public, max-age=86400');h.set('x-race-home-path',NORMAL_HOME_PATH);await caches.default.put(new Request(CACHE_URL),new Response(await r.clone().text(),{status:200,headers:h}));}catch{}
+          }
+          async function readCache():Promise<Response|null>{
+            try{if(typeof caches==='undefined'||!caches.default)return null;const hit=await caches.default.match(new Request(CACHE_URL));if(!hit)return null;const body=await hit.text();if(!body||hasRecoveryMarker(body))return null;const h=new Headers(hit.headers);h.set('x-race-home-path','v37-normal-cache');h.set('cache-control','no-store');return new Response(body,{status:200,headers:h});}catch{return null;}
+          }
+          function embedded(){return new Response(NORMAL_HOME_SNAPSHOT,{status:200,headers:{'content-type':'text/html; charset=UTF-8','cache-control':'no-store','x-race-home-path':'v37-normal-snapshot'}});}
+          export default {
+            async fetch(request:Request,env:AnyEnv,ctx:ExecutionContext):Promise<Response>{
+              const url=new URL(request.url);const home=request.method==='GET'&&url.pathname==='/';
+              const normal=await fetchNormalHome(request,env,ctx);
+              if(normal){if(home)ctx.waitUntil(saveCache(normal.clone()));return normal;}
+              if(home){const cached=await readCache();return cached||embedded();}
+              return core.fetch(request,env,ctx);
+            },
+            async scheduled(controller:ScheduledController,env:AnyEnv,ctx:ExecutionContext):Promise<void>{return core.scheduled(controller,env,ctx);},
+          };
+          TS
+          npm run typecheck
+
+      - name: Deploy public Worker immediately
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        run: npx wrangler deploy --config wrangler.jsonc
+
+      - name: Verify production is normal HTML, not 503 screen
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 10); do
+            code=$(curl -sS -D /tmp/prod.headers -o /tmp/prod.html -w '%{http_code}' https://race-tantei-phase0.race-tantei.workers.dev/ || true)
+            path=$(tr -d '\r' </tmp/prod.headers | awk 'BEGIN{IGNORECASE=1}/^x-race-home-path:/{print $2}' | tail -1)
+            echo "ATTEMPT=$i HTTP=$code PATH=$path"
+            if [ "$code" = "200" ] && grep -q '<html' /tmp/prod.html && ! grep -q '一時的にページを表示できません。' /tmp/prod.html; then ok=1; break; fi
+            sleep 3
+          done
+          test "$ok" = '1'
+          echo 'PRODUCTION_HOME_OK'
+          grep -i '^x-race-home-path:' /tmp/prod.headers || true
