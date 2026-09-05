@@ -7,12 +7,186 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  inspect-only:
+  restore-normal-home:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Print current public wrapper
-        run: sed -n '1,220p' src/public-site-entry-v37.ts
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Export production D1 without rows_read
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+          CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID']; dbid=os.environ['CLOUDFLARE_D1_DATABASE_ID']; token=os.environ['CLOUDFLARE_API_TOKEN']
+          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{dbid}/export'
+          headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'}
+          def post(payload):
+              req=urllib.request.Request(url,data=json.dumps(payload).encode(),method='POST',headers=headers)
+              with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
+              if not body.get('success'): raise RuntimeError(json.dumps(body,ensure_ascii=False))
+              return body.get('result') or {}
+          result=post({'output_format':'polling','dump_options':{}}); bookmark=result.get('at_bookmark')
+          for _ in range(120):
+              signed=(result.get('result') or {}).get('signed_url')
+              if signed: break
+              if not bookmark: raise RuntimeError('EXPORT_BOOKMARK_MISSING')
+              time.sleep(2)
+              result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':{}})
+          signed=(result.get('result') or {}).get('signed_url')
+          if not signed: raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
+          with urllib.request.urlopen(signed,timeout=240) as r: open('/tmp/prod.sql','wb').write(r.read())
+          PY
+
+      - name: Render exact normal home against local production snapshot
+        run: |
+          set -euo pipefail
+          rm -rf .wrangler/state
+          npx wrangler d1 execute race-tantei-phase0 --local --config wrangler.jsonc --file=/tmp/prod.sql >/tmp/import.log 2>&1
+          npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 8787 >/tmp/wrangler.log 2>&1 &
+          pid=$!
+          trap 'kill $pid 2>/dev/null || true' EXIT
+          ok=0
+          for i in $(seq 1 30); do
+            code=$(curl -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' http://127.0.0.1:8787/ || true)
+            if [ "$code" = "200" ] && grep -qi '^x-race-home-path: v37-normal' /tmp/home.headers; then ok=1; break; fi
+            sleep 1
+          done
+          if [ "$ok" != "1" ]; then cat /tmp/wrangler.log; cat /tmp/home.headers || true; head -c 1000 /tmp/home.html || true; exit 1; fi
+          for marker in 'データを再接続しています' 'データ取得を再試行しています' 'データベースへ接続できない' '表示データの読み込みに失敗しました' '表示系の自動復旧モードです' '一時的にページを表示できません。'; do
+            if grep -q "$marker" /tmp/home.html; then echo "banned marker: $marker"; exit 1; fi
+          done
+          python3 - <<'PY'
+          import json
+          html=open('/tmp/home.html',encoding='utf-8').read()
+          open('src/normal-home-snapshot.ts','w',encoding='utf-8').write('export const NORMAL_HOME_SNAPSHOT = '+json.dumps(html,ensure_ascii=False)+';\n')
+          PY
+
+      - name: Install exact normal-response cache fallback
+        run: |
+          cat > src/public-site-entry-v37.ts <<'TS'
+          import core from "./public-site-entry-v37-core.js";
+          import { NORMAL_HOME_SNAPSHOT } from "./normal-home-snapshot.js";
+
+          type AnyEnv = Record<string, unknown>;
+
+          const RECOVERY_MARKERS = [
+            "データを再接続しています",
+            "データ取得を再試行しています",
+            "データベースへ接続できない",
+            "表示データの読み込みに失敗しました",
+            "表示系の自動復旧モードです",
+            "一時的にページを表示できません。",
+          ];
+          const NORMAL_HOME_PATH = "v37-normal";
+          const CACHE_URL = "https://race-tantei.internal/__normal_home_snapshot__";
+
+          function hasRecoveryMarker(text: string): boolean {
+            return RECOVERY_MARKERS.some((marker) => text.includes(marker));
+          }
+
+          function isRecoveryResponse(response: Response): boolean {
+            const path = String(response.headers.get("x-race-home-path") || "").toLowerCase();
+            return path.includes("recovery") || path.includes("failed");
+          }
+
+          async function fetchNormalHome(request: Request, env: AnyEnv, ctx: ExecutionContext): Promise<Response | null> {
+            try {
+              const response = await core.fetch(request, env, ctx);
+              if (response.status >= 500 || isRecoveryResponse(response)) return null;
+              const body = await response.text();
+              if (hasRecoveryMarker(body)) return null;
+              const headers = new Headers(response.headers);
+              headers.set("x-race-home-path", NORMAL_HOME_PATH);
+              return new Response(body, { status: response.status, statusText: response.statusText, headers });
+            } catch {
+              return null;
+            }
+          }
+
+          async function cacheNormalHome(response: Response): Promise<void> {
+            try {
+              if (typeof caches === "undefined" || !caches.default) return;
+              const headers = new Headers(response.headers);
+              headers.set("cache-control", "public, max-age=86400");
+              headers.set("x-race-home-path", NORMAL_HOME_PATH);
+              await caches.default.put(new Request(CACHE_URL), new Response(await response.clone().text(), { status: 200, headers }));
+            } catch {
+              // Cache failure must never replace a valid normal response.
+            }
+          }
+
+          async function cachedNormalHome(): Promise<Response | null> {
+            try {
+              if (typeof caches === "undefined" || !caches.default) return null;
+              const hit = await caches.default.match(new Request(CACHE_URL));
+              if (!hit) return null;
+              const body = await hit.text();
+              if (!body || hasRecoveryMarker(body)) return null;
+              const headers = new Headers(hit.headers);
+              headers.set("x-race-home-path", "v37-normal-cache");
+              headers.set("cache-control", "no-store");
+              return new Response(body, { status: 200, headers });
+            } catch {
+              return null;
+            }
+          }
+
+          function embeddedNormalHome(): Response {
+            return new Response(NORMAL_HOME_SNAPSHOT, {
+              status: 200,
+              headers: {
+                "content-type": "text/html; charset=UTF-8",
+                "cache-control": "no-store",
+                "x-race-home-path": "v37-normal-snapshot",
+              },
+            });
+          }
+
+          export default {
+            async fetch(request: Request, env: AnyEnv, ctx: ExecutionContext): Promise<Response> {
+              const url = new URL(request.url);
+              const isHome = request.method === "GET" && url.pathname === "/";
+              const normal = await fetchNormalHome(request, env, ctx);
+              if (normal) {
+                if (isHome) ctx.waitUntil(cacheNormalHome(normal.clone()));
+                return normal;
+              }
+              if (isHome) {
+                const cached = await cachedNormalHome();
+                if (cached) return cached;
+                return embeddedNormalHome();
+              }
+              return core.fetch(request, env, ctx);
+            },
+            async scheduled(controller: ScheduledController, env: AnyEnv, ctx: ExecutionContext): Promise<void> {
+              // The public Worker owns public maintenance only. Dedicated primary/backup
+              // live-deadline Workers are the sole owners of race-day generation.
+              return core.scheduled(controller, env, ctx);
+            },
+          };
+          TS
+          npm run typecheck
+
+      - name: Commit normal-home recovery
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/public-site-entry-v37.ts src/normal-home-snapshot.ts
+          git commit -m 'fix: keep exact normal home available during D1 read exhaustion'
+          git pull --rebase origin main
+          git push origin HEAD:main
