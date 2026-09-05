@@ -33,6 +33,8 @@ jobs:
         run: npm run typecheck
       - name: Validate maintenance Worker bundle
         run: npx wrangler deploy --dry-run --config wrangler.entry-maintenance.jsonc --outdir dist-entry-maintenance
+      # Two obsolete guardian schedules are removed before this production deploy,
+      # so the Free-plan cron allocation can be used for entry acquisition.
       - name: Deploy maintenance Worker
         uses: cloudflare/wrangler-action@v3
         with:
