@@ -1,0 +1,82 @@
+name: Production recovery 2026-09-05
+
+on:
+  push:
+    paths:
+      - '.github/workflows/prod-recovery-20260905.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Export production D1 without rows_read
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+          CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+        run: |
+          python3 - <<'PY'
+          import json,os,time,urllib.request
+          a=os.environ['CLOUDFLARE_ACCOUNT_ID']; d=os.environ['CLOUDFLARE_D1_DATABASE_ID']; t=os.environ['CLOUDFLARE_API_TOKEN']
+          u=f'https://api.cloudflare.com/client/v4/accounts/{a}/d1/database/{d}/export'
+          h={'Authorization':f'Bearer {t}','Content-Type':'application/json'}
+          def post(p):
+            r=urllib.request.Request(u,data=json.dumps(p).encode(),method='POST',headers=h)
+            with urllib.request.urlopen(r,timeout=60) as x: b=json.load(x)
+            if not b.get('success'): raise SystemExit(json.dumps(b))
+            return b['result']
+          r=post({'output_format':'polling','dump_options':{}}); bm=r.get('at_bookmark')
+          for _ in range(120):
+            s=(r.get('result') or {}).get('signed_url')
+            if s: break
+            time.sleep(2); r=post({'output_format':'polling','current_bookmark':bm,'dump_options':{}})
+          s=(r.get('result') or {}).get('signed_url')
+          if not s: raise SystemExit('no signed url')
+          with urllib.request.urlopen(s,timeout=240) as x: open('/tmp/prod.sql','wb').write(x.read())
+          PY
+      - name: Inspect indexes and today's final state
+        run: |
+          python3 - <<'PY'
+          import sqlite3,json
+          c=sqlite3.connect(':memory:'); c.executescript(open('/tmp/prod.sql').read()); c.row_factory=sqlite3.Row
+          ml=['rt_ml_horse_hist','rt_ml_horse_total','rt_ml_horse_surface','rt_ml_horse_dist','rt_ml_horse_venue','rt_ml_jockey','rt_ml_trainer','rt_ml_pair']
+          for t in ml: print('INDEX',t,[dict(x) for x in c.execute(f"pragma index_list('{t}')")])
+          day='2026-09-05'
+          sel=c.execute('select state_value from rt_system_state where state_key=?',(f'final_daily_selection:{day}',)).fetchone()
+          ids=[]
+          if sel: ids=[x.get('raceId') for x in json.loads(sel[0]).get('selected',[]) if x.get('raceId')]
+          print('SELECTED',ids)
+          rows=[dict(x) for x in c.execute("select race_id,count(*) n,min(locked_at) first_locked,max(locked_at) last_locked from rt_public_bets where race_id in (select race_id from rt_races where race_date=?) group by race_id order by race_id",(day,))]
+          print('BETS',json.dumps(rows,ensure_ascii=False))
+          odds=[dict(x) for x in c.execute("select race_id,count(*) n,max(captured_at) cap from rt_official_odds_latest where race_id in (select race_id from rt_races where race_date=?) group by race_id order by race_id",(day,))]
+          print('ODDS',json.dumps(odds,ensure_ascii=False))
+          PY
+      - name: Deploy public worker and isolated live workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        run: |
+          npx wrangler deploy --config wrangler.jsonc
+          npx wrangler deploy --config wrangler.live-deadline.jsonc
+          npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
+      - name: Smoke check public home
+        run: |
+          set -e
+          for i in 1 2 3; do
+            code=$(curl -sS -o /tmp/home.html -w '%{http_code}' https://race-tantei-phase0.race-tantei.workers.dev/ || true)
+            echo "HTTP=$code"
+            head -c 500 /tmp/home.html || true; echo
+            if [ "$code" = "200" ] && ! grep -q '一時的にページを表示できません。' /tmp/home.html; then exit 0; fi
+            sleep 5
+          done
+          exit 1
