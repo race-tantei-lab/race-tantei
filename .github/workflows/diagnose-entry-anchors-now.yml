@@ -59,13 +59,12 @@ jobs:
             ORDER BY venue,race_no
           """).fetchall()
           print('CURRENT_0906_ENTRY_URLS',json.dumps([{'venue':v,'raceNo':n,'url':u} for v,n,u in current],ensure_ascii=False))
-          for venue in ('札幌','中山','阪神'):
-            rows=con.execute("""
-              SELECT race_date,race_no,meeting_no,meeting_day,entry_url FROM rt_races
-              WHERE venue=? AND race_no=1 AND race_date<'2026-09-06'
-                AND entry_url LIKE '%/JRADB/accessD.html?CNAME=pw01dde01%'
-              ORDER BY race_date DESC LIMIT 20
-            """,(venue,)).fetchall()
-            print('RACE1_HISTORY',venue,json.dumps([{'date':d,'raceNo':n,'meetingNo':m,'meetingDay':md,'url':u} for d,n,m,md,u in rows],ensure_ascii=False))
+          rows=con.execute("""
+            SELECT race_date,venue,race_no,meeting_no,meeting_day,entry_url FROM rt_races
+            WHERE race_no=1 AND race_date>='2026-06-01' AND race_date<'2026-09-06'
+              AND entry_url LIKE '%/JRADB/accessD.html?CNAME=pw01dde01%'
+            ORDER BY race_date DESC,venue LIMIT 160
+          """).fetchall()
+          print('ALL_RACE1_HISTORY',json.dumps([{'date':d,'venue':v,'raceNo':n,'meetingNo':m,'meetingDay':md,'url':u} for d,v,n,m,md,u in rows],ensure_ascii=False))
           con.close()
           PY
