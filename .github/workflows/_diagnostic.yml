@@ -1,0 +1,7 @@
+name: diagnostic
+on: workflow_dispatch
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo diagnostic
