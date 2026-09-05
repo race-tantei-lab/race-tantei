@@ -65,12 +65,32 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf .wrangler/state
-          timeout 90s npx wrangler d1 execute race-tantei-phase0 --local --config wrangler.jsonc --file=/tmp/prod-home.sql >/tmp/import.log 2>&1
+          # Ask Wrangler only to create its local D1 sqlite file. Importing the
+          # 16MB SQL through Wrangler is extremely slow; Python sqlite executes
+          # the exact same export in seconds without changing any data.
+          timeout 20s npx wrangler d1 execute race-tantei-phase0 --local --config wrangler.jsonc --command "CREATE TABLE IF NOT EXISTS __home_bootstrap(x INTEGER)" >/tmp/bootstrap.log 2>&1
+          dbfile=$(find .wrangler/state -type f \( -name '*.sqlite' -o -name '*.sqlite3' \) | head -1)
+          if [ -z "$dbfile" ]; then echo LOCAL_SQLITE_NOT_FOUND; find .wrangler/state -maxdepth 8 -type f -print; cat /tmp/bootstrap.log; exit 1; fi
+          echo "LOCAL_DB=$dbfile"
+          python3 - "$dbfile" <<'PY'
+          import sqlite3,sys,time
+          db=sys.argv[1]
+          sql=open('/tmp/prod-home.sql',encoding='utf-8').read()
+          con=sqlite3.connect(db)
+          started=time.time()
+          con.executescript(sql)
+          con.execute('DROP TABLE IF EXISTS __home_bootstrap')
+          con.commit()
+          print('SQLITE_IMPORT_SECONDS',round(time.time()-started,3))
+          for table in ('rt_races','rt_public_bets','rt_system_state'):
+            print(table,con.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0])
+          con.close()
+          PY
           npx wrangler dev --local --config wrangler.jsonc --ip 127.0.0.1 --port 8787 >/tmp/dev.log 2>&1 &
           pid=$!
           trap 'kill $pid 2>/dev/null || true' EXIT
           ok=0
-          for i in $(seq 1 25); do
+          for i in $(seq 1 30); do
             code=$(curl --max-time 5 -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' http://127.0.0.1:8787/ || true)
             path=$(tr -d '\r' </tmp/home.headers 2>/dev/null | awk 'BEGIN{IGNORECASE=1}/^x-race-home-path:/{print $2}' | tail -1)
             echo "LOCAL_ATTEMPT=$i HTTP=$code PATH=$path"
@@ -78,10 +98,10 @@ jobs:
             sleep 1
           done
           if [ "$ok" != "1" ]; then
-            echo '--- import ---'; tail -100 /tmp/import.log || true
-            echo '--- dev ---'; tail -160 /tmp/dev.log || true
+            echo '--- bootstrap ---'; cat /tmp/bootstrap.log || true
+            echo '--- dev ---'; tail -200 /tmp/dev.log || true
             echo '--- headers ---'; cat /tmp/home.headers || true
-            echo '--- body ---'; head -c 1600 /tmp/home.html || true
+            echo '--- body ---'; head -c 2000 /tmp/home.html || true
             exit 1
           fi
           for marker in 'データを再接続しています' 'データ取得を再試行しています' 'データベースへ接続できない' '表示データの読み込みに失敗しました' '表示系の自動復旧モードです' '一時的にページを表示できません。'; do
@@ -160,8 +180,6 @@ jobs:
             } catch (error) {
               console.error("V37_NORMAL_HOME_USING_SNAPSHOT_AFTER_ERROR", error);
             }
-            // Exact HTML rendered by the same production code against a zero-read
-            // production D1 export. This is not a dedicated error/recovery screen.
             return embeddedNormalHome();
           }
 
