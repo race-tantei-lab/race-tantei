@@ -3,6 +3,11 @@ name: Approved production policy verification
 on:
   push:
     branches: [main]
+    paths:
+      - "config/approved-production-model.json"
+      - "config/race-tantei-fixed-constraints.json"
+      - "scripts/verify-race-tantei-fixed-constraints.py"
+      - "scripts/verify-approved-production-model.py"
   workflow_dispatch:
 
 permissions:
