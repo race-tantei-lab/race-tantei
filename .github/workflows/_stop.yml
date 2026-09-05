@@ -1,0 +1,7 @@
+name: stop
+on: workflow_dispatch
+jobs:
+  stop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo stop
