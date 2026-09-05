@@ -272,9 +272,10 @@ async function probeAnchor(db: D1Database, group: MissingGroup): Promise<Anchor 
     }
   }));
 
-  if (found) {
+  const hit = found as { cname: string; html: string } | null;
+  if (hit) {
     await saveProbeState(db, group, { modeIndex: state.modeIndex, cursor: 0 });
-    return { ...found, probed: values.length };
+    return { ...hit, probed: values.length };
   }
 
   const cursor = state.cursor + values.length;
