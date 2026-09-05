@@ -1,0 +1,79 @@
+name: Diagnose production race page now
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/diagnose-race-page-now.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe production home, day API and race links
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          curl -sS -D /tmp/home.h -o /tmp/home.html "$base/"
+          echo '=== HOME ==='
+          head -n 20 /tmp/home.h
+          python3 - <<'PY'
+          import re
+          html=open('/tmp/home.html',encoding='utf-8',errors='replace').read()
+          print('HOME_BYTES',len(html))
+          print('FORBIDDEN_503_TEXT', '一時的にページを表示できません。' in html)
+          hrefs=re.findall(r'href=["\']([^"\']+)["\']',html)
+          race=[]
+          for h in hrefs:
+            if any(k in h.lower() for k in ['race','detail']) or 'race_id=' in h.lower() or 'raceId=' in h:
+              if h not in race: race.append(h)
+          print('RACE_LINK_COUNT',len(race))
+          for h in race[:20]: print('RACE_LINK',h)
+          open('/tmp/race-links.txt','w').write('\n'.join(race[:20]))
+          PY
+
+          for date in 2026-09-05 2026-09-06; do
+            echo "=== DAY $date ==="
+            code=$(curl -sS -D "/tmp/day-$date.h" -o "/tmp/day-$date.json" -w '%{http_code}' "$base/api/public/day?date=$date" || true)
+            echo "HTTP=$code"
+            grep -iE '^(x-race|content-type|cache-control|cf-ray|server):' "/tmp/day-$date.h" || true
+            python3 - "$date" <<'PY'
+          import json,sys
+          d=sys.argv[1]
+          p=f'/tmp/day-{d}.json'
+          try:
+            obj=json.load(open(p,encoding='utf-8'))
+            races=obj.get('races') if isinstance(obj,dict) else None
+            print('OK',obj.get('ok') if isinstance(obj,dict) else None,'RACES',len(races) if isinstance(races,list) else None,'SOURCE',obj.get('source') if isinstance(obj,dict) else None)
+            if isinstance(races,list):
+              for r in races[:3]: print('RACE_SAMPLE',r)
+          except Exception as e:
+            print('JSON_ERROR',repr(e))
+            print(open(p,encoding='utf-8',errors='replace').read()[:1000])
+          PY
+          done
+
+          echo '=== RACE LINKS ==='
+          while IFS= read -r href; do
+            [ -n "$href" ] || continue
+            case "$href" in
+              http*) url="$href" ;;
+              /*) url="$base$href" ;;
+              *) url="$base/$href" ;;
+            esac
+            code=$(curl -L -sS -D /tmp/race.h -o /tmp/race.body -w '%{http_code}' "$url" || true)
+            echo "URL=$url HTTP=$code BYTES=$(wc -c </tmp/race.body)"
+            grep -iE '^(location|content-type|x-race|cf-ray|server):' /tmp/race.h || true
+            python3 - <<'PY'
+          b=open('/tmp/race.body','rb').read(2000)
+          try: s=b.decode('utf-8','replace')
+          except: s=''
+          print('BODY_HEAD',repr(s[:300]))
+          PY
+          done < /tmp/race-links.txt
