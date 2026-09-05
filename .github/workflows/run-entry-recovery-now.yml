@@ -1,0 +1,35 @@
+name: Run 9/6 entry recovery now
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/run-entry-recovery-now.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Invoke Cloudflare-side official JRA recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl --retry 2 --retry-delay 2 --retry-all-errors --max-time 240 -sS \
+            -X POST -H 'content-type: application/json' \
+            -o /tmp/recovery.json -w '%{http_code}' \
+            'https://race-tantei-phase0.race-tantei.workers.dev/_ops/entry-seed-sync-20260906-7f4c9d2a')
+          cat /tmp/recovery.json
+          test "$code" = 200
+          python3 - <<'PY'
+          import json
+          body=json.load(open('/tmp/recovery.json',encoding='utf-8'))
+          ids=body.get('savedRaceIds') or []
+          if body.get('status')!='ready' or len(set(ids))!=36:
+              raise SystemExit('ENTRY_RECOVERY_NOT_COMPLETE:'+json.dumps(body,ensure_ascii=False))
+          print('ENTRY_RECOVERY_READY',len(set(ids)))
+          PY
