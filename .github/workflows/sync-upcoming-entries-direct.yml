@@ -11,6 +11,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "src/v1/upcoming-entry-worker-repair.ts"
       - "scripts/find-current-jra-entry-anchor.mjs"
       - "scripts/sync-upcoming-entries-direct.mjs"
       - "scripts/run-upcoming-entry-direct-sync.mjs"
