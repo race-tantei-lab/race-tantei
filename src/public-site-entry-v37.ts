@@ -1,9 +1,8 @@
 import core from "./public-site-entry-v37-core.js";
 import publicSite from "./public-site-entry-v34.js";
-import fallbackSite from "./public-site-entry-v33.js";
 import type { Env } from "./v1/types.js";
 
-const UI_VERSION = "ten-year-completed-public-v37-original-home-restored-20260905";
+const UI_VERSION = "ten-year-completed-public-v37-free-tier-safe-20260905";
 const FORBIDDEN_RECOVERY_TEXT = [
   "データ取得を再試行しています",
   "データを再接続しています",
@@ -11,17 +10,6 @@ const FORBIDDEN_RECOVERY_TEXT = [
   "表示データの読み込みに失敗しました",
   "表示系の自動復旧モードです",
 ] as const;
-
-// Safety-verifier markers. The actual maintenance implementation remains in
-// public-site-entry-v37-core.ts and is delegated unchanged from scheduled().
-// runPublicMaintenance
-// runUpcomingCalendarRepair
-// runUpcomingEntryWorkerRepair
-// runUpcomingEntryDerivedRepair
-
-async function pause(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 function normalHomeResponse(response: Response, html: string, path: string): Response {
   const headers = new Headers(response.headers);
@@ -45,64 +33,30 @@ function isRecoveryScreen(response: Response, html: string): boolean {
 }
 
 async function fetchNormalHome(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  let lastError: unknown = null;
-
-  // Keep all normal v37 homepage behavior (next-bet panel, JRA official odds,
-  // current race state). The only thing rejected here is the newly invented
-  // recovery/retry homepage.
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      const response = await core.fetch(request, env, ctx);
-      const contentType = response.headers.get("content-type") ?? "";
-      const html = contentType.includes("text/html") ? await response.text() : "";
-      if (html && !isRecoveryScreen(response, html)) {
-        return normalHomeResponse(response, html, "v37-normal");
-      }
-      console.error("V37_RECOVERY_HOME_REJECTED", attempt + 1, response.status);
-    } catch (error) {
-      lastError = error;
-      console.error("V37_NORMAL_HOME_FAILED", attempt + 1, error);
-    }
-    if (attempt < 2) await pause(150 * (attempt + 1));
-  }
-
-  // If v37's enhancement path is temporarily unavailable, use the previous
-  // normal renderer. Do not substitute a special recovery page.
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const response = await publicSite.fetch(request, env, ctx);
-      const contentType = response.headers.get("content-type") ?? "";
-      const html = contentType.includes("text/html") ? await response.text() : "";
-      if (html && !isRecoveryScreen(response, html)) {
-        return normalHomeResponse(response, html, "v37-normal-v34-fallback");
-      }
-    } catch (error) {
-      lastError = error;
-      console.error("V34_NORMAL_HOME_FAILED", attempt + 1, error);
-    }
-    if (attempt < 1) await pause(200);
-  }
-
+  // One browser request gets exactly one canonical render attempt. Previous
+  // versions retried the same D1-backed render through v37/v34/v33 up to six
+  // times when D1 was unhealthy, which amplified rows_read precisely when the
+  // free-tier budget was under pressure.
   try {
-    const response = await fallbackSite.fetch(request, env, ctx);
+    const response = await core.fetch(request, env, ctx);
     const contentType = response.headers.get("content-type") ?? "";
     const html = contentType.includes("text/html") ? await response.text() : "";
     if (html && !isRecoveryScreen(response, html)) {
-      return normalHomeResponse(response, html, "v37-normal-v33-fallback");
+      return normalHomeResponse(response, html, "v37-normal");
     }
+    console.error("V37_NORMAL_HOME_UNAVAILABLE", response.status);
   } catch (error) {
-    lastError = error;
-    console.error("V33_NORMAL_HOME_FAILED", error);
+    console.error("V37_NORMAL_HOME_FAILED", error);
   }
 
-  // There is deliberately no full-screen retry/reconnect UI here anymore.
-  console.error("NORMAL_HOME_UNAVAILABLE", lastError);
+  // Never fan out to older renderers here: they use the same D1 database and
+  // would turn one failed page view into several more database reads.
   return new Response("一時的にページを表示できません。", {
     status: 503,
     headers: {
       "content-type": "text/plain; charset=utf-8",
       "cache-control": "no-store, max-age=0",
-      "retry-after": "10",
+      "retry-after": "30",
       "x-race-ui-version": UI_VERSION,
       "x-race-home-path": "v37-normal-unavailable",
     },
@@ -122,6 +76,10 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    if (core.scheduled) await core.scheduled(controller, env, ctx);
+    // v34 is the canonical scheduler chain. It delegates to v25 -> v21 -> v20,
+    // where the completed-model daily selection and live-lock path actually run,
+    // and it also runs the current entry/calendar repairs. v37 must not replace
+    // that chain with display-only maintenance.
+    if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
