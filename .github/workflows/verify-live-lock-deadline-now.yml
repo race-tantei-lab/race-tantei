@@ -6,9 +6,6 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/verify-live-lock-deadline-now.yml"
-  schedule:
-    - cron: "14-54/10 23 * * 5,6,0"
-    - cron: "4-54/10 0-10 * * 6,0,1"
 
 permissions:
   contents: read
