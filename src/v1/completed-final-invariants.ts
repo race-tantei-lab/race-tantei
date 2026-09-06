@@ -1,36 +1,50 @@
 type TriggerRow = { name: string; sql: string | null };
+
+const VERIFY_INTERVAL_MS = 5 * 60_000;
+const REQUIRED_TRIGGERS = [
+  "rt_guard_final_bet_insert_deadline",
+  "rt_guard_final_state_insert_deadline",
+  "rt_guard_locked_public_bet_terms",
+  "rt_guard_locked_worker_final_state",
+  "rt_guard_probability_fallback_final_insert",
+  "rt_guard_probability_fallback_final_update",
+  "rt_guard_official_odds_final_insert",
+  "rt_guard_official_odds_final_update",
+] as const;
+
+let lastVerifiedAt = 0;
+
+// Production DDL is installed once by deploy-live-deadline.yml. Race-day
+// scheduled Workers only verify it. Never CREATE/DROP triggers in the hot path:
+// rebuilding schema objects during a race day can consume D1 rows_written.
 export async function ensureCompletedFinalImmutability(db: D1Database): Promise<void> {
-  const deadlineRows = await db.prepare(`SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name IN ('rt_guard_final_bet_insert_deadline','rt_guard_final_state_insert_deadline')`).all<TriggerRow>();
-  const triggerSql = new Map((deadlineRows.results ?? []).map((row) => [row.name, String(row.sql || '')]));
-  const betWindowCurrent = triggerSql.get('rt_guard_final_bet_insert_deadline')?.includes('FINAL_BET_REFLECTION_WINDOW_PASSED') === true;
-  const stateWindowCurrent = triggerSql.get('rt_guard_final_state_insert_deadline')?.includes('FINAL_STATE_REFLECTION_WINDOW_PASSED') === true;
-  if (!betWindowCurrent || !stateWindowCurrent) {
-    await db.batch([
-      db.prepare('DROP TRIGGER IF EXISTS rt_guard_final_bet_insert_deadline'), db.prepare('DROP TRIGGER IF EXISTS rt_guard_final_state_insert_deadline'),
-      db.prepare(`CREATE TRIGGER rt_guard_final_state_insert_deadline BEFORE INSERT ON rt_system_state
-        WHEN NEW.state_key LIKE 'worker_live_final:%' AND json_extract(NEW.state_value, '$.status')='locked' AND (
-          COALESCE((SELECT unixepoch(start_time_utc) FROM rt_races WHERE race_id=json_extract(NEW.state_value,'$.raceId') LIMIT 1),0) < unixepoch('now')+600
-          OR (COALESCE((SELECT unixepoch(start_time_utc) FROM rt_races WHERE race_id=json_extract(NEW.state_value,'$.raceId') LIMIT 1),0) < unixepoch('now')+900
-            AND NOT (json_extract(NEW.state_value,'$.finalizedFrom')='fresh' AND unixepoch(json_extract(NEW.state_value,'$.generationStartedAt')) IS NOT NULL
-              AND unixepoch(json_extract(NEW.state_value,'$.generationStartedAt')) <= COALESCE((SELECT unixepoch(start_time_utc)-900 FROM rt_races WHERE race_id=json_extract(NEW.state_value,'$.raceId') LIMIT 1),0))))
-        BEGIN SELECT RAISE(ABORT,'FINAL_STATE_REFLECTION_WINDOW_PASSED'); END`),
-      db.prepare(`CREATE TRIGGER rt_guard_final_bet_insert_deadline BEFORE INSERT ON rt_public_bets
-        WHEN NEW.source_prediction_id=-2 AND (
-          COALESCE((SELECT unixepoch(start_time_utc) FROM rt_races WHERE race_id=NEW.race_id LIMIT 1),0) < unixepoch('now')+600
-          OR (COALESCE((SELECT unixepoch(start_time_utc) FROM rt_races WHERE race_id=NEW.race_id LIMIT 1),0) < unixepoch('now')+900
-            AND NOT EXISTS (SELECT 1 FROM rt_system_state s WHERE s.state_key='worker_live_final:'||NEW.race_id
-              AND json_extract(s.state_value,'$.status')='locked' AND json_extract(s.state_value,'$.finalizedFrom')='fresh'
-              AND unixepoch(json_extract(s.state_value,'$.generationStartedAt')) IS NOT NULL
-              AND unixepoch(json_extract(s.state_value,'$.generationStartedAt')) <= COALESCE((SELECT unixepoch(start_time_utc)-900 FROM rt_races WHERE race_id=NEW.race_id LIMIT 1),0))))
-        BEGIN SELECT RAISE(ABORT,'FINAL_BET_REFLECTION_WINDOW_PASSED'); END`),
-    ]);
+  const now = Date.now();
+  if (lastVerifiedAt && now - lastVerifiedAt < VERIFY_INTERVAL_MS) return;
+
+  const placeholders = REQUIRED_TRIGGERS.map(() => "?").join(",");
+  const rows = await db.prepare(`SELECT name,sql FROM sqlite_master WHERE type='trigger' AND name IN (${placeholders})`)
+    .bind(...REQUIRED_TRIGGERS)
+    .all<TriggerRow>();
+  const triggerSql = new Map((rows.results ?? []).map((row) => [String(row.name), String(row.sql || "")]));
+  const missing = REQUIRED_TRIGGERS.filter((name) => !triggerSql.has(name));
+  if (missing.length) throw new Error(`FINAL_INVARIANT_TRIGGER_MISSING:${missing.join(",")}`);
+
+  const betSql = triggerSql.get("rt_guard_final_bet_insert_deadline") ?? "";
+  const stateSql = triggerSql.get("rt_guard_final_state_insert_deadline") ?? "";
+  const officialInsertSql = triggerSql.get("rt_guard_official_odds_final_insert") ?? "";
+  const officialUpdateSql = triggerSql.get("rt_guard_official_odds_final_update") ?? "";
+  if (!betSql.includes("FINAL_BET_REFLECTION_WINDOW_PASSED")) throw new Error("FINAL_BET_DEADLINE_TRIGGER_STALE");
+  if (!stateSql.includes("FINAL_STATE_REFLECTION_WINDOW_PASSED")) throw new Error("FINAL_STATE_DEADLINE_TRIGGER_STALE");
+  if (!triggerSql.get("rt_guard_locked_public_bet_terms")?.includes("IMMUTABLE_FINAL_BET_TERMS")) throw new Error("FINAL_BET_IMMUTABILITY_TRIGGER_STALE");
+  if (!triggerSql.get("rt_guard_locked_worker_final_state")?.includes("IMMUTABLE_WORKER_FINAL_STATE")) throw new Error("FINAL_STATE_IMMUTABILITY_TRIGGER_STALE");
+  if (!triggerSql.get("rt_guard_probability_fallback_final_insert")?.includes("PROBABILITY_FALLBACK_FORBIDDEN")) throw new Error("FINAL_FALLBACK_INSERT_TRIGGER_STALE");
+  if (!triggerSql.get("rt_guard_probability_fallback_final_update")?.includes("PROBABILITY_FALLBACK_FORBIDDEN")) throw new Error("FINAL_FALLBACK_UPDATE_TRIGGER_STALE");
+  if (!officialInsertSql.includes("OFFICIAL_JRA_ODDS_REQUIRED") || !officialUpdateSql.includes("OFFICIAL_JRA_ODDS_REQUIRED")) {
+    throw new Error("FINAL_OFFICIAL_ODDS_TRIGGER_STALE");
   }
-  await db.batch([
-    db.prepare(`CREATE TRIGGER IF NOT EXISTS rt_guard_locked_public_bet_terms BEFORE UPDATE OF course,bet_type,combination,stake_yen,assumed_odds,locked_at,source_prediction_id ON rt_public_bets WHEN OLD.source_prediction_id=-2 BEGIN SELECT RAISE(ABORT,'IMMUTABLE_FINAL_BET_TERMS'); END`),
-    db.prepare(`CREATE TRIGGER IF NOT EXISTS rt_guard_locked_worker_final_state BEFORE UPDATE ON rt_system_state WHEN OLD.state_key LIKE 'worker_live_final:%' AND json_extract(OLD.state_value,'$.status')='locked' BEGIN SELECT RAISE(ABORT,'IMMUTABLE_WORKER_FINAL_STATE'); END`),
-    db.prepare(`CREATE TRIGGER IF NOT EXISTS rt_guard_probability_fallback_final_insert BEFORE INSERT ON rt_system_state WHEN NEW.state_key LIKE 'worker_live_final:%' AND json_extract(NEW.state_value,'$.oddsMode')='probability_fallback' BEGIN SELECT RAISE(ABORT,'PROBABILITY_FALLBACK_FORBIDDEN'); END`),
-    db.prepare(`CREATE TRIGGER IF NOT EXISTS rt_guard_probability_fallback_final_update BEFORE UPDATE ON rt_system_state WHEN NEW.state_key LIKE 'worker_live_final:%' AND json_extract(NEW.state_value,'$.oddsMode')='probability_fallback' BEGIN SELECT RAISE(ABORT,'PROBABILITY_FALLBACK_FORBIDDEN'); END`),
-    db.prepare(`CREATE TRIGGER IF NOT EXISTS rt_guard_official_odds_final_insert BEFORE INSERT ON rt_system_state WHEN NEW.state_key LIKE 'worker_live_final:%' AND json_extract(NEW.state_value,'$.status')='locked' AND COALESCE(json_extract(NEW.state_value,'$.oddsSource'),'') NOT IN ('jra-fast-official', 'jra-crawl-official') BEGIN SELECT RAISE(ABORT,'OFFICIAL_JRA_ODDS_REQUIRED'); END`),
-    db.prepare(`CREATE TRIGGER IF NOT EXISTS rt_guard_official_odds_final_update BEFORE UPDATE ON rt_system_state WHEN NEW.state_key LIKE 'worker_live_final:%' AND json_extract(NEW.state_value,'$.status')='locked' AND COALESCE(json_extract(NEW.state_value,'$.oddsSource'),'') NOT IN ('jra-fast-official', 'jra-crawl-official') BEGIN SELECT RAISE(ABORT,'OFFICIAL_JRA_ODDS_REQUIRED'); END`),
-  ]);
+  if (!officialInsertSql.includes("jra-fast-official") || !officialInsertSql.includes("jra-crawl-official")) {
+    throw new Error("FINAL_OFFICIAL_ODDS_SOURCE_TRIGGER_STALE");
+  }
+
+  lastVerifiedAt = now;
 }
