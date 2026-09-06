@@ -26,13 +26,49 @@ def require_missing(path: str, label: str) -> None:
         raise AssertionError(f"{label} must be removed: {path}")
 
 
+def verify_public_entry(public_main: str) -> None:
+    if public_main == "src/public-site-entry-v37.ts":
+        return
+    if public_main != "src/public-site-entry-recovery-20260906.ts":
+        raise AssertionError(f"unexpected public Worker entry: {public_main!r}")
+
+    recovery = read(public_main)
+    for needle in (
+        'import publicSite from "./public-site-entry-v37.js";',
+        'const RECOVERY_PATH = "/_ops/entry-seed-sync-20260906-7f4c9d2a";',
+        'request.method === "POST" && url.pathname === RECOVERY_PATH',
+        'if (url.pathname === RECOVERY_PATH) return new Response("NOT_FOUND", { status: 404 });',
+        'runConfiguredEntrySeedWriteOnly(env, "2026-09-06")',
+        'if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);',
+    ):
+        require(recovery, needle, "temporary public recovery wrapper")
+    for forbidden in (
+        "rt_public_bets",
+        "runCompletedWorkerLiveLock",
+        "runCompletedWorkerDeadlineGuard",
+        "runDirectLiveTick",
+        "live-deadline-entry",
+        "completed-worker-live-lock",
+    ):
+        forbid(recovery, forbidden, "temporary public recovery wrapper live isolation")
+
+    runner_recovery = read("src/v1/configured-entry-seed-write-only.ts")
+    require(runner_recovery, "INSERT INTO rt_runners", "temporary runner recovery")
+    for forbidden in (
+        "rt_public_bets",
+        "rt_official_odds_latest",
+        "runCompletedWorkerLiveLock",
+        "runCompletedWorkerDeadlineGuard",
+    ):
+        forbid(runner_recovery, forbidden, "temporary runner recovery live isolation")
+
+
 def main() -> None:
     public_wrangler = json.loads(read("wrangler.jsonc"))
     primary_wrangler = json.loads(read("wrangler.live-deadline.jsonc"))
     backup_wrangler = json.loads(read("wrangler.live-deadline-backup.jsonc"))
 
-    if public_wrangler.get("main") != "src/public-site-entry-v37.ts":
-        raise AssertionError(f"unexpected public Worker entry: {public_wrangler.get('main')!r}")
+    verify_public_entry(str(public_wrangler.get("main") or ""))
     if public_wrangler.get("triggers", {}).get("crons", []) != ["*/15 * * * *"]:
         raise AssertionError("public maintenance Worker cron must remain every fifteen minutes")
     if primary_wrangler.get("name") != "race-tantei-live-deadline":
@@ -77,15 +113,15 @@ def main() -> None:
         "JRA_OFFICIAL_ODDS_PARSER_VERSION",
         "livePreviewPriorityRank",
         "MAX_PREVIEW_GENERATIONS_PER_TICK",
-        'cachedWorkerModel',
-        'previewMissingUrgentRaceIds',
-        'WORKER_HARD_T15_START_MISSED',
-        'WORKER_GENERATION_CROSSED_T10',
-        'await db.batch(statements)',
-        'if (isStrictComplete(existing)) return;',
+        "cachedWorkerModel",
+        "previewMissingUrgentRaceIds",
+        "WORKER_HARD_T15_START_MISSED",
+        "WORKER_GENERATION_CROSSED_T10",
+        "await db.batch(statements)",
+        "if (isStrictComplete(existing)) return;",
     ):
         require(live, needle, "isolated live lock")
-    forbid(live, 'probability_fallback', "isolated live lock")
+    forbid(live, "probability_fallback", "isolated live lock")
     forbid(live, "const ODDS_PARSER_VERSION", "isolated live lock parser provenance")
 
     guard = read("src/v1/completed-worker-deadline-guard.ts")
@@ -180,14 +216,14 @@ def main() -> None:
     ):
         forbid(public34, forbidden, "public v34")
     require(public34, 'pathname === "/_ops/live-tick"', "public v34")
-    require(public34, 'status: 404', "public v34")
+    require(public34, "status: 404", "public v34")
 
     public37 = read("src/public-site-entry-v37.ts")
     public37_core = read("src/public-site-entry-v37-core.ts")
     require(public37, 'import core from "./public-site-entry-v37-core.js";', "public v37 wrapper")
     require(public37, "if (core.scheduled) await core.scheduled(controller, env, ctx);", "public v37 maintenance delegation")
     require(public37, 'pathname === "/_ops/live-tick"', "public v37 live isolation")
-    require(public37, 'status: 404', "public v37 live isolation")
+    require(public37, "status: 404", "public v37 live isolation")
     for needle in (
         "runPublicMaintenance",
         "runUpcomingCalendarRepair",
