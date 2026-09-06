@@ -1,4 +1,5 @@
 import liveDeadlineV2 from "./live-deadline-entry-v2.js";
+import { shouldRunOnJraRaceDay } from "./v1/race-day-gate.js";
 import type { Env } from "./v1/types.js";
 
 const REQUIRED_LIVE_INDEXES = [
@@ -59,6 +60,13 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: LiveRoleEnv): Promise<void> {
+    const scheduledAt = Number.isFinite(controller.scheduledTime) ? new Date(controller.scheduledTime) : new Date();
+    const raceDay = await shouldRunOnJraRaceDay(scheduledAt);
+    if (!raceDay.shouldRun) {
+      console.log("LIVE_DEADLINE_NON_RACE_DAY_SKIP", JSON.stringify({ raceDate: raceDay.raceDate, role: env.LIVE_DEADLINE_ROLE || "primary", reason: raceDay.reason }));
+      return;
+    }
+
     const state = await requiredLiveIndexesReady(env.DB);
     if (!state.ready) {
       console.warn("LIVE_DEADLINE_WAITING_FOR_INDEXES", JSON.stringify(state.missing));
