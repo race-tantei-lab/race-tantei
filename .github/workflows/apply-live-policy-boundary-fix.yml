@@ -1,4 +1,5 @@
 name: Apply live policy boundary fix
+# One-shot patch workflow; remove after the source commit lands.
 on:
   push:
     branches: [main]
