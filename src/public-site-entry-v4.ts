@@ -3,18 +3,10 @@ import type { Env } from "./v1/types.js";
 import { safeRaceName } from "./v1/race-display.js";
 import { frozenRaceOutcome } from "./v1/frozen-race-results.js";
 
-const BAD_NAME_SQL = `
-  UPDATE rt_races
-  SET race_name = CAST(race_no AS TEXT) || 'レース', updated_at=CURRENT_TIMESTAMP
-  WHERE race_name IS NULL OR trim(race_name)=''
-     OR race_name LIKE '%検索ウィンドウ%'
-     OR race_name LIKE '%検索メニュー%'
-     OR race_name LIKE '%サイト内検索%'
-     OR race_name LIKE '%メニューを開く%'
-`;
-
-async function repairBadRaceNames(db: D1Database): Promise<void> {
-  try { await db.prepare(BAD_NAME_SQL).run(); } catch { /* display guard still applies */ }
+// Historical bad-name cleanup is migration-only. Public requests and cron must
+// never scan/update the full rt_races table; display-time safeRaceName remains.
+async function repairBadRaceNames(_db: D1Database): Promise<void> {
+  return;
 }
 
 async function settlementMap(db: D1Database, raceIds: string[]): Promise<Map<string, { settled: boolean; hit: boolean }>> {
