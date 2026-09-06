@@ -185,7 +185,7 @@ function validateSelection(payload: SelectionPayload): string[] {
     ids.push(raceId);
     counts.set(venue, (counts.get(venue) ?? 0) + 1);
   }
-  if (new Set(ids).size !== ids.length || counts.size < 2 || [...counts.values()].some((count) => count !== 5)) {
+  if (ids.length !== 15 || new Set(ids).size !== ids.length || counts.size !== 3 || [...counts.values()].some((count) => count !== 5)) {
     throw new Error(`WORKER_SELECTION_NOT_FIVE_PER_VENUE:${JSON.stringify(Object.fromEntries(counts))}`);
   }
   return ids;
@@ -438,7 +438,7 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
   const remainingAtCommit = startMs - now.getTime();
   const generationStartedMs = Date.parse(String(snapshot.generationStartedAt || snapshot.generatedAt));
   if (finalizedFrom === "fresh") {
-    if (!Number.isFinite(generationStartedMs) || startMs - generationStartedMs < DEADLINE_MS) throw new Error(`WORKER_FRESH_GENERATION_STARTED_AFTER_T15:${raceId}`);
+    if (!Number.isFinite(generationStartedMs) || startMs - generationStartedMs <= DEADLINE_MS) throw new Error(`WORKER_FRESH_GENERATION_STARTED_AFTER_T15:${raceId}`);
     if (remainingAtCommit < FINAL_REFLECTION_DEADLINE_MS) throw new Error(`WORKER_FRESH_REFLECTION_CROSSED_T10:${raceId}`);
   } else if (remainingAtCommit < DEADLINE_MS) {
     throw new Error(`WORKER_NONFRESH_REFLECTION_CROSSED_T15:${raceId}`);
@@ -586,7 +586,7 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       // T-15 is the generation-start boundary. No new calculation starts
       // after it. A fresh calculation that started on time may finish and be
       // reflected until the hard T-10 reflection boundary.
-      if (remaining < DEADLINE_MS) {
+      if (remaining <= DEADLINE_MS) {
         errors.push({ raceId, error: `WORKER_HARD_T15_START_MISSED:${raceId}` });
         continue;
       }
