@@ -9,6 +9,12 @@ ENTRY = ROOT / "src" / "public-site-entry-v28.ts"
 PARENT = ROOT / "src" / "public-site-entry-v27.ts"
 WRANGLER = ROOT / "wrangler.jsonc"
 RUNTIME = ROOT / "src" / "v1" / "completed-win5.ts"
+RECOVERY = ROOT / "src" / "public-site-entry-recovery-20260906.ts"
+V37 = ROOT / "src" / "public-site-entry-v37.ts"
+V37_CORE = ROOT / "src" / "public-site-entry-v37-core.ts"
+V34 = ROOT / "src" / "public-site-entry-v34.ts"
+V33 = ROOT / "src" / "public-site-entry-v33.ts"
+V32 = ROOT / "src" / "public-site-entry-v32.ts"
 
 
 def require(condition: bool, message: str) -> None:
@@ -16,21 +22,42 @@ def require(condition: bool, message: str) -> None:
         raise RuntimeError(message)
 
 
+def read(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
+
+
 def main() -> None:
-    top = TOP.read_text(encoding="utf-8")
-    canonical = CANONICAL.read_text(encoding="utf-8")
-    deadline = DEADLINE.read_text(encoding="utf-8")
-    entry = ENTRY.read_text(encoding="utf-8")
-    parent = PARENT.read_text(encoding="utf-8")
+    top = read(TOP)
+    canonical = read(CANONICAL)
+    deadline = read(DEADLINE)
+    entry = read(ENTRY)
+    parent = read(PARENT)
     source = top + "\n" + canonical + "\n" + deadline + "\n" + entry + "\n" + parent
     win5_ui_source = entry + "\n" + parent
-    wrangler = WRANGLER.read_text(encoding="utf-8")
-    runtime = RUNTIME.read_text(encoding="utf-8")
+    wrangler = read(WRANGLER)
+    runtime = read(RUNTIME)
+    recovery = read(RECOVERY)
+    v37 = read(V37)
+    v37_core = read(V37_CORE)
+    v34 = read(V34)
+    v33 = read(V33)
+    v32 = read(V32)
 
-    require('"main": "src/public-site-entry-v31.ts"' in wrangler, "WIN5_V31_NOT_CANONICAL_ENTRY")
+    # The temporary 2026-09-06 recovery entry is now canonical in wrangler, but
+    # it must preserve the normal UI chain all the way to the unchanged WIN5 v31
+    # implementation. This verifies the actual wrapper chain instead of forcing
+    # wrangler itself back to an obsolete entry.
+    require('"main": "src/public-site-entry-recovery-20260906.ts"' in wrangler, "WIN5_RECOVERY_NOT_CANONICAL_ENTRY")
+    require('import publicSite from "./public-site-entry-v37.js"' in recovery, "WIN5_RECOVERY_V37_WRAPPER_MISSING")
+    require('import core from "./public-site-entry-v37-core.js"' in v37, "WIN5_V37_CORE_WRAPPER_MISSING")
+    require('import publicSite from "./public-site-entry-v34.js"' in v37_core, "WIN5_V37CORE_V34_WRAPPER_MISSING")
+    require('import publicSite from "./public-site-entry-v33.js"' in v34, "WIN5_V34_V33_WRAPPER_MISSING")
+    require('import publicSite from "./public-site-entry-v32.js"' in v33, "WIN5_V33_V32_WRAPPER_MISSING")
+    require('import publicSite from "./public-site-entry-v31.js"' in v32, "WIN5_V32_V31_WRAPPER_MISSING")
     require('import publicSite from "./public-site-entry-v30.js"' in top, "WIN5_V31_V30_WRAPPER_MISSING")
     require('import publicSite from "./public-site-entry-v29.js"' in canonical, "WIN5_V30_V29_WRAPPER_MISSING")
     require('import publicSite from "./public-site-entry-v28.js"' in deadline, "WIN5_V29_V28_WRAPPER_MISSING")
+
     require('class="nav-win5"' in parent, "WIN5_TOP_NAV_TAB_MISSING")
     require('<nav class="nav"><a href="/">レース</a>' in parent, "WIN5_TOP_NAV_INSERTION_ANCHOR_MISSING")
     require('aria-current="page"' in parent, "WIN5_ACTIVE_TOP_NAV_STATE_MISSING")
@@ -71,11 +98,9 @@ def main() -> None:
     require('detail: "T-15で固定済み"' not in parent, "WIN5_UI_FALSE_T15_CLAIM_REINTRODUCED")
 
     require('.win5-target-list' in parent and '.win5-ticket-row' in parent, "WIN5_MOBILE_VERTICAL_LAYOUT_MISSING")
-    # Home-page controls can independently choose their own overflow behavior.
-    # This guard is specifically for the WIN5 page implementation.
     require('overflow-x:auto' not in win5_ui_source, "WIN5_HORIZONTAL_SCROLL_REINTRODUCED")
 
-    print("WIN5_UI_OK top_nav=true floating_button=false view_switch=tickets_other default=tickets duplicate_plan_comparison=false rule=false diagnostics=always_open horizontal_scroll=false canonical=v31_v30 clear_language=true")
+    print("WIN5_UI_OK top_nav=true floating_button=false view_switch=tickets_other default=tickets duplicate_plan_comparison=false rule=false diagnostics=always_open horizontal_scroll=false canonical=recovery_v37_v34_v33_v32_v31 clear_language=true")
 
 
 if __name__ == "__main__":
