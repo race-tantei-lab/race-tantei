@@ -12,12 +12,12 @@ const REQUIRED_LIVE_INDEXES = [
   "rt_idx_ml_pair_lookup",
 ] as const;
 
-// These indexes are persistent, pre-provisioned D1 schema. Race-day workers
-// never create them because building large ML indexes can exhaust rows_written.
-// While any index is missing, recheck every minute and fail closed. Once ready,
-// the in-memory state stays ready and no further sqlite_master reads are made.
 const RECHECK_MS = 60_000;
+const PRIMARY_HEARTBEAT_KEY = "live_deadline_primary_heartbeat:v1";
+const PRIMARY_STALE_SECONDS = 150;
 let indexState: { ready: boolean; checkedAt: number; missing: string[] } | null = null;
+
+type LiveRoleEnv = Env & { LIVE_DEADLINE_ROLE?: string };
 
 async function requiredLiveIndexesReady(db: D1Database): Promise<{ ready: boolean; missing: string[] }> {
   const now = Date.now();
@@ -36,17 +36,44 @@ async function requiredLiveIndexesReady(db: D1Database): Promise<{ ready: boolea
   return { ready: indexState.ready, missing: indexState.missing };
 }
 
+async function markPrimaryAlive(db: D1Database): Promise<void> {
+  const value = JSON.stringify({ role: "primary", checkedAt: new Date().toISOString() });
+  await db.prepare(`
+    INSERT INTO rt_system_state(state_key,state_value,updated_at)
+    VALUES(?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
+  `).bind(PRIMARY_HEARTBEAT_KEY, value).run();
+}
+
+async function primaryIsAlive(db: D1Database): Promise<boolean> {
+  const row = await db.prepare(`
+    SELECT CASE WHEN unixepoch(updated_at) >= unixepoch('now') - ? THEN 1 ELSE 0 END AS alive
+    FROM rt_system_state WHERE state_key=? LIMIT 1
+  `).bind(PRIMARY_STALE_SECONDS, PRIMARY_HEARTBEAT_KEY).first<{ alive: number }>();
+  return Number(row?.alive ?? 0) === 1;
+}
+
 export default {
   async fetch(request: Request): Promise<Response> {
     return liveDeadlineV2.fetch(request);
   },
 
-  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+  async scheduled(controller: ScheduledController, env: LiveRoleEnv): Promise<void> {
     const state = await requiredLiveIndexesReady(env.DB);
     if (!state.ready) {
       console.warn("LIVE_DEADLINE_WAITING_FOR_INDEXES", JSON.stringify(state.missing));
       return;
     }
+
+    const role = String(env.LIVE_DEADLINE_ROLE || "primary").toLowerCase();
+    if (role === "backup") {
+      if (await primaryIsAlive(env.DB)) return;
+      console.warn("LIVE_DEADLINE_BACKUP_TAKEOVER", new Date().toISOString());
+      await liveDeadlineV2.scheduled(controller, env);
+      return;
+    }
+
+    await markPrimaryAlive(env.DB);
     await liveDeadlineV2.scheduled(controller, env);
   },
-} satisfies ExportedHandler<Env>;
+} satisfies ExportedHandler<LiveRoleEnv>;
