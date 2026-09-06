@@ -1,0 +1,35 @@
+name: Emergency live state 2026-09-06
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/emergency-live-state-20260906.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Read only targeted live state
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== driver state ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('live_deadline_driver:2026-09-06','live_deadline_priority_guard_success:2026-09-06','final_daily_selection:2026-09-06') ORDER BY state_key"
+          echo '=== remaining target counts ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "WITH targets(race_id) AS (VALUES ('2026-09-06-hanshin-04'),('2026-09-06-sapporo-05'),('2026-09-06-hanshin-05'),('2026-09-06-nakayama-07'),('2026-09-06-hanshin-10'),('2026-09-06-nakayama-10'),('2026-09-06-sapporo-11')) SELECT t.race_id AS raceId,r.start_time_utc AS startUtc,(SELECT COUNT(*) FROM rt_runners x WHERE x.race_id=t.race_id AND COALESCE(x.runner_status,'active')='active') AS activeRunners,(SELECT COUNT(*) FROM rt_official_odds_latest o WHERE o.race_id=t.race_id) AS officialOddsRows,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=t.race_id) AS betRows FROM targets t LEFT JOIN rt_races r ON r.race_id=t.race_id ORDER BY r.start_time_utc"
