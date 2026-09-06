@@ -1,0 +1,72 @@
+name: Emergency offline live rescue 2026-09-06
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/emergency-offline-live-rescue-20260906.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: emergency-offline-live-rescue-20260906
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+  JRA_ODDS_REQUEST_PAUSE_SECONDS: "0.35"
+
+jobs:
+  rescue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 270
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install runtimes
+        run: |
+          npm ci
+          python -m pip install --disable-pip-version-check "lightgbm==4.6.0" numpy
+          python -m py_compile scripts/emergency-offline-live-20260906.py
+
+      - name: Export production D1 without SELECT quota
+        run: npx wrangler d1 export race-tantei-phase0 --remote --output=/tmp/prod.sql
+
+      - name: Restore quota-free local SQLite snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/prod.sqlite
+          sqlite3 /tmp/prod.sqlite "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY;"
+          sqlite3 /tmp/prod.sqlite < /tmp/prod.sql
+          sqlite3 /tmp/prod.sqlite "SELECT state_key,updated_at FROM rt_system_state WHERE state_key='final_daily_selection:2026-09-06';"
+
+      - name: Generate remaining races from local read snapshot and fresh JRA official odds
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/emergency-offline-live-20260906.py --db /tmp/prod.sqlite | tee emergency-offline-live-rescue.log
+
+      - name: Upload rescue audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emergency-offline-live-rescue-20260906-audit
+          path: |
+            analysis-results/emergency-offline-live-20260906.json
+            analysis-results/emergency-offline-live-2026-09-06-*.json
+            official-odds-collection-report.json
+            current-selected-official-odds.json.gz
+            emergency-offline-live-rescue.log
+          if-no-files-found: warn
+          retention-days: 30
