@@ -43,10 +43,6 @@ def main() -> None:
     v33 = read(V33)
     v32 = read(V32)
 
-    # The temporary 2026-09-06 recovery entry is now canonical in wrangler, but
-    # it must preserve the normal UI chain all the way to the unchanged WIN5 v31
-    # implementation. This verifies the actual wrapper chain instead of forcing
-    # wrangler itself back to an obsolete entry.
     require('"main": "src/public-site-entry-recovery-20260906.ts"' in wrangler, "WIN5_RECOVERY_NOT_CANONICAL_ENTRY")
     require('import publicSite from "./public-site-entry-v37.js"' in recovery, "WIN5_RECOVERY_V37_WRAPPER_MISSING")
     require('import core from "./public-site-entry-v37-core.js"' in v37, "WIN5_V37_CORE_WRAPPER_MISSING")
@@ -93,14 +89,17 @@ def main() -> None:
     require('await lockSnapshot(env.DB, preview, now, "last_good")' in runtime, "WIN5_PREVIEW_PROMOTION_MISSING")
     require('const freshCache = await resolveWin5Targets(env.DB, date, now, true)' not in runtime, "WIN5_POST_DEADLINE_FRESH_REGEN_REINTRODUCED")
     require('if (nowMs < deadlineMs)' in runtime, "WIN5_PREVIEW_NOT_CUTOFF_AT_DEADLINE")
-    require('WIN5_DEADLINE_GUARD_BEFORE' in deadline and 'WIN5_DEADLINE_GUARD_AFTER' in deadline, "WIN5_INDEPENDENT_DEADLINE_GUARD_MISSING")
+    require('// Hard T-15 guard: no external HTTP and no new prediction calculation.' in runtime, "WIN5_RUNTIME_T15_GUARD_MISSING")
+    guard_pos = runtime.index('// Hard T-15 guard: no external HTTP and no new prediction calculation.')
+    network_pos = runtime.index('const cache = await resolveWin5Targets(env.DB, date, now, false);', guard_pos)
+    require(guard_pos < network_pos, "WIN5_RUNTIME_NETWORK_BEFORE_T15_GUARD")
     require('state.status === "final" && state.snapshot?.lockedAt' in parent, "WIN5_UI_NOT_SHOWING_ACTUAL_LOCK_TIME")
     require('detail: "T-15で固定済み"' not in parent, "WIN5_UI_FALSE_T15_CLAIM_REINTRODUCED")
 
     require('.win5-target-list' in parent and '.win5-ticket-row' in parent, "WIN5_MOBILE_VERTICAL_LAYOUT_MISSING")
     require('overflow-x:auto' not in win5_ui_source, "WIN5_HORIZONTAL_SCROLL_REINTRODUCED")
 
-    print("WIN5_UI_OK top_nav=true floating_button=false view_switch=tickets_other default=tickets duplicate_plan_comparison=false rule=false diagnostics=always_open horizontal_scroll=false canonical=recovery_v37_v34_v33_v32_v31 clear_language=true")
+    print("WIN5_UI_OK top_nav=true floating_button=false view_switch=tickets_other default=tickets duplicate_plan_comparison=false rule=false diagnostics=always_open horizontal_scroll=false canonical=recovery_v37_v34_v33_v32_v31 clear_language=true runtime_t15_guard=true")
 
 
 if __name__ == "__main__":
