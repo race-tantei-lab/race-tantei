@@ -3,6 +3,10 @@ const PREVIEW_PREFIX = "worker_live_preview:";
 const SLA_PREFIX = "live_deadline_sla:";
 const LEASE_KEY = "live-deadline-primary";
 const OFFICIAL_ODDS_SOURCES = new Set(["jra-fast-official", "jra-crawl-official"]);
+const SCHEMA_VERIFY_INTERVAL_MS = 5 * 60_000;
+const SLA_HEARTBEAT_INTERVAL_MS = 3 * 60_000;
+
+let lastSchemaVerifiedAt = 0;
 
 export type LiveDeadlineSlaAudit = {
   checkedAt: string;
@@ -57,53 +61,25 @@ async function loadSelectedRaceIds(db: D1Database, date: string): Promise<string
   }
 }
 
+// Persistent schema is provisioned once by deploy-live-deadline.yml. Scheduled
+// race-day Workers only verify it; they never CREATE/DROP schema objects.
 export async function ensureLivePreviewSafetySchema(db: D1Database): Promise<void> {
-  await db.batch([
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS rt_live_preview_archive (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        race_id TEXT NOT NULL,
-        envelope_json TEXT NOT NULL,
-        newest_generated_at TEXT,
-        archived_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `),
-    db.prepare("CREATE INDEX IF NOT EXISTS idx_live_preview_archive_race_id ON rt_live_preview_archive(race_id,id DESC)"),
-    db.prepare(`
-      CREATE TABLE IF NOT EXISTS rt_live_deadline_lease (
-        lease_key TEXT PRIMARY KEY,
-        owner TEXT NOT NULL,
-        expires_at_epoch INTEGER NOT NULL,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      )
-    `),
-    db.prepare(`
-      CREATE TRIGGER IF NOT EXISTS rt_archive_live_preview_insert
-      AFTER INSERT ON rt_system_state
-      WHEN NEW.state_key LIKE 'worker_live_preview:%' AND json_valid(NEW.state_value)=1
-      BEGIN
-        INSERT INTO rt_live_preview_archive(race_id,envelope_json,newest_generated_at)
-        VALUES(
-          COALESCE(json_extract(NEW.state_value,'$.raceId'), substr(NEW.state_key,21)),
-          NEW.state_value,
-          json_extract(NEW.state_value,'$.snapshots[0].generatedAt')
-        );
-      END
-    `),
-    db.prepare(`
-      CREATE TRIGGER IF NOT EXISTS rt_archive_live_preview_update
-      AFTER UPDATE OF state_value ON rt_system_state
-      WHEN NEW.state_key LIKE 'worker_live_preview:%' AND json_valid(NEW.state_value)=1
-      BEGIN
-        INSERT INTO rt_live_preview_archive(race_id,envelope_json,newest_generated_at)
-        VALUES(
-          COALESCE(json_extract(NEW.state_value,'$.raceId'), substr(NEW.state_key,21)),
-          NEW.state_value,
-          json_extract(NEW.state_value,'$.snapshots[0].generatedAt')
-        );
-      END
-    `),
-  ]);
+  const now = Date.now();
+  if (lastSchemaVerifiedAt && now - lastSchemaVerifiedAt < SCHEMA_VERIFY_INTERVAL_MS) return;
+  const rows = await db.prepare(`
+    SELECT type,name FROM sqlite_master
+    WHERE (type='table' AND name IN ('rt_live_preview_archive','rt_live_deadline_lease'))
+       OR (type='index' AND name='idx_live_preview_archive_race_id')
+  `).all<{ type: string; name: string }>();
+  const found = new Set((rows.results ?? []).map((row) => `${row.type}:${row.name}`));
+  const required = [
+    "table:rt_live_preview_archive",
+    "table:rt_live_deadline_lease",
+    "index:idx_live_preview_archive_race_id",
+  ];
+  const missing = required.filter((name) => !found.has(name));
+  if (missing.length) throw new Error(`LIVE_PREVIEW_SCHEMA_MISSING:${missing.join(",")}`);
+  lastSchemaVerifiedAt = now;
 }
 
 export async function acquireLiveDeadlineLease(db: D1Database, owner: string, ttlSeconds = 55): Promise<boolean> {
@@ -116,7 +92,7 @@ export async function acquireLiveDeadlineLease(db: D1Database, owner: string, tt
       owner=excluded.owner,
       expires_at_epoch=excluded.expires_at_epoch,
       updated_at=CURRENT_TIMESTAMP
-    WHERE rt_live_deadline_lease.expires_at_epoch <= ?
+    WHERE rt_live_deadline_lease.expires_at_epoch <= ? OR rt_live_deadline_lease.owner=excluded.owner
   `).bind(LEASE_KEY, owner, expiresAt, nowEpoch).run();
   const row = await db.prepare("SELECT owner,expires_at_epoch AS expiresAtEpoch FROM rt_live_deadline_lease WHERE lease_key=? LIMIT 1")
     .bind(LEASE_KEY).first<{ owner: string; expiresAtEpoch: number }>();
@@ -127,6 +103,8 @@ export async function releaseLiveDeadlineLease(db: D1Database, owner: string): P
   await db.prepare("DELETE FROM rt_live_deadline_lease WHERE lease_key=? AND owner=?").bind(LEASE_KEY, owner).run();
 }
 
+// Legacy recovery only. New preview writes are not auto-archived because the
+// worker_live_preview envelope already retains recent official snapshots.
 export async function restoreNewestOfficialPreviewArchives(db: D1Database, date: string): Promise<string[]> {
   const ids = await loadSelectedRaceIds(db, date);
   const restored: string[] = [];
@@ -163,6 +141,40 @@ export async function restoreNewestOfficialPreviewArchives(db: D1Database, date:
   return restored;
 }
 
+function slaFingerprint(audit: LiveDeadlineSlaAudit): string {
+  return JSON.stringify({
+    date: audit.date,
+    selectedRaceCount: audit.selectedRaceCount,
+    previewReadyRaceIds: audit.previewReadyRaceIds,
+    finalReadyRaceIds: audit.finalReadyRaceIds,
+    previewMissingByT40RaceIds: audit.previewMissingByT40RaceIds,
+    previewMissingByT30RaceIds: audit.previewMissingByT30RaceIds,
+    finalMissingByT30RaceIds: audit.finalMissingByT30RaceIds,
+    finalMissingByT25RaceIds: audit.finalMissingByT25RaceIds,
+    finalMissingByT17RaceIds: audit.finalMissingByT17RaceIds,
+    finalMissingByT16RaceIds: audit.finalMissingByT16RaceIds,
+    deadlineMissedRaceIds: audit.deadlineMissedRaceIds,
+  });
+}
+
+async function persistSlaAuditIfNeeded(db: D1Database, audit: LiveDeadlineSlaAudit): Promise<void> {
+  const key = `${SLA_PREFIX}${audit.date}`;
+  const previous = await db.prepare("SELECT state_value AS value,updated_at AS updatedAt FROM rt_system_state WHERE state_key=? LIMIT 1")
+    .bind(key).first<{ value: string; updatedAt: string }>();
+  let unchanged = false;
+  if (previous?.value) {
+    try { unchanged = slaFingerprint(JSON.parse(previous.value) as LiveDeadlineSlaAudit) === slaFingerprint(audit); }
+    catch { unchanged = false; }
+  }
+  const previousMs = Date.parse(String(previous?.updatedAt || ""));
+  const heartbeatDue = !Number.isFinite(previousMs) || Date.now() - previousMs >= SLA_HEARTBEAT_INTERVAL_MS;
+  if (unchanged && !heartbeatDue) return;
+  await db.prepare(`
+    INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
+  `).bind(key, JSON.stringify(audit)).run();
+}
+
 export async function auditLiveDeadlineSla(db: D1Database, date: string, now = new Date()): Promise<LiveDeadlineSlaAudit> {
   const ids = await loadSelectedRaceIds(db, date);
   const audit: LiveDeadlineSlaAudit = {
@@ -197,9 +209,6 @@ export async function auditLiveDeadlineSla(db: D1Database, date: string, now = n
     if (remaining > 0 && remaining <= 16 * 60_000 && !finalReady) audit.finalMissingByT16RaceIds.push(raceId);
     if (remaining > 0 && remaining < 10 * 60_000 && !finalReady) audit.deadlineMissedRaceIds.push(raceId);
   }
-  await db.prepare(`
-    INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)
-    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
-  `).bind(`${SLA_PREFIX}${date}`, JSON.stringify(audit)).run();
+  await persistSlaAuditIfNeeded(db, audit);
   return audit;
 }
