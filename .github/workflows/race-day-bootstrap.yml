@@ -58,7 +58,7 @@ jobs:
           }
 
           # JRA acquisition belongs to the Cloudflare public Worker. GitHub never
-          # fetches JRA as the production path; it only observes D1 after reset.
+          # fetches JRA as the production path; it only observes D1.
           state=''
           for attempt in $(seq 1 11); do
             query_program
@@ -94,43 +94,26 @@ jobs:
             echo 'race_day=true' >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create required lookup indexes after the daily D1 reset
+      - name: Assert persistent lookup indexes exist without D1 writes
         if: steps.program.outputs.race_day == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          for q in \
-            "CREATE INDEX IF NOT EXISTS rt_idx_races_date ON rt_races(race_date DESC, venue, race_no)" \
-            "CREATE INDEX IF NOT EXISTS rt_idx_public_bets_race ON rt_public_bets(race_id, id)" \
-            "CREATE INDEX IF NOT EXISTS rt_idx_public_bets_settlement ON rt_public_bets(settlement_status, course, race_id)" \
-            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_hist_lookup ON rt_ml_horse_hist(generation, horse_name, seq)" \
-            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_total_lookup ON rt_ml_horse_total(generation, horse_name)" \
-            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_surface_lookup ON rt_ml_horse_surface(generation, horse_name)" \
-            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_dist_lookup ON rt_ml_horse_dist(generation, horse_name)" \
-            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_venue_lookup ON rt_ml_horse_venue(generation, horse_name)" \
-            "CREATE INDEX IF NOT EXISTS rt_idx_ml_jockey_lookup ON rt_ml_jockey(generation, name)" \
-            "CREATE INDEX IF NOT EXISTS rt_idx_ml_trainer_lookup ON rt_ml_trainer(generation, name)" \
-            "CREATE INDEX IF NOT EXISTS rt_idx_ml_pair_lookup ON rt_ml_pair(generation, horse_name, jockey)"; do
-            npx wrangler d1 execute race-tantei-phase0 --remote --command "$q"
-          done
-
-      - name: Assert all eight ML lookup indexes exist
-        if: steps.program.outputs.race_day == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
+          # Required indexes are persistent D1 schema objects. Never CREATE them
+          # on race morning: building ML indexes can exceed the 100k rows_written
+          # free-tier daily quota before any odds or bets can be persisted.
           npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "SELECT name FROM sqlite_master WHERE type='index' AND name IN ('rt_idx_ml_horse_hist_lookup','rt_idx_ml_horse_total_lookup','rt_idx_ml_horse_surface_lookup','rt_idx_ml_horse_dist_lookup','rt_idx_ml_horse_venue_lookup','rt_idx_ml_jockey_lookup','rt_idx_ml_trainer_lookup','rt_idx_ml_pair_lookup') ORDER BY name" \
+            "SELECT name FROM sqlite_master WHERE type='index' AND name IN ('rt_idx_races_date','rt_idx_public_bets_race','rt_idx_public_bets_settlement','rt_idx_ml_horse_hist_lookup','rt_idx_ml_horse_total_lookup','rt_idx_ml_horse_surface_lookup','rt_idx_ml_horse_dist_lookup','rt_idx_ml_horse_venue_lookup','rt_idx_ml_jockey_lookup','rt_idx_ml_trainer_lookup','rt_idx_ml_pair_lookup') ORDER BY name" \
             > /tmp/indexes.json
           python3 - <<'PY'
           import json
-          required={'rt_idx_ml_horse_hist_lookup','rt_idx_ml_horse_total_lookup','rt_idx_ml_horse_surface_lookup','rt_idx_ml_horse_dist_lookup','rt_idx_ml_horse_venue_lookup','rt_idx_ml_jockey_lookup','rt_idx_ml_trainer_lookup','rt_idx_ml_pair_lookup'}
+          required={'rt_idx_races_date','rt_idx_public_bets_race','rt_idx_public_bets_settlement','rt_idx_ml_horse_hist_lookup','rt_idx_ml_horse_total_lookup','rt_idx_ml_horse_surface_lookup','rt_idx_ml_horse_dist_lookup','rt_idx_ml_horse_venue_lookup','rt_idx_ml_jockey_lookup','rt_idx_ml_trainer_lookup','rt_idx_ml_pair_lookup'}
           raw=json.load(open('/tmp/indexes.json')); rows=[]
           for block in raw if isinstance(raw,list) else [raw]:
             if isinstance(block,dict): rows += block.get('results') or []
           found={str(r.get('name')) for r in rows}; missing=sorted(required-found)
-          print('LIVE_INDEXES_FOUND',sorted(found))
-          if missing: raise SystemExit('LIVE_INDEXES_MISSING:'+','.join(missing))
+          print('PERSISTENT_INDEXES_FOUND',sorted(found))
+          if missing: raise SystemExit('MISSING_PREPROVISIONED_INDEXES:'+','.join(missing))
           PY
 
       - name: Wait for all real race entries from Cloudflare maintenance
