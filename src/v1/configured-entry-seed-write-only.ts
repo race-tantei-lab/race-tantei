@@ -142,6 +142,19 @@ async function saveRunnerBundleWriteOnly(db: D1Database, bundle: RaceBundle): Pr
       jockey=excluded.jockey, assigned_weight=excluded.assigned_weight, trainer=excluded.trainer,
       stable=excluded.stable, win_odds=excluded.win_odds, popularity=excluded.popularity,
       runner_status=excluded.runner_status, updated_at=CURRENT_TIMESTAMP
+    WHERE rt_runners.frame_no IS NOT excluded.frame_no
+       OR rt_runners.horse_name IS NOT excluded.horse_name
+       OR rt_runners.sex_age IS NOT excluded.sex_age
+       OR rt_runners.coat_color IS NOT excluded.coat_color
+       OR rt_runners.horse_weight IS NOT excluded.horse_weight
+       OR rt_runners.weight_change IS NOT excluded.weight_change
+       OR rt_runners.jockey IS NOT excluded.jockey
+       OR rt_runners.assigned_weight IS NOT excluded.assigned_weight
+       OR rt_runners.trainer IS NOT excluded.trainer
+       OR rt_runners.stable IS NOT excluded.stable
+       OR rt_runners.win_odds IS NOT excluded.win_odds
+       OR rt_runners.popularity IS NOT excluded.popularity
+       OR rt_runners.runner_status IS NOT excluded.runner_status
   `).bind(
     bundle.race.raceId, runner.horseNo, runner.frameNo, runner.horseName, runner.sexAge, runner.coatColor,
     runner.horseWeight, runner.weightChange, runner.jockey, runner.assignedWeight, runner.trainer,
