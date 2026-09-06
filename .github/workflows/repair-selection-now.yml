@@ -1,0 +1,73 @@
+name: Repair 9/6 selection now
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/repair-selection-now.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Ensure all live-selection indexes exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          for q in \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_hist_lookup ON rt_ml_horse_hist(generation, horse_name, seq)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_total_lookup ON rt_ml_horse_total(generation, horse_name)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_surface_lookup ON rt_ml_horse_surface(generation, horse_name)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_dist_lookup ON rt_ml_horse_dist(generation, horse_name)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_horse_venue_lookup ON rt_ml_horse_venue(generation, horse_name)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_jockey_lookup ON rt_ml_jockey(generation, name)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_trainer_lookup ON rt_ml_trainer(generation, name)" \
+            "CREATE INDEX IF NOT EXISTS rt_idx_ml_pair_lookup ON rt_ml_pair(generation, horse_name, jockey)"; do
+            npx wrangler d1 execute race-tantei-phase0 --remote --command "$q"
+          done
+      - name: Verify live workers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(curl --max-time 10 -sS -o /tmp/p -w '%{http_code}' https://race-tantei-live-deadline.race-tantei.workers.dev/health)" = 200
+          test "$(curl --max-time 10 -sS -o /tmp/b -w '%{http_code}' https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health)" = 200
+      - name: Wait for authoritative 15-race selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          date=2026-09-06
+          for i in $(seq 1 12); do
+            npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+              "SELECT state_value AS value FROM rt_system_state WHERE state_key='final_daily_selection:$date' LIMIT 1" > /tmp/sel.json
+            if python3 - <<'PY'
+          import collections,json,sys
+          raw=json.load(open('/tmp/sel.json')); rows=[]
+          for block in raw if isinstance(raw,list) else [raw]:
+            if isinstance(block,dict): rows += block.get('results') or []
+          if not rows or not rows[0].get('value'): sys.exit(1)
+          p=json.loads(rows[0]['value']); s=p.get('selected') or []
+          ids=[str(x.get('raceId') or '') for x in s]; by=collections.Counter(str(x.get('venue') or '') for x in s)
+          ok=(p.get('sourceModel')=='ten-year-completed-model' and p.get('resultDataUsedForTargetDay') is False and len(s)==15 and len(set(ids))==15 and len(by)==3 and all(v==5 for v in by.values()))
+          if not ok: raise SystemExit('INVALID_SELECTION:'+json.dumps({'model':p.get('sourceModel'),'resultUsed':p.get('resultDataUsedForTargetDay'),'count':len(s),'venues':dict(by)},ensure_ascii=False))
+          print('SELECTION_READY',json.dumps({'count':len(s),'venues':dict(by),'raceIds':ids},ensure_ascii=False))
+          PY
+            then exit 0; fi
+            echo "SELECTION_WAIT=$i"
+            sleep 10
+          done
+          echo 'SELECTION_NOT_CREATED' >&2
+          exit 1
