@@ -93,8 +93,8 @@ def main() -> None:
         raise AssertionError("backup live deadline Worker name mismatch")
     if backup_wrangler.get("main") != "src/live-deadline-entry-v3.ts":
         raise AssertionError("backup live deadline Worker must use the exact same v3 entry/parser")
-    if backup_wrangler.get("triggers", {}).get("crons", []) != ["* * * * *"]:
-        raise AssertionError("backup standby must check primary health every minute")
+    if backup_wrangler.get("triggers", {}).get("crons", []) != ["2-59/5 * * * *"]:
+        raise AssertionError("backup standby must check primary health every five minutes")
     if backup_wrangler.get("vars", {}).get("LIVE_DEADLINE_ROLE") != "backup":
         raise AssertionError("backup live deadline Worker role mismatch")
 
@@ -138,6 +138,10 @@ def main() -> None:
         "cachedWorkerModel",
         "previewMissingUrgentRaceIds",
         "WORKER_HARD_T15_START_MISSED",
+        "ids.length !== 15",
+        "counts.size !== 3",
+        "startMs - generationStartedMs <= DEADLINE_MS",
+        "if (remaining <= DEADLINE_MS)",
         "WORKER_GENERATION_CROSSED_T10",
         "await db.batch(statements)",
         "if (isStrictComplete(existing)) return;",
@@ -289,9 +293,6 @@ def main() -> None:
 
     deploy = read(".github/workflows/deploy-live-deadline.yml")
     for needle in (
-        "Install persistent D1 runtime guards once",
-        "scripts/install-race-day-runtime-guards.sql",
-        "Verify persistent D1 runtime guards",
         "Deploy primary live deadline Worker",
         "Deploy backup live deadline Worker",
         "src/live-deadline-entry-v3.ts",
@@ -300,6 +301,17 @@ def main() -> None:
         "production/live-deadline",
     ):
         require(deploy, needle, "dual live deadline deploy")
+
+    for forbidden in ("wrangler d1 execute", "scripts/install-race-day-runtime-guards.sql"):
+        forbid(deploy, forbidden, "normal live deploy must not touch D1 schema")
+
+    migration = read(".github/workflows/migrate-live-runtime-guards.yml")
+    for needle in (
+        "scripts/install-race-day-runtime-guards.sql",
+        "wrangler d1 execute race-tantei-phase0 --remote",
+        "Verify required guards",
+    ):
+        require(migration, needle, "separate live D1 migration")
 
     readiness = read(".github/workflows/verify-live-deadline-production.yml")
     for needle in (
