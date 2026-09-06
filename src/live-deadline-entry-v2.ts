@@ -13,7 +13,6 @@ import type { Env } from "./v1/types.js";
 
 const DRIVER_VERSION = "live-deadline-v9-t30-public-final-t25-rescue-20260829";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
-const PRIORITY_GUARD_SUCCESS_PREFIX = "live_deadline_priority_guard_success:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
 const SELECTION_PREFIX = "final_daily_selection:";
 
@@ -93,30 +92,11 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
   }
 
   try {
+    // The priority guard still runs first, but healthy intermediate audit snapshots
+    // are no longer written every minute. The final driver state below retains the
+    // complete guard/live/SLA audit and failures retain a dedicated error state.
     const priorityGuardNow = new Date();
     const priorityGuard = await runCompletedWorkerDeadlineGuard(env, priorityGuardNow);
-    const priorityGuardPayload = {
-      ...base,
-      status: "completed",
-      phase: "priority_guard",
-      ok: true,
-      priorityGuardCheckedAt: iso(priorityGuardNow),
-      priorityGuard: auditGuard(priorityGuard),
-      completedAt: iso(),
-      durationMs: Date.now() - started.getTime(),
-    };
-    await saveState(env.DB, `${PRIORITY_GUARD_SUCCESS_PREFIX}${date}`, priorityGuardPayload);
-
-    await saveDriverState(env.DB, date, {
-      ...base,
-      status: "running",
-      phase: "selection",
-      priorityGuardCheckedAt: iso(priorityGuardNow),
-      priorityGuard: auditGuard(priorityGuard),
-      completedAt: null,
-      durationMs: null,
-      ok: false,
-    });
 
     const selectionNow = new Date();
     let selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
