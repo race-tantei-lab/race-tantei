@@ -1,0 +1,63 @@
+name: Apply live policy boundary fix
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/apply-live-policy-boundary-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch strict 15-race and T-15 boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/v1/completed-worker-live-lock.ts')
+          s=p.read_text()
+          old="""  if (new Set(ids).size !== ids.length || counts.size < 2 || [...counts.values()].some((count) => count !== 5)) {
+    throw new Error(`WORKER_SELECTION_NOT_FIVE_PER_VENUE:${JSON.stringify(Object.fromEntries(counts))}`);
+  }
+"""
+          new="""  if (ids.length !== 15 || new Set(ids).size !== ids.length || counts.size !== 3 || [...counts.values()].some((count) => count !== 5)) {
+    throw new Error(`WORKER_SELECTION_NOT_FIVE_PER_VENUE:${JSON.stringify(Object.fromEntries(counts))}`);
+  }
+"""
+          if old not in s: raise SystemExit('selection guard pattern not found')
+          s=s.replace(old,new,1)
+          old="if (!Number.isFinite(generationStartedMs) || startMs - generationStartedMs < DEADLINE_MS)"
+          new="if (!Number.isFinite(generationStartedMs) || startMs - generationStartedMs <= DEADLINE_MS)"
+          if old not in s: raise SystemExit('fresh T15 commit guard pattern not found')
+          s=s.replace(old,new,1)
+          old="if (remaining < DEADLINE_MS) {\n        errors.push({ raceId, error: `WORKER_HARD_T15_START_MISSED:${raceId}` });"
+          new="if (remaining <= DEADLINE_MS) {\n        errors.push({ raceId, error: `WORKER_HARD_T15_START_MISSED:${raceId}` });"
+          if old not in s: raise SystemExit('generation T15 guard pattern not found')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+      - name: Verify patch
+        run: |
+          grep -F "ids.length !== 15" src/v1/completed-worker-live-lock.ts
+          grep -F "startMs - generationStartedMs <= DEADLINE_MS" src/v1/completed-worker-live-lock.ts
+          grep -F "if (remaining <= DEADLINE_MS)" src/v1/completed-worker-live-lock.ts
+          npm ci
+          npm run typecheck
+          npx --yes tsx tests/jra-official-odds-fetch-tests.ts
+          npx --yes tsx tests/completed-worker-deadline-guard-tests.ts
+      - name: Commit patch
+        run: |
+          set -euo pipefail
+          git config user.name "race-tantei-bot"
+          git config user.email "race-tantei-bot@users.noreply.github.com"
+          git add src/v1/completed-worker-live-lock.ts
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: enforce 15-race selection and strict T-15 start boundary"
+          git push origin HEAD:main
