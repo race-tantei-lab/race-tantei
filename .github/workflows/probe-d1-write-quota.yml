@@ -1,4 +1,4 @@
-name: Probe D1 write quota
+name: Diagnose 9/6 D1 bets and odds
 
 on:
   push:
@@ -11,23 +11,72 @@ permissions:
   contents: read
 
 jobs:
-  probe:
+  diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci --prefer-offline --no-audit --no-fund
-      - name: Write-only D1 probe
+
+      - name: Export current production state without rows_read or rows_written
         shell: bash
         run: |
           set -euo pipefail
-          # This statement intentionally performs no SELECT and tests whether write quota remains available.
-          npx wrangler d1 execute race-tantei-phase0 --remote --command "INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES('ops_write_probe_20260906','ok',CURRENT_TIMESTAMP) ON CONFLICT(state_key) DO UPDATE SET state_value='ok',updated_at=CURRENT_TIMESTAMP"
-          echo WRITE_PROBE_OK
+          python3 - <<'PY'
+          import json,os,time,urllib.request
+          account=os.environ['CLOUDFLARE_ACCOUNT_ID'];dbid=os.environ['CLOUDFLARE_D1_DATABASE_ID'];token=os.environ['CLOUDFLARE_API_TOKEN']
+          url=f'https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{dbid}/export'
+          headers={'Authorization':f'Bearer {token}','Content-Type':'application/json'}
+          def post(payload):
+            req=urllib.request.Request(url,data=json.dumps(payload).encode(),method='POST',headers=headers)
+            with urllib.request.urlopen(req,timeout=60) as r: body=json.load(r)
+            if not body.get('success'): raise RuntimeError(json.dumps(body,ensure_ascii=False))
+            return body.get('result') or {}
+          opts={'tables':['rt_races','rt_runners','rt_public_bets','rt_official_odds_latest','rt_system_state']}
+          result=post({'output_format':'polling','dump_options':opts});bookmark=result.get('at_bookmark')
+          for _ in range(120):
+            signed=(result.get('result') or {}).get('signed_url')
+            if signed: break
+            if not bookmark: raise RuntimeError('EXPORT_BOOKMARK_MISSING')
+            time.sleep(1);result=post({'output_format':'polling','current_bookmark':bookmark,'dump_options':opts})
+          signed=(result.get('result') or {}).get('signed_url')
+          if not signed: raise RuntimeError('EXPORT_SIGNED_URL_MISSING')
+          with urllib.request.urlopen(signed,timeout=180) as r: open('/tmp/state.sql','wb').write(r.read())
+          print('EXPORT_BYTES',os.path.getsize('/tmp/state.sql'))
+          PY
+
+      - name: Report selected races, real bets and official odds
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/state.sqlite
+          python3 - <<'PY'
+          import collections,datetime as dt,json,sqlite3
+          DATE='2026-09-06'
+          con=sqlite3.connect('/tmp/state.sqlite');con.executescript(open('/tmp/state.sql',encoding='utf-8').read())
+          state=con.execute("SELECT state_value FROM rt_system_state WHERE state_key=? LIMIT 1",(f'final_daily_selection:{DATE}',)).fetchone()
+          if not state: raise SystemExit('SELECTION_MISSING')
+          payload=json.loads(state[0]);selected=payload.get('selected') or []
+          ids=[str(x.get('raceId') or '') for x in selected]
+          print('SELECTION',json.dumps({'count':len(ids),'sourceModel':payload.get('sourceModel'),'resultDataUsedForTargetDay':payload.get('resultDataUsedForTargetDay'),'raceIds':ids},ensure_ascii=False))
+          ph=','.join('?' for _ in ids)
+          races={r[0]:r for r in con.execute(f"SELECT race_id,venue,race_no,start_time_utc FROM rt_races WHERE race_id IN ({ph})",ids).fetchall()}
+          bet_rows=con.execute(f"SELECT race_id,course,COUNT(*) AS tickets,COUNT(DISTINCT bet_type) AS bet_types,SUM(stake_yen) AS stake,MIN(source_prediction_id),MAX(source_prediction_id) FROM rt_public_bets WHERE race_id IN ({ph}) GROUP BY race_id,course ORDER BY race_id,course",ids).fetchall()
+          bets=collections.defaultdict(list)
+          for r in bet_rows: bets[r[0]].append({'course':r[1],'tickets':r[2],'betTypes':r[3],'stakeYen':r[4],'minSource':r[5],'maxSource':r[6]})
+          odds=dict(con.execute(f"SELECT race_id,COUNT(*) FROM rt_official_odds_latest WHERE race_id IN ({ph}) AND odds_source='jra_official' GROUP BY race_id",ids).fetchall())
+          active=dict(con.execute(f"SELECT r.race_id,SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_id IN ({ph}) GROUP BY r.race_id",ids).fetchall())
+          total_bets=con.execute("SELECT COUNT(*) FROM rt_public_bets pb JOIN rt_races r ON r.race_id=pb.race_id WHERE r.race_date=?",(DATE,)).fetchone()[0]
+          total_official=con.execute("SELECT COUNT(*) FROM rt_official_odds_latest o JOIN rt_races r ON r.race_id=o.race_id WHERE r.race_date=? AND o.odds_source='jra_official'",(DATE,)).fetchone()[0]
+          complete=[]
+          for rid in ids:
+            rr=races.get(rid); courses=bets.get(rid,[])
+            ok=(len(courses)==3 and all(int(x['tickets'] or 0)==2 and int(x['betTypes'] or 0)==2 and int(x['minSource'] or 0)==-2 and int(x['maxSource'] or 0)==-2 for x in courses) and sorted(int(x['stakeYen'] or 0) for x in courses)==[2000,5000,10000])
+            if ok: complete.append(rid)
+            print('RACE_STATE',json.dumps({'raceId':rid,'venue':rr[1] if rr else None,'raceNo':rr[2] if rr else None,'startTimeUtc':rr[3] if rr else None,'activeRunners':int(active.get(rid) or 0),'betCourses':courses,'officialOddsRows':int(odds.get(rid) or 0),'betComplete':ok},ensure_ascii=False))
+          print('SUMMARY',json.dumps({'date':DATE,'selected':len(ids),'completeBetRaces':len(complete),'completeRaceIds':complete,'todayPublicBetRows':int(total_bets),'todayOfficialOddsRows':int(total_official)},ensure_ascii=False))
+          con.close()
+          PY
