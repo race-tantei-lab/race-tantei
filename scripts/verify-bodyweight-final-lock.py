@@ -34,9 +34,6 @@ def main():
     require('worker_bodyweight_snapshot:' in body,'BODYWEIGHT_PROVENANCE_STATE_MISSING')
     require('BODYWEIGHT_D1_VERIFY_FAILED' in body,'BODYWEIGHT_D1_REREAD_VERIFY_MISSING')
 
-    # Current worker-native policy: start bodyweight maintenance at T-100,
-    # preview generation at T-90, arm final lock at T-30, never start a new
-    # generation after T-15, and never reflect a fresh generation after T-10.
     require('const BODY_WEIGHT_REFRESH_OPEN_MS = 100 * 60 * 1000;' in live,'BODYWEIGHT_T100_REFRESH_WINDOW_MISSING')
     require('const PREVIEW_OPEN_MS = 90 * 60 * 1000;' in live,'BODYWEIGHT_T90_PREVIEW_WINDOW_MISSING')
     require('const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;' in live,'BODYWEIGHT_T30_FINAL_ARM_MISSING')
@@ -50,7 +47,6 @@ def main():
     require('bodyWeightBreachRaceIds' in live,'BODYWEIGHT_BREACH_AUDIT_MISSING')
     require('bodyWeightFetchedAt:' in live and 'bodyWeightSnapshotSha256:' in live and 'bodyWeights:' in live,'BODYWEIGHT_FINAL_AUDIT_PROVENANCE_MISSING')
 
-    # The T-15 branch itself must do no network/bodyweight/model/odds work.
     t15_start=live.index('if (remaining < DEADLINE_MS)')
     t15_end=live.index('const existingPreview = await latestPreview',t15_start)
     t15=live[t15_start:t15_end]
@@ -71,14 +67,12 @@ def main():
     require('WORKER_NONFRESH_REFLECTION_CROSSED_T15' in live,'BODYWEIGHT_NONFRESH_T15_GUARD_MISSING')
     require('WORKER_FRESH_REFLECTION_CROSSED_T10' in live,'BODYWEIGHT_FRESH_T10_GUARD_MISSING')
 
-    require('snapshot.bodyWeightApplied===true' in guard,'DEADLINE_GUARD_BODYWEIGHT_PROVENANCE_MISSING')
-    require('bodyWeightFetchedAt:body?.fetchedAt??null' in guard,'DEADLINE_GUARD_BODYWEIGHT_FETCH_TIME_MISSING')
-    require('bodyWeightSnapshotSha256:body?.snapshotSha256??null' in guard,'DEADLINE_GUARD_BODYWEIGHT_SHA_MISSING')
+    require('bodyWeightApplied: snapshot.bodyWeightApplied === true' in guard,'DEADLINE_GUARD_BODYWEIGHT_PROVENANCE_MISSING')
+    require('bodyWeightFetchedAt: body?.fetchedAt ?? null' in guard,'DEADLINE_GUARD_BODYWEIGHT_FETCH_TIME_MISSING')
+    require('bodyWeightSnapshotSha256: body?.snapshotSha256 ?? null' in guard,'DEADLINE_GUARD_BODYWEIGHT_SHA_MISSING')
     for forbidden in ('resolveOfficialBodyWeights(', 'refreshOfficialBodyWeights(', 'fetchFastJraOfficialOddsForRace('):
         require(forbidden not in guard,f'DEADLINE_GUARD_BODYWEIGHT_NETWORK_REINTRODUCED:{forbidden}')
 
-    # Production backup is now the same worker path in true standby mode; no
-    # retired GitHub post-T15 generation workflow is part of the safety model.
     require('LIVE_DEADLINE_ROLE' in wrapper and 'role === "backup"' in wrapper,'LIVE_BACKUP_ROLE_MISSING')
     require('if (await primaryIsAlive(env.DB)) return;' in wrapper,'LIVE_BACKUP_TRUE_STANDBY_GUARD_MISSING')
     require('await liveDeadlineV2.scheduled(controller, env);' in wrapper,'LIVE_PRIMARY_OR_BACKUP_WORKER_PATH_MISSING')
