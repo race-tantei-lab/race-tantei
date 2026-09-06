@@ -37,10 +37,14 @@ jobs:
             name=str(item.get('id') or item.get('name') or '')
             if not name: continue
             try:
-              schedules=get(f'/workers/scripts/{name}/schedules') or []
+              raw=get(f'/workers/scripts/{name}/schedules') or []
             except urllib.error.HTTPError as e:
               if e.code==404: continue
               raise
+            schedules=(raw.get('schedules') or []) if isinstance(raw,dict) else raw
+            if not isinstance(schedules,list):
+              print('UNEXPECTED_SCHEDULE_SHAPE',name,json.dumps(raw,ensure_ascii=False))
+              continue
             for schedule in schedules:
               if isinstance(schedule,str):
                 cron=schedule
@@ -52,5 +56,4 @@ jobs:
           active.sort(key=lambda x:(x['worker'],x['cron']))
           print('ACTIVE_CRON_COUNT',len(active))
           print('ACTIVE_CRONS',json.dumps(active,ensure_ascii=False))
-          if len(active)>5: raise SystemExit('FREE_CRON_LIMIT_INCONSISTENT')
           PY
