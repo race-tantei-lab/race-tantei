@@ -12,8 +12,9 @@ const REQUIRED_LIVE_INDEXES = [
   "rt_idx_ml_pair_lookup",
 ] as const;
 
-// While indexes are missing, recheck every minute so the live workers resume
-// immediately after the daily D1 reset/bootstrap creates them. Once ready,
+// These indexes are persistent, pre-provisioned D1 schema. Race-day workers
+// never create them because building large ML indexes can exhaust rows_written.
+// While any index is missing, recheck every minute and fail closed. Once ready,
 // the in-memory state stays ready and no further sqlite_master reads are made.
 const RECHECK_MS = 60_000;
 let indexState: { ready: boolean; checkedAt: number; missing: string[] } | null = null;
