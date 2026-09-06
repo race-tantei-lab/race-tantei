@@ -69,7 +69,8 @@ jobs:
             if [ "$attempt" -lt 11 ]; then sleep 120; fi
           done
 
-          query_program
+          # Reuse the last successful /tmp/program.json. A second identical D1 read
+          # here used to waste Free-tier rows_read and could fail after READY.
           python3 - <<'PY' > /tmp/program-state
           import json
           raw=json.load(open('/tmp/program.json')); rows=[]
