@@ -65,6 +65,9 @@ jobs:
       - name: Verify canonical model parity before deploy
         run: npx tsx scripts/verify-worker-model-parity.ts
 
+      - name: Verify non-race-day gate before D1
+        run: python scripts/verify-race-day-gate.py
+
       - name: Verify live-lock safety before deploy
         run: python scripts/verify-live-lock-safety.py
 
