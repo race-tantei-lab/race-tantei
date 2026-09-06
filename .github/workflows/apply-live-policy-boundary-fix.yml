@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/apply-live-policy-boundary-fix.yml"
+      - "scripts/apply-live-safety-fix.sh"
 permissions:
   contents: write
 jobs:
