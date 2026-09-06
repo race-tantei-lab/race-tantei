@@ -50,6 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           date=2026-09-06
+          # Once the indexes are ready, the primary live Worker runs every minute.
           for i in $(seq 1 12); do
             npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
               "SELECT state_value AS value FROM rt_system_state WHERE state_key='final_daily_selection:$date' LIMIT 1" > /tmp/sel.json
