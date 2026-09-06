@@ -22,6 +22,8 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
+      - name: Verify non-race-day gate before D1
+        run: python scripts/verify-race-day-gate.py
       - name: Verify live-lock safety
         run: python scripts/verify-live-lock-safety.py
       - name: Verify bodyweight final-lock acquisition
