@@ -3,11 +3,38 @@ import { loadConfiguredOfficialRace, runConfiguredEntrySeedWriteOnly } from "./v
 import type { Env, RaceBundle } from "./v1/types.js";
 
 const RECOVERY_PATH = "/_ops/entry-seed-sync-20260906-7f4c9d2a";
+const HOME_PATHS = new Set(["/", "/index.html", "/races", "/races/"]);
 
 function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[ch] ?? ch));
+}
+
+function jstToday(): string {
+  return new Date(Date.now() + (9 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+}
+
+async function retargetFallbackHome(response: Response): Promise<Response> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("text/html")) return response;
+
+  const html = await response.text();
+  const today = jstToday();
+  if (!html.includes(`"raceDate":"${today}"`)) {
+    return new Response(html, { status: response.status, statusText: response.statusText, headers: response.headers });
+  }
+
+  const monthDay = `${Number(today.slice(5, 7))}/${Number(today.slice(8, 10))}`;
+  const retargeted = html
+    .replace(/const today="\d{4}-\d{2}-\d{2}";/, `const today="${today}";`)
+    .replace(/本日の集計（\d{1,2}\/\d{1,2}）/, `本日の集計（${monthDay}）`);
+
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  headers.set("cache-control", "no-store, max-age=0");
+  headers.set("x-race-recovery-home-date", today);
+  return new Response(retargeted, { status: response.status, statusText: response.statusText, headers });
 }
 
 function runnerPanel(bundle: RaceBundle): string {
@@ -56,7 +83,9 @@ export default {
     const match = url.pathname.match(/^\/races\/(2026-09-06-[a-z0-9-]+-\d{2})\/?$/i);
     if (request.method === "GET" && match) return enrichRaceDetail(request, env, ctx, match[1]);
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
-    return publicSite.fetch(request, env, ctx);
+    const response = await publicSite.fetch(request, env, ctx);
+    if (request.method === "GET" && HOME_PATHS.has(url.pathname)) return retargetFallbackHome(response);
+    return response;
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
