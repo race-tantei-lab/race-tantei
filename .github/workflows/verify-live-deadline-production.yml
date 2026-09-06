@@ -5,15 +5,15 @@ on:
     branches: [main]
     paths:
       - "src/live-deadline-entry-v2.ts"
-      - "src/public-site-entry-v29.ts"
-      - "src/public-site-entry-v34.ts"
+      - "src/live-deadline-entry-v3.ts"
+      - "src/public-site-entry-recovery-20260906.ts"
       - "src/v1/live-preview-safety.ts"
       - "src/v1/completed-worker-live-lock.ts"
       - "src/v1/completed-worker-deadline-guard.ts"
       - "src/v1/completed-final-invariants.ts"
       - "src/v1/jra-official-odds-fetch.ts"
       - "src/v1/jra-official-odds.ts"
-      - "tests/completed-worker-deadline-guard-tests.ts"
+      - "scripts/install-race-day-runtime-guards.sql"
       - "scripts/verify-live-lock-safety.py"
       - "wrangler.jsonc"
       - "wrangler.live-deadline.jsonc"
@@ -21,7 +21,6 @@ on:
       - ".github/workflows/deploy-live-deadline.yml"
       - ".github/workflows/verify-live-deadline-production.yml"
   workflow_dispatch:
-  # Automatic preflight before the normal JRA race window. GitHub cron is UTC.
   schedule:
     - cron: "0 22 * * *"
     - cron: "30 23 * * *"
@@ -45,9 +44,8 @@ jobs:
       - name: Mark production readiness pending
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=pending \
-            -f context='production/live-deadline-readiness' \
-            -f description='Verifying T-40 previews, T-17 final and T-16 rescue' \
+            -f state=pending -f context='production/live-deadline-readiness' \
+            -f description='Verifying bounded primary/standby production path' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,9 +54,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Static safety verification
-        shell: bash
         run: |
-          set -euo pipefail
           npm run typecheck
           python3 scripts/verify-live-lock-safety.py
       - name: Wait for production deploy and cron registration
@@ -82,56 +78,62 @@ jobs:
             'https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health'; do
             body=$(curl --max-time 20 --retry 6 --retry-delay 5 --fail-with-body -sS "$url")
             echo "$url $body"
-            BODY="$body" EXPECTED_VERSION="$expected_version" URL="$url" node - <<'NODE'
+            BODY="$body" EXPECTED_VERSION="$expected_version" node - <<'NODE'
           const b=JSON.parse(process.env.BODY||'{}');
-          if(b.status!=='up'||b.service!=='race-tantei-live-deadline') throw new Error(`LIVE_HEALTH_BAD:${process.env.URL}`);
-          if(b.version!==process.env.EXPECTED_VERSION) throw new Error(`LIVE_VERSION_MISMATCH:${process.env.URL}:${b.version}:${process.env.EXPECTED_VERSION}`);
+          if(b.status!=='up'||b.service!=='race-tantei-live-deadline'||b.version!==process.env.EXPECTED_VERSION) throw new Error('LIVE_HEALTH_OR_VERSION_BAD');
           NODE
           done
-      - name: Verify Cloudflare cron registrations
+      - name: Verify Cloudflare primary and standby crons
         shell: bash
         run: |
           set -euo pipefail
           check_schedule() {
-            script="$1"; expected="$2"
+            script="$1"
             body=$(curl --max-time 20 --retry 4 --retry-delay 3 --fail-with-body -sS \
               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${script}/schedules" \
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
-            BODY="$body" SCRIPT="$script" EXPECTED="$expected" node - <<'NODE'
+            BODY="$body" SCRIPT="$script" node - <<'NODE'
           const b=JSON.parse(process.env.BODY||'{}');
           const s=Array.isArray(b.result?.schedules)?b.result.schedules.map(x=>String(x.cron)).sort():[];
-          if(b.success!==true||s.length!==1||s[0]!==process.env.EXPECTED) throw new Error(`LIVE_CRON_BAD:${process.env.SCRIPT}:${JSON.stringify(s)}`);
+          if(b.success!==true||s.length!==1||s[0]!=='* * * * *') throw new Error(`LIVE_CRON_BAD:${process.env.SCRIPT}:${JSON.stringify(s)}`);
           NODE
           }
-          check_schedule 'race-tantei-live-deadline' '* * * * *'
-          check_schedule 'race-tantei-live-deadline-backup' '2-59/5 * * * *'
+          check_schedule 'race-tantei-live-deadline'
+          check_schedule 'race-tantei-live-deadline-backup'
       - name: Verify public Worker cannot mutate live bets
-        shell: bash
         run: |
-          set -euo pipefail
           code=$(curl --max-time 20 -sS -o /tmp/public-live-tick-body -w '%{http_code}' -X POST \
             'https://race-tantei-phase0.race-tantei.workers.dev/_ops/live-tick' || true)
           test "$code" = "404"
-      - name: Verify D1 guards and completed priority rescue heartbeat
+      - name: Verify persistent D1 guards and primary heartbeat
         shell: bash
         run: |
           set -euo pipefail
-          schema=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "SELECT name,type FROM sqlite_master WHERE name IN ('rt_live_preview_archive','rt_live_deadline_lease','rt_guard_final_bet_insert_deadline','rt_guard_final_state_insert_deadline','rt_guard_official_odds_final_insert') ORDER BY name")
-          for name in rt_live_preview_archive rt_live_deadline_lease rt_guard_final_bet_insert_deadline rt_guard_final_state_insert_deadline rt_guard_official_odds_final_insert; do
-            printf '%s' "$schema" | grep -Fq "$name"
+          rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT name,type FROM sqlite_master WHERE name IN ('rt_live_preview_archive','rt_live_deadline_lease','rt_guard_final_bet_insert_deadline','rt_guard_final_state_insert_deadline','rt_guard_official_odds_final_insert','rt_ignore_unchanged_runner','rt_ignore_unchanged_race','rt_ignore_unchanged_system_state') ORDER BY name")
+          for name in rt_live_preview_archive rt_live_deadline_lease rt_guard_final_bet_insert_deadline rt_guard_final_state_insert_deadline rt_guard_official_odds_final_insert rt_ignore_unchanged_runner rt_ignore_unchanged_race rt_ignore_unchanged_system_state; do
+            printf '%s' "$rows" | grep -Fq "$name"
           done
+          heartbeat=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT unixepoch('now')-unixepoch(updated_at) AS ageSeconds FROM rt_system_state WHERE state_key='live_deadline_primary_heartbeat:v1' LIMIT 1")
+          HEARTBEAT="$heartbeat" node - <<'NODE'
+          const p=JSON.parse(process.env.HEARTBEAT||'[]'); const r=p?.[0]?.results?.[0];
+          if(!r) throw new Error('PRIMARY_HEARTBEAT_MISSING');
+          const age=Number(r.ageSeconds); if(!Number.isFinite(age)||age < -30||age > 150) throw new Error(`PRIMARY_HEARTBEAT_STALE:${age}`);
+          console.log(JSON.stringify({primaryHeartbeat:'ok',ageSeconds:age}));
+          NODE
+      - name: Verify completed priority rescue heartbeat
+        shell: bash
+        run: |
+          set -euo pipefail
           today=$(TZ=Asia/Tokyo date +%F)
           state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "SELECT state_key AS stateKey,updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok,json_extract(state_value,'$.completedAt') AS completedAt FROM rt_system_state WHERE state_key='live_deadline_priority_guard_success:${today}' LIMIT 1")
-          echo "$state"
-          STATE_JSON="$state" TODAY="$today" node - <<'NODE'
+            "SELECT updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok,json_extract(state_value,'$.completedAt') AS completedAt FROM rt_system_state WHERE state_key='live_deadline_priority_guard_success:${today}' LIMIT 1")
+          STATE_JSON="$state" node - <<'NODE'
           const p=JSON.parse(process.env.STATE_JSON||'[]'); const r=p?.[0]?.results?.[0];
-          if(!r) throw new Error(`PRIORITY_GUARD_SUCCESS_MISSING:${process.env.TODAY}`);
+          if(!r) throw new Error('PRIORITY_GUARD_SUCCESS_MISSING');
           const age=Number(r.ageSeconds);
-          if(r.status!=='completed'||Number(r.ok)!==1||!r.completedAt) throw new Error(`PRIORITY_GUARD_NOT_COMPLETED:${r.status}:${r.ok}`);
-          if(!Number.isFinite(age)||age < -30||age > 300) throw new Error(`PRIORITY_GUARD_STALE:${age}`);
-          console.log(JSON.stringify({priorityGuard:'completed',ageSeconds:age,updatedAt:r.updatedAt}));
+          if(r.status!=='completed'||Number(r.ok)!==1||!r.completedAt||!Number.isFinite(age)||age < -30||age > 300) throw new Error(`PRIORITY_GUARD_BAD:${JSON.stringify(r)}`);
           NODE
       - name: Verify T-40 selected races have official current previews
         shell: bash
@@ -149,7 +151,6 @@ jobs:
           )
           rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
             "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT json_extract(p.state_value,'$.snapshots[0].oddsParserVersion') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS parserVersion,(SELECT json_extract(p.state_value,'$.snapshots[0].oddsSource') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id LIMIT 1) AS oddsSource FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,parserVersion,oddsSource FROM q WHERE minutesToStart > 17 AND minutesToStart <= 40 ORDER BY minutesToStart")
-          echo "$rows"
           ROWS="$rows" EXPECTED_PARSER="$expected_parser" node - <<'NODE'
           const p=JSON.parse(process.env.ROWS||'[]'); const rows=p?.[0]?.results||[];
           const bad=rows.filter(r=>r.parserVersion!==process.env.EXPECTED_PARSER || !['jra-fast-official','jra-crawl-official'].includes(r.oddsSource));
@@ -163,7 +164,6 @@ jobs:
           today=$(TZ=Asia/Tokyo date +%F)
           rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
             "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,finalRows FROM q WHERE minutesToStart BETWEEN 15 AND 16 ORDER BY minutesToStart")
-          echo "$rows"
           ROWS="$rows" node - <<'NODE'
           const p=JSON.parse(process.env.ROWS||'[]'); const rows=p?.[0]?.results||[];
           for(const r of rows){ if(Number(r.finalRows)!==6) throw new Error(`DUE_FINAL_NOT_SIX:${r.raceId}:${r.minutesToStart}:${r.finalRows}`); }
@@ -173,15 +173,13 @@ jobs:
         if: success()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=success \
-            -f context='production/live-deadline-readiness' \
-            -f description='T-40 preview, T-17 final, T-16 rescue and T-15 boundary verified' \
+            -f state=success -f context='production/live-deadline-readiness' \
+            -f description='Primary/standby, D1 guards, T-40 and T-16 verified' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark production readiness failure
         if: failure()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
-            -f state=failure \
-            -f context='production/live-deadline-readiness' \
+            -f state=failure -f context='production/live-deadline-readiness' \
             -f description='Live deadline readiness failed closed; inspect production state' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
