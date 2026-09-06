@@ -15,13 +15,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          shopt -s globstar nullglob
+          files=(**/*.ts **/*.js **/*.mjs **/*.cjs **/*.sql **/*.jsonc **/*.yml **/*.yaml)
           echo '=== race-name repair ==='
-          rg -n -C 6 -i "race_name|検索ウィンドウ|検索メニュー|サイト内検索|メニューを開く" . --glob '!node_modules/**' --glob '!.git/**' --glob '!.github/**' | head -n 1400 || true
+          grep -nH -C 6 -E "race_name|検索ウィンドウ|検索メニュー|サイト内検索|メニューを開く" "${files[@]}" 2>/dev/null | head -n 1800 || true
           echo '=== legacy public bets migration ==='
-          rg -n -C 8 -i "INSERT OR IGNORE INTO rt_public_bets|rt_bets b JOIN rt_predictions|public_bets" . --glob '!node_modules/**' --glob '!.git/**' --glob '!.github/**' | head -n 1600 || true
+          grep -nH -C 8 -E "INSERT OR IGNORE INTO rt_public_bets|rt_bets b JOIN rt_predictions|public_bets" "${files[@]}" 2>/dev/null | head -n 2000 || true
           echo '=== runtime ML index creation ==='
-          rg -n -C 8 -i "rt_idx_ml_|CREATE INDEX IF NOT EXISTS.*rt_ml|CREATE INDEX.*rt_ml" . --glob '!node_modules/**' --glob '!.git/**' --glob '!.github/**' | head -n 1400 || true
+          grep -nH -C 8 -E "rt_idx_ml_|CREATE INDEX IF NOT EXISTS.*rt_ml|CREATE INDEX.*rt_ml" "${files[@]}" 2>/dev/null | head -n 1800 || true
           echo '=== schema/lease/state hot paths ==='
-          rg -n -C 8 -i "ensureLivePreviewSafetySchema|ensureSchema|CREATE TABLE IF NOT EXISTS|rt_live_deadline_lease|saveDriverState|saveState\(" src functions scripts --glob '!node_modules/**' 2>/dev/null | head -n 1800 || true
+          grep -nH -C 8 -E "ensureLivePreviewSafetySchema|ensureSchema|CREATE TABLE IF NOT EXISTS|rt_live_deadline_lease|saveDriverState|saveState\(" "${files[@]}" 2>/dev/null | head -n 2200 || true
           echo '=== generation/selection/deadline ==='
-          rg -n -C 8 -i "runCompletedWorkerLiveLock|final_daily_selection|source_prediction_id=-2|T-15|15 min|deadline|worker_live_preview|official" src functions scripts --glob '!node_modules/**' 2>/dev/null | head -n 2200 || true
+          grep -nH -C 8 -E "runCompletedWorkerLiveLock|final_daily_selection|source_prediction_id=-2|T-15|15 min|deadline|worker_live_preview|official" "${files[@]}" 2>/dev/null | head -n 2600 || true
