@@ -6,10 +6,11 @@
   "account_id": "3c6d1826b573b2e68cb13ec37e9e8ade",
   "workers_dev": true,
   "triggers": {
-    "crons": ["2-59/5 * * * *"]
+    "crons": ["* * * * *"]
   },
   "vars": {
     "ENVIRONMENT": "production",
+    "LIVE_DEADLINE_ROLE": "backup",
     "MODEL_VERSION": "ten-year-completed-model",
     "JRA_HOME_URL": "https://www.jra.go.jp/",
     "JRA_SEED_ENTRY_URLS": "",
