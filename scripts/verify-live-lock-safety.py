@@ -28,20 +28,26 @@ def require_missing(path: str, label: str) -> None:
 
 def verify_public_entry(public_main: str) -> None:
     if public_main == "src/public-site-entry-v37.ts":
-        return
+        raise AssertionError("public v37 core scheduler still contains legacy race-day DDL; use bounded wrapper until core is migrated")
     if public_main != "src/public-site-entry-recovery-20260906.ts":
         raise AssertionError(f"unexpected public Worker entry: {public_main!r}")
 
     recovery = read(public_main)
     for needle in (
         'import publicSite from "./public-site-entry-v37.js";',
+        'import { runUpcomingCalendarRepair } from "./v1/upcoming-calendar-repair.js";',
+        'import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.js";',
+        'import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";',
         'const RECOVERY_PATH = "/_ops/entry-seed-sync-20260906-7f4c9d2a";',
         'request.method === "POST" && url.pathname === RECOVERY_PATH',
-        'if (url.pathname === RECOVERY_PATH) return new Response("NOT_FOUND", { status: 404 });',
         'runConfiguredEntrySeedWriteOnly(env, "2026-09-06")',
-        'if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);',
+        "runBoundedPublicMaintenance",
+        "await runUpcomingCalendarRepair(env, now)",
+        "await runUpcomingEntryWorkerRepair(env, now)",
+        "await runUpcomingEntryDerivedRepair(env, now)",
     ):
         require(recovery, needle, "temporary public recovery wrapper")
+    forbid(recovery, "publicSite.scheduled", "public scheduler legacy-DDL isolation")
     for forbidden in (
         "rt_public_bets",
         "runCompletedWorkerLiveLock",
@@ -49,11 +55,15 @@ def verify_public_entry(public_main: str) -> None:
         "runDirectLiveTick",
         "live-deadline-entry",
         "completed-worker-live-lock",
+        "CREATE INDEX",
+        "CREATE TABLE",
+        "CREATE TRIGGER",
     ):
         forbid(recovery, forbidden, "temporary public recovery wrapper live isolation")
 
     runner_recovery = read("src/v1/configured-entry-seed-write-only.ts")
     require(runner_recovery, "INSERT INTO rt_runners", "temporary runner recovery")
+    require(runner_recovery, "WHERE rt_runners.frame_no IS NOT excluded.frame_no", "runner no-op write guard")
     for forbidden in (
         "rt_public_bets",
         "rt_official_odds_latest",
@@ -77,12 +87,16 @@ def main() -> None:
         raise AssertionError("primary live deadline Worker must use v3 index-gated entry")
     if primary_wrangler.get("triggers", {}).get("crons", []) != ["* * * * *"]:
         raise AssertionError("primary live deadline Worker must run every minute")
+    if primary_wrangler.get("vars", {}).get("LIVE_DEADLINE_ROLE") != "primary":
+        raise AssertionError("primary live deadline Worker role mismatch")
     if backup_wrangler.get("name") != "race-tantei-live-deadline-backup":
         raise AssertionError("backup live deadline Worker name mismatch")
     if backup_wrangler.get("main") != "src/live-deadline-entry-v3.ts":
-        raise AssertionError("backup live deadline Worker must use v3 index-gated entry")
-    if backup_wrangler.get("triggers", {}).get("crons", []) != ["2-59/5 * * * *"]:
-        raise AssertionError("backup live deadline Worker must be staggered every five minutes")
+        raise AssertionError("backup live deadline Worker must use the exact same v3 entry/parser")
+    if backup_wrangler.get("triggers", {}).get("crons", []) != ["* * * * *"]:
+        raise AssertionError("backup standby must check primary health every minute")
+    if backup_wrangler.get("vars", {}).get("LIVE_DEADLINE_ROLE") != "backup":
+        raise AssertionError("backup live deadline Worker role mismatch")
 
     gate = read("src/live-deadline-entry-v3.ts")
     for needle in (
@@ -95,10 +109,18 @@ def main() -> None:
         "rt_idx_ml_trainer_lookup",
         "rt_idx_ml_pair_lookup",
         "LIVE_DEADLINE_WAITING_FOR_INDEXES",
-        "if (!state.ready)",
+        'PRIMARY_HEARTBEAT_KEY = "live_deadline_primary_heartbeat:v1"',
+        "PRIMARY_STALE_SECONDS = 150",
+        "markPrimaryAlive",
+        "primaryIsAlive",
+        'if (role === "backup")',
+        "LIVE_DEADLINE_BACKUP_TAKEOVER",
+        "if (await primaryIsAlive(env.DB)) return;",
         "await liveDeadlineV2.scheduled(controller, env);",
     ):
-        require(gate, needle, "v3 live index gate")
+        require(gate, needle, "v3 primary/standby gate")
+    for forbidden in ("CREATE TABLE", "CREATE INDEX", "CREATE TRIGGER", "DROP TRIGGER"):
+        forbid(gate, forbidden, "v3 race-day DDL isolation")
 
     live = read("src/v1/completed-worker-live-lock.ts")
     for needle in (
@@ -149,24 +171,29 @@ def main() -> None:
 
     invariants = read("src/v1/completed-final-invariants.ts")
     for needle in (
+        "sqlite_master",
         "FINAL_BET_REFLECTION_WINDOW_PASSED",
         "FINAL_STATE_REFLECTION_WINDOW_PASSED",
         "IMMUTABLE_FINAL_BET_TERMS",
         "IMMUTABLE_WORKER_FINAL_STATE",
         "PROBABILITY_FALLBACK_FORBIDDEN",
         "OFFICIAL_JRA_ODDS_REQUIRED",
-        "NOT IN ('jra-fast-official', 'jra-crawl-official')",
+        "FINAL_INVARIANT_TRIGGER_MISSING",
     ):
-        require(invariants, needle, "D1 finalization invariants")
+        require(invariants, needle, "D1 finalization invariant verifier")
+    for forbidden in ("db.prepare(`CREATE TRIGGER", "db.prepare('DROP TRIGGER", "db.prepare(`DROP TRIGGER"):
+        forbid(invariants, forbidden, "runtime invariant DDL")
 
     safety = read("src/v1/live-preview-safety.ts")
     for needle in (
         "rt_live_preview_archive",
-        "rt_archive_live_preview_insert",
-        "rt_archive_live_preview_update",
+        "idx_live_preview_archive_race_id",
         "rt_live_deadline_lease",
         "acquireLiveDeadlineLease",
         "restoreNewestOfficialPreviewArchives",
+        "LIVE_PREVIEW_SCHEMA_MISSING",
+        "SLA_HEARTBEAT_INTERVAL_MS = 3 * 60_000",
+        "persistSlaAuditIfNeeded",
         "previewMissingByT40RaceIds",
         "previewMissingByT30RaceIds",
         "finalMissingByT30RaceIds",
@@ -176,6 +203,10 @@ def main() -> None:
         "deadlineMissedRaceIds",
     ):
         require(safety, needle, "live preview safety")
+    for forbidden in ("CREATE TABLE IF NOT EXISTS", "CREATE INDEX IF NOT EXISTS", "CREATE TRIGGER IF NOT EXISTS"):
+        forbid(safety, forbidden, "live preview race-day DDL")
+    forbid(safety, "rt_archive_live_preview_insert", "automatic preview archive write amplification")
+    forbid(safety, "rt_archive_live_preview_update", "automatic preview archive write amplification")
 
     driver = read("src/live-deadline-entry-v2.ts")
     for needle in (
@@ -221,7 +252,6 @@ def main() -> None:
     public37 = read("src/public-site-entry-v37.ts")
     public37_core = read("src/public-site-entry-v37-core.ts")
     require(public37, 'import core from "./public-site-entry-v37-core.js";', "public v37 wrapper")
-    require(public37, "if (core.scheduled) await core.scheduled(controller, env, ctx);", "public v37 maintenance delegation")
     require(public37, 'pathname === "/_ops/live-tick"', "public v37 live isolation")
     require(public37, "status: 404", "public v37 live isolation")
     for needle in (
@@ -243,8 +273,25 @@ def main() -> None:
     require_missing(".github/workflows/drive-live-tick.yml", "obsolete public live driver")
     require_missing(".github/workflows/auto-final-live-bets.yml", "obsolete stored-preview finalizer")
 
+    schema = read("scripts/install-race-day-runtime-guards.sql")
+    for needle in (
+        "rt_live_deadline_lease",
+        "DROP TRIGGER IF EXISTS rt_archive_live_preview_insert",
+        "DROP TRIGGER IF EXISTS rt_archive_live_preview_update",
+        "rt_guard_final_bet_insert_deadline",
+        "rt_guard_final_state_insert_deadline",
+        "rt_ignore_unchanged_system_state",
+        "rt_ignore_unchanged_runner",
+        "rt_ignore_unchanged_race",
+        "rt_ignore_unchanged_race_source",
+    ):
+        require(schema, needle, "deploy-time D1 runtime guards")
+
     deploy = read(".github/workflows/deploy-live-deadline.yml")
     for needle in (
+        "Install persistent D1 runtime guards once",
+        "scripts/install-race-day-runtime-guards.sql",
+        "Verify persistent D1 runtime guards",
         "Deploy primary live deadline Worker",
         "Deploy backup live deadline Worker",
         "src/live-deadline-entry-v3.ts",
@@ -300,9 +347,13 @@ def main() -> None:
 
     print(
         "LIVE_LOCK_SAFETY_OK",
-        "public_maintenance_cron=15m",
+        "public_maintenance_cron=15m_bounded_no_ddl",
         "primary_cron=1m",
-        "backup_cron=5m_staggered",
+        "backup_cron=1m_true_standby",
+        "backup_takeover_after=150s",
+        "runtime_ddl=false",
+        "preview_auto_archive=false",
+        "unchanged_runner_writes=false",
         "preview_open=90m",
         "preview_required=30m",
         "public_final_target=30m",
@@ -311,10 +362,6 @@ def main() -> None:
         "fresh_reflection_deadline=10m_hard",
         "official_jra_odds_required=true",
         "probability_fallback_forbidden=true",
-        "append_only_preview_archive=true",
-        "last_good_restore=true",
-        "lease=true",
-        "sla_t40_t30_t17_t16_t15=true",
         "public_live_mutation=false",
         "post_t15_creation=false",
         "critical_schedule=disabled",
