@@ -11,19 +11,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Locate D1 hot paths
+      - name: Locate exact D1 hot paths
         shell: bash
         run: |
           set -euo pipefail
-          shopt -s globstar nullglob
-          files=(**/*.ts **/*.js **/*.mjs **/*.cjs **/*.sql **/*.jsonc **/*.yml **/*.yaml)
-          echo '=== race-name repair ==='
-          grep -nH -C 6 -E "race_name|検索ウィンドウ|検索メニュー|サイト内検索|メニューを開く" "${files[@]}" 2>/dev/null | head -n 1800 || true
-          echo '=== legacy public bets migration ==='
-          grep -nH -C 8 -E "INSERT OR IGNORE INTO rt_public_bets|rt_bets b JOIN rt_predictions|public_bets" "${files[@]}" 2>/dev/null | head -n 2000 || true
-          echo '=== runtime ML index creation ==='
-          grep -nH -C 8 -E "rt_idx_ml_|CREATE INDEX IF NOT EXISTS.*rt_ml|CREATE INDEX.*rt_ml" "${files[@]}" 2>/dev/null | head -n 1800 || true
-          echo '=== schema/lease/state hot paths ==='
-          grep -nH -C 8 -E "ensureLivePreviewSafetySchema|ensureSchema|CREATE TABLE IF NOT EXISTS|rt_live_deadline_lease|saveDriverState|saveState\(" "${files[@]}" 2>/dev/null | head -n 2200 || true
-          echo '=== generation/selection/deadline ==='
-          grep -nH -C 8 -E "runCompletedWorkerLiveLock|final_daily_selection|source_prediction_id=-2|T-15|15 min|deadline|worker_live_preview|official" "${files[@]}" 2>/dev/null | head -n 2600 || true
+          echo '=== race-name repair files ==='
+          git grep -n -E "race_name = CAST|検索ウィンドウ|検索メニュー|サイト内検索|メニューを開く" -- 'src/**' 'functions/**' 'scripts/**' 2>/dev/null | head -n 120 || true
+          echo '=== legacy public bets migration files ==='
+          git grep -n -E "INSERT OR IGNORE INTO rt_public_bets|rt_bets b JOIN rt_predictions|latest ON latest.prediction_id" -- 'src/**' 'functions/**' 'scripts/**' 2>/dev/null | head -n 120 || true
+          echo '=== ML runtime index files ==='
+          git grep -n -E "rt_idx_ml_pair_lookup|rt_idx_ml_horse_surface_lookup|rt_idx_ml_horse_total_lookup|rt_idx_ml_jockey_lookup|rt_idx_ml_trainer_lookup" -- 'src/**' 'functions/**' 'scripts/**' 2>/dev/null | head -n 120 || true
+          echo '=== live hot path files ==='
+          git grep -n -E "ensureLiveDeadlineSchema|runLiveDeadlineGuards|saveLiveDeadlineDriverState|saveLiveDeadlinePriorityGuard|rt_live_deadline_lease" -- 'src/**' 2>/dev/null | head -n 180 || true
+          echo '=== public runtime schema/repair files ==='
+          git grep -n -E "ensureSchema\(|repair|migrate|CREATE TABLE IF NOT EXISTS|CREATE INDEX IF NOT EXISTS" -- 'src/**' 2>/dev/null | head -n 220 || true
+          echo '=== selection/generation files ==='
+          git grep -n -E "final_daily_selection|runCompletedWorkerLiveLock|worker_live_preview|source_prediction_id|official_odds|odds_source|jra_official" -- 'src/**' 2>/dev/null | head -n 220 || true
