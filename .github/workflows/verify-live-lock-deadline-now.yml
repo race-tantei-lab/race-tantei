@@ -30,11 +30,16 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
-          import collections,datetime as dt,importlib.util,json,pathlib,sys
+          import collections,datetime as dt,importlib.util,json,pathlib,sys,urllib.error
           p=pathlib.Path('scripts/collect-jra-official-odds.py')
           s=importlib.util.spec_from_file_location('deadline_verify',p);m=importlib.util.module_from_spec(s);sys.modules['deadline_verify']=m;s.loader.exec_module(m)
           now=dt.datetime.now(dt.timezone.utc);jst=now.astimezone(dt.timezone(dt.timedelta(hours=9)));date=jst.date().isoformat()
-          program=m.d1_query('SELECT COUNT(*) AS races FROM rt_races WHERE race_date=?',[date])
+          try:
+              program=m.d1_query('SELECT COUNT(*) AS races FROM rt_races WHERE race_date=?',[date])
+          except urllib.error.HTTPError as exc:
+              raw=exc.read().decode('utf-8',errors='replace')
+              print(json.dumps({'status':'D1_HTTP_ERROR','httpStatus':exc.code,'reason':str(exc.reason),'body':raw},ensure_ascii=False))
+              raise
           race_count=int(program[0].get('races') or 0) if program else 0
           if race_count==0:
               print(json.dumps({'status':'NO_RACE_DAY','date':date},ensure_ascii=False)); raise SystemExit(0)
