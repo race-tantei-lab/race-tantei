@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: emergency-offline-live-rescue-20260906
+  group: emergency-offline-live-rescue-20260906-v2
   cancel-in-progress: false
 
 permissions:
@@ -42,14 +42,33 @@ jobs:
       - name: Export production D1 without SELECT quota
         run: npx wrangler d1 export race-tantei-phase0 --remote --output=/tmp/prod.sql
 
-      - name: Restore quota-free local SQLite snapshot
+      - name: Restore quota-free local SQLite snapshot without rebuilding indexes
         shell: bash
         run: |
           set -euo pipefail
+          # The export is ~343 MB. Rebuilding every production index locally made
+          # the first rescue stall for tens of minutes. The rescue only needs the
+          # data; all production reads remain untouched and all production DDL is
+          # forbidden. Strip only CREATE INDEX statements from the local copy.
+          python - <<'PY'
+          src='/tmp/prod.sql'; dst='/tmp/prod-no-index.sql'
+          skipping=False
+          with open(src,'r',encoding='utf-8') as fin, open(dst,'w',encoding='utf-8') as fout:
+              for line in fin:
+                  upper=line.lstrip().upper()
+                  if not skipping and (upper.startswith('CREATE INDEX ') or upper.startswith('CREATE UNIQUE INDEX ')):
+                      skipping=';' not in line
+                      continue
+                  if skipping:
+                      if ';' in line: skipping=False
+                      continue
+                  fout.write(line)
+          PY
           rm -f /tmp/prod.sqlite
-          sqlite3 /tmp/prod.sqlite "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY;"
-          sqlite3 /tmp/prod.sqlite < /tmp/prod.sql
+          sqlite3 /tmp/prod.sqlite "PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA temp_store=MEMORY; PRAGMA foreign_keys=OFF;"
+          sqlite3 /tmp/prod.sqlite < /tmp/prod-no-index.sql
           sqlite3 /tmp/prod.sqlite "SELECT state_key,updated_at FROM rt_system_state WHERE state_key='final_daily_selection:2026-09-06';"
+          sqlite3 /tmp/prod.sqlite "SELECT COUNT(*) AS races FROM rt_races WHERE race_date='2026-09-06';"
 
       - name: Generate remaining races from local read snapshot and fresh JRA official odds
         shell: bash
@@ -61,7 +80,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: emergency-offline-live-rescue-20260906-audit
+          name: emergency-offline-live-rescue-20260906-audit-v2
           path: |
             analysis-results/emergency-offline-live-20260906.json
             analysis-results/emergency-offline-live-2026-09-06-*.json
