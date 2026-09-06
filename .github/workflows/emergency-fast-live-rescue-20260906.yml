@@ -1,0 +1,133 @@
+name: Emergency fast live rescue 2026-09-06
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/emergency-fast-live-rescue-20260906.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: emergency-fast-live-rescue-20260906
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+  CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+  JRA_ODDS_REQUEST_PAUSE_SECONDS: "0.25"
+
+jobs:
+  rescue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtimes
+        run: |
+          npm ci --prefer-offline --no-audit --no-fund
+          python -m pip install --disable-pip-version-check "lightgbm==4.6.0" numpy
+          python -m py_compile scripts/emergency-offline-live-20260906.py
+
+      - name: Export production D1 without SELECT quota
+        run: npx wrangler d1 export race-tantei-phase0 --remote --output=/tmp/prod.sql
+
+      - name: Build minimal canonical live snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import datetime as dt, gzip, json, pathlib
+
+          target=dt.date(2026,9,6)
+          with gzip.open('models/ten-year-runner-feature-state.json.gz','rt',encoding='utf-8') as fh:
+              through=dt.date.fromisoformat(str(json.load(fh)['throughDate']))
+          # Feature state needs only data after throughDate. Online recency needs
+          # the prior 30 days. Keep the earlier boundary, never target-day future data.
+          start=min(through+dt.timedelta(days=1), target-dt.timedelta(days=30))
+          dates=[]
+          d=start
+          while d<=target:
+              dates.append(d.isoformat()); d+=dt.timedelta(days=1)
+          needles=tuple(dates)
+          selection='final_daily_selection:2026-09-06'
+
+          src=pathlib.Path('/tmp/prod.sql')
+          dst=pathlib.Path('/tmp/minimal.sql')
+          kept=0; total=0
+
+          def statements(lines):
+              buf=[]; quote=None
+              for line in lines:
+                  buf.append(line)
+                  i=0; complete=False
+                  while i<len(line):
+                      c=line[i]
+                      if quote:
+                          if c==quote:
+                              if quote=="'" and i+1<len(line) and line[i+1]=="'":
+                                  i+=2; continue
+                              quote=None
+                      else:
+                          if c in ("'", '"'):
+                              quote=c
+                          elif c==';':
+                              complete=True
+                      i+=1
+                  if complete and quote is None:
+                      yield ''.join(buf); buf=[]
+              if buf: yield ''.join(buf)
+
+          with src.open('r',encoding='utf-8') as fin, dst.open('w',encoding='utf-8') as out:
+              out.write('PRAGMA foreign_keys=OFF;\nPRAGMA journal_mode=OFF;\nPRAGMA synchronous=OFF;\nBEGIN;\n')
+              for stmt in statements(fin):
+                  total+=1
+                  s=stmt.lstrip(); u=s.upper()
+                  keep=False
+                  if u.startswith('CREATE TABLE '):
+                      keep=True
+                  elif u.startswith('INSERT INTO '):
+                      # Race ids embed ISO dates, so this keeps exactly the feature
+                      # delta + 30-day online-learning window across every race-keyed
+                      # table, including current final bets/odds/results.
+                      keep=any(day in stmt for day in needles) or selection in stmt
+                  if keep:
+                      out.write(stmt if stmt.endswith('\n') else stmt+'\n'); kept+=1
+              out.write('COMMIT;\n')
+          print('MINIMAL_WINDOW',start.isoformat(),target.isoformat(),'THROUGH',through.isoformat(),'KEPT',kept,'TOTAL',total)
+          PY
+          rm -f /tmp/prod.sqlite
+          sqlite3 /tmp/prod.sqlite < /tmp/minimal.sql
+          sqlite3 /tmp/prod.sqlite "SELECT COUNT(*) AS races FROM rt_races WHERE race_date='2026-09-06';"
+          sqlite3 /tmp/prod.sqlite "SELECT state_key,updated_at FROM rt_system_state WHERE state_key='final_daily_selection:2026-09-06';"
+
+      - name: Generate all still-eligible selected races using fresh official JRA odds
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/emergency-offline-live-20260906.py --db /tmp/prod.sqlite | tee emergency-fast-live-rescue.log
+
+      - name: Upload rescue audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emergency-fast-live-rescue-20260906-audit
+          path: |
+            analysis-results/emergency-offline-live-20260906.json
+            analysis-results/emergency-offline-live-2026-09-06-*.json
+            official-odds-collection-report.json
+            current-selected-official-odds.json.gz
+            emergency-fast-live-rescue.log
+          if-no-files-found: warn
+          retention-days: 30
