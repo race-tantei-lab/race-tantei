@@ -47,12 +47,21 @@ def main():
     require('bodyWeightBreachRaceIds' in live,'BODYWEIGHT_BREACH_AUDIT_MISSING')
     require('bodyWeightFetchedAt:' in live and 'bodyWeightSnapshotSha256:' in live and 'bodyWeights:' in live,'BODYWEIGHT_FINAL_AUDIT_PROVENANCE_MISSING')
 
-    t15_start=live.index('if (remaining < DEADLINE_MS)')
+    # At T-15 exactly, as well as after T-15, the worker must not start any
+    # new network/model calculation. This intentionally verifies <=, not <.
+    t15_start=live.index('if (remaining <= DEADLINE_MS)')
     t15_end=live.index('const existingPreview = await latestPreview',t15_start)
     t15=live[t15_start:t15_end]
     for forbidden in ('resolveOfficialBodyWeights(', 'refreshOfficialBodyWeights(', 'generatePreview(', 'fetchFastJraOfficialOddsForRace(', 'loadCompletedFeatureStateForRace(', 'loadCompletedRecencyLearning('):
         require(forbidden not in t15,f'BODYWEIGHT_T15_NETWORK_OR_RECOMPUTE_REINTRODUCED:{forbidden}')
     require('WORKER_HARD_T15_START_MISSED' in t15,'BODYWEIGHT_T15_HARD_BLOCK_MISSING')
+
+    # Re-check the boundary at the actual generation start, after intervening
+    # D1/preview work, so a tick cannot cross T-15 by a few milliseconds and
+    # then begin a new calculation.
+    require('const remainingAtGenerationStart = startMs - generationStartedAt.getTime();' in live,'BODYWEIGHT_ACTUAL_GENERATION_START_RECHECK_MISSING')
+    require('remainingAtGenerationStart <= DEADLINE_MS' in live,'BODYWEIGHT_ACTUAL_GENERATION_START_T15_GUARD_MISSING')
+    require('WORKER_FRESH_GENERATION_STARTED_AFTER_T15' in live,'BODYWEIGHT_ACTUAL_GENERATION_START_T15_ERROR_MISSING')
 
     body_try=live.find('bodyWeightSnapshot = await resolveOfficialBodyWeights')
     body_catch=live.find('bodyWeightError = errorText(error)',body_try)
@@ -61,11 +70,10 @@ def main():
     vector=live.find('completedFeatureVector',feature)
     require(0 <= body_try < body_catch < reread < feature < vector,'BODYWEIGHT_REFRESH_NOT_ATTEMPTED_BEFORE_FEATURE_VECTOR')
 
-    require('remainingAtCommit < FINAL_REFLECTION_DEADLINE_MS' in live,'BODYWEIGHT_FRESH_T10_REFLECTION_GUARD_MISSING')
-    require('remainingAtCommit < DEADLINE_MS' in live,'BODYWEIGHT_NONFRESH_T15_REFLECTION_GUARD_MISSING')
-    require('WORKER_FRESH_GENERATION_STARTED_AFTER_T15' in live,'BODYWEIGHT_FRESH_GENERATION_START_GUARD_MISSING')
-    require('WORKER_NONFRESH_REFLECTION_CROSSED_T15' in live,'BODYWEIGHT_NONFRESH_T15_GUARD_MISSING')
-    require('WORKER_FRESH_REFLECTION_CROSSED_T10' in live,'BODYWEIGHT_FRESH_T10_GUARD_MISSING')
+    require('remainingAfterGeneration < FINAL_REFLECTION_DEADLINE_MS' in live,'BODYWEIGHT_FRESH_T10_REFLECTION_GUARD_MISSING')
+    require('remainingAfterGeneration < DEADLINE_MS' in live,'BODYWEIGHT_NONFRESH_T15_REFLECTION_GUARD_MISSING')
+    require('WORKER_GENERATION_CROSSED_T10' in live,'BODYWEIGHT_FRESH_T10_GUARD_MISSING')
+    require('WORKER_FALLBACK_CROSSED_T15' in live,'BODYWEIGHT_NONFRESH_T15_GUARD_MISSING')
 
     require('bodyWeightApplied: snapshot.bodyWeightApplied === true' in guard,'DEADLINE_GUARD_BODYWEIGHT_PROVENANCE_MISSING')
     require('bodyWeightFetchedAt: body?.fetchedAt ?? null' in guard,'DEADLINE_GUARD_BODYWEIGHT_FETCH_TIME_MISSING')
@@ -90,6 +98,8 @@ def main():
         'previewOpenMinutes':90,
         'finalArmMinutes':30,
         'generationStartDeadlineMinutes':15,
+        'generationStartBoundaryInclusive':True,
+        'actualGenerationStartRecheck':True,
         'freshReflectionDeadlineMinutes':10,
         'postT15GenerationStart':False,
         'backupMode':'same_worker_true_standby',
