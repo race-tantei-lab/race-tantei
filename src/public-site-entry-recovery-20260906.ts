@@ -73,7 +73,7 @@ async function enrichRaceDetail(request: Request, env: Env, ctx: ExecutionContex
 }
 
 async function runBoundedPublicMaintenance(env: Env, now: Date): Promise<void> {
-  // Deliberately bypass publicSite.scheduled: v37 core still contains legacy
+  // Deliberately bypass the legacy public scheduler: v37 core still contains
   // per-cron schema-index creation. Persistent indexes are deploy-time schema.
   // These three bounded repairs are the normal automatic maintenance duties.
   const errors: string[] = [];
