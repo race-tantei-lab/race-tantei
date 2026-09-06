@@ -8,6 +8,9 @@ on:
     paths:
       - "src/live-deadline-entry-v2.ts"
       - "src/live-deadline-entry-v3.ts"
+      - "src/v1/race-day-gate.ts"
+      - "src/v1/jra-calendar.ts"
+      - "src/v1/jra.ts"
       - "src/v1/live-preview-safety.ts"
       - "src/v1/completed-worker-live-lock.ts"
       - "src/v1/completed-worker-deadline-guard.ts"
@@ -17,9 +20,12 @@ on:
       - "src/v1/jra-official-odds-fetch.ts"
       - "src/v1/jra-official-odds-fast.ts"
       - "src/v1/jra-official-odds.ts"
+      - "tests/race-day-gate-tests.ts"
       - "tests/jra-official-odds-fetch-tests.ts"
       - "tests/completed-worker-deadline-guard-tests.ts"
+      - "scripts/verify-race-day-gate.py"
       - "scripts/verify-live-lock-safety.py"
+      - "scripts/verify-bodyweight-final-lock.py"
       - "wrangler.live-deadline.jsonc"
       - "wrangler.live-deadline-backup.jsonc"
       - ".github/workflows/deploy-live-deadline.yml"
@@ -51,10 +57,15 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck
+      - name: Verify non-race-day gate is before D1
+        run: python3 scripts/verify-race-day-gate.py
+      - name: Verify hard T-15 generation boundary
+        run: python3 scripts/verify-bodyweight-final-lock.py
       - name: Verify static live isolation and quota safety
         run: python3 scripts/verify-live-lock-safety.py
       - name: Verify live deadline regression suite
         run: |
+          npx --yes tsx tests/race-day-gate-tests.ts
           npx --yes tsx tests/jra-official-odds-fetch-tests.ts
           npx --yes tsx tests/completed-worker-deadline-guard-tests.ts
       - name: Validate primary isolated Worker bundle
