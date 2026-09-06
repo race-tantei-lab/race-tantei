@@ -73,7 +73,9 @@ export default {
       return;
     }
 
-    await markPrimaryAlive(env.DB);
+    // A heartbeat means the primary finished its live tick successfully. If the
+    // tick throws, the heartbeat stays stale and the standby can take over.
     await liveDeadlineV2.scheduled(controller, env);
+    await markPrimaryAlive(env.DB);
   },
 } satisfies ExportedHandler<LiveRoleEnv>;
