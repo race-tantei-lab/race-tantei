@@ -1,0 +1,56 @@
+name: Migrate live runtime guards
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/install-race-day-runtime-guards.sql"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+
+concurrency:
+  group: migrate-race-tantei-live-runtime-guards
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Install live runtime guards
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler d1 execute race-tantei-phase0 --remote --file=scripts/install-race-day-runtime-guards.sql --config wrangler.live-deadline.jsonc
+      - name: Verify required guards
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --config wrangler.live-deadline.jsonc --command "SELECT type,name FROM sqlite_master WHERE name IN ('rt_live_preview_archive','idx_live_preview_archive_race_id','rt_live_deadline_lease','rt_guard_final_bets_reflection_insert','rt_guard_final_bets_reflection_update','rt_guard_final_state_reflection_insert','rt_guard_final_state_reflection_update','rt_guard_final_bets_immutable_update','rt_guard_final_bets_immutable_delete','rt_guard_worker_final_immutable_update','rt_guard_worker_final_immutable_delete','rt_guard_probability_fallback_insert','rt_guard_probability_fallback_update','rt_guard_official_odds_final_insert','rt_guard_official_odds_final_update') ORDER BY type,name" > /tmp/live-runtime-guards.json
+          python3 - <<'PY'
+          import json
+          rows=json.load(open('/tmp/live-runtime-guards.json'))[0]['results']
+          names={r['name'] for r in rows}
+          required={
+            'rt_live_preview_archive','idx_live_preview_archive_race_id','rt_live_deadline_lease',
+            'rt_guard_final_bets_reflection_insert','rt_guard_final_bets_reflection_update',
+            'rt_guard_final_state_reflection_insert','rt_guard_final_state_reflection_update',
+            'rt_guard_final_bets_immutable_update','rt_guard_final_bets_immutable_delete',
+            'rt_guard_worker_final_immutable_update','rt_guard_worker_final_immutable_delete',
+            'rt_guard_probability_fallback_insert','rt_guard_probability_fallback_update',
+            'rt_guard_official_odds_final_insert','rt_guard_official_odds_final_update',
+          }
+          missing=sorted(required-names)
+          if missing: raise SystemExit('missing live runtime guards: '+','.join(missing))
+          print('LIVE_RUNTIME_GUARDS_OK', len(required))
+          PY
