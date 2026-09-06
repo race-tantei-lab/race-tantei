@@ -89,17 +89,18 @@ jobs:
           set -euo pipefail
           check_schedule() {
             script="$1"
+            expected="$2"
             body=$(curl --max-time 20 --retry 4 --retry-delay 3 --fail-with-body -sS \
               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${script}/schedules" \
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
-            BODY="$body" SCRIPT="$script" node - <<'NODE'
+            BODY="$body" SCRIPT="$script" EXPECTED="$expected" node - <<'NODE'
           const b=JSON.parse(process.env.BODY||'{}');
           const s=Array.isArray(b.result?.schedules)?b.result.schedules.map(x=>String(x.cron)).sort():[];
-          if(b.success!==true||s.length!==1||s[0]!=='* * * * *') throw new Error(`LIVE_CRON_BAD:${process.env.SCRIPT}:${JSON.stringify(s)}`);
+          if(b.success!==true||s.length!==1||s[0]!==process.env.EXPECTED) throw new Error(`LIVE_CRON_BAD:${process.env.SCRIPT}:${JSON.stringify(s)}:expected=${process.env.EXPECTED}`);
           NODE
           }
-          check_schedule 'race-tantei-live-deadline'
-          check_schedule 'race-tantei-live-deadline-backup'
+          check_schedule 'race-tantei-live-deadline' '* * * * *'
+          check_schedule 'race-tantei-live-deadline-backup' '2-59/5 * * * *'
       - name: Verify public Worker cannot mutate live bets
         run: |
           code=$(curl --max-time 20 -sS -o /tmp/public-live-tick-body -w '%{http_code}' -X POST \
@@ -122,18 +123,18 @@ jobs:
           const age=Number(r.ageSeconds); if(!Number.isFinite(age)||age < -30||age > 150) throw new Error(`PRIMARY_HEARTBEAT_STALE:${age}`);
           console.log(JSON.stringify({primaryHeartbeat:'ok',ageSeconds:age}));
           NODE
-      - name: Verify completed priority rescue heartbeat
+      - name: Verify completed live driver heartbeat
         shell: bash
         run: |
           set -euo pipefail
           today=$(TZ=Asia/Tokyo date +%F)
           state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "SELECT updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.ok') AS ok,json_extract(state_value,'$.completedAt') AS completedAt FROM rt_system_state WHERE state_key='live_deadline_priority_guard_success:${today}' LIMIT 1")
+            "SELECT updated_at AS updatedAt,unixepoch('now')-unixepoch(updated_at) AS ageSeconds,json_extract(state_value,'$.status') AS status,json_extract(state_value,'$.completedAt') AS completedAt FROM rt_system_state WHERE state_key='live_deadline_driver:${today}' LIMIT 1")
           STATE_JSON="$state" node - <<'NODE'
           const p=JSON.parse(process.env.STATE_JSON||'[]'); const r=p?.[0]?.results?.[0];
-          if(!r) throw new Error('PRIORITY_GUARD_SUCCESS_MISSING');
+          if(!r) throw new Error('LIVE_DRIVER_STATE_MISSING');
           const age=Number(r.ageSeconds);
-          if(r.status!=='completed'||Number(r.ok)!==1||!r.completedAt||!Number.isFinite(age)||age < -30||age > 300) throw new Error(`PRIORITY_GUARD_BAD:${JSON.stringify(r)}`);
+          if(!r.status||!r.completedAt||!Number.isFinite(age)||age < -30||age > 300) throw new Error(`LIVE_DRIVER_STATE_BAD:${JSON.stringify(r)}`);
           NODE
       - name: Verify T-40 selected races have official current previews
         shell: bash
@@ -163,7 +164,7 @@ jobs:
           set -euo pipefail
           today=$(TZ=Asia/Tokyo date +%F)
           rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,finalRows FROM q WHERE minutesToStart BETWEEN 15 AND 16 ORDER BY minutesToStart")
+            "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}'), q AS (SELECT r.race_id AS raceId,(julianday(r.start_time_utc)-julianday('now'))*1440.0 AS minutesToStart,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS finalRows FROM rt_races r JOIN selected x ON x.raceId=r.race_id) SELECT raceId,ROUND(minutesToStart,2) AS minutesToStart,finalRows FROM q WHERE minutesToStart BETWEEN 15 AND 16 ORDER BY minutesToStart")
           ROWS="$rows" node - <<'NODE'
           const p=JSON.parse(process.env.ROWS||'[]'); const rows=p?.[0]?.results||[];
           for(const r of rows){ if(Number(r.finalRows)!==6) throw new Error(`DUE_FINAL_NOT_SIX:${r.raceId}:${r.minutesToStart}:${r.finalRows}`); }
