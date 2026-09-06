@@ -594,6 +594,11 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       if (remaining > FINAL_LOCK_ARM_MS && existingPreview && previewIsFreshEnough(existingPreview, remaining, raceNow)) continue;
       if (generatedThisTick >= MAX_PREVIEW_GENERATIONS_PER_TICK && remaining > FINAL_LOCK_ARM_MS) continue;
       const generationStartedAt = new Date();
+      const remainingAtGenerationStart = startMs - generationStartedAt.getTime();
+      if (remainingAtGenerationStart <= DEADLINE_MS) {
+        errors.push({ raceId, error: `WORKER_FRESH_GENERATION_STARTED_AFTER_T15:${raceId}` });
+        continue;
+      }
       let fresh: PreviewSnapshot | null = null;
       try {
         model ??= await loadWorkerModel(env.DB);
