@@ -11,15 +11,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Trace legacy migration callers
+      - name: Locate remaining quota hot paths
         shell: bash
         run: |
           set -euo pipefail
-          echo '=== migrateLegacyData exact references ==='
-          git grep -n -F "migrateLegacyData" -- ':!node_modules/**' ':!.git/**' || true
-          echo '=== migrate module imports ==='
-          git grep -n -E "from .*migrate|import.*migrate" -- 'src/**' 'functions/**' 'scripts/**' || true
-          echo '=== legacy final-bet transfer shapes ==='
-          git grep -n -E "rt_bets b.*rt_predictions|INSERT( OR IGNORE)? INTO rt_public_bets|INSERT INTO rt_public_bets" -- 'src/**' 'functions/**' 'scripts/**' | head -n 250 || true
-          echo '=== public/live scheduled entrypoints ==='
-          git grep -n -E "async scheduled|scheduled\(" -- 'src/public-site-entry-recovery-20260906.ts' 'src/live-deadline-entry-v2.ts' 'src/live-deadline-entry-v3.ts' 'src/v1/**' | head -n 250 || true
+          echo '=== distinct entry url ==='
+          git grep -n -E "DISTINCT.*entry_url|entry_url.*DISTINCT" -- 'src/**' 'functions/**' 'scripts/**' || true
+          echo '=== finished completeness / payouts ==='
+          git grep -n -E "payoutTypes|activeRunners|COUNT\(DISTINCT.*bet_type|GROUP_CONCAT.*bet_type|status=.finished" -- 'src/**' 'functions/**' 'scripts/**' | head -n 300 || true
+          echo '=== historical race1 entry anchor ==='
+          git grep -n -E "race_no.?=.?1|pw01dde" -- 'src/**' 'functions/**' 'scripts/**' | head -n 260 || true
+          echo '=== result/settlement maintenance ==='
+          git grep -n -E "settle|settlement|awaiting_result|getDueRaceSources|saveResultBundle|run.*Result|result repair|result_repair" -- 'src/**' 'functions/**' 'scripts/**' | head -n 420 || true
+          echo '=== runtime schema calls ==='
+          git grep -n -E "ensureSchema\(|CREATE TABLE IF NOT EXISTS|CREATE INDEX IF NOT EXISTS|CREATE TRIGGER IF NOT EXISTS" -- 'src/**' | head -n 350 || true
