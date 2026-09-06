@@ -42,7 +42,12 @@ jobs:
               if e.code==404: continue
               raise
             for schedule in schedules:
-              cron=str(schedule.get('cron') or '')
+              if isinstance(schedule,str):
+                cron=schedule
+              elif isinstance(schedule,dict):
+                cron=str(schedule.get('cron') or '')
+              else:
+                cron=''
               if cron: active.append({'worker':name,'cron':cron})
           active.sort(key=lambda x:(x['worker'],x['cron']))
           print('ACTIVE_CRON_COUNT',len(active))
