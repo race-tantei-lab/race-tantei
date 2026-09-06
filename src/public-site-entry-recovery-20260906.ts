@@ -1,5 +1,8 @@
 import publicSite from "./public-site-entry-v37.js";
 import { loadConfiguredOfficialRace, runConfiguredEntrySeedWriteOnly } from "./v1/configured-entry-seed-write-only.js";
+import { runUpcomingCalendarRepair } from "./v1/upcoming-calendar-repair.js";
+import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.js";
+import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import type { Env, RaceBundle } from "./v1/types.js";
 
 const RECOVERY_PATH = "/_ops/entry-seed-sync-20260906-7f4c9d2a";
@@ -69,6 +72,17 @@ async function enrichRaceDetail(request: Request, env: Env, ctx: ExecutionContex
   return new Response(html, { status: 200, headers });
 }
 
+async function runBoundedPublicMaintenance(env: Env, now: Date): Promise<void> {
+  // Deliberately bypass publicSite.scheduled: v37 core still contains legacy
+  // per-cron CREATE INDEX calls. Persistent indexes are deploy-time schema.
+  // These three bounded repairs are the normal automatic maintenance duties.
+  const errors: string[] = [];
+  try { await runUpcomingCalendarRepair(env, now); } catch (error) { errors.push(`calendar:${String(error)}`); }
+  try { await runUpcomingEntryWorkerRepair(env, now); } catch (error) { errors.push(`entry:${String(error)}`); }
+  try { await runUpcomingEntryDerivedRepair(env, now); } catch (error) { errors.push(`derived:${String(error)}`); }
+  if (errors.length) console.error("PUBLIC_MAINTENANCE_PARTIAL", JSON.stringify(errors));
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -87,7 +101,8 @@ export default {
     if (request.method === "GET" && HOME_PATHS.has(url.pathname)) return retargetFallbackHome(response);
     return response;
   },
-  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);
+  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+    const now = Number.isFinite(controller.scheduledTime) ? new Date(controller.scheduledTime) : new Date();
+    await runBoundedPublicMaintenance(env, now);
   },
 } satisfies ExportedHandler<Env>;
