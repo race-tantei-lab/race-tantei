@@ -8,6 +8,7 @@ type RaceDayGateResult = {
     | "official_calendar"
     | "no_calendar"
     | "not_listed_in_official_month_calendar"
+    | "official_annual_schedule_fallback"
     | "probe_failed_fail_open"
     | "unparsed_calendar_fail_open";
 };
@@ -17,6 +18,7 @@ type JraPageFetcher = (url: string) => Promise<FetchPageResult>;
 
 const CACHE_MS = 6 * 60 * 60 * 1000;
 const MONTH_SLUGS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const;
+const JRA_2026_SPECIAL_MONDAYS = new Set(["2026-01-12", "2026-09-21", "2026-10-12", "2026-11-23"]);
 let cachedGate: CachedGate | null = null;
 
 function errorCode(error: unknown): string {
@@ -43,6 +45,35 @@ function monthCalendarListsDay(html: string, raceDate: string): boolean {
   return html.includes(file) || html.includes(`/${monthNumber}/${file}`);
 }
 
+// JRA's published 2026 annual program starts Sun Jan 4, ends Sun Dec 27,
+// and adds four holiday Mondays (Jan 12, Sep 21, Oct 12, Nov 23). Within
+// those bounds central racing is scheduled every Saturday/Sunday. This is a
+// local fallback only for 2026 so JRA-side 403/temporary blocking cannot make
+// non-race weekdays burn D1 quota. Unknown years still fail open.
+function officialAnnualScheduleFallback(raceDate: string): boolean | null {
+  if (!raceDate.startsWith("2026-")) return null;
+  if (raceDate < "2026-01-04" || raceDate > "2026-12-27") return false;
+  if (JRA_2026_SPECIAL_MONDAYS.has(raceDate)) return true;
+  const [yearText, monthText, dayText] = raceDate.split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return weekday === 0 || weekday === 6;
+}
+
+function cacheResult(result: RaceDayGateResult, checkedAt: number, mayUseProcessCache: boolean): RaceDayGateResult {
+  if (mayUseProcessCache) cachedGate = { ...result, checkedAt };
+  return result;
+}
+
+function fallbackForProbeFailure(raceDate: string, nowMs: number, mayUseProcessCache: boolean): RaceDayGateResult | null {
+  const known = officialAnnualScheduleFallback(raceDate);
+  if (known === null) return null;
+  return cacheResult({ raceDate, shouldRun: known, reason: "official_annual_schedule_fallback" }, nowMs, mayUseProcessCache);
+}
+
 export async function shouldRunOnJraRaceDay(
   now = new Date(),
   fetchPage: JraPageFetcher = fetchJraPage,
@@ -59,9 +90,7 @@ export async function shouldRunOnJraRaceDay(
     const page = await fetchPage(calendarUrl);
     const races = parseOfficialCalendar(page.html, raceDate, calendarUrl);
     if (races.length > 0) {
-      const result: CachedGate = { raceDate, shouldRun: true, reason: "official_calendar", checkedAt: nowMs };
-      if (mayUseProcessCache) cachedGate = result;
-      return result;
+      return cacheResult({ raceDate, shouldRun: true, reason: "official_calendar" }, nowMs, mayUseProcessCache);
     }
 
     // A daily URL can theoretically return a generic 200 page. Resolve that
@@ -70,11 +99,11 @@ export async function shouldRunOnJraRaceDay(
       const monthUrl = officialMonthCalendarUrl(raceDate);
       const monthPage = await fetchPage(monthUrl);
       if (!monthCalendarListsDay(monthPage.html, raceDate)) {
-        const result: CachedGate = { raceDate, shouldRun: false, reason: "not_listed_in_official_month_calendar", checkedAt: nowMs };
-        if (mayUseProcessCache) cachedGate = result;
-        return result;
+        return cacheResult({ raceDate, shouldRun: false, reason: "not_listed_in_official_month_calendar" }, nowMs, mayUseProcessCache);
       }
     } catch (monthError) {
+      const fallback = fallbackForProbeFailure(raceDate, nowMs, mayUseProcessCache);
+      if (fallback) return fallback;
       console.warn("RACE_DAY_GATE_MONTH_PROBE_FAILED_FAIL_OPEN", JSON.stringify({ raceDate, error: errorCode(monthError) }));
       return { raceDate, shouldRun: true, reason: "probe_failed_fail_open" };
     }
@@ -86,12 +115,13 @@ export async function shouldRunOnJraRaceDay(
     return { raceDate, shouldRun: true, reason: "unparsed_calendar_fail_open" };
   } catch (error) {
     if (isDefiniteNoCalendar(error)) {
-      const result: CachedGate = { raceDate, shouldRun: false, reason: "no_calendar", checkedAt: nowMs };
-      if (mayUseProcessCache) cachedGate = result;
-      return result;
+      return cacheResult({ raceDate, shouldRun: false, reason: "no_calendar" }, nowMs, mayUseProcessCache);
     }
 
-    // Network/JRA blocking failures must never disable race-day generation.
+    const fallback = fallbackForProbeFailure(raceDate, nowMs, mayUseProcessCache);
+    if (fallback) return fallback;
+
+    // Unknown-year network/JRA blocking failures must never disable race-day generation.
     console.warn("RACE_DAY_GATE_PROBE_FAILED_FAIL_OPEN", JSON.stringify({ raceDate, calendarUrl, error: errorCode(error) }));
     return { raceDate, shouldRun: true, reason: "probe_failed_fail_open" };
   }
