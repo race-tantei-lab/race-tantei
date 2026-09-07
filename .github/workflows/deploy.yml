@@ -12,6 +12,7 @@ on:
       - "package-lock.json"
       - "tsconfig.json"
       - "wrangler*.jsonc"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
 concurrency:
@@ -67,6 +68,10 @@ jobs:
 
       - name: Verify non-race-day gate before D1
         run: python scripts/verify-race-day-gate.py
+
+      - name: Probe current JRA race-day gate without D1
+        run: |
+          npx --yes tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{const r=await shouldRunOnJraRaceDay(new Date()); console.log('PUBLIC_RACE_DAY_GATE', JSON.stringify(r));})().catch(e=>{console.error(e);process.exit(1)})"
 
       - name: Verify live-lock safety before deploy
         run: python scripts/verify-live-lock-safety.py
