@@ -1,0 +1,38 @@
+name: Apply persistent D1 runtime guards once 2026-09-07
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/apply-runtime-guards-once-20260907.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Apply deployment-only persistent guards
+        run: npx wrangler d1 execute race-tantei-phase0 --remote --file scripts/install-race-day-runtime-guards.sql
+      - name: Verify all expected persistent objects
+        shell: bash
+        run: |
+          set -euo pipefail
+          rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT name,type FROM sqlite_master WHERE name IN ('rt_live_preview_archive','rt_live_deadline_lease','rt_guard_final_bet_insert_deadline','rt_guard_final_state_insert_deadline','rt_guard_official_odds_final_insert','rt_guard_official_odds_final_update','rt_guard_locked_public_bet_terms','rt_guard_locked_worker_final_state','rt_guard_probability_fallback_final_insert','rt_guard_probability_fallback_final_update','rt_ignore_unchanged_runner','rt_ignore_unchanged_race','rt_ignore_unchanged_system_state','rt_ignore_unchanged_race_source','rt_ignore_unchanged_result','rt_ignore_unchanged_payout') ORDER BY name")
+          echo "$rows"
+          for name in rt_live_preview_archive rt_live_deadline_lease rt_guard_final_bet_insert_deadline rt_guard_final_state_insert_deadline rt_guard_official_odds_final_insert rt_guard_official_odds_final_update rt_guard_locked_public_bet_terms rt_guard_locked_worker_final_state rt_guard_probability_fallback_final_insert rt_guard_probability_fallback_final_update rt_ignore_unchanged_runner rt_ignore_unchanged_race rt_ignore_unchanged_system_state rt_ignore_unchanged_race_source rt_ignore_unchanged_result rt_ignore_unchanged_payout; do
+            printf '%s' "$rows" | grep -Fq "$name"
+          done
