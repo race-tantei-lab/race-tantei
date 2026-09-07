@@ -1,0 +1,44 @@
+name: Audit non-race-day runtime 2026-09-07
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/_audit-non-race-day-runtime-20260907.yml"
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Static active-runtime inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NOW_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "HEAD=$(git rev-parse HEAD)"
+          echo "--- WIN5 references ---"
+          rg -n -i 'win5|rt_win5_driver_lease' src functions scripts .github/workflows || true
+          echo "--- Runtime schema helpers / DDL references ---"
+          rg -n 'ensureLivePreviewSafetySchema|CREATE TABLE IF NOT EXISTS|CREATE INDEX IF NOT EXISTS|CREATE TRIGGER' src functions || true
+          echo "--- Scheduled entrypoints ---"
+          rg -n 'async scheduled|shouldRunOnJraRaceDay|runBoundedPublicMaintenance|runIsolatedLiveDeadlineTick' src/live-deadline-entry-v3.ts src/public-site-entry-recovery-20260906.ts src/v1/race-day-gate.ts || true
+      - name: Read-only D1 runtime timestamps
+        shell: bash
+        run: |
+          set -euo pipefail
+          runq() {
+            echo "--- SQL: $1"
+            npx -y wrangler@latest d1 execute race-tantei-phase0 --remote --json --command "$1"
+          }
+          runq "SELECT datetime('now') AS db_now_utc"
+          runq "SELECT state_key, updated_at FROM rt_system_state WHERE state_key LIKE '%win5%' OR state_key LIKE 'live_deadline_primary_heartbeat:%' ORDER BY updated_at DESC LIMIT 30"
+          runq "SELECT name,type FROM sqlite_master WHERE name='rt_win5_driver_lease'"
+          runq "SELECT * FROM rt_win5_driver_lease LIMIT 10"
+          runq "SELECT state_key, updated_at FROM rt_system_state WHERE updated_at >= '2026-09-07 10:08:00' ORDER BY updated_at DESC LIMIT 50"
