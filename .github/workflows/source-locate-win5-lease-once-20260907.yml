@@ -1,0 +1,22 @@
+name: Locate WIN5 lease runtime source once 2026-09-07
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/source-locate-win5-lease-once-20260907.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  locate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate exact runtime source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git grep -n -C 8 -E 'rt_win5_driver_lease|win5_driver_lease' -- src functions scripts '*.ts' '*.js' '*.sql' || true
