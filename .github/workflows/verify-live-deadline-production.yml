@@ -118,7 +118,8 @@ jobs:
           echo "$gate"
           should_run=$(GATE="$gate" node -e 'const g=JSON.parse(process.env.GATE||"{}"); process.stdout.write(g.shouldRun ? "true" : "false")')
           echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
-      - name: Verify persistent D1 guards
+      - name: Verify persistent D1 guards on race days
+        if: steps.race_day.outputs.should_run == 'true'
         shell: bash
         run: |
           set -euo pipefail
