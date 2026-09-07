@@ -50,6 +50,7 @@ def main() -> None:
     require('"* * * * *"' in primary_cfg, "PRIMARY_CRON_CHANGED")
     require('"2-59/5 * * * *"' in backup_cfg, "BACKUP_CRON_NOT_FIVE_MINUTES")
 
+    # On non-race days both scheduled entrypoints must return before any D1-dependent work.
     print("RACE_DAY_GATE_OK no_d1_before_official_race_day=true primary=1m backup=5m ambiguous_fail_open=true")
 
 
