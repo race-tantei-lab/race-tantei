@@ -28,11 +28,11 @@ def main() -> None:
 
     if public.get("main") != "src/public-site-entry-v34.ts":
         raise AssertionError("unexpected public Worker entry")
-    if primary.get("name") != "race-tantei-win5" or primary.get("main") != "src/win5-entry-v2.ts":
+    if primary.get("name") != "race-tantei-win5" or primary.get("main") != "src/win5-entry-v3.ts":
         raise AssertionError("primary WIN5 Worker identity mismatch")
     if primary.get("triggers", {}).get("crons") != ["* * * * *"]:
         raise AssertionError("primary WIN5 Worker must run every minute")
-    if backup.get("name") != "race-tantei-win5-backup" or backup.get("main") != "src/win5-entry-v2.ts":
+    if backup.get("name") != "race-tantei-win5-backup" or backup.get("main") != "src/win5-entry-v3.ts":
         raise AssertionError("backup WIN5 Worker identity mismatch")
     if backup.get("triggers", {}).get("crons") != ["3-59/5 * * * *"]:
         raise AssertionError("backup WIN5 Worker must be staggered every five minutes")
@@ -42,6 +42,22 @@ def main() -> None:
         bindings = cfg.get("d1_databases", [])
         if len(bindings) != 1 or bindings[0].get("database_id") != expected_db:
             raise AssertionError(f"{label} WIN5 D1 binding mismatch")
+
+    wrapper = read("src/win5-entry-v3.ts")
+    for needle in (
+        'const DRIVER_VERSION = "win5-entry-v3-race-day-gate-20260908";',
+        'import { shouldRunOnJraRaceDay } from "./v1/race-day-gate.js";',
+        "const raceDay = await shouldRunOnJraRaceDay(scheduledAt);",
+        "if (!raceDay.shouldRun)",
+        "WIN5_NON_RACE_DAY_SKIP",
+        "await win5V2.scheduled(controller, env);",
+    ):
+        require(wrapper, needle, "WIN5 race-day gate wrapper")
+    forbid(wrapper, "env.DB", "WIN5 race-day gate wrapper")
+    gate_pos = wrapper.index("const raceDay = await shouldRunOnJraRaceDay(scheduledAt);")
+    core_pos = wrapper.index("await win5V2.scheduled(controller, env);")
+    if gate_pos >= core_pos:
+        raise AssertionError("WIN5 race-day gate must run before core scheduled driver")
 
     driver = read("src/win5-entry-v2.ts")
     for needle in (
@@ -97,7 +113,10 @@ def main() -> None:
 
     deploy = read(".github/workflows/deploy-win5.yml")
     for needle in (
+        "src/win5-entry-v3.ts",
+        "src/v1/race-day-gate.ts",
         "src/v1/win5-official-target-repair.ts",
+        "Verify WIN5 isolation safety",
         "Deploy primary WIN5 Worker",
         "Deploy backup WIN5 Worker",
         "wrangler.win5.jsonc",
@@ -108,6 +127,8 @@ def main() -> None:
 
     verify = read(".github/workflows/verify-win5.yml")
     for needle in (
+        "src/win5-entry-v3.ts",
+        "src/v1/race-day-gate.ts",
         "Verify isolated WIN5 Workers are healthy and current",
         "Verify Cloudflare WIN5 cron registrations",
         "Verify fresh WIN5 driver execution",
@@ -120,6 +141,7 @@ def main() -> None:
         "WIN5_SAFETY_OK",
         "primary_cron=1m",
         "backup_cron=5m_staggered",
+        "non_race_day_d1_precheck=true",
         "lease=true",
         "public_win5_mutation=false",
         "official_target_row_parse=true",
