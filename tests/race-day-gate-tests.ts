@@ -46,12 +46,45 @@ async function main(): Promise<void> {
   assert.equal(parserFailureOnListedRaceDay.shouldRun, true);
   assert.equal(parserFailureOnListedRaceDay.reason, "unparsed_calendar_fail_open");
 
-  const networkFailure = await shouldRunOnJraRaceDay(
+  const blockedNonRaceMonday = await shouldRunOnJraRaceDay(
     new Date("2026-09-06T15:00:00.000Z"),
+    async () => { throw new Error("HTTP_403"); },
+  );
+  assert.equal(blockedNonRaceMonday.raceDate, "2026-09-07");
+  assert.equal(blockedNonRaceMonday.shouldRun, false);
+  assert.equal(blockedNonRaceMonday.reason, "official_annual_schedule_fallback");
+
+  const blockedRaceSaturday = await shouldRunOnJraRaceDay(
+    new Date("2026-09-11T15:00:00.000Z"),
+    async () => { throw new Error("HTTP_403"); },
+  );
+  assert.equal(blockedRaceSaturday.raceDate, "2026-09-12");
+  assert.equal(blockedRaceSaturday.shouldRun, true);
+  assert.equal(blockedRaceSaturday.reason, "official_annual_schedule_fallback");
+
+  const blockedSpecialMonday = await shouldRunOnJraRaceDay(
+    new Date("2026-09-20T15:00:00.000Z"),
+    async () => { throw new Error("HTTP_403"); },
+  );
+  assert.equal(blockedSpecialMonday.raceDate, "2026-09-21");
+  assert.equal(blockedSpecialMonday.shouldRun, true);
+  assert.equal(blockedSpecialMonday.reason, "official_annual_schedule_fallback");
+
+  const blockedBeforeSeason = await shouldRunOnJraRaceDay(
+    new Date("2026-01-02T15:00:00.000Z"),
+    async () => { throw new Error("HTTP_403"); },
+  );
+  assert.equal(blockedBeforeSeason.raceDate, "2026-01-03");
+  assert.equal(blockedBeforeSeason.shouldRun, false);
+  assert.equal(blockedBeforeSeason.reason, "official_annual_schedule_fallback");
+
+  const unknownYearNetworkFailure = await shouldRunOnJraRaceDay(
+    new Date("2027-09-06T15:00:00.000Z"),
     async () => { throw new Error("HTTP_503"); },
   );
-  assert.equal(networkFailure.shouldRun, true);
-  assert.equal(networkFailure.reason, "probe_failed_fail_open");
+  assert.equal(unknownYearNetworkFailure.raceDate, "2027-09-07");
+  assert.equal(unknownYearNetworkFailure.shouldRun, true);
+  assert.equal(unknownYearNetworkFailure.reason, "probe_failed_fail_open");
 
   console.log("RACE_DAY_GATE_TESTS_OK");
 }
