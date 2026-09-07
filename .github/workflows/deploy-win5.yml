@@ -5,8 +5,11 @@ on:
     branches: [main]
     paths:
       - "src/win5-entry-v2.ts"
+      - "src/win5-entry-v3.ts"
+      - "src/v1/race-day-gate.ts"
       - "src/v1/completed-win5.ts"
       - "src/v1/win5-official-target-repair.ts"
+      - "scripts/verify-win5-safety.py"
       - "wrangler.win5.jsonc"
       - "wrangler.win5-backup.jsonc"
       - ".github/workflows/deploy-win5.yml"
@@ -37,10 +40,16 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck
+      - name: Verify WIN5 isolation safety
+        run: python3 scripts/verify-win5-safety.py
       - name: Validate primary isolated WIN5 Worker bundle
-        run: npx wrangler deploy --dry-run --config wrangler.win5.jsonc --outdir dist-win5
+        run: |
+          npx wrangler deploy --dry-run --config wrangler.win5.jsonc --outdir dist-win5
+          grep -R -Fq 'WIN5_NON_RACE_DAY_SKIP' dist-win5
       - name: Validate backup isolated WIN5 Worker bundle
-        run: npx wrangler deploy --dry-run --config wrangler.win5-backup.jsonc --outdir dist-win5-backup
+        run: |
+          npx wrangler deploy --dry-run --config wrangler.win5-backup.jsonc --outdir dist-win5-backup
+          grep -R -Fq 'WIN5_NON_RACE_DAY_SKIP' dist-win5-backup
       - name: Deploy primary WIN5 Worker
         uses: cloudflare/wrangler-action@v3
         with:
@@ -59,7 +68,7 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/win5' \
-            -f description='Primary and backup isolated WIN5 Workers deployed' \
+            -f description='Primary and backup race-day-gated WIN5 Workers deployed' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark WIN5 deploy failure
         if: failure()
