@@ -24,11 +24,27 @@ jobs:
           echo "NOW_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "HEAD=$(git rev-parse HEAD)"
           echo "--- WIN5 references ---"
-          rg -n -i 'win5|rt_win5_driver_lease' src functions scripts .github/workflows || true
+          grep -RniE 'win5|rt_win5_driver_lease' src functions scripts .github/workflows 2>/dev/null || true
           echo "--- Runtime schema helpers / DDL references ---"
-          rg -n 'ensureLivePreviewSafetySchema|CREATE TABLE IF NOT EXISTS|CREATE INDEX IF NOT EXISTS|CREATE TRIGGER' src functions || true
+          grep -RniE 'ensureLivePreviewSafetySchema|CREATE TABLE IF NOT EXISTS|CREATE INDEX IF NOT EXISTS|CREATE TRIGGER' src functions 2>/dev/null || true
           echo "--- Scheduled entrypoints ---"
-          rg -n 'async scheduled|shouldRunOnJraRaceDay|runBoundedPublicMaintenance|runIsolatedLiveDeadlineTick' src/live-deadline-entry-v3.ts src/public-site-entry-recovery-20260906.ts src/v1/race-day-gate.ts || true
+          grep -nE 'async scheduled|shouldRunOnJraRaceDay|runBoundedPublicMaintenance|runIsolatedLiveDeadlineTick' src/live-deadline-entry-v3.ts src/public-site-entry-recovery-20260906.ts src/v1/race-day-gate.ts || true
+      - name: Read-only Cloudflare Worker inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
+          scripts=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$base/workers/scripts")
+          echo "$scripts" | jq -r '.result[]?.id' | sort
+          echo "--- WIN5-like worker schedules ---"
+          while read -r w; do
+            [ -n "$w" ] || continue
+            if printf '%s' "$w" | grep -qi 'win5'; then
+              echo "WORKER=$w"
+              curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$base/workers/scripts/$w/schedules" | jq '{success,errors,result}'
+              curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$base/workers/scripts/$w/deployments" | jq '{success,errors,result:(.result|if type=="array" then .[0:3] else . end)}'
+            fi
+          done < <(echo "$scripts" | jq -r '.result[]?.id')
       - name: Read-only D1 runtime timestamps
         shell: bash
         run: |
@@ -38,7 +54,7 @@ jobs:
             npx -y wrangler@latest d1 execute race-tantei-phase0 --remote --json --command "$1"
           }
           runq "SELECT datetime('now') AS db_now_utc"
-          runq "SELECT state_key, updated_at FROM rt_system_state WHERE state_key LIKE '%win5%' OR state_key LIKE 'live_deadline_primary_heartbeat:%' ORDER BY updated_at DESC LIMIT 30"
+          runq "SELECT state_key,state_value,updated_at FROM rt_system_state WHERE state_key IN ('win5_driver_tick:2026-09-07','win5_driver_success:2026-09-07','live_deadline_primary_heartbeat:v1') ORDER BY updated_at DESC"
           runq "SELECT name,type FROM sqlite_master WHERE name='rt_win5_driver_lease'"
           runq "SELECT * FROM rt_win5_driver_lease LIMIT 10"
           runq "SELECT state_key, updated_at FROM rt_system_state WHERE updated_at >= '2026-09-07 10:08:00' ORDER BY updated_at DESC LIMIT 50"
