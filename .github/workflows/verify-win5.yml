@@ -5,6 +5,8 @@ on:
     paths:
       - "src/v1/completed-win5.ts"
       - "src/win5-entry-v2.ts"
+      - "src/win5-entry-v3.ts"
+      - "src/v1/race-day-gate.ts"
       - "src/public-site-entry-v34.ts"
       - "tests/completed-win5-tests.ts"
       - "tests/live-win5-official.ts"
@@ -18,6 +20,8 @@ on:
     paths:
       - "src/v1/completed-win5.ts"
       - "src/win5-entry-v2.ts"
+      - "src/win5-entry-v3.ts"
+      - "src/v1/race-day-gate.ts"
       - "src/public-site-entry-v34.ts"
       - "tests/completed-win5-tests.ts"
       - "tests/live-win5-official.ts"
@@ -79,9 +83,13 @@ jobs:
       - name: Verify live JRA WIN5 targets
         run: npx tsx tests/live-win5-official.ts
       - name: Validate primary WIN5 bundle
-        run: npx wrangler deploy --dry-run --config wrangler.win5.jsonc --outdir dist-win5-verify
+        run: |
+          npx wrangler deploy --dry-run --config wrangler.win5.jsonc --outdir dist-win5-verify
+          grep -R -Fq 'WIN5_NON_RACE_DAY_SKIP' dist-win5-verify
       - name: Validate backup WIN5 bundle
-        run: npx wrangler deploy --dry-run --config wrangler.win5-backup.jsonc --outdir dist-win5-backup-verify
+        run: |
+          npx wrangler deploy --dry-run --config wrangler.win5-backup.jsonc --outdir dist-win5-backup-verify
+          grep -R -Fq 'WIN5_NON_RACE_DAY_SKIP' dist-win5-backup-verify
       - name: Mark WIN5 code verification failure
         if: failure() && github.event_name != 'pull_request'
         run: |
@@ -113,7 +121,7 @@ jobs:
           expected_version=$(python3 - <<'PY'
           import re
           from pathlib import Path
-          text=Path('src/win5-entry-v2.ts').read_text(encoding='utf-8')
+          text=Path('src/win5-entry-v3.ts').read_text(encoding='utf-8')
           m=re.search(r'const\s+DRIVER_VERSION\s*=\s*"([^"]+)"',text)
           if not m: raise SystemExit('WIN5_DRIVER_VERSION_NOT_FOUND')
           print(m.group(1))
@@ -150,7 +158,17 @@ jobs:
           }
           check_schedule 'race-tantei-win5' '* * * * *'
           check_schedule 'race-tantei-win5-backup' '3-59/5 * * * *'
+      - name: Determine JRA race-day status without D1
+        id: race_day
+        shell: bash
+        run: |
+          set -euo pipefail
+          result=$(npx tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{const r=await shouldRunOnJraRaceDay(new Date()); console.log(JSON.stringify(r));})().catch(e=>{console.error(e);process.exit(1)})")
+          echo "$result"
+          should_run=$(RESULT="$result" node -e "const r=JSON.parse(process.env.RESULT); process.stdout.write(r.shouldRun?'true':'false')")
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
       - name: Verify fresh WIN5 driver execution
+        if: steps.race_day.outputs.should_run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -172,6 +190,7 @@ jobs:
           console.log(JSON.stringify({win5Driver:'fresh',ageSeconds:age,status:row.win5Status,targetCount:Number(row.targetCount),snapshotReady:Boolean(row.snapshotReady),snapshotLocked:Boolean(row.snapshotLocked),updatedAt:row.updatedAt}));
           NODE
       - name: Verify public WIN5 API and page
+        if: steps.race_day.outputs.should_run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -204,13 +223,16 @@ jobs:
           grep -Fq 'WIN5予想' <<<"$page"
           grep -Fq '対象5レース' <<<"$page"
           grep -Fq '買い目' <<<"$page"
+      - name: Report non-race-day D1 skip
+        if: steps.race_day.outputs.should_run != 'true'
+        run: echo 'WIN5_NON_RACE_DAY_PRODUCTION_VERIFY_SKIP_D1'
       - name: Mark WIN5 production readiness success
         if: success()
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success \
             -f context='production/win5-readiness' \
-            -f description='WIN5 dual Workers current, crons active, driver fresh, public output valid' \
+            -f description='WIN5 Workers current; non-race days skip D1, race days verify live output' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark WIN5 production readiness failure
         if: failure()
