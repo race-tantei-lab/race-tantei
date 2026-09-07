@@ -38,11 +38,12 @@ async function main(): Promise<void> {
   assert.equal(genericDailyNotListed.reason, "not_listed_in_official_month_calendar");
 
   const parserFailureOnListedRaceDay = await shouldRunOnJraRaceDay(
-    new Date("2026-09-06T15:00:00.000Z"),
-    async (url) => url.endsWith("0907.html")
+    new Date("2026-09-11T15:00:00.000Z"),
+    async (url) => url.endsWith("0912.html")
       ? page(url, "<html><body>unexpected new JRA markup</body></html>")
-      : page(url, "<html><body><a href=\"0907.html\">9/7</a></body></html>"),
+      : page(url, "<html><body><a href=\"0912.html\">9/12</a></body></html>"),
   );
+  assert.equal(parserFailureOnListedRaceDay.raceDate, "2026-09-12");
   assert.equal(parserFailureOnListedRaceDay.shouldRun, true);
   assert.equal(parserFailureOnListedRaceDay.reason, "unparsed_calendar_fail_open");
 
