@@ -13,8 +13,10 @@ on:
       - "src/v1/completed-final-invariants.ts"
       - "src/v1/jra-official-odds-fetch.ts"
       - "src/v1/jra-official-odds.ts"
+      - "src/v1/race-day-gate.ts"
       - "scripts/install-race-day-runtime-guards.sql"
       - "scripts/verify-live-lock-safety.py"
+      - "scripts/verify-race-day-gate.py"
       - "wrangler.jsonc"
       - "wrangler.live-deadline.jsonc"
       - "wrangler.live-deadline-backup.jsonc"
@@ -57,6 +59,7 @@ jobs:
         run: |
           npm run typecheck
           python3 scripts/verify-live-lock-safety.py
+          python3 scripts/verify-race-day-gate.py
       - name: Wait for production deploy and cron registration
         if: github.event_name == 'push'
         run: sleep 120
@@ -106,24 +109,41 @@ jobs:
           code=$(curl --max-time 20 -sS -o /tmp/public-live-tick-body -w '%{http_code}' -X POST \
             'https://race-tantei-phase0.race-tantei.workers.dev/_ops/live-tick' || true)
           test "$code" = "404"
-      - name: Verify persistent D1 guards and primary heartbeat
+      - name: Resolve JRA race-day gate for verifier
+        id: race_day
+        shell: bash
+        run: |
+          set -euo pipefail
+          gate=$(npx tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{const r=await shouldRunOnJraRaceDay(new Date()); console.log(JSON.stringify(r));})().catch(e=>{console.error(e);process.exit(1)})")
+          echo "$gate"
+          should_run=$(GATE="$gate" node -e 'const g=JSON.parse(process.env.GATE||"{}"); process.stdout.write(g.shouldRun ? "true" : "false")')
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+      - name: Verify persistent D1 guards
         shell: bash
         run: |
           set -euo pipefail
           rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
             "SELECT name,type FROM sqlite_master WHERE name IN ('rt_live_preview_archive','rt_live_deadline_lease','rt_guard_final_bet_insert_deadline','rt_guard_final_state_insert_deadline','rt_guard_official_odds_final_insert','rt_ignore_unchanged_runner','rt_ignore_unchanged_race','rt_ignore_unchanged_system_state') ORDER BY name")
+          echo "$rows"
           for name in rt_live_preview_archive rt_live_deadline_lease rt_guard_final_bet_insert_deadline rt_guard_final_state_insert_deadline rt_guard_official_odds_final_insert rt_ignore_unchanged_runner rt_ignore_unchanged_race rt_ignore_unchanged_system_state; do
             printf '%s' "$rows" | grep -Fq "$name"
           done
+      - name: Verify primary heartbeat on race days
+        if: steps.race_day.outputs.should_run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
           heartbeat=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
             "SELECT unixepoch('now')-unixepoch(updated_at) AS ageSeconds FROM rt_system_state WHERE state_key='live_deadline_primary_heartbeat:v1' LIMIT 1")
+          echo "$heartbeat"
           HEARTBEAT="$heartbeat" node - <<'NODE'
           const p=JSON.parse(process.env.HEARTBEAT||'[]'); const r=p?.[0]?.results?.[0];
           if(!r) throw new Error('PRIMARY_HEARTBEAT_MISSING');
           const age=Number(r.ageSeconds); if(!Number.isFinite(age)||age < -30||age > 150) throw new Error(`PRIMARY_HEARTBEAT_STALE:${age}`);
           console.log(JSON.stringify({primaryHeartbeat:'ok',ageSeconds:age}));
           NODE
-      - name: Verify completed live driver heartbeat
+      - name: Verify completed live driver heartbeat on race days
+        if: steps.race_day.outputs.should_run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -136,7 +156,8 @@ jobs:
           const age=Number(r.ageSeconds);
           if(!r.status||!r.completedAt||!Number.isFinite(age)||age < -30||age > 300) throw new Error(`LIVE_DRIVER_STATE_BAD:${JSON.stringify(r)}`);
           NODE
-      - name: Verify T-40 selected races have official current previews
+      - name: Verify T-40 selected races have official current previews on race days
+        if: steps.race_day.outputs.should_run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -158,7 +179,8 @@ jobs:
           if(bad.length) throw new Error(`PREVIEW_T40_COVERAGE_INVALID:${JSON.stringify(bad)}`);
           console.log(JSON.stringify({PREVIEW_T40_COVERAGE_OK:true,checked:rows.length}));
           NODE
-      - name: Verify every T-16 due selected race has exact six final rows
+      - name: Verify every T-16 due selected race has exact six final rows on race days
+        if: steps.race_day.outputs.should_run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -175,7 +197,7 @@ jobs:
         run: |
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
             -f state=success -f context='production/live-deadline-readiness' \
-            -f description='Primary/standby, D1 guards, T-40 and T-16 verified' \
+            -f description='Primary/standby, D1 guards and race-day duties verified' \
             -f target_url="$STATUS_TARGET_URL" >/dev/null
       - name: Mark production readiness failure
         if: failure()
