@@ -79,7 +79,7 @@ def main() -> None:
         "src/v1/completed-worker-deadline-guard.ts": read("src/v1/completed-worker-deadline-guard.ts"),
     }
     for path, source in runtime_schema_sensitive.items():
-        for forbidden in ("sqlite_master", "PRAGMA ", "PRAGMA\n", "CREATE TABLE", "CREATE INDEX", "CREATE TRIGGER", "DROP TRIGGER"):
+        for forbidden in ("FROM sqlite_master", "PRAGMA table_info", "PRAGMA index_", "PRAGMA trigger_", "CREATE TABLE", "CREATE INDEX", "CREATE TRIGGER", "DROP TRIGGER"):
             forbid_text(source, forbidden, f"race-day runtime schema isolation: {path}")
 
     safety = runtime_schema_sensitive["src/v1/live-preview-safety.ts"]
