@@ -29,35 +29,7 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Resolve expected deployed UI version
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import os
-          import re
-          from pathlib import Path
-
-          wrangler = Path('wrangler.jsonc').read_text(encoding='utf-8')
-          main_match = re.search(r'"main"\s*:\s*"([^"]+)"', wrangler)
-          revision_match = re.search(r'"DEPLOY_REVISION"\s*:\s*"([^"]+)"', wrangler)
-          if not main_match or not revision_match:
-              raise SystemExit('Could not resolve current main entry / DEPLOY_REVISION from wrangler.jsonc')
-
-          entry = main_match.group(1)
-          revision = revision_match.group(1)
-          source = Path(entry).read_text(encoding='utf-8')
-          ui_match = re.search(r'const\s+UI_VERSION\s*=\s*"([^"]+)"', source)
-          if not ui_match:
-              raise SystemExit(f'Could not resolve UI_VERSION from {entry}')
-          ui_version = ui_match.group(1)
-          if ui_version != revision:
-              raise SystemExit(f'UI_VERSION / DEPLOY_REVISION mismatch: {ui_version} != {revision}')
-
-          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as f:
-              f.write(f'EXPECTED_UI_VERSION={ui_version}\n')
-              f.write(f'EXPECTED_UI_ENTRY={entry}\n')
-          print(f'expected ui entry={entry} version={ui_version}')
-          PY
+        run: python3 scripts/resolve-public-ui-version.py --github-env
 
       - name: Mark feature verification pending
         run: |
@@ -86,10 +58,13 @@ jobs:
           console.log('today summary api=ok',JSON.stringify(s));
           NODE
           has_predictions=$(node -e "const s=require('/tmp/summary.json');process.stdout.write(s.hasPredictions?'yes':'no')")
-          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS "$BASE_URL/" -o /tmp/home.html
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS -D /tmp/home.headers "$BASE_URL/" -o /tmp/home.html
+          actual_home_ui=$(awk 'BEGIN{IGNORECASE=1} /^x-race-ui-version:/{gsub(/\r/,""); sub(/^[^:]+:[[:space:]]*/,""); print; exit}' /tmp/home.headers)
+          test "$actual_home_ui" = "$EXPECTED_UI_VERSION"
           if [[ "$has_predictions" == 'yes' ]]; then
             grep -q '今日の結果' /tmp/home.html
           fi
+          echo "PUBLIC_HOME_UI_VERSION_OK source=$EXPECTED_UI_SOURCE ui=$actual_home_ui deploy=$EXPECTED_DEPLOY_REVISION"
 
       - name: Verify compact race tabs and final ticket rationale
         shell: bash
@@ -160,5 +135,5 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
             -f state=failure \
             -f context='production/public-ui-features' \
-            -f description='3タブまたは最終2点の根拠表示の本番確認に失敗' \
+            -f description='公開UIの本番機能確認に失敗' \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
