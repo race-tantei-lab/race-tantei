@@ -1,10 +1,10 @@
 {
   "status": "production",
   "handoffVersion": 5,
-  "asOfJst": "2026-08-30T18:20:00+09:00",
+  "asOfJst": "2026-09-08T10:17:00+09:00",
   "repository": "race-tantei-lab/race-tantei",
   "branch": "main",
-  "verifiedProductionBaselineCommit": "5265321ad2186271aee96f45f98cbeec79c7df83",
+  "verifiedProductionBaselineCommit": "19f85d50d3eb01d8f533e8387c51142313434cda",
   "sourceOfTruth": "HANDOFF.md",
   "handoffVerification": {
     "script": "scripts/verify-canonical-handoff.py",
@@ -13,18 +13,14 @@
     "completionRule": "The handoff is complete only when the verifier succeeds against current main.",
     "verifies": [
       "canonical model identity and productionChanged status",
-      "model weights SHA256",
-      "production state throughDate, artifact IDs, and both state-file SHA256 values",
+      "model weights SHA256 plus production state artifact hashes",
       "completion audit gates and canonical 34,566 / 14,410 race counts",
-      "wrangler.jsonc.main, exact deploy revision, model version, D1 identity, and canonical Worker asset build command",
-      "frozen historical archive identity remains exactly five selected races per venue-day and legacy D1 rows cannot promote canonical skips",
-      "production deploy verifies historical API/detail plus current result ingestion and settlement",
-      "public 10-year summary and runner archive counts",
-      "deployment log production URL, model version, D1 binding, and presence of a Current Version ID; Wrangler may truncate long environment values in its printed binding table",
-      "README and HANDOFF canonical markers",
-      "isolated primary and staggered backup live-deadline Workers, with no public live mutation route",
-      "T-90 official preview acquisition, T-25 normal finalization, T-20 rescue guard, and hard T-15 database boundary",
-      "append-only preview archive, last-good restore, lease exclusion, and T-40/T-30/T-25/T-20/T-15 SLA audit wiring"
+      "wrangler.jsonc actual public entry, deploy revision, model version and D1 identity",
+      "actual primary/backup wrangler entries, roles and cron schedules",
+      "race-day gate before D1 and no runtime sqlite_master/PRAGMA/DDL in live cron",
+      "official JRA odds only, T-15 fresh-generation start boundary and T-10 fresh-reflection boundary",
+      "persistent D1 guard migration source and control-plane live-index verification",
+      "README and HANDOFF current-runtime markers"
     ]
   },
   "model": {
@@ -66,9 +62,18 @@
     "officialOddsOnly": true,
     "syntheticOddsForbidden": true,
     "courses": {
-      "ライト": [1000, 1000],
-      "スタンダード": [2500, 2500],
-      "プレミアム": [5000, 5000]
+      "ライト": [
+        1000,
+        1000
+      ],
+      "スタンダード": [
+        2500,
+        2500
+      ],
+      "プレミアム": [
+        5000,
+        5000
+      ]
     },
     "historicalRoiPct": 431.6505898681471
   },
@@ -84,8 +89,8 @@
     "workerLiveLock": "src/v1/completed-worker-live-lock.ts",
     "legacyShellDependency": "scripts/run-auto-final-live.py",
     "legacyShellRule": "Do not run scripts/run-auto-final-live.py directly as the current production model. The canonical wrapper imports it only as a runtime shell and replaces selection/generator/validation with ten-year-completed implementations.",
-    "deadlineGuardArmMinutes": 20,
-    "liveDeadlineEntry": "src/live-deadline-entry-v2.ts",
+    "deadlineGuardArmMinutes": 25,
+    "liveDeadlineEntry": "src/live-deadline-entry-v3.ts",
     "liveDeadlinePrimaryConfig": "wrangler.live-deadline.jsonc",
     "liveDeadlineBackupConfig": "wrangler.live-deadline-backup.jsonc",
     "liveDeadlineDeployWorkflow": ".github/workflows/deploy-live-deadline.yml",
@@ -93,16 +98,18 @@
     "publicLiveMutationEnabled": false,
     "previewOpenMinutes": 90,
     "previewRequiredMinutes": 30,
-    "normalLockMinutes": 25,
+    "normalLockMinutes": 30,
     "hardDeadlineMinutes": 15,
     "officialOddsOnly": true,
-    "syntheticOddsForbidden": true
+    "syntheticOddsForbidden": true,
+    "liveDeadlineDriverEntry": "src/live-deadline-entry-v2.ts",
+    "finalReflectionDeadlineMinutes": 10
   },
   "site": {
     "workerConfig": "wrangler.jsonc",
     "authoritativeEntryRule": "The current UI entry is always wrangler.jsonc.main. Do not infer the current UI from public-site-entry version filenames. Current wrappers intentionally layer earlier entries, so verification must inspect the active import chain while keeping wrangler.jsonc.main as the identity source of truth.",
-    "entry": "src/public-site-entry-v37.ts",
-    "revision": "ten-year-completed-public-v37-race-day-recovery-20260905",
+    "entry": "src/public-site-entry-recovery-20260906.ts",
+    "revision": "ten-year-completed-public-v37-original-home-restored-20260905",
     "url": "https://race-tantei-phase0.race-tantei.workers.dev",
     "workerName": "race-tantei-phase0",
     "d1DatabaseName": "race-tantei-phase0",
@@ -152,7 +159,7 @@
     "WIN5 target races and ticket rows must remain readable on mobile without horizontal scrolling.",
     "Past published picks and results are immutable.",
     "Live race-bet generation is owned only by the isolated live-deadline Workers; the public-site Worker and public requests cannot create or finalize race bets.",
-    "Official JRA-odds previews begin from 90 minutes before post time, a preview is required by 30 minutes, normal immutable finalization is targeted by 25 minutes, the DB-only rescue guard operates from 20 to 15 minutes, and T-15 is a hard no-new-final boundary.",
+    "Official JRA-odds previews begin from 90 minutes before post time and are required by 30 minutes. The fresh finalization window begins around T-30; stored official-preview rescue is armed from T-25 through the exact T-15 boundary. No fresh calculation may start at T-15 or later, while a fresh calculation that started before T-15 may be reflected only through the T-10 boundary.",
     "Primary live-deadline scheduling runs every minute and a separate staggered backup Worker runs every five minutes; a D1 lease prevents overlapping mutation while append-only preview archives preserve the newest last-good official preview.",
     "JRA official odds are the only allowed market odds; synthetic, estimated, and probability-derived substitute odds are forbidden by both application validation and D1 final-state guards."
   ],
@@ -167,8 +174,8 @@
     "Do not rewrite historical picks after publication.",
     "Do not use synthetic odds.",
     "Do not declare the handoff complete unless scripts/verify-canonical-handoff.py succeeds and emits CANONICAL_HANDOFF_OK on current main.",
-    "Treat src/live-deadline-entry-v2.ts plus wrangler.live-deadline.jsonc and wrangler.live-deadline-backup.jsonc as the canonical race-bet live scheduler; public-site requests must not mutate live race bets.",
-    "T-15 is a hard creation boundary: never create or backfill a new final race bet after fewer than 15 minutes remain before post time."
+    "Treat src/live-deadline-entry-v3.ts as the canonical live scheduler wrapper and src/live-deadline-entry-v2.ts as its isolated live driver; both wrangler.live-deadline*.jsonc files must point to v3, and public-site requests must not mutate live race bets.",
+    "T-15 is the hard fresh-generation start boundary: never start a new model/odds calculation at T-15 or later; only a fresh calculation started before T-15 may reflect until T-10, while stored/nonfresh finalization may not cross below T-15."
   ],
   "notAuthoritative": [
     {
