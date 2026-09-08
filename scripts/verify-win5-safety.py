@@ -26,7 +26,7 @@ def main() -> None:
     backup = json.loads(read("wrangler.win5-backup.jsonc"))
     public = json.loads(read("wrangler.jsonc"))
 
-    if public.get("main") != "src/public-site-entry-v34.ts":
+    if public.get("main") != "src/public-site-entry-recovery-20260906.ts":
         raise AssertionError("unexpected public Worker entry")
     if primary.get("name") != "race-tantei-win5" or primary.get("main") != "src/win5-entry-v3.ts":
         raise AssertionError("primary WIN5 Worker identity mismatch")
