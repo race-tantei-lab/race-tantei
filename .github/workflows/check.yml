@@ -27,6 +27,8 @@ jobs:
         run: python scripts/verify-race-day-gate.py
       - name: Verify live-lock safety
         run: python scripts/verify-live-lock-safety.py
+      - name: Verify live preview priority
+        run: python scripts/verify-live-preview-priority.py
       - name: Verify bodyweight final-lock acquisition
         run: python scripts/verify-bodyweight-final-lock.py
       - name: Verify WIN5 navigation UI
