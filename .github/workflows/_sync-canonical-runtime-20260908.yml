@@ -23,12 +23,12 @@ jobs:
           python-version: '3.13'
       - name: Apply canonical runtime sync
         run: python scripts/sync-canonical-runtime-20260908.py
-      - name: Commit canonical sync
+      - name: Commit canonical source files
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add HANDOFF.md README.md config/canonical-production-manifest.json scripts/verify-canonical-handoff.py .github/workflows/verify-canonical-handoff.yml
+          git add HANDOFF.md README.md config/canonical-production-manifest.json scripts/verify-canonical-handoff.py
           git commit -m 'docs: sync canonical production runtime'
           git push origin HEAD:fix/canonical-runtime-sync-20260908
