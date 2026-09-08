@@ -32,5 +32,13 @@ jobs:
         run: python scripts/verify-win5-ui.py
       - name: Verify public language clarity
         run: python scripts/verify-public-language.py
-      - name: Typecheck and test
-        run: npm run check
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build test bundle
+        run: npm run build:test
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Live JRA tests
+        run: npm run test:live
+      - name: Worker dry run
+        run: npm run build
