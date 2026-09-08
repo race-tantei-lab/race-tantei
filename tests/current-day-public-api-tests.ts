@@ -22,7 +22,11 @@ function rows(status = "pending", returns: number[] = [0, 0, 0, 0, 0, 0], refund
 }
 
 assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T00:30:00Z")).code, "target");
-assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T00:45:00Z")).code, "overdue");
+// T-15 is the inclusive latest start boundary. A calculation that starts on
+// time remains pending until the T-10 reflection deadline.
+assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T00:45:00Z")).code, "pending");
+assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T00:49:59Z")).code, "pending");
+assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T00:50:00Z")).code, "overdue");
 assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T01:00:00Z")).code, "missing");
 assert.equal(projectCurrentPublicState(race, unselected, [], Date.parse("2026-08-15T00:30:00Z")).code, "skip");
 assert.equal(projectCurrentPublicState(race, null, [], Date.parse("2026-08-15T00:30:00Z")).code, "pending");
