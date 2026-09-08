@@ -2,14 +2,22 @@ import { strict as assert } from "node:assert";
 import { decodeJraHtml } from "../src/v1/jra-official-odds.js";
 import { WIN5_PAGE_URL } from "../src/v1/completed-win5.js";
 import { parseWin5TargetIdentitiesFromHtml } from "../src/v1/win5-official-target-repair.js";
+import { shouldRunOnJraRaceDay } from "../src/v1/race-day-gate.js";
 
 function jstNow(now = new Date()): { date: string; hour: number } {
   const shifted = new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString();
   return { date: shifted.slice(0, 10), hour: Number(shifted.slice(11, 13)) };
 }
 
-const now = jstNow();
+const instant = new Date();
+const now = jstNow(instant);
 const date = now.date;
+const raceDay = await shouldRunOnJraRaceDay(instant);
+if (!raceDay.shouldRun) {
+  console.log(JSON.stringify({ status: "LIVE_WIN5_OFFICIAL_NON_RACE_DAY_SKIP", date, reason: raceDay.reason }));
+  process.exit(0);
+}
+
 const response = await fetch(WIN5_PAGE_URL, {
   headers: {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/136 Safari/537.36",
