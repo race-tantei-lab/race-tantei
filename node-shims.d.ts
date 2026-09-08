@@ -5,3 +5,8 @@ declare module "node:assert" {
     ok(value: unknown, message?: string): asserts value;
   };
 }
+
+declare const process: {
+  exit(code?: number): never;
+  env: Record<string, string | undefined>;
+};
