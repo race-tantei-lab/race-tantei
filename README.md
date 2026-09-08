@@ -22,8 +22,8 @@ JRA中央競馬を対象に、発走前情報を使って完成済み10年モデ
 ### Public site
 
 - public site entry: **常に `wrangler.jsonc.main` が正本**
-  - 2026-08-22確認値: `src/public-site-entry-v34.ts`
-- deploy revision: `ten-year-completed-public-v34-live-deadline-detached-20260822`
+  - 2026-09-08確認値: `src/public-site-entry-recovery-20260906.ts`
+- deploy revision: `ten-year-completed-public-v37-original-home-restored-20260905`
 - site: `https://race-tantei-phase0.race-tantei.workers.dev`
 - public-site Workerは表示・通常APIを担当し、**ライブ買い目の生成・確定を行わない**
 - 旧 `/_ops/live-tick` はhard-disabled / 404
@@ -32,7 +32,8 @@ JRA中央競馬を対象に、発走前情報を使って完成済み10年モデ
 
 ライブ買い目生成・確定は、公開サイトから分離した専用Workersが担当します。
 
-- scheduler entry: `src/live-deadline-entry-v2.ts`
+- scheduler wrapper: `src/live-deadline-entry-v3.ts`
+- isolated live driver: `src/live-deadline-entry-v2.ts`
 - primary config: `wrangler.live-deadline.jsonc`
   - every minute: `* * * * *`
 - backup config: `wrangler.live-deadline-backup.jsonc`
@@ -46,11 +47,11 @@ JRA中央競馬を対象に、発走前情報を使って完成済み10年モデ
 
 - **T-90**: JRA公式オッズでpreview作成開始
 - **T-40**: 早期SLA監査
-- **T-30**: official preview必須
-- **T-25**: 通常のimmutable final
-- **T-20**: 保存済みofficial previewだけを使う救済guard
-- **T-15**: hard creation boundary。新規推論・オッズ取得・買い目生成・backfillは禁止
-- T-15後の新規finalはD1 invariantでも拒否
+- **T-30**: official preview必須。fresh finalization window開始
+- **T-25**: 保存済みofficial previewによるrescue guard開始
+- **T-15**: fresh generation開始禁止。stored/nonfresh finalizationもここを下回って新規作成しない
+- **T-10**: T-15より前に開始したfresh計算の最終反映限界
+- T-15以降に新しい計算を開始せず、T-10以降にfresh結果を反映しない
 
 finalに使えるmarket oddsは `jra-fast-official` / `jra-crawl-official` のみです。synthetic / estimated / probability-derived substitute oddsは禁止し、公式previewが無い場合は偽データで補完せずfail closedします。
 
@@ -104,7 +105,7 @@ canonical verifierの成功markerは `CANONICAL_HANDOFF_OK` です。
 ### ライブ確定変更
 
 1. `HANDOFF.md` / canonical manifestを確認
-2. `src/live-deadline-entry-v2.ts` と2つの `wrangler.live-deadline*.jsonc` を確認
+2. `src/live-deadline-entry-v3.ts` → `src/live-deadline-entry-v2.ts` の実wrapper/driverと、2つの `wrangler.live-deadline*.jsonc` を確認
 3. `completed-worker-live-lock` / deadline guard / D1 invariants / preview safetyを確認
 4. `scripts/verify-live-lock-safety.py`
 5. dedicated live-deadline deploy

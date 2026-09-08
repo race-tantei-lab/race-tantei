@@ -12,21 +12,22 @@
 - status: **completed model / production active**
 - handoff version: **5**
 - canonical manifest: `config/canonical-production-manifest.json`
-- manifest as-of: `2026-08-22T19:20:00+09:00`
-- verified live-architecture baseline commit: `5265321ad2186271aee96f45f98cbeec79c7df83`
+- manifest as-of: `2026-09-08T10:17:00+09:00`
+- verified live-architecture baseline commit: `19f85d50d3eb01d8f533e8387c51142313434cda`
 - production site: `https://race-tantei-phase0.race-tantei.workers.dev`
 - public Worker: `race-tantei-phase0`
 - D1: `race-tantei-phase0`
 - D1 database ID: `949b5e8b-d1a4-4c4e-80d1-d031afdc03de`
 - current UI entry: **固定値で覚えず必ず `wrangler.jsonc.main` を読む**
-  - 2026-08-22確認値: `src/public-site-entry-v34.ts`
+  - 2026-09-08確認値: `src/public-site-entry-recovery-20260906.ts`
 - current deploy revision: **必ず `wrangler.jsonc.vars.DEPLOY_REVISION` を読む**
-  - 2026-08-22確認値: `ten-year-completed-public-v34-live-deadline-detached-20260822`
+  - 2026-09-08確認値: `ten-year-completed-public-v37-original-home-restored-20260905`
 - public Worker version IDも固定しない。必要なら `analysis-results/production-deployment.log` と本番deploymentを直接確認する。
 
 ### 現行ライブ確定の正本
 
-- scheduler entry: `src/live-deadline-entry-v2.ts`
+- scheduler wrapper: `src/live-deadline-entry-v3.ts`
+- isolated live driver: `src/live-deadline-entry-v2.ts`
 - primary Worker config: `wrangler.live-deadline.jsonc`
 - backup Worker config: `wrangler.live-deadline-backup.jsonc`
 - deploy workflow: `.github/workflows/deploy-live-deadline.yml`
@@ -51,19 +52,20 @@
 3. `wrangler.jsonc` のcurrent public entry / revision / D1
 4. `wrangler.live-deadline.jsonc`
 5. `wrangler.live-deadline-backup.jsonc`
-6. `src/live-deadline-entry-v2.ts`
-7. `src/v1/completed-worker-live-lock.ts`
-8. `src/v1/completed-worker-deadline-guard.ts`
-9. `src/v1/completed-final-invariants.ts`
-10. `src/v1/live-preview-safety.ts`
-11. `.github/workflows/deploy-live-deadline.yml`
-12. `.github/workflows/verify-live-deadline-production.yml`
-13. `config/ten-year-completed-model.json`
-14. `analysis-results/ten-year-model-completion-20260812.json`
-15. `analysis-results/completed-model-methodology-audit-20260813.md`
-16. 最新mainのproduction checks / readiness / deploymentを直接確認
-17. 必要なら本番D1で対象レースのpreview / final state / `locked_at` / `oddsSource` を確認
-18. 依頼された具体作業へ進む。**モデル探索からやり直さない。**
+6. `src/live-deadline-entry-v3.ts`
+7. `src/live-deadline-entry-v2.ts`
+8. `src/v1/completed-worker-live-lock.ts`
+9. `src/v1/completed-worker-deadline-guard.ts`
+10. `src/v1/completed-final-invariants.ts`
+11. `src/v1/live-preview-safety.ts`
+12. `.github/workflows/deploy-live-deadline.yml`
+13. `.github/workflows/verify-live-deadline-production.yml`
+14. `config/ten-year-completed-model.json`
+15. `analysis-results/ten-year-model-completion-20260812.json`
+16. `analysis-results/completed-model-methodology-audit-20260813.md`
+17. 最新mainのproduction checks / readiness / deploymentを直接確認
+18. 必要なら本番D1で対象レースのpreview / final state / `locked_at` / `oddsSource` を確認
+19. 依頼された具体作業へ進む。**モデル探索からやり直さない。**
 
 `FINAL_STATE_20260816.md` は過去事故・旧安全baselineの確認が必要な場合だけ参照する。現在のscheduler構成をそこから復元しない。
 
@@ -171,11 +173,10 @@ stakes:
 
 - **T-90**: JRA公式オッズでpreview作成を開始
 - **T-40**: 早期SLA監査
-- **T-30**: official previewが無ければ異常検知
-- **T-17**: 最新情報でfresh previewを再生成してimmutable finalを確定
-- **T-16**: fresh経路失敗時だけ、保存済みofficial previewを使うDB中心の最終救済guard
-- **T-15**: hard creation boundary。新規作成を一切しない。既に正しくfinal済みか確認するだけ
-- **T-15経過後**: D1 trigger自体が新規final / 後付けfinalを拒否
+- **T-30**: official preview必須。fresh finalization windowを開始
+- **T-25**: 保存済みofficial previewだけを使えるrescue guardを開始
+- **T-15**: fresh generation開始のhard boundary。ここから新しいモデル推論・オッズ取得・買い目計算を開始しない。stored/nonfresh finalizationもT-15未満へ持ち越さない
+- **T-10**: T-15より前に開始したfresh計算の最終反映限界。これを下回ったfresh結果は確定に使わない
 
 T-15境界以降に禁止されること:
 
@@ -235,7 +236,7 @@ locked後の公開買い目はD1 invariantでもimmutable。
 - 外部から叩けるライブmutation endpoint
 - primary/backupの重複mutation
 
-現在は隔離Worker + lease + archive + T-90/T-17/T-16/T-15構成を正本とする。旧GitHub backup方式や公開サイト経由のlive-tickを現行経路として復活させない。
+現在はv3 race-day gate / heartbeat wrapper + v2 isolated driver + lease + archive + T-90/T-30/T-25/T-15/T-10構成を正本とする。旧GitHub backup方式や公開サイト経由のlive-tickを現行経路として復活させない。
 
 ## 6. frozen history / 公開サイト
 
