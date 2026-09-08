@@ -3,10 +3,7 @@ const PREVIEW_PREFIX = "worker_live_preview:";
 const SLA_PREFIX = "live_deadline_sla:";
 const LEASE_KEY = "live-deadline-primary";
 const OFFICIAL_ODDS_SOURCES = new Set(["jra-fast-official", "jra-crawl-official"]);
-const SCHEMA_VERIFY_INTERVAL_MS = 5 * 60_000;
 const SLA_HEARTBEAT_INTERVAL_MS = 3 * 60_000;
-
-let lastSchemaVerifiedAt = 0;
 
 export type LiveDeadlineSlaAudit = {
   checkedAt: string;
@@ -61,25 +58,11 @@ async function loadSelectedRaceIds(db: D1Database, date: string): Promise<string
   }
 }
 
-// Persistent schema is provisioned once by deploy-live-deadline.yml. Scheduled
-// race-day Workers only verify it; they never CREATE/DROP schema objects.
-export async function ensureLivePreviewSafetySchema(db: D1Database): Promise<void> {
-  const now = Date.now();
-  if (lastSchemaVerifiedAt && now - lastSchemaVerifiedAt < SCHEMA_VERIFY_INTERVAL_MS) return;
-  const rows = await db.prepare(`
-    SELECT type,name FROM sqlite_master
-    WHERE (type='table' AND name IN ('rt_live_preview_archive','rt_live_deadline_lease'))
-       OR (type='index' AND name='idx_live_preview_archive_race_id')
-  `).all<{ type: string; name: string }>();
-  const found = new Set((rows.results ?? []).map((row) => `${row.type}:${row.name}`));
-  const required = [
-    "table:rt_live_preview_archive",
-    "table:rt_live_deadline_lease",
-    "index:idx_live_preview_archive_race_id",
-  ];
-  const missing = required.filter((name) => !found.has(name));
-  if (missing.length) throw new Error(`LIVE_PREVIEW_SCHEMA_MISSING:${missing.join(",")}`);
-  lastSchemaVerifiedAt = now;
+// Kept as a compatibility hook for the live driver. Persistent schema is
+// installed by migrate-live-runtime-guards.yml and verified by production
+// readiness. Scheduled race-day Workers must not inspect sqlite_master/PRAGMA.
+export async function ensureLivePreviewSafetySchema(_db: D1Database): Promise<void> {
+  return;
 }
 
 export async function acquireLiveDeadlineLease(db: D1Database, owner: string, ttlSeconds = 55): Promise<boolean> {
@@ -103,8 +86,6 @@ export async function releaseLiveDeadlineLease(db: D1Database, owner: string): P
   await db.prepare("DELETE FROM rt_live_deadline_lease WHERE lease_key=? AND owner=?").bind(LEASE_KEY, owner).run();
 }
 
-// Legacy recovery only. New preview writes are not auto-archived because the
-// worker_live_preview envelope already retains recent official snapshots.
 export async function restoreNewestOfficialPreviewArchives(db: D1Database, date: string): Promise<string[]> {
   const ids = await loadSelectedRaceIds(db, date);
   const restored: string[] = [];

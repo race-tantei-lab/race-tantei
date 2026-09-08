@@ -2,40 +2,10 @@ import liveDeadlineV2 from "./live-deadline-entry-v2.js";
 import { shouldRunOnJraRaceDay } from "./v1/race-day-gate.js";
 import type { Env } from "./v1/types.js";
 
-const REQUIRED_LIVE_INDEXES = [
-  "rt_idx_ml_horse_hist_lookup",
-  "rt_idx_ml_horse_total_lookup",
-  "rt_idx_ml_horse_surface_lookup",
-  "rt_idx_ml_horse_dist_lookup",
-  "rt_idx_ml_horse_venue_lookup",
-  "rt_idx_ml_jockey_lookup",
-  "rt_idx_ml_trainer_lookup",
-  "rt_idx_ml_pair_lookup",
-] as const;
-
-const RECHECK_MS = 60_000;
 const PRIMARY_HEARTBEAT_KEY = "live_deadline_primary_heartbeat:v1";
 const PRIMARY_STALE_SECONDS = 150;
-let indexState: { ready: boolean; checkedAt: number; missing: string[] } | null = null;
 
 type LiveRoleEnv = Env & { LIVE_DEADLINE_ROLE?: string };
-
-async function requiredLiveIndexesReady(db: D1Database): Promise<{ ready: boolean; missing: string[] }> {
-  const now = Date.now();
-  if (indexState && (indexState.ready || now - indexState.checkedAt < RECHECK_MS)) {
-    return { ready: indexState.ready, missing: indexState.missing };
-  }
-
-  const placeholders = REQUIRED_LIVE_INDEXES.map(() => "?").join(",");
-  const result = await db
-    .prepare(`SELECT name FROM sqlite_master WHERE type='index' AND name IN (${placeholders})`)
-    .bind(...REQUIRED_LIVE_INDEXES)
-    .all<{ name: string }>();
-  const present = new Set((result.results || []).map((row) => String(row.name)));
-  const missing = REQUIRED_LIVE_INDEXES.filter((name) => !present.has(name));
-  indexState = { ready: missing.length === 0, checkedAt: now, missing: [...missing] };
-  return { ready: indexState.ready, missing: indexState.missing };
-}
 
 async function markPrimaryAlive(db: D1Database): Promise<void> {
   const value = JSON.stringify({ role: "primary", checkedAt: new Date().toISOString() });
@@ -67,12 +37,9 @@ export default {
       return;
     }
 
-    const state = await requiredLiveIndexesReady(env.DB);
-    if (!state.ready) {
-      console.warn("LIVE_DEADLINE_WAITING_FOR_INDEXES", JSON.stringify(state.missing));
-      return;
-    }
-
+    // Persistent D1 tables/indexes/triggers are installed and verified by the
+    // dedicated migration/readiness workflows. The every-minute race-day hot
+    // path must never query sqlite_master/PRAGMA or execute runtime DDL.
     const role = String(env.LIVE_DEADLINE_ROLE || "primary").toLowerCase();
     if (role === "backup") {
       if (await primaryIsAlive(env.DB)) return;

@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   check:
@@ -26,11 +27,40 @@ jobs:
         run: python scripts/verify-race-day-gate.py
       - name: Verify live-lock safety
         run: python scripts/verify-live-lock-safety.py
+      - name: Verify live preview priority
+        run: python scripts/verify-live-preview-priority.py
       - name: Verify bodyweight final-lock acquisition
         run: python scripts/verify-bodyweight-final-lock.py
       - name: Verify WIN5 navigation UI
         run: python scripts/verify-win5-ui.py
       - name: Verify public language clarity
         run: python scripts/verify-public-language.py
-      - name: Typecheck and test
-        run: npm run check
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build test bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set +e
+          output=$(npm run build:test 2>&1)
+          code=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$code" -ne 0 ]; then
+            detail=$(printf '%s\n' "$output" | grep -m1 -E 'error TS[0-9]+:' || true)
+            if [ -z "$detail" ]; then detail="build:test failed; see Phase 0 checks"; fi
+            detail=$(printf '%s' "$detail" | tr '\n\r' '  ' | cut -c1-130)
+            gh api --method POST "/repos/${GITHUB_REPOSITORY}/statuses/${STATUS_SHA}" \
+              -f state=failure -f context=ci/build-test-detail -f description="$detail" >/dev/null
+            exit "$code"
+          fi
+          gh api --method POST "/repos/${GITHUB_REPOSITORY}/statuses/${STATUS_SHA}" \
+            -f state=success -f context=ci/build-test-detail -f description="build:test passed" >/dev/null
+      - name: Unit tests
+        run: npm run test:unit
+      - name: Live JRA tests
+        run: npm run test:live
+      - name: Worker dry run
+        run: npm run build
