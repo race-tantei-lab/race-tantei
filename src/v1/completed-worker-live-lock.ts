@@ -43,6 +43,7 @@ type SelectionPayload = {
   sourceModel?: string;
   resultDataUsedForTargetDay?: boolean;
   selected?: SelectionRow[];
+  venueCounts?: Record<string, number>;
 };
 
 type PublicBetRow = {
@@ -176,6 +177,10 @@ function validateSelection(payload: SelectionPayload): string[] {
   if (payload.sourceModel !== COMPLETED_MODEL_VERSION) throw new Error(`WORKER_SELECTION_MODEL_INVALID:${payload.sourceModel}`);
   if (payload.resultDataUsedForTargetDay !== false) throw new Error("WORKER_SELECTION_TARGET_RESULT_LEAK");
   if (!Array.isArray(payload.selected) || !payload.selected.length) throw new Error("WORKER_SELECTION_EMPTY");
+  const venueCounts = payload.venueCounts && typeof payload.venueCounts === "object" ? Object.entries(payload.venueCounts) : [];
+  if (venueCounts.length < 2 || venueCounts.some(([venue, count]) => !venue || Number(count) !== 12)) {
+    throw new Error(`WORKER_SELECTION_PROGRAM_INVALID:${JSON.stringify(payload.venueCounts ?? null)}`);
+  }
   const counts = new Map<string, number>();
   const ids: string[] = [];
   for (const row of payload.selected) {
@@ -185,8 +190,15 @@ function validateSelection(payload: SelectionPayload): string[] {
     ids.push(raceId);
     counts.set(venue, (counts.get(venue) ?? 0) + 1);
   }
-  if (ids.length !== 15 || new Set(ids).size !== ids.length || counts.size !== 3 || [...counts.values()].some((count) => count !== 5)) {
-    throw new Error(`WORKER_SELECTION_NOT_FIVE_PER_VENUE:${JSON.stringify(Object.fromEntries(counts))}`);
+  const expectedVenues = new Set(venueCounts.map(([venue]) => venue));
+  if (
+    ids.length !== expectedVenues.size * 5 ||
+    new Set(ids).size !== ids.length ||
+    counts.size !== expectedVenues.size ||
+    [...counts.entries()].some(([venue, count]) => !expectedVenues.has(venue) || count !== 5) ||
+    [...expectedVenues].some((venue) => counts.get(venue) !== 5)
+  ) {
+    throw new Error(`WORKER_SELECTION_NOT_FIVE_PER_ACTIVE_VENUE:${JSON.stringify(Object.fromEntries(counts))}`);
   }
   return ids;
 }
@@ -570,9 +582,6 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       if (remaining <= 0) { alreadyStartedIncompleteRaceIds.push(raceId); continue; }
       if (remaining > BODY_WEIGHT_REFRESH_OPEN_MS) { notYetInWindowRaceIds.push(raceId); continue; }
 
-      // From T-100 to T-90 we only refresh official body weight data. From
-      // T-90 onward we repeatedly generate official-JRA-odds previews, so one
-      // transient JRA/cron failure cannot leave us with no last-good snapshot.
       if (remaining > PREVIEW_OPEN_MS) {
         try {
           await refreshOfficialBodyWeights(env.DB, race, raceNow);
@@ -583,9 +592,6 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
         continue;
       }
 
-      // T-15 is the generation-start boundary. No new calculation starts
-      // after it. A fresh calculation that started on time may finish and be
-      // reflected until the hard T-10 reflection boundary.
       if (remaining <= DEADLINE_MS) {
         errors.push({ raceId, error: `WORKER_HARD_T15_START_MISSED:${raceId}` });
         continue;

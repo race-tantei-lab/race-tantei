@@ -136,25 +136,40 @@ function headingTexts(html: string): string[] {
 function isInvalidRaceName(value: string): boolean {
   const text = value.replace(/\s+/g, " ").trim();
   if (!text) return true;
-  if (/^(?:検索(?:ウィンドウ|窓)?|メニューを開く|JRAホーム|レース情報トップ|出馬表|レース|レース結果|払戻金|関連メニュー|コースレコード|勝馬の紹介)$/.test(text)) return true;
+  if (/^(?:検索(?:ウィンドウ|窓)?|メニューを開く|JRAホーム|レース情報トップ|出馬表|レース|レース結果|払戻金|関連メニュー|開催お知らせ|緊急情報|コースレコード|勝馬の紹介|開催選択へ戻る|レース選択へ戻る)$/.test(text)) return true;
   return false;
 }
 
-function parseRaceName(html: string, raceNo: number): string {
+export function parseRaceName(html: string, raceNo: number): string {
   const explicitHtml = html.match(/<span\b[^>]*class=["'][^"']*\btitleRaceName\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/i)?.[1];
   if (explicitHtml) {
     const explicitName = stripHtml(explicitHtml).replace(/\s+/g, " ").trim();
     if (!isInvalidRaceName(explicitName)) return explicitName;
   }
-  for (const raw of headingTexts(html)) {
-    const text = raw.replace(new RegExp(`^${raceNo}(?:R|レース)\\s*`), "").trim();
-    if (isInvalidRaceName(text)) continue;
-    if (/20\d{2}年|\d+回(?:札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉)\d+日/.test(text)) continue;
-    if (/^(?:\d+歳|障害|サラ系)/.test(text) && /(?:クラス|未勝利|新馬|オープン)/.test(text)) continue;
-    return text;
+
+  const startIndex = html.search(/発走時刻/);
+  if (startIndex >= 0) {
+    for (const raw of headingTexts(html.slice(startIndex))) {
+      const text = raw.replace(new RegExp(`^${raceNo}(?:R|レース)\\s*`), "").trim();
+      if (!text || new RegExp(`^${raceNo}(?:R|レース)?$`).test(text)) continue;
+      if (isInvalidRaceName(text)) continue;
+      if (/20\d{2}年|\d+回(?:札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉)\d+日/.test(text)) continue;
+      return text;
+    }
   }
-  const fallback = normalizeText(html).match(new RegExp(`${raceNo}(?:R|レース)\\s*([^\\n]+)`))?.[1]?.trim() ?? "";
-  return isInvalidRaceName(fallback) ? `${raceNo}レース` : fallback;
+
+  const lines = normalizeText(html).split("\n").map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const startLine = lines.findIndex((line) => /発走時刻/.test(line));
+  if (startLine >= 0) {
+    for (const raw of lines.slice(startLine + 1, startLine + 10)) {
+      const text = raw.replace(new RegExp(`^${raceNo}(?:R|レース)\\s*`), "").trim();
+      if (!text || new RegExp(`^${raceNo}(?:R|レース)?$`).test(text)) continue;
+      if (isInvalidRaceName(text)) continue;
+      if (/^(?:本賞金|印刷用ページ|馬柱の見方|スマートフォン用|詳細出馬表)/.test(text)) continue;
+      return text;
+    }
+  }
+  return `${raceNo}レース`;
 }
 
 function parseHeader(html: string, pageUrl: string, isResult: boolean): RaceRecord {
