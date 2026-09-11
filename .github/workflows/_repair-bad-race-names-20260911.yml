@@ -29,30 +29,35 @@ jobs:
         run: |
           cat > /tmp/build-repair.ts <<'TS'
           import { writeFileSync } from 'node:fs';
+          import { pathToFileURL } from 'node:url';
 
-          const mod = await import(process.cwd() + '/src/v1/jra-calendar.ts');
-          const { parseOfficialCalendar, officialCalendarUrl } = mod;
-          const dates = ['2026-09-12','2026-09-13'];
-          const bad = `(race_name LIKE '%検索%' OR race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース'))`;
-          const q = (s: string) => `'${s.replaceAll("'", "''")}'`;
-          const sql: string[] = ['BEGIN;'];
-          for (const date of dates) {
-            const url = officialCalendarUrl(date);
-            const response = await fetch(url, { headers: { 'user-agent': 'race-tantei-name-repair/1.0' } });
-            if (!response.ok) throw new Error(`JRA_CALENDAR_HTTP_${response.status}:${date}`);
-            const html = await response.text();
-            const races = parseOfficialCalendar(html, date, url);
-            if (races.length < 12) throw new Error(`JRA_CALENDAR_TOO_FEW_RACES:${date}:${races.length}`);
-            for (const race of races) {
-              if (/検索|メニューを開く|JRAホーム|レース情報トップ/.test(race.raceName)) {
-                throw new Error(`BAD_PARSED_RACE_NAME:${race.raceId}:${race.raceName}`);
+          async function main() {
+            const mod = await import(pathToFileURL(process.cwd() + '/src/v1/jra-calendar.ts').href);
+            const { parseOfficialCalendar, officialCalendarUrl } = mod;
+            const dates = ['2026-09-12','2026-09-13'];
+            const bad = `(race_name LIKE '%検索%' OR race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース'))`;
+            const q = (s: string) => `'${s.replaceAll("'", "''")}'`;
+            const sql: string[] = ['BEGIN;'];
+            for (const date of dates) {
+              const url = officialCalendarUrl(date);
+              const response = await fetch(url, { headers: { 'user-agent': 'race-tantei-name-repair/1.0' } });
+              if (!response.ok) throw new Error(`JRA_CALENDAR_HTTP_${response.status}:${date}`);
+              const html = await response.text();
+              const races = parseOfficialCalendar(html, date, url);
+              if (races.length < 12) throw new Error(`JRA_CALENDAR_TOO_FEW_RACES:${date}:${races.length}`);
+              for (const race of races) {
+                if (/検索|メニューを開く|JRAホーム|レース情報トップ/.test(race.raceName)) {
+                  throw new Error(`BAD_PARSED_RACE_NAME:${race.raceId}:${race.raceName}`);
+                }
+                sql.push(`UPDATE rt_races SET race_name=${q(race.raceName)}, updated_at=CURRENT_TIMESTAMP WHERE race_id=${q(race.raceId)} AND ${bad};`);
               }
-              sql.push(`UPDATE rt_races SET race_name=${q(race.raceName)}, updated_at=CURRENT_TIMESTAMP WHERE race_id=${q(race.raceId)} AND ${bad};`);
             }
+            sql.push('COMMIT;');
+            writeFileSync('/tmp/repair.sql', sql.join('\n'));
+            console.log(`repair_statements=${sql.length - 2}`);
           }
-          sql.push('COMMIT;');
-          writeFileSync('/tmp/repair.sql', sql.join('\n'));
-          console.log(`repair_statements=${sql.length - 2}`);
+
+          main().catch((error) => { console.error(error); process.exit(1); });
           TS
           npx tsx /tmp/build-repair.ts
           sed -n '1,8p' /tmp/repair.sql
