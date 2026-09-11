@@ -136,7 +136,7 @@ function headingTexts(html: string): string[] {
 function isInvalidRaceName(value: string): boolean {
   const text = value.replace(/\s+/g, " ").trim();
   if (!text) return true;
-  if (/^(?:検索(?:ウィンドウ|窓)?|メニューを開く|JRAホーム|レース情報トップ|出馬表|レース|レース結果|払戻金|関連メニュー|コースレコード|勝馬の紹介)$/.test(text)) return true;
+  if (/^(?:検索(?:ウィンドウ|窓)?|メニューを開く|JRAホーム|レース情報トップ|出馬表|レース|レース結果|払戻金|関連メニュー|コースレコード|勝馬の紹介|緊急情報|JRAからのお知らせ)$/.test(text)) return true;
   return false;
 }
 
@@ -145,6 +145,12 @@ function parseRaceName(html: string, raceNo: number): string {
   if (explicitHtml) {
     const explicitName = stripHtml(explicitHtml).replace(/\s+/g, " ").trim();
     if (!isInvalidRaceName(explicitName)) return explicitName;
+  }
+  const raceClassHtml = html.match(/<div\b[^>]*class=["\'][^"\']*\brace_name\b[^"\']*["\'][^>]*>([\s\S]*?)<\/div>/i)?.[1]
+    ?? html.match(/<span\b[^>]*class=["\'][^"\']*\brace_name\b[^"\']*["\'][^>]*>([\s\S]*?)<\/span>/i)?.[1];
+  if (raceClassHtml) {
+    const raceClassName = stripHtml(raceClassHtml).replace(/\s+/g, " ").trim();
+    if (!isInvalidRaceName(raceClassName)) return raceClassName;
   }
   for (const raw of headingTexts(html)) {
     const text = raw.replace(new RegExp(`^${raceNo}(?:R|レース)\\s*`), "").trim();
