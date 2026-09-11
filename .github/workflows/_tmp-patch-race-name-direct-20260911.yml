@@ -25,31 +25,17 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-
           jra = Path('src/v1/jra.ts')
           s = jra.read_text()
           old_invalid = '|コースレコード|勝馬の紹介)$/.test(text)'
           new_invalid = '|コースレコード|勝馬の紹介|緊急情報|JRAからのお知らせ)$/.test(text)'
-          if old_invalid not in s:
-              raise SystemExit('invalid-label anchor missing')
+          if old_invalid not in s: raise SystemExit('invalid-label anchor missing')
           s = s.replace(old_invalid, new_invalid, 1)
-          needle = '''  if (explicitHtml) {
-            const explicitName = stripHtml(explicitHtml).replace(/\\s+/g, " ").trim();
-            if (!isInvalidRaceName(explicitName)) return explicitName;
-          }
-'''
-          insert = needle + '''  const raceClassHtml = html.match(/<div\\b[^>]*class=["'][^"']*\\brace_name\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/div>/i)?.[1]
-            ?? html.match(/<span\\b[^>]*class=["'][^"']*\\brace_name\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/span>/i)?.[1];
-          if (raceClassHtml) {
-            const raceClassName = stripHtml(raceClassHtml).replace(/\\s+/g, " ").trim();
-            if (!isInvalidRaceName(raceClassName)) return raceClassName;
-          }
-'''
-          if needle not in s:
-              raise SystemExit('parser insertion anchor missing')
-          s = s.replace(needle, insert, 1)
+          needle = '  if (explicitHtml) {\n    const explicitName = stripHtml(explicitHtml).replace(/\\s+/g, " ").trim();\n    if (!isInvalidRaceName(explicitName)) return explicitName;\n  }\n'
+          extra = '  const raceClassHtml = html.match(/<div\\b[^>]*class=["\\\'][^"\\\']*\\brace_name\\b[^"\\\']*["\\\'][^>]*>([\\s\\S]*?)<\\/div>/i)?.[1]\n    ?? html.match(/<span\\b[^>]*class=["\\\'][^"\\\']*\\brace_name\\b[^"\\\']*["\\\'][^>]*>([\\s\\S]*?)<\\/span>/i)?.[1];\n  if (raceClassHtml) {\n    const raceClassName = stripHtml(raceClassHtml).replace(/\\s+/g, " ").trim();\n    if (!isInvalidRaceName(raceClassName)) return raceClassName;\n  }\n'
+          if needle not in s: raise SystemExit('parser insertion anchor missing')
+          s = s.replace(needle, needle + extra, 1)
           jra.write_text(s)
-
           wf = Path('.github/workflows/_repair-bad-race-names-20260911.yml')
           w = wf.read_text()
           w = w.replace("race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース')", "race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース','緊急情報','JRAからのお知らせ')")
@@ -58,14 +44,12 @@ jobs:
           w = w.replace("            sql.push('COMMIT;');\n", "")
           old_apply = "      - name: Apply official-name repair\n        run: npx wrangler d1 execute race-tantei-phase0 --remote --file=/tmp/repair.sql\n"
           new_apply = "      - name: Apply official-name repair\n        run: |\n          if [ -s /tmp/repair.sql ]; then\n            npx wrangler d1 execute race-tantei-phase0 --remote --file=/tmp/repair.sql\n          else\n            echo 'No repair SQL needed'\n          fi\n"
-          if old_apply not in w:
-              raise SystemExit('repair apply anchor missing')
-          w = w.replace(old_apply, new_apply, 1)
-          wf.write_text(w)
+          if old_apply not in w: raise SystemExit('repair apply anchor missing')
+          wf.write_text(w.replace(old_apply, new_apply, 1))
           PY
       - name: Verify parser on official JRA page
         run: |
-          cat > /tmp/check-race-name.ts <<'TS'
+          cat > check-race-name.ts <<'TS'
           import { fetchJraPage, parseEntryPage } from './src/v1/jra.ts';
           const url = 'https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0106202604031120260912/9D';
           const page = await fetchJraPage(url);
@@ -74,7 +58,8 @@ jobs:
           if (race.raceDate !== '2026-09-12' || race.venue !== '中山' || race.raceNo !== 11) throw new Error('RACE_IDENTITY_MISMATCH');
           if (/検索|緊急情報|JRAからのお知らせ|^11レース$/.test(race.raceName)) throw new Error(`BAD_RACE_NAME:${race.raceName}`);
           TS
-          npx tsx /tmp/check-race-name.ts
+          npx tsx check-race-name.ts
+          rm check-race-name.ts
       - name: Run repository checks
         run: npm run check --if-present
       - name: Commit patch
