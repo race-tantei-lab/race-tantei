@@ -21,7 +21,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Patch canonical parser and bounded repair workflow
+      - name: Patch canonical parser
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -34,18 +34,7 @@ jobs:
           needle = '  if (explicitHtml) {\n    const explicitName = stripHtml(explicitHtml).replace(/\\s+/g, " ").trim();\n    if (!isInvalidRaceName(explicitName)) return explicitName;\n  }\n'
           extra = '  const raceClassHtml = html.match(/<div\\b[^>]*class=["\\\'][^"\\\']*\\brace_name\\b[^"\\\']*["\\\'][^>]*>([\\s\\S]*?)<\\/div>/i)?.[1]\n    ?? html.match(/<span\\b[^>]*class=["\\\'][^"\\\']*\\brace_name\\b[^"\\\']*["\\\'][^>]*>([\\s\\S]*?)<\\/span>/i)?.[1];\n  if (raceClassHtml) {\n    const raceClassName = stripHtml(raceClassHtml).replace(/\\s+/g, " ").trim();\n    if (!isInvalidRaceName(raceClassName)) return raceClassName;\n  }\n'
           if needle not in s: raise SystemExit('parser insertion anchor missing')
-          s = s.replace(needle, needle + extra, 1)
-          jra.write_text(s)
-          wf = Path('.github/workflows/_repair-bad-race-names-20260911.yml')
-          w = wf.read_text()
-          w = w.replace("race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース')", "race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース','緊急情報','JRAからのお知らせ')")
-          w = w.replace("/検索|メニューを開く|JRAホーム|レース情報トップ|^(?:出馬表|レース)$/.test", "/検索|メニューを開く|JRAホーム|レース情報トップ|緊急情報|JRAからのお知らせ|^(?:出馬表|レース)$/.test")
-          w = w.replace("const sql: string[] = ['BEGIN;'];", "const sql: string[] = [];")
-          w = w.replace("            sql.push('COMMIT;');\n", "")
-          old_apply = "      - name: Apply official-name repair\n        run: npx wrangler d1 execute race-tantei-phase0 --remote --file=/tmp/repair.sql\n"
-          new_apply = "      - name: Apply official-name repair\n        run: |\n          if [ -s /tmp/repair.sql ]; then\n            npx wrangler d1 execute race-tantei-phase0 --remote --file=/tmp/repair.sql\n          else\n            echo 'No repair SQL needed'\n          fi\n"
-          if old_apply not in w: raise SystemExit('repair apply anchor missing')
-          wf.write_text(w.replace(old_apply, new_apply, 1))
+          jra.write_text(s.replace(needle, needle + extra, 1))
           PY
       - name: Verify parser on official JRA page
         run: |
@@ -62,11 +51,11 @@ jobs:
           rm check-race-name.ts
       - name: Run repository checks
         run: npm run check --if-present
-      - name: Commit patch
+      - name: Commit parser patch
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/v1/jra.ts .github/workflows/_repair-bad-race-names-20260911.yml
+          git add src/v1/jra.ts
           git diff --cached --check
           git commit -m 'fix: parse official JRA race_name directly'
           git push origin HEAD:${{ github.ref_name }}
