@@ -1,0 +1,31 @@
+name: Temporary diagnose JRA headings 2026-09-11
+
+on:
+  push:
+    paths:
+      - '.github/workflows/_tmp-diagnose-jra-headings-20260911.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect official JRA entry structure
+        run: |
+          node <<'NODE'
+          const url='https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0106202604031120260912/9D';
+          const r=await fetch(url,{headers:{'user-agent':'race-tantei-diagnose/1.0'}});
+          console.log('status',r.status,'url',r.url);
+          const html=await r.text();
+          const clean=s=>s.replace(/<script\b[\s\S]*?<\/script>/gi,' ').replace(/<style\b[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/\s+/g,' ').trim();
+          for(const m of html.matchAll(/<(h[1-6])\b([^>]*)>([\s\S]*?)<\/\1>/gi)) console.log('HEADING',m[1],m[2].replace(/\s+/g,' ').trim(),'=>',clean(m[3]));
+          for(const m of html.matchAll(/<(?:span|div|p)\b([^>]*class=["'][^"']*(?:race|title)[^"']*["'][^>]*)>([\s\S]*?)<\/(?:span|div|p)>/gi)) {
+            const text=clean(m[2]); if(text) console.log('RACECLASS',m[1].replace(/\s+/g,' ').trim(),'=>',text.slice(0,300));
+          }
+          NODE
