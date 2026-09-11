@@ -1,0 +1,72 @@
+name: Temporary patch race-name parser 2026-09-11
+
+on:
+  push:
+    paths:
+      - '.github/workflows/_tmp-patch-race-name-parser-20260911.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Patch parser safety
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/v1/jra.ts')
+          s = p.read_text()
+          start = s.index('function parseRaceName(html: string, raceNo: number): string {')
+          end = s.index('\n\nfunction parseHeader(', start)
+          replacement = r'''function isInvalidRaceName(value: string): boolean {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (!text) return true;
+  if (/^(?:検索(?:ウィンドウ|窓)?|メニューを開く|JRAホーム|レース情報トップ|出馬表|レース|レース結果|払戻金|関連メニュー|コースレコード|勝馬の紹介)$/.test(text)) return true;
+  return false;
+}
+
+function parseRaceName(html: string, raceNo: number): string {
+  const explicitHtml = html.match(/<span\b[^>]*class=["'][^"']*\btitleRaceName\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/i)?.[1];
+  if (explicitHtml) {
+    const explicitName = stripHtml(explicitHtml).replace(/\s+/g, " ").trim();
+    if (!isInvalidRaceName(explicitName)) return explicitName;
+  }
+  for (const raw of headingTexts(html)) {
+    const text = raw.replace(new RegExp(`^${raceNo}(?:R|レース)\\s*`), "").trim();
+    if (isInvalidRaceName(text)) continue;
+    if (/20\d{2}年|\d+回(?:札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉)\d+日/.test(text)) continue;
+    if (/^(?:\d+歳|障害|サラ系)/.test(text) && /(?:クラス|未勝利|新馬|オープン)/.test(text)) continue;
+    return text;
+  }
+  const fallback = normalizeText(html).match(new RegExp(`${raceNo}(?:R|レース)\\s*([^\\n]+)`))?.[1]?.trim() ?? "";
+  return isInvalidRaceName(fallback) ? `${raceNo}レース` : fallback;
+}'''
+          p.write_text(s[:start] + replacement + s[end:])
+          PY
+      - name: Verify parser guard
+        run: |
+          grep -n "isInvalidRaceName" src/v1/jra.ts
+          grep -n "検索" src/v1/jra.ts
+          npm run check --if-present
+      - name: Commit parser patch
+        run: |
+          if git diff --quiet -- src/v1/jra.ts; then
+            echo 'No parser diff to commit'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/v1/jra.ts
+          git commit -m 'fix: reject JRA search UI text as race names'
+          git push origin HEAD:${{ github.ref_name }}
