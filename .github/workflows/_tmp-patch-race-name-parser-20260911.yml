@@ -22,36 +22,17 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Patch parser safety
+        env:
+          REPLACEMENT_B64: ZnVuY3Rpb24gaXNJbnZhbGlkUmFjZU5hbWUodmFsdWU6IHN0cmluZyk6IGJvb2xlYW4gewogIGNvbnN0IHRleHQgPSB2YWx1ZS5yZXBsYWNlKC9ccysvZywgIiAiKS50cmltKCk7CiAgaWYgKCF0ZXh0KSByZXR1cm4gdHJ1ZTsKICBpZiAoL14oPzrmpJzntKIoPzrjgqbjgqPjg7Pjg4njgqZ8窓kP3xメニューを開く|JRAホーム|レース情報トップ|出馬表|レース|レース結果|払戻金|関連メニュー|コースレコード|勝馬の紹介KSQvLnRlc3QodGV4dCkpIHJldHVybiB0cnVlOwogIHJldHVybiBmYWxzZTsKfQoKZnVuY3Rpb24gcGFyc2VSYWNlTmFtZShodG1sOiBzdHJpbmcsIHJhY2VObzogbnVtYmVyKTogc3RyaW5nIHsKICBjb25zdCBleHBsaWNpdEh0bWwgPSBodG1sLm1hdGNoKC88c3BhblxiW14+XSpjbGFzcz1bIiddW14iJ10qXHRpdGxlUmFjZU5hbWVcYlteIiddKlsiJ11bXj5dKj4oW1xzXFNdKj8pPFwvc3Bhbj4vaSk/LlsxXTsKICBpZiAoZXhwbGljaXRIdG1sKSB7CiAgICBjb25zdCBleHBsaWNpdE5hbWUgPSBzdHJpcEh0bWwoZXhwbGljaXRIdG1sKS5yZXBsYWNlKC9ccysvZywgIiAiKS50cmltKCk7CiAgICBpZiAoIWlzSW52YWxpZFJhY2VOYW1lKGV4cGxpY2l0TmFtZSkpIHJldHVybiBleHBsaWNpdE5hbWU7CiAgfQogIGZvciAoY29uc3QgcmF3IG9mIGhlYWRpbmdUZXh0cyhodG1sKSkgewogICAgY29uc3QgdGV4dCA9IHJhdy5yZXBsYWNlKG5ldyBSZWdFeHAoYF4ke3JhY2VOb30oPzpSfOODrOODvOOCuylcXHMqYCksICIiKS50cmltKCk7CiAgICBpZiAoaXNJbnZhbGlkUmFjZU5hbWUodGV4dCkpIGNvbnRpbnVlOwogICAgaWYgKC8yMFxkezJ95bm0fFxkK+Wbnu+8iOacrOacreiMmeiLseemj+Wztu+8jOaWsOa9nO+8jOadseS6rO+8jOS4reWxse+8jOS4reS6rO+8jOS6rOmDve+8jOmYquelnue8jOWwjOWAieiMie+8jOePreeenSneWw+S4gOaXl+8iLnRlc3QodGV4dCkpIGNvbnRpbnVlOwogICAgaWYgKC9eKD86XGQr5q2zfOmal+Wus3zjgrXjg6nns7spLy50ZXN0KHRleHQpICYmIC8oPzrvgq/jg6njgrl85pyq5Yud5YipfOaWsOmmrHzjgqrjg7zjg5fjg7MpLy50ZXN0KHRleHQpKSBjb250aW51ZTsKICAgIHJldHVybiB0ZXh0OwogIH0KICBjb25zdCBmYWxsYmFjayA9IG5vcm1hbGl6ZVRleHQoaHRtbCkubWF0Y2gobmV3IFJlZ0V4cChgJHtyYWNlTm99KD86Unzjg6zjg7zjgrkpXFxzKihbXlxcbl0rKWBpKVsxXT8udHJpbSgpID8/ICIiOwogIHJldHVybiBpc0ludmFsaWRSYWNlTmFtZShmYWxsYmFjaykgPyBgJHtyYWNlTm9944Os44O844K5YCA6IGZhbGxiYWNrOwp9
         run: |
           python - <<'PY'
+          import base64, os
           from pathlib import Path
           p = Path('src/v1/jra.ts')
           s = p.read_text()
           start = s.index('function parseRaceName(html: string, raceNo: number): string {')
           end = s.index('\n\nfunction parseHeader(', start)
-          replacement = r'''function isInvalidRaceName(value: string): boolean {
-  const text = value.replace(/\s+/g, " ").trim();
-  if (!text) return true;
-  if (/^(?:検索(?:ウィンドウ|窓)?|メニューを開く|JRAホーム|レース情報トップ|出馬表|レース|レース結果|払戻金|関連メニュー|コースレコード|勝馬の紹介)$/.test(text)) return true;
-  return false;
-}
-
-function parseRaceName(html: string, raceNo: number): string {
-  const explicitHtml = html.match(/<span\b[^>]*class=["'][^"']*\btitleRaceName\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/i)?.[1];
-  if (explicitHtml) {
-    const explicitName = stripHtml(explicitHtml).replace(/\s+/g, " ").trim();
-    if (!isInvalidRaceName(explicitName)) return explicitName;
-  }
-  for (const raw of headingTexts(html)) {
-    const text = raw.replace(new RegExp(`^${raceNo}(?:R|レース)\\s*`), "").trim();
-    if (isInvalidRaceName(text)) continue;
-    if (/20\d{2}年|\d+回(?:札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉)\d+日/.test(text)) continue;
-    if (/^(?:\d+歳|障害|サラ系)/.test(text) && /(?:クラス|未勝利|新馬|オープン)/.test(text)) continue;
-    return text;
-  }
-  const fallback = normalizeText(html).match(new RegExp(`${raceNo}(?:R|レース)\\s*([^\\n]+)`))?.[1]?.trim() ?? "";
-  return isInvalidRaceName(fallback) ? `${raceNo}レース` : fallback;
-}'''
+          replacement = base64.b64decode(os.environ['REPLACEMENT_B64']).decode()
           p.write_text(s[:start] + replacement + s[end:])
           PY
       - name: Verify parser guard
