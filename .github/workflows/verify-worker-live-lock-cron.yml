@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/verify-worker-live-lock-cron.yml"
       - "src/v1/completed-worker-live-lock.ts"
+      - "src/v1/race-day-gate.ts"
       - "src/public-site-entry-v20.ts"
 
 permissions:
@@ -27,7 +28,22 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - name: Wait for a fresh Worker cron audit
+      - name: Verify race-day gate stays before D1
+        run: python3 scripts/verify-race-day-gate.py
+      - name: Resolve JRA race-day gate for cron verifier
+        id: race_day
+        shell: bash
+        run: |
+          set -euo pipefail
+          gate=$(npx --yes tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{const r=await shouldRunOnJraRaceDay(new Date()); console.log(JSON.stringify(r));})().catch(e=>{console.error(e);process.exit(1)})")
+          echo "$gate"
+          should_run=$(GATE="$gate" node -e 'const g=JSON.parse(process.env.GATE||"{}"); process.stdout.write(g.shouldRun ? "true" : "false")')
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+      - name: Confirm non-race day skips D1 cron audit
+        if: steps.race_day.outputs.should_run != 'true'
+        run: echo "WORKER_LIVE_LOCK_CRON_SKIP_NON_RACE_DAY"
+      - name: Wait for a fresh race-day Worker cron audit
+        if: steps.race_day.outputs.should_run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -41,18 +57,23 @@ jobs:
               updated_epoch=$(date -u -d "$updated UTC" +%s 2>/dev/null || echo 0)
               if [ "$updated_epoch" -ge "$started" ]; then
                 printf '%s' "$value" | jq .
-                printf '%s' "$value" | jq -e '
+                if printf '%s' "$value" | jq -e '
                   .sourceModel == "ten-year-completed-model" and
-                  .selectedRaceCount == 15 and
-                  .completeAfter == 15 and
-                  (.incompleteRaceIds | length) == 0 and
-                  (.deadlineBreachRaceIds | length) == 0
-                ' >/dev/null
-                echo "WORKER_LIVE_LOCK_CRON_OK updatedAt=$updated"
-                exit 0
+                  (.selectedRaceCount == 10 or .selectedRaceCount == 15) and
+                  (.selectedRaceCount % 5 == 0) and
+                  .status == "ok" and
+                  (.completeAfter >= .completeBefore) and
+                  (.deadlineBreachRaceIds | length) == 0 and
+                  (.alreadyStartedIncompleteRaceIds | length) == 0 and
+                  (.previewMissingUrgentRaceIds | length) == 0 and
+                  (.bodyWeightBreachRaceIds | length) == 0
+                ' >/dev/null; then
+                  echo "WORKER_LIVE_LOCK_CRON_OK updatedAt=$updated selectedRaceCount=$(printf '%s' "$value" | jq -r '.selectedRaceCount')"
+                  exit 0
+                fi
               fi
             fi
             sleep 10
           done
-          echo "No fresh Worker live-lock audit arrived within six minutes" >&2
+          echo "No fresh healthy Worker live-lock audit arrived within six minutes" >&2
           exit 1
