@@ -49,8 +49,8 @@ jobs:
           TS
           npx tsx check-race-name.ts
           rm check-race-name.ts
-      - name: Run repository checks
-        run: npm run check --if-present
+      - name: Run stable repository checks
+        run: npm run typecheck && npm run build:test && npm run test:unit
       - name: Commit parser patch
         run: |
           git config user.name 'github-actions[bot]'
