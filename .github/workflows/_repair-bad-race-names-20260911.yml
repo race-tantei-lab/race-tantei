@@ -26,7 +26,7 @@ jobs:
       - run: npm ci
       - name: Inspect bad race names before repair
         run: |
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id,race_date,venue,race_no,race_name,entry_url FROM rt_races WHERE race_date IN ('2026-09-12','2026-09-13') AND (race_name LIKE '%検索%' OR race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース')) ORDER BY race_date,venue,race_no" | tee /tmp/before.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id,race_date,venue,race_no,race_name,entry_url FROM rt_races WHERE race_date IN ('2026-09-12','2026-09-13') AND (race_name LIKE '%検索%' OR race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース','開催お知らせ','緊急情報','関連メニュー')) ORDER BY race_date,venue,race_no" | tee /tmp/before.json
       - name: Build bounded official entry-page repair SQL
         run: |
           cat > /tmp/build-repair.ts <<'TS'
@@ -34,15 +34,17 @@ jobs:
           import { pathToFileURL } from 'node:url';
 
           type BadRow = { race_id: string; race_date: string; venue: string; race_no: number; race_name: string; entry_url: string | null };
-          const suspicious = (value: string) => /検索|メニューを開く|JRAホーム|レース情報トップ|^(?:出馬表|レース)$/.test(String(value || '').trim());
+          const suspicious = (value: string) => /検索|メニューを開く|JRAホーム|レース情報トップ|^(?:出馬表|レース|開催お知らせ|緊急情報|関連メニュー)$/.test(String(value || '').trim());
           const q = (s: string) => `'${String(s).replaceAll("'", "''")}'`;
+          const badSqlPredicate = "(race_name LIKE '%検索%' OR race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース','開催お知らせ','緊急情報','関連メニュー'))";
 
           async function main() {
             const payload = JSON.parse(readFileSync('/tmp/before.json', 'utf8')) as Array<{ results?: BadRow[] }>;
             const rows = payload.flatMap((part) => part.results ?? []);
             const mod = await import(pathToFileURL(process.cwd() + '/src/v1/jra.ts').href);
             const { fetchJraPage, parseEntryPage } = mod;
-            const sql: string[] = ['BEGIN;'];
+            const sql: string[] = [];
+            const proposedNames: string[] = [];
             let repaired = 0;
             for (const row of rows) {
               if (!row.entry_url) throw new Error(`ENTRY_URL_MISSING:${row.race_id}`);
@@ -57,12 +59,15 @@ jobs:
               if (suspicious(race.raceName) || /^\d+レース$/.test(race.raceName)) {
                 throw new Error(`BAD_OFFICIAL_ENTRY_NAME:${row.race_id}:${race.raceName}`);
               }
-              sql.push(`UPDATE rt_races SET race_name=${q(race.raceName)},updated_at=CURRENT_TIMESTAMP WHERE race_id=${q(row.race_id)} AND (race_name LIKE '%検索%' OR race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース'));`);
+              proposedNames.push(race.raceName);
+              sql.push(`UPDATE rt_races SET race_name=${q(race.raceName)},updated_at=CURRENT_TIMESTAMP WHERE race_id=${q(row.race_id)} AND ${badSqlPredicate};`);
               repaired += 1;
               console.log(`${row.race_id}: ${row.race_name} -> ${race.raceName}`);
             }
-            sql.push('COMMIT;');
-            writeFileSync('/tmp/repair.sql', sql.join('\n'));
+            if (proposedNames.length >= 2 && new Set(proposedNames).size === 1) {
+              throw new Error(`SUSPICIOUS_IDENTICAL_REPAIR_NAMES:${proposedNames[0]}:${proposedNames.length}`);
+            }
+            writeFileSync('/tmp/repair.sql', sql.length ? `${sql.join('\n')}\n` : '-- no bad rows\n');
             console.log(`bad_rows=${rows.length} repair_statements=${repaired}`);
             if (rows.length > 0 && repaired !== rows.length) throw new Error(`INCOMPLETE_REPAIR_PLAN:${repaired}/${rows.length}`);
           }
@@ -74,7 +79,7 @@ jobs:
         run: npx wrangler d1 execute race-tantei-phase0 --remote --file=/tmp/repair.sql
       - name: Verify current and upcoming rows are clean
         run: |
-          result=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id,race_date,venue,race_no,race_name FROM rt_races WHERE race_date IN ('2026-09-12','2026-09-13') AND (race_name LIKE '%検索%' OR race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース')) ORDER BY race_date,venue,race_no")
+          result=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id,race_date,venue,race_no,race_name FROM rt_races WHERE race_date IN ('2026-09-12','2026-09-13') AND (race_name LIKE '%検索%' OR race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース','開催お知らせ','緊急情報','関連メニュー')) ORDER BY race_date,venue,race_no")
           echo "$result"
           RESULT="$result" node - <<'NODE'
           const payload=JSON.parse(process.env.RESULT||'[]');
