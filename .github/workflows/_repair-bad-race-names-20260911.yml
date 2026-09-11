@@ -28,9 +28,10 @@ jobs:
       - name: Build bounded official-name repair SQL
         run: |
           cat > /tmp/build-repair.ts <<'TS'
-          import { parseOfficialCalendar, officialCalendarUrl } from process.cwd() + '/src/v1/jra-calendar.ts';
           import { writeFileSync } from 'node:fs';
 
+          const mod = await import(process.cwd() + '/src/v1/jra-calendar.ts');
+          const { parseOfficialCalendar, officialCalendarUrl } = mod;
           const dates = ['2026-09-12','2026-09-13'];
           const bad = `(race_name LIKE '%検索%' OR race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース'))`;
           const q = (s: string) => `'${s.replaceAll("'", "''")}'`;
