@@ -133,21 +133,28 @@ function headingTexts(html: string): string[] {
   return headings;
 }
 
+function isInvalidRaceName(value: string): boolean {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (!text) return true;
+  if (/^(?:検索(?:ウィンドウ|窓)?|メニューを開く|JRAホーム|レース情報トップ|出馬表|レース|レース結果|払戻金|関連メニュー|コースレコード|勝馬の紹介)$/.test(text)) return true;
+  return false;
+}
+
 function parseRaceName(html: string, raceNo: number): string {
   const explicitHtml = html.match(/<span\b[^>]*class=["'][^"']*\btitleRaceName\b[^"']*["'][^>]*>([\s\S]*?)<\/span>/i)?.[1];
   if (explicitHtml) {
     const explicitName = stripHtml(explicitHtml).replace(/\s+/g, " ").trim();
-    if (explicitName) return explicitName;
+    if (!isInvalidRaceName(explicitName)) return explicitName;
   }
   for (const raw of headingTexts(html)) {
     const text = raw.replace(new RegExp(`^${raceNo}(?:R|レース)\\s*`), "").trim();
-    if (!text || /^(?:出馬表|レース結果|払戻金|関連メニュー|コースレコード|勝馬の紹介)$/.test(text)) continue;
+    if (isInvalidRaceName(text)) continue;
     if (/20\d{2}年|\d+回(?:札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉)\d+日/.test(text)) continue;
     if (/^(?:\d+歳|障害|サラ系)/.test(text) && /(?:クラス|未勝利|新馬|オープン)/.test(text)) continue;
     return text;
   }
-  const match = normalizeText(html).match(new RegExp(`${raceNo}(?:R|レース)\\s*([^\\n]+)`));
-  return match?.[1]?.trim() || `${raceNo}レース`;
+  const fallback = normalizeText(html).match(new RegExp(`${raceNo}(?:R|レース)\\s*([^\\n]+)`))?.[1]?.trim() ?? "";
+  return isInvalidRaceName(fallback) ? `${raceNo}レース` : fallback;
 }
 
 function parseHeader(html: string, pageUrl: string, isResult: boolean): RaceRecord {
