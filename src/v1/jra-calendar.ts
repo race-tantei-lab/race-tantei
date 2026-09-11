@@ -3,6 +3,8 @@ import { fetchJraPage } from "./jra.js";
 import { htmlToLines, parseJapaneseDateTime } from "./utils.js";
 
 const VENUES = "札幌|函館|福島|新潟|東京|中山|中京|京都|阪神|小倉";
+const CALENDAR_NAVIGATION_TEXT = /検索(?:ウィンドウ|メニュー)?|サイト内検索|メニューを開く|JRAホーム|レース情報トップ/i;
+const CALENDAR_STANDALONE_UI_TEXT = /^(?:JRA|オッズ|出馬表|レース結果|検索|メニュー|レース)$/i;
 
 function venueSlug(venue: string): string {
   const map: Record<string, string> = {
@@ -19,6 +21,18 @@ function meetingHeading(value: string): { venue: string; meetingNo: number; meet
   return { venue: match[2] ?? "", meetingNo: Number(match[1]), meetingDay: Number(match[3]) };
 }
 
+function isCalendarNavigationText(value: string): boolean {
+  const clean = value.replace(/[\s\u3000]+/g, " ").trim();
+  return !clean || CALENDAR_NAVIGATION_TEXT.test(clean) || CALENDAR_STANDALONE_UI_TEXT.test(clean);
+}
+
+function stripCalendarNavigationText(value: string): string {
+  return value
+    .replace(/検索ウィンドウ|検索メニュー|サイト内検索|メニューを開く|JRAホーム|レース情報トップ/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function jstDateKey(date = new Date(), offsetDays = 0): string {
   const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000 + offsetDays * 24 * 60 * 60 * 1000);
   return `${jst.getUTCFullYear()}-${String(jst.getUTCMonth() + 1).padStart(2, "0")}-${String(jst.getUTCDate()).padStart(2, "0")}`;
@@ -33,7 +47,7 @@ export function officialCalendarUrl(raceDate: string): string {
 function descriptorParts(descriptor: string, raceNo: number): {
   raceName: string; conditions: string; surface: string | null; distanceM: number | null; direction: string | null;
 } {
-  const clean = descriptor.replace(/\s+/g, " ").trim();
+  const clean = stripCalendarNavigationText(descriptor);
   const distance = clean.match(/([0-9,]{3,5})\s*[（(]([^）)]+)[）)]/);
   const inside = distance?.[2] ?? "";
   const distanceM = distance?.[1] ? Number(distance[1].replace(/,/g, "")) : null;
@@ -45,6 +59,7 @@ function descriptorParts(descriptor: string, raceNo: number): {
   if (!raceName) {
     raceName = clean.match(/^(?:障害)?(?:2歳|3歳|4歳|3歳以上|4歳以上)(?:\s|　)*(?:未勝利|新馬|1勝クラス|2勝クラス|3勝クラス|オープン)/)?.[0]?.replace(/\s+/g, "") ?? `${raceNo}レース`;
   }
+  if (isCalendarNavigationText(raceName)) raceName = `${raceNo}レース`;
   return { raceName, conditions: clean, surface, distanceM, direction };
 }
 
@@ -73,7 +88,7 @@ export function parseOfficialCalendar(html: string, raceDate: string, _calendarU
 
     const full = line.match(/^(\d{1,2})\s*レース\s+(.+?)\s+(\d{1,2})時(\d{2})分$/);
     if (full) {
-      raceNo = Number(full[1]); descriptor = full[2] ?? ""; hour = Number(full[3]); minute = Number(full[4]);
+      raceNo = Number(full[1]); descriptor = stripCalendarNavigationText(full[2] ?? ""); hour = Number(full[3]); minute = Number(full[4]);
     } else {
       const raceOnly = line.match(/^(\d{1,2})\s*レース$/);
       if (!raceOnly) continue;
@@ -84,9 +99,9 @@ export function parseOfficialCalendar(html: string, raceDate: string, _calendarU
         if (meetingHeading(next) || /^\d{1,2}\s*レース$/.test(next)) break;
         const time = next.match(/^(\d{1,2})時(\d{2})分$/);
         if (time) { hour = Number(time[1]); minute = Number(time[2]); i = j; break; }
-        if (!/^(?:レース\s*番号|レース名・条件|発走時刻|---|\|)/.test(next)) pieces.push(next);
+        if (!/^(?:レース\s*番号|レース名・条件|発走時刻|---|\|)/.test(next) && !isCalendarNavigationText(next)) pieces.push(next);
       }
-      descriptor = pieces.join(" ").trim();
+      descriptor = stripCalendarNavigationText(pieces.join(" "));
     }
 
     if (raceNo < 1 || raceNo > 12 || !descriptor || hour < 1 || minute < 0 || minute > 59) continue;
