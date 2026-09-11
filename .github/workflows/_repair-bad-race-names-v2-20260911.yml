@@ -1,0 +1,78 @@
+name: Repair bad race names v2 2026-09-11
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/_repair-bad-race-names-v2-20260911.yml'
+      - 'src/v1/jra.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Inspect suspicious current and upcoming names
+        run: |
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id,race_date,venue,race_no,race_name,entry_url FROM rt_races WHERE race_date IN ('2026-09-12','2026-09-13') AND (race_name LIKE '%検索%' OR race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース','緊急情報','JRAからのお知らせ')) ORDER BY race_date,venue,race_no" | tee /tmp/before.json
+      - name: Resolve every suspicious name from its official JRA entry page
+        run: |
+          cat > repair-race-names.ts <<'TS'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { fetchJraPage, parseEntryPage } from './src/v1/jra.ts';
+          type BadRow = { race_id:string; race_date:string; venue:string; race_no:number; race_name:string; entry_url:string|null };
+          const bad = (v:string) => /検索|メニューを開く|JRAホーム|レース情報トップ|緊急情報|JRAからのお知らせ|^(?:出馬表|レース)$/.test(String(v||'').trim());
+          const payload = JSON.parse(readFileSync('/tmp/before.json','utf8')) as Array<{results?:BadRow[]}>;
+          const rows = payload.flatMap(x=>x.results??[]);
+          const out:Array<{race_id:string;race_name:string}> = [];
+          for (const row of rows) {
+            if (!row.entry_url) throw new Error(`ENTRY_URL_MISSING:${row.race_id}`);
+            const host = new URL(row.entry_url).hostname;
+            if (!['www.jra.go.jp','jra.jp','sp.jra.jp'].includes(host)) throw new Error(`NON_JRA_URL:${row.race_id}:${host}`);
+            const page = await fetchJraPage(row.entry_url);
+            const race = parseEntryPage(page.html,page.url).race;
+            if (race.raceDate!==row.race_date || race.venue!==row.venue || Number(race.raceNo)!==Number(row.race_no)) throw new Error(`IDENTITY_MISMATCH:${row.race_id}`);
+            if (bad(race.raceName) || /^\d+レース$/.test(race.raceName)) throw new Error(`BAD_RESOLVED_NAME:${row.race_id}:${race.raceName}`);
+            out.push({race_id:row.race_id,race_name:race.raceName});
+            console.log(`${row.race_id}: ${row.race_name} -> ${race.raceName}`);
+          }
+          writeFileSync('/tmp/repairs.json',JSON.stringify(out));
+          console.log(`resolved=${out.length}`);
+          TS
+          npx tsx repair-race-names.ts
+          rm repair-race-names.ts
+      - name: Apply bounded conditional updates without bulk-import transaction
+        run: |
+          node <<'NODE'
+          const fs=require('fs');
+          const {spawnSync}=require('child_process');
+          const rows=JSON.parse(fs.readFileSync('/tmp/repairs.json','utf8'));
+          const q=s=>`'${String(s).replaceAll("'","''")}'`;
+          for(const row of rows){
+            const sql=`UPDATE rt_races SET race_name=${q(row.race_name)},updated_at=CURRENT_TIMESTAMP WHERE race_id=${q(row.race_id)} AND (race_name LIKE '%検索%' OR race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース','緊急情報','JRAからのお知らせ'))`;
+            const r=spawnSync('npx',['wrangler','d1','execute','race-tantei-phase0','--remote','--command',sql],{stdio:'inherit',env:process.env});
+            if(r.status!==0) process.exit(r.status||1);
+          }
+          NODE
+      - name: Verify suspicious names are zero
+        run: |
+          result=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "SELECT race_id,race_date,venue,race_no,race_name FROM rt_races WHERE race_date IN ('2026-09-12','2026-09-13') AND (race_name LIKE '%検索%' OR race_name IN ('メニューを開く','JRAホーム','レース情報トップ','出馬表','レース','緊急情報','JRAからのお知らせ')) ORDER BY race_date,venue,race_no")
+          echo "$result"
+          RESULT="$result" node - <<'NODE'
+          const p=JSON.parse(process.env.RESULT||'[]');
+          const rows=(p||[]).flatMap(x=>x.results||[]);
+          if(rows.length) throw new Error(`BAD_RACE_NAMES_REMAIN:${JSON.stringify(rows)}`);
+          console.log('BAD_RACE_NAMES_CURRENT_UPCOMING=0');
+          NODE
