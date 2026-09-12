@@ -83,7 +83,9 @@ def main():
 
     require('LIVE_DEADLINE_ROLE' in wrapper and 'role === "backup"' in wrapper,'LIVE_BACKUP_ROLE_MISSING')
     require('if (await primaryIsAlive(env.DB)) return;' in wrapper,'LIVE_BACKUP_TRUE_STANDBY_GUARD_MISSING')
-    require('await liveDeadlineV2.scheduled(controller, env);' in wrapper,'LIVE_PRIMARY_OR_BACKUP_WORKER_PATH_MISSING')
+    require('const liveEnv = safeEnv(env);' in wrapper,'LIVE_FREE_TIER_SAFE_ENV_MISSING')
+    require(wrapper.count('await liveDeadlineV2.scheduled(controller, liveEnv);') >= 2,'LIVE_PRIMARY_OR_BACKUP_SAFE_WORKER_PATH_MISSING')
+    require('await liveDeadlineV2.scheduled(controller, env);' not in wrapper,'LIVE_RAW_DB_WORKER_PATH_REINTRODUCED')
 
     cfg=json.loads(text('config/ten-year-completed-model.json'))
     require(str(cfg['runnerProbabilityModel']['modelWeightsSha256'])==EXPECTED_MODEL_SHA,'MODEL_CONFIG_SHA_CHANGED')
@@ -102,7 +104,7 @@ def main():
         'actualGenerationStartRecheck':True,
         'freshReflectionDeadlineMinutes':10,
         'postT15GenerationStart':False,
-        'backupMode':'same_worker_true_standby',
+        'backupMode':'same_worker_true_standby_free_tier_safe_db',
         'officialBodyweightAppliedWhenAvailable':True,
     },ensure_ascii=False))
 
