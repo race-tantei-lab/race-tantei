@@ -37,7 +37,11 @@ def main() -> None:
     primary_main = str(primary_cfg.get("main") or "")
     backup_main = str(backup_cfg.get("main") or "")
 
-    require(public_main == "src/public-site-entry-recovery-20260906.ts", f"unexpected public entry: {public_main}")
+    allowed_public_entries = {
+        "src/public-site-entry-recovery-20260906.ts",
+        "src/public-site-entry-quota-recovery-20260912.ts",
+    }
+    require(public_main in allowed_public_entries, f"unexpected public entry: {public_main}")
     require(primary_main == backup_main, "primary/backup must use the exact same live entry")
     require(primary_main == "src/live-deadline-entry-v3.ts", f"unexpected live entry: {primary_main}")
     require(primary_cfg.get("triggers", {}).get("crons", []) == ["* * * * *"], "primary cron must remain every minute")
@@ -46,16 +50,34 @@ def main() -> None:
     require(backup_cfg.get("vars", {}).get("LIVE_DEADLINE_ROLE") == "backup", "backup role mismatch")
 
     public = read(public_main)
-    for forbidden in (
-        "runCompletedWorkerLiveLock",
-        "runCompletedWorkerDeadlineGuard",
-        "runDirectLiveTick",
-        "publicSite.scheduled",
-        "CREATE TABLE",
-        "CREATE INDEX",
-        "CREATE TRIGGER",
-    ):
-        forbid_text(public, forbidden, "public Worker live isolation")
+    public_sources = {public_main: public}
+    if public_main == "src/public-site-entry-quota-recovery-20260912.ts":
+        for needle in (
+            'import recovery from "./public-site-entry-recovery-20260906.js";',
+            "RECENT_PUBLIC_DAY_SNAPSHOT",
+            'date === "2026-09-12"',
+            "PUBLIC_D1_READ_LOCKOUT_SKIP",
+            'fallbackSource: "recent-public-day-snapshot-v1-quota-lockout"',
+            "if (recovery.scheduled) await recovery.scheduled(controller, env, ctx);",
+        ):
+            require_text(public, needle, "public quota recovery")
+        lockout = public.index('if (date === "2026-09-12")')
+        lockout_return = public.index("return;", lockout)
+        delegated_schedule = public.index("recovery.scheduled", lockout_return)
+        require(lockout < lockout_return < delegated_schedule, "public quota lockout must return before delegated D1 maintenance")
+        public_sources["src/public-site-entry-recovery-20260906.ts"] = read("src/public-site-entry-recovery-20260906.ts")
+
+    for path, source in public_sources.items():
+        for forbidden in (
+            "runCompletedWorkerLiveLock",
+            "runCompletedWorkerDeadlineGuard",
+            "runDirectLiveTick",
+            "publicSite.scheduled",
+            "CREATE TABLE",
+            "CREATE INDEX",
+            "CREATE TRIGGER",
+        ):
+            forbid_text(source, forbidden, f"public Worker live isolation: {path}")
 
     live_entry = read(primary_main)
     for needle in (
@@ -66,9 +88,16 @@ def main() -> None:
         'if (role === "backup")',
         "if (await primaryIsAlive(env.DB)) return;",
         "LIVE_DEADLINE_BACKUP_TAKEOVER",
-        "await liveDeadlineV2.scheduled(controller, env);",
+        "function isHistoricalRecencyScan",
+        "function freeTierSafeDb",
+        "function safeEnv",
+        "LIVE_RECENCY_HISTORY_SCAN_SKIPPED_FREE_TIER",
+        "const liveEnv = safeEnv(env);",
+        "await liveDeadlineV2.scheduled(controller, liveEnv);",
     ):
         require_text(live_entry, needle, "live entry")
+    require(live_entry.count("await liveDeadlineV2.scheduled(controller, liveEnv);") >= 2, "primary and backup must both use free-tier safe DB wrapper")
+    forbid_text(live_entry, "await liveDeadlineV2.scheduled(controller, env);", "live entry raw DB path")
 
     runtime_schema_sensitive = {
         primary_main: live_entry,
@@ -188,7 +217,7 @@ def main() -> None:
     for obsolete in (".github/workflows/drive-live-tick.yml", ".github/workflows/auto-final-live-bets.yml"):
         require(not (ROOT / obsolete).exists(), f"obsolete workflow must remain removed: {obsolete}")
 
-    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=5m public_live_mutation=false")
+    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=5m public_live_mutation=false free_tier_historical_scan=false")
 
 
 if __name__ == "__main__":
