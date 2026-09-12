@@ -23,6 +23,36 @@ CREATE TABLE IF NOT EXISTS rt_live_deadline_lease (
 DROP TRIGGER IF EXISTS rt_archive_live_preview_insert;
 DROP TRIGGER IF EXISTS rt_archive_live_preview_update;
 
+-- Keep a verified race name from being overwritten by JRA page chrome.
+-- This protects the storage boundary even if any parser/updater regresses.
+DROP TRIGGER IF EXISTS rt_guard_race_name_update_chrome;
+CREATE TRIGGER rt_guard_race_name_update_chrome
+AFTER UPDATE OF race_name ON rt_races
+WHEN
+  (
+    trim(COALESCE(NEW.race_name, '')) = ''
+    OR instr(NEW.race_name, '検索ウィンドウ') > 0
+    OR NEW.race_name IN (
+      '検索','検索窓','検索メニュー','サイト内検索','メニューを開く','JRAホーム',
+      'レース情報トップ','出馬表','レース','レース結果','払戻金','関連メニュー',
+      '開催お知らせ','緊急情報','コースレコード','勝馬の紹介',
+      '開催選択へ戻る','レース選択へ戻る'
+    )
+  )
+  AND NOT (
+    trim(COALESCE(OLD.race_name, '')) = ''
+    OR instr(OLD.race_name, '検索ウィンドウ') > 0
+    OR OLD.race_name IN (
+      '検索','検索窓','検索メニュー','サイト内検索','メニューを開く','JRAホーム',
+      'レース情報トップ','出馬表','レース','レース結果','払戻金','関連メニュー',
+      '開催お知らせ','緊急情報','コースレコード','勝馬の紹介',
+      '開催選択へ戻る','レース選択へ戻る'
+    )
+  )
+BEGIN
+  UPDATE rt_races SET race_name=OLD.race_name WHERE race_id=NEW.race_id;
+END;
+
 -- Final-bet deadline and immutability guards. These are provisioned here once,
 -- then runtime only verifies that they remain present.
 DROP TRIGGER IF EXISTS rt_guard_final_bet_insert_deadline;
