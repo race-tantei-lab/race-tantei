@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,6 +35,36 @@ def assert_gate_before_d1(entry_path: str, label: str) -> None:
     require(gate < stop < early_return < first_db, f"{label}_NON_RACE_DAY_GATE_NOT_BEFORE_D1")
 
 
+def assert_public_gate(public_main: str) -> None:
+    source = text(public_main)
+    body = scheduled_body(source)
+    if "await shouldRunOnJraRaceDay" in body:
+        gate = body.index("await shouldRunOnJraRaceDay")
+        stop = body.index("if (!raceDay.shouldRun)", gate)
+        early_return = body.index("return;", stop)
+        maintenance = body.index("runBoundedPublicMaintenance", early_return)
+        require(gate < stop < early_return < maintenance, "PUBLIC_NON_RACE_DAY_GATE_NOT_BEFORE_MAINTENANCE")
+        return
+
+    lockout = body.index('date === "2026-09-12"')
+    skip = body.index("PUBLIC_D1_READ_LOCKOUT_SKIP", lockout)
+    early_return = body.index("return;", skip)
+    delegate = body.index("recovery.scheduled", early_return)
+    require(lockout < skip < early_return < delegate, "PUBLIC_QUOTA_LOCKOUT_NOT_BEFORE_DELEGATE")
+    require("env.DB" not in body[:delegate], "PUBLIC_QUOTA_WRAPPER_D1_BEFORE_DELEGATE")
+
+    match = re.search(r'import recovery from ["\'](\./[^"\']+)\.js["\'];', source)
+    require(match is not None, "PUBLIC_RECOVERY_DELEGATE_IMPORT_MISSING")
+    recovery_rel = match.group(1)
+    recovery_path = (Path(public_main).parent / (recovery_rel[2:] + ".ts")).as_posix()
+    recovery = scheduled_body(text(recovery_path))
+    gate = recovery.index("await shouldRunOnJraRaceDay")
+    stop = recovery.index("if (!raceDay.shouldRun)", gate)
+    recovery_return = recovery.index("return;", stop)
+    maintenance = recovery.index("runBoundedPublicMaintenance", recovery_return)
+    require(gate < stop < recovery_return < maintenance, "PUBLIC_DELEGATE_NON_RACE_DAY_GATE_NOT_BEFORE_MAINTENANCE")
+
+
 def main() -> None:
     gate = text("src/v1/race-day-gate.ts")
     public_cfg = config("wrangler.jsonc")
@@ -58,13 +89,7 @@ def main() -> None:
     require('reason: "unparsed_calendar_fail_open"' in gate, "RACE_DAY_GATE_PARSER_FAIL_OPEN_MISSING")
 
     assert_gate_before_d1(primary_main, "LIVE")
-
-    public = scheduled_body(text(public_main))
-    public_gate = public.index("await shouldRunOnJraRaceDay")
-    public_stop = public.index("if (!raceDay.shouldRun)", public_gate)
-    public_return = public.index("return;", public_stop)
-    public_maintenance = public.index("runBoundedPublicMaintenance", public_return)
-    require(public_gate < public_stop < public_return < public_maintenance, "PUBLIC_NON_RACE_DAY_GATE_NOT_BEFORE_MAINTENANCE")
+    assert_public_gate(public_main)
 
     require(primary_cfg.get("triggers", {}).get("crons", []) == ["* * * * *"], "PRIMARY_CRON_CHANGED")
     require(backup_cfg.get("triggers", {}).get("crons", []) == ["2-59/5 * * * *"], "BACKUP_CRON_NOT_FIVE_MINUTES")
