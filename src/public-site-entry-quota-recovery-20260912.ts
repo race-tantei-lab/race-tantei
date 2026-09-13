@@ -1,7 +1,7 @@
 import recovery from "./public-site-entry-recovery-20260906.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
 import { postAug9PerformanceResponse } from "./v1/post-aug9-public-fallback.js";
-import { projectCurrentPublicState } from "./v1/current-day-public-api.js";
+import { fastCurrentDayResponse, projectCurrentPublicState } from "./v1/current-day-public-api.js";
 import type { Env } from "./v1/types.js";
 
 type SnapshotRace = {
@@ -245,8 +245,13 @@ export default {
     if (request.method === "GET" && url.pathname === "/api/public/day") {
       const date = url.searchParams.get("date") ?? "";
       if (date === today) {
-        const snapshot = snapshotResponse(date);
-        if (snapshot) return snapshot;
+        try {
+          return await fastCurrentDayResponse(env.DB, date);
+        } catch (error) {
+          console.error("CURRENT_DAY_DIRECT_D1_FAILED_USING_QUOTA_SNAPSHOT", date, error);
+          const snapshot = snapshotResponse(date);
+          if (snapshot) return snapshot;
+        }
       }
     }
     if (request.method === "GET" && url.pathname === "/api/public/daily-performance") {
