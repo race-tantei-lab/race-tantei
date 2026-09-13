@@ -48,6 +48,10 @@ jobs:
           npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
             "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}') SELECT x.raceId,COUNT(b.id) AS finalRows FROM selected x LEFT JOIN rt_public_bets b ON b.race_id=x.raceId AND b.source_prediction_id=-2 GROUP BY x.raceId ORDER BY x.raceId"
 
+          echo '=== LIVE D1 TODAY SUMMARY ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "WITH per_race AS (SELECT b.course,b.race_id,COUNT(*) AS rows,SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END) AS settledRows,SUM(COALESCE(b.stake_yen,0)) AS stakeYen,SUM(COALESCE(b.return_yen,0)) AS returnYen,MAX(CASE WHEN COALESCE(b.return_yen,0)>0 THEN 1 ELSE 0 END) AS hit FROM rt_races r JOIN rt_public_bets b ON b.race_id=r.race_id WHERE r.race_date='${today}' AND b.source_prediction_id=-2 GROUP BY b.course,b.race_id) SELECT course,SUM(CASE WHEN rows=2 THEN 1 ELSE 0 END) AS totalRaces,SUM(CASE WHEN rows=2 AND settledRows=2 THEN 1 ELSE 0 END) AS settledRaces,SUM(CASE WHEN rows=2 AND settledRows=2 AND hit=1 THEN 1 ELSE 0 END) AS hitRaces,SUM(CASE WHEN rows=2 AND settledRows=2 THEN stakeYen ELSE 0 END) AS stakeYen,SUM(CASE WHEN rows=2 AND settledRows=2 THEN returnYen ELSE 0 END) AS returnYen FROM per_race GROUP BY course ORDER BY course"
+
           echo '=== PUBLIC DAY API ==='
           curl --max-time 20 --fail-with-body -sS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=${today}" -o /tmp/public-day.json
           TODAY="$today" node - <<'NODE'
@@ -68,3 +72,8 @@ jobs:
             bytes:Buffer.byteLength(text),
           }));
           NODE
+
+          echo '=== TODAY SUMMARY API ==='
+          curl --max-time 20 --fail-with-body -sS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/today-summary" -o /tmp/today-summary.json
+          cat /tmp/today-summary.json
+          echo
