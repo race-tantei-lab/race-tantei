@@ -47,3 +47,21 @@ jobs:
           echo '=== FINAL BET ROWS FOR SELECTED ==='
           npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
             "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}') SELECT x.raceId,COUNT(b.id) AS finalRows FROM selected x LEFT JOIN rt_public_bets b ON b.race_id=x.raceId AND b.source_prediction_id=-2 GROUP BY x.raceId ORDER BY x.raceId"
+
+          echo '=== PUBLIC DAY API ==='
+          curl --max-time 20 --fail-with-body -sS 'https://race-tantei-phase0.race-tantei.workers.dev/api/public/day' -o /tmp/public-day.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const b=JSON.parse(fs.readFileSync('/tmp/public-day.json','utf8'));
+          const text=JSON.stringify(b);
+          console.log(JSON.stringify({
+            topLevelKeys:Object.keys(b),
+            date:b.date ?? b.raceDate ?? b.day?.date ?? null,
+            fallbackSource:b.fallbackSource ?? null,
+            containsToday:text.includes('2026-09-13'),
+            containsHanshin01:text.includes('2026-09-13-hanshin-01'),
+            containsSourcePredictionMinus2:text.includes('sourcePredictionId') || text.includes('source_prediction_id'),
+            bytes:Buffer.byteLength(text),
+          }));
+          console.log(text.slice(0,12000));
+          NODE
