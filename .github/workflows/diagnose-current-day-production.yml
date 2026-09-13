@@ -49,19 +49,22 @@ jobs:
             "WITH selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:${today}') SELECT x.raceId,COUNT(b.id) AS finalRows FROM selected x LEFT JOIN rt_public_bets b ON b.race_id=x.raceId AND b.source_prediction_id=-2 GROUP BY x.raceId ORDER BY x.raceId"
 
           echo '=== PUBLIC DAY API ==='
-          curl --max-time 20 --fail-with-body -sS 'https://race-tantei-phase0.race-tantei.workers.dev/api/public/day' -o /tmp/public-day.json
-          node - <<'NODE'
+          curl --max-time 20 --fail-with-body -sS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=${today}" -o /tmp/public-day.json
+          TODAY="$today" node - <<'NODE'
           const fs=require('fs');
           const b=JSON.parse(fs.readFileSync('/tmp/public-day.json','utf8'));
           const text=JSON.stringify(b);
+          const today=process.env.TODAY;
+          const h1=(b.races||[]).find(r=>r.raceId===`${today}-hanshin-01`);
           console.log(JSON.stringify({
             topLevelKeys:Object.keys(b),
-            date:b.date ?? b.raceDate ?? b.day?.date ?? null,
+            ok:b.ok ?? null,
+            date:b.date ?? null,
+            betStateAvailable:b.betStateAvailable ?? null,
             fallbackSource:b.fallbackSource ?? null,
-            containsToday:text.includes('2026-09-13'),
-            containsHanshin01:text.includes('2026-09-13-hanshin-01'),
-            containsSourcePredictionMinus2:text.includes('sourcePredictionId') || text.includes('source_prediction_id'),
+            raceCount:Array.isArray(b.races)?b.races.length:null,
+            hanshin01State:h1?.publicState ?? null,
+            containsToday:text.includes(today),
             bytes:Buffer.byteLength(text),
           }));
-          console.log(text.slice(0,12000));
           NODE
