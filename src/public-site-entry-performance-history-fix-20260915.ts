@@ -1,5 +1,6 @@
 import base from "./public-site-entry-quota-recovery-20260912.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
+import { shouldRunOnJraRaceDay } from "./v1/race-day-gate.js";
 import type { Env } from "./v1/types.js";
 
 type SnapshotRace = {
@@ -192,6 +193,7 @@ export default {
     try {
       const payload = await response.clone().json() as PerformancePayload;
       const headers = new Headers(response.headers);
+      headers.delete("content-length");
       headers.set("cache-control", "no-store, max-age=0");
       headers.set("x-race-history-source", HISTORY_SOURCE);
       return Response.json({
@@ -208,6 +210,11 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    const raceDay = await shouldRunOnJraRaceDay(new Date());
+    if (!raceDay.shouldRun) {
+      return;
+    }
+    // runBoundedPublicMaintenance remains owned by the delegated public scheduler.
     if (base.scheduled) await base.scheduled(controller, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
