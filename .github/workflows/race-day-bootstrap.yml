@@ -2,7 +2,8 @@ name: Race-day automatic bootstrap
 
 on:
   schedule:
-    - cron: '1 0 * * *' # 09:01 JST every day; exits immediately when no stored race day exists
+    - cron: '50 22 * * *' # 07:50 JST: pre-selection readiness before the 08:00 selection gate
+    - cron: '1 0 * * *'   # 09:01 JST: second automatic verification before the first races
   workflow_dispatch:
 
 permissions:
@@ -178,7 +179,7 @@ jobs:
           set -euo pipefail
           today='${{ steps.program.outputs.date }}'
           found=0
-          for i in $(seq 1 15); do
+          for i in $(seq 1 25); do
             npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
               "SELECT state_value AS value FROM rt_system_state WHERE state_key='final_daily_selection:$today' LIMIT 1" > /tmp/selection.json
             if python3 - <<'PY'
