@@ -37,7 +37,7 @@ def assert_gate_before_d1(entry_path: str, label: str) -> None:
 
 def resolve_import(entry_path: str, source: str, binding: str) -> str:
     match = re.search(
-        rf'import {re.escape(binding)} from ["\\'](\\./[^"\\']+)\\.js["\\'];',
+        rf"import {re.escape(binding)} from [\\\"'](\\./[^\\\"']+)\\.js[\\\"'];",
         source,
     )
     require(match is not None, f"PUBLIC_DELEGATE_IMPORT_MISSING:{binding}")
