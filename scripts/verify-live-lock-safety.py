@@ -40,6 +40,7 @@ def main() -> None:
     allowed_public_entries = {
         "src/public-site-entry-recovery-20260906.ts",
         "src/public-site-entry-quota-recovery-20260912.ts",
+        "src/public-site-entry-performance-history-fix-20260915.ts",
     }
     require(public_main in allowed_public_entries, f"unexpected public entry: {public_main}")
     require(primary_main == backup_main, "primary/backup must use the exact same live entry")
@@ -51,7 +52,25 @@ def main() -> None:
 
     public = read(public_main)
     public_sources = {public_main: public}
-    if public_main == "src/public-site-entry-quota-recovery-20260912.ts":
+
+    if public_main == "src/public-site-entry-performance-history-fix-20260915.ts":
+        require_text(
+            public,
+            'import base from "./public-site-entry-quota-recovery-20260912.js";',
+            "public performance-history wrapper",
+        )
+        require_text(
+            public,
+            "if (base.scheduled) await base.scheduled(controller, env, ctx);",
+            "public performance-history wrapper",
+        )
+        public_sources["src/public-site-entry-quota-recovery-20260912.ts"] = read(
+            "src/public-site-entry-quota-recovery-20260912.ts"
+        )
+
+    quota_path = "src/public-site-entry-quota-recovery-20260912.ts"
+    if quota_path in public_sources:
+        quota_source = public_sources[quota_path]
         for needle in (
             'import recovery from "./public-site-entry-recovery-20260906.js";',
             "RECENT_PUBLIC_DAY_SNAPSHOT",
@@ -60,12 +79,16 @@ def main() -> None:
             'fallbackSource: "recent-public-day-snapshot-v1-quota-lockout"',
             "if (recovery.scheduled) await recovery.scheduled(controller, env, ctx);",
         ):
-            require_text(public, needle, "public quota recovery")
-        lockout = public.index('if (date === "2026-09-12")')
-        lockout_return = public.index("return;", lockout)
-        delegated_schedule = public.index("recovery.scheduled", lockout_return)
+            require_text(quota_source, needle, "public quota recovery")
+        lockout = quota_source.index('if (date === "2026-09-12")')
+        lockout_return = quota_source.index("return;", lockout)
+        delegated_schedule = quota_source.index("recovery.scheduled", lockout_return)
         require(lockout < lockout_return < delegated_schedule, "public quota lockout must return before delegated D1 maintenance")
-        public_sources["src/public-site-entry-recovery-20260906.ts"] = read("src/public-site-entry-recovery-20260906.ts")
+        public_sources["src/public-site-entry-recovery-20260906.ts"] = read(
+            "src/public-site-entry-recovery-20260906.ts"
+        )
+    elif public_main == "src/public-site-entry-recovery-20260906.ts":
+        public_sources["src/public-site-entry-recovery-20260906.ts"] = public
 
     for path, source in public_sources.items():
         for forbidden in (
