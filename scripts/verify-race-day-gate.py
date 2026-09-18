@@ -35,34 +35,57 @@ def assert_gate_before_d1(entry_path: str, label: str) -> None:
     require(gate < stop < early_return < first_db, f"{label}_NON_RACE_DAY_GATE_NOT_BEFORE_D1")
 
 
+def resolve_import(entry_path: str, source: str, binding: str) -> str:
+    match = re.search(
+        rf'import {re.escape(binding)} from ["\\'](\\./[^"\\']+)\\.js["\\'];',
+        source,
+    )
+    require(match is not None, f"PUBLIC_DELEGATE_IMPORT_MISSING:{binding}")
+    rel = match.group(1)
+    return (Path(entry_path).parent / (rel[2:] + ".ts")).as_posix()
+
+
 def assert_public_gate(public_main: str) -> None:
     source = text(public_main)
     body = scheduled_body(source)
-    if "await shouldRunOnJraRaceDay" in body:
-        gate = body.index("await shouldRunOnJraRaceDay")
-        stop = body.index("if (!raceDay.shouldRun)", gate)
-        early_return = body.index("return;", stop)
-        maintenance = body.index("runBoundedPublicMaintenance", early_return)
-        require(gate < stop < early_return < maintenance, "PUBLIC_NON_RACE_DAY_GATE_NOT_BEFORE_MAINTENANCE")
+
+    # Presentation/API wrappers must delegate scheduler ownership without
+    # touching D1. The lower layer owns the actual race/preparation-day gate.
+    if "if (base.scheduled) await base.scheduled(controller, env, ctx);" in body:
+        delegate = body.index("base.scheduled")
+        require("env.DB" not in body[:delegate], "PUBLIC_OUTER_WRAPPER_D1_BEFORE_DELEGATE")
+        assert_public_gate(resolve_import(public_main, source, "base"))
         return
 
-    lockout = body.index('date === "2026-09-12"')
-    skip = body.index("PUBLIC_D1_READ_LOCKOUT_SKIP", lockout)
-    early_return = body.index("return;", skip)
-    delegate = body.index("recovery.scheduled", early_return)
-    require(lockout < skip < early_return < delegate, "PUBLIC_QUOTA_LOCKOUT_NOT_BEFORE_DELEGATE")
-    require("env.DB" not in body[:delegate], "PUBLIC_QUOTA_WRAPPER_D1_BEFORE_DELEGATE")
+    # Historical quota wrapper: preserve its date-specific lockout, then follow
+    # the delegated scheduler rather than treating this wrapper as the gate.
+    if "PUBLIC_D1_READ_LOCKOUT_SKIP" in body and "recovery.scheduled" in body:
+        lockout = body.index('date === "2026-09-12"')
+        skip = body.index("PUBLIC_D1_READ_LOCKOUT_SKIP", lockout)
+        early_return = body.index("return;", skip)
+        delegate = body.index("recovery.scheduled", early_return)
+        require(lockout < skip < early_return < delegate, "PUBLIC_QUOTA_LOCKOUT_NOT_BEFORE_DELEGATE")
+        require("env.DB" not in body[:delegate], "PUBLIC_QUOTA_WRAPPER_D1_BEFORE_DELEGATE")
+        assert_public_gate(resolve_import(public_main, source, "recovery"))
+        return
 
-    match = re.search(r'import recovery from ["\'](\./[^"\']+)\.js["\'];', source)
-    require(match is not None, "PUBLIC_RECOVERY_DELEGATE_IMPORT_MISSING")
-    recovery_rel = match.group(1)
-    recovery_path = (Path(public_main).parent / (recovery_rel[2:] + ".ts")).as_posix()
-    recovery = scheduled_body(text(recovery_path))
-    gate = recovery.index("await shouldRunOnJraRaceDay")
-    stop = recovery.index("if (!raceDay.shouldRun)", gate)
-    recovery_return = recovery.index("return;", stop)
-    maintenance = recovery.index("runBoundedPublicMaintenance", recovery_return)
-    require(gate < stop < recovery_return < maintenance, "PUBLIC_DELEGATE_NON_RACE_DAY_GATE_NOT_BEFORE_MAINTENANCE")
+    gate = body.index("await shouldRunOnJraRaceDay")
+    maintenance = body.index("runBoundedPublicMaintenance", gate)
+    require("env.DB" not in body[:maintenance], "PUBLIC_D1_BEFORE_GATE_OR_PREPARATION_DECISION")
+
+    if "isPreRacePreparationDay(now)" in body:
+        prep = body.index("isPreRacePreparationDay(now)", gate)
+        stop = body.index("if (!raceDay.shouldRun && !preparationDay)", prep)
+        early_return = body.index("return;", stop)
+        require(
+            gate < prep < stop < early_return < maintenance,
+            "PUBLIC_RACE_OR_PREPARATION_GATE_NOT_BEFORE_MAINTENANCE",
+        )
+        return
+
+    stop = body.index("if (!raceDay.shouldRun)", gate)
+    early_return = body.index("return;", stop)
+    require(gate < stop < early_return < maintenance, "PUBLIC_NON_RACE_DAY_GATE_NOT_BEFORE_MAINTENANCE")
 
 
 def main() -> None:
@@ -94,7 +117,7 @@ def main() -> None:
     require(primary_cfg.get("triggers", {}).get("crons", []) == ["* * * * *"], "PRIMARY_CRON_CHANGED")
     require(backup_cfg.get("triggers", {}).get("crons", []) == ["2-59/5 * * * *"], "BACKUP_CRON_NOT_FIVE_MINUTES")
 
-    print(f"RACE_DAY_GATE_OK public={public_main} live={primary_main} no_d1_before_official_race_day=true primary=1m backup=5m")
+    print(f"RACE_DAY_GATE_OK public={public_main} live={primary_main} public_d1_guarded_for_race_or_preparation_day=true primary=1m backup=5m")
 
 
 if __name__ == "__main__":
