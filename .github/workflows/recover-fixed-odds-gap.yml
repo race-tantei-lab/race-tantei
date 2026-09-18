@@ -1,11 +1,8 @@
 name: Recover fixed archive official odds gap
 run-name: Recover fixed archive official odds gap · ${{ github.sha }}
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/recover-fixed-odds-gap.yml'
   workflow_dispatch:
+
 permissions:
   actions: read
   contents: read

@@ -1,11 +1,6 @@
 name: Probe finished race source columns
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/probe-finished-race-source-columns.py"
-      - ".github/workflows/probe-finished-race-source-columns.yml"
   workflow_dispatch:
 
 permissions:

@@ -1,11 +1,6 @@
 name: Probe JRA historical official odds
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/probe-jra-historical-odds-links.py"
-      - ".github/workflows/probe-jra-historical-odds.yml"
   workflow_dispatch:
 
 permissions:

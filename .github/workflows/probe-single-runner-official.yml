@@ -1,11 +1,8 @@
 name: Recover malformed runner from JRA official page
 run-name: Recover malformed runner · ${{ github.sha }}
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/probe-single-runner-official.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

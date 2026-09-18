@@ -1,9 +1,6 @@
 name: Public home cache hotfix
 
 on:
-  push:
-    paths:
-      - '.github/workflows/prod-home-cache-hotfix.yml'
   workflow_dispatch:
 
 permissions:

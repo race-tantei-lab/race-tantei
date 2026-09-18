@@ -1,11 +1,8 @@
 name: Audit unused pre-race D1 sources
 run-name: Audit unused pre-race D1 sources · ${{ github.sha }}
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/probe-unused-prerace-schema.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

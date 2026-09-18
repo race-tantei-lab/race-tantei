@@ -1,11 +1,6 @@
 name: Probe JRA historical venue bet actions
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/probe-jra-historical-venue-bet-actions.py"
-      - ".github/workflows/probe-jra-historical-venue-bet-actions.yml"
   workflow_dispatch:
 
 permissions:

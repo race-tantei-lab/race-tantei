@@ -1,11 +1,6 @@
 name: Probe historical JRA odds table structure
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/probe-jra-historical-odds-structure.py"
-      - ".github/workflows/probe-jra-historical-odds-structure.yml"
   workflow_dispatch:
 
 permissions:

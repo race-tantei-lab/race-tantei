@@ -1,11 +1,8 @@
 name: Probe historical JRA entry past-four form
 run-name: Probe historical entry past-four · ${{ github.sha }}
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/probe-historical-entry-past4.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

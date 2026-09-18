@@ -1,9 +1,6 @@
 name: Direct production home recovery
 
 on:
-  push:
-    paths:
-      - '.github/workflows/prod-home-direct-recover.yml'
   workflow_dispatch:
 
 permissions:
