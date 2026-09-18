@@ -2,11 +2,6 @@ name: Retry all mobile full official odds
 run-name: Retry all mobile full official odds · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/retry-all-mobile-full-official-odds.py"
-      - ".github/workflows/retry-all-mobile-full-official-odds.yml"
   workflow_dispatch:
 
 permissions:

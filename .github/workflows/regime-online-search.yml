@@ -2,11 +2,6 @@ name: Regime full-period ROI completion search
 run-name: Regime full-period ROI completion search · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/analyze-regime-online-search.py"
-      - ".github/workflows/regime-online-search.yml"
   workflow_dispatch:
 
 permissions:

@@ -2,11 +2,6 @@ name: Rich form full-period completion search
 run-name: Rich form full-period completion search · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/run-rich-form-regime-search.py"
-      - ".github/workflows/rich-form-regime-search.yml"
   workflow_dispatch:
 
 permissions:

@@ -2,12 +2,6 @@ name: Retry all-light mobile official odds
 run-name: Retry all-light mobile official odds · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "analysis-results/all-light-primary-failure-ids.json"
-      - "scripts/retry-all-light-mobile-official-odds.py"
-      - ".github/workflows/retry-all-light-mobile-official-odds.yml"
   workflow_dispatch:
 
 permissions:

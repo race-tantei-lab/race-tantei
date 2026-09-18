@@ -2,11 +2,6 @@ name: Repair current Sapporo 1R
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/repair-sapporo1-current.yml"
-      - "src/v1/jra-payout-fallback.ts"
 
 permissions:
   contents: read

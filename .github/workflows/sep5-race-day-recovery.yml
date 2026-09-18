@@ -1,10 +1,7 @@
 name: Sep 5 race-day recovery
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/sep5-race-day-recovery.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read

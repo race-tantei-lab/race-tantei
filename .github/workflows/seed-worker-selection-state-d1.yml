@@ -2,12 +2,6 @@ name: Seed Worker Selection State D1
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/seed-worker-selection-state-d1.yml"
-      - "scripts/seed-worker-selection-state-d1.py"
-      - "models/ten-year-race-selection-state.json.gz"
 
 permissions:
   contents: read

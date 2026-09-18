@@ -2,13 +2,6 @@ name: Seed Worker Feature State
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/seed-worker-feature-state.yml
-      - scripts/seed-worker-feature-state.py
-      - models/ten-year-runner-feature-state.json.gz
-      - config/ten-year-completed-model.json
 
 permissions:
   contents: read

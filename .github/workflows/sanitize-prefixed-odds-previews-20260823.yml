@@ -1,8 +1,7 @@
 name: Sanitize pre-fix odds previews
 on:
-  push:
-    branches: [main]
-    paths: [".github/workflows/sanitize-prefixed-odds-previews-20260823.yml"]
+  workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

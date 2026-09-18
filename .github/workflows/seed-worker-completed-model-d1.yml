@@ -2,15 +2,6 @@ name: Seed Worker Completed Model D1
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/seed-worker-completed-model-d1.yml"
-      - "scripts/build-worker-completed-model-assets.py"
-      - "scripts/seed-worker-completed-model-d1.py"
-      - "models/ten-year-completed-model.txt"
-      - "config/ten-year-completed-model.json"
-      - "scripts/ten-year-production-core.py"
 
 permissions:
   contents: read

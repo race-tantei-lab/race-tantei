@@ -2,10 +2,6 @@ name: Repair today settlement identity
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/repair-today-settlement-identity.yml"
 
 permissions:
   contents: read

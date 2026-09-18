@@ -2,11 +2,6 @@ name: Repair fixed race context
 run-name: Repair fixed race context · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/repair-fixed-race-context.py"
-      - ".github/workflows/repair-fixed-race-context.yml"
   workflow_dispatch:
 
 permissions:
