@@ -155,9 +155,16 @@ function cnamePrefix(group: MissingGroup, raceNo: number, mode: typeof PROBE_MOD
   return `${mode.family}${mode.viewMode}${venueCode}${year}${String(group.meetingNo).padStart(2, "0")}${String(group.meetingDay).padStart(2, "0")}${String(raceNo).padStart(2, "0")}${date}`;
 }
 
+function upcomingHorizonDays(now: Date): number {
+  const day = jstWeekday(now);
+  if (day === 4) return 4; // Thu -> through possible holiday Monday
+  if (day === 5) return 3; // Fri -> through possible holiday Monday
+  return 2;
+}
+
 async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]> {
   const today = jstDate(now);
-  const maxDate = jstDate(now, 2);
+  const maxDate = jstDate(now, upcomingHorizonDays(now));
   const result = await db.prepare(`
     WITH per_race AS (
       SELECT r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no,
@@ -176,19 +183,13 @@ async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]>
     ORDER BY race_date,venue
   `).bind(today, maxDate).all<MissingGroup>();
 
-  const day = jstWeekday(now);
-  const tomorrow = jstDate(now, 1);
-  const rows = (result.results ?? []).map((row) => ({
+  return (result.results ?? []).map((row) => ({
     ...row,
     meetingNo: Number(row.meetingNo),
     meetingDay: Number(row.meetingDay),
     storedRaces: Number(row.storedRaces),
     readyRaces: Number(row.readyRaces),
-  }));
-  // Friday must finish Saturday first. Saturday must finish the current day before Sunday.
-  if (day === 5) return rows.filter((row) => row.raceDate === tomorrow);
-  if (day === 6 || day === 0) return rows.sort((a, b) => a.raceDate.localeCompare(b.raceDate));
-  return rows;
+  })).sort((a, b) => a.raceDate.localeCompare(b.raceDate) || a.venue.localeCompare(b.venue));
 }
 
 async function existingOfficialAnchor(db: D1Database, group: MissingGroup): Promise<Anchor | null> {
@@ -304,7 +305,9 @@ async function saveCname(db: D1Database, cname: string, expectedDates: Set<strin
 }
 
 async function expandAndSave(db: D1Database, anchorCname: string, anchorHtml: string, now: Date): Promise<string[]> {
-  const expectedDates = new Set([jstDate(now), jstDate(now, 1), jstDate(now, 2)]);
+  const expectedDates = new Set(
+    Array.from({ length: upcomingHorizonDays(now) + 1 }, (_, offset) => jstDate(now, offset)),
+  );
   const cnames = new Set<string>([anchorCname, ...cnameCandidates(anchorHtml)]);
   const saved = new Set<string>();
   let queue = [...cnames];
