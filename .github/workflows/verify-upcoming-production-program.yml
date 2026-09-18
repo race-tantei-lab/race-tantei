@@ -97,6 +97,35 @@ jobs:
           print('RUNTIME_STATE_READY')
           PY
 
+      - name: Verify production Workers and cron ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          primary=$(curl --max-time 20 --retry 4 --retry-delay 2 --fail-with-body -sS 'https://race-tantei-live-deadline.race-tantei.workers.dev/health')
+          backup=$(curl --max-time 20 --retry 4 --retry-delay 2 --fail-with-body -sS 'https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health')
+          PRIMARY="$primary" BACKUP="$backup" node - <<'NODE'
+          const p=JSON.parse(process.env.PRIMARY||'{}');
+          const b=JSON.parse(process.env.BACKUP||'{}');
+          if(p.status!=='up'||b.status!=='up') throw new Error('LIVE_WORKER_NOT_UP');
+          if(p.service!=='race-tantei-live-deadline'||b.service!=='race-tantei-live-deadline') throw new Error('LIVE_WORKER_SERVICE_BAD');
+          if(!p.version||p.version!==b.version) throw new Error('LIVE_WORKER_VERSION_MISMATCH');
+          console.log('LIVE_WORKERS_READY',JSON.stringify({version:p.version,primary:p.status,backup:b.status}));
+          NODE
+
+          check_schedule() {
+            script="$1"; expected="$2"
+            body=$(curl --max-time 20 --retry 4 --retry-delay 2 --fail-with-body -sS               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${script}/schedules"               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
+            BODY="$body" SCRIPT="$script" EXPECTED="$expected" node - <<'NODE'
+          const b=JSON.parse(process.env.BODY||'{}');
+          const s=Array.isArray(b.result?.schedules)?b.result.schedules.map(x=>String(x.cron)).sort():[];
+          if(b.success!==true||s.length!==1||s[0]!==process.env.EXPECTED) throw new Error('CRON_BAD:'+process.env.SCRIPT+':'+JSON.stringify(s));
+          console.log('CRON_READY',process.env.SCRIPT,process.env.EXPECTED);
+          NODE
+          }
+          check_schedule 'race-tantei-phase0' '*/15 * * * *'
+          check_schedule 'race-tantei-live-deadline' '* * * * *'
+          check_schedule 'race-tantei-live-deadline-backup' '2-59/5 * * * *'
+
       - name: Dry-run tomorrow canonical race selection
         shell: bash
         run: |
