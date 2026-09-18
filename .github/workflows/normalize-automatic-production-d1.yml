@@ -19,25 +19,55 @@ jobs:
       - uses: actions/checkout@v4
       - name: Normalize all non-production automatic D1 readers
         run: python scripts/normalize-automatic-d1-workflows.py
-      - name: Package normalized workflow files
+      - name: Prepare detached Git commit with all normalized workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           git diff --name-only -- .github/workflows > /tmp/changed-workflows.txt
           cat /tmp/changed-workflows.txt
-          mkdir -p /tmp/normalized
-          while IFS= read -r file; do
-            [ -n "$file" ] || continue
-            mkdir -p "/tmp/normalized/$(dirname "$file")"
-            cp "$file" "/tmp/normalized/$file"
-          done < /tmp/changed-workflows.txt
-          cp /tmp/changed-workflows.txt /tmp/normalized/changed-workflows.txt
-          tar -C /tmp/normalized -czf normalized-production-d1-workflows.tar.gz .
+          python3 - <<'PY'
+          import base64,json,os,urllib.request
+          from pathlib import Path
 
-      - name: Upload normalized workflow patch
+          repo=os.environ["GITHUB_REPOSITORY"]
+          token=os.environ["GH_TOKEN"]
+          parent=os.environ["GITHUB_SHA"]
+          api="https://api.github.com"
+          headers={
+              "Authorization":f"Bearer {token}",
+              "Accept":"application/vnd.github+json",
+              "X-GitHub-Api-Version":"2022-11-28",
+              "Content-Type":"application/json",
+          }
+          def call(method,path,payload=None):
+              data=None if payload is None else json.dumps(payload).encode()
+              req=urllib.request.Request(api+path,data=data,headers=headers,method=method)
+              with urllib.request.urlopen(req,timeout=60) as r:
+                  return json.load(r)
+
+          base=call("GET",f"/repos/{repo}/git/commits/{parent}")
+          entries=[]
+          files=[x.strip() for x in Path("/tmp/changed-workflows.txt").read_text().splitlines() if x.strip()]
+          for path in files:
+              content=Path(path).read_text(encoding="utf-8")
+              blob=call("POST",f"/repos/{repo}/git/blobs",{"content":content,"encoding":"utf-8"})
+              entries.append({"path":path,"mode":"100644","type":"blob","sha":blob["sha"]})
+          tree=call("POST",f"/repos/{repo}/git/trees",{"base_tree":base["tree"]["sha"],"tree":entries})
+          commit=call("POST",f"/repos/{repo}/git/commits",{
+              "message":"ops: make non-production D1 workflows manual-only",
+              "tree":tree["sha"],
+              "parents":[parent],
+          })
+          Path("prepared-commit.txt").write_text(commit["sha"]+"\n")
+          print("PREPARED_NORMALIZATION_COMMIT",commit["sha"],"FILES",len(entries),"PARENT",parent)
+          PY
+
+      - name: Upload prepared commit reference
         uses: actions/upload-artifact@v4
         with:
-          name: normalized-production-d1-workflows
-          path: normalized-production-d1-workflows.tar.gz
+          name: prepared-production-d1-normalization
+          path: prepared-commit.txt
           if-no-files-found: error
           retention-days: 1
