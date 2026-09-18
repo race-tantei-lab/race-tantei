@@ -23,8 +23,7 @@ D1_MARKERS = (
     "CLOUDFLARE_D1_DATABASE_ID",
     "wrangler d1 execute",
     "/d1/database/",
-    "race-tantei-phase0.race-tantei.workers.dev/api/validation/",
-    "race-tantei-phase0.race-tantei.workers.dev/api/public/",
+    "race-tantei-phase0.race-tantei.workers.dev/api/",
 )
 
 def trigger_block(text: str) -> str:
