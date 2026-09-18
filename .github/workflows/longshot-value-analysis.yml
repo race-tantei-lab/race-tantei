@@ -2,13 +2,6 @@ name: Longshot value model analysis
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/longshot-value-analysis.yml"
-      - "scripts/train-longshot-value-model.mjs"
-      - "src/v1/betting-candidate-universe.ts"
 
 concurrency:
   group: longshot-value-model-analysis

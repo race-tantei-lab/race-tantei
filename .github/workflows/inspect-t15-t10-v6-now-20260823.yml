@@ -1,9 +1,7 @@
 name: Inspect T15 start T10 reflection v6 now
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/inspect-t15-t10-v6-now-20260823.yml"
+  workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

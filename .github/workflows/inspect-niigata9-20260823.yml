@@ -1,10 +1,7 @@
 name: Inspect Niigata9 production 20260823
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/inspect-niigata9-20260823.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write

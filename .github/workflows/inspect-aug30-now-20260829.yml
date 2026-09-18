@@ -1,10 +1,7 @@
 name: Inspect Aug 30 now 20260829
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/inspect-aug30-now-20260829.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read

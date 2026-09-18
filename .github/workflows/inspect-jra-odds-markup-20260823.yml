@@ -1,8 +1,7 @@
 name: Inspect JRA odds markup 20260823
 on:
-  push:
-    branches: [main]
-    paths: [".github/workflows/inspect-jra-odds-markup-20260823.yml"]
+  workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

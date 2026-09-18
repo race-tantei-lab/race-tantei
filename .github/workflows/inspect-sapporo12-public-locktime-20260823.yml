@@ -1,9 +1,7 @@
 name: Verify Sapporo12 lock time and public page
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/inspect-sapporo12-public-locktime-20260823.yml"
+  workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

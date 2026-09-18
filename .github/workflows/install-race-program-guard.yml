@@ -1,11 +1,7 @@
 name: Install race program guard
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/install-race-program-guard.yml'
-      - 'scripts/install-race-program-guard.py'
   workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

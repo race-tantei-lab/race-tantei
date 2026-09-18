@@ -2,10 +2,6 @@ name: Force reconcile today from JRA
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/force-reconcile-today-from-jra.yml"
 
 permissions:
   contents: read

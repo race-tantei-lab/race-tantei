@@ -1,10 +1,6 @@
 name: Migrate live runtime guards
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/install-race-day-runtime-guards.sql"
   workflow_dispatch:
 
 permissions:

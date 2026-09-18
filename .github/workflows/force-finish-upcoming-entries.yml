@@ -2,10 +2,6 @@ name: Force finish upcoming entry repair
 run-name: Force finish upcoming entry repair · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/force-finish-upcoming-entries.yml"
   workflow_dispatch:
 
 permissions:

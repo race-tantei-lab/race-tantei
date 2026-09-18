@@ -2,12 +2,6 @@ name: Independent-edge full-period completion search
 run-name: Independent-edge full-period completion search · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/analyze-independent-edge-regime-search.py"
-      - "scripts/run-independent-edge-regime-search.py"
-      - ".github/workflows/independent-edge-regime-search.yml"
   workflow_dispatch:
 
 permissions:
