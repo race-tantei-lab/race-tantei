@@ -33,18 +33,19 @@ jobs:
           for offset in 1 2 3; do
             date=$(TZ=Asia/Tokyo date -d "+${offset} day" +%F)
             echo "=== UPCOMING_DATE=$date OFFSET=$offset ==="
-            npx wrangler d1 execute race-tantei-phase0 --remote --json --command               "WITH p AS (
-                 SELECT r.race_id,r.venue,r.race_no,
+            npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+              "WITH p AS (
+                 SELECT r.race_id,r.venue,r.race_no,r.race_name,r.entry_url,
                         SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS active
                  FROM rt_races r
                  LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
                  WHERE r.race_date='$date'
-                 GROUP BY r.race_id,r.venue,r.race_no
+                 GROUP BY r.race_id,r.venue,r.race_no,r.race_name,r.entry_url
                )
-               SELECT venue,COUNT(*) AS races,
-                      SUM(CASE WHEN active>=3 THEN 1 ELSE 0 END) AS ready,
-                      MIN(active) AS min_active
-               FROM p GROUP BY venue ORDER BY venue" > "/tmp/upcoming-$offset.json"
+               SELECT race_id AS raceId,venue,race_no AS raceNo,race_name AS raceName,
+                      CASE WHEN LENGTH(TRIM(COALESCE(entry_url,'')))>0 THEN 1 ELSE 0 END AS hasEntryUrl,
+                      active
+               FROM p ORDER BY venue,race_no" > "/tmp/upcoming-$offset.json"
             cat "/tmp/upcoming-$offset.json"
           done
 
