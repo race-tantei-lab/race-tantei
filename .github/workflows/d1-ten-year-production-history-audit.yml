@@ -1,11 +1,6 @@
 name: Ten-year production history audit
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/audit-ten-year-production-history.py"
-      - ".github/workflows/d1-ten-year-production-history-audit.yml"
   workflow_dispatch:
 
 permissions:

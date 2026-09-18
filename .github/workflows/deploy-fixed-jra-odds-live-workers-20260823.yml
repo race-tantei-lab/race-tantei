@@ -1,8 +1,7 @@
 name: Deploy fixed JRA odds parser to live workers 20260823
 on:
-  push:
-    branches: [main]
-    paths: [".github/workflows/deploy-fixed-jra-odds-live-workers-20260823.yml"]
+  workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

@@ -1,9 +1,7 @@
 name: Diagnose Chukyo10 odds mismatch
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/diagnose-chukyo10-odds-20260823.yml"
+  workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

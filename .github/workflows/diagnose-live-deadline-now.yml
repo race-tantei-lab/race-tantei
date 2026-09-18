@@ -1,10 +1,6 @@
 name: Diagnose live deadline now
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/diagnose-live-deadline-now.yml"
   workflow_dispatch:
 
 permissions:

@@ -2,10 +2,6 @@ name: Diagnose current JRA sde01 pages
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/diagnose-current-jra-sde01.yml"
 
 permissions:
   contents: read

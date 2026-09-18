@@ -1,10 +1,6 @@
 name: Diagnose entry anchors now
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/diagnose-entry-anchors-now.yml'
   workflow_dispatch:
 
 permissions:

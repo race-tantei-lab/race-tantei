@@ -1,10 +1,7 @@
 name: Diagnose Aug 30 public load 20260829
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/diagnose-aug30-load-20260829.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read

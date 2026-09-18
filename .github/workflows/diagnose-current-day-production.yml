@@ -1,10 +1,6 @@
 name: Diagnose current-day production state
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/diagnose-current-day-production.yml"
   workflow_dispatch:
 
 permissions:

@@ -2,11 +2,6 @@ name: Deep longshot full-period completion search
 run-name: Deep longshot full-period completion search · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/run-deep-longshot-regime-search.py"
-      - ".github/workflows/deep-longshot-regime-search.yml"
   workflow_dispatch:
 
 permissions:

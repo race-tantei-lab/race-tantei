@@ -2,10 +2,6 @@ name: Diagnose current JRA result links
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/diagnose-current-jra-result-links.yml"
 
 permissions:
   contents: read
