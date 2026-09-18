@@ -1,0 +1,21 @@
+name: Guard automatic production D1 readers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/audit-automatic-d1-workflows.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit automatic production D1 readers
+        run: python scripts/audit-automatic-d1-workflows.py
