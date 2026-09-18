@@ -1,5 +1,6 @@
 import { setState } from "./db.js";
 import { syncOfficialCalendarDay } from "./jra-calendar.js";
+import { shouldRunOnJraRaceDay } from "./race-day-gate.js";
 import type { Env } from "./types.js";
 
 const STATE_KEY = "worker_upcoming_calendar_repair";
@@ -36,12 +37,19 @@ function jstWeekday(now: Date): number {
 
 function targetDates(now: Date): string[] {
   const weekday = jstWeekday(now); // Sun=0 ... Sat=6
-  if (weekday === 4) return [jstDate(now, 2), jstDate(now, 3)]; // Thu -> Sat/Sun
-  if (weekday === 5) return [jstDate(now, 1), jstDate(now, 2)]; // Fri -> Sat/Sun
-  if (weekday === 6) return [jstDate(now, 0), jstDate(now, 1), jstDate(now, 2)]; // Sat -> Sat/Sun/Mon holiday
-  if (weekday === 0) return [jstDate(now, 0), jstDate(now, 1)]; // Sun -> Sun/Mon holiday
+  // Prepare the whole possible three-day JRA block before the weekend. The
+  // per-date official gate below removes ordinary non-race Mondays.
+  if (weekday === 4) return [jstDate(now, 2), jstDate(now, 3), jstDate(now, 4)]; // Thu -> Sat/Sun/Mon
+  if (weekday === 5) return [jstDate(now, 1), jstDate(now, 2), jstDate(now, 3)]; // Fri -> Sat/Sun/Mon
+  if (weekday === 6) return [jstDate(now, 0), jstDate(now, 1), jstDate(now, 2)]; // Sat -> Sat/Sun/Mon
+  if (weekday === 0) return [jstDate(now, 0), jstDate(now, 1)]; // Sun -> Sun/Mon
   if (weekday === 1) return [jstDate(now, 0)]; // Mon -> holiday Monday when applicable
   return [];
+}
+
+function probeDateForJstDay(raceDate: string): Date {
+  // Noon JST avoids boundary ambiguity when the race-day gate derives YYYY-MM-DD.
+  return new Date(`${raceDate}T03:00:00.000Z`);
 }
 
 async function storedRaceCount(db: D1Database, raceDate: string): Promise<number> {
@@ -66,6 +74,8 @@ export async function runUpcomingCalendarRepair(env: Env, now = new Date()): Pro
   const dates = targetDates(now);
   const audit: UpcomingCalendarAudit = { checkedAt: now.toISOString(), status: dates.length ? "ready" : "idle", days: [] };
   for (const raceDate of dates) {
+    const raceDay = await shouldRunOnJraRaceDay(probeDateForJstDay(raceDate));
+    if (!raceDay.shouldRun) continue;
     const storedBefore = await storedRaceCount(env.DB, raceDate);
     if (await recentSuccess(env.DB, raceDate, now)) {
       audit.days.push({ raceDate, status: "recent", storedBefore, storedAfter: storedBefore, races: null, venues: null, error: null });
