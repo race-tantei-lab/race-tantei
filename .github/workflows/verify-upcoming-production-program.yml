@@ -64,10 +64,12 @@ jobs:
           for block in raw if isinstance(raw,list) else [raw]:
               if isinstance(block,dict):
                   rows += block.get('results') or []
-          print('TOMORROW_PROGRAM', rows)
-          total=sum(int(r.get('races') or 0) for r in rows)
-          ready=sum(int(r.get('ready') or 0) for r in rows)
-          if len(rows)!=3 or total!=36 or ready!=36:
-              raise SystemExit(f'UPCOMING_PROGRAM_INCOMPLETE venues={len(rows)} races={total} ready={ready} rows={rows}')
-          print('UPCOMING_PROGRAM_READY races=36 ready=36 venues=3')
+          venues=sorted({str(r.get('venue') or '') for r in rows if r.get('venue')})
+          missing=[r for r in rows if int(r.get('active') or 0)<3 or int(r.get('hasEntryUrl') or 0)!=1]
+          print('TOMORROW_PROGRAM', {'venues':venues,'races':len(rows),'ready':len(rows)-len(missing)})
+          print('TOMORROW_MISSING', missing)
+          # 2026-09-19 has two JRA venues (Nakayama/Hanshin), 12 races each.
+          if len(venues)!=2 or len(rows)!=24 or missing:
+              raise SystemExit(f'UPCOMING_PROGRAM_INCOMPLETE venues={len(venues)} races={len(rows)} missing={len(missing)}')
+          print('UPCOMING_PROGRAM_READY races=24 ready=24 venues=2')
           PY
