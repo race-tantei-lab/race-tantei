@@ -1,10 +1,7 @@
 name: Emergency check Sapporo12 and later races
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/emergency-check-sapporo12-20260823.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read

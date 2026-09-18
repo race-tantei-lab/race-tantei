@@ -1,10 +1,6 @@
 name: Diagnose production D1
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/diagnose-production-d1.yml"
   workflow_dispatch:
 
 permissions:

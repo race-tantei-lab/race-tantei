@@ -3,18 +3,6 @@ name: Elite segment barbell search
 # Explicit trigger after workflow registration.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/elite-barbell-search.yml"
-      - "scripts/run-elite-barbell-search.mjs"
-      - "scripts/train-direct-barbell-search.mjs"
-      - "src/v1/betting-candidate-universe.ts"
-      - "src/v1/learned-betting-policy.ts"
-      - "src/v1/walk-forward-scope.ts"
-      - "src/v1/budget-courses.ts"
-      - "package.json"
 
 concurrency:
   group: elite-segment-barbell-search

@@ -1,10 +1,7 @@
 name: Emergency deploy T-15 latest-input finalization
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/emergency-deploy-t15-v5-20260823.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write

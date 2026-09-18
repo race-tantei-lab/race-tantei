@@ -1,10 +1,6 @@
 name: Emergency include Sapporo 9R saved preview
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/emergency-include-sapporo09.yml"
   workflow_dispatch:
 
 permissions:

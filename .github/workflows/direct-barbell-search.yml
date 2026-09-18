@@ -3,17 +3,6 @@ name: Direct barbell betting search
 # Fast first-pass search; expand after a valid result is recorded.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/direct-barbell-search.yml"
-      - "scripts/train-direct-barbell-search.mjs"
-      - "src/v1/betting-candidate-universe.ts"
-      - "src/v1/learned-betting-policy.ts"
-      - "src/v1/walk-forward-scope.ts"
-      - "src/v1/budget-courses.ts"
-      - "package.json"
 
 concurrency:
   group: direct-barbell-betting-search

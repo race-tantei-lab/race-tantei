@@ -1,9 +1,6 @@
 name: Diagnose production day API now
 
 on:
-  push:
-    paths:
-      - '.github/workflows/diagnose-prod-day-api-now.yml'
   workflow_dispatch:
 
 permissions:

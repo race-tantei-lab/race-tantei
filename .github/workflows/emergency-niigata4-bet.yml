@@ -2,10 +2,6 @@ name: Emergency Niigata4 bet
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/emergency-niigata4-bet.yml"
 
 permissions:
   contents: read

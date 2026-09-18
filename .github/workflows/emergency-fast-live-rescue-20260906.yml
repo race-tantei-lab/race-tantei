@@ -1,10 +1,6 @@
 name: Emergency fast live rescue 2026-09-06
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/emergency-fast-live-rescue-20260906.yml"
   workflow_dispatch:
 
 concurrency:

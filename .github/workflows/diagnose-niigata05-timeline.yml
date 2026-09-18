@@ -1,10 +1,6 @@
 name: Verify Sapporo 12R preview and v4 production
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/diagnose-niigata05-timeline.yml"
   workflow_dispatch:
 
 permissions:

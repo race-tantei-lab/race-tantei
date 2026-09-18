@@ -1,10 +1,7 @@
 name: Diagnose live result ingestion
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/diagnose-live-results.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
