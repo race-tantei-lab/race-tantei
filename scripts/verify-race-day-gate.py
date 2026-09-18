@@ -36,13 +36,19 @@ def assert_gate_before_d1(entry_path: str, label: str) -> None:
 
 
 def resolve_import(entry_path: str, source: str, binding: str) -> str:
-    match = re.search(
-        rf"import {re.escape(binding)} from [\\\"'](\\./[^\\\"']+)\\.js[\\\"'];",
-        source,
-    )
-    require(match is not None, f"PUBLIC_DELEGATE_IMPORT_MISSING:{binding}")
-    rel = match.group(1)
-    return (Path(entry_path).parent / (rel[2:] + ".ts")).as_posix()
+    rel = None
+    for quote in ('"', "'"):
+        marker = f"import {binding} from {quote}"
+        start = source.find(marker)
+        if start < 0:
+            continue
+        value_start = start + len(marker)
+        value_end = source.find(quote, value_start)
+        if value_end > value_start:
+            rel = source[value_start:value_end]
+            break
+    require(rel is not None and rel.startswith("./") and rel.endswith(".js"), f"PUBLIC_DELEGATE_IMPORT_MISSING:{binding}")
+    return (Path(entry_path).parent / (rel[2:-3] + ".ts")).as_posix()
 
 
 def assert_public_gate(public_main: str) -> None:
