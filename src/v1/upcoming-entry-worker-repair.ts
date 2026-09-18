@@ -3,6 +3,7 @@ import { pageLooksLikeEntry, parseEntryPage, toResultUrl } from "./jra.js";
 import type { Env, RaceRecord } from "./types.js";
 
 const REPAIR_STATE_KEY = "worker_upcoming_entry_repair";
+const ROTATION_STATE_KEY = "worker_upcoming_entry_rotation";
 const PROBE_PREFIX = "worker_upcoming_entry_probe:";
 const PROBE_BATCH = 48;
 const FETCH_CONCURRENCY = 8;
@@ -160,6 +161,19 @@ function upcomingHorizonDays(now: Date): number {
   if (day === 4) return 4; // Thu -> through possible holiday Monday
   if (day === 5) return 3; // Fri -> through possible holiday Monday
   return 2;
+}
+
+async function loadRotationIndex(db: D1Database, groupCount: number): Promise<number> {
+  if (groupCount <= 1) return 0;
+  const row = await db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
+    .bind(ROTATION_STATE_KEY).first<{ value: string }>();
+  const parsed = Number(row?.value ?? 0);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed % groupCount : 0;
+}
+
+async function saveNextRotationIndex(db: D1Database, currentIndex: number, groupCount: number): Promise<void> {
+  if (groupCount <= 1) return;
+  await setState(db, ROTATION_STATE_KEY, String((currentIndex + 1) % groupCount));
 }
 
 async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]> {
@@ -354,24 +368,33 @@ export async function runUpcomingEntryWorkerRepair(env: Env, now = new Date()): 
       await setState(env.DB, REPAIR_STATE_KEY, JSON.stringify(audit));
       return audit;
     }
-    const group = groups[0];
+    // Rotate across incomplete date/venue groups instead of always taking
+    // groups[0]. A temporarily unavailable JRA page for one venue must never
+    // starve the other venue/date on every 15-minute maintenance tick.
+    const groupIndex = await loadRotationIndex(env.DB, groups.length);
+    const group = groups[groupIndex] ?? groups[0];
     audit.targetDate = group.raceDate;
     audit.targetVenue = group.venue;
 
-    // Reuse a verified official page already stored for the same venue/day first.
-    // This is deterministic and lets us follow JRA's own page links instead of
-    // brute-forcing race 1 again when race 7/8/etc. is already known.
-    let anchor = await existingOfficialAnchor(env.DB, group);
-    if (!anchor) anchor = await probeAnchor(env.DB, group);
-    audit.probed = anchor?.probed ?? PROBE_BATCH;
-    if (!anchor) {
-      audit.status = "probing";
-      await setState(env.DB, REPAIR_STATE_KEY, JSON.stringify(audit));
-      return audit;
+    try {
+      // Reuse a verified official page already stored for the same venue/day first.
+      // This is deterministic and lets us follow JRA's own page links instead of
+      // brute-forcing race 1 again when race 7/8/etc. is already known.
+      let anchor = await existingOfficialAnchor(env.DB, group);
+      if (!anchor) anchor = await probeAnchor(env.DB, group);
+      audit.probed = anchor?.probed ?? PROBE_BATCH;
+      if (!anchor) {
+        audit.status = "probing";
+      } else {
+        audit.anchorFound = true;
+        audit.savedRaceIds = await expandAndSave(env.DB, anchor.cname, anchor.html, now);
+        audit.status = audit.savedRaceIds.length ? "repaired" : "anchor_without_saved_entries";
+      }
+    } finally {
+      // Advance even when this group throws. The next scheduled tick therefore
+      // gets a different group rather than repeating one failing venue forever.
+      await saveNextRotationIndex(env.DB, groupIndex, groups.length);
     }
-    audit.anchorFound = true;
-    audit.savedRaceIds = await expandAndSave(env.DB, anchor.cname, anchor.html, now);
-    audit.status = audit.savedRaceIds.length ? "repaired" : "anchor_without_saved_entries";
   } catch (error) {
     audit.status = "error";
     audit.errors.push(errorText(error));
