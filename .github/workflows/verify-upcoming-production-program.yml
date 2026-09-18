@@ -50,6 +50,13 @@ jobs:
             cat "/tmp/upcoming-$offset.json"
           done
 
+      - name: Verify tomorrow race-day gate without D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          tomorrow=$(TZ=Asia/Tokyo date -d '+1 day' +%F)
+          TOMORROW="$tomorrow" npx --yes tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{const d=new Date(process.env.TOMORROW+'T03:00:00Z'); const r=await shouldRunOnJraRaceDay(d); console.log('TOMORROW_RACE_DAY_GATE',JSON.stringify(r)); if(!r.shouldRun) process.exit(2);})().catch(e=>{console.error(e);process.exit(1)})"
+
       - name: Verify model and selection runtime state
         shell: bash
         run: |
