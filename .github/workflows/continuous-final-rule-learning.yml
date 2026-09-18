@@ -2,10 +2,12 @@ name: Continuous final rule learning
 
 on:
   workflow_dispatch:
-  # Keep analytical D1 work away from the live race/deadline window.
-  # 12:37 UTC = 21:37 JST, after normal JRA racing has finished.
+  # Production-D1 learning must never spend the free-tier read budget on the
+  # night/morning before a weekend or holiday race day. Run once weekly after
+  # the full weekend/holiday block instead of daily.
+  # 12:37 UTC Tuesday = 21:37 JST Tuesday.
   schedule:
-    - cron: "37 12 * * *"
+    - cron: "37 12 * * 2"
   push:
     branches: [main]
     paths:
