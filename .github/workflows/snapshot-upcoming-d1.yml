@@ -2,10 +2,6 @@ name: Snapshot live upcoming D1
 run-name: Snapshot live upcoming D1 · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/snapshot-upcoming-d1.yml"
   workflow_dispatch:
 
 permissions:

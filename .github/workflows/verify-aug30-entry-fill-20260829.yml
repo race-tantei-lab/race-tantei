@@ -1,10 +1,7 @@
 name: Verify Aug 30 entry fill 20260829
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/verify-aug30-entry-fill-20260829.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read

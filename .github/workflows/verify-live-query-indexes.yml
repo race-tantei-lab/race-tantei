@@ -1,14 +1,6 @@
 name: Verify live query indexes
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "src/live-deadline-entry-v3.ts"
-      - "src/v1/live-preview-safety.ts"
-      - "src/v1/completed-final-invariants.ts"
-      - "scripts/verify-live-lock-safety.py"
-      - ".github/workflows/verify-live-query-indexes.yml"
   workflow_dispatch:
 
 permissions:

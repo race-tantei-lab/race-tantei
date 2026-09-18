@@ -1,12 +1,6 @@
 name: Validate JRA historical parser across archive period
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/validate-jra-historical-parser-across-period.py"
-      - "scripts/validate-jra-historical-combination-parser.py"
-      - ".github/workflows/validate-jra-historical-parser-across-period.yml"
   workflow_dispatch:
 
 permissions:

@@ -1,8 +1,7 @@
 name: Verify Niigata12 parser provenance
 on:
-  push:
-    branches: [main]
-    paths: [".github/workflows/verify-niigata12-parser-provenance-20260823.yml"]
+  workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

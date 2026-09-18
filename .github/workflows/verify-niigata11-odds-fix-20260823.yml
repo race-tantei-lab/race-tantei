@@ -1,8 +1,7 @@
 name: Verify Niigata11 odds fix
 on:
-  push:
-    branches: [main]
-    paths: [".github/workflows/verify-niigata11-odds-fix-20260823.yml"]
+  workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

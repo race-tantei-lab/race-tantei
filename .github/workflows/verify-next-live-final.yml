@@ -1,10 +1,6 @@
 name: Verify next live final across T25 and T20
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/verify-next-live-final.yml"
   workflow_dispatch:
 
 permissions:

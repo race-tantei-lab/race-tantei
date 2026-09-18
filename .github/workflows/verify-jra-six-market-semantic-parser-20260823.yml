@@ -1,8 +1,7 @@
 name: Verify JRA six-market semantic parser 20260823
 on:
-  push:
-    branches: [main]
-    paths: [".github/workflows/verify-jra-six-market-semantic-parser-20260823.yml"]
+  workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

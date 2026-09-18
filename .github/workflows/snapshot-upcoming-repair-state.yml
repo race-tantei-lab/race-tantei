@@ -2,10 +2,6 @@ name: Snapshot upcoming repair state
 run-name: Snapshot upcoming repair state · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/snapshot-upcoming-repair-state.yml"
   workflow_dispatch:
 
 permissions:

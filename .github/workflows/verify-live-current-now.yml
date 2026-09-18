@@ -1,10 +1,6 @@
 name: Verify current live finals now
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/verify-live-current-now.yml"
   workflow_dispatch:
 
 permissions:
