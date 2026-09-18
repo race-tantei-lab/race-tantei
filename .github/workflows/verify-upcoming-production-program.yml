@@ -49,6 +49,17 @@ jobs:
             cat "/tmp/upcoming-$offset.json"
           done
 
+      - name: Inspect public maintenance audit state
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT state_key AS stateKey,state_value AS stateValue,updated_at AS updatedAt
+             FROM rt_system_state
+             WHERE state_key IN ('worker_upcoming_calendar_repair','worker_upcoming_entry_repair','worker_upcoming_entry_derived_repair')
+             ORDER BY state_key" > /tmp/maintenance-state.json
+          cat /tmp/maintenance-state.json
+
       - name: Require tomorrow card to be complete on Thu/Fri preparation runs
         shell: bash
         run: |
