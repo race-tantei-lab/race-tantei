@@ -167,7 +167,9 @@ def main() -> None:
         "PRIMARY_STALE_SECONDS = 150",
         'if (role === "backup")',
         "primaryIsAlive(env.DB)",
-        "await liveDeadlineV2.scheduled(controller, env)",
+        "LIVE_RECENCY_HISTORY_SCAN_SKIPPED_FREE_TIER",
+        "const liveEnv = safeEnv(env);",
+        "await liveDeadlineV2.scheduled(controller, liveEnv)",
     ):
         require(wrapper, marker, "live v3 wrapper")
 
