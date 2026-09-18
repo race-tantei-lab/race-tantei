@@ -1,6 +1,5 @@
 import base from "./public-site-entry-quota-recovery-20260912.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
-import { shouldRunOnJraRaceDay } from "./v1/race-day-gate.js";
 import type { Env } from "./v1/types.js";
 
 type SnapshotRace = {
@@ -210,11 +209,9 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    const raceDay = await shouldRunOnJraRaceDay(new Date());
-    if (!raceDay.shouldRun) {
-      return;
-    }
-    // runBoundedPublicMaintenance remains owned by the delegated public scheduler.
+    // Do not add a second race-day gate here. The delegated scheduler also owns
+    // Thursday/Friday pre-race acquisition, so an outer race-day-only gate would
+    // suppress the very maintenance that prepares the upcoming card.
     if (base.scheduled) await base.scheduled(controller, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
