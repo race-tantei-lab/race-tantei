@@ -2,23 +2,7 @@ name: One-off history backfill
 run-name: Targeted history market repair · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/repair-invalid-market-history.mjs"
-      - "src/v1/three-month-history.ts"
-      - "src/v1/three-month-desktop.ts"
-      - ".github/workflows/backfill-history.yml"
   workflow_dispatch:
-    inputs:
-      concurrency:
-        description: "Concurrent JRA result requests"
-        required: false
-        default: "2"
-      request_interval_ms:
-        description: "Minimum interval between JRA requests"
-        required: false
-        default: "850"
 
 permissions:
   contents: read

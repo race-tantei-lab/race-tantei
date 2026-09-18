@@ -2,11 +2,6 @@ name: Completion analysis dataset export
 run-name: Completion analysis dataset export · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/export-completion-analysis-dataset.py"
-      - ".github/workflows/completion-analysis-export.yml"
   workflow_dispatch:
 
 permissions:

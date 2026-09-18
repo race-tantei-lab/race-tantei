@@ -3,14 +3,6 @@ name: Backfill nonlinear v4 August 1-2
 # Re-run the fixed, D1-safe historical replay.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/backfill-nonlinear-v4-august.yml"
-      - "scripts/backfill-nonlinear-v4-august.py"
-      - "scripts/publish-nonlinear-v4-production.py"
-      - "scripts/train-nonlinear-market-blend-v4.py"
 
 concurrency:
   group: backfill-nonlinear-v4-august

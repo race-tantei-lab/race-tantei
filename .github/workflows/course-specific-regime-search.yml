@@ -2,11 +2,6 @@ name: Course-specific full-period completion search
 run-name: Course-specific full-period completion search · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/analyze-course-specific-regime-search.py"
-      - ".github/workflows/course-specific-regime-search.yml"
   workflow_dispatch:
 
 permissions:

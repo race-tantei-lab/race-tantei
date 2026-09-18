@@ -2,11 +2,6 @@ name: D1 schema inventory audit
 run-name: D1 schema inventory audit · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/export-d1-schema-inventory.py"
-      - ".github/workflows/d1-schema-inventory.yml"
   workflow_dispatch:
 
 permissions:

@@ -2,13 +2,6 @@ name: Build speed-enriched runner OOS
 run-name: Build speed-enriched runner OOS · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/prepare-speed-enriched-analysis-input.py"
-      - "scripts/finalize-speed-enriched-analysis-input.py"
-      - "scripts/build-speed-enriched-runner-oos.py"
-      - ".github/workflows/build-speed-runner-oos.yml"
   workflow_dispatch:
 
 permissions:

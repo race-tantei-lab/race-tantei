@@ -2,10 +2,6 @@ name: Audit v34 live tick proof
 run-name: Audit v34 live tick proof · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/audit-v34-live-tick-proof.yml"
   workflow_dispatch:
 
 permissions:

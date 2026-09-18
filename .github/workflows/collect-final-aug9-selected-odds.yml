@@ -2,11 +2,6 @@ name: Collect fixed August 9 official odds
 run-name: Collect fixed Aug 9 official odds · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/collect-final-aug9-selected-odds.py'
-      - '.github/workflows/collect-final-aug9-selected-odds.yml'
   workflow_dispatch:
 
 permissions:

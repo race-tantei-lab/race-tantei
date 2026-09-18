@@ -1,10 +1,6 @@
 name: Check Sapporo 12R preview now
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/check-sapporo12-preview-now.yml"
   workflow_dispatch:
 
 permissions:
