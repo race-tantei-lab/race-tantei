@@ -2,10 +2,6 @@ name: Retry late historical official odds sharded
 run-name: Retry late historical official odds sharded · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/export-late-historical-official-odds-sharded.yml"
   workflow_dispatch:
 
 permissions:

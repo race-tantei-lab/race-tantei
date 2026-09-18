@@ -2,19 +2,6 @@ name: Final course-specific model
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/final-course-model.yml"
-      - "config/approved-production-model.json"
-      - "config/race-tantei-fixed-constraints.json"
-      - "scripts/verify-race-tantei-fixed-constraints.py"
-      - "scripts/verify-production-candidate.py"
-      - "scripts/verify-approved-production-model.py"
-      - "scripts/final-course-policy.py"
-      - "scripts/run-final-course-production.py"
-      - "scripts/backfill-final-course-august-fast.py"
 
 concurrency:
   group: final-course-model

@@ -2,10 +2,6 @@ name: Export August 9 final model input
 run-name: Export Aug 9 final input · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/export-aug9-final-input.yml'
   workflow_dispatch:
 
 permissions:

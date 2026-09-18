@@ -1,12 +1,8 @@
 name: Export all historical official light odds sharded
 run-name: Export all historical official light odds sharded · ${{ github.sha }}
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/export-selected-historical-official-light-odds.py"
-      - ".github/workflows/export-all-historical-official-light-odds-sharded.yml"
   workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

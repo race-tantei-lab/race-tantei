@@ -2,11 +2,6 @@ name: Export selected historical official odds
 run-name: Export selected historical official odds · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/export-selected-historical-official-odds.py"
-      - ".github/workflows/export-selected-historical-official-odds.yml"
   workflow_dispatch:
 
 permissions:

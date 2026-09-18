@@ -1,10 +1,6 @@
 name: Emergency verify production bets 2026-09-06
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/emergency-verify-production-bets-20260906.yml"
   workflow_dispatch:
 
 permissions:

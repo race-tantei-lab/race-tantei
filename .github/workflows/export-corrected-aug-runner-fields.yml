@@ -1,11 +1,8 @@
 name: Export corrected Aug runner fields
 run-name: Export corrected Aug runner fields · ${{ github.sha }}
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/export-corrected-aug-runner-fields.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

@@ -2,18 +2,6 @@ name: Full-period ROI completion search
 run-name: Full-period ROI completion search · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/analyze-expanded-context-search.py"
-      - "scripts/analyze-full-period-online-search.py"
-      - "scripts/verify-race-tantei-fixed-constraints.py"
-      - "scripts/verify-production-candidate.py"
-      - "scripts/find-and-promote-production-candidate.py"
-      - "scripts/verify-approved-production-model.py"
-      - "config/race-tantei-fixed-constraints.json"
-      - "docs/RACE_TANTEI_NON_NEGOTIABLE_RULES.md"
-      - ".github/workflows/expanded-context-search.yml"
   workflow_dispatch:
 
 permissions:

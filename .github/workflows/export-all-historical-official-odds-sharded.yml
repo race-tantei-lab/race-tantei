@@ -2,10 +2,6 @@ name: Export all historical official odds sharded
 run-name: Export all historical official odds sharded · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/export-all-historical-official-odds-sharded.yml"
   workflow_dispatch:
 
 permissions:

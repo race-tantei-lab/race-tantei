@@ -1,11 +1,8 @@
 name: Export all Light official odds
 run-name: Export all Light official odds · ${{ github.sha }}
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/export-all-light-official-odds.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

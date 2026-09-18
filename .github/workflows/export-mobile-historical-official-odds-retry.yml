@@ -1,11 +1,8 @@
 name: Export mobile historical official odds retry
 run-name: Export mobile historical official odds retry · ${{ github.sha }}
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/export-mobile-historical-official-odds-retry.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write
