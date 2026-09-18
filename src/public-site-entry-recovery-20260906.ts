@@ -19,6 +19,15 @@ function jstToday(): string {
   return new Date(Date.now() + (9 * 60 * 60 * 1000)).toISOString().slice(0, 10);
 }
 
+function jstWeekday(now: Date): number {
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000).getUTCDay();
+}
+
+function isPreRacePreparationDay(now: Date): boolean {
+  const weekday = jstWeekday(now);
+  return weekday === 4 || weekday === 5; // Thu/Fri prepare the upcoming weekend card.
+}
+
 async function retargetFallbackHome(response: Response): Promise<Response> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("text/html")) return response;
@@ -105,9 +114,13 @@ export default {
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     const now = Number.isFinite(controller.scheduledTime) ? new Date(controller.scheduledTime) : new Date();
     const raceDay = await shouldRunOnJraRaceDay(now);
-    if (!raceDay.shouldRun) {
+    const preparationDay = isPreRacePreparationDay(now);
+    if (!raceDay.shouldRun && !preparationDay) {
       console.log("PUBLIC_NON_RACE_DAY_SKIP", JSON.stringify({ raceDate: raceDay.raceDate, reason: raceDay.reason }));
       return;
+    }
+    if (preparationDay && !raceDay.shouldRun) {
+      console.log("PUBLIC_PRE_RACE_MAINTENANCE", JSON.stringify({ raceDate: raceDay.raceDate, reason: raceDay.reason }));
     }
     await runBoundedPublicMaintenance(env, now);
   },
