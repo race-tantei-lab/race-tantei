@@ -1,0 +1,73 @@
+name: Verify upcoming production program
+
+on:
+  push:
+    paths:
+      - ".github/workflows/verify-upcoming-production-program.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "35 12 * * 4,5" # 21:35 JST Thu/Fri
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Inspect next three JST days in production D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          for offset in 1 2 3; do
+            date=$(TZ=Asia/Tokyo date -d "+${offset} day" +%F)
+            echo "=== UPCOMING_DATE=$date OFFSET=$offset ==="
+            npx wrangler d1 execute race-tantei-phase0 --remote --json --command               "WITH p AS (
+                 SELECT r.race_id,r.venue,r.race_no,
+                        SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS active
+                 FROM rt_races r
+                 LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
+                 WHERE r.race_date='$date'
+                 GROUP BY r.race_id,r.venue,r.race_no
+               )
+               SELECT venue,COUNT(*) AS races,
+                      SUM(CASE WHEN active>=3 THEN 1 ELSE 0 END) AS ready,
+                      MIN(active) AS min_active
+               FROM p GROUP BY venue ORDER BY venue" > "/tmp/upcoming-$offset.json"
+            cat "/tmp/upcoming-$offset.json"
+          done
+
+      - name: Require tomorrow card to be complete on Thu/Fri preparation runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          weekday=$(TZ=Asia/Tokyo date +%u)
+          if [ "$weekday" != "4" ] && [ "$weekday" != "5" ]; then
+            echo "NOT_PREPARATION_DAY weekday=$weekday"
+            exit 0
+          fi
+          python3 - <<'PY'
+          import json
+          raw=json.load(open('/tmp/upcoming-1.json'))
+          rows=[]
+          for block in raw if isinstance(raw,list) else [raw]:
+              if isinstance(block,dict):
+                  rows += block.get('results') or []
+          print('TOMORROW_PROGRAM', rows)
+          total=sum(int(r.get('races') or 0) for r in rows)
+          ready=sum(int(r.get('ready') or 0) for r in rows)
+          if len(rows)!=3 or total!=36 or ready!=36:
+              raise SystemExit(f'UPCOMING_PROGRAM_INCOMPLETE venues={len(rows)} races={total} ready={ready} rows={rows}')
+          print('UPCOMING_PROGRAM_READY races=36 ready=36 venues=3')
+          PY
