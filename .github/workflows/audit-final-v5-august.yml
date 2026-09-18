@@ -2,12 +2,6 @@ name: Audit final v5 August
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/audit-final-v5-august.yml"
-      - "scripts/audit-final-v5-august.py"
 
 permissions:
   contents: write

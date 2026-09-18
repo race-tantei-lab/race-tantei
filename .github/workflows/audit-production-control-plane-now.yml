@@ -1,10 +1,6 @@
 # Read-only production control-plane audit. No D1 mutations.
 name: Audit production control plane now
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/audit-production-control-plane-now.yml"
   workflow_dispatch:
 
 jobs:

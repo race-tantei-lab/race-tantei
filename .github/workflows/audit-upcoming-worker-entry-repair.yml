@@ -2,12 +2,6 @@ name: Audit upcoming Worker entry repair
 run-name: Audit upcoming Worker entry repair · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/audit-upcoming-worker-entry-repair.yml"
-      - "src/v1/upcoming-entry-worker-repair.ts"
-      - "src/public-site-entry-v32.ts"
   workflow_dispatch:
 
 permissions:

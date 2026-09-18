@@ -1,8 +1,7 @@
 name: Audit malformed JRA odds parser impact
 on:
-  push:
-    branches: [main]
-    paths: [".github/workflows/audit-odds-parser-impact-20260823.yml"]
+  workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write

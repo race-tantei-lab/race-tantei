@@ -2,11 +2,6 @@ name: Audit upcoming entry readiness
 run-name: Audit upcoming entry readiness · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/audit-upcoming-entry-readiness.py"
-      - ".github/workflows/audit-upcoming-entry-readiness.yml"
   workflow_dispatch:
 
 permissions:

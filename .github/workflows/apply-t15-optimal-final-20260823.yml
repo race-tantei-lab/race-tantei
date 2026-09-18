@@ -1,10 +1,7 @@
 name: Apply T-15 optimal finalization patch
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/apply-t15-optimal-final-20260823.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write

@@ -2,11 +2,6 @@ name: Audit official combination odds storage
 run-name: Audit official combination odds storage · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/audit-official-combination-odds-storage.py"
-      - ".github/workflows/audit-official-combination-odds-storage.yml"
   workflow_dispatch:
 
 permissions:

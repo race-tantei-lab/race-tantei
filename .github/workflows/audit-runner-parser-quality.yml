@@ -1,11 +1,8 @@
 name: Audit runner parser quality
 run-name: Audit runner parser quality · ${{ github.sha }}
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/audit-runner-parser-quality.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write
