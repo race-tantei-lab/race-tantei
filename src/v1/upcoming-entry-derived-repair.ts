@@ -159,26 +159,31 @@ async function fetchOfficialEntry(cname: string): Promise<string | null> {
   return null;
 }
 
-async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]> {
+function targetRange(now: Date): { startDate: string; endDate: string } {
   const weekday = jstWeekday(now);
-  // Friday prepares Saturday; Saturday prepares Sunday. On race day itself,
-  // continue repairing the current day. This keeps the lightweight derived
-  // repair focused on the next race day instead of re-scanning Saturday while
-  // Sunday's cards are still empty.
-  const targetDate = weekday === 5 || weekday === 6 ? jstDate(now, 1) : jstDate(now, 0);
+  if (weekday === 4) return { startDate: jstDate(now, 2), endDate: jstDate(now, 4) }; // Thu -> Sat/Sun/Mon
+  if (weekday === 5) return { startDate: jstDate(now, 1), endDate: jstDate(now, 3) }; // Fri -> Sat/Sun/Mon
+  if (weekday === 6) return { startDate: jstDate(now, 0), endDate: jstDate(now, 2) }; // Sat -> Sat/Sun/Mon
+  if (weekday === 0) return { startDate: jstDate(now, 0), endDate: jstDate(now, 1) }; // Sun -> Sun/Mon
+  return { startDate: jstDate(now, 0), endDate: jstDate(now, 0) };
+}
+
+async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]> {
+  const { startDate, endDate } = targetRange(now);
   const result = await db.prepare(`
     WITH per_race AS (
       SELECT r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no,
              SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS activeRunners,
              MAX(CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END) AS hasEntryUrl
       FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
-      WHERE r.race_date=? GROUP BY r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no
+      WHERE r.race_date>=? AND r.race_date<=?
+      GROUP BY r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no
     )
     SELECT race_date AS raceDate,venue,meeting_no AS meetingNo,meeting_day AS meetingDay,
            SUM(CASE WHEN activeRunners>=3 AND hasEntryUrl=1 THEN 1 ELSE 0 END) AS readyRaces
     FROM per_race GROUP BY race_date,venue,meeting_no,meeting_day HAVING readyRaces < 12
-    ORDER BY CASE venue WHEN '中京' THEN 0 WHEN '新潟' THEN 1 WHEN '札幌' THEN 2 ELSE 3 END,venue
-  `).bind(targetDate).all<MissingGroup>();
+    ORDER BY race_date,CASE venue WHEN '中京' THEN 0 WHEN '新潟' THEN 1 WHEN '札幌' THEN 2 ELSE 3 END,venue
+  `).bind(startDate, endDate).all<MissingGroup>();
   return (result.results ?? []).slice(0, MAX_GROUPS_PER_PASS).map((row) => ({
     raceDate: String(row.raceDate), venue: String(row.venue), meetingNo: Number(row.meetingNo),
     meetingDay: Number(row.meetingDay), readyRaces: Number(row.readyRaces),
