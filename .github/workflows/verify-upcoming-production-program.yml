@@ -4,6 +4,11 @@ on:
   push:
     paths:
       - ".github/workflows/verify-upcoming-production-program.yml"
+      - "src/v1/upcoming-calendar-repair.ts"
+      - "src/v1/upcoming-entry-worker-repair.ts"
+      - "src/v1/upcoming-entry-derived-repair.ts"
+      - "src/public-site-entry-recovery-20260906.ts"
+      - "src/public-site-entry-performance-history-fix-20260915.ts"
   workflow_dispatch:
   schedule:
     - cron: "35 12 * * 4,5" # 21:35 JST Thu/Fri
