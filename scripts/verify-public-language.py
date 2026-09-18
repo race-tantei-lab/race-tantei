@@ -22,9 +22,11 @@ def read(path: Path) -> str:
 def main() -> None:
     wrangler = json.loads(read(WRANGLER))
     actual_main = str(wrangler.get("main") or "")
-    require(actual_main == "src/public-site-entry-recovery-20260906.ts", "CLEAR_LANGUAGE_ENTRY_NOT_ACTUAL_WRANGLER_MAIN")
+    require(actual_main == "src/public-site-entry-performance-history-fix-20260915.ts", "CLEAR_LANGUAGE_ENTRY_NOT_ACTUAL_WRANGLER_MAIN")
 
-    recovery = read(ROOT / actual_main)
+    performance = read(ROOT / actual_main)
+    quota = read(ROOT / "src" / "public-site-entry-quota-recovery-20260912.ts")
+    recovery = read(ROOT / "src" / "public-site-entry-recovery-20260906.ts")
     v37 = read(ROOT / "src" / "public-site-entry-v37.ts")
     v37_core = read(ROOT / "src" / "public-site-entry-v37-core.ts")
     v34 = read(ROOT / "src" / "public-site-entry-v34.ts")
@@ -39,6 +41,8 @@ def main() -> None:
 
     # Resolve the real public fetch chain from wrangler instead of pretending
     # that v31 is the Worker entrypoint. v31/v30 remain the active language layer.
+    require('import base from "./public-site-entry-quota-recovery-20260912.js"' in performance, "PUBLIC_CHAIN_PERFORMANCE_TO_QUOTA_MISSING")
+    require('import recovery from "./public-site-entry-recovery-20260906.js"' in quota, "PUBLIC_CHAIN_QUOTA_TO_RECOVERY_MISSING")
     require('import publicSite from "./public-site-entry-v37.js"' in recovery, "PUBLIC_CHAIN_RECOVERY_TO_V37_MISSING")
     require('import core from "./public-site-entry-v37-core.js"' in v37, "PUBLIC_CHAIN_V37_CORE_MISSING")
     require('import publicSite from "./public-site-entry-v34.js"' in v37_core, "PUBLIC_CHAIN_V37_TO_V34_MISSING")
@@ -105,7 +109,7 @@ def main() -> None:
     require("jra-fast-official','jra-crawl-official" in migration, "OFFICIAL_ODDS_ALLOWLIST_MISSING")
 
     print(
-        "PUBLIC_LANGUAGE_OK actual_entry=recovery_v37 language_layer=v31_v30 "
+        "PUBLIC_LANGUAGE_OK actual_entry=performance_quota_recovery_v37 language_layer=v31_v30 "
         "continuous_learning=same_day official_odds_only=true fail_closed=true t15_start=true t10_reflection=true"
     )
 
