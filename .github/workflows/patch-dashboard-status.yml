@@ -1,8 +1,7 @@
 name: Diagnose Aug 30 stored JRA anchors
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/patch-dashboard-status.yml']
+  workflow_dispatch:
+
 permissions:
   contents: read
 jobs:

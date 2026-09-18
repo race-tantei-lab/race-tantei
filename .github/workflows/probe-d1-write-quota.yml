@@ -1,10 +1,6 @@
 name: Diagnose 9/6 D1 bets and odds
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/probe-d1-write-quota.yml'
   workflow_dispatch:
 
 permissions:

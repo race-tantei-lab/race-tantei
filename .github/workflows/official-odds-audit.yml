@@ -2,11 +2,6 @@ name: Official odds coverage audit
 run-name: Official odds coverage audit · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/export-official-odds-audit.py"
-      - ".github/workflows/official-odds-audit.yml"
   workflow_dispatch:
 
 permissions:

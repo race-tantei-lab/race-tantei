@@ -2,10 +2,7 @@ name: One-shot early public final hardening v2
 # corrected starvation regression: stale refresh is outside the T-30 final window
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/one-shot-early-public-final-v2.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write

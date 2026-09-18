@@ -1,10 +1,7 @@
 name: One-shot early public final hardening
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/one-shot-early-public-final.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write

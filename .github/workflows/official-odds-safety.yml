@@ -2,11 +2,6 @@ name: Official JRA odds safety gate
 run-name: Remove synthetic odds bets · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/final-course-policy.py"
-      - ".github/workflows/official-odds-safety.yml"
   workflow_dispatch:
 
 permissions:

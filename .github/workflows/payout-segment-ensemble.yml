@@ -3,16 +3,6 @@ name: Payout segment ensemble
 # Emergency rerun after light-search generator failure.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/payout-segment-ensemble.yml"
-      - "scripts/train-payout-segment-ensemble.mjs"
-      - "src/v1/betting-candidate-universe.ts"
-      - "src/v1/learned-betting-policy.ts"
-      - "src/v1/walk-forward-scope.ts"
-      - "package.json"
 
 concurrency:
   group: payout-segment-ensemble

@@ -3,14 +3,6 @@ name: Nonlinear v4 allocation refinement
 # Explicit trigger after workflow registration.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/nonlinear-v4-allocation-refinement.yml"
-      - "scripts/refine-nonlinear-v4-allocation.py"
-      - "scripts/train-nonlinear-market-blend-v4.py"
-      - "analysis-results/nonlinear-market-blend-v4.json"
 
 concurrency:
   group: nonlinear-v4-allocation-refinement

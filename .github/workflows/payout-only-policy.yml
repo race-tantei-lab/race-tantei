@@ -2,16 +2,6 @@ name: Payout-only betting policy
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/payout-only-policy.yml"
-      - "scripts/train-payout-only-policy.mjs"
-      - "src/v1/betting-candidate-universe.ts"
-      - "src/v1/learned-betting-policy.ts"
-      - "src/v1/walk-forward-scope.ts"
-      - "package.json"
 
 concurrency:
   group: payout-only-betting-policy

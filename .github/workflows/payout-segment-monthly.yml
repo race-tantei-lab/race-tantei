@@ -2,17 +2,6 @@ name: Payout segment monthly gate
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/payout-segment-monthly.yml"
-      - "scripts/run-payout-segment-monthly.mjs"
-      - "scripts/train-payout-segment-ensemble.mjs"
-      - "src/v1/betting-candidate-universe.ts"
-      - "src/v1/learned-betting-policy.ts"
-      - "src/v1/walk-forward-scope.ts"
-      - "package.json"
 
 concurrency:
   group: payout-segment-monthly-gate

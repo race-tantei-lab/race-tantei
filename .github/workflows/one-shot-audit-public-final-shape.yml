@@ -1,10 +1,7 @@
 name: One-shot audit exact public final shape
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/one-shot-audit-public-final-shape.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read

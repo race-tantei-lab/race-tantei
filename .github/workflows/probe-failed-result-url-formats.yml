@@ -1,11 +1,8 @@
 name: Probe failed result URL formats
 run-name: Probe failed result URL formats · ${{ github.sha }}
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/probe-failed-result-url-formats.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
   statuses: write
