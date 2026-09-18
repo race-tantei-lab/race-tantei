@@ -8,12 +8,6 @@ on:
   # 12:37 UTC Tuesday = 21:37 JST Tuesday.
   schedule:
     - cron: "37 12 * * 2"
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/continuous-final-rule-learning.yml"
-      - "scripts/update-final-rule-learning.py"
-      - "scripts/generate-final-live-bets-batched.py"
 
 concurrency:
   group: continuous-final-rule-learning
@@ -25,8 +19,6 @@ permissions:
 
 jobs:
   learn:
-    # A push can happen during racing. Production-D1 learning is schedule/manual only.
-    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
