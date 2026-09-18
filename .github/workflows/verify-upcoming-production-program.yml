@@ -18,6 +18,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -89,6 +90,26 @@ jobs:
               if int(by.get(kind,{}).get('chunkCount','0') or 0)<=0 or int(by.get(kind,{}).get('byteLength','0') or 0)<=0:
                   raise SystemExit(f'{kind.upper()}_STATE_META_INCOMPLETE')
           print('RUNTIME_STATE_READY')
+          PY
+
+      - name: Dry-run tomorrow canonical race selection
+        shell: bash
+        run: |
+          set -euo pipefail
+          tomorrow=$(TZ=Asia/Tokyo date -d '+1 day' +%F)
+          python scripts/generate-ten-year-preday-selection.py --date "$tomorrow" --out /tmp/tomorrow-selection.json
+          python3 - <<'PY'
+          import collections,json
+          p=json.load(open('/tmp/tomorrow-selection.json'))
+          selected=p.get('selected') or []
+          by=collections.Counter(str(r.get('venue') or '') for r in selected)
+          if p.get('sourceModel')!='ten-year-completed-model':
+              raise SystemExit('DRY_SELECTION_MODEL_BAD')
+          if p.get('resultDataUsedForTargetDay') is not False:
+              raise SystemExit('DRY_SELECTION_TARGET_RESULT_LEAK')
+          if len(by)!=2 or any(v!=5 for v in by.values()) or len(selected)!=10:
+              raise SystemExit('DRY_SELECTION_COUNT_BAD:'+json.dumps(dict(by),ensure_ascii=False))
+          print('TOMORROW_SELECTION_DRY_RUN_OK', {'selected':len(selected),'venues':dict(by),'raceIds':[r.get('raceId') for r in selected]})
           PY
 
       - name: Inspect public maintenance audit state
