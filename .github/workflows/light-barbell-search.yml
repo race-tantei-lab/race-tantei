@@ -3,17 +3,6 @@ name: Light barbell betting search
 # Explicit trigger after workflow registration.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/light-barbell-search.yml"
-      - "scripts/run-light-barbell-search.mjs"
-      - "scripts/run-light-barbell-search-repaired.mjs"
-      - "scripts/run-light-policy-aware-search.mjs"
-      - "scripts/train-payout-segment-ensemble.mjs"
-      - "src/v1/**"
-      - "package.json"
 
 concurrency:
   group: light-barbell-betting-search
