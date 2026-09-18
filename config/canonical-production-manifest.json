@@ -107,9 +107,9 @@
   },
   "site": {
     "workerConfig": "wrangler.jsonc",
-    "authoritativeEntryRule": "The current UI entry is always wrangler.jsonc.main. Do not infer the current UI from public-site-entry version filenames. Current wrappers intentionally layer earlier entries, so verification must inspect the active import chain while keeping wrangler.jsonc.main as the identity source of truth.",
-    "entry": "src/public-site-entry-recovery-20260906.ts",
-    "revision": "ten-year-completed-public-v37-original-home-restored-20260905",
+    "authoritativeEntryRule": "The current UI entry is always wrangler.jsonc.main. The active production wrapper chain is performance-history -> quota-recovery -> recovery -> v37 core; verification must inspect the delegated chain while keeping wrangler.jsonc.main as the identity source of truth.",
+    "entry": "src/public-site-entry-performance-history-fix-20260915.ts",
+    "revision": "daily-performance-history-fix-20260915",
     "url": "https://race-tantei-phase0.race-tantei.workers.dev",
     "workerName": "race-tantei-phase0",
     "d1DatabaseName": "race-tantei-phase0",
