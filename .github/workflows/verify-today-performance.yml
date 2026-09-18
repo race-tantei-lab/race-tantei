@@ -1,17 +1,7 @@
 name: Verify today performance
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "src/public-site-entry-v14.ts"
-      - "src/public-site-entry-v15.ts"
-      - "src/v1/today-performance.ts"
-      - "scripts/verify-today-performance-response.mjs"
-      - ".github/workflows/verify-today-performance.yml"
   workflow_dispatch:
-  schedule:
-    - cron: "30 9 * * 6,0" # Sat/Sun 18:30 JST; partial settlement is intentionally valid to verify.
 
 permissions:
   contents: read

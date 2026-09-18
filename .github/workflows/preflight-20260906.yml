@@ -2,13 +2,7 @@ name: 2026-09-06 production preflight
 # Forced 07:34 JST readiness recheck before the daily D1 reset.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/preflight-20260906.yml'
   workflow_dispatch:
-  schedule:
-    - cron: '25 0 6 9 *' # 09:25 JST on Sep 6; acceptance after daily D1 reset/bootstrap
 
 permissions:
   contents: read

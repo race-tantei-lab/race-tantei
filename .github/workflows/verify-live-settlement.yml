@@ -2,12 +2,6 @@ name: Verify live settlement integrity
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/verify-live-settlement.yml"
-  schedule:
-    - cron: '30 8 * * *' # 17:30 JST; exits immediately on non-race days
 
 permissions:
   contents: read

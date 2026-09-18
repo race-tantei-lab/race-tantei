@@ -3,37 +3,6 @@ run-name: Official odds ROI 200 runtime · ${{ github.sha }}
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - "scripts/collect-jra-official-odds.py"
-      - "scripts/collect-jra-official-odds-runtime.py"
-      - "scripts/test-official-odds-runtime.py"
-      - "scripts/production_base_loader.py"
-      - "scripts/generate-official-odds-roi200-shadow-v2.py"
-      - "scripts/search-official-odds-roi200-forward-v2.py"
-      - "scripts/prepare-official-odds-roi200-promotion-v2.py"
-      - "scripts/official-odds-roi200-policy.py"
-      - "scripts/official-odds-roi200-policy-v2.py"
-      - "scripts/publish-official-odds-roi200-production-v2.py"
-      - ".github/workflows/official-odds-roi200-runtime.yml"
-  push:
-    branches: [main]
-    paths:
-      - "scripts/collect-jra-official-odds.py"
-      - "scripts/collect-jra-official-odds-runtime.py"
-      - "scripts/test-official-odds-runtime.py"
-      - "scripts/production_base_loader.py"
-      - "scripts/generate-official-odds-roi200-shadow-v2.py"
-      - "scripts/search-official-odds-roi200-forward-v2.py"
-      - "scripts/prepare-official-odds-roi200-promotion-v2.py"
-      - "scripts/official-odds-roi200-policy.py"
-      - "scripts/official-odds-roi200-policy-v2.py"
-      - "scripts/publish-official-odds-roi200-production-v2.py"
-      - ".github/workflows/official-odds-roi200-runtime.yml"
-  # Research must not compete with live deadline writes on the production D1.
-  # 11:30 UTC = 20:30 JST, after the normal Saturday/Sunday race window.
-  schedule:
-    - cron: "30 11 * * 6,0"
 
 permissions:
   contents: write

@@ -2,13 +2,6 @@ name: Verify live lock deadline now
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/verify-live-lock-deadline-now.yml"
-  schedule:
-    - cron: '40 0-6 * * *' # 09:40,10:40,...15:40 JST
-    - cron: '10 1-7 * * *' # 10:10,11:10,...16:10 JST
 
 permissions:
   contents: read

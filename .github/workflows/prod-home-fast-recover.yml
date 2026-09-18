@@ -1,14 +1,7 @@
 name: Fast production home snapshot
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/prod-home-fast-recover.yml'
   workflow_dispatch:
-  schedule:
-    - cron: '45 23 * * *' # 08:45 JST
-    - cron: '50 0 * * *'  # 09:50 JST
 
 permissions:
   contents: write

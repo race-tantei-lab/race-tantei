@@ -1,39 +1,6 @@
 name: Verify WIN5 production readiness
 
 on:
-  pull_request:
-    paths:
-      - "src/v1/completed-win5.ts"
-      - "src/win5-entry-v2.ts"
-      - "src/win5-entry-v3.ts"
-      - "src/v1/race-day-gate.ts"
-      - "src/public-site-entry-v34.ts"
-      - "tests/completed-win5-tests.ts"
-      - "tests/live-win5-official.ts"
-      - "scripts/verify-win5-safety.py"
-      - "wrangler.win5.jsonc"
-      - "wrangler.win5-backup.jsonc"
-      - ".github/workflows/deploy-win5.yml"
-      - ".github/workflows/verify-win5.yml"
-  push:
-    branches: [main]
-    paths:
-      - "src/v1/completed-win5.ts"
-      - "src/win5-entry-v2.ts"
-      - "src/win5-entry-v3.ts"
-      - "src/v1/race-day-gate.ts"
-      - "src/public-site-entry-v34.ts"
-      - "tests/completed-win5-tests.ts"
-      - "tests/live-win5-official.ts"
-      - "scripts/verify-win5-safety.py"
-      - "wrangler.win5.jsonc"
-      - "wrangler.win5-backup.jsonc"
-      - ".github/workflows/deploy-win5.yml"
-      - ".github/workflows/verify-win5.yml"
-  schedule:
-    # Sunday readiness in JST: 06:00, 08:00, 09:30.
-    - cron: "0 21,23 * * 6"
-    - cron: "30 0 * * 0"
   workflow_dispatch:
 
 permissions:
