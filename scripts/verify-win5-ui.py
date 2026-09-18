@@ -9,6 +9,8 @@ ENTRY = ROOT / "src" / "public-site-entry-v28.ts"
 PARENT = ROOT / "src" / "public-site-entry-v27.ts"
 WRANGLER = ROOT / "wrangler.jsonc"
 RUNTIME = ROOT / "src" / "v1" / "completed-win5.ts"
+PERFORMANCE = ROOT / "src" / "public-site-entry-performance-history-fix-20260915.ts"
+QUOTA = ROOT / "src" / "public-site-entry-quota-recovery-20260912.ts"
 RECOVERY = ROOT / "src" / "public-site-entry-recovery-20260906.ts"
 V37 = ROOT / "src" / "public-site-entry-v37.ts"
 V37_CORE = ROOT / "src" / "public-site-entry-v37-core.ts"
@@ -36,6 +38,8 @@ def main() -> None:
     win5_ui_source = entry + "\n" + parent
     wrangler = read(WRANGLER)
     runtime = read(RUNTIME)
+    performance = read(PERFORMANCE)
+    quota = read(QUOTA)
     recovery = read(RECOVERY)
     v37 = read(V37)
     v37_core = read(V37_CORE)
@@ -43,7 +47,9 @@ def main() -> None:
     v33 = read(V33)
     v32 = read(V32)
 
-    require('"main": "src/public-site-entry-recovery-20260906.ts"' in wrangler, "WIN5_RECOVERY_NOT_CANONICAL_ENTRY")
+    require('"main": "src/public-site-entry-performance-history-fix-20260915.ts"' in wrangler, "WIN5_ACTIVE_PUBLIC_ENTRY_MISMATCH")
+    require('import base from "./public-site-entry-quota-recovery-20260912.js"' in performance, "WIN5_PERFORMANCE_QUOTA_WRAPPER_MISSING")
+    require('import recovery from "./public-site-entry-recovery-20260906.js"' in quota, "WIN5_QUOTA_RECOVERY_WRAPPER_MISSING")
     require('import publicSite from "./public-site-entry-v37.js"' in recovery, "WIN5_RECOVERY_V37_WRAPPER_MISSING")
     require('import core from "./public-site-entry-v37-core.js"' in v37, "WIN5_V37_CORE_WRAPPER_MISSING")
     require('import publicSite from "./public-site-entry-v34.js"' in v37_core, "WIN5_V37CORE_V34_WRAPPER_MISSING")
@@ -99,7 +105,7 @@ def main() -> None:
     require('.win5-target-list' in parent and '.win5-ticket-row' in parent, "WIN5_MOBILE_VERTICAL_LAYOUT_MISSING")
     require('overflow-x:auto' not in win5_ui_source, "WIN5_HORIZONTAL_SCROLL_REINTRODUCED")
 
-    print("WIN5_UI_OK top_nav=true floating_button=false view_switch=tickets_other default=tickets duplicate_plan_comparison=false rule=false diagnostics=always_open horizontal_scroll=false canonical=recovery_v37_v34_v33_v32_v31 clear_language=true runtime_t15_guard=true")
+    print("WIN5_UI_OK top_nav=true floating_button=false view_switch=tickets_other default=tickets duplicate_plan_comparison=false rule=false diagnostics=always_open horizontal_scroll=false canonical=performance_quota_recovery_v37_v34_v33_v32_v31 clear_language=true runtime_t15_guard=true")
 
 
 if __name__ == "__main__":
