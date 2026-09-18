@@ -1,27 +1,6 @@
 name: Verify live deadline production readiness
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "src/live-deadline-entry-v2.ts"
-      - "src/live-deadline-entry-v3.ts"
-      - "src/public-site-entry-recovery-20260906.ts"
-      - "src/v1/live-preview-safety.ts"
-      - "src/v1/completed-worker-live-lock.ts"
-      - "src/v1/completed-worker-deadline-guard.ts"
-      - "src/v1/completed-final-invariants.ts"
-      - "src/v1/jra-official-odds-fetch.ts"
-      - "src/v1/jra-official-odds.ts"
-      - "src/v1/race-day-gate.ts"
-      - "scripts/install-race-day-runtime-guards.sql"
-      - "scripts/verify-live-lock-safety.py"
-      - "scripts/verify-race-day-gate.py"
-      - "wrangler.jsonc"
-      - "wrangler.live-deadline.jsonc"
-      - "wrangler.live-deadline-backup.jsonc"
-      - ".github/workflows/deploy-live-deadline.yml"
-      - ".github/workflows/verify-live-deadline-production.yml"
   workflow_dispatch:
   schedule:
     - cron: "0 22 * * *"
@@ -60,9 +39,6 @@ jobs:
           npm run typecheck
           python3 scripts/verify-live-lock-safety.py
           python3 scripts/verify-race-day-gate.py
-      - name: Wait for production deploy and cron registration
-        if: github.event_name == 'push'
-        run: sleep 120
       - name: Verify isolated Workers are healthy and current
         shell: bash
         run: |
