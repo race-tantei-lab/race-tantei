@@ -35,19 +35,54 @@ jobs:
             echo "=== UPCOMING_DATE=$date OFFSET=$offset ==="
             npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
               "WITH p AS (
-                 SELECT r.race_id,r.venue,r.race_no,r.race_name,r.entry_url,
+                 SELECT r.race_id,r.venue,r.race_no,r.race_name,r.entry_url,r.start_time_utc,r.surface,r.distance_m,
                         SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS active
                  FROM rt_races r
                  LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
                  WHERE r.race_date='$date'
-                 GROUP BY r.race_id,r.venue,r.race_no,r.race_name,r.entry_url
+                 GROUP BY r.race_id,r.venue,r.race_no,r.race_name,r.entry_url,r.start_time_utc,r.surface,r.distance_m
                )
                SELECT race_id AS raceId,venue,race_no AS raceNo,race_name AS raceName,
+                      entry_url AS entryUrl,
                       CASE WHEN LENGTH(TRIM(COALESCE(entry_url,'')))>0 THEN 1 ELSE 0 END AS hasEntryUrl,
-                      active
+                      start_time_utc AS startTimeUtc,surface,distance_m AS distanceM,active
                FROM p ORDER BY venue,race_no" > "/tmp/upcoming-$offset.json"
             cat "/tmp/upcoming-$offset.json"
           done
+
+      - name: Verify model and selection runtime state
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command             "SELECT 'selection' AS state,key,value FROM rt_selection_state_meta
+             WHERE key IN ('ready','modelVersion','generation','chunkCount','byteLength','throughDate')
+             UNION ALL
+             SELECT 'model' AS state,key,value FROM rt_ml_model_meta
+             WHERE key IN ('ready','modelVersion','sourceSha256','generation','chunkCount','byteLength')
+             ORDER BY state,key" > /tmp/runtime-state.json
+          cat /tmp/runtime-state.json
+          python3 - <<'PY'
+          import json
+          raw=json.load(open('/tmp/runtime-state.json')); rows=[]
+          for block in raw if isinstance(raw,list) else [raw]:
+              if isinstance(block,dict): rows += block.get('results') or []
+          by={}
+          for r in rows:
+              by.setdefault(str(r.get('state')),{})[str(r.get('key'))]=str(r.get('value'))
+          print('RUNTIME_STATE',by)
+          if by.get('selection',{}).get('ready')!='1':
+              raise SystemExit('SELECTION_STATE_NOT_READY')
+          if by.get('selection',{}).get('modelVersion')!='ten-year-completed-model':
+              raise SystemExit('SELECTION_MODEL_VERSION_BAD')
+          if by.get('model',{}).get('ready')!='1':
+              raise SystemExit('ML_MODEL_NOT_READY')
+          if by.get('model',{}).get('modelVersion')!='ten-year-completed-model':
+              raise SystemExit('ML_MODEL_VERSION_BAD')
+          for kind in ('selection','model'):
+              if int(by.get(kind,{}).get('chunkCount','0') or 0)<=0 or int(by.get(kind,{}).get('byteLength','0') or 0)<=0:
+                  raise SystemExit(f'{kind.upper()}_STATE_META_INCOMPLETE')
+          print('RUNTIME_STATE_READY')
+          PY
 
       - name: Inspect public maintenance audit state
         shell: bash
@@ -77,11 +112,16 @@ jobs:
               if isinstance(block,dict):
                   rows += block.get('results') or []
           venues=sorted({str(r.get('venue') or '') for r in rows if r.get('venue')})
-          missing=[r for r in rows if int(r.get('active') or 0)<3 or int(r.get('hasEntryUrl') or 0)!=1]
+          missing=[r for r in rows if
+                   int(r.get('active') or 0)<3
+                   or int(r.get('hasEntryUrl') or 0)!=1
+                   or not str(r.get('startTimeUtc') or '').strip()
+                   or not str(r.get('surface') or '').strip()
+                   or int(r.get('distanceM') or 0)<=0]
           print('TOMORROW_PROGRAM', {'venues':venues,'races':len(rows),'ready':len(rows)-len(missing)})
           print('TOMORROW_MISSING', missing)
           # 2026-09-19 has two JRA venues (Nakayama/Hanshin), 12 races each.
           if len(venues)!=2 or len(rows)!=24 or missing:
               raise SystemExit(f'UPCOMING_PROGRAM_INCOMPLETE venues={len(venues)} races={len(rows)} missing={len(missing)}')
-          print('UPCOMING_PROGRAM_READY races=24 ready=24 venues=2')
+          print('UPCOMING_PROGRAM_READY races=24 ready=24 venues=2 metadata=complete')
           PY
