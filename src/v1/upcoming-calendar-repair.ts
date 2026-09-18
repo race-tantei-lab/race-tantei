@@ -74,14 +74,18 @@ export async function runUpcomingCalendarRepair(env: Env, now = new Date()): Pro
   const dates = targetDates(now);
   const audit: UpcomingCalendarAudit = { checkedAt: now.toISOString(), status: dates.length ? "ready" : "idle", days: [] };
   for (const raceDate of dates) {
-    const raceDay = await shouldRunOnJraRaceDay(probeDateForJstDay(raceDate));
-    if (!raceDay.shouldRun) continue;
-    const storedBefore = await storedRaceCount(env.DB, raceDate);
-    if (await recentSuccess(env.DB, raceDate, now)) {
-      audit.days.push({ raceDate, status: "recent", storedBefore, storedAfter: storedBefore, races: null, venues: null, error: null });
-      continue;
-    }
+    let storedBefore = 0;
     try {
+      // Isolate every candidate day. A JRA/calendar/D1 failure for one date
+      // must not prevent the remaining weekend/holiday dates from being synced.
+      const raceDay = await shouldRunOnJraRaceDay(probeDateForJstDay(raceDate));
+      if (!raceDay.shouldRun) continue;
+      storedBefore = await storedRaceCount(env.DB, raceDate);
+      if (await recentSuccess(env.DB, raceDate, now)) {
+        audit.days.push({ raceDate, status: "recent", storedBefore, storedAfter: storedBefore, races: null, venues: null, error: null });
+        continue;
+      }
+
       const result = await syncOfficialCalendarDay(env.DB, raceDate);
       const storedAfter = await storedRaceCount(env.DB, raceDate);
       const day: DayAudit = {
@@ -96,7 +100,8 @@ export async function runUpcomingCalendarRepair(env: Env, now = new Date()): Pro
       audit.days.push(day);
       await setState(env.DB, `${DATE_STATE_PREFIX}${raceDate}`, JSON.stringify({ checkedAt: now.toISOString(), ...day }));
     } catch (error) {
-      const storedAfter = await storedRaceCount(env.DB, raceDate);
+      let storedAfter = storedBefore;
+      try { storedAfter = await storedRaceCount(env.DB, raceDate); } catch { /* preserve original failure */ }
       const day: DayAudit = {
         raceDate,
         status: "error",
@@ -107,7 +112,9 @@ export async function runUpcomingCalendarRepair(env: Env, now = new Date()): Pro
         error: errorText(error),
       };
       audit.days.push(day);
-      await setState(env.DB, `${DATE_STATE_PREFIX}${raceDate}`, JSON.stringify({ checkedAt: now.toISOString(), ...day }));
+      try {
+        await setState(env.DB, `${DATE_STATE_PREFIX}${raceDate}`, JSON.stringify({ checkedAt: now.toISOString(), ...day }));
+      } catch { /* top-level audit still records the per-day failure when D1 recovers */ }
     }
   }
   const errors = audit.days.filter((day) => day.status === "error").length;
