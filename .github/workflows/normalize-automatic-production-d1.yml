@@ -1,0 +1,34 @@
+name: Normalize automatic production D1 workflows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/normalize-automatic-d1-workflows.py"
+      - ".github/workflows/normalize-automatic-production-d1.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Normalize all non-production automatic D1 readers
+        run: python scripts/normalize-automatic-d1-workflows.py
+      - name: Commit normalized workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows
+          if git diff --cached --quiet; then
+            echo "NO_NORMALIZATION_CHANGES"
+            exit 0
+          fi
+          git commit -m "ops: make non-production D1 workflows manual-only"
+          git push
