@@ -2,11 +2,6 @@ name: Verify Worker Live-Lock Backup
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/verify-worker-live-lock-backup.yml
-      - scripts/verify-worker-live-lock-backup.py
 
 permissions:
   contents: read

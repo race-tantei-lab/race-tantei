@@ -3,10 +3,6 @@ name: Verify Sapporo1 refund final
 # Fresh re-audit after Worker-native live-lock hardening on 2026-08-15.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/verify-sapporo1-refund-final.yml"
 
 permissions:
   contents: read

@@ -2,11 +2,6 @@ name: Verify Worker End-to-End Cron
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/verify-worker-end-to-end-cron.yml"
-      - "scripts/verify-worker-end-to-end-cron.py"
 
 permissions:
   contents: read

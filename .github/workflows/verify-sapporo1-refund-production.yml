@@ -2,10 +2,6 @@ name: Verify Sapporo1 refund production
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/verify-sapporo1-refund-production.yml"
 
 permissions:
   contents: read

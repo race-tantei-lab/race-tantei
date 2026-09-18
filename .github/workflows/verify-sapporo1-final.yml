@@ -2,10 +2,6 @@ name: Verify final Sapporo 1R settlement
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/verify-sapporo1-final.yml"
 
 permissions:
   contents: read

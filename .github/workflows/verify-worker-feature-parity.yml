@@ -2,14 +2,6 @@ name: Verify Worker Feature Parity
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - .github/workflows/verify-worker-feature-parity.yml
-      - scripts/build-worker-feature-parity.py
-      - scripts/verify-worker-feature-parity.ts
-      - src/v1/completed-feature-runtime.ts
-      - scripts/ten-year-production-core.py
-      - models/ten-year-runner-feature-state.json.gz
 
 permissions:
   contents: read
