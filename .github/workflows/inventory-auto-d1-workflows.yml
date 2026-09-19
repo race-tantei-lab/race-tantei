@@ -1,0 +1,36 @@
+name: Inventory automatic production D1 workflows
+on:
+  push:
+    branches: ["ops/diag-20260919"]
+    paths: [".github/workflows/inventory-auto-d1-workflows.yml"]
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Inventory automatic workflows touching production D1
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, json
+          root=Path('.github/workflows')
+          rows=[]
+          d1_markers=[
+            'wrangler d1 execute','wrangler d1 insights','race-tantei-phase0 --remote',
+            'CLOUDFLARE_D1_DATABASE_ID','D1_DATABASE_ID','train-payout-segment-ensemble',
+            'audit-d1','snapshot-upcoming-d1','d1-ten-year','probe-d1'
+          ]
+          for p in sorted(root.glob('*.yml')):
+            t=p.read_text()
+            auto=('push:' in t) or ('schedule:' in t)
+            markers=[m for m in d1_markers if m.lower() in t.lower()]
+            if auto and markers:
+              crons=re.findall(r'cron:\s*[\'"]?([^\'"\n]+)',t)
+              rows.append({'path':str(p),'push':'push:' in t,'schedule':'schedule:' in t,'crons':crons,'markers':markers})
+          print('AUTO_D1_WORKFLOWS',json.dumps(rows,ensure_ascii=False))
+          PY
