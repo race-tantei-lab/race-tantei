@@ -1,0 +1,42 @@
+name: Quick Sep20 readiness
+on:
+  push:
+    branches: ["ops/diag-20260919"]
+    paths: [".github/workflows/quick-sep20-readiness.yml"]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Aggregate production readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            WITH p AS (
+              SELECT r.race_id,r.venue,r.race_no,r.entry_url,r.start_time_utc,r.surface,r.distance_m,
+                (SELECT COUNT(*) FROM rt_runners x WHERE x.race_id=r.race_id AND COALESCE(x.runner_status,'active')='active') active
+              FROM rt_races r WHERE r.race_date='2026-09-20'
+            )
+            SELECT venue,COUNT(*) races,
+              SUM(CASE WHEN LENGTH(TRIM(COALESCE(entry_url,'')))>0 THEN 1 ELSE 0 END) entryUrls,
+              SUM(CASE WHEN active>=3 THEN 1 ELSE 0 END) runnerReady,
+              SUM(CASE WHEN start_time_utc IS NOT NULL AND surface IS NOT NULL AND distance_m IS NOT NULL THEN 1 ELSE 0 END) metadataReady,
+              MIN(active) minActive
+            FROM p GROUP BY venue ORDER BY venue;" | tee /tmp/out.json
+          node - <<'NODE'
+          const x=require('/tmp/out.json'); const a=x?.[0]?.results||x?.[0]?.result?.results||[];
+          console.log('SEP20_QUICK_RESULT',JSON.stringify(a));
+          if(a.length!==2||a.some(r=>Number(r.races)!==12||Number(r.entryUrls)!==12||Number(r.runnerReady)!==12||Number(r.metadataReady)!==12||Number(r.minActive)<3)) process.exit(2);
+          console.log('SEP20_QUICK_READY_24_24');
+          NODE
