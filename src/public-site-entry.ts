@@ -1,4 +1,3 @@
-import { runPublicDataSync } from "./public-data-sync.js";
 import { ensurePublicHistory, getPublicBets } from "./v1/public-history-db.js";
 import {
   FROZEN_PUBLIC_METRICS,
@@ -95,7 +94,6 @@ async function home(env: Env, ctx: ExecutionContext): Promise<string> {
   const today = jstDateKey();
   await ensurePublicHistory(env.DB);
   const rows = await calendar(env.DB);
-  ctx.waitUntil(runPublicDataSync(env, "manual"));
   const hasToday = rows.some((row) => row.raceDate === today);
   const intro = hasToday
     ? `<section class="hero today-hero"><span class="today-pill">TODAY</span><h1>今日のレース</h1><p>年 → 月 → 日付 → 会場 → レースの順に選ぶだけで、全レースを確認できます。買い目対象・見送り・判定中も同じ画面で分かります。</p></section>`
@@ -162,7 +160,8 @@ export default {
     if (path.startsWith("/api/")) return json({ ok: false, error: "NOT_FOUND" }, 404);
     return response(shell("ページが見つかりません", `<section class="panel"><h1>ページが見つかりません</h1><p><a class="back" href="/">レース一覧へ戻る</a></p></section>`), 404);
   },
-  async scheduled(_controller: ScheduledController, env: Env, _ctx: ExecutionContext): Promise<void> {
-    await runPublicDataSync(env, "cron");
+  async scheduled(_controller: ScheduledController, _env: Env, _ctx: ExecutionContext): Promise<void> {
+    // Legacy scheduler intentionally disabled. Current bounded maintenance is
+    // owned by public-site-entry-recovery-20260906.ts.
   }
 } satisfies ExportedHandler<Env>;
