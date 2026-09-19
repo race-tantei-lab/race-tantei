@@ -1,0 +1,75 @@
+name: Verify Sep 20 official entries quota-free
+on:
+  push:
+    branches: ["ops/diag-20260919"]
+    paths: [".github/workflows/verify-sep20-jra-quota-free.yml"]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Verify all 24 Sep 20 official entry pages without D1
+        shell: bash
+        run: |
+          cat >/tmp/check.ts <<'TS'
+          import { pageLooksLikeEntry, parseEntryPage } from "./src/v1/jra.ts";
+          const RACE_TENS_WEIGHT=0x52, RACE_UNITS_WEIGHT=0xB5;
+          const anchors=[
+            {venue:"中山", race1:"pw01dde0106202604060120260920/84"},
+            {venue:"阪神", race1:"pw01dde0109202604060120260920/62"},
+          ];
+          function mod256(v:number){return ((v%256)+256)%256}
+          function cnameForRace(race1:string,n:number){
+            const [p,s]=race1.split("/");
+            const x=parseInt(s,16)+Math.floor(n/10)*RACE_TENS_WEIGHT+(n%10-1)*RACE_UNITS_WEIGHT;
+            return p.slice(0,19)+String(n).padStart(2,"0")+p.slice(21)+"/"+mod256(x).toString(16).toUpperCase().padStart(2,"0");
+          }
+          async function fetchPage(cname:string){
+            const encoded=encodeURIComponent(cname);
+            for(const u of [
+              "https://www.jra.go.jp/JRADB/accessD.html?CNAME="+encoded,
+              "https://sp.jra.jp/JRADB/accessD.html?CNAME="+encoded,
+              "https://app.jra.jp/JRADB/accessD.html?CNAME="+encoded,
+            ]){
+              try{
+                const r=await fetch(u,{redirect:"follow",headers:{
+                  "User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136 Safari/537.36",
+                  "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                  "Accept-Language":"ja-JP,ja;q=0.9","Cache-Control":"no-cache","Pragma":"no-cache","Referer":"https://www.jra.go.jp/"
+                }});
+                if(!r.ok) continue;
+                const bytes=await r.arrayBuffer();
+                const html=new TextDecoder("shift_jis").decode(bytes);
+                if(!pageLooksLikeEntry(html)) continue;
+                return {html,url:u};
+              }catch{}
+            }
+            return null;
+          }
+          const rows:any[]=[];
+          for(const a of anchors){
+            for(let n=1;n<=12;n++){
+              const cname=cnameForRace(a.race1,n);
+              const p=await fetchPage(cname);
+              if(!p){ rows.push({venue:a.venue,raceNo:n,cname,ok:false}); continue; }
+              try{
+                const canonical="https://www.jra.go.jp/JRADB/accessD.html?CNAME="+encodeURIComponent(cname);
+                const b=parseEntryPage(p.html,canonical);
+                const active=b.runners.filter(x=>(x.runnerStatus||"active")==="active").length;
+                rows.push({venue:a.venue,raceNo:n,cname,ok:b.race.raceDate==="2026-09-20"&&b.race.venue===a.venue&&Number(b.race.raceNo)===n&&active>=3,raceId:b.race.raceId,raceDate:b.race.raceDate,parsedVenue:b.race.venue,parsedRaceNo:b.race.raceNo,active,entryUrl:canonical});
+              }catch(e){ rows.push({venue:a.venue,raceNo:n,cname,ok:false,error:String(e)}); }
+            }
+          }
+          console.log("SEP20_OFFICIAL_ENTRIES",JSON.stringify(rows));
+          const good=rows.filter(r=>r.ok);
+          const by=Object.fromEntries(anchors.map(a=>[a.venue,good.filter(r=>r.venue===a.venue).length]));
+          console.log("SEP20_OFFICIAL_READY",JSON.stringify({good:good.length,total:rows.length,by,minActive:good.length?Math.min(...good.map(r=>r.active)):0}));
+          if(good.length!==24) process.exit(2);
+          TS
+          npx tsx /tmp/check.ts
