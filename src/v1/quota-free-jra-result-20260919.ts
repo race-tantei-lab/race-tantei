@@ -45,7 +45,20 @@ export async function quotaFreeOfficialResultResponse(raceId: string): Promise<R
   const entryUrl = ENTRY_URLS[raceId];
   if (!entryUrl) return null;
 
-  const resultUrl = toResultUrl(entryUrl);
+  // The two-character JRA CNAME suffix is page-specific. Replacing dde->sde
+  // while keeping the entry-page suffix can point at a non-result page.
+  // Read the official entry page first and use its embedded result link.
+  let resultUrl = toResultUrl(entryUrl);
+  const horseNames = new Map<number, string>();
+  try {
+    const entryPage = await fetchJraPage(entryUrl);
+    const entry = parseEntryPage(entryPage.html, entryPage.url);
+    if (entry.race.resultUrl) resultUrl = entry.race.resultUrl;
+    for (const runner of entry.runners) horseNames.set(Number(runner.horseNo), String(runner.horseName || ""));
+  } catch {
+    // Keep the deterministic dde->sde fallback when the entry page itself is unavailable.
+  }
+
   let resultPage;
   try {
     resultPage = await fetchJraPage(resultUrl);
@@ -68,15 +81,6 @@ export async function quotaFreeOfficialResultResponse(raceId: string): Promise<R
     payoutMap.set(`${payout.betType}:${combination}`, { ...payout, combination });
   }
   const payouts = [...payoutMap.values()];
-
-  const horseNames = new Map<number, string>();
-  try {
-    const entryPage = await fetchJraPage(entryUrl);
-    const entry = parseEntryPage(entryPage.html, entryPage.url);
-    for (const runner of entry.runners) horseNames.set(Number(runner.horseNo), String(runner.horseName || ""));
-  } catch {
-    // Result visibility must not depend on a second JRA request.
-  }
 
   const rows = [...result.results]
     .sort((a, b) => Number(a.finishPosition ?? 999) - Number(b.finishPosition ?? 999) || Number(a.horseNo) - Number(b.horseNo))
