@@ -4,6 +4,8 @@ import { shell } from "./public-ui.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "../recent-public-day-snapshot.js";
 import { RECENT_PUBLIC_FINAL_EVIDENCE } from "../recent-public-final-evidence.js";
 
+const QUOTA_FREE_UI_VERSION = "ten-year-completed-public-v37-free-tier-safe-snapshot-20260905";
+
 const ENTRY_URLS: Readonly<Record<string, string>> = {
   "2026-09-19-nakayama-01": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0106202604050120260919%2F5C",
   "2026-09-19-nakayama-02": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0106202604050220260919%2F11",
@@ -153,6 +155,7 @@ export async function quotaFreeOfficialResultResponse(raceId: string): Promise<R
       "content-type": "text/html; charset=utf-8",
       "cache-control": "public, max-age=45",
       "x-race-result-source": "jra-official-direct-quota-free-20260919",
+      "x-race-ui-version": QUOTA_FREE_UI_VERSION,
     },
   });
 }
