@@ -21,7 +21,9 @@ jobs:
         shell: bash
         run: |
           npx wrangler d1 export race-tantei-phase0 --remote --table rt_races --output /tmp/races.sql
+          npx wrangler d1 export race-tantei-phase0 --remote --table rt_runners --output /tmp/runners.sql
           sqlite3 /tmp/r.db < /tmp/races.sql
+          sqlite3 /tmp/r.db < /tmp/runners.sql
           echo '=== SEP20_RACES ==='
           sqlite3 -json /tmp/r.db "
             SELECT race_id AS raceId,venue,race_no AS raceNo,
@@ -34,3 +36,21 @@ jobs:
               SUM(CASE WHEN LENGTH(TRIM(COALESCE(entry_url,'')))>0 THEN 1 ELSE 0 END) entryUrls,
               SUM(CASE WHEN start_time_utc IS NOT NULL AND surface IS NOT NULL AND distance_m IS NOT NULL THEN 1 ELSE 0 END) metadataReady
             FROM rt_races WHERE race_date='2026-09-20' GROUP BY venue ORDER BY venue;"
+          echo '=== SEP20_RUNNER_SUMMARY ==='
+          sqlite3 -json /tmp/r.db "
+            SELECT r.venue,COUNT(DISTINCT r.race_id) AS racesWithRunners,
+              COUNT(ru.horse_no) AS activeRunnerRows,
+              MIN(CASE WHEN ru.race_id IS NULL THEN 0 ELSE 1 END) AS allJoined
+            FROM rt_races r
+            LEFT JOIN rt_runners ru ON ru.race_id=r.race_id AND COALESCE(ru.runner_status,'active')='active'
+            WHERE r.race_date='2026-09-20'
+            GROUP BY r.venue ORDER BY r.venue;"
+          echo '=== SEP20_PER_RACE_RUNNERS ==='
+          sqlite3 -json /tmp/r.db "
+            SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,
+              COUNT(ru.horse_no) AS activeRunners
+            FROM rt_races r
+            LEFT JOIN rt_runners ru ON ru.race_id=r.race_id AND COALESCE(ru.runner_status,'active')='active'
+            WHERE r.race_date='2026-09-20'
+            GROUP BY r.race_id,r.venue,r.race_no
+            ORDER BY r.venue,r.race_no;"
