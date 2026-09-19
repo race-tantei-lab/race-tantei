@@ -307,11 +307,6 @@ async function fetchRaceList(request: Request, env: Env, ctx: ExecutionContext):
 }
 
 async function fetchRaceDetail(request: Request, env: Env, ctx: ExecutionContext, raceId: string): Promise<Response> {
-  const snapshotDay = DAY_SNAPSHOT[raceId.slice(0, 10)];
-  if (snapshotDay?.bets?.some((bet) => bet.raceId === raceId)) {
-    const fixed = staticRaceDetail(raceId);
-    if (fixed) return fixed;
-  }
   // Results must stay visible even when the D1 daily rows_read quota is exhausted.
   // For races covered by the quota-free JRA map, prefer the official result page
   // once it exists; before result publication this returns null and normal detail
