@@ -2,6 +2,7 @@ import core from "./public-site-entry-v37-core.js";
 import { NORMAL_HOME_SNAPSHOT } from "./normal-home-snapshot.js";
 import { RECENT_HOME_CALENDAR_SNAPSHOT } from "./recent-home-calendar-snapshot.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
+import { RECENT_PUBLIC_FINAL_EVIDENCE } from "./recent-public-final-evidence.js";
 import { projectCurrentPublicState } from "./v1/current-day-public-api.js";
 import { quotaFreeOfficialResultResponse } from "./v1/quota-free-jra-result-20260919.js";
 import { shell } from "./v1/public-ui.js";
@@ -27,9 +28,11 @@ type SnapshotRace = {
 type SnapshotBet = {
   raceId: string; course: string; betType: string; combination: string;
   returnYen: number | null; settlementStatus: string;
+  stakeYen?: number; assumedOdds?: number; lockedAt?: string; sourcePredictionId?: number;
 };
 type SnapshotDay = { selection: string | null; races: SnapshotRace[]; bets: SnapshotBet[] };
 const DAY_SNAPSHOT = RECENT_PUBLIC_DAY_SNAPSHOT as unknown as Record<string, SnapshotDay>;
+const FINAL_EVIDENCE = RECENT_PUBLIC_FINAL_EVIDENCE as unknown as Record<string, { tickets: Array<{ betType:string; combination:string; horses:number[]; predictedProbability:number; officialOdds:number; valueProduct:number; score:number }>; horseNames: Record<string,string> }>;
 
 // Public scheduled work remains maintenance-only. Race-bet generation is
 // owned exclusively by the isolated primary/backup live-deadline Workers.
@@ -216,42 +219,39 @@ function staticRaceDetail(raceId: string): Response | null {
   if (!day?.races?.length) return null;
   const race = day.races.find((row) => String(row.raceId) === raceId);
   if (!race) return null;
-
   const frozen = parseSelection(day.selection);
   const bets = snapshotBetsForRace(day, race);
+  const evidence = FINAL_EVIDENCE[raceId] ?? null;
   const state = projectCurrentPublicState(race, frozen, bets, Date.now());
   const stateCode = String(state.code ?? "pending");
   const stateLabel = String(state.label ?? "判定中");
-  const meta = [
-    race.raceDate.replaceAll("-", "/"),
-    race.venue,
-    `${Number(race.raceNo)}R`,
-    race.startTimeJst ? `${race.startTimeJst}発走` : null,
-    race.surface,
-    race.distanceM == null ? null : `${Number(race.distanceM)}m`,
-  ].filter(Boolean).join("　");
-
-  let betHtml = "";
+  const meta = [race.raceDate.replaceAll("-", "/"), race.venue, String(Number(race.raceNo))+"R", race.startTimeJst ? race.startTimeJst+"発走" : null, race.surface, race.distanceM == null ? null : String(Number(race.distanceM))+"m"].filter(Boolean).join("　");
+  const courseOrder = ["ライト", "スタンダード", "プレミアム"];
+  let betPanel = "";
+  let reasonPanel = "";
   if (bets.length) {
-    const courseOrder = ["ライト", "スタンダード", "プレミアム"];
-    const groups = courseOrder.map((course) => ({ course, rows: bets.filter((bet) => bet.course === course) })).filter((group) => group.rows.length);
-    betHtml = groups.map((group) => `<section class="card panel"><h2>${esc(group.course)}の買い目</h2><div class="bet-table"><table><thead><tr><th>券種</th><th>組合せ</th><th>状態</th></tr></thead><tbody>${group.rows.map((bet) => `<tr><td>${esc(bet.betType)}</td><td><b>${esc(bet.combination)}</b></td><td>${bet.settlementStatus === "settled" ? "精算済み" : "確定済み"}</td></tr>`).join("")}</tbody></table></div></section>`).join("");
+    const blocks = courseOrder.map((course, index) => {
+      const rows = bets.filter((bet) => bet.course === course);
+      const body = rows.map((bet) => "<tr><td>"+esc(bet.betType)+"</td><td>"+esc(bet.combination)+"</td><td>"+(Number.isFinite(Number(bet.assumedOdds))?Number(bet.assumedOdds).toFixed(1)+"倍":"—")+"</td><td>"+(Number.isFinite(Number(bet.stakeYen))?Math.round(Number(bet.stakeYen)).toLocaleString("ja-JP")+"円":"—")+"</td><td>"+(bet.settlementStatus==="settled"?Math.round(Number(bet.returnYen??0)).toLocaleString("ja-JP")+"円":"—")+"</td></tr>").join("");
+      return "<div class=\"course-view\" data-course=\""+index+"\" style=\""+(index===0?"":"display:none")+"\"><h3 class=\"course-heading\">"+esc(course)+"</h3><div class=\"bet-table\"><table><thead><tr><th>券種</th><th>組合せ</th><th>オッズ</th><th>購入</th><th>払戻</th></tr></thead><tbody>"+body+"</tbody></table></div></div>";
+    }).join("");
+    betPanel = "<section data-race-panel=\"bets\"><div class=\"section-title\"><h2>確定買い目</h2><span class=\"status buy\">固定済み</span></div>"+blocks+"</section>";
+    const tickets = evidence?.tickets ?? [];
+    reasonPanel = "<section id=\"race-panel-reason\" data-race-panel=\"reason\" hidden><div class=\"section-title\"><h2>買い目の理由</h2></div><div class=\"ticket-reason-list\">"+tickets.map((ticket) => {
+      const names = ticket.horses.map((horseNo) => String(horseNo)+"番 "+String(evidence?.horseNames?.[String(horseNo)] ?? "")).join(" / ");
+      return "<article class=\"ticket-reason-card\" data-ticket-reason=\""+esc(ticket.betType)+":"+esc(ticket.combination)+"\"><strong>"+esc(ticket.betType)+" "+esc(ticket.combination)+"</strong><div>"+esc(names)+"</div><div>この組合せが当たる推定確率：<b>"+(ticket.predictedProbability*100).toFixed(2)+"%</b></div><div>JRA公式オッズ：<b>"+ticket.officialOdds.toFixed(1)+"倍</b></div><div>推定確率 × 公式オッズ：<b>"+ticket.valueProduct.toFixed(4)+"</b></div><div>買い目の評価点：<b>"+ticket.score.toFixed(6)+"</b></div><p><b>選ばれた理由：</b>発走前に保存された最終確定時の予測値とJRA公式オッズです。quota-lock中も再計算せず、この固定済み正本を表示しています。</p></article>";
+    }).join("")+"</div></section>";
   } else {
-    betHtml = `<section class="card panel"><h2>予想買い目</h2><p class="muted">${esc(stateLabel)}</p></section>`;
+    betPanel = "<section data-race-panel=\"bets\"><div class=\"section-title\"><h2>買い目</h2></div><p>"+esc(stateLabel)+"</p></section>";
+    reasonPanel = "<section id=\"race-panel-reason\" data-race-panel=\"reason\" hidden><div class=\"section-title\"><h2>買い目の理由</h2></div><p>確定買い目はありません。</p></section>";
   }
-
-  const body = `<a class="back" href="/races/">← レース一覧へ</a><section class="hero"><div class="race-title"><span class="race-no">${Number(race.raceNo)}R</span><h1>${esc(race.raceName ?? `${race.venue} ${race.raceNo}R`)}</h1><span class="status ${stateCssClass(stateCode)}">${esc(stateLabel)}</span></div><p>${esc(meta)}</p></section>${betHtml}`;
-  return new Response(shell(`${race.venue}${race.raceNo}R`, body), {
-    status: 200,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "cache-control": "no-store, max-age=0",
-      "x-race-ui-version": UI_VERSION,
-      "x-race-detail-path": "recent-public-day-snapshot-v1",
-    },
-  });
+  const horseRows = evidence ? Object.entries(evidence.horseNames).sort((a,b)=>Number(a[0])-Number(b[0])).map(([no,name]) => "<tr><td>"+esc(no)+"</td><td>"+esc(name)+"</td></tr>").join("") : "";
+  const horses = "<section data-race-panel=\"horses\" hidden><div class=\"section-title\"><h2>出走馬</h2></div><div class=\"runner-table\"><table><thead><tr><th>馬番</th><th>馬名</th></tr></thead><tbody>"+horseRows+"</tbody></table></div></section>";
+  const tabs = "<nav class=\"race-detail-tabs\" data-race-tabs><button type=\"button\" data-race-tab=\"bets\">予想買い目</button><button type=\"button\" data-race-tab=\"reason\">根拠</button><button type=\"button\" data-race-tab=\"horses\">出走馬</button></nav>";
+  const script = "<script>(function(){var panels={bets:document.querySelector('[data-race-panel=\"bets\"]'),reason:document.querySelector('[data-race-panel=\"reason\"]'),horses:document.querySelector('[data-race-panel=\"horses\"]')};function activate(name){Object.keys(panels).forEach(function(k){if(panels[k])panels[k].hidden=k!==name;});document.querySelectorAll('[data-race-tab]').forEach(function(b){b.setAttribute('aria-selected',b.getAttribute('data-race-tab')===name?'true':'false');});}document.querySelectorAll('[data-race-tab]').forEach(function(b){b.addEventListener('click',function(){activate(b.getAttribute('data-race-tab'));});});activate('bets');})();</script>";
+  const body = "<a class=\"back\" href=\"/races/\">← レース一覧へ</a><section class=\"hero\"><div class=\"race-title\"><span class=\"race-no\">"+Number(race.raceNo)+"R</span><h1>"+esc(race.raceName ?? race.venue+" "+race.raceNo+"R")+"</h1><span class=\"status "+stateCssClass(stateCode)+"\">"+esc(stateLabel)+"</span></div><p>"+esc(meta)+"</p></section>"+tabs+betPanel+reasonPanel+horses+script;
+  return new Response(shell(race.venue+race.raceNo+"R", body), { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store, max-age=0", "x-race-ui-version": UI_VERSION, "x-race-detail-path": "recent-public-day-snapshot-v2-fixed-evidence" } });
 }
-
 async function fetchPublicDay(request: Request, env: Env, ctx: ExecutionContext, date: string): Promise<Response> {
   let live: Response | null = null;
   try {
@@ -271,25 +271,9 @@ async function fetchPublicDay(request: Request, env: Env, ctx: ExecutionContext,
   }
 }
 
-async function fetchNormalHome(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  // Never spend production D1 rows_read just to render the home/calendar.
-  // Recent/current calendar rows are already available from embedded snapshots.
-  const recentCalendar = staticRecentCalendar();
-  try {
-    const response = await core.fetch(request, env, ctx);
-    const contentType = response.headers.get("content-type") ?? "";
-    const html = contentType.includes("text/html") ? await response.text() : "";
-    const recoveryHeader = Boolean(response.headers.get("x-race-resilient-home") || response.headers.get("x-race-emergency-fallback"));
-    if (response.status < 500 && html && !recoveryHeader && !hasForbidden(html)) {
-      return normalResponse(response, mergeRecentCalendar(html, recentCalendar), "v37-normal");
-    }
-    console.error("V37_NORMAL_HOME_USING_SNAPSHOT", response.status);
-  } catch (error) {
-    console.error("V37_NORMAL_HOME_USING_SNAPSHOT_AFTER_ERROR", error);
-  }
+async function fetchNormalHome(_request: Request, _env: Env, _ctx: ExecutionContext): Promise<Response> {
   return embeddedNormalHome();
 }
-
 async function fetchRaceList(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const homeUrl = new URL(request.url);
   homeUrl.pathname = "/";
@@ -298,6 +282,11 @@ async function fetchRaceList(request: Request, env: Env, ctx: ExecutionContext):
 }
 
 async function fetchRaceDetail(request: Request, env: Env, ctx: ExecutionContext, raceId: string): Promise<Response> {
+  const snapshotDay = DAY_SNAPSHOT[raceId.slice(0, 10)];
+  if (snapshotDay?.bets?.some((bet) => bet.raceId === raceId)) {
+    const fixed = staticRaceDetail(raceId);
+    if (fixed) return fixed;
+  }
   // Results must stay visible even when the D1 daily rows_read quota is exhausted.
   // For races covered by the quota-free JRA map, prefer the official result page
   // once it exists; before result publication this returns null and normal detail
