@@ -38,7 +38,7 @@ def main() -> None:
     require(live_backup["triggers"]["crons"] == ["2-59/5 * * * *"], "live backup cron must stay 5m staggered")
     require(win5["triggers"]["crons"] == ["* * * * *"], "WIN5 primary cron must stay 1m")
     require(win5_backup["triggers"]["crons"] == ["3-59/5 * * * *"], "WIN5 backup cron must stay 5m staggered")
-    require(entry["triggers"]["crons"] == ["*/5 * * * *"], "entry maintenance cron must stay 5m")
+    require(entry["triggers"]["crons"] == [], "standalone entry maintenance cron must stay disabled")
     require(guardian["triggers"]["crons"] == [], "obsolete guardian primary cron must stay disabled")
     require(guardian_backup["triggers"]["crons"] == [], "obsolete guardian backup cron must stay disabled")
 
@@ -74,6 +74,10 @@ def main() -> None:
     require_text(win5_core, "{ includeHistoricalDelta: false }", "WIN5 precomputed features")
     require_text(win5_core, "WIN5_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY", "WIN5 neutral recency")
     forbid_text(win5_core, "loadCompletedRecencyLearning(", "WIN5 raw recency")
+
+    recovery_source = read("src/public-site-entry-recovery-20260906.ts")
+    require_text(recovery_source, 'import { runPublishedEntryMaintenance } from "./v1/published-entry-maintenance.js";', "public owns published entry maintenance")
+    require_text(recovery_source, "await runPublishedEntryMaintenance(env, now)", "public owns published entry maintenance")
 
     entry_main = read("src/published-entry-maintenance-entry.ts")
     for needle in (
@@ -113,7 +117,7 @@ def main() -> None:
         "legacy_14d_scan=false",
         "live_raw_history=false",
         "win5_raw_history=false",
-        "entry_cron=5m_gated",
+        "entry_cron=disabled_public15m_owner",
         "guardian_crons=disabled",
         "research_push_d1=false",
     )
