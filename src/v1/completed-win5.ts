@@ -9,6 +9,10 @@ import type { Env, RaceRecord, RunnerRecord } from "./types";
 export const WIN5_PAGE_URL = "https://www.jra.go.jp/kouza/win5/info/racelist.html";
 export const WIN5_VERSION = 1 as const;
 export const WIN5_LOCK_MINUTES = 15;
+// Expensive five-leg model/recency recomputation is only useful near the
+// first WIN5 leg. Keeping it closed earlier prevents repeated 30-day D1 scans
+// while preserving multiple pre-deadline chances and the immutable T-15 lock.
+export const WIN5_PREVIEW_OPEN_MINUTES = 90;
 const TARGET_PREFIX = "win5:targets:";
 const PREVIEW_PREFIX = "win5:preview:";
 const FINAL_PREFIX = "win5:final:";
@@ -476,14 +480,20 @@ export async function runCompletedWin5Scheduled(env: Env, now = new Date()): Pro
   }
 
   if (nowMs < deadlineMs) {
-    const cadence = previewCadenceMs(firstStartMs - nowMs);
-    const stale = !preview || nowMs - Date.parse(preview.generatedAt) >= cadence;
-    if (stale) {
-      try {
-        preview = await generateSnapshot(env.DB, cache, now);
-        await savePreview(env.DB, preview);
-      } catch (error) {
-        console.error("WIN5_PREVIEW_FAILED", date, errorText(error));
+    const untilFirstMs = firstStartMs - nowMs;
+    const previewOpenMs = WIN5_PREVIEW_OPEN_MINUTES * 60 * 1000;
+    // Before T-90 keep only the cheap target cache. A 15-minute public cron
+    // still gives at least five pre-deadline opportunities from T-90 to T-15.
+    if (untilFirstMs <= previewOpenMs) {
+      const cadence = previewCadenceMs(untilFirstMs);
+      const stale = !preview || nowMs - Date.parse(preview.generatedAt) >= cadence;
+      if (stale) {
+        try {
+          preview = await generateSnapshot(env.DB, cache, now);
+          await savePreview(env.DB, preview);
+        } catch (error) {
+          console.error("WIN5_PREVIEW_FAILED", date, errorText(error));
+        }
       }
     }
   }
