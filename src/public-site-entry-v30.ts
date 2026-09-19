@@ -1,4 +1,5 @@
 import publicSite from "./public-site-entry-v29.js";
+import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v30-clean-home-20260816";
@@ -25,6 +26,20 @@ type HomeUx = {
 };
 
 type RaceNavRow = { raceId: string; venue: string; raceNo: number; raceDate: string };
+
+type RecentSnapshotBet = {
+  raceId: string;
+  course: string;
+  returnYen: number | null;
+  settlementStatus: string;
+};
+type RecentSnapshotDay = { bets?: RecentSnapshotBet[] };
+const RECENT_SNAPSHOT = RECENT_PUBLIC_DAY_SNAPSHOT as unknown as Record<string, RecentSnapshotDay>;
+const COURSE_STAKE_YEN: Readonly<Record<string, number>> = {
+  "ライト": 2_000,
+  "スタンダード": 5_000,
+  "プレミアム": 10_000,
+};
 
 function replaceExact(html: string, from: string, to: string): string {
   return html.split(from).join(to);
@@ -83,10 +98,42 @@ function compactNavigation(input: string, path: string): string {
   return input.replace(/<nav class="nav">[\s\S]*?<\/nav>/, nav);
 }
 
+function recentSnapshotTotals(today: string): { races: number; stakeYen: number; returnYen: number } {
+  const start = new Date(`${today}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - 29);
+  const startDate = start.toISOString().slice(0, 10);
+  const raceIds = new Set<string>();
+  let stakeYen = 0;
+  let returnYen = 0;
+
+  for (const [date, day] of Object.entries(RECENT_SNAPSHOT)) {
+    // Current day is always read directly from the tiny date-bounded live set.
+    if (date < startDate || date >= today) continue;
+    const byRaceCourse = new Map<string, RecentSnapshotBet[]>();
+    for (const bet of day.bets ?? []) {
+      if (bet.settlementStatus !== "settled") continue;
+      const key = `${bet.raceId}\u0001${bet.course}`;
+      const rows = byRaceCourse.get(key) ?? [];
+      rows.push(bet);
+      byRaceCourse.set(key, rows);
+    }
+    for (const rows of byRaceCourse.values()) {
+      if (rows.length !== 2) continue;
+      const course = String(rows[0]?.course ?? "");
+      const stake = COURSE_STAKE_YEN[course];
+      if (!stake) continue;
+      raceIds.add(String(rows[0]?.raceId ?? ""));
+      stakeYen += stake;
+      returnYen += rows.reduce((sum, row) => sum + Number(row.returnYen ?? 0), 0);
+    }
+  }
+  return { races: raceIds.size, stakeYen, returnYen };
+}
+
 async function loadHomeUx(db: D1Database, now = new Date()): Promise<HomeUx> {
   const date = jstDate(now);
   try {
-    const [races, selection, locked, recent30] = await Promise.all([
+    const [races, selection, locked, todaySettled] = await Promise.all([
       db.prepare(`
         SELECT race_id AS raceId,venue,race_no AS raceNo,race_name AS raceName,
                start_time_jst AS startTimeJst,start_time_utc AS startTimeUtc
@@ -102,16 +149,18 @@ async function loadHomeUx(db: D1Database, now = new Date()): Promise<HomeUx> {
         JOIN rt_races r ON r.race_id=b.race_id
         WHERE r.race_date=? AND b.source_prediction_id=-2
       `).bind(date).all<{ raceId: string }>(),
+      // Only today's tiny live set is queried. Historical 30-day totals come
+      // from the immutable public snapshot, so page views cannot burn D1 quota.
       db.prepare(`
         SELECT COUNT(DISTINCT b.race_id) AS races,
                COALESCE(SUM(b.stake_yen),0) AS stakeYen,
                COALESCE(SUM(COALESCE(b.return_yen,0)),0) AS returnYen
         FROM rt_public_bets b
         JOIN rt_races r ON r.race_id=b.race_id
-        WHERE r.race_date>=date(?,'-29 days') AND r.race_date<=?
+        WHERE r.race_date=?
           AND b.source_prediction_id=-2
           AND b.settlement_status='settled'
-      `).bind(date, date).first<{ races: number; stakeYen: number; returnYen: number }>(),
+      `).bind(date).first<{ races: number; stakeYen: number; returnYen: number }>(),
     ]);
 
     const lockedIds = new Set(locked.results.map((row) => String(row.raceId)));
@@ -142,9 +191,10 @@ async function loadHomeUx(db: D1Database, now = new Date()): Promise<HomeUx> {
       overdue: nowMs >= next.startMs - 15 * 60 * 1000,
     } : null;
 
-    const recentRaces = Number(recent30?.races ?? 0);
-    const recentStake = Number(recent30?.stakeYen ?? 0);
-    const recentReturn = Number(recent30?.returnYen ?? 0);
+    const historical = recentSnapshotTotals(date);
+    const recentRaces = historical.races + Number(todaySettled?.races ?? 0);
+    const recentStake = historical.stakeYen + Number(todaySettled?.stakeYen ?? 0);
+    const recentReturn = historical.returnYen + Number(todaySettled?.returnYen ?? 0);
 
     return {
       nextRace,
