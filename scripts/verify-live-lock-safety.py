@@ -165,7 +165,6 @@ def main() -> None:
         "acquireLiveDeadlineLease",
         "runCompletedWorkerDeadlineGuard",
         "runCompletedWorkerLiveLock",
-        "runUpcomingEntryDerivedRepair",
         "selection_critical",
         "predeadline_critical",
         "LIVE_DEADLINE_HARD_T15_BREACH",
