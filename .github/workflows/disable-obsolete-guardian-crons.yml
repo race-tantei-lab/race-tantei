@@ -1,0 +1,41 @@
+name: Disable obsolete guardian crons
+on:
+  push:
+    branches: ["ops/diag-20260919"]
+    paths: [".github/workflows/disable-obsolete-guardian-crons.yml"]
+permissions:
+  contents: read
+jobs:
+  disable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Redeploy obsolete guardians with zero cron triggers
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config wrangler.live-deadline-guardian.jsonc
+          npx wrangler deploy --config wrangler.live-deadline-guardian-backup.jsonc
+      - name: Verify no guardian schedules remain
+        shell: bash
+        run: |
+          set -euo pipefail
+          for script in race-tantei-live-deadline-guardian race-tantei-live-deadline-guardian-backup; do
+            body=$(curl --max-time 20 -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$script/schedules" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+            echo "$script $body"
+            BODY="$body" node - <<'NODE'
+          const b=JSON.parse(process.env.BODY);
+          if(!b.success || !Array.isArray(b.result) || b.result.length!==0) throw new Error(JSON.stringify(b));
+          NODE
+          done
