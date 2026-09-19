@@ -1,4 +1,4 @@
-import { fetchJraPage, pageLooksLikeResult, parseEntryPage, parseResultPage, toResultUrl } from "./jra.js";
+import { extractResultLinks, fetchJraPage, pageLooksLikeResult, parseEntryPage, parseResultPage, toResultUrl } from "./jra.js";
 import { parseJraPayoutsFromHtml } from "./jra-payout-fallback.js";
 import { shell } from "./public-ui.js";
 
@@ -45,35 +45,45 @@ export async function quotaFreeOfficialResultResponse(raceId: string): Promise<R
   const entryUrl = ENTRY_URLS[raceId];
   if (!entryUrl) return null;
 
-  // The two-character JRA CNAME suffix is page-specific. Replacing dde->sde
-  // while keeping the entry-page suffix can point at a non-result page.
-  // Read the official entry page first and use its embedded result link.
-  let resultUrl = toResultUrl(entryUrl);
+  // JRA result CNAME suffixes are page-specific. Never assume the entry
+  // suffix survives dde->sde. Collect every official result link advertised
+  // by the entry page, then try the deterministic fallback last.
+  const resultUrls: string[] = [];
+  const seenResultUrls = new Set<string>();
+  const addResultUrl = (value: string | null | undefined) => {
+    if (!value || seenResultUrls.has(value)) return;
+    seenResultUrls.add(value);
+    resultUrls.push(value);
+  };
   const horseNames = new Map<number, string>();
+
   try {
     const entryPage = await fetchJraPage(entryUrl);
+    for (const value of extractResultLinks(entryPage.html, entryPage.url)) addResultUrl(value);
     const entry = parseEntryPage(entryPage.html, entryPage.url);
-    if (entry.race.resultUrl) resultUrl = entry.race.resultUrl;
+    addResultUrl(entry.race.resultUrl);
     for (const runner of entry.runners) horseNames.set(Number(runner.horseNo), String(runner.horseName || ""));
   } catch {
-    // Keep the deterministic dde->sde fallback when the entry page itself is unavailable.
+    // The deterministic fallback below is still available.
   }
+  addResultUrl(toResultUrl(entryUrl));
 
-  let resultPage;
-  try {
-    resultPage = await fetchJraPage(resultUrl);
-  } catch {
-    return null;
+  let resultPage: Awaited<ReturnType<typeof fetchJraPage>> | null = null;
+  let result: ReturnType<typeof parseResultPage> | null = null;
+  for (const candidate of resultUrls) {
+    try {
+      const page = await fetchJraPage(candidate);
+      if (!pageLooksLikeResult(page.html)) continue;
+      const parsed = parseResultPage(page.html, page.url);
+      if (parsed.race.raceId !== raceId || parsed.results.length < 2) continue;
+      resultPage = page;
+      result = parsed;
+      break;
+    } catch {
+      // Try the next official candidate. One stale CNAME must not hide results.
+    }
   }
-  if (!pageLooksLikeResult(resultPage.html)) return null;
-
-  let result;
-  try {
-    result = parseResultPage(resultPage.html, resultPage.url);
-  } catch {
-    return null;
-  }
-  if (result.race.raceId !== raceId || result.results.length < 2) return null;
+  if (!resultPage || !result) return null;
 
   const payoutMap = new Map<string, typeof result.payouts[number]>();
   for (const payout of [...result.payouts, ...parseJraPayoutsFromHtml(resultPage.html)]) {
