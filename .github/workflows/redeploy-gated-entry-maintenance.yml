@@ -1,0 +1,42 @@
+name: Redeploy gated entry maintenance
+on:
+  push:
+    branches: ["ops/diag-20260919"]
+    paths: [".github/workflows/redeploy-gated-entry-maintenance.yml"]
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - run: python3 scripts/verify-production-d1-budget.py
+      - run: npx wrangler deploy --config wrangler.entry-maintenance.jsonc
+      - name: Verify 5-minute gated schedule
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(curl --max-time 20 -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/race-tantei-entry-maintenance/schedules" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+          echo "$body"
+          BODY="$body" node - <<'NODE'
+          const b=JSON.parse(process.env.BODY);
+          const rows=Array.isArray(b.result)?b.result:(b.result?.schedules||[]);
+          if(!b.success || rows.length!==1 || rows[0].cron!=="*/5 * * * *") throw new Error(JSON.stringify(b));
+          NODE
+          h=$(curl --max-time 20 -fsS https://race-tantei-entry-maintenance.race-tantei.workers.dev/health)
+          echo "$h"
+          H="$h" node - <<'NODE'
+          const b=JSON.parse(process.env.H);
+          if(!b.ok || b.version!=="published-entry-v2-gated-5m") throw new Error(JSON.stringify(b));
+          NODE
