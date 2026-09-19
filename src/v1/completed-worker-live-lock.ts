@@ -6,7 +6,7 @@ import {
 } from "./bodyweight-refresh";
 import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION, completedFeatureVector, loadCompletedFeatureStateForRace } from "./completed-feature-runtime";
 import { loadCompletedModelRuntime, type CompletedModelRuntime } from "./completed-model-runtime";
-import { completedRecencyBetFactor, loadCompletedRecencyLearning, neutralCompletedRecencyLearning, type CompletedRecencyAudit, type CompletedRunnerRecencyDetail } from "./completed-recency-learning";
+import { completedRecencyBetFactor, neutralCompletedRecencyLearning, type CompletedRecencyAudit, type CompletedRunnerRecencyDetail } from "./completed-recency-learning";
 import {
   COMPLETED_COURSE_STAKES,
   chooseCompletedTwoTickets,
@@ -397,16 +397,25 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
   }
 
   const learningCutoff = iso(now);
-  const state = await loadCompletedFeatureStateForRace(db, refreshed.race, refreshed.runners, learningCutoff);
+  // Race-day prediction must never scan historical raw tables. The canonical
+  // precomputed feature state is loaded with bounded entity lookups only; the
+  // historical delta/30-day recency paths are disabled at the call site.
+  // The live Worker proxy remains a second fail-safe, not the primary control.
+  const state = await loadCompletedFeatureStateForRace(
+    db,
+    refreshed.race,
+    refreshed.runners,
+    learningCutoff,
+    { includeHistoricalDelta: false },
+  );
   const vectors = refreshed.runners.map((runner) => completedFeatureVector(state, refreshed.race, runner, refreshed.runners.length));
   const raw = vectors.map((vector) => model.predict(vector));
   const baseWeights = normalizeCompletedWeights(raw);
-  let learning;
-  try {
-    learning = await loadCompletedRecencyLearning(db, refreshed.race, refreshed.runners, learningCutoff);
-  } catch (error) {
-    learning = neutralCompletedRecencyLearning(refreshed.runners, learningCutoff, errorText(error));
-  }
+  const learning = neutralCompletedRecencyLearning(
+    refreshed.runners,
+    learningCutoff,
+    "LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY",
+  );
   const weights = normalizeCompletedWeights(baseWeights.map((value, index) => value * learning.runnerFactors[index]));
   const fetched = await fetchFastJraOfficialOddsForRace(refreshed.race.entryUrl, { raceDate: refreshed.race.raceDate, venue: refreshed.race.venue, raceNo: refreshed.race.raceNo });
   const oddsFetchedAt = iso();
