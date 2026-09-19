@@ -1,0 +1,149 @@
+name: Audit Sep 19 production from D1 export
+on:
+  push:
+    branches: ["ops/diag-20260919"]
+    paths: [".github/workflows/audit-sep19-export.yml"]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Export bounded production tables without D1 SQL reads
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/prod.db /tmp/*.sql
+          for table in rt_races rt_runners rt_public_bets rt_system_state rt_results rt_payouts; do
+            echo "EXPORTING=$table"
+            npx wrangler d1 export race-tantei-phase0 --remote --table "$table" --output "/tmp/$table.sql"
+            sqlite3 /tmp/prod.db < "/tmp/$table.sql"
+          done
+          echo EXPORT_TABLES_OK
+      - name: Audit Sep 19 and Sep 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== SELECTION ==='
+          sqlite3 -json /tmp/prod.db "
+            SELECT state_key,state_value,updated_at
+            FROM rt_system_state
+            WHERE state_key='final_daily_selection:2026-09-19';"
+          echo '=== BET_AUDIT ==='
+          sqlite3 -json /tmp/prod.db "
+            WITH sel AS (
+              SELECT json_extract(j.value,'$.raceId') race_id
+              FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j
+              WHERE s.state_key='final_daily_selection:2026-09-19'
+            )
+            SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.start_time_utc AS startTimeUtc,
+              COUNT(b.id) AS rows,
+              SUM(CASE WHEN b.source_prediction_id=-2 THEN 1 ELSE 0 END) AS finalRows,
+              SUM(CASE WHEN b.course='ライト' THEN 1 ELSE 0 END) AS lightRows,
+              SUM(CASE WHEN b.course='スタンダード' THEN 1 ELSE 0 END) AS standardRows,
+              SUM(CASE WHEN b.course='プレミアム' THEN 1 ELSE 0 END) AS premiumRows,
+              MIN(b.locked_at) AS lockedAt,MAX(b.locked_at) AS lastLockedAt,
+              ROUND((julianday(r.start_time_utc)-julianday(MIN(b.locked_at)))*1440.0,2) AS lockLeadMin,
+              SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END) AS settledRows,
+              SUM(CASE WHEN b.settlement_status='pending' THEN 1 ELSE 0 END) AS pendingRows,
+              SUM(CASE WHEN b.course='ライト' THEN b.stake_yen ELSE 0 END) AS lightStake,
+              SUM(CASE WHEN b.course='ライト' THEN COALESCE(b.return_yen,0) ELSE 0 END) AS lightReturn,
+              GROUP_CONCAT(DISTINCT b.source_prediction_id) AS sourceIds
+            FROM sel JOIN rt_races r ON r.race_id=sel.race_id
+            LEFT JOIN rt_public_bets b ON b.race_id=sel.race_id
+            GROUP BY r.race_id,r.venue,r.race_no,r.start_time_utc
+            ORDER BY r.start_time_utc;"
+          echo '=== FINAL_STATE ==='
+          sqlite3 -json /tmp/prod.db "
+            WITH sel AS (
+              SELECT json_extract(j.value,'$.raceId') race_id
+              FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j
+              WHERE s.state_key='final_daily_selection:2026-09-19'
+            )
+            SELECT s.race_id AS raceId,
+              json_extract(x.state_value,'$.status') AS status,
+              json_extract(x.state_value,'$.lockedAt') AS lockedAt,
+              json_extract(x.state_value,'$.finalizedFrom') AS finalizedFrom,
+              json_extract(x.state_value,'$.oddsFetchedAt') AS oddsFetchedAt,
+              json_extract(x.state_value,'$.oddsSource') AS oddsSource,
+              json_extract(x.state_value,'$.oddsParserVersion') AS oddsParserVersion,
+              json_extract(x.state_value,'$.oddsSnapshotSha256') AS oddsSha,
+              x.updated_at AS stateUpdatedAt
+            FROM sel s LEFT JOIN rt_system_state x
+              ON x.state_key='worker_live_final:'||s.race_id
+            ORDER BY s.race_id;"
+          echo '=== BET_ROWS ==='
+          sqlite3 -json /tmp/prod.db "
+            SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,
+              b.stake_yen AS stakeYen,b.assumed_odds AS assumedOdds,b.return_yen AS returnYen,
+              b.settlement_status AS settlementStatus,b.locked_at AS lockedAt,b.source_prediction_id AS sourcePredictionId
+            FROM rt_public_bets b
+            WHERE b.race_id LIKE '2026-09-19-%'
+            ORDER BY b.race_id,b.course,b.id;"
+          echo '=== TODAY_LIGHT_TOTAL ==='
+          sqlite3 -json /tmp/prod.db "
+            WITH complete AS (
+              SELECT race_id
+              FROM rt_public_bets
+              WHERE race_id LIKE '2026-09-19-%' AND source_prediction_id=-2 AND course='ライト'
+              GROUP BY race_id HAVING COUNT(*)=2
+            )
+            SELECT COUNT(*) AS finalizedRaces,
+              SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END)/2 AS settledRaces,
+              SUM(CASE WHEN b.settlement_status='settled' THEN b.stake_yen ELSE 0 END) AS settledStake,
+              SUM(CASE WHEN b.settlement_status='settled' THEN COALESCE(b.return_yen,0) ELSE 0 END) AS returnYen,
+              ROUND(100.0*SUM(CASE WHEN b.settlement_status='settled' THEN COALESCE(b.return_yen,0) ELSE 0 END)/
+                NULLIF(SUM(CASE WHEN b.settlement_status='settled' THEN b.stake_yen ELSE 0 END),0),3) AS roiPct
+            FROM rt_public_bets b JOIN complete c ON c.race_id=b.race_id
+            WHERE b.course='ライト';"
+          echo '=== HEARTBEATS_AND_AUDITS ==='
+          sqlite3 -json /tmp/prod.db "
+            SELECT state_key,state_value,updated_at
+            FROM rt_system_state
+            WHERE state_key IN (
+              'live_deadline_primary_heartbeat:v1',
+              'live_deadline_driver:2026-09-19',
+              'worker_live_lock:2026-09-19',
+              'worker_deadline_guard:2026-09-19',
+              'worker_upcoming_calendar_repair',
+              'worker_upcoming_entry_repair',
+              'worker_upcoming_entry_derived_repair'
+            )
+            ORDER BY state_key;"
+          echo '=== SEP20_READINESS ==='
+          sqlite3 -json /tmp/prod.db "
+            WITH p AS (
+              SELECT r.race_id,r.venue,r.race_no,r.entry_url,r.start_time_utc,r.surface,r.distance_m,
+                SUM(CASE WHEN ru.race_id IS NOT NULL AND COALESCE(ru.runner_status,'active')='active' THEN 1 ELSE 0 END) active
+              FROM rt_races r LEFT JOIN rt_runners ru ON ru.race_id=r.race_id
+              WHERE r.race_date='2026-09-20'
+              GROUP BY r.race_id,r.venue,r.race_no,r.entry_url,r.start_time_utc,r.surface,r.distance_m
+            )
+            SELECT race_id AS raceId,venue,race_no AS raceNo,
+              CASE WHEN LENGTH(TRIM(COALESCE(entry_url,'')))>0 THEN 1 ELSE 0 END AS hasEntryUrl,
+              start_time_utc AS startTimeUtc,surface,distance_m AS distanceM,active
+            FROM p ORDER BY venue,race_no;"
+          echo '=== SEP20_SUMMARY ==='
+          sqlite3 -json /tmp/prod.db "
+            WITH p AS (
+              SELECT r.race_id,r.venue,
+                CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END AS hasEntryUrl,
+                SUM(CASE WHEN ru.race_id IS NOT NULL AND COALESCE(ru.runner_status,'active')='active' THEN 1 ELSE 0 END) active,
+                r.start_time_utc,r.surface,r.distance_m
+              FROM rt_races r LEFT JOIN rt_runners ru ON ru.race_id=r.race_id
+              WHERE r.race_date='2026-09-20'
+              GROUP BY r.race_id,r.venue,r.entry_url,r.start_time_utc,r.surface,r.distance_m
+            )
+            SELECT venue,COUNT(*) races,SUM(hasEntryUrl) entryUrls,
+              SUM(CASE WHEN active>=3 THEN 1 ELSE 0 END) runnerReady,
+              SUM(CASE WHEN start_time_utc IS NOT NULL AND surface IS NOT NULL AND distance_m IS NOT NULL THEN 1 ELSE 0 END) metadataReady,
+              MIN(active) minActive
+            FROM p GROUP BY venue ORDER BY venue;"
