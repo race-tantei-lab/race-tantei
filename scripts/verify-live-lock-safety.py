@@ -212,14 +212,19 @@ def main() -> None:
     forbid_text(guard, "chooseCompletedProbabilityFallbackTickets", "deadline guard probability fallback")
 
     recovery = read("src/public-site-entry-recovery-20260906.ts")
+    quota_recovery = read("src/public-site-entry-quota-recovery-20260912.ts")
     settlement = read("src/v1/bounded-result-settlement.ts")
     for needle in (
         'import { runBoundedResultSettlement } from "./v1/bounded-result-settlement.js";',
         "await runBoundedResultSettlement(env, now)",
-        'live.headers.get("x-race-current-day-bet-state") === "degraded"',
         "PUBLIC_BOUNDED_RESULT_SETTLEMENT",
     ):
         require_text(recovery, needle, "bounded automatic result settlement")
+    require_text(
+        quota_recovery,
+        'live.headers.get("x-race-current-day-bet-state") === "degraded"',
+        "quota-degraded public-day snapshot fallback",
+    )
     for needle in (
         "b.source_prediction_id=-2",
         "b.settlement_status='pending'",
