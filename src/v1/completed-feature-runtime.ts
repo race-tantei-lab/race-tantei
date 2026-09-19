@@ -354,9 +354,18 @@ export async function loadCompletedFeatureStateForRace(db: D1Database, race: Rac
     ).bind(throughDate, race.raceDate, race.raceDate, effectiveCutoff, horseJson, jockeyJson, trainerJson).all<{ raceId: string }>();
     const ids = (raceIds.results ?? []).map((row) => row.raceId);
     if (ids.length) {
+      // Use direct race_id placeholders rather than json_each(). The latter
+      // prevented D1 from using the race_id lookup efficiently and repeatedly
+      // scanned ~11k rows per prediction on race day.
+      const placeholders = ids.map(() => "?").join(",");
       const delta = await db.prepare(
-        "SELECT ra.race_id AS raceId,ra.race_date AS raceDate,ra.venue,ra.surface,ra.distance_m AS distanceM,ru.horse_no AS horseNo,ru.horse_name AS horseName,ru.jockey,ru.trainer,ru.runner_status AS runnerStatus,re.finish_position AS finishPosition,re.time_text AS timeText,re.final3f FROM rt_races ra JOIN rt_runners ru ON ru.race_id=ra.race_id LEFT JOIN rt_results re ON re.race_id=ru.race_id AND re.horse_no=ru.horse_no WHERE ra.race_id IN (SELECT value FROM json_each(?)) ORDER BY ra.race_date,ra.venue,ra.race_no,ru.horse_no"
-      ).bind(JSON.stringify(ids)).all<DeltaRow>();
+        `SELECT ra.race_id AS raceId,ra.race_date AS raceDate,ra.venue,ra.surface,ra.distance_m AS distanceM,ru.horse_no AS horseNo,ru.horse_name AS horseName,ru.jockey,ru.trainer,ru.runner_status AS runnerStatus,re.finish_position AS finishPosition,re.time_text AS timeText,re.final3f
+         FROM rt_races ra
+         JOIN rt_runners ru ON ru.race_id=ra.race_id
+         LEFT JOIN rt_results re ON re.race_id=ru.race_id AND re.horse_no=ru.horse_no
+         WHERE ra.race_id IN (${placeholders})
+         ORDER BY ra.race_date,ra.venue,ra.race_no,ru.horse_no`
+      ).bind(...ids).all<DeltaRow>();
       advanceRelevantCompletedFeatureState(state, (delta.results ?? []) as DeltaRow[], new Set(horses), new Set(jockeys), new Set(trainers));
     }
   }
