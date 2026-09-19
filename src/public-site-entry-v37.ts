@@ -250,6 +250,17 @@ async function fetchRaceList(request: Request, env: Env, ctx: ExecutionContext):
 }
 
 async function fetchRaceDetail(request: Request, env: Env, ctx: ExecutionContext, raceId: string): Promise<Response> {
+  // Results must stay visible even when the D1 daily rows_read quota is exhausted.
+  // For races covered by the quota-free JRA map, prefer the official result page
+  // once it exists; before result publication this returns null and normal detail
+  // rendering continues.
+  try {
+    const official = await quotaFreeOfficialResultResponse(raceId);
+    if (official) return official;
+  } catch (error) {
+    console.error("V37_RACE_DETAIL_DIRECT_JRA_FIRST_FAILED", raceId, error);
+  }
+
   try {
     const response = await core.fetch(request, env, ctx);
     const contentType = response.headers.get("content-type") ?? "";

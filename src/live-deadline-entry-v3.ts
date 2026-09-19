@@ -9,16 +9,29 @@ type LiveRoleEnv = Env & { LIVE_DEADLINE_ROLE?: string };
 
 function isHistoricalRecencyScan(sql: string): boolean {
   const q = sql.toLowerCase().replace(/\s+/g, " ");
-  const runnerScan = q.includes("with scored as")
+
+  // The runner recency SQL gained a candidate_races CTE, so matching only
+  // "WITH scored AS" stopped protecting Free D1. Match the invariant shape
+  // instead: historical date range + runners + results + market probability.
+  const runnerScan = q.includes("race_date between")
     && q.includes("join rt_runners")
     && q.includes("join rt_results")
-    && q.includes("row_number") === false
-    && q.includes("race_date between");
+    && q.includes("marketprobability");
+
+  // Feature-state delta discovery was the other large race-day reader. When
+  // neutral recency is required on Free D1, an empty race-id set is correct and
+  // prevents the follow-up multi-thousand-row delta query as well.
+  const featureDeltaScan = q.includes("select distinct ra.race_id as raceid")
+    && q.includes("join rt_runners ru")
+    && q.includes("ra.race_date>?")
+    && q.includes("json_each(?)");
+
   const betScan = q.includes("from rt_public_bets b join rt_races r")
     && q.includes("race_date between")
     && q.includes("source_prediction_id=-2")
     && q.includes("settlement_status='settled'");
-  return runnerScan || betScan;
+
+  return runnerScan || featureDeltaScan || betScan;
 }
 
 function emptyPreparedStatement(): D1PreparedStatement {
