@@ -18,14 +18,16 @@ jobs:
     steps:
       - name: Wait for public Worker deploy
         run: sleep 75
-      - name: Verify completed race result without D1
+      - name: Verify completed race results without D1
         shell: bash
         run: |
           set -euo pipefail
-          url='https://race-tantei-phase0.race-tantei.workers.dev/races/2026-09-19-hanshin-01'
-          curl --retry 6 --retry-delay 5 --retry-all-errors --max-time 30 -fsS -D /tmp/headers "$url" -o /tmp/body
-          tr -d '\r' </tmp/headers | tee /tmp/headers.clean
-          grep -qi '^x-race-result-source: jra-official-direct-quota-free-20260919$' /tmp/headers.clean
-          grep -q 'JRA公式結果' /tmp/body
-          grep -q '払戻' /tmp/body
-          echo 'QUOTA_FREE_RESULT_OK race=2026-09-19-hanshin-01'
+          base='https://race-tantei-phase0.race-tantei.workers.dev/races'
+          for race in 2026-09-19-hanshin-01 2026-09-19-nakayama-01; do
+            curl --retry 6 --retry-delay 5 --retry-all-errors --max-time 30 -fsS -D "/tmp/$race.headers" "$base/$race" -o "/tmp/$race.body"
+            tr -d '\r' <"/tmp/$race.headers" | tee "/tmp/$race.headers.clean"
+            grep -qi '^x-race-result-source: jra-official-direct-quota-free-20260919 "/tmp/$race.headers.clean"
+            grep -q 'JRA公式結果' "/tmp/$race.body"
+            grep -q '払戻' "/tmp/$race.body"
+            echo "QUOTA_FREE_RESULT_OK race=$race"
+          done
