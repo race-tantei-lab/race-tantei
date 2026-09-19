@@ -1,0 +1,36 @@
+name: Audit D1 post-fix one hour
+on:
+  push:
+    branches: ["ops/diag-20260919"]
+    paths: [".github/workflows/audit-d1-postfix-hour.yml"]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: One hour D1 insights
+        shell: bash
+        run: |
+          npx wrangler d1 insights race-tantei-phase0 --time-period 1h --sort-type sum --sort-by reads --sort-direction DESC --limit 100 --json > /tmp/i.json
+          node - <<'NODE'
+          const fs=require('fs');
+          const a=JSON.parse(fs.readFileSync('/tmp/i.json','utf8'));
+          const high=a.filter(x=>{
+            const q=String(x.query||'').toLowerCase().replace(/\s+/g,' ');
+            return (q.includes('marketprobability')&&q.includes('join rt_results')) ||
+              (q.includes('select distinct ra.race_id as raceid')&&q.includes('json_each(?)')) ||
+              (q.includes('from rt_public_bets b join rt_races r')&&q.includes('race_date between'));
+          });
+          console.log('POSTFIX_INSIGHTS_TOTAL_READS',a.reduce((s,x)=>s+Number(x.totalRowsRead||0),0));
+          console.log('POSTFIX_HIGH_READ_MATCHES',JSON.stringify(high));
+          console.log('POSTFIX_TOP10',JSON.stringify(a.slice(0,10).map(x=>({reads:x.totalRowsRead,runs:x.numberOfTimesRun,avg:x.avgRowsRead,q:String(x.query||'').replace(/\s+/g,' ').slice(0,240)}))));
+          NODE
