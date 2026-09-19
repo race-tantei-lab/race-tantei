@@ -12,8 +12,10 @@ type SnapshotBet = {
   course: string;
   betType: string;
   combination: string;
+  stakeYen?: number;
   returnYen: number | null;
   settlementStatus: string;
+  refundsJson?: string | null;
 };
 
 type SnapshotDay = {
@@ -44,10 +46,7 @@ type DayPerformance = CoursePerformance & {
   targetRaces?: number;
 };
 
-type PerformancePayload = {
-  history?: DayPerformance[];
-  [key: string]: unknown;
-};
+type LiveBetRow = SnapshotBet & { refundsJson: string | null };
 
 const DAYS = RECENT_PUBLIC_DAY_SNAPSHOT as unknown as Record<string, SnapshotDay>;
 const COURSES: readonly CourseName[] = ["ライト", "スタンダード", "プレミアム"];
@@ -56,20 +55,28 @@ const COURSE_STAKE_YEN: Readonly<Record<CourseName, number>> = {
   "スタンダード": 5_000,
   "プレミアム": 10_000,
 };
-const HISTORY_SOURCE = "recent-public-day-snapshot-v3-all-dates";
+const HISTORY_SOURCE = "snapshot-history-plus-date-bounded-live-v4";
 
-function parseSelectionCount(day: SnapshotDay): number {
-  if (!day.selection) return 0;
+function jstDate(now = new Date()): string {
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function validDate(value: string | null): value is string {
+  return Boolean(value && /^20\d{2}-\d{2}-\d{2}$/.test(value));
+}
+
+function parseSelectionCountRaw(raw: string | null | undefined): number {
+  if (!raw) return 0;
   try {
-    const parsed = JSON.parse(day.selection) as { selected?: Array<{ raceId?: unknown }> };
-    return new Set(
-      (parsed.selected ?? [])
-        .map((row) => String(row?.raceId ?? ""))
-        .filter(Boolean),
-    ).size;
+    const parsed = JSON.parse(raw) as { selected?: Array<{ raceId?: unknown }> };
+    return new Set((parsed.selected ?? []).map((row) => String(row?.raceId ?? "")).filter(Boolean)).size;
   } catch {
     return 0;
   }
+}
+
+function parseSelectionCount(day: SnapshotDay): number {
+  return parseSelectionCountRaw(day.selection);
 }
 
 function horseNos(combination: string): number[] {
@@ -78,27 +85,24 @@ function horseNos(combination: string): number[] {
     .filter((value) => Number.isInteger(value) && value >= 1 && value <= 18);
 }
 
-function refundSet(raw: string | null): Set<number> {
+function refundSet(raw: string | null | undefined): Set<number> {
   try {
     const parsed = JSON.parse(String(raw ?? "[]"));
-    return new Set(
-      Array.isArray(parsed)
-        ? parsed.map(Number).filter((value) => Number.isInteger(value))
-        : [],
-    );
+    return new Set(Array.isArray(parsed) ? parsed.map(Number).filter((value) => Number.isInteger(value)) : []);
   } catch {
     return new Set();
   }
 }
 
-function summarizeSnapshotDay(date: string, day: SnapshotDay): DayPerformance {
-  const refundsByRace = new Map(
-    day.races.map((race) => [race.raceId, refundSet(race.refundsJson)]),
-  );
+function summarizeDay(date: string, races: SnapshotRace[], bets: SnapshotBet[], targetRaces: number): DayPerformance {
+  const refundsByRace = new Map(races.map((race) => [race.raceId, refundSet(race.refundsJson)]));
+  for (const bet of bets) {
+    if (bet.refundsJson != null && !refundsByRace.has(bet.raceId)) refundsByRace.set(bet.raceId, refundSet(bet.refundsJson));
+  }
 
   const courses = COURSES.map((course): CoursePerformance => {
     const byRace = new Map<string, SnapshotBet[]>();
-    for (const bet of day.bets ?? []) {
+    for (const bet of bets) {
       if (bet.course !== course) continue;
       const rows = byRace.get(bet.raceId) ?? [];
       rows.push(bet);
@@ -109,13 +113,22 @@ function summarizeSnapshotDay(date: string, day: SnapshotDay): DayPerformance {
     let settledRaces = 0;
     let hitRaces = 0;
     let refundRaces = 0;
+    let finalizedStakeYen = 0;
+    let settledStakeYen = 0;
     let returnYen = 0;
 
     for (const [raceId, rows] of byRace) {
       if (rows.length !== 2) continue;
       finalizedRaces += 1;
+      const explicitStake = rows.every((row) => Number.isFinite(Number(row.stakeYen)));
+      const raceStake = explicitStake
+        ? rows.reduce((sum, row) => sum + Number(row.stakeYen ?? 0), 0)
+        : COURSE_STAKE_YEN[course];
+      finalizedStakeYen += raceStake;
+
       if (!rows.every((row) => row.settlementStatus === "settled")) continue;
       settledRaces += 1;
+      settledStakeYen += raceStake;
 
       let genuineHit = false;
       let hasRefund = false;
@@ -130,8 +143,6 @@ function summarizeSnapshotDay(date: string, day: SnapshotDay): DayPerformance {
       if (hasRefund) refundRaces += 1;
     }
 
-    const finalizedStakeYen = finalizedRaces * COURSE_STAKE_YEN[course];
-    const settledStakeYen = settledRaces * COURSE_STAKE_YEN[course];
     return {
       course,
       finalizedRaces,
@@ -147,71 +158,98 @@ function summarizeSnapshotDay(date: string, day: SnapshotDay): DayPerformance {
     };
   });
 
-  const baseCourse = courses.find((row) => row.course === "ライト")!;
-  return {
-    ...baseCourse,
-    date,
-    courses,
-    targetRaces: parseSelectionCount(day),
-  };
+  const light = courses.find((row) => row.course === "ライト")!;
+  return { ...light, date, courses, targetRaces };
 }
 
-function mergeSnapshotDates(history: DayPerformance[] | undefined): DayPerformance[] {
+function summarizeSnapshotDay(date: string, day: SnapshotDay): DayPerformance {
+  return summarizeDay(date, day.races ?? [], day.bets ?? [], parseSelectionCount(day));
+}
+
+function snapshotHistory(overrides: DayPerformance[] = []): DayPerformance[] {
   const byDate = new Map<string, DayPerformance>();
-  for (const row of history ?? []) {
-    if (row?.date) byDate.set(String(row.date), row);
-  }
-
   for (const [date, day] of Object.entries(DAYS)) {
-    if (!day?.races?.length || byDate.has(date)) continue;
-    byDate.set(date, summarizeSnapshotDay(date, day));
+    if (day?.races?.length) byDate.set(date, summarizeSnapshotDay(date, day));
   }
+  for (const row of overrides) if (row?.date) byDate.set(row.date, row);
+  return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
+}
 
-  return [...byDate.values()]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 30);
+function emptyDay(date: string): DayPerformance {
+  return summarizeDay(date, [], [], 0);
+}
+
+async function boundedLiveDay(db: D1Database, date: string): Promise<DayPerformance> {
+  const [betResult, selectionRow] = await Promise.all([
+    db.prepare(`
+      SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,
+             b.stake_yen AS stakeYen,b.return_yen AS returnYen,b.settlement_status AS settlementStatus,
+             r.refund_horse_nos_json AS refundsJson
+      FROM rt_public_bets b
+      JOIN rt_races r ON r.race_id=b.race_id
+      WHERE r.race_date=? AND b.source_prediction_id=-2
+      ORDER BY b.race_id,b.course,b.id
+    `).bind(date).all<LiveBetRow>(),
+    db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
+      .bind(`final_daily_selection:${date}`).first<{ value: string | null }>(),
+  ]);
+
+  const rows = betResult.results ?? [];
+  const races = new Map<string, SnapshotRace>();
+  for (const row of rows) races.set(row.raceId, { raceId: row.raceId, refundsJson: row.refundsJson });
+  return summarizeDay(date, [...races.values()], rows, parseSelectionCountRaw(selectionRow?.value));
+}
+
+function performanceResponse(today: string, summary: DayPerformance, history: DayPerformance[], mode: string): Response {
+  return Response.json({
+    ok: true,
+    version: "daily-performance-v7-bounded-current-plus-snapshot-history",
+    today,
+    summary,
+    history,
+  }, {
+    headers: {
+      "cache-control": "public, max-age=20, stale-while-revalidate=40",
+      "x-race-history-source": HISTORY_SOURCE,
+      "x-race-performance-mode": mode,
+    },
+  });
 }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (!base.fetch) return new Response("NOT_FOUND", { status: 404 });
-
-    const response = await base.fetch(request, env, ctx);
     const url = new URL(request.url);
-    if (
-      request.method !== "GET" ||
-      url.pathname !== "/api/public/daily-performance" ||
-      !response.ok
-    ) {
-      return response;
+    if (request.method === "GET" && url.pathname === "/api/public/daily-performance") {
+      const today = jstDate();
+      const requested = url.searchParams.get("date");
+      const date = validDate(requested) ? requested : today;
+      const snapshotDay = DAYS[date];
+
+      // Historical dates are immutable in the embedded snapshot and must never
+      // spend D1 rows_read on a web request.
+      if (date !== today && snapshotDay?.races?.length) {
+        const summary = summarizeSnapshotDay(date, snapshotDay);
+        return performanceResponse(today, summary, snapshotHistory([summary]), "snapshot-historical");
+      }
+
+      // Current day is deliberately bounded to only that date's final public
+      // bets plus one selection-state row. The old 30-day GROUP BY query ran on
+      // every browser poll and could exhaust the Free D1 allowance.
+      try {
+        const summary = await boundedLiveDay(env.DB, date);
+        return performanceResponse(today, summary, snapshotHistory([summary]), "bounded-current-day");
+      } catch (error) {
+        console.error("DAILY_PERFORMANCE_BOUNDED_D1_FALLBACK", date, error);
+        const summary = snapshotDay?.races?.length ? summarizeSnapshotDay(date, snapshotDay) : emptyDay(date);
+        return performanceResponse(today, summary, snapshotHistory([summary]), "quota-free-snapshot");
+      }
     }
 
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("application/json")) return response;
-
-    try {
-      const payload = await response.clone().json() as PerformancePayload;
-      const headers = new Headers(response.headers);
-      headers.delete("content-length");
-      headers.set("cache-control", "no-store, max-age=0");
-      headers.set("x-race-history-source", HISTORY_SOURCE);
-      return Response.json({
-        ...payload,
-        history: mergeSnapshotDates(payload.history),
-      }, {
-        status: response.status,
-        headers,
-      });
-    } catch (error) {
-      console.error("DAILY_PERFORMANCE_HISTORY_MERGE_FAILED", error);
-      return response;
-    }
+    if (!base.fetch) return new Response("NOT_FOUND", { status: 404 });
+    return base.fetch(request, env, ctx);
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    // Do not add a second race-day gate here. The delegated scheduler also owns
-    // Thursday/Friday pre-race acquisition, so an outer race-day-only gate would
-    // suppress the very maintenance that prepares the upcoming card.
     if (base.scheduled) await base.scheduled(controller, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
