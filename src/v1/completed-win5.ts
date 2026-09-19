@@ -1,7 +1,8 @@
 import { bodyWeightSnapshotMatchesRunners, resolveOfficialBodyWeights } from "./bodyweight-refresh";
 import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION, completedFeatureVector, loadCompletedFeatureStateForRace } from "./completed-feature-runtime";
 import { loadCompletedModelRuntime, type CompletedModelRuntime } from "./completed-model-runtime";
-import { neutralCompletedRecencyLearning, type CompletedRecencyAudit } from "./completed-recency-learning";
+import { neutralCompletedRecencyLearning } from "./completed-recency-neutral";
+import type { CompletedRecencyAudit } from "./completed-recency-learning";
 import { normalizeCompletedWeights } from "./completed-ticket-runtime";
 import { decodeJraHtml, jraPageText } from "./jra-official-odds";
 import type { Env, RaceRecord, RunnerRecord } from "./types";
