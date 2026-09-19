@@ -25,6 +25,7 @@ jobs:
         run: |
           git rev-parse HEAD
           python3 scripts/verify-production-d1-budget.py
+          python3 scripts/verify-production-runtime-reachability.py
           python3 scripts/verify-live-lock-safety.py
           python3 scripts/verify-win5-safety.py
       - name: Verify exact Cloudflare cron set
@@ -123,3 +124,5 @@ jobs:
           console.log("FORBIDDEN_HIGH_READ_MATCHES",JSON.stringify(bad));
           if(bad.length) process.exit(2);
           NODE
+
+# rerun-main: adef8e4e72d203b836192968f348fe155455bc4f
