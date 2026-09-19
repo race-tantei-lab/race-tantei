@@ -216,6 +216,7 @@ def main() -> None:
     for needle in (
         'import { runBoundedResultSettlement } from "./v1/bounded-result-settlement.js";',
         "await runBoundedResultSettlement(env, now)",
+        'live.headers.get("x-race-current-day-bet-state") === "degraded"',
         "PUBLIC_BOUNDED_RESULT_SETTLEMENT",
     ):
         require_text(recovery, needle, "bounded automatic result settlement")

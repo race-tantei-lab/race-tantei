@@ -392,7 +392,15 @@ export default {
       const date = url.searchParams.get("date") ?? "";
       if (date === today) {
         try {
-          return await fastCurrentDayResponse(env.DB, date);
+          const live = await fastCurrentDayResponse(env.DB, date);
+          if (live.headers.get("x-race-current-day-bet-state") === "degraded") {
+            const snapshot = snapshotResponse(date);
+            if (snapshot) {
+              console.warn("CURRENT_DAY_BET_ENRICHMENT_DEGRADED_USING_QUOTA_SNAPSHOT", date);
+              return snapshot;
+            }
+          }
+          return live;
         } catch (error) {
           console.error("CURRENT_DAY_DIRECT_D1_FAILED_USING_QUOTA_SNAPSHOT", date, error);
           const snapshot = snapshotResponse(date);
