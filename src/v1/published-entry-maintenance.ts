@@ -46,6 +46,7 @@ async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]>
   const result = await db.prepare(`
     WITH per_race AS (
       SELECT r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no,
+             MAX(CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END) AS hasEntryUrl,
              SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners
       FROM rt_races r
       LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
@@ -54,7 +55,7 @@ async function missingGroups(db: D1Database, now: Date): Promise<MissingGroup[]>
     )
     SELECT race_date AS raceDate,venue,meeting_no AS meetingNo,meeting_day AS meetingDay,
            COUNT(*) AS storedRaces,
-           SUM(CASE WHEN activeRunners>=3 THEN 1 ELSE 0 END) AS readyRaces
+           SUM(CASE WHEN activeRunners>=3 AND hasEntryUrl=1 THEN 1 ELSE 0 END) AS readyRaces
     FROM per_race
     GROUP BY race_date,venue,meeting_no,meeting_day
     HAVING readyRaces < storedRaces
