@@ -112,7 +112,7 @@ def main() -> None:
     require_text(db_source, "SET entry_url=?,entry_updated_at=CURRENT_TIMESTAMP", "entry URL persistence")
     require_text(db_source, "WHERE race_id=? AND TRIM(COALESCE(entry_url,''))<>TRIM(?)", "entry URL persistence")
 
-        entry_main = read("src/published-entry-maintenance-entry.ts")
+    entry_main = read("src/published-entry-maintenance-entry.ts")
     for needle in (
         'import { shouldRunOnJraRaceDay } from "./v1/race-day-gate.js";',
         "PUBLISHED_ENTRY_NON_RACE_DAY_SKIP",
