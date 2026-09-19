@@ -14,8 +14,8 @@ ENTRY_CONFIGS = (
     "wrangler.win5-backup.jsonc",
     "wrangler.entry-maintenance.jsonc",
 )
-IMPORT_RE = re.compile(r'(?ms)^\\s*import\\s+(?!type\\b).*?\\s+from\\s+["\\\'](\\.[^"\\\']+)["\\\']\\s*;?')
-SIDE_EFFECT_RE = re.compile(r'(?m)^\\s*import\\s+["\\\'](\\.[^"\\\']+)["\\\']\\s*;?')
+IMPORT_RE = re.compile(r'(?ms)^\s*import\s+(?!type\b).*?\s+from\s+["\'](\.[^"\']+)["\']\s*;?')
+SIDE_EFFECT_RE = re.compile(r'(?m)^\s*import\s+["\'](\.[^"\']+)["\']\s*;?')
 
 def resolve(source: Path, spec: str) -> Path | None:
     base = (source.parent / spec).resolve()
