@@ -13,6 +13,7 @@ on:
       - "src/v1/jra.ts"
       - "src/v1/live-preview-safety.ts"
       - "src/v1/completed-worker-live-lock.ts"
+      - "src/v1/completed-recency-neutral.ts"
       - "src/v1/completed-worker-deadline-guard.ts"
       - "src/v1/completed-selection-runtime.ts"
       - "src/v1/completed-final-invariants.ts"

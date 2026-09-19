@@ -65,6 +65,11 @@ def main() -> None:
     forbid_text(live_runtime, 'neutralCompletedRecencyLearning, type', "live runtime mixed raw recency import")
     forbid_text(win5_runtime, 'neutralCompletedRecencyLearning, type', "WIN5 runtime mixed raw recency import")
 
+    live_deploy = read(".github/workflows/deploy-live-deadline.yml")
+    win5_deploy = read(".github/workflows/deploy-win5.yml")
+    require_text(live_deploy, '"src/v1/completed-recency-neutral.ts"', "live deploy trigger")
+    require_text(win5_deploy, '"src/v1/completed-recency-neutral.ts"', "WIN5 deploy trigger")
+
     # Browser GETs are display-only. The old v8/v9 mutation paths caused D1 use
     # to scale with page traffic and repeatedly scanned 14 days of bets/results.
     public_v8 = read("src/public-site-entry-v8.ts")

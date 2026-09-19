@@ -8,6 +8,7 @@ on:
       - "src/win5-entry-v3.ts"
       - "src/v1/race-day-gate.ts"
       - "src/v1/completed-win5.ts"
+      - "src/v1/completed-recency-neutral.ts"
       - "src/v1/win5-official-target-repair.ts"
       - "scripts/verify-win5-safety.py"
       - "wrangler.win5.jsonc"
