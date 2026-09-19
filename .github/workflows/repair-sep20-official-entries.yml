@@ -1,0 +1,124 @@
+name: Repair Sep 20 official entries in production
+on:
+  push:
+    branches: ["ops/diag-20260919"]
+    paths: [".github/workflows/repair-sep20-official-entries.yml"]
+permissions:
+  contents: read
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Build official Sep20 repair SQL
+        shell: bash
+        run: |
+          cat >.diag-repair-sep20.ts <<'TS'
+          import fs from "node:fs";
+          import { pageLooksLikeEntry, parseEntryPage } from "./src/v1/jra.ts";
+          const anchors=[
+            {venue:"中山", race1:"pw01dde0106202604060120260920/84"},
+            {venue:"阪神", race1:"pw01dde0109202604060120260920/62"},
+          ];
+          const RACE_TENS_WEIGHT=0x52, RACE_UNITS_WEIGHT=0xB5;
+          function mod256(v:number){return ((v%256)+256)%256}
+          function cnameForRace(race1:string,n:number){
+            const [p,s]=race1.split("/");
+            const x=parseInt(s,16)+Math.floor(n/10)*RACE_TENS_WEIGHT+(n%10-1)*RACE_UNITS_WEIGHT;
+            return p.slice(0,19)+String(n).padStart(2,"0")+p.slice(21)+"/"+mod256(x).toString(16).toUpperCase().padStart(2,"0");
+          }
+          async function fetchPage(cname:string){
+            const encoded=encodeURIComponent(cname);
+            for(let attempt=1;attempt<=5;attempt++){
+              for(const u of [
+                "https://www.jra.go.jp/JRADB/accessD.html?CNAME="+encoded,
+                "https://sp.jra.jp/JRADB/accessD.html?CNAME="+encoded,
+                "https://app.jra.jp/JRADB/accessD.html?CNAME="+encoded,
+              ]){
+                try{
+                  const r=await fetch(u,{redirect:"follow",headers:{
+                    "User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136 Safari/537.36",
+                    "Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language":"ja-JP,ja;q=0.9","Cache-Control":"no-cache","Pragma":"no-cache","Referer":"https://www.jra.go.jp/"
+                  }});
+                  if(!r.ok) continue;
+                  const bytes=await r.arrayBuffer();
+                  let html:string;
+                  try{html=new TextDecoder("shift_jis").decode(bytes)}catch{html=new TextDecoder("utf-8").decode(bytes)}
+                  if(pageLooksLikeEntry(html)) return {html,url:u};
+                }catch{}
+              }
+              await new Promise(r=>setTimeout(r,1000));
+            }
+            throw new Error("ENTRY_FETCH_FAILED:"+cname);
+          }
+          function q(v:any):string {
+            if(v===null||v===undefined) return "NULL";
+            if(typeof v==="number") return Number.isFinite(v)?String(v):"NULL";
+            return "'"+String(v).replaceAll("'","''")+"'";
+          }
+          async function main(){
+            const sql:string[]=["PRAGMA foreign_keys=ON;"];
+            const audit:any[]=[];
+            for(const a of anchors){
+              for(let n=1;n<=12;n++){
+                const cname=cnameForRace(a.race1,n);
+                const canonical="https://www.jra.go.jp/JRADB/accessD.html?CNAME="+encodeURIComponent(cname);
+                const p=await fetchPage(cname);
+                const b=parseEntryPage(p.html,canonical);
+                if(b.race.raceDate!=="2026-09-20"||b.race.venue!==a.venue||Number(b.race.raceNo)!==n) throw new Error("ENTRY_ID_MISMATCH:"+canonical);
+                if(b.runners.length<3) throw new Error("RUNNERS_TOO_FEW:"+b.race.raceId+":"+b.runners.length);
+                const r=b.race;
+                sql.push(`UPDATE rt_races SET race_name=${q(r.raceName)},conditions=${q(r.conditions)},surface=${q(r.surface)},distance_m=${q(r.distanceM)},direction=${q(r.direction)},start_time_jst=${q(r.startTimeJst)},start_time_utc=${q(r.startTimeUtc)},weather=COALESCE(${q(r.weather)},weather),track_condition=COALESCE(${q(r.trackCondition)},track_condition),entry_url=${q(canonical)},result_url=${q(r.resultUrl)},status=CASE WHEN status='finished' THEN status ELSE ${q(r.status)} END,entry_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE race_id=${q(r.raceId)};`);
+                sql.push(`DELETE FROM rt_runners WHERE race_id=${q(r.raceId)};`);
+                for(const x of b.runners){
+                  sql.push(`INSERT INTO rt_runners(race_id,horse_no,frame_no,horse_name,sex_age,coat_color,horse_weight,weight_change,jockey,assigned_weight,trainer,stable,win_odds,popularity,runner_status,updated_at) VALUES(${q(r.raceId)},${q(x.horseNo)},${q(x.frameNo)},${q(x.horseName)},${q(x.sexAge)},${q(x.coatColor)},${q(x.horseWeight)},${q(x.weightChange)},${q(x.jockey)},${q(x.assignedWeight)},${q(x.trainer)},${q(x.stable)},${q(x.winOdds)},${q(x.popularity)},${q(x.runnerStatus)},CURRENT_TIMESTAMP);`);
+                }
+                audit.push({raceId:r.raceId,venue:r.venue,raceNo:r.raceNo,runners:b.runners.length,active:b.runners.filter(x=>(x.runnerStatus||"active")==="active").length,entryUrl:canonical});
+              }
+            }
+            if(audit.length!==24) throw new Error("NOT_24");
+            fs.writeFileSync("/tmp/sep20-repair.sql",sql.join("\n"));
+            console.log("SEP20_REPAIR_SOURCE_OK",JSON.stringify({races:audit.length,byVenue:Object.fromEntries(anchors.map(a=>[a.venue,audit.filter(x=>x.venue===a.venue).length])),minActive:Math.min(...audit.map(x=>x.active))}));
+            console.log("SEP20_REPAIR_AUDIT",JSON.stringify(audit));
+          }
+          main().catch(e=>{console.error(e);process.exit(1)});
+          TS
+          npx tsx .diag-repair-sep20.ts
+      - name: Apply official entries to production D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --file /tmp/sep20-repair.sql
+      - name: Export and prove Sep20 readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 export race-tantei-phase0 --remote --table rt_races --output /tmp/races.sql
+          npx wrangler d1 export race-tantei-phase0 --remote --table rt_runners --output /tmp/runners.sql
+          sqlite3 /tmp/proof.db < /tmp/races.sql
+          sqlite3 /tmp/proof.db < /tmp/runners.sql
+          sqlite3 -json /tmp/proof.db "
+            SELECT r.venue,COUNT(DISTINCT r.race_id) races,
+              SUM(CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END) entryUrls,
+              COUNT(DISTINCT CASE WHEN ru.race_id IS NOT NULL THEN r.race_id END) racesWithRunners,
+              MIN((SELECT COUNT(*) FROM rt_runners x WHERE x.race_id=r.race_id AND COALESCE(x.runner_status,'active')='active')) minActive
+            FROM rt_races r LEFT JOIN rt_runners ru ON ru.race_id=r.race_id
+            WHERE r.race_date='2026-09-20'
+            GROUP BY r.venue ORDER BY r.venue;" | tee /tmp/proof.json
+          node - <<'NODE'
+          const fs=require('fs'); const a=JSON.parse(fs.readFileSync('/tmp/proof.json','utf8'));
+          if(a.length!==2) throw new Error(JSON.stringify(a));
+          for(const x of a){
+            if(Number(x.races)!==12 || Number(x.entryUrls)!==12 || Number(x.racesWithRunners)!==12 || Number(x.minActive)<3) throw new Error(JSON.stringify(a));
+          }
+          console.log("SEP20_D1_READY_24_24",JSON.stringify(a));
+          NODE
