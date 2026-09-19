@@ -1,0 +1,125 @@
+name: Final production quota safety verification
+on:
+  push:
+    branches: ["ops/diag-20260919"]
+    paths: [".github/workflows/final-production-quota-safety.yml"]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Static production quota guard
+        run: |
+          git rev-parse HEAD
+          python3 scripts/verify-production-d1-budget.py
+          python3 scripts/verify-live-lock-safety.py
+          python3 scripts/verify-win5-safety.py
+      - name: Verify exact Cloudflare cron set
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >/tmp/expected.json <<'JSON'
+          {
+            "race-tantei-phase0":["*/15 * * * *"],
+            "race-tantei-live-deadline":["* * * * *"],
+            "race-tantei-live-deadline-backup":["2-59/5 * * * *"],
+            "race-tantei-win5":["* * * * *"],
+            "race-tantei-win5-backup":["3-59/5 * * * *"],
+            "race-tantei-entry-maintenance":[],
+            "race-tantei-live-deadline-guardian":[],
+            "race-tantei-live-deadline-guardian-backup":[]
+          }
+          JSON
+          while IFS= read -r script; do
+            body=$(curl --max-time 20 -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$script/schedules" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+            BODY="$body" SCRIPT="$script" node - <<'NODE'
+          const fs=require('fs'), exp=JSON.parse(fs.readFileSync('/tmp/expected.json','utf8'));
+          const b=JSON.parse(process.env.BODY);
+          const rows=Array.isArray(b.result)?b.result:(b.result?.schedules||[]);
+          const got=rows.map(x=>String(x.cron)).sort();
+          const want=(exp[process.env.SCRIPT]||[]).slice().sort();
+          if(!b.success || JSON.stringify(got)!==JSON.stringify(want)) throw new Error(process.env.SCRIPT+': got='+JSON.stringify(got)+' want='+JSON.stringify(want));
+          console.log("CRON_OK",process.env.SCRIPT,JSON.stringify(got));
+          NODE
+          done < <(node -e "const x=require('/tmp/expected.json'); Object.keys(x).forEach(k=>console.log(k))")
+          total=0
+          for script in race-tantei-phase0 race-tantei-live-deadline race-tantei-live-deadline-backup race-tantei-win5 race-tantei-win5-backup race-tantei-entry-maintenance race-tantei-live-deadline-guardian race-tantei-live-deadline-guardian-backup; do
+            body=$(curl --max-time 20 -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$script/schedules" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+            n=$(BODY="$body" node -e "const b=JSON.parse(process.env.BODY); const r=Array.isArray(b.result)?b.result:(b.result?.schedules||[]); process.stdout.write(String(r.length))")
+            total=$((total+n))
+          done
+          echo "TOTAL_ACTIVE_CRONS=$total"
+          test "$total" = 5
+      - name: Verify production health and public truth
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in \
+            https://race-tantei-live-deadline.race-tantei.workers.dev/health \
+            https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health; do
+            body=$(curl --max-time 20 -fsS "$url"); echo "$url $body"
+            BODY="$body" node - <<'NODE'
+          const b=JSON.parse(process.env.BODY);
+          if(b.status!=="up" || b.version!=="live-deadline-v11-persistent-miss-lastgood-20260919") throw new Error(JSON.stringify(b));
+          NODE
+          done
+          for url in \
+            https://race-tantei-win5.race-tantei.workers.dev/health \
+            https://race-tantei-win5-backup.race-tantei.workers.dev/health; do
+            body=$(curl --max-time 20 -fsS "$url"); echo "$url $body"
+            BODY="$body" node - <<'NODE'
+          const b=JSON.parse(process.env.BODY);
+          if(b.status!=="up" || b.version!=="win5-entry-v3-race-day-gate-20260908") throw new Error(JSON.stringify(b));
+          NODE
+          done
+          entry=$(curl --max-time 20 -fsS https://race-tantei-entry-maintenance.race-tantei.workers.dev/health)
+          echo "$entry"
+          ENTRY="$entry" node - <<'NODE'
+          const b=JSON.parse(process.env.ENTRY);
+          if(!b.ok || b.version!=="published-entry-v2-gated-5m") throw new Error(JSON.stringify(b));
+          NODE
+          day=$(curl --max-time 20 -fsS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-09-19")
+          DAY="$day" node - <<'NODE'
+          const b=JSON.parse(process.env.DAY), rows=b.races||[];
+          if(rows.length!==24) throw new Error("DAY_NOT_24");
+          const counts={}; for(const r of rows) counts[r.publicState?.code]=(counts[r.publicState?.code]||0)+1;
+          const generated=(counts.hit||0)+(counts.miss||0)+(counts.buy||0)+(counts.refund||0);
+          if(generated!==7 || (counts.missing||0)!==3) throw new Error(JSON.stringify(counts));
+          console.log("PUBLIC_TRUTH_OK",JSON.stringify(counts),b.fallbackSource||"live");
+          NODE
+          perf=$(curl --max-time 20 -fsS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/daily-performance?date=2026-09-19")
+          PERF="$perf" node - <<'NODE'
+          const b=JSON.parse(process.env.PERF),s=b.summary||{};
+          if(s.targetRaces!==10 || s.finalizedRaces!==7) throw new Error(JSON.stringify(s));
+          console.log("PERFORMANCE_TRUTH_OK",JSON.stringify({targetRaces:s.targetRaces,finalizedRaces:s.finalizedRaces,settledRaces:s.settledRaces,roiPct:s.roiPct}));
+          NODE
+      - name: Verify high-read query signatures are absent from current one-hour profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 insights race-tantei-phase0 --time-period 1h --sort-type sum --sort-by reads --sort-direction DESC --limit 100 --json > /tmp/insights.json
+          node - <<'NODE'
+          const a=require('/tmp/insights.json');
+          const bad=a.filter(x=>{
+            const q=String(x.query||'').toLowerCase().replace(/\s+/g,' ');
+            return (q.includes('marketprobability')&&q.includes('join rt_results'))
+              || (q.includes('from rt_public_bets b join rt_races r')&&q.includes("date('now','-14 days')"))
+              || (q.includes('select distinct ra.race_id as raceid')&&q.includes('join rt_runners ru'));
+          });
+          console.log("ONE_HOUR_TOTAL_ROWS_READ",a.reduce((s,x)=>s+Number(x.totalRowsRead||0),0));
+          console.log("FORBIDDEN_HIGH_READ_MATCHES",JSON.stringify(bad));
+          if(bad.length) process.exit(2);
+          NODE
