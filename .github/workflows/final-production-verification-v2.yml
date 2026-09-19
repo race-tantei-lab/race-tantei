@@ -1,0 +1,147 @@
+name: Final production verification 20260919 v2
+on:
+  push:
+    branches: ["ops/diag-20260919"]
+    paths: [".github/workflows/final-production-verification-v2.yml"]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Static production safety
+        run: |
+          git rev-parse HEAD
+          python3 scripts/verify-production-d1-budget.py
+          python3 scripts/verify-production-runtime-reachability.py
+          python3 scripts/verify-live-lock-safety.py
+          python3 scripts/verify-win5-safety.py
+      - name: Exact Cloudflare schedules
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >/tmp/expected.json <<'JSON'
+          {
+            "race-tantei-phase0":["*/15 * * * *"],
+            "race-tantei-live-deadline":["* * * * *"],
+            "race-tantei-live-deadline-backup":["2-59/5 * * * *"],
+            "race-tantei-win5":["* * * * *"],
+            "race-tantei-win5-backup":["3-59/5 * * * *"],
+            "race-tantei-entry-maintenance":[],
+            "race-tantei-live-deadline-guardian":[],
+            "race-tantei-live-deadline-guardian-backup":[]
+          }
+          JSON
+          total=0
+          while IFS= read -r script; do
+            body=$(curl --max-time 20 -fsS "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$script/schedules" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+            n=$(BODY="$body" SCRIPT="$script" node - <<'NODE'
+          const fs=require("fs"), exp=JSON.parse(fs.readFileSync("/tmp/expected.json","utf8"));
+          const b=JSON.parse(process.env.BODY); const rows=Array.isArray(b.result)?b.result:(b.result?.schedules||[]);
+          const got=rows.map(x=>String(x.cron)).sort(), want=(exp[process.env.SCRIPT]||[]).slice().sort();
+          if(!b.success||JSON.stringify(got)!==JSON.stringify(want)) throw new Error(process.env.SCRIPT+":"+JSON.stringify(got)+" expected="+JSON.stringify(want));
+          console.error("CRON_OK",process.env.SCRIPT,JSON.stringify(got));
+          process.stdout.write(String(rows.length));
+          NODE
+          )
+            total=$((total+n))
+          done < <(node -e 'const x=require("/tmp/expected.json");Object.keys(x).forEach(k=>console.log(k))')
+          echo "TOTAL_ACTIVE_CRONS=$total"
+          test "$total" = 5
+      - name: Production Worker health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for u in race-tantei-live-deadline race-tantei-live-deadline-backup; do
+            b=$(curl --retry 4 --retry-delay 2 -fsS "https://$u.race-tantei.workers.dev/health"); echo "$u $b"
+            B="$b" node -e 'const x=JSON.parse(process.env.B);if(x.status!=="up"||x.version!=="live-deadline-v11-persistent-miss-lastgood-20260919")process.exit(1)'
+          done
+          for u in race-tantei-win5 race-tantei-win5-backup; do
+            b=$(curl --retry 4 --retry-delay 2 -fsS "https://$u.race-tantei.workers.dev/health"); echo "$u $b"
+            B="$b" node -e 'const x=JSON.parse(process.env.B);if(x.status!=="up")process.exit(1)'
+          done
+      - name: Wait for latest public UI and verify truth
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=https://race-tantei-phase0.race-tantei.workers.dev
+          ok=0
+          for i in $(seq 1 12); do
+            curl --max-time 20 -sS -D /tmp/h "$base/" -o /tmp/home || true
+            if grep -qi '^x-race-ui-version: ten-year-completed-public-v37-free-tier-safe-snapshot-20260905' /tmp/h && grep -Fq '今日の結果' /tmp/home; then ok=1; break; fi
+            sleep 5
+          done
+          test "$ok" = 1
+          curl --max-time 20 -fsS "$base/api/public/day?date=2026-09-19" -o /tmp/day.json
+          node - <<'NODE'
+          const b=require("/tmp/day.json"), rows=b.races||[], c={};
+          for(const r of rows)c[r.publicState?.code]=(c[r.publicState?.code]||0)+1;
+          const generated=(c.hit||0)+(c.miss||0)+(c.buy||0)+(c.refund||0);
+          if(rows.length!==24||generated!==7||(c.missing||0)!==3)throw new Error(JSON.stringify(c));
+          console.log("PUBLIC_DAY_TRUTH_OK",JSON.stringify(c),b.fallbackSource||b.liveSource||"live");
+          NODE
+          for id in 2026-09-19-hanshin-01 2026-09-19-hanshin-02 2026-09-19-hanshin-03 2026-09-19-hanshin-05 2026-09-19-hanshin-06 2026-09-19-nakayama-01 2026-09-19-nakayama-03; do
+            curl --max-time 20 -fsS "$base/races/$id" -o /tmp/detail
+            grep -Fq '<h2>確定買い目</h2>' /tmp/detail
+            grep -Fq 'data-race-tabs' /tmp/detail
+            grep -Fq 'この組合せが当たる推定確率' /tmp/detail
+            test "$(grep -o 'data-ticket-reason=' /tmp/detail | wc -l)" = 2
+            for course in ライト スタンダード プレミアム; do grep -Fq "class=\"course-heading\">$course</h3>" /tmp/detail; done
+            test "$(grep -o '<tr><td>' /tmp/detail | wc -l)" -ge 6
+            echo "DETAIL_OK $id"
+          done
+      - name: D1 one-hour read profile
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 insights race-tantei-phase0 --time-period 1h --sort-type sum --sort-by reads --sort-direction DESC --limit 100 --json > /tmp/insights.json
+          node - <<'NODE'
+          const a=require("/tmp/insights.json");
+          const bad=a.filter(x=>{const q=String(x.query||"").toLowerCase().replace(/\s+/g," ");
+            return (q.includes("marketprobability")&&q.includes("join rt_results"))
+              || (q.includes("date('now','-14 days')")&&q.includes("rt_public_bets"))
+              || (q.includes("select distinct ra.race_id as raceid")&&q.includes("join rt_runners ru"));
+          });
+          const total=a.reduce((s,x)=>s+Number(x.totalRowsRead||0),0);
+          console.log("ONE_HOUR_TOTAL_ROWS_READ",total);
+          console.log("FORBIDDEN_HIGH_READ_MATCHES",JSON.stringify(bad));
+          if(bad.length)process.exit(2);
+          NODE
+      - name: Export and verify Sep20 readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/r.db /tmp/*.sql
+          for table in rt_races rt_runners; do
+            npx wrangler d1 export race-tantei-phase0 --remote --table "$table" --output "/tmp/$table.sql"
+            sqlite3 /tmp/r.db < "/tmp/$table.sql"
+          done
+          sqlite3 -json /tmp/r.db "
+            WITH x AS (
+              SELECT r.race_id,r.venue,r.race_no,
+                CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END hasEntry,
+                CASE WHEN r.start_time_utc IS NOT NULL AND r.surface IS NOT NULL AND r.distance_m IS NOT NULL THEN 1 ELSE 0 END meta,
+                SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) active
+              FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
+              WHERE r.race_date='2026-09-20'
+              GROUP BY r.race_id,r.venue,r.race_no
+            )
+            SELECT venue,COUNT(*) races,SUM(hasEntry) entryUrls,SUM(meta) metadataReady,
+              SUM(CASE WHEN active>=3 THEN 1 ELSE 0 END) runnerReady,MIN(active) minActive
+            FROM x GROUP BY venue ORDER BY venue;" > /tmp/sep20.json
+          cat /tmp/sep20.json
+          node - <<'NODE'
+          const r=require("/tmp/sep20.json");
+          if(r.length!==2)throw new Error("SEP20_VENUES_"+JSON.stringify(r));
+          for(const x of r) if(Number(x.races)!==12||Number(x.entryUrls)!==12||Number(x.metadataReady)!==12||Number(x.runnerReady)!==12||Number(x.minActive)<3) throw new Error("SEP20_NOT_READY_"+JSON.stringify(x));
+          console.log("SEP20_READY_24_OF_24");
+          NODE
