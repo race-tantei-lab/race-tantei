@@ -29,6 +29,8 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - name: Verify production D1 budget safety
+        run: python3 scripts/verify-production-d1-budget.py
       - name: Typecheck
         run: npm run typecheck
       - name: Validate maintenance Worker bundle
@@ -49,7 +51,7 @@ jobs:
           for attempt in $(seq 1 10); do
             code=$(curl --max-time 10 -sS -o /tmp/health -w '%{http_code}' "$url" || true)
             echo "HEALTH_ATTEMPT=$attempt HTTP=$code"
-            if [ "$code" = 200 ] && grep -q 'published-entry-v1' /tmp/health; then
+            if [ "$code" = 200 ] && grep -q 'published-entry-v2-gated-5m' /tmp/health; then
               cat /tmp/health
               exit 0
             fi

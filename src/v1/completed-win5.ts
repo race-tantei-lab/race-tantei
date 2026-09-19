@@ -1,7 +1,7 @@
 import { bodyWeightSnapshotMatchesRunners, resolveOfficialBodyWeights } from "./bodyweight-refresh";
 import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION, completedFeatureVector, loadCompletedFeatureStateForRace } from "./completed-feature-runtime";
 import { loadCompletedModelRuntime, type CompletedModelRuntime } from "./completed-model-runtime";
-import { loadCompletedRecencyLearning, neutralCompletedRecencyLearning, type CompletedRecencyAudit } from "./completed-recency-learning";
+import { neutralCompletedRecencyLearning, type CompletedRecencyAudit } from "./completed-recency-learning";
 import { normalizeCompletedWeights } from "./completed-ticket-runtime";
 import { decodeJraHtml, jraPageText } from "./jra-official-odds";
 import type { Env, RaceRecord, RunnerRecord } from "./types";
@@ -276,15 +276,22 @@ async function scoreRace(db: D1Database, model: CompletedModelRuntime, target: W
     }
   }
   const cutoffUtc = now.toISOString();
-  const state = await loadCompletedFeatureStateForRace(db, loaded.race, loaded.runners, cutoffUtc);
+  const state = await loadCompletedFeatureStateForRace(
+    db,
+    loaded.race,
+    loaded.runners,
+    cutoffUtc,
+    { includeHistoricalDelta: false },
+  );
   const raw = loaded.runners.map((runner) => model.predict(completedFeatureVector(state, loaded.race, runner, loaded.runners.length)));
   const base = normalizeCompletedWeights(raw);
-  let learning;
-  try {
-    learning = await loadCompletedRecencyLearning(db, loaded.race, loaded.runners, cutoffUtc);
-  } catch (error) {
-    learning = neutralCompletedRecencyLearning(loaded.runners, cutoffUtc, errorText(error));
-  }
+  // Race-day WIN5 must never scan raw 30-day history. The canonical ML feature
+  // state is already precomputed; use neutral online-recency factors in production.
+  const learning = neutralCompletedRecencyLearning(
+    loaded.runners,
+    cutoffUtc,
+    "WIN5_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY",
+  );
   const weights = normalizeCompletedWeights(base.map((probability, index) => probability * learning.runnerFactors[index]));
   const runners = loaded.runners.map((runner, index) => ({
     horseNo: Number(runner.horseNo),

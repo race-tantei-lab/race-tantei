@@ -26,7 +26,7 @@ def main() -> None:
     backup = json.loads(read("wrangler.win5-backup.jsonc"))
     public = json.loads(read("wrangler.jsonc"))
 
-    if public.get("main") != "src/public-site-entry-recovery-20260906.ts":
+    if public.get("main") != "src/public-site-entry-performance-history-fix-20260915.ts":
         raise AssertionError("unexpected public Worker entry")
     if primary.get("name") != "race-tantei-win5" or primary.get("main") != "src/win5-entry-v3.ts":
         raise AssertionError("primary WIN5 Worker identity mismatch")
@@ -97,6 +97,9 @@ def main() -> None:
     forbid(public34, "if (publicSite.scheduled) await publicSite.scheduled(controller, env, ctx);", "public v34 scheduled ownership")
 
     completed = read("src/v1/completed-win5.ts")
+    forbid(completed, "loadCompletedRecencyLearning(", "WIN5 raw recency history")
+    require(completed, "{ includeHistoricalDelta: false }", "WIN5 bounded feature state")
+    require(completed, "WIN5_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY", "WIN5 bounded recency")
     for needle in (
         "WIN5_LOCK_MINUTES = 15",
         "win5:preview:",
