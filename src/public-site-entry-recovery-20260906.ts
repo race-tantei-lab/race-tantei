@@ -1,6 +1,7 @@
 import publicSite from "./public-site-entry-v37.js";
 import { loadConfiguredOfficialRace, runConfiguredEntrySeedWriteOnly } from "./v1/configured-entry-seed-write-only.js";
 import { shouldRunOnJraRaceDay } from "./v1/race-day-gate.js";
+import { runBoundedResultSettlement } from "./v1/bounded-result-settlement.js";
 import { runUpcomingCalendarRepair } from "./v1/upcoming-calendar-repair.js";
 import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.js";
 import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
@@ -113,6 +114,19 @@ export default {
   },
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     const now = Number.isFinite(controller.scheduledTime) ? new Date(controller.scheduledTime) : new Date();
+
+    // Result/payout settlement must not depend on someone opening the website.
+    // Keep this bounded to pending final public bets from today/yesterday and run
+    // it even on a non-race day so a prior-day outage can recover automatically.
+    try {
+      const settlement = await runBoundedResultSettlement(env, now);
+      if (settlement.candidates.length || settlement.errors.length) {
+        console.log("PUBLIC_BOUNDED_RESULT_SETTLEMENT", JSON.stringify(settlement));
+      }
+    } catch (error) {
+      console.error("PUBLIC_BOUNDED_RESULT_SETTLEMENT_FAILED", error);
+    }
+
     const raceDay = await shouldRunOnJraRaceDay(now);
     const preparationDay = isPreRacePreparationDay(now);
     if (!raceDay.shouldRun && !preparationDay) {

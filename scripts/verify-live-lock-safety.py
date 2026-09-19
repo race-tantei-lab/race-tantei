@@ -210,6 +210,25 @@ def main() -> None:
     ):
         require_text(guard, needle, "persistent deadline guard")
     forbid_text(guard, "chooseCompletedProbabilityFallbackTickets", "deadline guard probability fallback")
+
+    recovery = read("src/public-site-entry-recovery-20260906.ts")
+    settlement = read("src/v1/bounded-result-settlement.ts")
+    for needle in (
+        'import { runBoundedResultSettlement } from "./v1/bounded-result-settlement.js";',
+        "await runBoundedResultSettlement(env, now)",
+        "PUBLIC_BOUNDED_RESULT_SETTLEMENT",
+    ):
+        require_text(recovery, needle, "bounded automatic result settlement")
+    for needle in (
+        "b.source_prediction_id=-2",
+        "b.settlement_status='pending'",
+        "MAX_CANDIDATES_PER_TICK = 15",
+        "saveResultBundle(env.DB, bundle)",
+        "settlement_status='settled'",
+    ):
+        require_text(settlement, needle, "bounded settlement implementation")
+    for forbidden in ("date('now','-14 days')", "rt_prediction_runners", "rt_predictions"):
+        forbid_text(settlement, forbidden, "bounded settlement broad/legacy scan")
     forbid_text(guard, "&& remainingMs > 0", "deadline guard post-start miss persistence")
 
     migration_sql = read("scripts/install-race-day-runtime-guards.sql")
