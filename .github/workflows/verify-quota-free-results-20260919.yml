@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev/races'
-          for race in 2026-09-19-hanshin-01 2026-09-19-nakayama-01; do
+          for race in             2026-09-19-hanshin-01             2026-09-19-hanshin-02             2026-09-19-hanshin-03             2026-09-19-hanshin-05             2026-09-19-hanshin-06             2026-09-19-nakayama-01             2026-09-19-nakayama-02             2026-09-19-nakayama-03             2026-09-19-nakayama-07; do
             curl --retry 6 --retry-delay 5 --retry-all-errors --max-time 30 -fsS -D "/tmp/$race.headers" "$base/$race" -o "/tmp/$race.body"
             tr -d '\r' <"/tmp/$race.headers" | tee "/tmp/$race.headers.clean"
             grep -qi 'x-race-result-source: jra-official-direct-quota-free-20260919' "/tmp/$race.headers.clean"
