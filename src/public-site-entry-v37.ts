@@ -47,11 +47,32 @@ function esc(value: unknown): string {
 }
 
 function staticRecentCalendar(): CalendarRow[] {
-  return RECENT_HOME_CALENDAR_SNAPSHOT.map((row) => ({
-    raceDate: String(row.raceDate),
-    venue: String(row.venue),
-    raceCount: Number(row.raceCount),
-  }));
+  const byKey = new Map<string, CalendarRow>();
+  for (const row of RECENT_HOME_CALENDAR_SNAPSHOT) {
+    const normalized = {
+      raceDate: String(row.raceDate),
+      venue: String(row.venue),
+      raceCount: Number(row.raceCount),
+    };
+    byKey.set(`${normalized.raceDate}\u0000${normalized.venue}`, normalized);
+  }
+
+  // The current/recent day snapshot is the quota-free source of truth when D1
+  // reads are blocked. Let it update stale calendar counts and add missing
+  // venues (for example the second venue on the current race day).
+  for (const [raceDate, day] of Object.entries(DAY_SNAPSHOT)) {
+    const counts = new Map<string, number>();
+    for (const race of day?.races ?? []) {
+      const venue = String(race.venue ?? "");
+      if (!venue) continue;
+      counts.set(venue, (counts.get(venue) ?? 0) + 1);
+    }
+    for (const [venue, raceCount] of counts) {
+      byKey.set(`${raceDate}\u0000${venue}`, { raceDate, venue, raceCount });
+    }
+  }
+
+  return [...byKey.values()].sort((a, b) => a.raceDate.localeCompare(b.raceDate) || a.venue.localeCompare(b.venue, "ja"));
 }
 
 async function loadRecentCalendar(env: Env): Promise<CalendarRow[]> {
@@ -72,16 +93,32 @@ async function loadRecentCalendar(env: Env): Promise<CalendarRow[]> {
 }
 
 function mergeRecentCalendar(html: string, rows: CalendarRow[]): string {
-  const start = html.indexOf("const calendar=[");
-  const end = html.indexOf("];const today=", start);
+  const marker = "const calendar=";
+  const start = html.indexOf(marker);
+  const end = html.indexOf(";const today=", start);
   if (start < 0 || end < 0 || !rows.length) return html;
-  const existing = html.slice(start, end);
-  const extra = rows.filter((row) => {
-    const token = `\"raceDate\":\"${row.raceDate}\",\"venue\":\"${row.venue}\"`;
-    return !existing.includes(token);
-  });
-  if (!extra.length) return html;
-  return `${html.slice(0, end)},${extra.map((row) => JSON.stringify(row)).join(",")}${html.slice(end)}`;
+
+  try {
+    const raw = html.slice(start + marker.length, end);
+    const existing = JSON.parse(raw) as CalendarRow[];
+    const byKey = new Map<string, CalendarRow>();
+    for (const row of existing) {
+      const normalized = {
+        raceDate: String(row.raceDate),
+        venue: String(row.venue),
+        raceCount: Number(row.raceCount),
+      };
+      byKey.set(`${normalized.raceDate}\u0000${normalized.venue}`, normalized);
+    }
+    for (const row of rows) {
+      byKey.set(`${row.raceDate}\u0000${row.venue}`, row);
+    }
+    const merged = [...byKey.values()].sort((a, b) => a.raceDate.localeCompare(b.raceDate) || a.venue.localeCompare(b.venue, "ja"));
+    return `${html.slice(0, start + marker.length)}${JSON.stringify(merged)}${html.slice(end)}`;
+  } catch (error) {
+    console.error("V37_CALENDAR_MERGE_FAILED", error);
+    return html;
+  }
 }
 
 function normalResponse(response: Response, html: string, path: string): Response {
@@ -96,8 +133,17 @@ function normalResponse(response: Response, html: string, path: string): Respons
   return new Response(html, { status: 200, headers });
 }
 
+function rewriteEmbeddedToday(html: string): string {
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const [, month, day] = today.split("-").map(Number);
+  return html
+    .replace(/const today="20\d{2}-\d{2}-\d{2}";/g, `const today="${today}";`)
+    .replace(/const TODAY="20\d{2}-\d{2}-\d{2}";/g, `const TODAY="${today}";`)
+    .replace(/本日の集計（\d{1,2}\/\d{1,2}）/g, `本日の集計（${month}/${day}）`);
+}
+
 function embeddedNormalHome(): Response {
-  const html = mergeRecentCalendar(NORMAL_HOME_SNAPSHOT, staticRecentCalendar());
+  const html = rewriteEmbeddedToday(mergeRecentCalendar(NORMAL_HOME_SNAPSHOT, staticRecentCalendar()));
   return new Response(html, {
     status: 200,
     headers: {
@@ -226,7 +272,9 @@ async function fetchPublicDay(request: Request, env: Env, ctx: ExecutionContext,
 }
 
 async function fetchNormalHome(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const recentCalendar = await loadRecentCalendar(env);
+  // Never spend production D1 rows_read just to render the home/calendar.
+  // Recent/current calendar rows are already available from embedded snapshots.
+  const recentCalendar = staticRecentCalendar();
   try {
     const response = await core.fetch(request, env, ctx);
     const contentType = response.headers.get("content-type") ?? "";
