@@ -41,6 +41,7 @@ jobs:
           selected=[r for r in rows if str((r.get('publicState') or {}).get('code') or '') in selected_codes]
           selected_by_venue=collections.Counter(str(r.get('venue') or '') for r in selected)
           skip_by_venue=collections.Counter(str(r.get('venue') or '') for r in rows if (r.get('publicState') or {}).get('code')=='skip')
+          deadline_failure_count=states.get('missing',0)+states.get('overdue',0)
           detail={
               'raceCount':len(rows),
               'venues':dict(venues),
@@ -48,11 +49,13 @@ jobs:
               'selectedByVenue':dict(selected_by_venue),
               'skipByVenue':dict(skip_by_venue),
               'selectedRaceIds':[r.get('raceId') for r in selected],
+              'deadlineFailureCount':deadline_failure_count,
           }
           print(json.dumps(detail,ensure_ascii=False))
           good=(
               structured
               and states.get('pending',0)==0
+              and deadline_failure_count==0
               and all(selected_by_venue.get(v,0)==5 for v in venues)
               and all(skip_by_venue.get(v,0)==7 for v in venues)
           )
