@@ -1,6 +1,8 @@
 import { extractResultLinks, fetchJraPage, pageLooksLikeResult, parseEntryPage, parseResultPage, toResultUrl } from "./jra.js";
 import { parseJraPayoutsFromHtml } from "./jra-payout-fallback.js";
 import { shell } from "./public-ui.js";
+import { RECENT_PUBLIC_DAY_SNAPSHOT } from "../recent-public-day-snapshot.js";
+import { RECENT_PUBLIC_FINAL_EVIDENCE } from "../recent-public-final-evidence.js";
 
 const ENTRY_URLS: Readonly<Record<string, string>> = {
   "2026-09-19-nakayama-01": "https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0106202604050120260919%2F5C",
@@ -39,6 +41,32 @@ function canonicalCombination(betType: string, combination: string): string {
   const values = (String(combination).match(/\d{1,2}/g) ?? []).map(Number);
   if (["ワイド", "馬連", "3連複"].includes(betType)) values.sort((a, b) => a - b);
   return values.join("-");
+}
+
+const SNAPSHOT_DAYS = RECENT_PUBLIC_DAY_SNAPSHOT as unknown as Record<string, { bets: Array<{ raceId:string; course:string; betType:string; combination:string; returnYen:number|null; settlementStatus:string; stakeYen?:number; assumedOdds?:number }> }>;
+const FIXED_EVIDENCE = RECENT_PUBLIC_FINAL_EVIDENCE as unknown as Record<string, { tickets:Array<{ betType:string; combination:string; horses:number[]; predictedProbability:number; officialOdds:number; valueProduct:number; score:number }>; horseNames:Record<string,string> }>;
+
+function fixedBetDetailHtml(raceId: string): string {
+  const day = SNAPSHOT_DAYS[raceId.slice(0, 10)];
+  const bets = day?.bets?.filter((bet) => bet.raceId === raceId) ?? [];
+  if (!bets.length) return "";
+  const evidence = FIXED_EVIDENCE[raceId];
+  const courses = ["ライト", "スタンダード", "プレミアム"];
+  const blocks = courses.map((course, index) => {
+    const rows = bets.filter((bet) => bet.course === course);
+    const body = rows.map((bet) => "<tr><td>"+esc(bet.betType)+"</td><td>"+esc(bet.combination)+"</td><td>"+(Number.isFinite(Number(bet.assumedOdds))?Number(bet.assumedOdds).toFixed(1)+"倍":"—")+"</td><td>"+(Number.isFinite(Number(bet.stakeYen))?Math.round(Number(bet.stakeYen)).toLocaleString("ja-JP")+"円":"—")+"</td><td>"+(bet.settlementStatus==="settled"?Math.round(Number(bet.returnYen??0)).toLocaleString("ja-JP")+"円":"—")+"</td></tr>").join("");
+    return "<div class=\"course-view\" data-course=\""+index+"\" style=\""+(index===0?"":"display:none")+"\"><h3 class=\"course-heading\">"+esc(course)+"</h3><div class=\"bet-table\"><table><thead><tr><th>券種</th><th>組合せ</th><th>オッズ</th><th>購入</th><th>払戻</th></tr></thead><tbody>"+body+"</tbody></table></div></div>";
+  }).join("");
+  const reasons = (evidence?.tickets ?? []).map((ticket) => {
+    const names = ticket.horses.map((horseNo) => String(horseNo)+"番 "+String(evidence?.horseNames?.[String(horseNo)] ?? "")).join(" / ");
+    return "<article class=\"ticket-reason-card\" data-ticket-reason=\""+esc(ticket.betType)+":"+esc(ticket.combination)+"\"><strong>"+esc(ticket.betType)+" "+esc(ticket.combination)+"</strong><div>"+esc(names)+"</div><div>この組合せが当たる推定確率：<b>"+(ticket.predictedProbability*100).toFixed(2)+"%</b></div><div>JRA公式オッズ：<b>"+ticket.officialOdds.toFixed(1)+"倍</b></div><div>推定確率 × 公式オッズ：<b>"+ticket.valueProduct.toFixed(4)+"</b></div><div>買い目の評価点：<b>"+ticket.score.toFixed(6)+"</b></div><p><b>選ばれた理由：</b>発走前に保存された最終確定時の予測値とJRA公式オッズです。結果確定後も再計算せず、固定済み正本を表示しています。</p></article>";
+  }).join("");
+  const horseRows = evidence ? Object.entries(evidence.horseNames).sort((a,b)=>Number(a[0])-Number(b[0])).map(([no,name]) => "<tr><td>"+esc(no)+"</td><td>"+esc(name)+"</td></tr>").join("") : "";
+  return "<nav class=\"race-detail-tabs\" data-race-tabs><button type=\"button\" data-race-tab=\"bets\">予想買い目</button><button type=\"button\" data-race-tab=\"reason\">根拠</button><button type=\"button\" data-race-tab=\"horses\">出走馬</button></nav>"
+    +"<section data-race-panel=\"bets\"><div class=\"section-title\"><h2>確定買い目</h2><span class=\"status buy\">固定済み</span></div>"+blocks+"</section>"
+    +"<section id=\"race-panel-reason\" data-race-panel=\"reason\" hidden><div class=\"section-title\"><h2>買い目の理由</h2></div>"+reasons+"</section>"
+    +"<section data-race-panel=\"horses\" hidden><div class=\"section-title\"><h2>出走馬</h2></div><div class=\"runner-table\"><table><thead><tr><th>馬番</th><th>馬名</th></tr></thead><tbody>"+horseRows+"</tbody></table></div></section>"
+    +"<script>(function(){var panels={bets:document.querySelector('[data-race-panel=\"bets\"]'),reason:document.querySelector('[data-race-panel=\"reason\"]'),horses:document.querySelector('[data-race-panel=\"horses\"]')};function activate(name){Object.keys(panels).forEach(function(k){if(panels[k])panels[k].hidden=k!==name;});}document.querySelectorAll('[data-race-tab]').forEach(function(b){b.addEventListener('click',function(){activate(b.getAttribute('data-race-tab'));});});activate('bets');})();</script>";
 }
 
 export async function quotaFreeOfficialResultResponse(raceId: string): Promise<Response | null> {
@@ -117,7 +145,9 @@ export async function quotaFreeOfficialResultResponse(raceId: string): Promise<R
     <section class="card panel"><h2>払戻</h2>${payoutRows ? `<div class="runner-table"><table><thead><tr><th>券種</th><th>組合せ</th><th>払戻</th><th>人気</th></tr></thead><tbody>${payoutRows}</tbody></table></div>` : '<p class="muted">JRA公式払戻を確認中です。</p>'}${refundText}</section>
     <p class="muted">D1障害時のJRA公式ページ直読表示です。買い目の精算・回収率はD1復旧後に自動反映します。</p>`;
 
-  return new Response(shell(`${race.venue}${race.raceNo}R 結果`, body), {
+  const mergedBody = body.replace('<section class="card panel"><h2>着順</h2>', fixedBetDetailHtml(raceId) + '<section class="card panel"><h2>着順</h2>');
+
+  return new Response(shell(`${race.venue}${race.raceNo}R 結果`, mergedBody), {
     status: 200,
     headers: {
       "content-type": "text/html; charset=utf-8",
