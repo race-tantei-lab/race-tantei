@@ -1,0 +1,34 @@
+name: Inventory public request D1 queries
+on:
+  push:
+    branches: ["ops/diag-20260919"]
+    paths: [".github/workflows/inventory-public-d1-queries.yml"]
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Extract SQL-bearing public runtime files
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, json
+          rows=[]
+          paths=list(Path('src').glob('public-site-entry*.ts'))+[Path('src/v1/current-day-public-api.ts'),Path('src/v1/daily-performance-public.ts'),Path('src/v1/today-performance.ts')]
+          for p in paths:
+            if not p.exists(): continue
+            t=p.read_text(encoding='utf-8')
+            if '.prepare(' not in t and '.batch(' not in t: continue
+            # Compact SQL-ish lines with context markers.
+            sql=[]
+            for i,line in enumerate(t.splitlines(),1):
+              if re.search(r'\b(?:SELECT|FROM rt_|JOIN rt_|UPDATE rt_|INSERT INTO rt_|DELETE FROM rt_|\.prepare\()',line,re.I):
+                sql.append({'line':i,'text':line.strip()[:300]})
+            rows.append({'path':str(p),'sql':sql})
+          print('PUBLIC_D1_QUERY_INVENTORY',json.dumps(rows,ensure_ascii=False))
+          PY
