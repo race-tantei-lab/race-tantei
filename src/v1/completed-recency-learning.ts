@@ -120,8 +120,33 @@ async function loadRunnerRows(db: D1Database, race: RaceRecord, runners: RunnerR
   const horses = [...new Set(runners.map((row) => String(row.horseName || "").trim()).filter(Boolean))];
   const jockeys = [...new Set(runners.map((row) => String(row.jockey || "").trim()).filter(Boolean))];
   const trainers = [...new Set(runners.map((row) => String(row.trainer || "").trim()).filter(Boolean))];
+  const horseJson = JSON.stringify(horses);
+  const jockeyJson = JSON.stringify(jockeys);
+  const trainerJson = JSON.stringify(trainers);
+  const surface = String(race.surface || "");
   const result = await db.prepare(`
-    WITH scored AS (
+    WITH candidate_races AS (
+      SELECT r.race_id
+      FROM rt_races r
+      WHERE r.race_date BETWEEN ? AND ?
+        AND r.start_time_utc IS NOT NULL
+        AND datetime(r.start_time_utc) < datetime(?)
+        AND (
+          (r.venue=? AND COALESCE(r.surface,'')=?)
+          OR EXISTS (
+            SELECT 1
+            FROM rt_runners z
+            WHERE z.race_id=r.race_id
+              AND COALESCE(z.runner_status,'active')='active'
+              AND (
+                z.horse_name IN (SELECT value FROM json_each(?))
+                OR COALESCE(z.jockey,'') IN (SELECT value FROM json_each(?))
+                OR COALESCE(z.trainer,'') IN (SELECT value FROM json_each(?))
+              )
+          )
+        )
+    ),
+    scored AS (
       SELECT r.race_id AS raceId,r.race_date AS raceDate,r.start_time_utc AS startTimeUtc,r.venue,r.surface,
              x.horse_no AS horseNo,x.horse_name AS horseName,x.jockey,x.trainer,
              CAST(y.finish_position AS INTEGER) AS finishPosition,
@@ -133,13 +158,11 @@ async function loadRunnerRows(db: D1Database, race: RaceRecord, runners: RunnerR
                ELSE 1.0 / COUNT(*) OVER (PARTITION BY r.race_id)
              END AS marketProbability,
              COUNT(*) OVER (PARTITION BY r.race_id) AS fieldSize
-      FROM rt_races r
+      FROM candidate_races c
+      JOIN rt_races r ON r.race_id=c.race_id
       JOIN rt_runners x ON x.race_id=r.race_id
       JOIN rt_results y ON y.race_id=x.race_id AND y.horse_no=x.horse_no
-      WHERE r.race_date BETWEEN ? AND ?
-        AND r.start_time_utc IS NOT NULL
-        AND datetime(r.start_time_utc) < datetime(?)
-        AND COALESCE(x.runner_status,'active')='active'
+      WHERE COALESCE(x.runner_status,'active')='active'
         AND y.finish_position IS NOT NULL
         AND CAST(y.finish_position AS INTEGER)>0
     )
@@ -151,7 +174,11 @@ async function loadRunnerRows(db: D1Database, race: RaceRecord, runners: RunnerR
       OR (venue=? AND COALESCE(surface,'')=?)
     )
     ORDER BY startTimeUtc,raceId,horseNo
-  `).bind(startDate(race.raceDate), race.raceDate, cutoffUtc, JSON.stringify(horses), JSON.stringify(jockeys), JSON.stringify(trainers), race.venue, String(race.surface || "")).all<RunnerHistoryRow>();
+  `).bind(
+    startDate(race.raceDate), race.raceDate, cutoffUtc,
+    race.venue, surface, horseJson, jockeyJson, trainerJson,
+    horseJson, jockeyJson, trainerJson, race.venue, surface,
+  ).all<RunnerHistoryRow>();
   return result.results ?? [];
 }
 
