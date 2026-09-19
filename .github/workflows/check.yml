@@ -29,6 +29,8 @@ jobs:
         run: python scripts/verify-live-lock-safety.py
       - name: Verify production D1 budget safety
         run: python scripts/verify-production-d1-budget.py
+      - name: Verify production runtime import reachability
+        run: python scripts/verify-production-runtime-reachability.py
       - name: Verify live preview priority
         run: python scripts/verify-live-preview-priority.py
       - name: Verify bodyweight final-lock acquisition

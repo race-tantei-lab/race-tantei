@@ -58,6 +58,13 @@ def main() -> None:
     require_text(calendar_cache, "REFRESH_MS = 6 * 60 * 60 * 1000", "public calendar cache")
     require_text(calendar_cache, "state_key=?", "public calendar cache one-row read")
 
+    live_runtime = read("src/v1/completed-worker-live-lock.ts")
+    win5_runtime = read("src/v1/completed-win5.ts")
+    require_text(live_runtime, 'from "./completed-recency-neutral"', "live neutral recency module")
+    require_text(win5_runtime, 'from "./completed-recency-neutral"', "WIN5 neutral recency module")
+    forbid_text(live_runtime, 'neutralCompletedRecencyLearning, type', "live runtime mixed raw recency import")
+    forbid_text(win5_runtime, 'neutralCompletedRecencyLearning, type', "WIN5 runtime mixed raw recency import")
+
     # Browser GETs are display-only. The old v8/v9 mutation paths caused D1 use
     # to scale with page traffic and repeatedly scanned 14 days of bets/results.
     public_v8 = read("src/public-site-entry-v8.ts")
