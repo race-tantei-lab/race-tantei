@@ -6,7 +6,8 @@ import {
 } from "./bodyweight-refresh";
 import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION, completedFeatureVector, loadCompletedFeatureStateForRace } from "./completed-feature-runtime";
 import { loadCompletedModelRuntime, type CompletedModelRuntime } from "./completed-model-runtime";
-import { completedRecencyBetFactor, neutralCompletedRecencyLearning, type CompletedRecencyAudit, type CompletedRunnerRecencyDetail } from "./completed-recency-learning";
+import { neutralCompletedRecencyLearning } from "./completed-recency-neutral";
+import type { CompletedRecencyAudit, CompletedRunnerRecencyDetail } from "./completed-recency-learning";
 import {
   COMPLETED_COURSE_STAKES,
   chooseCompletedTwoTickets,
@@ -423,7 +424,7 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     refreshed.runners.map((runner) => Number(runner.horseNo)),
     weights,
     fetched.rows,
-    (betType, odds) => completedRecencyBetFactor(learning, betType, refreshed.race.venue, odds),
+    () => 1,
   );
   const courseBets = completedCourseBets(tickets);
   const snapshot: PreviewSnapshot = {
