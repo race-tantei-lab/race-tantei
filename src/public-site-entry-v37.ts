@@ -3,6 +3,7 @@ import { NORMAL_HOME_SNAPSHOT } from "./normal-home-snapshot.js";
 import { RECENT_HOME_CALENDAR_SNAPSHOT } from "./recent-home-calendar-snapshot.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
 import { projectCurrentPublicState } from "./v1/current-day-public-api.js";
+import { quotaFreeOfficialResultResponse } from "./v1/quota-free-jra-result-20260919.js";
 import { shell } from "./v1/public-ui.js";
 import type { Env } from "./v1/types.js";
 
@@ -269,6 +270,12 @@ async function fetchRaceDetail(request: Request, env: Env, ctx: ExecutionContext
     console.error("V37_RACE_DETAIL_USING_SNAPSHOT", raceId, response.status);
   } catch (error) {
     console.error("V37_RACE_DETAIL_USING_SNAPSHOT_AFTER_ERROR", raceId, error);
+  }
+  try {
+    const official = await quotaFreeOfficialResultResponse(raceId);
+    if (official) return official;
+  } catch (error) {
+    console.error("V37_RACE_DETAIL_DIRECT_JRA_FAILED", raceId, error);
   }
   return staticRaceDetail(raceId) ?? new Response("NOT_FOUND", { status: 404, headers: { "cache-control": "no-store" } });
 }
