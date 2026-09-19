@@ -145,8 +145,33 @@ function rewriteEmbeddedToday(html: string): string {
     .replace(/本日の集計（\d{1,2}\/\d{1,2}）/g, `本日の集計（${month}/${day}）`);
 }
 
+function embeddedTodayResultsHtml(): string {
+  const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+  const day = DAY_SNAPSHOT[today];
+  if (!day?.bets?.length) return "";
+  const courses = ["ライト", "スタンダード", "プレミアム"];
+  const rows = courses.map((course) => {
+    const bets = day.bets.filter((bet) => bet.course === course);
+    const raceIds = [...new Set(bets.map((bet) => bet.raceId))];
+    const settledIds = raceIds.filter((raceId) => {
+      const rowsForRace = bets.filter((bet) => bet.raceId === raceId);
+      return rowsForRace.length > 0 && rowsForRace.every((bet) => bet.settlementStatus === "settled");
+    });
+    const hitIds = settledIds.filter((raceId) => bets.some((bet) => bet.raceId === raceId && Number(bet.returnYen ?? 0) > 0));
+    const stake = bets.filter((bet) => settledIds.includes(bet.raceId)).reduce((sum, bet) => sum + Number(bet.stakeYen ?? 0), 0);
+    const returned = bets.filter((bet) => settledIds.includes(bet.raceId)).reduce((sum, bet) => sum + Number(bet.returnYen ?? 0), 0);
+    const roi = stake > 0 ? returned / stake * 100 : 0;
+    return '<div class="today-result-row"><b>' + esc(course) + '</b><span>' + settledIds.length + '/' + raceIds.length + 'R精算　的中' + hitIds.length + 'R</span><strong>' + roi.toFixed(1) + '%</strong></div>';
+  }).join("");
+  return '<section class="card today-results"><div class="section-title"><h2>今日の結果</h2><span class="muted">精算済み時点</span></div>' + rows + '</section>';
+}
+
 function embeddedNormalHome(): Response {
-  const html = rewriteEmbeddedToday(mergeRecentCalendar(NORMAL_HOME_SNAPSHOT, staticRecentCalendar()));
+  let html = rewriteEmbeddedToday(mergeRecentCalendar(NORMAL_HOME_SNAPSHOT, staticRecentCalendar()));
+  const todayResults = embeddedTodayResultsHtml();
+  if (todayResults && !html.includes("今日の結果")) {
+    html = html.replace('<div class="section-title"><h2>累計回収率</h2>', todayResults + '<div class="section-title"><h2>累計回収率</h2>');
+  }
   return new Response(html, {
     status: 200,
     headers: {
