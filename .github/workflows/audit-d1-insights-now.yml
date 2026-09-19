@@ -26,4 +26,4 @@ jobs:
       - run: npm ci --prefer-offline --no-audit --no-fund
       - name: Top D1 queries by rows read
         run: |
-          npx wrangler d1 insights race-tantei-phase0 --time-period 6h --sort-type sum --sort-by reads --sort-direction DESC --limit 30 --json | tee /tmp/d1-insights.json
+          npx wrangler d1 insights race-tantei-phase0 --time-period 4h --sort-type sum --sort-by reads --sort-direction DESC --limit 30 --json | tee /tmp/d1-insights.json
