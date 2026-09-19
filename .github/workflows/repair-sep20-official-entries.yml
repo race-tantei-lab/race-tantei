@@ -107,18 +107,24 @@ jobs:
           sqlite3 /tmp/proof.db < /tmp/races.sql
           sqlite3 /tmp/proof.db < /tmp/runners.sql
           sqlite3 -json /tmp/proof.db "
-            SELECT r.venue,COUNT(DISTINCT r.race_id) races,
-              SUM(CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END) entryUrls,
-              COUNT(DISTINCT CASE WHEN ru.race_id IS NOT NULL THEN r.race_id END) racesWithRunners,
-              MIN((SELECT COUNT(*) FROM rt_runners x WHERE x.race_id=r.race_id AND COALESCE(x.runner_status,'active')='active')) minActive
-            FROM rt_races r LEFT JOIN rt_runners ru ON ru.race_id=r.race_id
-            WHERE r.race_date='2026-09-20'
-            GROUP BY r.venue ORDER BY r.venue;" | tee /tmp/proof.json
+            WITH p AS (
+              SELECT r.race_id,r.venue,r.race_no,r.entry_url,r.start_time_utc,r.surface,r.distance_m,
+                (SELECT COUNT(*) FROM rt_runners x WHERE x.race_id=r.race_id AND COALESCE(x.runner_status,'active')='active') active
+              FROM rt_races r
+              WHERE r.race_date='2026-09-20'
+            )
+            SELECT venue,COUNT(*) races,
+              SUM(CASE WHEN LENGTH(TRIM(COALESCE(entry_url,'')))>0 THEN 1 ELSE 0 END) entryUrls,
+              SUM(CASE WHEN active>=3 THEN 1 ELSE 0 END) racesWithRunners,
+              SUM(CASE WHEN start_time_utc IS NOT NULL AND surface IS NOT NULL AND distance_m IS NOT NULL THEN 1 ELSE 0 END) metadataReady,
+              MIN(active) minActive
+            FROM p
+            GROUP BY venue ORDER BY venue;" | tee /tmp/proof.json
           node - <<'NODE'
           const fs=require('fs'); const a=JSON.parse(fs.readFileSync('/tmp/proof.json','utf8'));
           if(a.length!==2) throw new Error(JSON.stringify(a));
           for(const x of a){
-            if(Number(x.races)!==12 || Number(x.entryUrls)!==12 || Number(x.racesWithRunners)!==12 || Number(x.minActive)<3) throw new Error(JSON.stringify(a));
+            if(Number(x.races)!==12 || Number(x.entryUrls)!==12 || Number(x.racesWithRunners)!==12 || Number(x.metadataReady)!==12 || Number(x.minActive)<3) throw new Error(JSON.stringify(a));
           }
           console.log("SEP20_D1_READY_24_24",JSON.stringify(a));
           NODE
