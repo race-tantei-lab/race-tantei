@@ -210,6 +210,9 @@ def main() -> None:
     ):
         require_text(guard, needle, "persistent deadline guard")
     forbid_text(guard, "chooseCompletedProbabilityFallbackTickets", "deadline guard probability fallback")
+    live_entry = read("src/live-deadline-entry-v2.ts")
+    forbid_text(live_entry, "runUpcomingEntryDerivedRepair", "live/public entry-repair ownership")
+    forbid_text(live_entry, "upcoming-entry-derived-repair", "live/public entry-repair ownership")
 
     recovery = read("src/public-site-entry-recovery-20260906.ts")
     quota_recovery = read("src/public-site-entry-quota-recovery-20260912.ts")

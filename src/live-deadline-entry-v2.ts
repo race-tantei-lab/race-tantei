@@ -1,7 +1,6 @@
 import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";
 import { runCompletedWorkerDeadlineGuard } from "./v1/completed-worker-deadline-guard.js";
 import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";
-import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import {
   acquireLiveDeadlineLease,
   auditLiveDeadlineSla,
@@ -101,15 +100,9 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
     const selectionNow = new Date();
     let selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
     let selection: Record<string, unknown> = { status: "already_frozen" };
-    let entryRepair: Record<string, unknown> | null = null;
     if (!selectionReady) {
       selection = await freezeCompletedWorkerSelectionIfNeeded(env, selectionNow) as unknown as Record<string, unknown>;
       selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
-      if (!selectionReady && String(selection.status || "") === "waiting_complete_program") {
-        entryRepair = await runUpcomingEntryDerivedRepair(env, new Date()) as unknown as Record<string, unknown>;
-        selection = await freezeCompletedWorkerSelectionIfNeeded(env, new Date()) as unknown as Record<string, unknown>;
-        selectionReady = await hasSelection(env.DB, jstDate(new Date()));
-      }
     }
     if (!selectionReady) {
       const firstRace = await env.DB.prepare("SELECT MIN(start_time_utc) AS firstStart FROM rt_races WHERE race_date=? AND start_time_utc IS NOT NULL")
@@ -126,7 +119,7 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
         priorityGuardCheckedAt: iso(priorityGuardNow),
         priorityGuard: auditGuard(priorityGuard),
         selection,
-        entryRepair,
+        entryRepair: null,
         selectionCheckedAt: iso(selectionNow),
         remainingToFirstRaceMs,
         completedAt: iso(completed),
