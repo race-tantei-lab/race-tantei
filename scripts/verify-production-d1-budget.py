@@ -107,7 +107,12 @@ def main() -> None:
     require_text(recovery_source, 'import { runPublishedEntryMaintenance } from "./v1/published-entry-maintenance.js";', "public owns published entry maintenance")
     require_text(recovery_source, "await runPublishedEntryMaintenance(env, now)", "public owns published entry maintenance")
 
-    entry_main = read("src/published-entry-maintenance-entry.ts")
+    db_source = read("src/v1/db.ts")
+    require_text(db_source, "UPDATE rt_races", "entry URL persistence")
+    require_text(db_source, "SET entry_url=?,entry_updated_at=CURRENT_TIMESTAMP", "entry URL persistence")
+    require_text(db_source, "WHERE race_id=? AND TRIM(COALESCE(entry_url,''))<>TRIM(?)", "entry URL persistence")
+
+        entry_main = read("src/published-entry-maintenance-entry.ts")
     for needle in (
         'import { shouldRunOnJraRaceDay } from "./v1/race-day-gate.js";',
         "PUBLISHED_ENTRY_NON_RACE_DAY_SKIP",

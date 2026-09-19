@@ -293,6 +293,17 @@ export async function saveEntryBundle(db: D1Database, bundle: RaceBundle): Promi
       entry_updated_at=excluded.entry_updated_at, updated_at=CURRENT_TIMESTAMP
   `).bind(...raceValues(race), nowIso()).run();
 
+  // Keep the official entry URL independent from the guarded race-program
+  // metadata update. The production malformed-program trigger can intentionally
+  // ignore a metadata refresh, but that must never discard a valid official URL.
+  if (race.entryUrl) {
+    await db.prepare(`
+      UPDATE rt_races
+      SET entry_url=?,entry_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
+      WHERE race_id=? AND TRIM(COALESCE(entry_url,''))<>TRIM(?)
+    `).bind(race.entryUrl, race.raceId, race.entryUrl).run();
+  }
+
   const statements = bundle.runners.map((runner) => db.prepare(`
     INSERT INTO rt_runners (
       race_id, horse_no, frame_no, horse_name, sex_age, coat_color, horse_weight, weight_change,
