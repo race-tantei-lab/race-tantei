@@ -77,7 +77,7 @@ jobs:
                 if(b.race.raceDate!=="2026-09-20"||b.race.venue!==a.venue||Number(b.race.raceNo)!==n) throw new Error("ENTRY_ID_MISMATCH:"+canonical);
                 if(b.runners.length<3) throw new Error("RUNNERS_TOO_FEW:"+b.race.raceId+":"+b.runners.length);
                 const r=b.race;
-                sql.push(`UPDATE rt_races SET race_name=${q(r.raceName)},conditions=${q(r.conditions)},surface=${q(r.surface)},distance_m=${q(r.distanceM)},direction=${q(r.direction)},start_time_jst=${q(r.startTimeJst)},start_time_utc=${q(r.startTimeUtc)},weather=COALESCE(${q(r.weather)},weather),track_condition=COALESCE(${q(r.trackCondition)},track_condition),entry_url=${q(canonical)},result_url=${q(r.resultUrl)},status=CASE WHEN status='finished' THEN status ELSE ${q(r.status)} END,entry_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE race_id=${q(r.raceId)};`);
+                sql.push(`UPDATE rt_races SET entry_url=${q(canonical)},entry_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE race_id=${q(r.raceId)};`);
                 sql.push(`DELETE FROM rt_runners WHERE race_id=${q(r.raceId)};`);
                 for(const x of b.runners){
                   sql.push(`INSERT INTO rt_runners(race_id,horse_no,frame_no,horse_name,sex_age,coat_color,horse_weight,weight_change,jockey,assigned_weight,trainer,stable,win_odds,popularity,runner_status,updated_at) VALUES(${q(r.raceId)},${q(x.horseNo)},${q(x.frameNo)},${q(x.horseName)},${q(x.sexAge)},${q(x.coatColor)},${q(x.horseWeight)},${q(x.weightChange)},${q(x.jockey)},${q(x.assignedWeight)},${q(x.trainer)},${q(x.stable)},${q(x.winOdds)},${q(x.popularity)},${q(x.runnerStatus)},CURRENT_TIMESTAMP);`);
