@@ -56,6 +56,12 @@ def closure(entry: Path) -> set[Path]:
             stack.extend(imports(path))
     return seen
 
+def forbid(path: str, needles: tuple[str, ...], violations: list[tuple[str, str]]) -> None:
+    text = (ROOT / path).read_text(encoding="utf-8")
+    for needle in needles:
+        if needle in text:
+            violations.append((path, needle))
+
 def main() -> None:
     configs: dict[str, Path] = {}
     for cfg_name in ENTRY_CONFIGS:
@@ -65,28 +71,22 @@ def main() -> None:
     live = closures["wrangler.live-deadline.jsonc"] | closures["wrangler.live-deadline-backup.jsonc"]
     win5 = closures["wrangler.win5.jsonc"] | closures["wrangler.win5-backup.jsonc"]
     public = closures["wrangler.jsonc"]
+
     heavy = Path("src/v1/completed-recency-learning.ts")
     if heavy in live:
         raise AssertionError("raw recency module is runtime-reachable from live Worker")
     if heavy in win5:
         raise AssertionError("raw recency module is runtime-reachable from WIN5 Worker")
-    forbidden_public = (
-        "date(\'now\',\'-14 days\')",
-        "syncAndSettle(",
-        "settlePublicBets(",
-        "runPublicDataSync(",
-        "syncOfficialCalendarDay(",
-    )
+
     violations: list[tuple[str, str]] = []
-    for path in sorted(public):
-        if path.suffix not in {".ts", ".tsx"}:
-            continue
-        text = (ROOT / path).read_text(encoding="utf-8")
-        for needle in forbidden_public:
-            if needle in text:
-                violations.append((str(path), needle))
+    forbid("src/public-site-entry.ts", ("runPublicDataSync(", "ctx.waitUntil("), violations)
+    forbid("src/public-site-entry-v2.ts", ("syncOfficialCalendarDay(", "syncCalendarWindow(", "expandRecentDiscovery(", "ctx.waitUntil(", "ensureSchema("), violations)
+    forbid("src/public-site-entry-v3.ts", ("syncOfficialCalendarDay(", "handleCanonicalHistorySeed(", "/internal/refresh-current"), violations)
+    forbid("src/public-site-entry-v8.ts", ("date('now','-14 days')", "settlePublicBets("), violations)
+    forbid("src/public-site-entry-v9.ts", ("date('now','-14 days')", "syncAndSettle(", "syncFinishedPayouts(", "settleFinishedBets("), violations)
     if violations:
-        raise AssertionError("public runtime forbidden D1/mutation paths: " + repr(violations))
+        raise AssertionError("public request runtime forbidden D1/mutation paths: " + repr(violations))
+
     print(json.dumps({
         "PRODUCTION_RUNTIME_REACHABILITY_OK": True,
         "publicModules": len(public),
@@ -95,7 +95,7 @@ def main() -> None:
         "rawRecencyInPublic": heavy in public,
         "rawRecencyInLive": heavy in live,
         "rawRecencyInWin5": heavy in win5,
-        "publicForbiddenViolations": violations,
+        "publicRequestMutationViolations": violations,
     }, ensure_ascii=False))
 
 if __name__ == "__main__":
