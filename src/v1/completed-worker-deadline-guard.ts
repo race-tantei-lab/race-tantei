@@ -11,7 +11,9 @@ const AUDIT_PREFIX = "worker_deadline_guard:";
 export const DEADLINE_GUARD_MS = 15 * 60 * 1000;
 export const DEADLINE_GUARD_ARM_MS = 25 * 60 * 1000;
 export const FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;
-const MAX_OFFICIAL_PREVIEW_AGE_MS = 60 * 60 * 1000;
+// A valid JRA-official preview created anywhere in the T-90 preview window must
+// remain eligible as the last-good insurance through the T-15 hard deadline.
+const MAX_OFFICIAL_PREVIEW_AGE_MS = 90 * 60 * 1000;
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
 
 type SelectionPayload = { sourceModel?: string; resultDataUsedForTargetDay?: boolean; selected?: Array<{ raceId?: string; venue?: string; raceNo?: number }> };
@@ -69,9 +71,9 @@ function errorText(error: unknown): string {
   return error instanceof Error ? `${error.name}:${error.message}` : String(error);
 }
 
-// The final must already exist by T-15. The guard arms from T-20 through
+// The final must already exist by T-15. The persistent guard arms from T-25
 // the exact T-15 boundary so normal per-minute cron jitter still has margin.
-// Once less than 15 minutes remain, creating a new final is forbidden.
+// Once less than 15 minutes remain, creating a new final is forbidden and the\n// missing final remains a deadline miss even after the race has started.
 export function shouldDeadlineGuardLock(remainingMs: number): boolean {
   return Number.isFinite(remainingMs)
     && remainingMs >= DEADLINE_GUARD_MS
@@ -80,8 +82,7 @@ export function shouldDeadlineGuardLock(remainingMs: number): boolean {
 
 export function isDeadlineGuardMissed(remainingMs: number): boolean {
   return Number.isFinite(remainingMs)
-    && remainingMs > 0
-    && remainingMs < FINAL_REFLECTION_DEADLINE_MS;
+    && remainingMs < DEADLINE_GUARD_MS;
 }
 
 async function loadSelection(db: D1Database, date: string): Promise<string[]> {

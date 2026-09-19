@@ -11,7 +11,7 @@ import {
 } from "./v1/live-preview-safety.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "live-deadline-v10-free-tier-no-history-20260919";
+const DRIVER_VERSION = "live-deadline-v11-persistent-miss-lastgood-20260919";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
 const SELECTION_PREFIX = "final_daily_selection:";

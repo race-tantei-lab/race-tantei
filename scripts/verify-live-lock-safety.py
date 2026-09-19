@@ -201,13 +201,16 @@ def main() -> None:
         "DEADLINE_GUARD_MS = 15 * 60 * 1000",
         "DEADLINE_GUARD_ARM_MS = 25 * 60 * 1000",
         "FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000",
+        "MAX_OFFICIAL_PREVIEW_AGE_MS = 90 * 60 * 1000",
         "isDeadlineGuardMissed",
+        "&& remainingMs < DEADLINE_GUARD_MS;",
         "DEADLINE_GUARD_T15_MISSED",
         "JRA_OFFICIAL_ODDS_PARSER_VERSION",
         'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
     ):
         require_text(guard, needle, "persistent deadline guard")
     forbid_text(guard, "chooseCompletedProbabilityFallbackTickets", "deadline guard probability fallback")
+    forbid_text(guard, "&& remainingMs > 0", "deadline guard post-start miss persistence")
 
     migration_sql = read("scripts/install-race-day-runtime-guards.sql")
     for needle in (
