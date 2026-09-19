@@ -1,9 +1,5 @@
 name: Audit non-race-day runtime 2026-09-07
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/_audit-non-race-day-runtime-20260907.yml"
   workflow_dispatch:
 
 jobs:

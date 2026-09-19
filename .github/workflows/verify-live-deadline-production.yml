@@ -2,10 +2,6 @@ name: Verify live deadline production readiness
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 22 * * *"
-    - cron: "30 23 * * *"
-    - cron: "30 0 * * *"
 
 permissions:
   contents: read

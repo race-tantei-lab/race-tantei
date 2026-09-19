@@ -13,7 +13,6 @@ WF = ROOT / ".github" / "workflows"
 ALLOW_AUTOMATIC_D1 = {
     "deploy.yml",
     "deploy-live-deadline.yml",
-    "verify-live-deadline-production.yml",
     "verify-upcoming-production-program.yml",
     "race-day-bootstrap.yml",
     "continuous-final-rule-learning.yml",  # weekly Tuesday night only

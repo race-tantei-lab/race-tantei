@@ -1,10 +1,6 @@
 name: Audit D1 insights now
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/audit-d1-insights-now.yml"
   workflow_dispatch:
 
 permissions:

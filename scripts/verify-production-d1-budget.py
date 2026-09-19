@@ -93,6 +93,29 @@ def main() -> None:
         "entry maintenance must gate before first D1 maintenance call",
     )
 
+    # The race-day quota may be touched automatically only by bootstrap, Thu/Fri
+    # upcoming-program preflight, and Tuesday-night learning. Historical audits,
+    # ad-hoc diagnostics, and heavy selection generation are manual-only.
+    auto_d1 = {
+        "race-day-bootstrap.yml",
+        "verify-upcoming-production-program.yml",
+        "continuous-final-rule-learning.yml",
+    }
+    d1_markers = (
+        "CLOUDFLARE_D1_DATABASE_ID",
+        "wrangler d1 execute",
+        "wrangler d1 insights",
+        "race-tantei-phase0 --remote",
+    )
+    for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+        text = path.read_text(encoding="utf-8")
+        block_match = re.search(r"(?ms)^on:\s*\n(?P<body>(?:^[ \t]+.*\n?)*)", text)
+        block = block_match.group("body") if block_match else ""
+        automatic = bool(re.search(r"(?m)^\s{2}(?:push|schedule):", block))
+        touches_d1 = any(marker.lower() in text.lower() for marker in d1_markers)
+        if automatic and touches_d1 and path.name not in auto_d1:
+            raise AssertionError(f"automatic production D1 workflow forbidden: {path.name}")
+
     # Research/training workflows that touch production D1 cannot auto-run from
     # source pushes. Continuous learning is permitted only on Tuesday JST.
     heavy_markers = (

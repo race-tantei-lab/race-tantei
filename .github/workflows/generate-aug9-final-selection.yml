@@ -2,11 +2,6 @@ name: Generate August 9 final five-race selection
 run-name: Generate Aug 9 five-race selection · ${{ github.sha }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/generate-final-preday-selection.py'
-      - '.github/workflows/generate-aug9-final-selection.yml'
   workflow_dispatch:
 
 permissions:
