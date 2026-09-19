@@ -1,0 +1,141 @@
+name: Diagnose Sep 19 production state
+on:
+  push:
+    branches: ["ops/diag-20260919"]
+    paths: [".github/workflows/diag-production-20260919.yml"]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Minimal production D1 probe
+        shell: bash
+        run: |
+          set +e
+          echo "=== D1_SELECTION ==="
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT state_key,state_value,updated_at FROM rt_system_state WHERE state_key='final_daily_selection:2026-09-19' LIMIT 1"
+          echo "D1_SELECTION_RC=$?"
+          echo "=== D1_TODAY_BETS ==="
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "WITH s AS (
+               SELECT json_extract(j.value,'$.raceId') AS race_id
+               FROM rt_system_state x, json_each(json_extract(x.state_value,'$.selected')) j
+               WHERE x.state_key='final_daily_selection:2026-09-19'
+             )
+             SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.start_time_utc AS startTimeUtc,
+                    COUNT(b.id) AS betRows,
+                    SUM(CASE WHEN b.source_prediction_id=-2 THEN 1 ELSE 0 END) AS finalRows,
+                    SUM(CASE WHEN b.course='ライト' THEN 1 ELSE 0 END) AS lightRows,
+                    SUM(CASE WHEN b.course='スタンダード' THEN 1 ELSE 0 END) AS standardRows,
+                    SUM(CASE WHEN b.course='プレミアム' THEN 1 ELSE 0 END) AS premiumRows,
+                    MIN(b.locked_at) AS firstLockedAt,MAX(b.locked_at) AS lastLockedAt,
+                    SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END) AS settledRows,
+                    SUM(CASE WHEN b.course='ライト' THEN b.stake_yen ELSE 0 END) AS lightStake,
+                    SUM(CASE WHEN b.course='スタンダード' THEN b.stake_yen ELSE 0 END) AS standardStake,
+                    SUM(CASE WHEN b.course='プレミアム' THEN b.stake_yen ELSE 0 END) AS premiumStake,
+                    SUM(CASE WHEN b.course='ライト' THEN COALESCE(b.return_yen,0) ELSE 0 END) AS lightReturn
+             FROM s JOIN rt_races r ON r.race_id=s.race_id
+             LEFT JOIN rt_public_bets b ON b.race_id=s.race_id
+             GROUP BY r.race_id,r.venue,r.race_no,r.start_time_utc
+             ORDER BY r.start_time_utc,r.race_id"
+          echo "D1_TODAY_BETS_RC=$?"
+          echo "=== D1_TODAY_FINAL_STATE ==="
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "WITH s AS (
+               SELECT json_extract(j.value,'$.raceId') AS race_id
+               FROM rt_system_state x, json_each(json_extract(x.state_value,'$.selected')) j
+               WHERE x.state_key='final_daily_selection:2026-09-19'
+             )
+             SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.start_time_utc AS startTimeUtc,
+                    json_extract(f.state_value,'$.status') AS finalStatus,
+                    json_extract(f.state_value,'$.lockedAt') AS lockedAt,
+                    json_extract(f.state_value,'$.generationStartedAt') AS generationStartedAt,
+                    json_extract(f.state_value,'$.oddsFetchedAt') AS oddsFetchedAt,
+                    json_extract(f.state_value,'$.oddsSource') AS oddsSource,
+                    json_extract(f.state_value,'$.oddsParserVersion') AS oddsParserVersion,
+                    json_extract(f.state_value,'$.oddsSnapshotSha256') AS oddsSha,
+                    json_extract(f.state_value,'$.finalizedFrom') AS finalizedFrom,
+                    unixepoch(r.start_time_utc)-unixepoch(json_extract(f.state_value,'$.lockedAt')) AS lockLeadSec,
+                    unixepoch(r.start_time_utc)-unixepoch(json_extract(f.state_value,'$.generationStartedAt')) AS generationLeadSec
+             FROM s JOIN rt_races r ON r.race_id=s.race_id
+             LEFT JOIN rt_system_state f ON f.state_key='worker_live_final:'||s.race_id
+             ORDER BY r.start_time_utc,r.race_id"
+          echo "D1_TODAY_FINAL_STATE_RC=$?"
+          echo "=== D1_HEARTBEAT ==="
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT state_key,state_value,updated_at,unixepoch('now')-unixepoch(updated_at) AS ageSeconds
+             FROM rt_system_state
+             WHERE state_key IN ('live_deadline_primary_heartbeat:v1','worker_live_lock:2026-09-19','worker_deadline_guard:2026-09-19')
+             ORDER BY state_key"
+          echo "D1_HEARTBEAT_RC=$?"
+          echo "=== D1_0920_READY ==="
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.entry_url AS entryUrl,
+                    r.start_time_utc AS startTimeUtc,r.surface,r.distance_m AS distanceM,
+                    SUM(CASE WHEN ru.race_id IS NOT NULL AND COALESCE(ru.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners
+             FROM rt_races r
+             LEFT JOIN rt_runners ru ON ru.race_id=r.race_id
+             WHERE r.race_date='2026-09-20'
+             GROUP BY r.race_id,r.venue,r.race_no,r.entry_url,r.start_time_utc,r.surface,r.distance_m
+             ORDER BY r.venue,r.race_no"
+          echo "D1_0920_READY_RC=$?"
+          exit 0
+      - name: D1 read insights since shortly after reset
+        shell: bash
+        run: |
+          set +e
+          echo "=== D1_INSIGHTS_5H ==="
+          npx wrangler d1 insights race-tantei-phase0 --time-period 5h --sort-type sum --sort-by reads --sort-direction DESC --limit 100 --json
+          echo "D1_INSIGHTS_RC=$?"
+          exit 0
+      - name: Worker health cron and public APIs
+        shell: bash
+        run: |
+          set +e
+          echo "=== PRIMARY_HEALTH ==="
+          curl --max-time 20 -sS -D - https://race-tantei-live-deadline.race-tantei.workers.dev/health
+          echo
+          echo "=== BACKUP_HEALTH ==="
+          curl --max-time 20 -sS -D - https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health
+          echo
+          for spec in "race-tantei-phase0" "race-tantei-live-deadline" "race-tantei-live-deadline-backup"; do
+            echo "=== CRON $spec ==="
+            curl --max-time 20 -sS "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/$spec/schedules" -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+            echo
+          done
+          echo "=== PUBLIC_DAY_0919 ==="
+          curl --max-time 30 -sS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-09-19"
+          echo
+          echo "=== PUBLIC_DAY_0920 ==="
+          curl --max-time 30 -sS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-09-20"
+          echo
+          echo "=== DAILY_PERF_CURRENT ==="
+          curl --max-time 30 -sS -D - "https://race-tantei-phase0.race-tantei.workers.dev/api/public/daily-performance?date=2026-09-19"
+          echo
+          echo "=== DAILY_PERF_0905 ==="
+          curl --max-time 30 -sS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/daily-performance?date=2026-09-05"
+          echo
+          echo "=== DAILY_PERF_0906 ==="
+          curl --max-time 30 -sS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/daily-performance?date=2026-09-06"
+          echo
+          echo "=== DAILY_PERF_0912 ==="
+          curl --max-time 30 -sS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/daily-performance?date=2026-09-12"
+          echo
+          echo "=== DAILY_PERF_0913 ==="
+          curl --max-time 30 -sS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/daily-performance?date=2026-09-13"
+          echo
+          echo "=== HOME_HISTORY_MARKERS ==="
+          curl --max-time 30 -sS https://race-tantei-phase0.race-tantei.workers.dev/ | grep -Eo '2026-09-(05|06|12|13|15|19)' | sort -u
+          exit 0
