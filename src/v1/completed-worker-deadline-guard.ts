@@ -73,7 +73,8 @@ function errorText(error: unknown): string {
 
 // The final must already exist by T-15. The persistent guard arms from T-25
 // the exact T-15 boundary so normal per-minute cron jitter still has margin.
-// Once less than 15 minutes remain, creating a new final is forbidden and the\n// missing final remains a deadline miss even after the race has started.
+// Once less than 15 minutes remain, creating a new final is forbidden and the
+// missing final remains a deadline miss even after the race has started.
 export function shouldDeadlineGuardLock(remainingMs: number): boolean {
   return Number.isFinite(remainingMs)
     && remainingMs >= DEADLINE_GUARD_MS
