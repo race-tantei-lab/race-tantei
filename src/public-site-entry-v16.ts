@@ -1,5 +1,7 @@
 import publicSite from "./public-site-entry-v15.js";
-import { TEN_YEAR_HISTORY_END, TEN_YEAR_HISTORY_START, tenYearCalendar, tenYearRaceMap, tenYearRacesOnDate, type TenYearRace } from "./v1/ten-year-history.js";
+import { TEN_YEAR_HISTORY_START, TEN_YEAR_HISTORY_END, tenYearCalendar, tenYearRaceMap, tenYearRacesOnDate, type TenYearRace } from "./v1/ten-year-history.js";
+import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
+import { readPublicCalendarCache } from "./v1/public-calendar-cache.js";
 import { shell } from "./v1/public-ui.js";
 import { escapeHtml, formatYen } from "./v1/utils.js";
 import type { Env } from "./v1/types.js";
@@ -18,11 +20,26 @@ function json(value:unknown,status=200):Response{
 
 function inArchive(date:string):boolean{return date>=TEN_YEAR_HISTORY_START&&date<=TEN_YEAR_HISTORY_END;}
 
+function embeddedRecentCalendar():CalendarRow[]{
+  const days=RECENT_PUBLIC_DAY_SNAPSHOT as unknown as Record<string,{races?:Array<{venue?:string}>}>;
+  const rows:CalendarRow[]=[];
+  for(const [raceDate,day] of Object.entries(days)){
+    if(raceDate<=TEN_YEAR_HISTORY_END||!Array.isArray(day?.races))continue;
+    const counts=new Map<string,number>();
+    for(const race of day.races){const venue=String(race?.venue??"");if(venue)counts.set(venue,(counts.get(venue)??0)+1);}
+    for(const [venue,raceCount] of counts)rows.push({raceDate,venue,raceCount});
+  }
+  return rows;
+}
+
 async function liveCalendar(db:D1Database):Promise<CalendarRow[]>{
+  const fallback=embeddedRecentCalendar();
   try{
-    const rows=await db.prepare(`SELECT race_date AS raceDate,venue,COUNT(*) AS raceCount FROM rt_races WHERE race_date>? GROUP BY race_date,venue ORDER BY race_date,venue`).bind(TEN_YEAR_HISTORY_END).all<CalendarRow>();
-    return rows.results.map((r)=>({...r,raceCount:Number(r.raceCount)}));
-  }catch{return [];}
+    const cached=await readPublicCalendarCache(db);
+    const byKey=new Map<string,CalendarRow>();
+    for(const row of [...fallback,...cached])byKey.set(`${row.raceDate}\u0001${row.venue}`,{...row,raceCount:Number(row.raceCount)});
+    return [...byKey.values()].sort((a,b)=>a.raceDate.localeCompare(b.raceDate)||a.venue.localeCompare(b.venue));
+  }catch{return fallback;}
 }
 
 async function fullCalendar(db:D1Database):Promise<CalendarRow[]>{

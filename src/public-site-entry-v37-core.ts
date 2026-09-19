@@ -1,9 +1,6 @@
 import publicSite from "./public-site-entry-v34.js";
 import { summarizeTodayPerformance, type TodayPerformanceBetRow } from "./v1/today-performance.js";
 import { hasPostAug9SnapshotDate, postAug9DayResponse, postAug9PerformanceResponse } from "./v1/post-aug9-public-fallback.js";
-import { runUpcomingCalendarRepair } from "./v1/upcoming-calendar-repair.js";
-import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.js";
-import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v37-resilient-home-20260905";
@@ -228,15 +225,6 @@ async function canonicalHome(response: Response, db: D1Database, today: string):
   html = html.split(fromMetric).join(toMetric);
   html = html.split("3コース合計（比較用）・").join("ライト基準・");
 
-  try {
-    const recent = await recent30(db, today);
-    if (recent?.roiPct != null) {
-      const replacement = `<div class="recent-roi-strip"><span>直近30日（ライト・精算済）</span><strong>${recent.roiPct.toFixed(1)}%</strong><small>${recent.races}R</small></div>`;
-      html = html.replace(/<div class="recent-roi-strip">[\s\S]*?<\/div>/, replacement);
-    }
-  } catch (error) {
-    console.error("HOME_RECENT30_SKIPPED", error);
-  }
 
   html = html.replace("</head>", `${homeStyle()}</head>`);
   const headers = new Headers(response.headers);
@@ -327,20 +315,6 @@ function serviceUnavailableHome(): Response {
   });
 }
 
-async function ensureRaceDayIndexes(db: D1Database): Promise<void> {
-  await db.batch([
-    db.prepare("CREATE INDEX IF NOT EXISTS rt_idx_races_date ON rt_races(race_date DESC, venue, race_no)"),
-    db.prepare("CREATE INDEX IF NOT EXISTS rt_idx_public_bets_race ON rt_public_bets(race_id, id)"),
-    db.prepare("CREATE INDEX IF NOT EXISTS rt_idx_public_bets_settlement ON rt_public_bets(settlement_status, course, race_id)"),
-  ]);
-}
-
-async function runPublicMaintenance(env: Env, now: Date): Promise<void> {
-  await runUpcomingCalendarRepair(env, now);
-  await runUpcomingEntryWorkerRepair(env, now);
-  await runUpcomingEntryDerivedRepair(env, now);
-}
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -393,16 +367,7 @@ export default {
     }
     return response;
   },
-  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
-    try {
-      await ensureRaceDayIndexes(env.DB);
-    } catch (error) {
-      console.error("PUBLIC_RACE_DAY_INDEX_REPAIR_FAILED", error);
-    }
-    try {
-      await runPublicMaintenance(env, new Date(controller.scheduledTime || Date.now()));
-    } catch (error) {
-      console.error("PUBLIC_MAINTENANCE_FAILED", error);
-    }
+  async scheduled(_controller: ScheduledController, _env: Env): Promise<void> {
+    // Scheduling is owned exclusively by the top-level bounded recovery Worker.
   },
 } satisfies ExportedHandler<Env>;

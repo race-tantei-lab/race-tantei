@@ -6,6 +6,7 @@ import { runUpcomingCalendarRepair } from "./v1/upcoming-calendar-repair.js";
 import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.js";
 import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import { runPublishedEntryMaintenance } from "./v1/published-entry-maintenance.js";
+import { refreshPublicCalendarCache } from "./v1/public-calendar-cache.js";
 import type { Env, RaceBundle } from "./v1/types.js";
 
 const RECOVERY_PATH = "/_ops/entry-seed-sync-20260906-7f4c9d2a";
@@ -93,6 +94,7 @@ async function runBoundedPublicMaintenance(env: Env, now: Date): Promise<void> {
   try { await runUpcomingEntryWorkerRepair(env, now); } catch (error) { errors.push(`entry:${String(error)}`); }
   try { await runUpcomingEntryDerivedRepair(env, now); } catch (error) { errors.push(`derived:${String(error)}`); }
   try { await runPublishedEntryMaintenance(env, now); } catch (error) { errors.push(`published:${String(error)}`); }
+  try { await refreshPublicCalendarCache(env, now); } catch (error) { errors.push(`calendar-cache:${String(error)}`); }
   if (errors.length) console.error("PUBLIC_MAINTENANCE_PARTIAL", JSON.stringify(errors));
 }
 

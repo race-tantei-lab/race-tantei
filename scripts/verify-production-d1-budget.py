@@ -42,6 +42,22 @@ def main() -> None:
     require(guardian["triggers"]["crons"] == [], "obsolete guardian primary cron must stay disabled")
     require(guardian_backup["triggers"]["crons"] == [], "obsolete guardian backup cron must stay disabled")
 
+    public_v13 = read("src/public-site-entry-v13.ts")
+    for forbidden in ("runPublicDataSync", "syncOfficialCalendarDay", "backfillRaceNamesForDate", "backfillHistoricalRaceNames"):
+        forbid_text(public_v13, forbidden, "public-v13 GET purity")
+
+    public_v16 = read("src/public-site-entry-v16.ts")
+    forbid_text(public_v16, "WHERE race_date>?", "public-v16 growing calendar GET")
+    require_text(public_v16, "readPublicCalendarCache(db)", "public-v16 cached calendar GET")
+    require_text(public_v16, "embeddedRecentCalendar()", "public-v16 quota-lock fallback")
+
+    public_v37 = read("src/public-site-entry-v37-core.ts")
+    for forbidden in ("CREATE INDEX IF NOT EXISTS", "await recent30(db, today)"):
+        forbid_text(public_v37, forbidden, "public-v37 GET/runtime DDL")
+    calendar_cache = read("src/v1/public-calendar-cache.ts")
+    require_text(calendar_cache, "REFRESH_MS = 6 * 60 * 60 * 1000", "public calendar cache")
+    require_text(calendar_cache, "state_key=?", "public calendar cache one-row read")
+
     # Browser GETs are display-only. The old v8/v9 mutation paths caused D1 use
     # to scale with page traffic and repeatedly scanned 14 days of bets/results.
     public_v8 = read("src/public-site-entry-v8.ts")
