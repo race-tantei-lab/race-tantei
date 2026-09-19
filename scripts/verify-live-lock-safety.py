@@ -190,6 +190,8 @@ def main() -> None:
         "WORKER_GENERATION_CROSSED_T10",
         "JRA_OFFICIAL_ODDS_PARSER_VERSION",
         'new Set(["jra-fast-official", "jra-crawl-official"])',
+        "{ includeHistoricalDelta: false }",
+        "LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY",
     ):
         require_text(lock, needle, "isolated live lock")
     forbid_text(lock, "chooseCompletedProbabilityFallbackTickets", "probability fallback")
