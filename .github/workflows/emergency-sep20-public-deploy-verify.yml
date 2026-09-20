@@ -1,0 +1,187 @@
+name: Emergency Sep20 Public Deploy Verify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/emergency-sep20-public-deploy-verify.yml"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  deploy-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Deploy public Worker
+        run: npx wrangler deploy --config wrangler.jsonc | tee /tmp/public-deploy.txt
+
+      - name: Verify Sep20 production
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATE=2026-09-20
+          BASE=https://race-tantei-phase0.race-tantei.workers.dev
+          mkdir -p ops
+          d1() { npx wrangler d1 execute race-tantei-phase0 --remote --json --command "$1"; }
+
+          # Wait for first selected race final only until its hard T-15 boundary.
+          # If already past T-15, this loop exits immediately and validation below fails if incomplete.
+          for i in $(seq 1 60); do
+            first=$(d1 "SELECT r.start_time_utc AS startTimeUtc,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id='2026-09-20-hanshin-01') AS finalRows,ROUND((julianday(r.start_time_utc)-julianday('now'))*1440.0,3) AS remainingMin FROM rt_races r WHERE r.race_id='2026-09-20-hanshin-01' LIMIT 1")
+            echo "$first" > /tmp/first-latest.json
+            decision=$(FIRST="$first" node - <<'NODE'
+          const p=JSON.parse(process.env.FIRST||'[]'); const r=p?.[0]?.results?.[0]||{};
+          const rows=Number(r.finalRows||0), rem=Number(r.remainingMin);
+          if(rows===6) console.log('ready');
+          else if(Number.isFinite(rem) && rem<=15) console.log('deadline');
+          else console.log('wait');
+          NODE
+            )
+            if [ "$decision" = ready ] || [ "$decision" = deadline ]; then break; fi
+            sleep 10
+          done
+
+          d1 "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('final_daily_selection:$DATE','live_deadline_driver:$DATE','live_deadline_priority_guard_success:$DATE','worker_deadline_guard:$DATE','worker_live_lock:$DATE') OR state_key LIKE 'worker_live_preview:2026-09-20-%' OR state_key LIKE 'worker_live_final:2026-09-20-%' ORDER BY state_key" > /tmp/system.json
+
+          d1 "WITH s AS (SELECT state_value FROM rt_system_state WHERE state_key='final_daily_selection:$DATE' LIMIT 1), selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId,json_extract(j.value,'$.venue') AS venue,json_extract(j.value,'$.raceNo') AS raceNo FROM s,json_each(json_extract(s.state_value,'$.selected')) j) SELECT x.venue,x.raceNo,x.raceId,r.start_time_utc AS startTimeUtc,ROUND((julianday(r.start_time_utc)-julianday('now'))*1440.0,3) AS remainingMin,(SELECT COUNT(*) FROM rt_runners rr WHERE rr.race_id=x.raceId AND COALESCE(rr.runner_status,'active')='active') AS activeRunners,(SELECT COUNT(*) FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||x.raceId) AS previewState,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=x.raceId) AS finalRows,(SELECT MIN(b.locked_at) FROM rt_public_bets b WHERE b.race_id=x.raceId) AS lockedAt,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=x.raceId AND b.source_prediction_id=-2) AS sourceMinus2 FROM selected x JOIN rt_races r ON r.race_id=x.raceId ORDER BY r.start_time_utc" > /tmp/selected.json
+
+          d1 "SELECT race_id AS raceId,course,COUNT(*) AS rows,COUNT(DISTINCT bet_type) AS distinctBetTypes,MIN(source_prediction_id) AS minSource,MAX(source_prediction_id) AS maxSource,MIN(locked_at) AS lockedAt,MAX(locked_at) AS lockedAtMax FROM rt_public_bets WHERE race_id IN (SELECT json_extract(j.value,'$.raceId') FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j WHERE s.state_key='final_daily_selection:$DATE') GROUP BY race_id,course ORDER BY race_id,course" > /tmp/course-final.json
+
+          curl -fsS "$BASE/api/public/day?date=$DATE&_rt=$(date +%s)" > /tmp/day.json
+          curl -fsS "$BASE/api/public/today-summary?_rt=$(date +%s)" > /tmp/summary.json
+          curl -fsS "$BASE/?_rt=$(date +%s)" > /tmp/home.html
+          curl -fsSI "$BASE/?_rt=$(date +%s)" > /tmp/home.headers
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/race-day-bootstrap.yml/runs?per_page=12" > /tmp/bootstrap-runs.json
+
+          for worker in race-tantei-phase0 race-tantei-live-deadline race-tantei-live-deadline-backup race-tantei-win5 race-tantei-win5-backup; do
+            curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker/schedules" > "/tmp/cron-$worker.json"
+          done
+          for pair in "livePrimary|https://race-tantei-live-deadline.race-tantei.workers.dev/health" "liveBackup|https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health" "win5Primary|https://race-tantei-win5.race-tantei.workers.dev/health" "win5Backup|https://race-tantei-win5-backup.race-tantei.workers.dev/health"; do
+            n=${pair%%|*}; u=${pair#*|}; curl -fsS "$u" > "/tmp/$n.json"
+          done
+
+          python3 - <<'PY'
+          import json, pathlib, re
+          def load(p, default=None):
+              try:return json.load(open(p,encoding='utf-8'))
+              except:return default
+          def rows(p):
+              raw=load(p,[])
+              out=[]
+              for b in raw if isinstance(raw,list) else [raw]:
+                  if isinstance(b,dict): out += b.get('results') or []
+              return out
+          selected=rows('/tmp/selected.json')
+          courses=rows('/tmp/course-final.json')
+          system=rows('/tmp/system.json')
+          day=load('/tmp/day.json',{})
+          summary=load('/tmp/summary.json',{})
+          home=pathlib.Path('/tmp/home.html').read_text(errors='replace')
+          headers=pathlib.Path('/tmp/home.headers').read_text(errors='replace')
+          selection_row=next((x for x in system if x.get('state_key')=='final_daily_selection:2026-09-20'),None)
+          selection=json.loads(selection_row['state_value']) if selection_row else None
+          boot=load('/tmp/bootstrap-runs.json',{})
+          boot_rows=[{
+              'id':r.get('id'),'event':r.get('event'),'status':r.get('status'),'conclusion':r.get('conclusion'),
+              'created_at':r.get('created_at'),'updated_at':r.get('updated_at'),'html_url':r.get('html_url'),
+              'head_sha':r.get('head_sha')
+          } for r in boot.get('workflow_runs',[])]
+          crons={n:load('/tmp/cron-'+n+'.json',{}) for n in ['race-tantei-phase0','race-tantei-live-deadline','race-tantei-live-deadline-backup','race-tantei-win5','race-tantei-win5-backup']}
+          health={n:load('/tmp/'+n+'.json',{}) for n in ['livePrimary','liveBackup','win5Primary','win5Backup']}
+          report={
+            'selection':selection,'selected':selected,'courseFinals':courses,
+            'systemState':system,'publicDay':day,'todaySummary':summary,
+            'home':{
+              'oldFalseEmptyPhrasePresent':'公開買い目はありません' in home,
+              'selectedTargetMessageSourcePresent':'買い目対象として選定済みです' in home,
+              'hasSep20': '2026-09-20' in home,
+              'headers':headers[:3000]
+            },
+            'bootstrapRuns':boot_rows,'crons':crons,'health':health,
+            'deployLog':pathlib.Path('/tmp/public-deploy.txt').read_text(errors='replace')[-5000:]
+          }
+          pathlib.Path('ops/sep20-public-deploy-verify.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+
+          # Hard validations.
+          if not selection or len(selection.get('selected') or []) != 10:
+              raise SystemExit('SELECTION_NOT_10')
+          svc=selection.get('selectedVenueCounts') or {}
+          if svc.get('中山') != 5 or svc.get('阪神') != 5:
+              raise SystemExit('SELECTION_VENUE_COUNTS_BAD:'+json.dumps(svc,ensure_ascii=False))
+          races=day.get('races') or []
+          if len(races) != 24:
+              raise SystemExit('PUBLIC_DAY_NOT_24')
+          targets=[r for r in races if (r.get('publicState') or {}).get('code') not in ('skip',)]
+          target_ids={r['raceId'] for r in races if r['raceId'] in {x['raceId'] for x in selection['selected']}}
+          if len(target_ids)!=10:
+              raise SystemExit('PUBLIC_SELECTED_NOT_10')
+          if '公開買い目はありません' in home:
+              raise SystemExit('HOME_STILL_HAS_FALSE_EMPTY_MESSAGE')
+          if '買い目対象として選定済みです' not in home:
+              raise SystemExit('HOME_TARGET_MESSAGE_PATCH_MISSING')
+
+          # Any selected race at/past T-15 must already have exactly six final rows,
+          # all source -2, with lock at least 15 minutes before start.
+          bad=[]
+          for r in selected:
+              rem=float(r.get('remainingMin') or 99999)
+              if rem <= 15:
+                  if int(r.get('finalRows') or 0)!=6 or int(r.get('sourceMinus2') or 0)!=6:
+                      bad.append({'raceId':r['raceId'],'reason':'rows/source','row':r})
+                      continue
+                  lock=r.get('lockedAt'); start=r.get('startTimeUtc')
+                  from datetime import datetime, timezone
+                  def parse(s):
+                      if not s:return None
+                      s=str(s).replace(' ','T')
+                      if s.endswith('Z'):s=s[:-1]+'+00:00'
+                      d=datetime.fromisoformat(s)
+                      return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+                  ld,sd=parse(lock),parse(start)
+                  if not ld or not sd or (sd-ld).total_seconds() < 15*60:
+                      bad.append({'raceId':r['raceId'],'reason':'late_lock','row':r})
+          if bad:
+              raise SystemExit('T15_FINAL_VIOLATION:'+json.dumps(bad,ensure_ascii=False))
+
+          # Each finalized race must be exactly 2 rows per course, source -2.
+          by={}
+          for r in courses: by.setdefault(r['raceId'],[]).append(r)
+          for race_id, rr in by.items():
+              if len(rr)!=3 or any(int(x['rows'])!=2 or int(x['distinctBetTypes'])!=2 or int(x['minSource'])!=-2 or int(x['maxSource'])!=-2 for x in rr):
+                  raise SystemExit('FINAL_COURSE_SHAPE_BAD:'+race_id+':'+json.dumps(rr,ensure_ascii=False))
+          print(json.dumps({'selectionCount':len(selection['selected']),'selectedVenueCounts':svc,'selected':selected,'todaySummary':summary,'home':report['home'],'bootstrapRuns':boot_rows[:6],'health':health},ensure_ascii=False,indent=2))
+          PY
+
+      - name: Persist verification report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ops/sep20-public-deploy-verify.json || exit 0
+          git config user.name race-tantei-emergency-bot
+          git config user.email race-tantei-emergency-bot@users.noreply.github.com
+          git add ops/sep20-public-deploy-verify.json
+          git commit -m "ops: verify Sep 20 public production after fix" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
