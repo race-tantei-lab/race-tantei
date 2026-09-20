@@ -1,0 +1,135 @@
+name: Emergency Sep20 Final Production Probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/emergency-sep20-final-probe.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CF_DB: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Probe final production truth
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          BASE=https://race-tantei-phase0.race-tantei.workers.dev
+          q() {
+            jq -n --arg sql "$1" '{sql:$sql}' | curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/d1/database/$CF_DB/query"               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               -H 'content-type: application/json' --data-binary @-
+          }
+
+          q "WITH s AS (SELECT state_value FROM rt_system_state WHERE state_key='final_daily_selection:2026-09-20' LIMIT 1), selected AS (SELECT json_extract(j.value,'$.raceId') AS raceId,json_extract(j.value,'$.venue') AS venue,json_extract(j.value,'$.raceNo') AS raceNo FROM s,json_each(json_extract(s.state_value,'$.selected')) j) SELECT x.venue,x.raceNo,x.raceId,r.start_time_jst AS startTimeJst,r.start_time_utc AS startTimeUtc,ROUND((julianday(r.start_time_utc)-julianday('now'))*1440.0,2) AS remainingMin,(SELECT COUNT(*) FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||x.raceId) AS previewState,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=x.raceId) AS finalRows,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=x.raceId AND b.source_prediction_id=-2) AS sourceMinus2,(SELECT MIN(b.locked_at) FROM rt_public_bets b WHERE b.race_id=x.raceId) AS lockedAt FROM selected x JOIN rt_races r ON r.race_id=x.raceId ORDER BY r.start_time_utc" > /tmp/selected.json
+
+          q "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('final_daily_selection:2026-09-20','live_deadline_driver:2026-09-20','worker_deadline_guard:2026-09-20','worker_live_lock:2026-09-20') ORDER BY state_key" > /tmp/state.json
+
+          q "SELECT b.race_id AS raceId,COUNT(*) AS rows,SUM(b.settlement_status='settled') AS settledRows,SUM(b.settlement_status='pending') AS pendingRows,SUM(CASE WHEN COALESCE(b.return_yen,0)>0 THEN 1 ELSE 0 END) AS positiveReturnRows,r.status AS raceStatus,(SELECT COUNT(*) FROM rt_payouts p WHERE p.race_id=b.race_id) AS payoutRows FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id WHERE r.race_date='2026-09-19' AND b.source_prediction_id=-2 GROUP BY b.race_id ORDER BY b.race_id" > /tmp/sep19.json
+
+          curl -fsS -D /tmp/home.headers -o /tmp/home.html "$BASE/?_rt=$(date +%s)"
+          curl -fsS "$BASE/api/public/day?date=2026-09-20&_rt=$(date +%s)" > /tmp/day20.json
+          curl -fsS "$BASE/api/public/day?date=2026-09-19&_rt=$(date +%s)" > /tmp/day19.json
+          curl -fsS "$BASE/api/public/today-summary?_rt=$(date +%s)" > /tmp/summary.json
+
+          for pair in "livePrimary|https://race-tantei-live-deadline.race-tantei.workers.dev/health" "liveBackup|https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health" "win5Primary|https://race-tantei-win5.race-tantei.workers.dev/health" "win5Backup|https://race-tantei-win5-backup.race-tantei.workers.dev/health"; do
+            n=${pair%%|*}; u=${pair#*|}; curl -fsS "$u" > "/tmp/$n.json"
+          done
+
+          for worker in race-tantei-phase0 race-tantei-live-deadline race-tantei-live-deadline-backup race-tantei-win5 race-tantei-win5-backup; do
+            curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/workers/scripts/$worker/schedules" > "/tmp/cron-$worker.json"
+          done
+
+          cat > /tmp/gql.json <<'JSON'
+          {"query":"query D1Usage($accountTag: string!, $start: Date, $end: Date, $databaseId: string) { viewer { accounts(filter: { accountTag: $accountTag }) { d1AnalyticsAdaptiveGroups(limit: 10, filter: { date_geq: $start, date_leq: $end, databaseId: $databaseId }) { sum { readQueries writeQueries rowsRead rowsWritten } dimensions { date databaseId } } } } }","variables":{"accountTag":"3c6d1826b573b2e68cb13ec37e9e8ade","start":"2026-09-20","end":"2026-09-20","databaseId":"949b5e8b-d1a4-4c4e-80d1-d031afdc03de"}}
+          JSON
+          curl -fsS https://api.cloudflare.com/client/v4/graphql             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             -H 'content-type: application/json' --data-binary @/tmp/gql.json > /tmp/quota.json
+
+          python3 - <<'PY'
+          import json,pathlib,datetime
+          def load(p):
+              return json.load(open(p,encoding='utf-8'))
+          def cf(p):
+              x=load(p)
+              return ((x.get('result') or [{}])[0].get('results') or []) if x.get('success') else []
+          selected=cf('/tmp/selected.json')
+          state=cf('/tmp/state.json')
+          sep19=cf('/tmp/sep19.json')
+          home=pathlib.Path('/tmp/home.html').read_text(errors='replace')
+          headers=pathlib.Path('/tmp/home.headers').read_text(errors='replace')
+          day20=load('/tmp/day20.json')
+          day19=load('/tmp/day19.json')
+          summary=load('/tmp/summary.json')
+          selrow=next((r for r in state if r.get('state_key')=='final_daily_selection:2026-09-20'),None)
+          selection=json.loads(selrow['state_value']) if selrow else {}
+          audits={}
+          for key in ('live_deadline_driver:2026-09-20','worker_deadline_guard:2026-09-20','worker_live_lock:2026-09-20'):
+              r=next((x for x in state if x.get('state_key')==key),None)
+              if r:
+                  try: audits[key]=json.loads(r['state_value'])
+                  except: audits[key]=r.get('state_value')
+          crons={n:load('/tmp/cron-'+n+'.json') for n in ['race-tantei-phase0','race-tantei-live-deadline','race-tantei-live-deadline-backup','race-tantei-win5','race-tantei-win5-backup']}
+          health={n:load('/tmp/'+n+'.json') for n in ['livePrimary','liveBackup','win5Primary','win5Backup']}
+          report={
+            'capturedAtUtc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            'selection':selection,'selected':selected,'audits':audits,
+            'sep19':sep19,
+            'home':{
+              'hasSep20Calendar':'"raceDate":"2026-09-20"' in home,
+              'hasTodayConst':'const today="2026-09-20";' in home,
+              'hasTodayUpperConst':'const TODAY="2026-09-20";' in home,
+              'hasFalseEmpty':'本日（9/20）の公開買い目はありません。' in home,
+              'headers':headers[:3000]
+            },
+            'day20RaceCount':len(day20.get('races') or []),
+            'day20States':{r['raceId']:r.get('publicState') for r in day20.get('races',[]) if r.get('raceId') in {x.get('raceId') for x in (selection.get('selected') or [])}},
+            'day19States':{r['raceId']:r.get('publicState') for r in day19.get('races',[]) if r.get('raceId') in {x.get('raceId') for x in sep19}},
+            'todaySummary':summary,'crons':crons,'health':health,'quota':load('/tmp/quota.json')
+          }
+          pathlib.Path('ops/sep20-final-production-probe.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+
+          if len(selection.get('selected') or []) != 10:
+              raise SystemExit('SELECTION_NOT_10')
+          svc=selection.get('selectedVenueCounts') or {}
+          if svc.get('中山')!=5 or svc.get('阪神')!=5:
+              raise SystemExit('SELECTION_VENUE_BAD')
+          if report['day20RaceCount']!=24:
+              raise SystemExit('DAY20_NOT_24')
+          if not report['home']['hasSep20Calendar'] or not report['home']['hasTodayConst'] or report['home']['hasFalseEmpty']:
+              raise SystemExit('HOME_NOT_CURRENT')
+          if any(int(x.get('settledRows') or 0)!=6 or int(x.get('pendingRows') or 0)!=0 for x in sep19):
+              raise SystemExit('SEP19_NOT_FULLY_SETTLED')
+          if any((report['day19States'].get(x['raceId']) or {}).get('code') not in ('hit','miss','refund') for x in sep19):
+              raise SystemExit('SEP19_API_NOT_SETTLED')
+          urgent=[]
+          for r in selected:
+              rem=float(r.get('remainingMin') or 99999)
+              if rem <= 15 and (int(r.get('finalRows') or 0)!=6 or int(r.get('sourceMinus2') or 0)!=6):
+                  urgent.append(r)
+              if rem > 15 and rem <= 45 and int(r.get('previewState') or 0)==0 and int(r.get('finalRows') or 0)!=6:
+                  urgent.append(r)
+          if urgent:
+              raise SystemExit('SEP20_PROTECTION_GAP:'+json.dumps(urgent,ensure_ascii=False))
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY
+
+      - name: Persist probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name race-tantei-emergency-bot
+          git config user.email race-tantei-emergency-bot@users.noreply.github.com
+          git add ops/sep20-final-production-probe.json
+          git commit -m "ops: capture final Sep 20 production truth"
+          git pull --rebase origin main
+          git push origin HEAD:main
