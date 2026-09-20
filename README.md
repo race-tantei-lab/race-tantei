@@ -49,9 +49,7 @@ JRA中央競馬を対象に、発走前情報を使って完成済み10年モデ
 - **T-40**: 早期SLA監査
 - **T-30**: official preview必須。fresh finalization window開始
 - **T-25**: 保存済みofficial previewによるrescue guard開始
-- **T-15**: fresh generation開始禁止。stored/nonfresh finalizationもここを下回って新規作成しない
-- **T-10**: T-15より前に開始したfresh計算の最終反映限界
-- T-15以降に新しい計算を開始せず、T-10以降にfresh結果を反映しない
+- **T-15**: 最終確定のhard boundary。fresh generation開始禁止。T-15より前に開始したfresh計算も含め、ここを下回って新しいfinalを書き込まない。stored/nonfresh finalizationも同じT-15境界を超えない
 
 finalに使えるmarket oddsは `jra-fast-official` / `jra-crawl-official` のみです。synthetic / estimated / probability-derived substitute oddsは禁止し、公式previewが無い場合は偽データで補完せずfail closedします。
 
