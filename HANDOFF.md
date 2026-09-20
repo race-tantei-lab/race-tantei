@@ -171,7 +171,7 @@ stakes:
 
 ### 時系列
 
-- **T-90**: JRA公式オッズでpreview作成を開始
+- **selection is frozen / 選定確定直後**: 全選定済みfuture raceをfirst-good保護対象にする。JRA公式オッズが取得可能になったレースからmissing previewをrefreshより優先して作成し、1レースにつき最初のvalid official previewをarchiveへ保存
 - **T-40**: 早期SLA監査
 - **T-30**: official preview必須。fresh finalization windowを開始
 - **T-25**: 保存済みofficial previewだけを使えるrescue guardを開始
@@ -192,8 +192,8 @@ T-15境界以降に禁止されること:
 - primary Workerは毎分実行
 - backup Workerは5分ごとに2分ずらして実行
 - D1 leaseで同時mutationを排他
-- official previewはappend-only archiveにも保存
-- 障害時はnewest last-good official previewを復元可能
+- 各選定レースの最初のvalid official previewをarchiveへ1回だけ保存（毎refreshの二重書込みは禁止）
+- 障害時はcurrent last-goodまたはarchive済みofficial previewを復元可能
 - 各工程で現在時刻を取り直し、古いscheduled timestampを締切判定へ流用しない
 - 1レースの異常を理由に他レースの確定経路全体を長時間停止させない
 
@@ -235,7 +235,7 @@ locked後の公開買い目はD1 invariantでもimmutable。
 - 外部から叩けるライブmutation endpoint
 - primary/backupの重複mutation
 
-現在はv3 race-day gate / heartbeat wrapper + v2 isolated driver + lease + archive + T-90/T-30/T-25/T-15 hard-final構成を正本とする。旧GitHub backup方式や公開サイト経由のlive-tickを現行経路として復活させない。
+現在はv3 race-day gate / heartbeat wrapper + v2 isolated driver + lease + selection-driven first-good protection + one-copy archive + T-30/T-25/T-15 hard-final構成を正本とする。旧GitHub backup方式や公開サイト経由のlive-tickを現行経路として復活させない。
 
 ## 6. frozen history / 公開サイト
 
@@ -321,7 +321,7 @@ live production:
 - public live mutationはdisabled。
 - live schedulerは `src/live-deadline-entry-v2.ts`。
 - primary毎分 + backup 5分staggered + D1 lease。
-- T-90 preview開始 / T-30 required / T-17 fresh final / T-16 rescue / T-15 hard no-new-final。
+- selection is frozen直後から全future選定レースをfirst-good保護 / T-30 required / T-25 rescue / T-15 hard no-new-final。
 - official oddsは `jra-fast-official` / `jra-crawl-official` のみ。
 - T-15後の新規finalはD1でも拒否。
 - locked finalはimmutable。
