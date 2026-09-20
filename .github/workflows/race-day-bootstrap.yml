@@ -37,8 +37,15 @@ jobs:
         run: |
           set -euo pipefail
           today=$(TZ=Asia/Tokyo date +%F)
-          weekday=$(TZ=Asia/Tokyo date +%u) # 1=Mon ... 7=Sun
           echo "date=$today" >> "$GITHUB_OUTPUT"
+
+          # Use the same JRA-aware gate as production. Weekday alone must never
+          # mean "no racing": JRA can and does hold holiday-Monday meetings.
+          gate=$(npx tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{console.log(JSON.stringify(await shouldRunOnJraRaceDay(new Date())));})().catch(e=>{console.error(e);process.exit(1)})")
+          echo "RACE_DAY_GATE=$gate"
+          expected_race_day=$(GATE="$gate" node -e 'const g=JSON.parse(process.env.GATE||"{}"); process.stdout.write(g.shouldRun ? "true" : "false")')
+          echo "expected_race_day=$expected_race_day" >> "$GITHUB_OUTPUT"
+
           query_program() {
             npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
               "SELECT venue,COUNT(*) AS races,SUM(CASE WHEN start_time_utc IS NOT NULL THEN 1 ELSE 0 END) AS timed FROM rt_races WHERE race_date='$today' GROUP BY venue ORDER BY venue" \
@@ -68,7 +75,7 @@ jobs:
             state=$(classify_program | tail -n 1)
             echo "PROGRAM_ATTEMPT=$attempt STATE=$state"
             if [ "$state" = READY ]; then break; fi
-            if [ "$state" = EMPTY ] && [ "$weekday" -ge 1 ] && [ "$weekday" -le 5 ]; then break; fi
+            if [ "$state" = EMPTY ] && [ "$expected_race_day" = false ]; then break; fi
             if [ "$attempt" -lt 11 ]; then sleep 120; fi
           done
 
@@ -89,8 +96,8 @@ jobs:
           PY
           cat /tmp/program-state
           if grep -q '^NO_RACE_DAY$' /tmp/program-state; then
-            if [ "$weekday" = 6 ] || [ "$weekday" = 7 ]; then
-              echo 'Weekend program remained empty after Cloudflare maintenance window.' >&2
+            if [ "$expected_race_day" = true ]; then
+              echo "JRA gate says $today is a race day, but production D1 program remained empty after the maintenance window." >&2
               exit 1
             fi
             echo 'race_day=false' >> "$GITHUB_OUTPUT"
