@@ -101,7 +101,11 @@ jobs:
             code=$(curl --retry 2 --retry-delay 1 --retry-all-errors -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$base?_rt_deploy=${GITHUB_RUN_ID}-$attempt" || true)
             actual_ui=$(awk 'BEGIN{IGNORECASE=1} /^x-race-ui-version:/{gsub(/\\r/,""); sub(/^[^:]+:[[:space:]]*/,""); print; exit}' /tmp/home.headers)
             echo "home attempt=$attempt http=$code ui=${actual_ui:-missing} expected=$EXPECTED_UI_VERSION"
-            if [[ "$code" = '200' ]] && [[ "$actual_ui" = "$EXPECTED_UI_VERSION" ]] && ! grep -q '一時的にページを表示できません。' /tmp/home.html; then
+            # The fallback copy may exist inside bundled client-side source even
+            # when it is not the rendered page. HTTP 200 + the exact deployed UI
+            # version header is the lightweight deployment invariant; the separate
+            # public-UI verifier checks rendered feature behavior.
+            if [[ "$code" = '200' ]] && [[ "$actual_ui" = "$EXPECTED_UI_VERSION" ]]; then
               ok=1
               break
             fi
