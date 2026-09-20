@@ -10,7 +10,7 @@ const FINAL_PREFIX = "worker_live_final:";
 const AUDIT_PREFIX = "worker_deadline_guard:";
 export const DEADLINE_GUARD_MS = 15 * 60 * 1000;
 export const DEADLINE_GUARD_ARM_MS = 25 * 60 * 1000;
-export const FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;
+export const FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000;
 // A valid JRA-official preview created anywhere in the T-90 preview window must
 // remain eligible as the last-good insurance through the T-15 hard deadline.
 const MAX_OFFICIAL_PREVIEW_AGE_MS = 90 * 60 * 1000;
