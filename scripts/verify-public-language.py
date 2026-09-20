@@ -94,12 +94,12 @@ def main() -> None:
     require("DEADLINE_GUARD_MS = 15 * 60 * 1000" in deadline, "T15_RUNTIME_MISSING")
     require("DEADLINE_GUARD_ARM_MS = 25 * 60 * 1000" in deadline, "T25_GUARD_ARM_RUNTIME_MISSING")
 
-    # Current-day status copy follows the actual two-boundary contract:
-    # no fresh calculation may start after T-15; an on-time calculation may
-    # finish/refelect only until T-10. Do not freeze an obsolete exact sentence.
+    # Current-day status copy follows the hard T-15 contract:
+    # no fresh calculation may start at/after T-15 and no final may be written
+    # after T-15. There is no later T-10 reflection grace period.
     require("START_DEADLINE_MS = 15 * 60 * 1000" in current, "CURRENT_DAY_T15_START_BOUNDARY_MISSING")
-    require("FINAL_DEADLINE_MS = 10 * 60 * 1000" in current, "CURRENT_DAY_T10_REFLECTION_BOUNDARY_MISSING")
-    require("発走15分前までに最終計算開始・発走10分前までに確定" in current, "CURRENT_DAY_BOUNDARY_COPY_MISSING")
+    require("FINAL_DEADLINE_MS = 15 * 60 * 1000" in current, "CURRENT_DAY_T15_FINAL_BOUNDARY_MISSING")
+    require("発走15分前までに確定" in current, "CURRENT_DAY_BOUNDARY_COPY_MISSING")
     require("確定買い目として扱いません" in current, "CURRENT_DAY_LATE_FINAL_FAIL_CLOSED_COPY_MISSING")
 
     # Runtime schema introspection is intentionally gone. Verify the actual
@@ -110,7 +110,7 @@ def main() -> None:
 
     print(
         "PUBLIC_LANGUAGE_OK actual_entry=performance_quota_recovery_v37 language_layer=v31_v30 "
-        "continuous_learning=same_day official_odds_only=true fail_closed=true t15_start=true t10_reflection=true"
+        "continuous_learning=same_day official_odds_only=true fail_closed=true t15_start=true t15_final=true"
     )
 
 
