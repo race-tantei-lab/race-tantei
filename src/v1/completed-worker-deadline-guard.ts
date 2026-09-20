@@ -106,16 +106,20 @@ async function loadSelection(db: D1Database, date: string): Promise<string[]> {
   return ids;
 }
 
-async function orderSelectedRaceIds(db: D1Database, date: string, ids: string[]): Promise<string[]> {
+async function selectedRaceSchedule(db: D1Database, date: string, ids: string[]): Promise<RaceStartRow[]> {
+  const wanted = new Set(ids);
   const rows = await db.prepare("SELECT race_id AS raceId,start_time_utc AS startTimeUtc FROM rt_races WHERE race_date=?")
     .bind(date)
     .all<RaceStartRow>();
-  const startById = new Map((rows.results ?? []).map((row) => [String(row.raceId), Date.parse(String(row.startTimeUtc || ""))]));
-  return [...ids].sort((a, b) => {
-    const av = Number.isFinite(startById.get(a)) ? Number(startById.get(a)) : Number.POSITIVE_INFINITY;
-    const bv = Number.isFinite(startById.get(b)) ? Number(startById.get(b)) : Number.POSITIVE_INFINITY;
-    return av - bv || a.localeCompare(b);
-  });
+  return (rows.results ?? [])
+    .filter((row) => wanted.has(String(row.raceId)))
+    .sort((a, b) => {
+      const av = Date.parse(String(a.startTimeUtc || ""));
+      const bv = Date.parse(String(b.startTimeUtc || ""));
+      const aa = Number.isFinite(av) ? av : Number.POSITIVE_INFINITY;
+      const bb = Number.isFinite(bv) ? bv : Number.POSITIVE_INFINITY;
+      return aa - bb || String(a.raceId).localeCompare(String(b.raceId));
+    });
 }
 
 async function publicRows(db: D1Database, raceId: string): Promise<PublicBetRow[]> {
@@ -331,7 +335,8 @@ export async function runCompletedWorkerDeadlineGuard(env: Env, now = new Date()
     .bind(`${SELECTION_PREFIX}${date}`)
     .first<{ ok: number }>();
   const rawIds = Number(selectionExists?.ok ?? 0) === 1 ? await loadSelection(env.DB, date) : [];
-  const ids = await orderSelectedRaceIds(env.DB, date, rawIds);
+  const schedule = await selectedRaceSchedule(env.DB, date, rawIds);
+  const ids = schedule.map((row) => String(row.raceId));
   const audit: DeadlineGuardAudit = {
     status: "ok",
     checkedAt: iso(now),
@@ -347,51 +352,52 @@ export async function runCompletedWorkerDeadlineGuard(env: Env, now = new Date()
     errors: [],
   };
 
-  for (const raceId of ids) {
+  // This path is deliberately tiny: one selection read, one schedule read, then
+  // only races inside T-25..T-15 are touched. Historical misses and far-future
+  // races must never consume the critical finalization invocation.
+  for (const row of schedule) {
+    const raceId = String(row.raceId);
+    const startMs = Date.parse(String(row.startTimeUtc || ""));
+    if (!Number.isFinite(startMs)) {
+      audit.errors.push({ raceId, error: `Error:DEADLINE_GUARD_START_TIME_INVALID:${raceId}` });
+      continue;
+    }
+
+    const remaining = startMs - now.getTime();
+    if (remaining <= 0) {
+      audit.skippedOutsideWindowRaceIds.push(raceId);
+      continue;
+    }
+    if (remaining < DEADLINE_GUARD_MS) {
+      audit.deadlineMissedRaceIds.push(raceId);
+      audit.skippedOutsideWindowRaceIds.push(raceId);
+      continue;
+    }
+    if (!shouldDeadlineGuardLock(remaining)) {
+      audit.skippedOutsideWindowRaceIds.push(raceId);
+      continue;
+    }
+
+    audit.dueRaceIds.push(raceId);
     try {
       if (strictComplete(await publicRows(env.DB, raceId))) {
         audit.skippedAlreadyLockedRaceIds.push(raceId);
+        audit.lockedRaceIds.push(raceId);
         continue;
       }
 
-      const start = await env.DB.prepare("SELECT start_time_utc AS startTimeUtc FROM rt_races WHERE race_id=? LIMIT 1")
-        .bind(raceId)
-        .first<{ startTimeUtc: string | null }>();
-      const startMs = Date.parse(String(start?.startTimeUtc || ""));
-      if (!Number.isFinite(startMs)) throw new Error(`DEADLINE_GUARD_START_TIME_INVALID:${raceId}`);
-
-      const remaining = startMs - now.getTime();
-      if (isDeadlineGuardMissed(remaining)) {
-        audit.dueRaceIds.push(raceId);
-        audit.deadlineMissedRaceIds.push(raceId);
-        throw new Error(`DEADLINE_GUARD_T15_MISSED:${raceId}:${remaining}`);
-      }
-      if (!shouldDeadlineGuardLock(remaining)) {
-        audit.skippedOutsideWindowRaceIds.push(raceId);
-        continue;
-      }
-
-      audit.dueRaceIds.push(raceId);
-      const result = await ensureCompletedRaceFinalAtDeadline(env, raceId, now);
-      if (result.status === "locked") {
-        audit.lockedRaceIds.push(raceId);
-        audit.lockedOfficialPreviewRaceIds.push(raceId);
-      } else if (result.status === "already_locked") {
-        audit.lockedRaceIds.push(raceId);
-      } else if (result.status === "preview_missing") {
-        throw new Error(`DEADLINE_GUARD_PREVIEW_MISSING:${raceId}`);
-      } else if (result.status === "deadline_missed") {
-        audit.deadlineMissedRaceIds.push(raceId);
-        throw new Error(`DEADLINE_GUARD_T15_MISSED:${raceId}:${result.remainingMs}`);
-      } else {
-        throw new Error(`DEADLINE_GUARD_UNEXPECTED_STATUS:${raceId}:${result.status}`);
-      }
+      const official = await latestOfficialPreview(env.DB, raceId, now, startMs);
+      if (!official) throw new Error(`DEADLINE_GUARD_PREVIEW_MISSING:${raceId}`);
+      await commitOfficialPreview(env.DB, raceId, official, now, startMs);
+      audit.lockedRaceIds.push(raceId);
+      audit.lockedOfficialPreviewRaceIds.push(raceId);
     } catch (error) {
       audit.errors.push({ raceId, error: errorText(error) });
     }
   }
 
-  audit.status = audit.errors.length ? "error" : audit.lockedRaceIds.length ? "locked" : "ok";
+  audit.status = audit.errors.length ? "error" : audit.lockedOfficialPreviewRaceIds.length ? "locked" : "ok";
   await saveAudit(env.DB, audit);
   return audit;
 }
+
