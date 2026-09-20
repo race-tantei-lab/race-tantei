@@ -10,7 +10,7 @@ import {
 } from "./v1/live-preview-safety.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "live-deadline-v11-persistent-miss-lastgood-20260919";
+const DRIVER_VERSION = "live-deadline-v12-preview-first-fallback-20260920";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
 const SELECTION_PREFIX = "final_daily_selection:";
@@ -91,12 +91,9 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
   }
 
   try {
-    // The priority guard still runs first, but healthy intermediate audit snapshots
-    // are no longer written every minute. The final driver state below retains the
-    // complete guard/live/SLA audit and failures retain a dedicated error state.
-    const priorityGuardNow = new Date();
-    const priorityGuard = await runCompletedWorkerDeadlineGuard(env, priorityGuardNow);
-
+    // Selection first, then protect future races before any watchdog/archive work.
+    // A missing historical race must never consume the tick that should create
+    // the next race's last-good preview.
     const selectionNow = new Date();
     let selectionReady = await hasSelection(env.DB, jstDate(selectionNow));
     let selection: Record<string, unknown> = { status: "already_frozen" };
@@ -109,15 +106,13 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
         .bind(date).first<{ firstStart: string | null }>();
       const firstStartMs = Date.parse(String(firstRace?.firstStart || ""));
       const remainingToFirstRaceMs = Number.isFinite(firstStartMs) ? firstStartMs - Date.now() : Number.NaN;
-      const selectionCritical = Number.isFinite(remainingToFirstRaceMs) && remainingToFirstRaceMs <= 100 * 60_000;
+      const selectionCritical = Number.isFinite(remainingToFirstRaceMs) && remainingToFirstRaceMs <= 110 * 60_000;
       const completed = new Date();
       const result = {
         ...base,
         status: selectionCritical ? "selection_critical" : "waiting_selection",
         phase: "complete",
         ok: !selectionCritical,
-        priorityGuardCheckedAt: iso(priorityGuardNow),
-        priorityGuard: auditGuard(priorityGuard),
         selection,
         entryRepair: null,
         selectionCheckedAt: iso(selectionNow),
@@ -130,14 +125,6 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       return result;
     }
 
-    let restoredBefore: string[] = [];
-    if (priorityGuard.errors.some((row) => row.error.includes("PREVIEW_MISSING"))) {
-      restoredBefore = await restoreNewestOfficialPreviewArchives(env.DB, date);
-    }
-    const slaBefore = null;
-    const guardBeforeNow = priorityGuardNow;
-    const guardBefore = priorityGuard;
-
     const liveNow = new Date();
     let live: Awaited<ReturnType<typeof runCompletedWorkerLiveLock>> | null = null;
     let liveFailure: string | null = null;
@@ -146,6 +133,21 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
     } catch (error) {
       liveFailure = errorText(error);
     }
+
+    // The persistent deadline guard is now secondary insurance. It can promote
+    // the official last-good, or a network-independent probability fallback,
+    // but it no longer gets to starve preview generation for later races.
+    let priorityGuardNow = new Date();
+    let priorityGuard = await runCompletedWorkerDeadlineGuard(env, priorityGuardNow);
+    let restoredBefore: string[] = [];
+    if (priorityGuard.errors.some((row) => row.error.includes("PREVIEW_MISSING"))) {
+      restoredBefore = await restoreNewestOfficialPreviewArchives(env.DB, date);
+      priorityGuardNow = new Date();
+      priorityGuard = await runCompletedWorkerDeadlineGuard(env, priorityGuardNow);
+    }
+    const slaBefore = null;
+    const guardBeforeNow = priorityGuardNow;
+    const guardBefore = priorityGuard;
 
     let restoredAfter: string[] = [];
     let guardAfterNow = new Date();
@@ -167,9 +169,6 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       ...guardAfter.skippedAlreadyLockedRaceIds,
       ...slaAfter.finalReadyRaceIds,
     ]);
-    const unresolvedDueRaceIds = [...due].filter((raceId) => !locked.has(raceId));
-    const unresolvedGuardErrors = [...priorityGuard.errors, ...guardBefore.errors, ...guardAfter.errors]
-      .filter((row) => !locked.has(row.raceId));
     const hardDeadlineBreachRaceIds = [...new Set([
       ...priorityGuard.deadlineMissedRaceIds,
       ...guardBefore.deadlineMissedRaceIds,
@@ -177,13 +176,17 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       ...(live?.deadlineBreachRaceIds ?? []),
       ...slaAfter.deadlineMissedRaceIds,
     ])];
+    const immutableMisses = new Set(hardDeadlineBreachRaceIds);
+    const unresolvedDueRaceIds = [...due].filter((raceId) => !locked.has(raceId) && !immutableMisses.has(raceId));
+    const unresolvedGuardErrors = [...priorityGuard.errors, ...guardBefore.errors, ...guardAfter.errors]
+      .filter((row) => !locked.has(row.raceId) && !immutableMisses.has(row.raceId));
     const preDeadlineCriticalRaceIds = [...new Set([
       ...slaAfter.previewMissingByT40RaceIds,
       ...slaAfter.previewMissingByT30RaceIds,
       ...slaAfter.finalMissingByT30RaceIds,
       ...slaAfter.finalMissingByT25RaceIds,
       ...slaAfter.finalMissingByT16RaceIds,
-    ])].filter((raceId) => !locked.has(raceId));
+    ])].filter((raceId) => !locked.has(raceId) && !immutableMisses.has(raceId));
 
     const completed = new Date();
     const ok = !liveFailure
@@ -228,7 +231,13 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
     };
     await saveDriverState(env.DB, date, result);
 
-    if (hardDeadlineBreachRaceIds.length) throw new Error(`LIVE_DEADLINE_HARD_T15_BREACH:${hardDeadlineBreachRaceIds.join(",")}`);
+    // T-15 breaches are immutable by design: never backfill them. Record them,
+    // but keep the primary heartbeat alive so later selected races continue to
+    // receive previews/finals instead of treating an unfixable past miss as a
+    // reason to stop the whole race day.
+    if (hardDeadlineBreachRaceIds.length) {
+      console.error("LIVE_DEADLINE_HARD_T15_BREACH_RECORDED", hardDeadlineBreachRaceIds.join(","));
+    }
     if (preDeadlineCriticalRaceIds.length) throw new Error(`LIVE_DEADLINE_PREDEADLINE_CRITICAL:${preDeadlineCriticalRaceIds.join(",")}`);
     if (unresolvedDueRaceIds.length || unresolvedGuardErrors.length) {
       throw new Error(`LIVE_DEADLINE_DUE_UNRESOLVED:${unresolvedDueRaceIds.join(",")}:guards=${JSON.stringify(unresolvedGuardErrors)}`);
