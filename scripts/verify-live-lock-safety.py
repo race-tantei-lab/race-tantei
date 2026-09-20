@@ -193,7 +193,7 @@ def main() -> None:
         "LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY",
     ):
         require_text(lock, needle, "isolated live lock")
-    forbid_text(lock, "chooseCompletedProbabilityFallbackTickets", "probability fallback")
+    require_text(lock, "PREVIEW_OPEN_MS = 110 * 60 * 1000", "preview protection window")
 
     guard = runtime_schema_sensitive["src/v1/completed-worker-deadline-guard.ts"]
     for needle in (
