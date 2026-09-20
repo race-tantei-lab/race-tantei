@@ -33,7 +33,7 @@ export type CurrentPublicState = {
 
 const COURSES = ["ライト", "スタンダード", "プレミアム"] as const;
 const START_DEADLINE_MS = 15 * 60 * 1000;
-const FINAL_DEADLINE_MS = 10 * 60 * 1000;
+const FINAL_DEADLINE_MS = 15 * 60 * 1000;
 
 function selectedIds(raw: string | null | undefined): Set<string> | null {
   if (!raw) return null;
@@ -102,15 +102,13 @@ function clockBefore(startTimeJst: string | null, minutesBefore: number): string
 }
 
 function timingText(startTimeJst: string | null): string {
-  const start = clockBefore(startTimeJst, 15);
-  const final = clockBefore(startTimeJst, 10);
-  if (!start || !final) return "発走15分前までに最終計算開始・発走10分前までに確定";
-  return `${start}までに最終計算開始 / ${final}までに確定`;
+  const final = clockBefore(startTimeJst, 15);
+  return final ? `${final}までに確定` : "発走15分前までに確定";
 }
 
 function finalDeadlineText(startTimeJst: string | null): string {
-  const final = clockBefore(startTimeJst, 10);
-  return final ? `${final}までに確定・それまでは変更の可能性あり` : "発走10分前までに確定・それまでは変更の可能性あり";
+  const final = clockBefore(startTimeJst, 15);
+  return final ? `${final}までに確定` : "発走15分前までに確定";
 }
 
 export function projectCurrentPublicState(
