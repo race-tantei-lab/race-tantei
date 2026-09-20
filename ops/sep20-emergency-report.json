@@ -1,0 +1,810 @@
+{
+  "program": [
+    {
+      "venue": "中山",
+      "races": 12,
+      "entryUrls": 12,
+      "minActive": 12
+    },
+    {
+      "venue": "阪神",
+      "races": 12,
+      "entryUrls": 12,
+      "minActive": 7
+    }
+  ],
+  "systemState": [
+    {
+      "state_key": "final_daily_selection:2026-09-20",
+      "updated_at": "2026-09-20 00:00:19",
+      "state_value": "{\"date\":\"2026-09-20\",\"sourceModel\":\"ten-year-completed-model\",\"selectionMode\":\"canonical-ten-year-race-score\",\"selected\":[{\"raceId\":\"2026-09-20-nakayama-02\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":2,\"raceName\":\"2歳未勝利\",\"startTimeJst\":\"10:35\",\"raceScore\":0.76129082},{\"raceId\":\"2026-09-20-nakayama-03\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":3,\"raceName\":\"2歳未勝利\",\"startTimeJst\":\"11:05\",\"raceScore\":0.76173362},{\"raceId\":\"2026-09-20-nakayama-07\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":7,\"raceName\":\"3歳以上1勝クラス\",\"startTimeJst\":\"13:25\",\"raceScore\":0.79246288},{\"raceId\":\"2026-09-20-nakayama-11\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":11,\"raceName\":\"第72回 産経賞オールカマー（GⅡ）\",\"startTimeJst\":\"15:45\",\"raceScore\":0.77989985},{\"raceId\":\"2026-09-20-nakayama-12\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":12,\"raceName\":\"3歳以上1勝クラス\",\"startTimeJst\":\"16:30\",\"raceScore\":0.76022363},{\"raceId\":\"2026-09-20-hanshin-01\",\"raceDate\":\"2026-09-20\",\"venue\":\"阪神\",\"raceNo\":1,\"raceName\":\"障害3歳以上未勝利\",\"startTimeJst\":\"09:45\",\"raceScore\":0.76673313},{\"raceId\":\"2026-09-20-hanshin-02\",\"raceDate\":\"2026-09-20\",\"venue\":\"阪神\",\"raceNo\":2,\"raceName\":\"2歳未勝利\",\"startTimeJst\":\"10:20\",\"raceScore\":0.78583349},{\"raceId\":\"2026-09-20-hanshin-03\",\"raceDate\":\"2026-09-20\",\"venue\":\"阪神\",\"raceNo\":3,\"raceName\":\"2歳未勝利\",\"startTimeJst\":\"10:50\",\"raceScore\":0.76209502},{\"raceId\":\"2026-09-20-hanshin-06\",\"raceDate\":\"2026-09-20\",\"venue\":\"阪神\",\"raceNo\":6,\"raceName\":\"3歳以上1勝クラス\",\"startTimeJst\":\"12:40\",\"raceScore\":0.75854895},{\"raceId\":\"2026-09-20-hanshin-09\",\"raceDate\":\"2026-09-20\",\"venue\":\"阪神\",\"raceNo\":9,\"raceName\":\"夕月特別\",\"startTimeJst\":\"14:10\",\"raceScore\":0.78737029}],\"venueCounts\":{\"中山\":12,\"阪神\":12},\"selectedVenueCounts\":{\"中山\":5,\"阪神\":5},\"stateBaseThroughDate\":\"2026-08-09\",\"stateAdvancedThroughDate\":\"2026-09-19\",\"resultDataUsedForTargetDay\":false,\"historicalFinalOddsUsedForSelection\":false,\"syntheticOddsUsed\":false}"
+    },
+    {
+      "state_key": "live_deadline_driver:2026-09-20",
+      "updated_at": "2026-09-20 00:05:22",
+      "state_value": "{\"version\":\"live-deadline-v11-persistent-miss-lastgood-20260919\",\"date\":\"2026-09-20\",\"scheduledAt\":\"2026-09-20T00:05:16.000Z\",\"startedAt\":\"2026-09-20T00:05:16.654Z\",\"owner\":\"live-deadline-v11-persistent-miss-lastgood-20260919:4baaae5e-d230-42da-a7d4-fa38a271d62a\",\"status\":\"ok\",\"phase\":\"complete\",\"ok\":true,\"priorityGuardCheckedAt\":\"2026-09-20T00:05:16.674Z\",\"priorityGuard\":{\"status\":\"ok\",\"checkedAt\":\"2026-09-20T00:05:16.674Z\",\"dueRaceIds\":[],\"lockedRaceIds\":[],\"deadlineMissedRaceIds\":[],\"skippedAlreadyLockedRaceIds\":[],\"errors\":[]},\"selection\":{\"status\":\"already_frozen\"},\"selectionCheckedAt\":\"2026-09-20T00:05:16.868Z\",\"restoredBefore\":[],\"slaBefore\":null,\"guardBeforeCheckedAt\":\"2026-09-20T00:05:16.674Z\",\"guardBefore\":{\"status\":\"ok\",\"checkedAt\":\"2026-09-20T00:05:16.674Z\",\"dueRaceIds\":[],\"lockedRaceIds\":[],\"deadlineMissedRaceIds\":[],\"skippedAlreadyLockedRaceIds\":[],\"errors\":[]},\"liveStartedAt\":\"2026-09-20T00:05:16.876Z\",\"liveFailure\":null,\"live\":{\"status\":\"ok\",\"checkedAt\":\"2026-09-20T00:05:16.876Z\",\"completeBefore\":0,\"completeAfter\":0,\"refreshedPreviewRaceIds\":[\"2026-09-20-nakayama-02\"],\"previewAvailableRaceIds\":[\"2026-09-20-nakayama-02\",\"2026-09-20-hanshin-01\",\"2026-09-20-hanshin-02\"],\"lockedByWorker\":[],\"incompleteRaceIds\":[\"2026-09-20-nakayama-02\",\"2026-09-20-hanshin-01\",\"2026-09-20-hanshin-02\"],\"deadlineBreachRaceIds\":[],\"errors\":[]},\"restoredAfter\":[],\"guardAfterCheckedAt\":\"2026-09-20T00:05:22.319Z\",\"guardAfter\":{\"status\":\"ok\",\"checkedAt\":\"2026-09-20T00:05:22.319Z\",\"dueRaceIds\":[],\"lockedRaceIds\":[],\"deadlineMissedRaceIds\":[],\"skippedAlreadyLockedRaceIds\":[],\"errors\":[]},\"slaAfter\":{\"checkedAt\":\"2026-09-20T00:05:22.558Z\",\"date\":\"2026-09-20\",\"selectedRaceCount\":10,\"previewReadyRaceIds\":[\"2026-09-20-hanshin-01\",\"2026-09-20-hanshin-02\",\"2026-09-20-nakayama-02\"],\"finalReadyRaceIds\":[],\"previewMissingByT40RaceIds\":[],\"previewMissingByT30RaceIds\":[],\"finalMissingByT30RaceIds\":[],\"finalMissingByT25RaceIds\":[],\"finalMissingByT17RaceIds\":[],\"finalMissingByT16RaceIds\":[],\"deadlineMissedRaceIds\":[]},\"unresolvedDueRaceIds\":[],\"unresolvedGuardErrors\":[],\"hardDeadlineBreachRaceIds\":[],\"preDeadlineCriticalRaceIds\":[],\"completedAt\":\"2026-09-20T00:05:22.593Z\",\"durationMs\":5939}"
+    }
+  ],
+  "selection": {
+    "date": "2026-09-20",
+    "sourceModel": "ten-year-completed-model",
+    "selectionMode": "canonical-ten-year-race-score",
+    "selected": [
+      {
+        "raceId": "2026-09-20-nakayama-02",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 2,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:35",
+        "raceScore": 0.76129082
+      },
+      {
+        "raceId": "2026-09-20-nakayama-03",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 3,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "11:05",
+        "raceScore": 0.76173362
+      },
+      {
+        "raceId": "2026-09-20-nakayama-07",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 7,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "13:25",
+        "raceScore": 0.79246288
+      },
+      {
+        "raceId": "2026-09-20-nakayama-11",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 11,
+        "raceName": "第72回 産経賞オールカマー（GⅡ）",
+        "startTimeJst": "15:45",
+        "raceScore": 0.77989985
+      },
+      {
+        "raceId": "2026-09-20-nakayama-12",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 12,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "16:30",
+        "raceScore": 0.76022363
+      },
+      {
+        "raceId": "2026-09-20-hanshin-01",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 1,
+        "raceName": "障害3歳以上未勝利",
+        "startTimeJst": "09:45",
+        "raceScore": 0.76673313
+      },
+      {
+        "raceId": "2026-09-20-hanshin-02",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 2,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:20",
+        "raceScore": 0.78583349
+      },
+      {
+        "raceId": "2026-09-20-hanshin-03",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 3,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:50",
+        "raceScore": 0.76209502
+      },
+      {
+        "raceId": "2026-09-20-hanshin-06",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 6,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "12:40",
+        "raceScore": 0.75854895
+      },
+      {
+        "raceId": "2026-09-20-hanshin-09",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 9,
+        "raceName": "夕月特別",
+        "startTimeJst": "14:10",
+        "raceScore": 0.78737029
+      }
+    ],
+    "venueCounts": {
+      "中山": 12,
+      "阪神": 12
+    },
+    "selectedVenueCounts": {
+      "中山": 5,
+      "阪神": 5
+    },
+    "stateBaseThroughDate": "2026-08-09",
+    "stateAdvancedThroughDate": "2026-09-19",
+    "resultDataUsedForTargetDay": false,
+    "historicalFinalOddsUsedForSelection": false,
+    "syntheticOddsUsed": false
+  },
+  "selectedRaceAudit": [
+    {
+      "venue": "阪神",
+      "raceNo": 1,
+      "raceId": "2026-09-20-hanshin-01",
+      "startTimeUtc": "2026-09-20T00:45:00.000Z",
+      "activeRunners": 12,
+      "previewState": 1,
+      "finalRows": 0
+    },
+    {
+      "venue": "阪神",
+      "raceNo": 2,
+      "raceId": "2026-09-20-hanshin-02",
+      "startTimeUtc": "2026-09-20T01:20:00.000Z",
+      "activeRunners": 13,
+      "previewState": 1,
+      "finalRows": 0
+    },
+    {
+      "venue": "中山",
+      "raceNo": 2,
+      "raceId": "2026-09-20-nakayama-02",
+      "startTimeUtc": "2026-09-20T01:35:00.000Z",
+      "activeRunners": 13,
+      "previewState": 1,
+      "finalRows": 0
+    },
+    {
+      "venue": "阪神",
+      "raceNo": 3,
+      "raceId": "2026-09-20-hanshin-03",
+      "startTimeUtc": "2026-09-20T01:50:00.000Z",
+      "activeRunners": 7,
+      "previewState": 0,
+      "finalRows": 0
+    },
+    {
+      "venue": "中山",
+      "raceNo": 3,
+      "raceId": "2026-09-20-nakayama-03",
+      "startTimeUtc": "2026-09-20T02:05:00.000Z",
+      "activeRunners": 13,
+      "previewState": 0,
+      "finalRows": 0
+    },
+    {
+      "venue": "阪神",
+      "raceNo": 6,
+      "raceId": "2026-09-20-hanshin-06",
+      "startTimeUtc": "2026-09-20T03:40:00.000Z",
+      "activeRunners": 11,
+      "previewState": 0,
+      "finalRows": 0
+    },
+    {
+      "venue": "中山",
+      "raceNo": 7,
+      "raceId": "2026-09-20-nakayama-07",
+      "startTimeUtc": "2026-09-20T04:25:00.000Z",
+      "activeRunners": 18,
+      "previewState": 0,
+      "finalRows": 0
+    },
+    {
+      "venue": "阪神",
+      "raceNo": 9,
+      "raceId": "2026-09-20-hanshin-09",
+      "startTimeUtc": "2026-09-20T05:10:00.000Z",
+      "activeRunners": 10,
+      "previewState": 0,
+      "finalRows": 0
+    },
+    {
+      "venue": "中山",
+      "raceNo": 11,
+      "raceId": "2026-09-20-nakayama-11",
+      "startTimeUtc": "2026-09-20T06:45:00.000Z",
+      "activeRunners": 13,
+      "previewState": 0,
+      "finalRows": 0
+    },
+    {
+      "venue": "中山",
+      "raceNo": 12,
+      "raceId": "2026-09-20-nakayama-12",
+      "startTimeUtc": "2026-09-20T07:30:00.000Z",
+      "activeRunners": 16,
+      "previewState": 0,
+      "finalRows": 0
+    }
+  ],
+  "crons": {
+    "race-tantei-phase0": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "*/15 * * * *",
+            "created_on": "2026-09-03T00:37:50.075242Z",
+            "modified_on": "2026-09-19T13:54:32.226331Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    },
+    "race-tantei-live-deadline": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "* * * * *",
+            "created_on": "2026-08-22T10:16:05.847612Z",
+            "modified_on": "2026-09-19T13:46:53.77229Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    },
+    "race-tantei-live-deadline-backup": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "2-59/5 * * * *",
+            "created_on": "2026-09-06T10:34:58.828488Z",
+            "modified_on": "2026-09-19T13:46:59.23107Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    },
+    "race-tantei-win5": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "* * * * *",
+            "created_on": "2026-08-22T16:10:18.443337Z",
+            "modified_on": "2026-09-19T08:32:33.515955Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    },
+    "race-tantei-win5-backup": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "3-59/5 * * * *",
+            "created_on": "2026-08-22T16:10:23.463815Z",
+            "modified_on": "2026-09-19T08:32:38.732496Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    }
+  },
+  "http": {
+    "day": {
+      "code": "200",
+      "json": {
+        "ok": true,
+        "date": "2026-09-20",
+        "races": [
+          {
+            "raceId": "2026-09-20-nakayama-01",
+            "raceDate": "2026-09-20",
+            "venue": "中山",
+            "raceNo": 1,
+            "raceName": "2歳未勝利",
+            "startTimeJst": "10:00",
+            "startTimeUtc": "2026-09-20T01:00:00.000Z",
+            "surface": "ダート",
+            "distanceM": 1800,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-nakayama-02",
+            "raceDate": "2026-09-20",
+            "venue": "中山",
+            "raceNo": 2,
+            "raceName": "2歳未勝利",
+            "startTimeJst": "10:35",
+            "startTimeUtc": "2026-09-20T01:35:00.000Z",
+            "surface": "芝",
+            "distanceM": 1600,
+            "status": "scheduled",
+            "publicState": {
+              "code": "target",
+              "label": "買い目対象・確定前",
+              "deadline": "10:20までに最終計算開始 / 10:25までに確定"
+            }
+          },
+          {
+            "raceId": "2026-09-20-nakayama-03",
+            "raceDate": "2026-09-20",
+            "venue": "中山",
+            "raceNo": 3,
+            "raceName": "2歳未勝利",
+            "startTimeJst": "11:05",
+            "startTimeUtc": "2026-09-20T02:05:00.000Z",
+            "surface": "芝",
+            "distanceM": 2000,
+            "status": "scheduled",
+            "publicState": {
+              "code": "target",
+              "label": "買い目対象・確定前",
+              "deadline": "10:50までに最終計算開始 / 10:55までに確定"
+            }
+          },
+          {
+            "raceId": "2026-09-20-nakayama-04",
+            "raceDate": "2026-09-20",
+            "venue": "中山",
+            "raceNo": 4,
+            "raceName": "2歳新馬",
+            "startTimeJst": "11:35",
+            "startTimeUtc": "2026-09-20T02:35:00.000Z",
+            "surface": "ダート",
+            "distanceM": 1800,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-nakayama-05",
+            "raceDate": "2026-09-20",
+            "venue": "中山",
+            "raceNo": 5,
+            "raceName": "2歳新馬",
+            "startTimeJst": "12:25",
+            "startTimeUtc": "2026-09-20T03:25:00.000Z",
+            "surface": "芝",
+            "distanceM": 1600,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-nakayama-06",
+            "raceDate": "2026-09-20",
+            "venue": "中山",
+            "raceNo": 6,
+            "raceName": "3歳以上1勝クラス",
+            "startTimeJst": "12:55",
+            "startTimeUtc": "2026-09-20T03:55:00.000Z",
+            "surface": "ダート",
+            "distanceM": 1800,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-nakayama-07",
+            "raceDate": "2026-09-20",
+            "venue": "中山",
+            "raceNo": 7,
+            "raceName": "3歳以上1勝クラス",
+            "startTimeJst": "13:25",
+            "startTimeUtc": "2026-09-20T04:25:00.000Z",
+            "surface": "芝",
+            "distanceM": 2000,
+            "status": "scheduled",
+            "publicState": {
+              "code": "target",
+              "label": "買い目対象・確定前",
+              "deadline": "13:10までに最終計算開始 / 13:15までに確定"
+            }
+          },
+          {
+            "raceId": "2026-09-20-nakayama-08",
+            "raceDate": "2026-09-20",
+            "venue": "中山",
+            "raceNo": 8,
+            "raceName": "3歳以上1勝クラス",
+            "startTimeJst": "13:55",
+            "startTimeUtc": "2026-09-20T04:55:00.000Z",
+            "surface": "ダート",
+            "distanceM": 1200,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-nakayama-09",
+            "raceDate": "2026-09-20",
+            "venue": "中山",
+            "raceNo": 9,
+            "raceName": "松戸特別",
+            "startTimeJst": "14:25",
+            "startTimeUtc": "2026-09-20T05:25:00.000Z",
+            "surface": "ダート",
+            "distanceM": 2400,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-nakayama-10",
+            "raceDate": "2026-09-20",
+            "venue": "中山",
+            "raceNo": 10,
+            "raceName": "汐留特別",
+            "startTimeJst": "15:05",
+            "startTimeUtc": "2026-09-20T06:05:00.000Z",
+            "surface": "ダート",
+            "distanceM": 1200,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-nakayama-11",
+            "raceDate": "2026-09-20",
+            "venue": "中山",
+            "raceNo": 11,
+            "raceName": "第72回 産経賞オールカマー（GⅡ）",
+            "startTimeJst": "15:45",
+            "startTimeUtc": "2026-09-20T06:45:00.000Z",
+            "surface": "芝",
+            "distanceM": 2200,
+            "status": "scheduled",
+            "publicState": {
+              "code": "target",
+              "label": "買い目対象・確定前",
+              "deadline": "15:30までに最終計算開始 / 15:35までに確定"
+            }
+          },
+          {
+            "raceId": "2026-09-20-nakayama-12",
+            "raceDate": "2026-09-20",
+            "venue": "中山",
+            "raceNo": 12,
+            "raceName": "3歳以上1勝クラス",
+            "startTimeJst": "16:30",
+            "startTimeUtc": "2026-09-20T07:30:00.000Z",
+            "surface": "芝",
+            "distanceM": 1200,
+            "status": "scheduled",
+            "publicState": {
+              "code": "target",
+              "label": "買い目対象・確定前",
+              "deadline": "16:15までに最終計算開始 / 16:20までに確定"
+            }
+          },
+          {
+            "raceId": "2026-09-20-hanshin-01",
+            "raceDate": "2026-09-20",
+            "venue": "阪神",
+            "raceNo": 1,
+            "raceName": "障害3歳以上未勝利",
+            "startTimeJst": "09:45",
+            "startTimeUtc": "2026-09-20T00:45:00.000Z",
+            "surface": "ダート",
+            "distanceM": 2970,
+            "status": "scheduled",
+            "publicState": {
+              "code": "target",
+              "label": "買い目対象・確定前",
+              "deadline": "09:30までに最終計算開始 / 09:35までに確定"
+            }
+          },
+          {
+            "raceId": "2026-09-20-hanshin-02",
+            "raceDate": "2026-09-20",
+            "venue": "阪神",
+            "raceNo": 2,
+            "raceName": "2歳未勝利",
+            "startTimeJst": "10:20",
+            "startTimeUtc": "2026-09-20T01:20:00.000Z",
+            "surface": "ダート",
+            "distanceM": 1200,
+            "status": "scheduled",
+            "publicState": {
+              "code": "target",
+              "label": "買い目対象・確定前",
+              "deadline": "10:05までに最終計算開始 / 10:10までに確定"
+            }
+          },
+          {
+            "raceId": "2026-09-20-hanshin-03",
+            "raceDate": "2026-09-20",
+            "venue": "阪神",
+            "raceNo": 3,
+            "raceName": "2歳未勝利",
+            "startTimeJst": "10:50",
+            "startTimeUtc": "2026-09-20T01:50:00.000Z",
+            "surface": "芝",
+            "distanceM": 1800,
+            "status": "scheduled",
+            "publicState": {
+              "code": "target",
+              "label": "買い目対象・確定前",
+              "deadline": "10:35までに最終計算開始 / 10:40までに確定"
+            }
+          },
+          {
+            "raceId": "2026-09-20-hanshin-04",
+            "raceDate": "2026-09-20",
+            "venue": "阪神",
+            "raceNo": 4,
+            "raceName": "2歳新馬",
+            "startTimeJst": "11:20",
+            "startTimeUtc": "2026-09-20T02:20:00.000Z",
+            "surface": "ダート",
+            "distanceM": 1200,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-hanshin-05",
+            "raceDate": "2026-09-20",
+            "venue": "阪神",
+            "raceNo": 5,
+            "raceName": "2歳新馬",
+            "startTimeJst": "12:10",
+            "startTimeUtc": "2026-09-20T03:10:00.000Z",
+            "surface": "芝",
+            "distanceM": 1600,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-hanshin-06",
+            "raceDate": "2026-09-20",
+            "venue": "阪神",
+            "raceNo": 6,
+            "raceName": "3歳以上1勝クラス",
+            "startTimeJst": "12:40",
+            "startTimeUtc": "2026-09-20T03:40:00.000Z",
+            "surface": "芝",
+            "distanceM": 2000,
+            "status": "scheduled",
+            "publicState": {
+              "code": "target",
+              "label": "買い目対象・確定前",
+              "deadline": "12:25までに最終計算開始 / 12:30までに確定"
+            }
+          },
+          {
+            "raceId": "2026-09-20-hanshin-07",
+            "raceDate": "2026-09-20",
+            "venue": "阪神",
+            "raceNo": 7,
+            "raceName": "3歳以上1勝クラス",
+            "startTimeJst": "13:10",
+            "startTimeUtc": "2026-09-20T04:10:00.000Z",
+            "surface": "ダート",
+            "distanceM": 1800,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-hanshin-08",
+            "raceDate": "2026-09-20",
+            "venue": "阪神",
+            "raceNo": 8,
+            "raceName": "3歳以上1勝クラス",
+            "startTimeJst": "13:40",
+            "startTimeUtc": "2026-09-20T04:40:00.000Z",
+            "surface": "芝",
+            "distanceM": 1600,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-hanshin-09",
+            "raceDate": "2026-09-20",
+            "venue": "阪神",
+            "raceNo": 9,
+            "raceName": "夕月特別",
+            "startTimeJst": "14:10",
+            "startTimeUtc": "2026-09-20T05:10:00.000Z",
+            "surface": "芝",
+            "distanceM": 2000,
+            "status": "scheduled",
+            "publicState": {
+              "code": "target",
+              "label": "買い目対象・確定前",
+              "deadline": "13:55までに最終計算開始 / 14:00までに確定"
+            }
+          },
+          {
+            "raceId": "2026-09-20-hanshin-10",
+            "raceDate": "2026-09-20",
+            "venue": "阪神",
+            "raceNo": 10,
+            "raceName": "鳥取特別",
+            "startTimeJst": "14:50",
+            "startTimeUtc": "2026-09-20T05:50:00.000Z",
+            "surface": "ダート",
+            "distanceM": 1800,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-hanshin-11",
+            "raceDate": "2026-09-20",
+            "venue": "阪神",
+            "raceNo": 11,
+            "raceName": "道頓堀ステークス",
+            "startTimeJst": "15:30",
+            "startTimeUtc": "2026-09-20T06:30:00.000Z",
+            "surface": "芝",
+            "distanceM": 1200,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          },
+          {
+            "raceId": "2026-09-20-hanshin-12",
+            "raceDate": "2026-09-20",
+            "venue": "阪神",
+            "raceNo": 12,
+            "raceName": "3歳以上1勝クラス",
+            "startTimeJst": "16:10",
+            "startTimeUtc": "2026-09-20T07:10:00.000Z",
+            "surface": "ダート",
+            "distanceM": 1400,
+            "status": "scheduled",
+            "publicState": {
+              "code": "skip",
+              "label": "見送り",
+              "deadline": null
+            }
+          }
+        ],
+        "betStateAvailable": true
+      },
+      "bodySnippet": "{\"ok\":true,\"date\":\"2026-09-20\",\"races\":[{\"raceId\":\"2026-09-20-nakayama-01\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":1,\"raceName\":\"2歳未勝利\",\"startTimeJst\":\"10:00\",\"startTimeUtc\":\"2026-09-20T01:00:00.000Z\",\"surface\":\"ダート\",\"distanceM\":1800,\"status\":\"scheduled\",\"publicState\":{\"code\":\"skip\",\"label\":\"見送り\",\"deadline\":null}},{\"raceId\":\"2026-09-20-nakayama-02\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":2,\"raceName\":\"2歳未勝利\",\"startTimeJst\":\"10:35\",\"startTimeUtc\":\"2026-09-20T01:35:00.000Z\",\"surface\":\"芝\",\"distanceM\":1600,\"status\":\"scheduled\",\"publicState\":{\"code\":\"target\",\"label\":\"買い目対象・確定前\",\"deadline\":\"10:20までに最終計算開始 / 10:25までに確定\"}},{\"raceId\":\"2026-09-20-nakayama-03\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":3,\"raceName\":\"2歳未勝利\",\"startTimeJst\":\"11:05\",\"startTimeUtc\":\"2026-09-20T02:05:00.000Z\",\"surface\":\"芝\",\"distanceM\":2000,\"status\":\"scheduled\",\"publicState\":{\"code\":\"target\",\"label\":\"買い目対象・確定前\",\"deadline\":\"10:50までに最終計算開始 / 10:55までに確定\"}},{\"raceId\":\"2026-09-20-nakayama-04\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":4,\"raceName\":\"2歳新馬\",\"startTimeJst\":\"11:35\",\"startTimeUtc\":\"2026-09-20T02:35:00.000Z\",\"surface\":\"ダート\",\"distanceM\":1800,\"status\":\"scheduled\",\"publicState\":{\"code\":\"skip\",\"label\":\"見送り\",\"deadline\":null}},{\"raceId\":\"2026-09-20-nakayama-05\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":5,\"raceName\":\"2歳新馬\",\"startTimeJst\":\"12:25\",\"startTimeUtc\":\"2026-09-20T03:25:00.000Z\",\"surface\":\"芝\",\"distanceM\":1600,\"status\":\"scheduled\",\"publicState\":{\"code\":\"skip\",\"label\":\"見送り\",\"deadline\":null}},{\"raceId\":\"2026-09-20-nakayama-06\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":6,\"raceName\":\"3歳以上1勝クラス\",\"startTimeJst\":\"12:55\",\"startTimeUtc\":\"2026-09-20T03:55:00.000Z\",\"surface\":\"ダート\",\"distanceM\":1800,\"status\":\"scheduled\",\"publicState\":{\"code\":\"skip\",\"label\":\"見送り\",\"deadline\":null}},{\"raceId\":\"2026-09-20-nakayama-07\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":7,\"raceName\":\"3歳以上1勝クラス\",\"startTimeJst\":\"13:25\",\"startTimeUtc\":\"2026-09-20T04:25:00.000Z\",\"surface\":\"芝\",\"distanceM\":2000,\"status\":\"scheduled\",\"publicState\":{\"code\":\"target\",\"label\":\"買い目対象・確定前\",\"deadline\":\"13:10までに最終計算開始 / 13:15までに確定\"}},{\"raceId\":\"2026-09-20-nakayama-08\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":8,\"raceName\":\"3歳以上1勝クラス\",\"startTimeJst\":\"13:55\",\"startTimeUtc\":\"2026-09-20T04:55:00.000Z\",\"surface\":\"ダート\",\"distanceM\":1200,\"status\":\"scheduled\",\"publicState\":{\"code\":\"skip\",\"label\":\"見送り\",\"deadline\":null}},{\"raceId\":\"2026-09-20-nakayama-09\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":9,\"raceName\":\"松戸特別\",\"startTimeJst\":\"14:25\",\"startTimeUtc\":\"2026-09-20T05:25:00.000Z\",\"surface\":\"ダート\",\"distanceM\":2400,\"status\":\"scheduled\",\"publicState\":{\"code\":\"skip\",\"label\":\"見送り\",\"deadline\":null}},{\"raceId\":\"2026-09-20-nakayama-10\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":10,\"raceName\":\"汐留特別\",\"startTimeJst\":\"15:05\",\"startTimeUtc\":\"2026-09-20T06:05:00.000Z\",\"surface\":\"ダート\",\"distanceM\":1200,\"status\":\"scheduled\",\"publicState\":{\"code\":\"skip\",\"label\":\"見送り\",\"deadline\":null}},{\"raceId\":\"2026-09-20-nakayama-11\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":11,\"raceName\":\"第72回 産経賞オールカマー（GⅡ）\",\"startTimeJst\":\"15:45\",\"startTimeUtc\":\"2026-09-20T06:45:00.000Z\",\"surface\":\"芝\",\"distanceM\":2200,\"status\":\"scheduled\",\"publicState\":{\"code\":\"target\",\"label\":\"買い目対象・確定前\",\"deadline\":\"15:30までに最終計算開始 / 15:35までに確定\"}},{\"raceId\":\"2026-09-20-nakayama-12\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":12,\"raceName\":\"3歳以上1勝クラス\",\"startTimeJst\":\"16:30\",\"startTimeUtc\":\"2026-09-20T07:30:00.000Z\",\"surface\":\"芝\",\"distanceM\":1200,\"status\":\"scheduled\",\"publicState\":{\"code\":\"target\",\"label\":\"買い目対象・確定前\",\"deadline\":\"16:15までに最終計算開始 / 16:20までに確定\"}},{\"raceId\":\"2026-09-20-hanshin-01\",\"raceDate\":\"2026-09-20\",\"venue\":\"阪神\",\"raceNo\":1,\"raceName\":\"障害3歳以上未勝利\",\"startTimeJst\":\"09:45\",\"startTimeUtc\":\"2026-09-20T00:45:00.000Z\",\"surface\":\"ダート\",\"distanceM\":2970,\"status\":\"scheduled\",\"publicState\":{\"code\":\"target\",\"label\":\"買い目対象・確定前\",\"deadline\":\"09:30までに最終計算開始 / 09:35までに確定\"}},{\"raceId\":\"2026-09-20-hanshin-02\",\"raceDate\":\"2026-09-20\",\"venue\":\"阪神\",\"raceN"
+    },
+    "summary": {
+      "code": "200",
+      "json": {
+        "ok": true,
+        "date": "2026-09-20",
+        "hasPredictions": false,
+        "targetRaces": 10,
+        "courses": [
+          {
+            "course": "ライト",
+            "totalRaces": 0,
+            "settledRaces": 0,
+            "hitRaces": 0,
+            "refundRaces": 0,
+            "stakeYen": 0,
+            "returnYen": 0,
+            "roiPct": null,
+            "complete": false
+          },
+          {
+            "course": "スタンダード",
+            "totalRaces": 0,
+            "settledRaces": 0,
+            "hitRaces": 0,
+            "refundRaces": 0,
+            "stakeYen": 0,
+            "returnYen": 0,
+            "roiPct": null,
+            "complete": false
+          },
+          {
+            "course": "プレミアム",
+            "totalRaces": 0,
+            "settledRaces": 0,
+            "hitRaces": 0,
+            "refundRaces": 0,
+            "stakeYen": 0,
+            "returnYen": 0,
+            "roiPct": null,
+            "complete": false
+          }
+        ],
+        "liveSource": "live-d1-current-day+snapshot-history"
+      },
+      "bodySnippet": "{\"ok\":true,\"date\":\"2026-09-20\",\"hasPredictions\":false,\"targetRaces\":10,\"courses\":[{\"course\":\"ライト\",\"totalRaces\":0,\"settledRaces\":0,\"hitRaces\":0,\"refundRaces\":0,\"stakeYen\":0,\"returnYen\":0,\"roiPct\":null,\"complete\":false},{\"course\":\"スタンダード\",\"totalRaces\":0,\"settledRaces\":0,\"hitRaces\":0,\"refundRaces\":0,\"stakeYen\":0,\"returnYen\":0,\"roiPct\":null,\"complete\":false},{\"course\":\"プレミアム\",\"totalRaces\":0,\"settledRaces\":0,\"hitRaces\":0,\"refundRaces\":0,\"stakeYen\":0,\"returnYen\":0,\"roiPct\":null,\"complete\":false}],\"liveSource\":\"live-d1-current-day+snapshot-history\"}"
+    },
+    "home": {
+      "code": "200",
+      "json": null,
+      "bodySnippet": "<!doctype html><html lang=\"ja\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\"><meta name=\"theme-color\" content=\"#07111b\"><title>レース一覧｜レース探偵</title><style>\n:root{color-scheme:dark;--bg:#07111b;--panel:#101c29;--panel2:#0c1723;--line:#2b3d52;--text:#f2f5f8;--muted:#9baec4;--green:#51d0a5;--green2:#123d35;--red:#ff817c;--warn:#f2d48d;--blue:#87bfff}\n*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",\"Noto Sans JP\",sans-serif}.wrap{max-width:1080px;margin:auto;padding:16px 14px 52px}a{color:inherit;text-decoration:none}.top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0 18px;position:sticky;top:0;z-index:20;background:linear-gradient(var(--bg) 76%,transparent)}.brand{font-weight:900;font-size:25px;color:var(--green);white-space:nowrap}.nav{display:flex;gap:7px;overflow:auto}.nav a{white-space:nowrap;padding:8px 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel)}\n.hero,.card,.race-card,.panel,.notice,.runner-table,.rule-box{border:1px solid var(--line);background:var(--panel);border-radius:18px}.hero{padding:20px;margin-bottom:16px}.hero h1{margin:0 0 8px;font-size:27px}.hero p{color:var(--muted);line-height:1.75;margin:6px 0}.today-hero{border-color:#2d806c;background:linear-gradient(135deg,#102b27,#101c29)}.today-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:var(--green2);color:#b9f4df;font-weight:800;font-size:12px}.section-title{display:flex;align-items:end;justify-content:space-between;gap:10px;margin:24px 0 10px}.section-title h2{margin:0;font-size:21px}.muted{color:var(--muted)}\n.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.metric{padding:16px}.metric strong{display:block;font-size:34px;color:var(--green);margin:5px 0}.metric small{color:var(--muted);line-height:1.6}.metric summary{cursor:pointer;list-style:none}.metric summary::-webkit-details-marker{display:none}.metric summary:after{content:\"月別を見る\";display:inline-block;margin-top:9px;font-size:12px;color:var(--blue)}.metric[open] summary:after{content:\"月別を閉じる\"}.monthly{margin-top:12px;padding-top:11px;border-top:1px solid var(--line);max-height:300px;overflow:auto}.monthly-row{display:grid;grid-template-columns:68px 1fr auto;gap:8px;padding:7px 0;border-bottom:1px solid rgba(43,61,82,.55);font-size:12px}.monthly-row span:nth-child(2){color:var(--muted)}\n.navigator{padding:14px}.nav-step{margin:12px 0}.nav-label{font-size:12px;color:var(--muted);margin:0 0 7px}.rail{display:flex;gap:8px;overflow-x:auto;padding:1px 0 7px;scrollbar-width:thin}.chip{flex:0 0 auto;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:999px;padding:9px 13px;font:inherit;cursor:pointer;white-space:nowrap}.chip.active{border-color:var(--green);background:var(--green2);color:#c7f8e5;font-weight:800}.chip.today{box-shadow:inset 0 0 0 1px var(--green)}.race-rail{display:flex;gap:10px;overflow-x:auto;padding:2px 0 10px;min-height:176px}.race-card{flex:0 0 245px;padding:15px;position:relative}.race-card.today{border-color:var(--green)}.race-head{display:flex;align-items:center;justify-content:space-between;gap:8px}.race-no{font-size:24px;font-weight:900}.race-time{font-weight:700;color:var(--muted)}.race-name{margin:9px 0 5px;font-weight:800;min-height:42px}.race-meta{color:var(--muted);font-size:12px}.status{display:inline-flex;margin-top:12px;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:800}.status.buy{background:#15483a;color:#baf4dd}.status.skip{background:#263442;color:#b9c8d8}.status.pending{background:#4a3b1d;color:#f6dda0}.status.none{background:#3a2830;color:#efb9c3}.deadline{font-size:11px;color:var(--warn);margin-top:7px;line-height:1.5}.empty{padding:22px;color:var(--muted)}\n.grid2{display:grid;grid-template-columns:1fr"
+    },
+    "live_primary": {
+      "code": "200",
+      "json": {
+        "service": "race-tantei-live-deadline",
+        "version": "live-deadline-v11-persistent-miss-lastgood-20260919",
+        "status": "up"
+      },
+      "bodySnippet": "{\"service\":\"race-tantei-live-deadline\",\"version\":\"live-deadline-v11-persistent-miss-lastgood-20260919\",\"status\":\"up\"}"
+    },
+    "live_backup": {
+      "code": "200",
+      "json": {
+        "service": "race-tantei-live-deadline",
+        "version": "live-deadline-v11-persistent-miss-lastgood-20260919",
+        "status": "up"
+      },
+      "bodySnippet": "{\"service\":\"race-tantei-live-deadline\",\"version\":\"live-deadline-v11-persistent-miss-lastgood-20260919\",\"status\":\"up\"}"
+    },
+    "win5_primary": {
+      "code": "200",
+      "json": {
+        "service": "race-tantei-win5",
+        "version": "win5-entry-v3-race-day-gate-20260908",
+        "status": "up"
+      },
+      "bodySnippet": "{\"service\":\"race-tantei-win5\",\"version\":\"win5-entry-v3-race-day-gate-20260908\",\"status\":\"up\"}"
+    },
+    "win5_backup": {
+      "code": "200",
+      "json": {
+        "service": "race-tantei-win5",
+        "version": "win5-entry-v3-race-day-gate-20260908",
+        "status": "up"
+      },
+      "bodySnippet": "{\"service\":\"race-tantei-win5\",\"version\":\"win5-entry-v3-race-day-gate-20260908\",\"status\":\"up\"}"
+    }
+  }
+}
