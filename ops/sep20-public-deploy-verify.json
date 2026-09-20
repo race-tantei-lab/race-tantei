@@ -1,0 +1,988 @@
+{
+  "selection": {
+    "date": "2026-09-20",
+    "sourceModel": "ten-year-completed-model",
+    "selectionMode": "canonical-ten-year-race-score",
+    "selected": [
+      {
+        "raceId": "2026-09-20-nakayama-02",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 2,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:35",
+        "raceScore": 0.76129082
+      },
+      {
+        "raceId": "2026-09-20-nakayama-03",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 3,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "11:05",
+        "raceScore": 0.76173362
+      },
+      {
+        "raceId": "2026-09-20-nakayama-07",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 7,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "13:25",
+        "raceScore": 0.79246288
+      },
+      {
+        "raceId": "2026-09-20-nakayama-11",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 11,
+        "raceName": "第72回 産経賞オールカマー（GⅡ）",
+        "startTimeJst": "15:45",
+        "raceScore": 0.77989985
+      },
+      {
+        "raceId": "2026-09-20-nakayama-12",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 12,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "16:30",
+        "raceScore": 0.76022363
+      },
+      {
+        "raceId": "2026-09-20-hanshin-01",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 1,
+        "raceName": "障害3歳以上未勝利",
+        "startTimeJst": "09:45",
+        "raceScore": 0.76673313
+      },
+      {
+        "raceId": "2026-09-20-hanshin-02",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 2,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:20",
+        "raceScore": 0.78583349
+      },
+      {
+        "raceId": "2026-09-20-hanshin-03",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 3,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:50",
+        "raceScore": 0.76209502
+      },
+      {
+        "raceId": "2026-09-20-hanshin-06",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 6,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "12:40",
+        "raceScore": 0.75854895
+      },
+      {
+        "raceId": "2026-09-20-hanshin-09",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 9,
+        "raceName": "夕月特別",
+        "startTimeJst": "14:10",
+        "raceScore": 0.78737029
+      }
+    ],
+    "venueCounts": {
+      "中山": 12,
+      "阪神": 12
+    },
+    "selectedVenueCounts": {
+      "中山": 5,
+      "阪神": 5
+    },
+    "stateBaseThroughDate": "2026-08-09",
+    "stateAdvancedThroughDate": "2026-09-19",
+    "resultDataUsedForTargetDay": false,
+    "historicalFinalOddsUsedForSelection": false,
+    "syntheticOddsUsed": false
+  },
+  "selected": [
+    {
+      "venue": "阪神",
+      "raceNo": 1,
+      "raceId": "2026-09-20-hanshin-01",
+      "startTimeUtc": "2026-09-20T00:45:00.000Z",
+      "remainingMin": 25.092,
+      "activeRunners": 12,
+      "previewState": 1,
+      "finalRows": 6,
+      "lockedAt": "2026-09-20T00:19:40.904Z",
+      "sourceMinus2": 6
+    },
+    {
+      "venue": "阪神",
+      "raceNo": 2,
+      "raceId": "2026-09-20-hanshin-02",
+      "startTimeUtc": "2026-09-20T01:20:00.000Z",
+      "remainingMin": 60.092,
+      "activeRunners": 13,
+      "previewState": 1,
+      "finalRows": 0,
+      "lockedAt": null,
+      "sourceMinus2": 0
+    },
+    {
+      "venue": "中山",
+      "raceNo": 2,
+      "raceId": "2026-09-20-nakayama-02",
+      "startTimeUtc": "2026-09-20T01:35:00.000Z",
+      "remainingMin": 75.092,
+      "activeRunners": 13,
+      "previewState": 1,
+      "finalRows": 0,
+      "lockedAt": null,
+      "sourceMinus2": 0
+    },
+    {
+      "venue": "阪神",
+      "raceNo": 3,
+      "raceId": "2026-09-20-hanshin-03",
+      "startTimeUtc": "2026-09-20T01:50:00.000Z",
+      "remainingMin": 90.092,
+      "activeRunners": 7,
+      "previewState": 0,
+      "finalRows": 0,
+      "lockedAt": null,
+      "sourceMinus2": 0
+    },
+    {
+      "venue": "中山",
+      "raceNo": 3,
+      "raceId": "2026-09-20-nakayama-03",
+      "startTimeUtc": "2026-09-20T02:05:00.000Z",
+      "remainingMin": 105.092,
+      "activeRunners": 13,
+      "previewState": 0,
+      "finalRows": 0,
+      "lockedAt": null,
+      "sourceMinus2": 0
+    },
+    {
+      "venue": "阪神",
+      "raceNo": 6,
+      "raceId": "2026-09-20-hanshin-06",
+      "startTimeUtc": "2026-09-20T03:40:00.000Z",
+      "remainingMin": 200.092,
+      "activeRunners": 11,
+      "previewState": 0,
+      "finalRows": 0,
+      "lockedAt": null,
+      "sourceMinus2": 0
+    },
+    {
+      "venue": "中山",
+      "raceNo": 7,
+      "raceId": "2026-09-20-nakayama-07",
+      "startTimeUtc": "2026-09-20T04:25:00.000Z",
+      "remainingMin": 245.092,
+      "activeRunners": 18,
+      "previewState": 0,
+      "finalRows": 0,
+      "lockedAt": null,
+      "sourceMinus2": 0
+    },
+    {
+      "venue": "阪神",
+      "raceNo": 9,
+      "raceId": "2026-09-20-hanshin-09",
+      "startTimeUtc": "2026-09-20T05:10:00.000Z",
+      "remainingMin": 290.092,
+      "activeRunners": 10,
+      "previewState": 0,
+      "finalRows": 0,
+      "lockedAt": null,
+      "sourceMinus2": 0
+    },
+    {
+      "venue": "中山",
+      "raceNo": 11,
+      "raceId": "2026-09-20-nakayama-11",
+      "startTimeUtc": "2026-09-20T06:45:00.000Z",
+      "remainingMin": 385.092,
+      "activeRunners": 13,
+      "previewState": 0,
+      "finalRows": 0,
+      "lockedAt": null,
+      "sourceMinus2": 0
+    },
+    {
+      "venue": "中山",
+      "raceNo": 12,
+      "raceId": "2026-09-20-nakayama-12",
+      "startTimeUtc": "2026-09-20T07:30:00.000Z",
+      "remainingMin": 430.092,
+      "activeRunners": 16,
+      "previewState": 0,
+      "finalRows": 0,
+      "lockedAt": null,
+      "sourceMinus2": 0
+    }
+  ],
+  "courseFinals": [
+    {
+      "raceId": "2026-09-20-hanshin-01",
+      "course": "スタンダード",
+      "rows": 2,
+      "distinctBetTypes": 2,
+      "minSource": -2,
+      "maxSource": -2,
+      "lockedAt": "2026-09-20T00:19:40.904Z",
+      "lockedAtMax": "2026-09-20T00:19:40.904Z"
+    },
+    {
+      "raceId": "2026-09-20-hanshin-01",
+      "course": "プレミアム",
+      "rows": 2,
+      "distinctBetTypes": 2,
+      "minSource": -2,
+      "maxSource": -2,
+      "lockedAt": "2026-09-20T00:19:40.904Z",
+      "lockedAtMax": "2026-09-20T00:19:40.904Z"
+    },
+    {
+      "raceId": "2026-09-20-hanshin-01",
+      "course": "ライト",
+      "rows": 2,
+      "distinctBetTypes": 2,
+      "minSource": -2,
+      "maxSource": -2,
+      "lockedAt": "2026-09-20T00:19:40.904Z",
+      "lockedAtMax": "2026-09-20T00:19:40.904Z"
+    }
+  ],
+  "systemState": [
+    {
+      "state_key": "final_daily_selection:2026-09-20",
+      "updated_at": "2026-09-20 00:00:19",
+      "state_value": "{\"date\":\"2026-09-20\",\"sourceModel\":\"ten-year-completed-model\",\"selectionMode\":\"canonical-ten-year-race-score\",\"selected\":[{\"raceId\":\"2026-09-20-nakayama-02\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":2,\"raceName\":\"2歳未勝利\",\"startTimeJst\":\"10:35\",\"raceScore\":0.76129082},{\"raceId\":\"2026-09-20-nakayama-03\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":3,\"raceName\":\"2歳未勝利\",\"startTimeJst\":\"11:05\",\"raceScore\":0.76173362},{\"raceId\":\"2026-09-20-nakayama-07\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":7,\"raceName\":\"3歳以上1勝クラス\",\"startTimeJst\":\"13:25\",\"raceScore\":0.79246288},{\"raceId\":\"2026-09-20-nakayama-11\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":11,\"raceName\":\"第72回 産経賞オールカマー（GⅡ）\",\"startTimeJst\":\"15:45\",\"raceScore\":0.77989985},{\"raceId\":\"2026-09-20-nakayama-12\",\"raceDate\":\"2026-09-20\",\"venue\":\"中山\",\"raceNo\":12,\"raceName\":\"3歳以上1勝クラス\",\"startTimeJst\":\"16:30\",\"raceScore\":0.76022363},{\"raceId\":\"2026-09-20-hanshin-01\",\"raceDate\":\"2026-09-20\",\"venue\":\"阪神\",\"raceNo\":1,\"raceName\":\"障害3歳以上未勝利\",\"startTimeJst\":\"09:45\",\"raceScore\":0.76673313},{\"raceId\":\"2026-09-20-hanshin-02\",\"raceDate\":\"2026-09-20\",\"venue\":\"阪神\",\"raceNo\":2,\"raceName\":\"2歳未勝利\",\"startTimeJst\":\"10:20\",\"raceScore\":0.78583349},{\"raceId\":\"2026-09-20-hanshin-03\",\"raceDate\":\"2026-09-20\",\"venue\":\"阪神\",\"raceNo\":3,\"raceName\":\"2歳未勝利\",\"startTimeJst\":\"10:50\",\"raceScore\":0.76209502},{\"raceId\":\"2026-09-20-hanshin-06\",\"raceDate\":\"2026-09-20\",\"venue\":\"阪神\",\"raceNo\":6,\"raceName\":\"3歳以上1勝クラス\",\"startTimeJst\":\"12:40\",\"raceScore\":0.75854895},{\"raceId\":\"2026-09-20-hanshin-09\",\"raceDate\":\"2026-09-20\",\"venue\":\"阪神\",\"raceNo\":9,\"raceName\":\"夕月特別\",\"startTimeJst\":\"14:10\",\"raceScore\":0.78737029}],\"venueCounts\":{\"中山\":12,\"阪神\":12},\"selectedVenueCounts\":{\"中山\":5,\"阪神\":5},\"stateBaseThroughDate\":\"2026-08-09\",\"stateAdvancedThroughDate\":\"2026-09-19\",\"resultDataUsedForTargetDay\":false,\"historicalFinalOddsUsedForSelection\":false,\"syntheticOddsUsed\":false}"
+    },
+    {
+      "state_key": "live_deadline_driver:2026-09-20",
+      "updated_at": "2026-09-20 00:05:22",
+      "state_value": "{\"version\":\"live-deadline-v11-persistent-miss-lastgood-20260919\",\"date\":\"2026-09-20\",\"scheduledAt\":\"2026-09-20T00:05:16.000Z\",\"startedAt\":\"2026-09-20T00:05:16.654Z\",\"owner\":\"live-deadline-v11-persistent-miss-lastgood-20260919:4baaae5e-d230-42da-a7d4-fa38a271d62a\",\"status\":\"ok\",\"phase\":\"complete\",\"ok\":true,\"priorityGuardCheckedAt\":\"2026-09-20T00:05:16.674Z\",\"priorityGuard\":{\"status\":\"ok\",\"checkedAt\":\"2026-09-20T00:05:16.674Z\",\"dueRaceIds\":[],\"lockedRaceIds\":[],\"deadlineMissedRaceIds\":[],\"skippedAlreadyLockedRaceIds\":[],\"errors\":[]},\"selection\":{\"status\":\"already_frozen\"},\"selectionCheckedAt\":\"2026-09-20T00:05:16.868Z\",\"restoredBefore\":[],\"slaBefore\":null,\"guardBeforeCheckedAt\":\"2026-09-20T00:05:16.674Z\",\"guardBefore\":{\"status\":\"ok\",\"checkedAt\":\"2026-09-20T00:05:16.674Z\",\"dueRaceIds\":[],\"lockedRaceIds\":[],\"deadlineMissedRaceIds\":[],\"skippedAlreadyLockedRaceIds\":[],\"errors\":[]},\"liveStartedAt\":\"2026-09-20T00:05:16.876Z\",\"liveFailure\":null,\"live\":{\"status\":\"ok\",\"checkedAt\":\"2026-09-20T00:05:16.876Z\",\"completeBefore\":0,\"completeAfter\":0,\"refreshedPreviewRaceIds\":[\"2026-09-20-nakayama-02\"],\"previewAvailableRaceIds\":[\"2026-09-20-nakayama-02\",\"2026-09-20-hanshin-01\",\"2026-09-20-hanshin-02\"],\"lockedByWorker\":[],\"incompleteRaceIds\":[\"2026-09-20-nakayama-02\",\"2026-09-20-hanshin-01\",\"2026-09-20-hanshin-02\"],\"deadlineBreachRaceIds\":[],\"errors\":[]},\"restoredAfter\":[],\"guardAfterCheckedAt\":\"2026-09-20T00:05:22.319Z\",\"guardAfter\":{\"status\":\"ok\",\"checkedAt\":\"2026-09-20T00:05:22.319Z\",\"dueRaceIds\":[],\"lockedRaceIds\":[],\"deadlineMissedRaceIds\":[],\"skippedAlreadyLockedRaceIds\":[],\"errors\":[]},\"slaAfter\":{\"checkedAt\":\"2026-09-20T00:05:22.558Z\",\"date\":\"2026-09-20\",\"selectedRaceCount\":10,\"previewReadyRaceIds\":[\"2026-09-20-hanshin-01\",\"2026-09-20-hanshin-02\",\"2026-09-20-nakayama-02\"],\"finalReadyRaceIds\":[],\"previewMissingByT40RaceIds\":[],\"previewMissingByT30RaceIds\":[],\"finalMissingByT30RaceIds\":[],\"finalMissingByT25RaceIds\":[],\"finalMissingByT17RaceIds\":[],\"finalMissingByT16RaceIds\":[],\"deadlineMissedRaceIds\":[]},\"unresolvedDueRaceIds\":[],\"unresolvedGuardErrors\":[],\"hardDeadlineBreachRaceIds\":[],\"preDeadlineCriticalRaceIds\":[],\"completedAt\":\"2026-09-20T00:05:22.593Z\",\"durationMs\":5939}"
+    },
+    {
+      "state_key": "worker_deadline_guard:2026-09-20",
+      "updated_at": "2026-09-20 00:19:28",
+      "state_value": "{\"status\":\"ok\",\"checkedAt\":\"2026-09-20T00:19:24.464Z\",\"date\":\"2026-09-20\",\"orderedSelectedRaceIds\":[\"2026-09-20-hanshin-01\",\"2026-09-20-hanshin-02\",\"2026-09-20-nakayama-02\",\"2026-09-20-hanshin-03\",\"2026-09-20-nakayama-03\",\"2026-09-20-hanshin-06\",\"2026-09-20-nakayama-07\",\"2026-09-20-hanshin-09\",\"2026-09-20-nakayama-11\",\"2026-09-20-nakayama-12\"],\"dueRaceIds\":[],\"lockedRaceIds\":[],\"lockedOfficialPreviewRaceIds\":[],\"lockedProbabilityFallbackRaceIds\":[],\"skippedAlreadyLockedRaceIds\":[],\"skippedOutsideWindowRaceIds\":[\"2026-09-20-hanshin-01\",\"2026-09-20-hanshin-02\",\"2026-09-20-nakayama-02\",\"2026-09-20-hanshin-03\",\"2026-09-20-nakayama-03\",\"2026-09-20-hanshin-06\",\"2026-09-20-nakayama-07\",\"2026-09-20-hanshin-09\",\"2026-09-20-nakayama-11\",\"2026-09-20-nakayama-12\"],\"deadlineMissedRaceIds\":[],\"errors\":[]}"
+    },
+    {
+      "state_key": "worker_live_final:2026-09-20-hanshin-01",
+      "updated_at": "2026-09-20 00:19:41",
+      "state_value": "{\"status\":\"locked\",\"raceId\":\"2026-09-20-hanshin-01\",\"lockedAt\":\"2026-09-20T00:19:40.904Z\",\"finalizedFrom\":\"fresh\",\"generationStartedAt\":\"2026-09-20T00:19:30.514Z\",\"reflectionDeadlineMinutes\":10,\"sourceModel\":\"ten-year-completed-model\",\"modelSha256\":\"63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5\",\"previewGeneratedAt\":\"2026-09-20T00:19:40.351Z\",\"bodyWeightApplied\":true,\"bodyWeightFetchedAt\":\"2026-09-20T00:19:30.514Z\",\"bodyWeightSource\":\"https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0109202604060120260920%2F62\",\"bodyWeightSnapshotSha256\":\"d3ee30af90c2bb5af822afb7a40c25dafa1ce160a031231005a099c49280e9b8\",\"bodyWeights\":[{\"horseNo\":1,\"horseWeight\":524,\"weightChange\":8},{\"horseNo\":2,\"horseWeight\":524,\"weightChange\":0},{\"horseNo\":3,\"horseWeight\":508,\"weightChange\":null},{\"horseNo\":4,\"horseWeight\":468,\"weightChange\":10},{\"horseNo\":5,\"horseWeight\":504,\"weightChange\":null},{\"horseNo\":6,\"horseWeight\":488,\"weightChange\":14},{\"horseNo\":7,\"horseWeight\":460,\"weightChange\":null},{\"horseNo\":8,\"horseWeight\":490,\"weightChange\":14},{\"horseNo\":9,\"horseWeight\":496,\"weightChange\":null},{\"horseNo\":10,\"horseWeight\":470,\"weightChange\":null},{\"horseNo\":11,\"horseWeight\":476,\"weightChange\":null},{\"horseNo\":12,\"horseWeight\":476,\"weightChange\":4}],\"bodyWeightError\":null,\"oddsFetchedAt\":\"2026-09-20T00:19:40.351Z\",\"oddsSource\":\"jra-fast-official\",\"oddsParserVersion\":\"jra-semantic-table-parser-v3-20260823\",\"oddsSnapshotSha256\":\"91e675489b13c6de7dde5e9c28f17e5f74e9bcdbdaa859c72cbb0846001a8191\",\"onlineLearning\":{\"status\":\"neutral_fallback\",\"version\":\"canonical-recency-v1\",\"cutoffUtc\":\"2026-09-20T00:19:30.514Z\",\"historyDays\":30,\"halfLifeDays\":7,\"dateMultipliers\":{\"sameDay\":6,\"previousDay\":4,\"days2To7\":2,\"days8To30\":1},\"futureResultsAllowed\":false,\"sameDayFinishedResultsAllowed\":true,\"runnerHistoryRaces\":0,\"sameDayFinishedRaces\":0,\"previousDayFinishedRaces\":0,\"last7DaysFinishedRaces\":0,\"betHistoryRaces\":0,\"sameDaySettledBetRaces\":0,\"previousDaySettledBetRaces\":0,\"last7DaysSettledBetRaces\":0,\"runnerFactorRange\":[0.5,2],\"betFactorRange\":[0.7,1.35],\"error\":\"LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY\"},\"runnerRecencyFactors\":[{\"horseNo\":1,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":2,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":3,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":4,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":5,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":6,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":7,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":8,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":9,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":10,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":11,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":12,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}}],\"tickets\":[{\"betType\":\"ワイド\",\"combination\":\"5-9\",\"horses\":[5,9],\"predictedProbability\":0.3240952338617493,\"officialOdds\":13.8,\"valueProduct\":4.472514227292141,\"score\":-0.07685043784192924,\"recencyFactor\":1},{\"betType\":\"単勝\",\"combination\":\"5\",\"horses\":[5],\"predictedProbability\":0.17356785936144423,\"officialOdds\":25.1,\"valueProduct\":4.356553269972251,\"score\":-0.46203949736883865,\"recencyFactor\":1}]}"
+    },
+    {
+      "state_key": "worker_live_lock:2026-09-20",
+      "updated_at": "2026-09-20 00:19:50",
+      "state_value": "{\"status\":\"ok\",\"checkedAt\":\"2026-09-20T00:19:28.663Z\",\"date\":\"2026-09-20\",\"sourceModel\":\"ten-year-completed-model\",\"selectedRaceCount\":10,\"completeBefore\":0,\"completeAfter\":1,\"lockedByWorker\":[\"2026-09-20-hanshin-01\"],\"refreshedBodyWeightRaceIds\":[\"2026-09-20-hanshin-01\"],\"bodyWeightPendingRaceIds\":[\"2026-09-20-hanshin-03\"],\"bodyWeightBreachRaceIds\":[],\"refreshedPreviewRaceIds\":[\"2026-09-20-hanshin-01\"],\"previewAvailableRaceIds\":[\"2026-09-20-hanshin-02\",\"2026-09-20-nakayama-02\"],\"previewMissingUrgentRaceIds\":[],\"finalizedFromFreshRaceIds\":[\"2026-09-20-hanshin-01\"],\"finalizedFromFallbackRaceIds\":[],\"latePromotedRaceIds\":[],\"protectedRaceIds\":[\"2026-09-20-hanshin-01\",\"2026-09-20-hanshin-02\",\"2026-09-20-nakayama-02\"],\"incompleteRaceIds\":[\"2026-09-20-hanshin-03\",\"2026-09-20-hanshin-02\",\"2026-09-20-nakayama-02\"],\"deadlineBreachRaceIds\":[],\"notYetInWindowRaceIds\":[],\"alreadyStartedIncompleteRaceIds\":[],\"errors\":[]}"
+    },
+    {
+      "state_key": "worker_live_preview:2026-09-20-hanshin-01",
+      "updated_at": "2026-09-20 00:19:40",
+      "state_value": "{\"version\":1,\"raceId\":\"2026-09-20-hanshin-01\",\"snapshots\":[{\"version\":1,\"raceId\":\"2026-09-20-hanshin-01\",\"sourceModel\":\"ten-year-completed-model\",\"modelSha256\":\"63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5\",\"generatedAt\":\"2026-09-20T00:19:40.351Z\",\"generationStartedAt\":\"2026-09-20T00:19:30.514Z\",\"bodyWeightApplied\":true,\"bodyWeightSnapshot\":{\"version\":1,\"raceId\":\"2026-09-20-hanshin-01\",\"fetchedAt\":\"2026-09-20T00:19:30.514Z\",\"sourceUrl\":\"https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0109202604060120260920%2F62\",\"snapshotSha256\":\"d3ee30af90c2bb5af822afb7a40c25dafa1ce160a031231005a099c49280e9b8\",\"activeRunners\":[{\"horseNo\":1,\"horseWeight\":524,\"weightChange\":8},{\"horseNo\":2,\"horseWeight\":524,\"weightChange\":0},{\"horseNo\":3,\"horseWeight\":508,\"weightChange\":null},{\"horseNo\":4,\"horseWeight\":468,\"weightChange\":10},{\"horseNo\":5,\"horseWeight\":504,\"weightChange\":null},{\"horseNo\":6,\"horseWeight\":488,\"weightChange\":14},{\"horseNo\":7,\"horseWeight\":460,\"weightChange\":null},{\"horseNo\":8,\"horseWeight\":490,\"weightChange\":14},{\"horseNo\":9,\"horseWeight\":496,\"weightChange\":null},{\"horseNo\":10,\"horseWeight\":470,\"weightChange\":null},{\"horseNo\":11,\"horseWeight\":476,\"weightChange\":null},{\"horseNo\":12,\"horseWeight\":476,\"weightChange\":4}]},\"bodyWeightError\":null,\"oddsFetchedAt\":\"2026-09-20T00:19:40.351Z\",\"oddsSource\":\"jra-fast-official\",\"oddsParserVersion\":\"jra-semantic-table-parser-v3-20260823\",\"oddsSnapshotSha256\":\"91e675489b13c6de7dde5e9c28f17e5f74e9bcdbdaa859c72cbb0846001a8191\",\"onlineLearning\":{\"status\":\"neutral_fallback\",\"version\":\"canonical-recency-v1\",\"cutoffUtc\":\"2026-09-20T00:19:30.514Z\",\"historyDays\":30,\"halfLifeDays\":7,\"dateMultipliers\":{\"sameDay\":6,\"previousDay\":4,\"days2To7\":2,\"days8To30\":1},\"futureResultsAllowed\":false,\"sameDayFinishedResultsAllowed\":true,\"runnerHistoryRaces\":0,\"sameDayFinishedRaces\":0,\"previousDayFinishedRaces\":0,\"last7DaysFinishedRaces\":0,\"betHistoryRaces\":0,\"sameDaySettledBetRaces\":0,\"previousDaySettledBetRaces\":0,\"last7DaysSettledBetRaces\":0,\"runnerFactorRange\":[0.5,2],\"betFactorRange\":[0.7,1.35],\"error\":\"LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY\"},\"runnerRecencyFactors\":[{\"horseNo\":1,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":2,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":3,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":4,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":5,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":6,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":7,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":8,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":9,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":10,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":11,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":12,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}}],\"tickets\":[{\"betType\":\"ワイド\",\"combination\":\"5-9\",\"horses\":[5,9],\"predictedProbability\":0.3240952338617493,\"officialOdds\":13.8,\"valueProduct\":4.472514227292141,\"score\":-0.07685043784192924,\"recencyFactor\":1},{\"betType\":\"単勝\",\"combination\":\"5\",\"horses\":[5],\"predictedProbability\":0.17356785936144423,\"officialOdds\":25.1,\"valueProduct\":4.356553269972251,\"score\":-0.46203949736883865,\"recencyFactor\":1}],\"courseBets\":[{\"course\":\"ライト\",\"betType\":\"ワイド\",\"combination\":\"5-9\",\"stakeYen\":1000,\"assumedOdds\":13.8},{\"course\":\"ライト\",\"betType\":\"単勝\",\"combination\":\"5\",\"stakeYen\":1000,\"assumedOdds\":25.1},{\"course\":\"スタンダード\",\"betType\":\"ワイド\",\"combination\":\"5-9\",\"stakeYen\":2500,\"assumedOdds\":13.8},{\"course\":\"スタンダード\",\"betType\":\"単勝\",\"combination\":\"5\",\"stakeYen\":2500,\"assumedOdds\":25.1},{\"course\":\"プレミアム\",\"betType\":\"ワイド\",\"combination\":\"5-9\",\"stakeYen\":5000,\"assumedOdds\":13.8},{\"course\":\"プレミアム\",\"betType\":\"単勝\",\"combination\":\"5\",\"stakeYen\":5000,\"assumedOdds\":25.1}]},{\"version\":1,\"raceId\":\"2026-09-20-hanshin-01\",\"sourceModel\":\"ten-year-completed-model\",\"modelSha256\":\"63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5\",\"generatedAt\":\"2026-09-20T00:00:23.773Z\",\"generationStartedAt\":\"2026-09-20T00:00:18.399Z\",\"bodyWeightApplied\":true,\"bodyWeightSnapshot\":{\"version\":1,\"raceId\":\"2026-09-20-hanshin-01\",\"fetchedAt\":\"2026-09-20T00:00:18.399Z\",\"sourceUrl\":\"https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0109202604060120260920%2F62\",\"snapshotSha256\":\"d3ee30af90c2bb5af822afb7a40c25dafa1ce160a031231005a099c49280e9b8\",\"activeRunners\":[{\"horseNo\":1,\"horseWeight\":524,\"weightChange\":8},{\"horseNo\":2,\"horseWeight\":524,\"weightChange\":0},{\"horseNo\":3,\"horseWeight\":508,\"weightChange\":null},{\"horseNo\":4,\"horseWeight\":468,\"weightChange\":10},{\"horseNo\":5,\"horseWeight\":504,\"weightChange\":null},{\"horseNo\":6,\"horseWeight\":488,\"weightChange\":14},{\"horseNo\":7,\"horseWeight\":460,\"weightChange\":null},{\"horseNo\":8,\"horseWeight\":490,\"weightChange\":14},{\"horseNo\":9,\"horseWeight\":496,\"weightChange\":null},{\"horseNo\":10,\"horseWeight\":470,\"weightChange\":null},{\"horseNo\":11,\"horseWeight\":476,\"weightChange\":null},{\"horseNo\":12,\"horseWeight\":476,\"weightChange\":4}]},\"bodyWeightError\":null,\"oddsFetchedAt\":\"2026-09-20T00:00:23.773Z\",\"oddsSource\":\"jra-fast-official\",\"oddsParserVersion\":\"jra-semantic-table-parser-v3-20260823\",\"oddsSnapshotSha256\":\"c8b30e5ba59e57ba7e506b0f444cf68e8d73ee8c8cc88b0063cd55ee5ddd070f\",\"onlineLearning\":{\"status\":\"neutral_fallback\",\"version\":\"canonical-recency-v1\",\"cutoffUtc\":\"2026-09-20T00:00:18.399Z\",\"historyDays\":30,\"halfLifeDays\":7,\"dateMultipliers\":{\"sameDay\":6,\"previousDay\":4,\"days2To7\":2,\"days8To30\":1},\"futureResultsAllowed\":false,\"sameDayFinishedResultsAllowed\":true,\"runnerHistoryRaces\":0,\"sameDayFinishedRaces\":0,\"previousDayFinishedRaces\":0,\"last7DaysFinishedRaces\":0,\"betHistoryRaces\":0,\"sameDaySettledBetRaces\":0,\"previousDaySettledBetRaces\":0,\"last7DaysSettledBetRaces\":0,\"runnerFactorRange\":[0.5,2],\"betFactorRange\":[0.7,1.35],\"error\":\"LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY\"},\"runnerRecencyFactors\":[{\"horseNo\":1,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":2,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":3,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":4,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":5,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":6,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":7,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":8,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":9,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":10,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":11,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":12,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}}],\"tickets\":[{\"betType\":\"ワイド\",\"combination\":\"5-9\",\"horses\":[5,9],\"predictedProbability\":0.3240952338617493,\"officialOdds\":12.95,\"valueProduct\":4.197033278509654,\"score\":-0.10227955944897427,\"recencyFactor\":1},{\"betType\":\"単勝\",\"combination\":\"5\",\"horses\":[5],\"predictedProbability\":0.17356785936144423,\"officialOdds\":27.9,\"valueProduct\":4.842543276184293,\"score\":-0.41973596029300597,\"recencyFactor\":1}],\"courseBets\":[{\"course\":\"ライト\",\"betType\":\"ワイド\",\"combination\":\"5-9\",\"stakeYen\":1000,\"assumedOdds\":12.95},{\"course\":\"ライト\",\"betType\":\"単勝\",\"combination\":\"5\",\"stakeYen\":1000,\"assumedOdds\":27.9},{\"course\":\"スタンダード\",\"betType\":\"ワイド\",\"combination\":\"5-9\",\"stakeYen\":2500,\"assumedOdds\":12.95},{\"course\":\"スタンダード\",\"betType\":\"単勝\",\"combination\":\"5\",\"stakeYen\":2500,\"assumedOdds\":27.9},{\"course\":\"プレミアム\",\"betType\":\"ワイド\",\"combination\":\"5-9\",\"stakeYen\":5000,\"assumedOdds\":12.95},{\"course\":\"プレミアム\",\"betType\":\"単勝\",\"combination\":\"5\",\"stakeYen\":5000,\"assumedOdds\":27.9}]}]}"
+    },
+    {
+      "state_key": "worker_live_preview:2026-09-20-hanshin-02",
+      "updated_at": "2026-09-20 00:01:21",
+      "state_value": "{\"version\":1,\"raceId\":\"2026-09-20-hanshin-02\",\"snapshots\":[{\"version\":1,\"raceId\":\"2026-09-20-hanshin-02\",\"sourceModel\":\"ten-year-completed-model\",\"modelSha256\":\"63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5\",\"generatedAt\":\"2026-09-20T00:01:21.510Z\",\"generationStartedAt\":\"2026-09-20T00:01:16.949Z\",\"bodyWeightApplied\":false,\"bodyWeightSnapshot\":null,\"bodyWeightError\":\"Error:BODYWEIGHT_REFRESH_FAILED:2026-09-20-hanshin-02:https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0109202604060220260920%2F17:Error:BODYWEIGHT_NOT_PUBLISHED:1,2,3,4,5,6,7,8,9,10,11,12,13|https://sp.jra.jp/JRADB/accessD.html?CNAME=pw01dde0109202604060220260920%2F17:Error:NOT_ENTRY_PAGE|https://jra.jp/JRADB/accessD.html?CNAME=pw01dde0109202604060220260920%2F17:Error:BODYWEIGHT_NOT_PUBLISHED:1,2,3,4,5,6,7,8,9,10,11,12,13\",\"oddsFetchedAt\":\"2026-09-20T00:01:21.510Z\",\"oddsSource\":\"jra-fast-official\",\"oddsParserVersion\":\"jra-semantic-table-parser-v3-20260823\",\"oddsSnapshotSha256\":\"d5ced3335ecc1bd606a37031abd013669d05edde13b6cd4904d1212d3a3ac1e0\",\"onlineLearning\":{\"status\":\"neutral_fallback\",\"version\":\"canonical-recency-v1\",\"cutoffUtc\":\"2026-09-20T00:01:16.949Z\",\"historyDays\":30,\"halfLifeDays\":7,\"dateMultipliers\":{\"sameDay\":6,\"previousDay\":4,\"days2To7\":2,\"days8To30\":1},\"futureResultsAllowed\":false,\"sameDayFinishedResultsAllowed\":true,\"runnerHistoryRaces\":0,\"sameDayFinishedRaces\":0,\"previousDayFinishedRaces\":0,\"last7DaysFinishedRaces\":0,\"betHistoryRaces\":0,\"sameDaySettledBetRaces\":0,\"previousDaySettledBetRaces\":0,\"last7DaysSettledBetRaces\":0,\"runnerFactorRange\":[0.5,2],\"betFactorRange\":[0.7,1.35],\"error\":\"LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY\"},\"runnerRecencyFactors\":[{\"horseNo\":1,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":2,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":3,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":4,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":5,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":6,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":7,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":8,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":9,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":10,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":11,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":12,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":13,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}}],\"tickets\":[{\"betType\":\"単勝\",\"combination\":\"8\",\"horses\":[8],\"predictedProbability\":0.24214296781622663,\"officialOdds\":6.7,\"valueProduct\":1.6223578843687185,\"score\":-0.6573839406060729,\"recencyFactor\":1},{\"betType\":\"ワイド\",\"combination\":\"4-8\",\"horses\":[4,8],\"predictedProbability\":0.07337054785374739,\"officialOdds\":38.15,\"valueProduct\":2.7990864006204625,\"score\":-1.1556223761925066,\"recencyFactor\":1}],\"courseBets\":[{\"course\":\"ライト\",\"betType\":\"単勝\",\"combination\":\"8\",\"stakeYen\":1000,\"assumedOdds\":6.7},{\"course\":\"ライト\",\"betType\":\"ワイド\",\"combination\":\"4-8\",\"stakeYen\":1000,\"assumedOdds\":38.15},{\"course\":\"スタンダード\",\"betType\":\"単勝\",\"combination\":\"8\",\"stakeYen\":2500,\"assumedOdds\":6.7},{\"course\":\"スタンダード\",\"betType\":\"ワイド\",\"combination\":\"4-8\",\"stakeYen\":2500,\"assumedOdds\":38.15},{\"course\":\"プレミアム\",\"betType\":\"単勝\",\"combination\":\"8\",\"stakeYen\":5000,\"assumedOdds\":6.7},{\"course\":\"プレミアム\",\"betType\":\"ワイド\",\"combination\":\"4-8\",\"stakeYen\":5000,\"assumedOdds\":38.15}]}]}"
+    },
+    {
+      "state_key": "worker_live_preview:2026-09-20-nakayama-02",
+      "updated_at": "2026-09-20 00:05:22",
+      "state_value": "{\"version\":1,\"raceId\":\"2026-09-20-nakayama-02\",\"snapshots\":[{\"version\":1,\"raceId\":\"2026-09-20-nakayama-02\",\"sourceModel\":\"ten-year-completed-model\",\"modelSha256\":\"63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5\",\"generatedAt\":\"2026-09-20T00:05:22.115Z\",\"generationStartedAt\":\"2026-09-20T00:05:17.011Z\",\"bodyWeightApplied\":false,\"bodyWeightSnapshot\":null,\"bodyWeightError\":\"Error:BODYWEIGHT_REFRESH_FAILED:2026-09-20-nakayama-02:https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0106202604060220260920%2F39:Error:BODYWEIGHT_NOT_PUBLISHED:1,2,3,4,5,6,7,8,9,10,11,12,14|https://sp.jra.jp/JRADB/accessD.html?CNAME=pw01dde0106202604060220260920%2F39:Error:NOT_ENTRY_PAGE|https://jra.jp/JRADB/accessD.html?CNAME=pw01dde0106202604060220260920%2F39:Error:BODYWEIGHT_NOT_PUBLISHED:1,2,3,4,5,6,7,8,9,10,11,12,14\",\"oddsFetchedAt\":\"2026-09-20T00:05:22.115Z\",\"oddsSource\":\"jra-fast-official\",\"oddsParserVersion\":\"jra-semantic-table-parser-v3-20260823\",\"oddsSnapshotSha256\":\"ba1a9c7ef5694c1f2f2d11a9b37e33b861dd75a9be9e6162b14ac29fd74b2dcf\",\"onlineLearning\":{\"status\":\"neutral_fallback\",\"version\":\"canonical-recency-v1\",\"cutoffUtc\":\"2026-09-20T00:05:17.011Z\",\"historyDays\":30,\"halfLifeDays\":7,\"dateMultipliers\":{\"sameDay\":6,\"previousDay\":4,\"days2To7\":2,\"days8To30\":1},\"futureResultsAllowed\":false,\"sameDayFinishedResultsAllowed\":true,\"runnerHistoryRaces\":0,\"sameDayFinishedRaces\":0,\"previousDayFinishedRaces\":0,\"last7DaysFinishedRaces\":0,\"betHistoryRaces\":0,\"sameDaySettledBetRaces\":0,\"previousDaySettledBetRaces\":0,\"last7DaysSettledBetRaces\":0,\"runnerFactorRange\":[0.5,2],\"betFactorRange\":[0.7,1.35],\"error\":\"LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY\"},\"runnerRecencyFactors\":[{\"horseNo\":1,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":2,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":3,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":4,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":5,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":6,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":7,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":8,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":9,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":10,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":11,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":12,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}},{\"horseNo\":14,\"factor\":1,\"signals\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"samples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0},\"sameDaySamples\":{\"horse\":0,\"jockey\":0,\"trainer\":0,\"sameVenueSurfaceDraw\":0}}],\"tickets\":[{\"betType\":\"ワイド\",\"combination\":\"3-7\",\"horses\":[3,7],\"predictedProbability\":0.38825288927547974,\"officialOdds\":48.25,\"valueProduct\":18.733201907541897,\"score\":0.6044599559242869,\"recencyFactor\":1},{\"betType\":\"馬連\",\"combination\":\"3-7\",\"horses\":[3,7],\"predictedProbability\":0.17309184419239027,\"officialOdds\":155.1,\"valueProduct\":26.84654503423973,\"score\":0.2636950940012104,\"recencyFactor\":1}],\"courseBets\":[{\"course\":\"ライト\",\"betType\":\"ワイド\",\"combination\":\"3-7\",\"stakeYen\":1000,\"assumedOdds\":48.25},{\"course\":\"ライト\",\"betType\":\"馬連\",\"combination\":\"3-7\",\"stakeYen\":1000,\"assumedOdds\":155.1},{\"course\":\"スタンダード\",\"betType\":\"ワイド\",\"combination\":\"3-7\",\"stakeYen\":2500,\"assumedOdds\":48.25},{\"course\":\"スタンダード\",\"betType\":\"馬連\",\"combination\":\"3-7\",\"stakeYen\":2500,\"assumedOdds\":155.1},{\"course\":\"プレミアム\",\"betType\":\"ワイド\",\"combination\":\"3-7\",\"stakeYen\":5000,\"assumedOdds\":48.25},{\"course\":\"プレミアム\",\"betType\":\"馬連\",\"combination\":\"3-7\",\"stakeYen\":5000,\"assumedOdds\":155.1}]}]}"
+    }
+  ],
+  "publicDay": {
+    "ok": true,
+    "date": "2026-09-20",
+    "races": [
+      {
+        "raceId": "2026-09-20-nakayama-01",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 1,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:00",
+        "startTimeUtc": "2026-09-20T01:00:00.000Z",
+        "surface": "ダート",
+        "distanceM": 1800,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-nakayama-02",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 2,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:35",
+        "startTimeUtc": "2026-09-20T01:35:00.000Z",
+        "surface": "芝",
+        "distanceM": 1600,
+        "status": "scheduled",
+        "publicState": {
+          "code": "target",
+          "label": "買い目対象・確定前",
+          "deadline": "10:20までに確定"
+        }
+      },
+      {
+        "raceId": "2026-09-20-nakayama-03",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 3,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "11:05",
+        "startTimeUtc": "2026-09-20T02:05:00.000Z",
+        "surface": "芝",
+        "distanceM": 2000,
+        "status": "scheduled",
+        "publicState": {
+          "code": "target",
+          "label": "買い目対象・確定前",
+          "deadline": "10:50までに確定"
+        }
+      },
+      {
+        "raceId": "2026-09-20-nakayama-04",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 4,
+        "raceName": "2歳新馬",
+        "startTimeJst": "11:35",
+        "startTimeUtc": "2026-09-20T02:35:00.000Z",
+        "surface": "ダート",
+        "distanceM": 1800,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-nakayama-05",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 5,
+        "raceName": "2歳新馬",
+        "startTimeJst": "12:25",
+        "startTimeUtc": "2026-09-20T03:25:00.000Z",
+        "surface": "芝",
+        "distanceM": 1600,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-nakayama-06",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 6,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "12:55",
+        "startTimeUtc": "2026-09-20T03:55:00.000Z",
+        "surface": "ダート",
+        "distanceM": 1800,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-nakayama-07",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 7,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "13:25",
+        "startTimeUtc": "2026-09-20T04:25:00.000Z",
+        "surface": "芝",
+        "distanceM": 2000,
+        "status": "scheduled",
+        "publicState": {
+          "code": "target",
+          "label": "買い目対象・確定前",
+          "deadline": "13:10までに確定"
+        }
+      },
+      {
+        "raceId": "2026-09-20-nakayama-08",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 8,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "13:55",
+        "startTimeUtc": "2026-09-20T04:55:00.000Z",
+        "surface": "ダート",
+        "distanceM": 1200,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-nakayama-09",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 9,
+        "raceName": "松戸特別",
+        "startTimeJst": "14:25",
+        "startTimeUtc": "2026-09-20T05:25:00.000Z",
+        "surface": "ダート",
+        "distanceM": 2400,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-nakayama-10",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 10,
+        "raceName": "汐留特別",
+        "startTimeJst": "15:05",
+        "startTimeUtc": "2026-09-20T06:05:00.000Z",
+        "surface": "ダート",
+        "distanceM": 1200,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-nakayama-11",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 11,
+        "raceName": "第72回 産経賞オールカマー（GⅡ）",
+        "startTimeJst": "15:45",
+        "startTimeUtc": "2026-09-20T06:45:00.000Z",
+        "surface": "芝",
+        "distanceM": 2200,
+        "status": "scheduled",
+        "publicState": {
+          "code": "target",
+          "label": "買い目対象・確定前",
+          "deadline": "15:30までに確定"
+        }
+      },
+      {
+        "raceId": "2026-09-20-nakayama-12",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 12,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "16:30",
+        "startTimeUtc": "2026-09-20T07:30:00.000Z",
+        "surface": "芝",
+        "distanceM": 1200,
+        "status": "scheduled",
+        "publicState": {
+          "code": "target",
+          "label": "買い目対象・確定前",
+          "deadline": "16:15までに確定"
+        }
+      },
+      {
+        "raceId": "2026-09-20-hanshin-01",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 1,
+        "raceName": "障害3歳以上未勝利",
+        "startTimeJst": "09:45",
+        "startTimeUtc": "2026-09-20T00:45:00.000Z",
+        "surface": "ダート",
+        "distanceM": 2970,
+        "status": "scheduled",
+        "publicState": {
+          "code": "buy",
+          "label": "買い目確定",
+          "deadline": "確定済み・以後変更なし"
+        }
+      },
+      {
+        "raceId": "2026-09-20-hanshin-02",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 2,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:20",
+        "startTimeUtc": "2026-09-20T01:20:00.000Z",
+        "surface": "ダート",
+        "distanceM": 1200,
+        "status": "scheduled",
+        "publicState": {
+          "code": "target",
+          "label": "買い目対象・確定前",
+          "deadline": "10:05までに確定"
+        }
+      },
+      {
+        "raceId": "2026-09-20-hanshin-03",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 3,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:50",
+        "startTimeUtc": "2026-09-20T01:50:00.000Z",
+        "surface": "芝",
+        "distanceM": 1800,
+        "status": "scheduled",
+        "publicState": {
+          "code": "target",
+          "label": "買い目対象・確定前",
+          "deadline": "10:35までに確定"
+        }
+      },
+      {
+        "raceId": "2026-09-20-hanshin-04",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 4,
+        "raceName": "2歳新馬",
+        "startTimeJst": "11:20",
+        "startTimeUtc": "2026-09-20T02:20:00.000Z",
+        "surface": "ダート",
+        "distanceM": 1200,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-hanshin-05",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 5,
+        "raceName": "2歳新馬",
+        "startTimeJst": "12:10",
+        "startTimeUtc": "2026-09-20T03:10:00.000Z",
+        "surface": "芝",
+        "distanceM": 1600,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-hanshin-06",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 6,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "12:40",
+        "startTimeUtc": "2026-09-20T03:40:00.000Z",
+        "surface": "芝",
+        "distanceM": 2000,
+        "status": "scheduled",
+        "publicState": {
+          "code": "target",
+          "label": "買い目対象・確定前",
+          "deadline": "12:25までに確定"
+        }
+      },
+      {
+        "raceId": "2026-09-20-hanshin-07",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 7,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "13:10",
+        "startTimeUtc": "2026-09-20T04:10:00.000Z",
+        "surface": "ダート",
+        "distanceM": 1800,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-hanshin-08",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 8,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "13:40",
+        "startTimeUtc": "2026-09-20T04:40:00.000Z",
+        "surface": "芝",
+        "distanceM": 1600,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-hanshin-09",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 9,
+        "raceName": "夕月特別",
+        "startTimeJst": "14:10",
+        "startTimeUtc": "2026-09-20T05:10:00.000Z",
+        "surface": "芝",
+        "distanceM": 2000,
+        "status": "scheduled",
+        "publicState": {
+          "code": "target",
+          "label": "買い目対象・確定前",
+          "deadline": "13:55までに確定"
+        }
+      },
+      {
+        "raceId": "2026-09-20-hanshin-10",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 10,
+        "raceName": "鳥取特別",
+        "startTimeJst": "14:50",
+        "startTimeUtc": "2026-09-20T05:50:00.000Z",
+        "surface": "ダート",
+        "distanceM": 1800,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-hanshin-11",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 11,
+        "raceName": "道頓堀ステークス",
+        "startTimeJst": "15:30",
+        "startTimeUtc": "2026-09-20T06:30:00.000Z",
+        "surface": "芝",
+        "distanceM": 1200,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      },
+      {
+        "raceId": "2026-09-20-hanshin-12",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 12,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "16:10",
+        "startTimeUtc": "2026-09-20T07:10:00.000Z",
+        "surface": "ダート",
+        "distanceM": 1400,
+        "status": "scheduled",
+        "publicState": {
+          "code": "skip",
+          "label": "見送り",
+          "deadline": null
+        }
+      }
+    ],
+    "betStateAvailable": true
+  },
+  "todaySummary": {
+    "ok": true,
+    "date": "2026-09-20",
+    "hasPredictions": true,
+    "targetRaces": 10,
+    "courses": [
+      {
+        "course": "ライト",
+        "totalRaces": 1,
+        "settledRaces": 0,
+        "hitRaces": 0,
+        "refundRaces": 0,
+        "stakeYen": 0,
+        "returnYen": 0,
+        "roiPct": null,
+        "complete": false
+      },
+      {
+        "course": "スタンダード",
+        "totalRaces": 1,
+        "settledRaces": 0,
+        "hitRaces": 0,
+        "refundRaces": 0,
+        "stakeYen": 0,
+        "returnYen": 0,
+        "roiPct": null,
+        "complete": false
+      },
+      {
+        "course": "プレミアム",
+        "totalRaces": 1,
+        "settledRaces": 0,
+        "hitRaces": 0,
+        "refundRaces": 0,
+        "stakeYen": 0,
+        "returnYen": 0,
+        "roiPct": null,
+        "complete": false
+      }
+    ],
+    "liveSource": "live-d1-current-day+snapshot-history"
+  },
+  "home": {
+    "oldFalseEmptyPhrasePresent": false,
+    "selectedTargetMessageSourcePresent": true,
+    "hasSep20": true,
+    "headers": "HTTP/2 200 \ndate: Sun, 20 Sep 2026 00:19:58 GMT\ncontent-type: text/html; charset=utf-8\ncache-control: no-store, max-age=0\ncontent-security-policy: default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'\nreferrer-policy: no-referrer\nx-content-type-options: nosniff\nx-race-finalization-ui: t15-start-t10-finalization-transparent-20260823\nx-race-performance-ui: daily-performance-v4-collapsed-history-20260829\nx-race-roi-basis: light-complete-settled-races\nx-race-tantei-ui: ten-year-completed-public-v21-worker-live-lock-20260815\nx-race-ui-version: ten-year-completed-public-v37-resilient-home-20260905\nreport-to: {\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=2gF2CGMIZLKp3z0PU%2Fk0EMXQm7QSlbKokGpAGLGPpy3o3dLR%2Bso1VW3lOtuWKVUtIEINoyyhhy58JAGq2pWX6iRPRkQITuHBFs41sa6kB6Cfn5pqjVzgE%2BwVctnhbR5i6kcHsdgBdP2ysyRw4EdsKy08U5Dvy9RbtKjuHOs%3D\"}]}\nnel: {\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}\nserver: cloudflare\ncf-ray: a3dca95a2ab04705-SJC\nalt-svc: h3=\":443\"; ma=86400\n\n"
+  },
+  "bootstrapRuns": [
+    {
+      "id": 35417841320,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-19T03:11:22Z",
+      "updated_at": "2026-09-19T03:11:51Z",
+      "html_url": "https://github.com/race-tantei-lab/race-tantei/actions/runs/35417841320",
+      "head_sha": "465522484ea07d9b13825818fb6c004d84538c6d"
+    },
+    {
+      "id": 35410140420,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-19T00:40:15Z",
+      "updated_at": "2026-09-19T00:40:44Z",
+      "html_url": "https://github.com/race-tantei-lab/race-tantei/actions/runs/35410140420",
+      "head_sha": "465522484ea07d9b13825818fb6c004d84538c6d"
+    },
+    {
+      "id": 35302500262,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-18T03:15:09Z",
+      "updated_at": "2026-09-18T03:15:31Z",
+      "html_url": "https://github.com/race-tantei-lab/race-tantei/actions/runs/35302500262",
+      "head_sha": "01e60e6bcbef14bd3735321bfc39814a0c51a8d6"
+    },
+    {
+      "id": 35178343457,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-17T03:29:14Z",
+      "updated_at": "2026-09-17T03:29:29Z",
+      "html_url": "https://github.com/race-tantei-lab/race-tantei/actions/runs/35178343457",
+      "head_sha": "01e60e6bcbef14bd3735321bfc39814a0c51a8d6"
+    },
+    {
+      "id": 35051617710,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-16T03:23:33Z",
+      "updated_at": "2026-09-16T03:23:50Z",
+      "html_url": "https://github.com/race-tantei-lab/race-tantei/actions/runs/35051617710",
+      "head_sha": "e7e37331860b95d3035f4cd5da19cc4899e42077"
+    },
+    {
+      "id": 34925051042,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-15T03:27:29Z",
+      "updated_at": "2026-09-15T03:27:46Z",
+      "html_url": "https://github.com/race-tantei-lab/race-tantei/actions/runs/34925051042",
+      "head_sha": "c5c230b3218ed7fe5f3109f32d39c9ff9f111ac4"
+    },
+    {
+      "id": 34802612629,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-14T03:26:25Z",
+      "updated_at": "2026-09-14T03:26:50Z",
+      "html_url": "https://github.com/race-tantei-lab/race-tantei/actions/runs/34802612629",
+      "head_sha": "6b68aa71bcc997430b53ce853c6bea9bbdc741b4"
+    },
+    {
+      "id": 34734961676,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-09-13T03:13:45Z",
+      "updated_at": "2026-09-13T03:34:17Z",
+      "html_url": "https://github.com/race-tantei-lab/race-tantei/actions/runs/34734961676",
+      "head_sha": "4734f66a8ebdcc6723b3d6013d25b6f6dee4f7c9"
+    },
+    {
+      "id": 34669658182,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-09-12T03:10:39Z",
+      "updated_at": "2026-09-12T03:10:52Z",
+      "html_url": "https://github.com/race-tantei-lab/race-tantei/actions/runs/34669658182",
+      "head_sha": "9994b9af448eef2b4f7cc05d3455445adeae3780"
+    },
+    {
+      "id": 34557006842,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-11T03:03:51Z",
+      "updated_at": "2026-09-11T03:04:10Z",
+      "html_url": "https://github.com/race-tantei-lab/race-tantei/actions/runs/34557006842",
+      "head_sha": "e8080f91b0caaa1a75f24be90bac4d1a80e827c8"
+    },
+    {
+      "id": 34432205502,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-10T03:08:52Z",
+      "updated_at": "2026-09-10T03:09:07Z",
+      "html_url": "https://github.com/race-tantei-lab/race-tantei/actions/runs/34432205502",
+      "head_sha": "e8080f91b0caaa1a75f24be90bac4d1a80e827c8"
+    },
+    {
+      "id": 34305968298,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-09-09T03:08:36Z",
+      "updated_at": "2026-09-09T03:08:53Z",
+      "html_url": "https://github.com/race-tantei-lab/race-tantei/actions/runs/34305968298",
+      "head_sha": "dae21a2a593ab0d2cb6d28eb11df03f91cd34fcd"
+    }
+  ],
+  "crons": {
+    "race-tantei-phase0": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "*/15 * * * *",
+            "created_on": "2026-09-03T00:37:50.075242Z",
+            "modified_on": "2026-09-20T00:19:17.878082Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    },
+    "race-tantei-live-deadline": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "* * * * *",
+            "created_on": "2026-08-22T10:16:05.847612Z",
+            "modified_on": "2026-09-19T13:46:53.77229Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    },
+    "race-tantei-live-deadline-backup": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "2-59/5 * * * *",
+            "created_on": "2026-09-06T10:34:58.828488Z",
+            "modified_on": "2026-09-19T13:46:59.23107Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    },
+    "race-tantei-win5": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "* * * * *",
+            "created_on": "2026-08-22T16:10:18.443337Z",
+            "modified_on": "2026-09-19T08:32:33.515955Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    },
+    "race-tantei-win5-backup": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "3-59/5 * * * *",
+            "created_on": "2026-08-22T16:10:23.463815Z",
+            "modified_on": "2026-09-19T08:32:38.732496Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    }
+  },
+  "health": {
+    "livePrimary": {
+      "service": "race-tantei-live-deadline",
+      "version": "live-deadline-v11-persistent-miss-lastgood-20260919",
+      "status": "up"
+    },
+    "liveBackup": {
+      "service": "race-tantei-live-deadline",
+      "version": "live-deadline-v11-persistent-miss-lastgood-20260919",
+      "status": "up"
+    },
+    "win5Primary": {
+      "service": "race-tantei-win5",
+      "version": "win5-entry-v3-race-day-gate-20260908",
+      "status": "up"
+    },
+    "win5Backup": {
+      "service": "race-tantei-win5",
+      "version": "win5-entry-v3-race-day-gate-20260908",
+      "status": "up"
+    }
+  },
+  "deployLog": "\n ⛅️ wrangler 4.118.0\n────────────────────\n[custom build] Running: test -f worker-assets/_internal/completed-model/model.bin || (python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' && python scripts/build-worker-completed-model-assets.py)\n[custom build] Defaulting to user installation because normal site-packages is not writeable\n[custom build] \n[custom build] Collecting lightgbm==4.6.0\n[custom build] \n[custom build]   Downloading lightgbm-4.6.0-py3-none-manylinux_2_28_x86_64.whl.metadata (17 kB)\n[custom build] \n[custom build] Collecting numpy<3\n[custom build] \n[custom build]   Downloading numpy-2.5.3-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (6.6 kB)\n[custom build] \n[custom build] Collecting scipy (from lightgbm==4.6.0)\n[custom build] \n[custom build]   Downloading scipy-1.18.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)\n[custom build] \n[custom build]      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 62.4/62.4 kB 937.3 kB/s eta 0:00:00\n[custom build] \n[custom build] \n[custom build] Downloading lightgbm-4.6.0-py3-none-manylinux_2_28_x86_64.whl (3.6 MB)\n[custom build] \n[custom build]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.6/3.6 MB 35.5 MB/s eta 0:00:00\n[custom build] \n[custom build] \n[custom build] Downloading numpy-2.5.3-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.7 MB)\n[custom build] \n[custom build]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.7/16.7 MB 83.6 MB/s eta 0:00:00\n[custom build] \n[custom build] \n[custom build] Downloading scipy-1.18.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (35.3 MB)\n[custom build] \n[custom build]    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 35.3/35.3 MB 46.5 MB/s eta 0:00:00\n[custom build] \n[custom build] \n[custom build] Installing collected packages: numpy, scipy, lightgbm\n[custom build] \n[custom build] Successfully installed lightgbm-4.6.0 numpy-2.5.3 scipy-1.18.1\n[custom build] \n[custom build] {\"format\": \"RTLMOD01\", \"version\": 1, \"modelVersion\": \"ten-year-completed-model\", \"sourceSha256\": \"63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5\", \"featureCount\": 56, \"treeCount\": 500, \"nodeCount\": 126500, \"sigmoid\": 1.0, \"averageOutput\": false, \"binaryBytes\": 3038040, \"nodeStats\": {\"split\": 63000, \"leaf\": 63500, \"missingNone\": 63000, \"missingNaN\": 0, \"missingZero\": 0}}\n[custom build] \n🌀 Building list of assets...\n✨ Read 5 files from the assets directory /home/runner/work/race-tantei/race-tantei/worker-assets\n🌀 Starting asset upload...\nNo updated asset files to upload. Proceeding with deployment...\nTotal Upload: 2400.98 KiB / gzip: 874.88 KiB\nWorker Startup Time: 3 ms\nYour Worker has access to the following bindings:\nBinding                                                                      Resource                  \nenv.DB (race-tantei-phase0)                                                  D1 Database               \nenv.ASSETS                                                                   Assets                    \nenv.ENVIRONMENT (\"production\")                                               Environment Variable      \nenv.DEPLOY_REVISION (\"daily-performance-history-fix-20260915\")               Environment Variable      \nenv.UI_PERFORMANCE_VERSION (\"daily-performance-v6-target-race-coun...\")      Environment Variable      \nenv.MODEL_VERSION (\"ten-year-completed-model\")                               Environment Variable      \nenv.JRA_HOME_URL (\"https://www.jra.go.jp/\")                                  Environment Variable      \nenv.JRA_SEED_ENTRY_URLS (\"https://www.jra.go.jp/JRADB/accessD.h...\")         Environment Variable      \nenv.MIN_EXPECTED_VALUE (\"108\")                                               Environment Variable      \nenv.MAX_RACE_BUDGET_YEN (\"10000\")                                            Environment Variable      \nenv.SYNC_BATCH_SIZE (\"12\")                                                   Environment Variable      \n\nUploaded race-tantei-phase0 (2.86 sec)\nDeployed race-tantei-phase0 triggers (0.57 sec)\n  https://race-tantei-phase0.race-tantei.workers.dev\n  schedule: */15 * * * *\nCurrent Version ID: a331ab35-7e71-4b18-af78-600df9c5da98\n\nCloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md\n"
+}
