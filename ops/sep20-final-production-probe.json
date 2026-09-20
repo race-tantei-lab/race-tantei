@@ -1,0 +1,753 @@
+{
+  "capturedAtUtc": "2026-09-20T00:37:47.962229+00:00",
+  "selection": {
+    "date": "2026-09-20",
+    "sourceModel": "ten-year-completed-model",
+    "selectionMode": "canonical-ten-year-race-score",
+    "selected": [
+      {
+        "raceId": "2026-09-20-nakayama-02",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 2,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:35",
+        "raceScore": 0.76129082
+      },
+      {
+        "raceId": "2026-09-20-nakayama-03",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 3,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "11:05",
+        "raceScore": 0.76173362
+      },
+      {
+        "raceId": "2026-09-20-nakayama-07",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 7,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "13:25",
+        "raceScore": 0.79246288
+      },
+      {
+        "raceId": "2026-09-20-nakayama-11",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 11,
+        "raceName": "第72回 産経賞オールカマー（GⅡ）",
+        "startTimeJst": "15:45",
+        "raceScore": 0.77989985
+      },
+      {
+        "raceId": "2026-09-20-nakayama-12",
+        "raceDate": "2026-09-20",
+        "venue": "中山",
+        "raceNo": 12,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "16:30",
+        "raceScore": 0.76022363
+      },
+      {
+        "raceId": "2026-09-20-hanshin-01",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 1,
+        "raceName": "障害3歳以上未勝利",
+        "startTimeJst": "09:45",
+        "raceScore": 0.76673313
+      },
+      {
+        "raceId": "2026-09-20-hanshin-02",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 2,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:20",
+        "raceScore": 0.78583349
+      },
+      {
+        "raceId": "2026-09-20-hanshin-03",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 3,
+        "raceName": "2歳未勝利",
+        "startTimeJst": "10:50",
+        "raceScore": 0.76209502
+      },
+      {
+        "raceId": "2026-09-20-hanshin-06",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 6,
+        "raceName": "3歳以上1勝クラス",
+        "startTimeJst": "12:40",
+        "raceScore": 0.75854895
+      },
+      {
+        "raceId": "2026-09-20-hanshin-09",
+        "raceDate": "2026-09-20",
+        "venue": "阪神",
+        "raceNo": 9,
+        "raceName": "夕月特別",
+        "startTimeJst": "14:10",
+        "raceScore": 0.78737029
+      }
+    ],
+    "venueCounts": {
+      "中山": 12,
+      "阪神": 12
+    },
+    "selectedVenueCounts": {
+      "中山": 5,
+      "阪神": 5
+    },
+    "stateBaseThroughDate": "2026-08-09",
+    "stateAdvancedThroughDate": "2026-09-19",
+    "resultDataUsedForTargetDay": false,
+    "historicalFinalOddsUsedForSelection": false,
+    "syntheticOddsUsed": false
+  },
+  "selected": [
+    {
+      "venue": "阪神",
+      "raceNo": 1,
+      "raceId": "2026-09-20-hanshin-01",
+      "startTimeJst": "09:45",
+      "startTimeUtc": "2026-09-20T00:45:00.000Z",
+      "remainingMin": 7.28,
+      "previewState": 1,
+      "finalRows": 6,
+      "sourceMinus2": 6,
+      "lockedAt": "2026-09-20T00:19:40.904Z"
+    },
+    {
+      "venue": "阪神",
+      "raceNo": 2,
+      "raceId": "2026-09-20-hanshin-02",
+      "startTimeJst": "10:20",
+      "startTimeUtc": "2026-09-20T01:20:00.000Z",
+      "remainingMin": 42.28,
+      "previewState": 1,
+      "finalRows": 0,
+      "sourceMinus2": 0,
+      "lockedAt": null
+    },
+    {
+      "venue": "中山",
+      "raceNo": 2,
+      "raceId": "2026-09-20-nakayama-02",
+      "startTimeJst": "10:35",
+      "startTimeUtc": "2026-09-20T01:35:00.000Z",
+      "remainingMin": 57.28,
+      "previewState": 1,
+      "finalRows": 0,
+      "sourceMinus2": 0,
+      "lockedAt": null
+    },
+    {
+      "venue": "阪神",
+      "raceNo": 3,
+      "raceId": "2026-09-20-hanshin-03",
+      "startTimeJst": "10:50",
+      "startTimeUtc": "2026-09-20T01:50:00.000Z",
+      "remainingMin": 72.28,
+      "previewState": 1,
+      "finalRows": 0,
+      "sourceMinus2": 0,
+      "lockedAt": null
+    },
+    {
+      "venue": "中山",
+      "raceNo": 3,
+      "raceId": "2026-09-20-nakayama-03",
+      "startTimeJst": "11:05",
+      "startTimeUtc": "2026-09-20T02:05:00.000Z",
+      "remainingMin": 87.28,
+      "previewState": 1,
+      "finalRows": 0,
+      "sourceMinus2": 0,
+      "lockedAt": null
+    },
+    {
+      "venue": "阪神",
+      "raceNo": 6,
+      "raceId": "2026-09-20-hanshin-06",
+      "startTimeJst": "12:40",
+      "startTimeUtc": "2026-09-20T03:40:00.000Z",
+      "remainingMin": 182.28,
+      "previewState": 0,
+      "finalRows": 0,
+      "sourceMinus2": 0,
+      "lockedAt": null
+    },
+    {
+      "venue": "中山",
+      "raceNo": 7,
+      "raceId": "2026-09-20-nakayama-07",
+      "startTimeJst": "13:25",
+      "startTimeUtc": "2026-09-20T04:25:00.000Z",
+      "remainingMin": 227.28,
+      "previewState": 0,
+      "finalRows": 0,
+      "sourceMinus2": 0,
+      "lockedAt": null
+    },
+    {
+      "venue": "阪神",
+      "raceNo": 9,
+      "raceId": "2026-09-20-hanshin-09",
+      "startTimeJst": "14:10",
+      "startTimeUtc": "2026-09-20T05:10:00.000Z",
+      "remainingMin": 272.28,
+      "previewState": 0,
+      "finalRows": 0,
+      "sourceMinus2": 0,
+      "lockedAt": null
+    },
+    {
+      "venue": "中山",
+      "raceNo": 11,
+      "raceId": "2026-09-20-nakayama-11",
+      "startTimeJst": "15:45",
+      "startTimeUtc": "2026-09-20T06:45:00.000Z",
+      "remainingMin": 367.28,
+      "previewState": 0,
+      "finalRows": 0,
+      "sourceMinus2": 0,
+      "lockedAt": null
+    },
+    {
+      "venue": "中山",
+      "raceNo": 12,
+      "raceId": "2026-09-20-nakayama-12",
+      "startTimeJst": "16:30",
+      "startTimeUtc": "2026-09-20T07:30:00.000Z",
+      "remainingMin": 412.28,
+      "previewState": 0,
+      "finalRows": 0,
+      "sourceMinus2": 0,
+      "lockedAt": null
+    }
+  ],
+  "audits": {
+    "live_deadline_driver:2026-09-20": {
+      "version": "live-deadline-v11-persistent-miss-lastgood-20260919",
+      "date": "2026-09-20",
+      "scheduledAt": "2026-09-20T00:37:23.000Z",
+      "startedAt": "2026-09-20T00:37:24.004Z",
+      "owner": "live-deadline-v11-persistent-miss-lastgood-20260919:2aee86dd-1792-429a-9cb6-51353736fe76",
+      "status": "ok",
+      "phase": "complete",
+      "ok": true,
+      "priorityGuardCheckedAt": "2026-09-20T00:37:24.539Z",
+      "priorityGuard": {
+        "status": "ok",
+        "checkedAt": "2026-09-20T00:37:24.539Z",
+        "dueRaceIds": [],
+        "lockedRaceIds": [],
+        "deadlineMissedRaceIds": [],
+        "skippedAlreadyLockedRaceIds": [
+          "2026-09-20-hanshin-01"
+        ],
+        "errors": []
+      },
+      "selection": {
+        "status": "already_frozen"
+      },
+      "selectionCheckedAt": "2026-09-20T00:37:28.401Z",
+      "restoredBefore": [],
+      "slaBefore": null,
+      "guardBeforeCheckedAt": "2026-09-20T00:37:24.539Z",
+      "guardBefore": {
+        "status": "ok",
+        "checkedAt": "2026-09-20T00:37:24.539Z",
+        "dueRaceIds": [],
+        "lockedRaceIds": [],
+        "deadlineMissedRaceIds": [],
+        "skippedAlreadyLockedRaceIds": [
+          "2026-09-20-hanshin-01"
+        ],
+        "errors": []
+      },
+      "liveStartedAt": "2026-09-20T00:37:28.573Z",
+      "liveFailure": null,
+      "live": {
+        "status": "ok",
+        "checkedAt": "2026-09-20T00:37:28.573Z",
+        "completeBefore": 1,
+        "completeAfter": 1,
+        "refreshedPreviewRaceIds": [],
+        "previewAvailableRaceIds": [
+          "2026-09-20-hanshin-02",
+          "2026-09-20-nakayama-02",
+          "2026-09-20-hanshin-03",
+          "2026-09-20-nakayama-03"
+        ],
+        "lockedByWorker": [],
+        "incompleteRaceIds": [
+          "2026-09-20-hanshin-02",
+          "2026-09-20-nakayama-02",
+          "2026-09-20-hanshin-03",
+          "2026-09-20-nakayama-03"
+        ],
+        "deadlineBreachRaceIds": [],
+        "errors": []
+      },
+      "restoredAfter": [],
+      "guardAfterCheckedAt": "2026-09-20T00:37:36.030Z",
+      "guardAfter": {
+        "status": "ok",
+        "checkedAt": "2026-09-20T00:37:36.030Z",
+        "dueRaceIds": [],
+        "lockedRaceIds": [],
+        "deadlineMissedRaceIds": [],
+        "skippedAlreadyLockedRaceIds": [
+          "2026-09-20-hanshin-01"
+        ],
+        "errors": []
+      },
+      "slaAfter": {
+        "checkedAt": "2026-09-20T00:37:41.534Z",
+        "date": "2026-09-20",
+        "selectedRaceCount": 10,
+        "previewReadyRaceIds": [
+          "2026-09-20-hanshin-01",
+          "2026-09-20-hanshin-02",
+          "2026-09-20-hanshin-03",
+          "2026-09-20-nakayama-02",
+          "2026-09-20-nakayama-03"
+        ],
+        "finalReadyRaceIds": [
+          "2026-09-20-hanshin-01"
+        ],
+        "previewMissingByT40RaceIds": [],
+        "previewMissingByT30RaceIds": [],
+        "finalMissingByT30RaceIds": [],
+        "finalMissingByT25RaceIds": [],
+        "finalMissingByT17RaceIds": [],
+        "finalMissingByT16RaceIds": [],
+        "deadlineMissedRaceIds": []
+      },
+      "unresolvedDueRaceIds": [],
+      "unresolvedGuardErrors": [],
+      "hardDeadlineBreachRaceIds": [],
+      "preDeadlineCriticalRaceIds": [],
+      "completedAt": "2026-09-20T00:37:42.113Z",
+      "durationMs": 18109
+    },
+    "worker_deadline_guard:2026-09-20": {
+      "status": "ok",
+      "checkedAt": "2026-09-20T00:37:36.030Z",
+      "date": "2026-09-20",
+      "orderedSelectedRaceIds": [
+        "2026-09-20-hanshin-01",
+        "2026-09-20-hanshin-02",
+        "2026-09-20-nakayama-02",
+        "2026-09-20-hanshin-03",
+        "2026-09-20-nakayama-03",
+        "2026-09-20-hanshin-06",
+        "2026-09-20-nakayama-07",
+        "2026-09-20-hanshin-09",
+        "2026-09-20-nakayama-11",
+        "2026-09-20-nakayama-12"
+      ],
+      "dueRaceIds": [],
+      "lockedRaceIds": [],
+      "lockedOfficialPreviewRaceIds": [],
+      "lockedProbabilityFallbackRaceIds": [],
+      "skippedAlreadyLockedRaceIds": [
+        "2026-09-20-hanshin-01"
+      ],
+      "skippedOutsideWindowRaceIds": [
+        "2026-09-20-hanshin-02",
+        "2026-09-20-nakayama-02",
+        "2026-09-20-hanshin-03",
+        "2026-09-20-nakayama-03",
+        "2026-09-20-hanshin-06",
+        "2026-09-20-nakayama-07",
+        "2026-09-20-hanshin-09",
+        "2026-09-20-nakayama-11",
+        "2026-09-20-nakayama-12"
+      ],
+      "deadlineMissedRaceIds": [],
+      "errors": []
+    },
+    "worker_live_lock:2026-09-20": {
+      "status": "ok",
+      "checkedAt": "2026-09-20T00:37:28.573Z",
+      "date": "2026-09-20",
+      "sourceModel": "ten-year-completed-model",
+      "selectedRaceCount": 10,
+      "completeBefore": 1,
+      "completeAfter": 1,
+      "lockedByWorker": [],
+      "refreshedBodyWeightRaceIds": [],
+      "bodyWeightPendingRaceIds": [],
+      "bodyWeightBreachRaceIds": [],
+      "refreshedPreviewRaceIds": [],
+      "previewAvailableRaceIds": [
+        "2026-09-20-hanshin-02",
+        "2026-09-20-nakayama-02",
+        "2026-09-20-hanshin-03",
+        "2026-09-20-nakayama-03"
+      ],
+      "previewMissingUrgentRaceIds": [],
+      "finalizedFromFreshRaceIds": [],
+      "finalizedFromFallbackRaceIds": [],
+      "latePromotedRaceIds": [],
+      "protectedRaceIds": [
+        "2026-09-20-hanshin-01",
+        "2026-09-20-hanshin-02",
+        "2026-09-20-nakayama-02",
+        "2026-09-20-hanshin-03",
+        "2026-09-20-nakayama-03"
+      ],
+      "incompleteRaceIds": [
+        "2026-09-20-hanshin-02",
+        "2026-09-20-nakayama-02",
+        "2026-09-20-hanshin-03",
+        "2026-09-20-nakayama-03"
+      ],
+      "deadlineBreachRaceIds": [],
+      "notYetInWindowRaceIds": [],
+      "alreadyStartedIncompleteRaceIds": [],
+      "errors": []
+    }
+  },
+  "sep19": [
+    {
+      "raceId": "2026-09-19-hanshin-01",
+      "rows": 6,
+      "settledRows": 6,
+      "pendingRows": 0,
+      "positiveReturnRows": 0,
+      "raceStatus": "finished",
+      "payoutRows": 8
+    },
+    {
+      "raceId": "2026-09-19-hanshin-02",
+      "rows": 6,
+      "settledRows": 6,
+      "pendingRows": 0,
+      "positiveReturnRows": 3,
+      "raceStatus": "finished",
+      "payoutRows": 8
+    },
+    {
+      "raceId": "2026-09-19-hanshin-03",
+      "rows": 6,
+      "settledRows": 6,
+      "pendingRows": 0,
+      "positiveReturnRows": 0,
+      "raceStatus": "finished",
+      "payoutRows": 8
+    },
+    {
+      "raceId": "2026-09-19-hanshin-05",
+      "rows": 6,
+      "settledRows": 6,
+      "pendingRows": 0,
+      "positiveReturnRows": 0,
+      "raceStatus": "finished",
+      "payoutRows": 8
+    },
+    {
+      "raceId": "2026-09-19-hanshin-06",
+      "rows": 6,
+      "settledRows": 6,
+      "pendingRows": 0,
+      "positiveReturnRows": 0,
+      "raceStatus": "finished",
+      "payoutRows": 8
+    },
+    {
+      "raceId": "2026-09-19-nakayama-01",
+      "rows": 6,
+      "settledRows": 6,
+      "pendingRows": 0,
+      "positiveReturnRows": 3,
+      "raceStatus": "finished",
+      "payoutRows": 8
+    },
+    {
+      "raceId": "2026-09-19-nakayama-03",
+      "rows": 6,
+      "settledRows": 6,
+      "pendingRows": 0,
+      "positiveReturnRows": 0,
+      "raceStatus": "finished",
+      "payoutRows": 8
+    }
+  ],
+  "home": {
+    "hasSep20Calendar": true,
+    "hasTodayConst": true,
+    "hasTodayUpperConst": true,
+    "hasFalseEmpty": false,
+    "headers": "HTTP/2 200 \ndate: Sun, 20 Sep 2026 00:37:44 GMT\ncontent-type: text/html; charset=utf-8\ncache-control: no-store, max-age=0\nx-race-home-path: v37-normal-snapshot\nx-race-recovery-home-date: 2026-09-20\nx-race-ui-version: ten-year-completed-public-v37-free-tier-safe-snapshot-20260905\nreport-to: {\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=z35T51FFk8HCKPQ5WVSRe4hhEnQ4WY%2FCCa1zxdolN6YMsPfmoc4UUaE9JWqumxjYHGo%2Fw2sog3kYSET98dzAlzJkMUYWy2taiJFXvCx06VY1b1t4mXM7E85OkQnZviQ6Qo4ubVP9RDagb9OmbiiRD9dkm79M0B0w%2FmAByYI%3D\"}]}\nnel: {\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}\nserver: cloudflare\ncf-ray: a3dcc364e8ff1360-LAX\nalt-svc: h3=\":443\"; ma=86400\n\n"
+  },
+  "day20RaceCount": 24,
+  "day20States": {
+    "2026-09-20-nakayama-02": {
+      "code": "target",
+      "label": "買い目対象・確定前",
+      "deadline": "10:20までに確定"
+    },
+    "2026-09-20-nakayama-03": {
+      "code": "target",
+      "label": "買い目対象・確定前",
+      "deadline": "10:50までに確定"
+    },
+    "2026-09-20-nakayama-07": {
+      "code": "target",
+      "label": "買い目対象・確定前",
+      "deadline": "13:10までに確定"
+    },
+    "2026-09-20-nakayama-11": {
+      "code": "target",
+      "label": "買い目対象・確定前",
+      "deadline": "15:30までに確定"
+    },
+    "2026-09-20-nakayama-12": {
+      "code": "target",
+      "label": "買い目対象・確定前",
+      "deadline": "16:15までに確定"
+    },
+    "2026-09-20-hanshin-01": {
+      "code": "buy",
+      "label": "買い目確定",
+      "deadline": "確定済み・以後変更なし"
+    },
+    "2026-09-20-hanshin-02": {
+      "code": "target",
+      "label": "買い目対象・確定前",
+      "deadline": "10:05までに確定"
+    },
+    "2026-09-20-hanshin-03": {
+      "code": "target",
+      "label": "買い目対象・確定前",
+      "deadline": "10:35までに確定"
+    },
+    "2026-09-20-hanshin-06": {
+      "code": "target",
+      "label": "買い目対象・確定前",
+      "deadline": "12:25までに確定"
+    },
+    "2026-09-20-hanshin-09": {
+      "code": "target",
+      "label": "買い目対象・確定前",
+      "deadline": "13:55までに確定"
+    }
+  },
+  "day19States": {
+    "2026-09-19-nakayama-01": {
+      "code": "hit",
+      "label": "的中",
+      "deadline": null,
+      "payouts": {
+        "ライト": 1100,
+        "スタンダード": 2750,
+        "プレミアム": 5500
+      }
+    },
+    "2026-09-19-nakayama-03": {
+      "code": "miss",
+      "label": "不的中",
+      "deadline": null
+    },
+    "2026-09-19-hanshin-01": {
+      "code": "miss",
+      "label": "不的中",
+      "deadline": null
+    },
+    "2026-09-19-hanshin-02": {
+      "code": "hit",
+      "label": "的中",
+      "deadline": null,
+      "payouts": {
+        "ライト": 2000,
+        "スタンダード": 5000,
+        "プレミアム": 10000
+      }
+    },
+    "2026-09-19-hanshin-03": {
+      "code": "miss",
+      "label": "不的中",
+      "deadline": null
+    },
+    "2026-09-19-hanshin-05": {
+      "code": "miss",
+      "label": "不的中",
+      "deadline": null
+    },
+    "2026-09-19-hanshin-06": {
+      "code": "miss",
+      "label": "不的中",
+      "deadline": null
+    }
+  },
+  "todaySummary": {
+    "ok": true,
+    "date": "2026-09-20",
+    "hasPredictions": true,
+    "targetRaces": 10,
+    "courses": [
+      {
+        "course": "ライト",
+        "totalRaces": 1,
+        "settledRaces": 0,
+        "hitRaces": 0,
+        "refundRaces": 0,
+        "stakeYen": 0,
+        "returnYen": 0,
+        "roiPct": null,
+        "complete": false
+      },
+      {
+        "course": "スタンダード",
+        "totalRaces": 1,
+        "settledRaces": 0,
+        "hitRaces": 0,
+        "refundRaces": 0,
+        "stakeYen": 0,
+        "returnYen": 0,
+        "roiPct": null,
+        "complete": false
+      },
+      {
+        "course": "プレミアム",
+        "totalRaces": 1,
+        "settledRaces": 0,
+        "hitRaces": 0,
+        "refundRaces": 0,
+        "stakeYen": 0,
+        "returnYen": 0,
+        "roiPct": null,
+        "complete": false
+      }
+    ],
+    "liveSource": "live-d1-current-day+snapshot-history"
+  },
+  "crons": {
+    "race-tantei-phase0": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "*/15 * * * *",
+            "created_on": "2026-09-03T00:37:50.075242Z",
+            "modified_on": "2026-09-20T00:37:13.069978Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    },
+    "race-tantei-live-deadline": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "* * * * *",
+            "created_on": "2026-08-22T10:16:05.847612Z",
+            "modified_on": "2026-09-20T00:28:13.223374Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    },
+    "race-tantei-live-deadline-backup": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "2-59/5 * * * *",
+            "created_on": "2026-09-06T10:34:58.828488Z",
+            "modified_on": "2026-09-20T00:28:18.478591Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    },
+    "race-tantei-win5": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "* * * * *",
+            "created_on": "2026-08-22T16:10:18.443337Z",
+            "modified_on": "2026-09-19T08:32:33.515955Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    },
+    "race-tantei-win5-backup": {
+      "result": {
+        "schedules": [
+          {
+            "cron": "3-59/5 * * * *",
+            "created_on": "2026-08-22T16:10:23.463815Z",
+            "modified_on": "2026-09-19T08:32:38.732496Z"
+          }
+        ]
+      },
+      "success": true,
+      "errors": [],
+      "messages": []
+    }
+  },
+  "health": {
+    "livePrimary": {
+      "service": "race-tantei-live-deadline",
+      "version": "live-deadline-v11-persistent-miss-lastgood-20260919",
+      "status": "up"
+    },
+    "liveBackup": {
+      "service": "race-tantei-live-deadline",
+      "version": "live-deadline-v11-persistent-miss-lastgood-20260919",
+      "status": "up"
+    },
+    "win5Primary": {
+      "service": "race-tantei-win5",
+      "version": "win5-entry-v3-race-day-gate-20260908",
+      "status": "up"
+    },
+    "win5Backup": {
+      "service": "race-tantei-win5",
+      "version": "win5-entry-v3-race-day-gate-20260908",
+      "status": "up"
+    }
+  },
+  "quota": {
+    "data": {
+      "viewer": {
+        "accounts": [
+          {
+            "d1AnalyticsAdaptiveGroups": [
+              {
+                "dimensions": {
+                  "databaseId": "949b5e8b-d1a4-4c4e-80d1-d031afdc03de",
+                  "date": "2026-09-20"
+                },
+                "sum": {
+                  "readQueries": 3904,
+                  "rowsRead": 319199,
+                  "rowsWritten": 568,
+                  "writeQueries": 472
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "errors": null
+  }
+}
