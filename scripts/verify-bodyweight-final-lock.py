@@ -34,8 +34,8 @@ def main():
     require('worker_bodyweight_snapshot:' in body,'BODYWEIGHT_PROVENANCE_STATE_MISSING')
     require('BODYWEIGHT_D1_VERIFY_FAILED' in body,'BODYWEIGHT_D1_REREAD_VERIFY_MISSING')
 
-    require('const BODY_WEIGHT_REFRESH_OPEN_MS = 100 * 60 * 1000;' in live,'BODYWEIGHT_T100_REFRESH_WINDOW_MISSING')
-    require('const PREVIEW_OPEN_MS = 90 * 60 * 1000;' in live,'BODYWEIGHT_T90_PREVIEW_WINDOW_MISSING')
+    require('const BODY_WEIGHT_REFRESH_OPEN_MS = 110 * 60 * 1000;' in live,'BODYWEIGHT_T110_REFRESH_WINDOW_MISSING')
+    require('const PREVIEW_OPEN_MS = 110 * 60 * 1000;' in live,'BODYWEIGHT_T110_PREVIEW_WINDOW_MISSING')
     require('const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;' in live,'BODYWEIGHT_T30_FINAL_ARM_MISSING')
     require('const DEADLINE_MS = 15 * 60 * 1000;' in live,'BODYWEIGHT_T15_DEADLINE_MISSING')
     require('const FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000;' in live,'BODYWEIGHT_T15_REFLECTION_MISSING')
@@ -96,8 +96,8 @@ def main():
         'status':'BODYWEIGHT_WORKER_NATIVE_PREDEADLINE_LOCK_OK',
         'modelSha256':EXPECTED_MODEL_SHA,
         'featureCount':56,
-        'refreshOpenMinutes':100,
-        'previewOpenMinutes':90,
+        'refreshOpenMinutes':110,
+        'previewOpenMinutes':110,
         'finalArmMinutes':30,
         'generationStartDeadlineMinutes':15,
         'generationStartBoundaryInclusive':True,
