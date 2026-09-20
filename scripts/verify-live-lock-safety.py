@@ -179,11 +179,13 @@ def main() -> None:
     for needle in (
         'const PREVIEW_PREFIX = "worker_live_preview:";',
         'const FINAL_PREFIX = "worker_live_final:";',
-        "PREVIEW_OPEN_MS = 180 * 60 * 1000",
         "FINAL_LOCK_ARM_MS = 30 * 60 * 1000",
         "DEADLINE_MS = 15 * 60 * 1000",
         "FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000",
         "MAX_PREVIEW_GENERATIONS_PER_TICK = 1",
+        "MAX_PREVIEW_ATTEMPTS_PER_TICK = 2",
+        "WHERE race_date=? AND start_time_utc>?",
+        "INSERT INTO rt_live_preview_archive",
         "WORKER_HARD_T15_START_MISSED",
         "WORKER_FRESH_GENERATION_STARTED_AFTER_T15",
         "WORKER_GENERATION_CROSSED_T15",
@@ -193,14 +195,15 @@ def main() -> None:
         "LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY",
     ):
         require_text(lock, needle, "isolated live lock")
-    require_text(lock, "PREVIEW_OPEN_MS = 180 * 60 * 1000", "preview protection window")
+    forbid_text(lock, "PREVIEW_OPEN_MS", "selection-driven preview protection")
+    forbid_text(lock, "start_time_utc<=?", "selection-driven preview protection")
 
     guard = runtime_schema_sensitive["src/v1/completed-worker-deadline-guard.ts"]
     for needle in (
         "DEADLINE_GUARD_MS = 15 * 60 * 1000",
         "DEADLINE_GUARD_ARM_MS = 25 * 60 * 1000",
         "FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000",
-        "MAX_OFFICIAL_PREVIEW_AGE_MS = 90 * 60 * 1000",
+        "MAX_OFFICIAL_PREVIEW_AGE_MS = 12 * 60 * 60 * 1000",
         "isDeadlineGuardMissed",
         "&& remainingMs < DEADLINE_GUARD_MS;",
         "DEADLINE_GUARD_T15_MISSED",
@@ -208,9 +211,9 @@ def main() -> None:
         'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
     ):
         require_text(guard, needle, "persistent deadline guard")
-    require_text(guard, "chooseCompletedProbabilityFallbackTickets", "deadline guard probability fallback")
-    require_text(guard, "lockedProbabilityFallbackRaceIds", "deadline guard fallback audit")
-    require_text(guard, 'oddsMode: "probability_fallback"', "deadline guard fallback payload")
+    forbid_text(guard, "chooseCompletedProbabilityFallbackTickets", "deadline guard fake odds fallback")
+    forbid_text(guard, 'oddsMode: "probability_fallback"', "deadline guard fake odds fallback")
+    require_text(guard, 'if (!official) return { status: "preview_missing"', "official last-good only")
     live_entry = read("src/live-deadline-entry-v2.ts")
     forbid_text(live_entry, "runUpcomingEntryDerivedRepair", "live/public entry-repair ownership")
     forbid_text(live_entry, "upcoming-entry-derived-repair", "live/public entry-repair ownership")

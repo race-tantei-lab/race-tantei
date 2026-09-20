@@ -24,18 +24,18 @@ const SELECTION_PREFIX = "final_daily_selection:";
 const AUDIT_PREFIX = "worker_live_lock:";
 const PREVIEW_PREFIX = "worker_live_preview:";
 const FINAL_PREFIX = "worker_live_final:";
-const BODY_WEIGHT_REFRESH_OPEN_MS = 180 * 60 * 1000;
-const PREVIEW_OPEN_MS = 180 * 60 * 1000;
 const PREVIEW_REQUIRED_MS = 30 * 60 * 1000;
 const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
 const FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000;
+const VERY_EARLY_PREVIEW_REFRESH_MS = 60 * 60 * 1000;
 const EARLY_PREVIEW_REFRESH_MS = 20 * 60 * 1000;
 const MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000;
 const NEAR_PREVIEW_REFRESH_MS = 3 * 60 * 1000;
 const PREVIEW_HISTORY = 3;
 const PREVIEW_VERSION = 1;
 export const MAX_PREVIEW_GENERATIONS_PER_TICK = 1;
+export const MAX_PREVIEW_ATTEMPTS_PER_TICK = 2;
 const OFFICIAL_ODDS_SOURCES = new Set(["jra-fast-official", "jra-crawl-official"]);
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
 
@@ -316,6 +316,7 @@ async function latestOfficialBodyWeightPreview(db: D1Database, raceId: string): 
 }
 
 function previewRefreshIntervalMs(remainingMs: number): number {
+  if (remainingMs > 180 * 60_000) return VERY_EARLY_PREVIEW_REFRESH_MS;
   if (remainingMs > 45 * 60_000) return EARLY_PREVIEW_REFRESH_MS;
   if (remainingMs > 30 * 60_000) return MID_PREVIEW_REFRESH_MS;
   return NEAR_PREVIEW_REFRESH_MS;
@@ -372,6 +373,17 @@ async function savePreview(db: D1Database, snapshot: PreviewSnapshot): Promise<v
   const saved = await latestPreview(db, snapshot.raceId);
   if (!saved || saved.generatedAt !== snapshot.generatedAt || saved.oddsSnapshotSha256 !== snapshot.oddsSnapshotSha256) {
     throw new Error(`WORKER_PREVIEW_SAVE_VERIFY_FAILED:${snapshot.raceId}`);
+  }
+
+  // Keep one append-only JRA-official insurance copy per selected race. The old
+  // database triggers archived every refresh and doubled race-day writes; archive
+  // only the first valid preview, reusing the pre-save lookup above so later
+  // refreshes add no archive read/write cost.
+  if (!existing) {
+    await db.prepare(`
+      INSERT INTO rt_live_preview_archive(race_id,envelope_json,newest_generated_at,archived_at)
+      VALUES(?,?,?,CURRENT_TIMESTAMP)
+    `).bind(snapshot.raceId, JSON.stringify(envelope), snapshot.generatedAt).run();
   }
 }
 
@@ -558,12 +570,15 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
     return audit;
   }
   const selectedIds = await orderLiveRaceIdsByStart(env.DB, date, validateSelection(selection));
-  const activeResult = await env.DB.prepare(`
+  // Protect every selected future race as soon as the frozen selection exists.
+  // There is deliberately no T-90/T-180 opening gate: after JRA odds become
+  // available, first-good coverage is filled one race per successful tick.
+  const futureResult = await env.DB.prepare(`
     SELECT race_id AS raceId FROM rt_races
-    WHERE race_date=? AND start_time_utc>? AND start_time_utc<=?
-  `).bind(date, iso(now), iso(new Date(now.getTime() + BODY_WEIGHT_REFRESH_OPEN_MS))).all<{ raceId: string }>();
-  const activeSet = new Set((activeResult.results ?? []).map((row) => String(row.raceId)));
-  const ids = await orderLiveRaceIdsByPreviewPriority(env.DB, date, selectedIds.filter((raceId) => activeSet.has(raceId)), now);
+    WHERE race_date=? AND start_time_utc>?
+  `).bind(date, iso(now)).all<{ raceId: string }>();
+  const futureSet = new Set((futureResult.results ?? []).map((row) => String(row.raceId)));
+  const ids = await orderLiveRaceIdsByPreviewPriority(env.DB, date, selectedIds.filter((raceId) => futureSet.has(raceId)), now);
   const beforeStates = await Promise.all(ids.map(async (raceId) => isStrictComplete(await publicBetRows(env.DB, raceId))));
   const completeBefore = beforeStates.filter(Boolean).length;
   const lockedByWorker: string[] = [];
@@ -579,6 +594,7 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
   const errors: Array<{ raceId: string; error: string }> = [];
   let model: CompletedModelRuntime | null = null;
   let generatedThisTick = 0;
+  let attemptedThisTick = 0;
 
   for (const raceId of ids) {
     const existing = await publicBetRows(env.DB, raceId);
@@ -590,13 +606,6 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       const raceNow = new Date();
       const remaining = startMs - raceNow.getTime();
       if (remaining <= 0) { alreadyStartedIncompleteRaceIds.push(raceId); continue; }
-      if (remaining > BODY_WEIGHT_REFRESH_OPEN_MS) { notYetInWindowRaceIds.push(raceId); continue; }
-
-      // Candidate existence is the top priority. Do not spend a live tick on a
-      // bodyweight-only network refresh before the preview window; the preview
-      // generator resolves bodyweights itself and can still proceed when that
-      // optional refresh fails.
-      if (remaining > PREVIEW_OPEN_MS) continue;
 
       if (remaining <= DEADLINE_MS) {
         errors.push({ raceId, error: `WORKER_HARD_T15_START_MISSED:${raceId}` });
@@ -605,6 +614,8 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       const existingPreview = await latestPreview(env.DB, raceId);
       if (remaining > FINAL_LOCK_ARM_MS && existingPreview && previewIsFreshEnough(existingPreview, remaining, raceNow)) continue;
       if (generatedThisTick >= MAX_PREVIEW_GENERATIONS_PER_TICK && remaining > FINAL_LOCK_ARM_MS) continue;
+      if (attemptedThisTick >= MAX_PREVIEW_ATTEMPTS_PER_TICK && remaining > FINAL_LOCK_ARM_MS) continue;
+      attemptedThisTick += 1;
       const generationStartedAt = new Date();
       const remainingAtGenerationStart = startMs - generationStartedAt.getTime();
       if (remainingAtGenerationStart <= DEADLINE_MS) {

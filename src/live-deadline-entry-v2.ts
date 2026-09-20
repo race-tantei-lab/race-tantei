@@ -10,7 +10,7 @@ import {
 } from "./v1/live-preview-safety.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "live-deadline-v12-preview-first-fallback-20260920";
+const DRIVER_VERSION = "live-deadline-v13-durable-official-lastgood-20260920";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
 const SELECTION_PREFIX = "final_daily_selection:";
