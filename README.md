@@ -37,10 +37,13 @@ JRA中央競馬を対象に、発走前情報を使って完成済み10年モデ
 - primary config: `wrangler.live-deadline.jsonc`
   - every minute: `* * * * *`
 - backup config: `wrangler.live-deadline-backup.jsonc`
-  - staggered every five minutes: `2-59/5 * * * *`
+  - every two minutes: `1-59/2 * * * *`
 - deployment: `.github/workflows/deploy-live-deadline.yml`
 - production readiness: `.github/workflows/verify-live-deadline-production.yml`
-- D1 leaseでprimary / backupの重複mutationを排他
+- lightweight deadline guardをCPU-heavy preview/model処理より先に実行
+- critical guard専用short D1 leaseとheavy処理用leaseを分離
+- `lease_busy` ではprimary heartbeatを更新しない
+- optional bodyweight取得はT-45以降へ遅延し、first-good生成のCPU負荷を抑制
 - 各選定レースの最初のvalid official previewをarchiveへ1回だけ保存し、current last-good消失時に復元可能
 
 締切フロー:
