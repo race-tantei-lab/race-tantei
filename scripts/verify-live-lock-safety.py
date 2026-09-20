@@ -179,7 +179,7 @@ def main() -> None:
     for needle in (
         'const PREVIEW_PREFIX = "worker_live_preview:";',
         'const FINAL_PREFIX = "worker_live_final:";',
-        "PREVIEW_OPEN_MS = 110 * 60 * 1000",
+        "PREVIEW_OPEN_MS = 180 * 60 * 1000",
         "FINAL_LOCK_ARM_MS = 30 * 60 * 1000",
         "DEADLINE_MS = 15 * 60 * 1000",
         "FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000",
@@ -193,7 +193,7 @@ def main() -> None:
         "LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY",
     ):
         require_text(lock, needle, "isolated live lock")
-    require_text(lock, "PREVIEW_OPEN_MS = 110 * 60 * 1000", "preview protection window")
+    require_text(lock, "PREVIEW_OPEN_MS = 180 * 60 * 1000", "preview protection window")
 
     guard = runtime_schema_sensitive["src/v1/completed-worker-deadline-guard.ts"]
     for needle in (
