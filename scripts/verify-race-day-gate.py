@@ -123,6 +123,14 @@ def main() -> None:
     require(primary_cfg.get("triggers", {}).get("crons", []) == ["* * * * *"], "PRIMARY_CRON_CHANGED")
     require(backup_cfg.get("triggers", {}).get("crons", []) == ["1-59/2 * * * *"], "BACKUP_CRON_NOT_TWO_MINUTES")
 
+
+    bootstrap = text(".github/workflows/race-day-bootstrap.yml")
+    require("shouldRunOnJraRaceDay" in bootstrap, "BOOTSTRAP_MUST_USE_JRA_RACE_DAY_GATE")
+    require("expected_race_day" in bootstrap, "BOOTSTRAP_EXPECTED_RACE_DAY_SIGNAL_MISSING")
+    require("weekday=$(TZ=Asia/Tokyo date +%u)" not in bootstrap, "BOOTSTRAP_WEEKDAY_HEURISTIC_REINTRODUCED")
+    require('"$weekday" -ge 1' not in bootstrap and '"$weekday" = 6' not in bootstrap, "BOOTSTRAP_WEEKDAY_SKIP_REINTRODUCED")
+    require("JRA gate says $today is a race day" in bootstrap, "BOOTSTRAP_RACE_DAY_EMPTY_FAIL_CLOSED_MISSING")
+
     print(f"RACE_DAY_GATE_OK public={public_main} live={primary_main} public_d1_guarded_for_race_or_preparation_day=true primary=1m backup=2m")
 
 
