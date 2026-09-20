@@ -56,6 +56,16 @@ const COURSE_STAKE_YEN: Readonly<Record<CourseName, number>> = {
   "プレミアム": 10_000,
 };
 const HISTORY_SOURCE = "snapshot-history-plus-date-bounded-live-v4";
+const D1_READ_BACKOFF_MS = 60_000;
+let d1ReadBackoffUntilMs = 0;
+
+function d1ReadBackoffActive(nowMs = Date.now()): boolean {
+  return nowMs < d1ReadBackoffUntilMs;
+}
+
+function tripD1ReadBackoff(nowMs = Date.now()): void {
+  d1ReadBackoffUntilMs = Math.max(d1ReadBackoffUntilMs, nowMs + D1_READ_BACKOFF_MS);
+}
 
 function jstDate(now = new Date()): string {
   return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -233,12 +243,17 @@ export default {
       }
 
       // Current day is deliberately bounded to only that date's final public
-      // bets plus one selection-state row. The old 30-day GROUP BY query ran on
-      // every browser poll and could exhaust the Free D1 allowance.
+      // bets plus one selection-state row. If D1 rejects one read (quota/outage),
+      // this isolate backs off instead of retrying on every browser poll.
+      if (d1ReadBackoffActive()) {
+        const summary = snapshotDay?.races?.length ? summarizeSnapshotDay(date, snapshotDay) : emptyDay(date);
+        return performanceResponse(today, summary, snapshotHistory([summary]), "quota-free-backoff-snapshot");
+      }
       try {
         const summary = await boundedLiveDay(env.DB, date);
         return performanceResponse(today, summary, snapshotHistory([summary]), "bounded-current-day");
       } catch (error) {
+        tripD1ReadBackoff();
         console.error("DAILY_PERFORMANCE_BOUNDED_D1_FALLBACK", date, error);
         const summary = snapshotDay?.races?.length ? summarizeSnapshotDay(date, snapshotDay) : emptyDay(date);
         return performanceResponse(today, summary, snapshotHistory([summary]), "quota-free-snapshot");
