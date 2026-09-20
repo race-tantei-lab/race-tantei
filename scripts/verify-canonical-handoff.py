@@ -130,7 +130,8 @@ def main() -> None:
         "liveDeadlinePrimaryConfig": "wrangler.live-deadline.jsonc",
         "liveDeadlineBackupConfig": "wrangler.live-deadline-backup.jsonc",
         "publicLiveMutationEnabled": False,
-        "previewOpenMinutes": 90,
+        "previewOpenMinutes": None,
+        "previewProtectionMode": "selection-driven-all-future-races",
         "previewRequiredMinutes": 30,
         "normalLockMinutes": 30,
         "deadlineGuardArmMinutes": 25,
@@ -184,25 +185,34 @@ def main() -> None:
 
     live = read("src/v1/completed-worker-live-lock.ts")
     for marker in (
-        "PREVIEW_OPEN_MS = 90 * 60 * 1000",
+        "WHERE race_date=? AND start_time_utc>?",
+        "MAX_PREVIEW_GENERATIONS_PER_TICK = 1",
+        "MAX_PREVIEW_ATTEMPTS_PER_TICK = 2",
         "PREVIEW_REQUIRED_MS = 30 * 60 * 1000",
         "FINAL_LOCK_ARM_MS = 30 * 60 * 1000",
         "DEADLINE_MS = 15 * 60 * 1000",
         "FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000",
+        "INSERT INTO rt_live_preview_archive",
         "WORKER_FRESH_GENERATION_STARTED_AFTER_T15",
         "WORKER_GENERATION_CROSSED_T15",
         'new Set(["jra-fast-official", "jra-crawl-official"])',
     ):
         require(live, marker, "live lock")
+    if "PREVIEW_OPEN_MS" in live or "start_time_utc<=?" in live:
+        fail("fixed preview opening window reintroduced")
 
     guard = read("src/v1/completed-worker-deadline-guard.ts")
     for marker in (
         "DEADLINE_GUARD_MS = 15 * 60 * 1000",
         "DEADLINE_GUARD_ARM_MS = 25 * 60 * 1000",
         "FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000",
+        "MAX_OFFICIAL_PREVIEW_AGE_MS = 12 * 60 * 60 * 1000",
         "remainingMs >= DEADLINE_GUARD_MS",
+        'if (!official) return { status: "preview_missing"',
     ):
         require(guard, marker, "deadline guard")
+    if "chooseCompletedProbabilityFallbackTickets" in guard or 'oddsMode: "probability_fallback"' in guard:
+        fail("probability fallback finalization reintroduced")
 
     migration = read("scripts/install-race-day-runtime-guards.sql")
     for marker in (
@@ -232,7 +242,7 @@ def main() -> None:
         "src/live-deadline-entry-v3.ts",
         "src/live-deadline-entry-v2.ts",
         "public live mutation: **disabled**",
-        "**T-90**",
+        "selection is frozen",
         "**T-30**",
         "**T-25**",
         "**T-15**",
@@ -242,7 +252,7 @@ def main() -> None:
         "src/public-site-entry-recovery-20260906.ts",
         "src/live-deadline-entry-v3.ts",
         "src/live-deadline-entry-v2.ts",
-        "**T-90**",
+        "selection is frozen",
         "**T-30**",
         "**T-25**",
         "**T-15**",
@@ -260,7 +270,7 @@ def main() -> None:
         "live_driver=v2",
         "live_primary=1m",
         "live_backup=5m_staggered",
-        "preview_open=90m",
+        "preview_protection=selection_driven",
         "normal_lock=30m",
         "rescue_guard=25m",
         "fresh_start_deadline=15m",
