@@ -169,9 +169,6 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       ...guardAfter.skippedAlreadyLockedRaceIds,
       ...slaAfter.finalReadyRaceIds,
     ]);
-    const unresolvedDueRaceIds = [...due].filter((raceId) => !locked.has(raceId));
-    const unresolvedGuardErrors = [...priorityGuard.errors, ...guardBefore.errors, ...guardAfter.errors]
-      .filter((row) => !locked.has(row.raceId));
     const hardDeadlineBreachRaceIds = [...new Set([
       ...priorityGuard.deadlineMissedRaceIds,
       ...guardBefore.deadlineMissedRaceIds,
@@ -179,13 +176,17 @@ async function runIsolatedLiveDeadlineTick(env: Env, scheduledAt: string): Promi
       ...(live?.deadlineBreachRaceIds ?? []),
       ...slaAfter.deadlineMissedRaceIds,
     ])];
+    const immutableMisses = new Set(hardDeadlineBreachRaceIds);
+    const unresolvedDueRaceIds = [...due].filter((raceId) => !locked.has(raceId) && !immutableMisses.has(raceId));
+    const unresolvedGuardErrors = [...priorityGuard.errors, ...guardBefore.errors, ...guardAfter.errors]
+      .filter((row) => !locked.has(row.raceId) && !immutableMisses.has(row.raceId));
     const preDeadlineCriticalRaceIds = [...new Set([
       ...slaAfter.previewMissingByT40RaceIds,
       ...slaAfter.previewMissingByT30RaceIds,
       ...slaAfter.finalMissingByT30RaceIds,
       ...slaAfter.finalMissingByT25RaceIds,
       ...slaAfter.finalMissingByT16RaceIds,
-    ])].filter((raceId) => !locked.has(raceId));
+    ])].filter((raceId) => !locked.has(raceId) && !immutableMisses.has(raceId));
 
     const completed = new Date();
     const ok = !liveFailure
