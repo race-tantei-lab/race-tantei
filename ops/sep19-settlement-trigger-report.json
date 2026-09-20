@@ -1,0 +1,96 @@
+{
+  "settlementAudit": {
+    "checkedAt": "2026-09-20T00:36:03.511Z",
+    "candidates": [
+      "2026-09-19-hanshin-05",
+      "2026-09-19-hanshin-06"
+    ],
+    "resultSavedRaceIds": [
+      "2026-09-19-hanshin-05",
+      "2026-09-19-hanshin-06"
+    ],
+    "settledRaceIds": [
+      "2026-09-19-hanshin-05",
+      "2026-09-19-hanshin-06"
+    ],
+    "settledRows": 12,
+    "waitingRaceIds": [],
+    "errors": []
+  },
+  "sep19": [
+    {
+      "raceId": "2026-09-19-hanshin-05",
+      "rows": 6,
+      "settledRows": 6,
+      "pendingRows": 0,
+      "raceStatus": "finished",
+      "resultUrl": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1009202604050520260919/A9",
+      "payoutRows": 8,
+      "resultRows": 10
+    },
+    {
+      "raceId": "2026-09-19-hanshin-06",
+      "rows": 6,
+      "settledRows": 6,
+      "pendingRows": 0,
+      "raceStatus": "finished",
+      "resultUrl": "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1009202604050620260919/5E",
+      "payoutRows": 8,
+      "resultRows": 11
+    }
+  ],
+  "sep20Early": [
+    {
+      "raceId": "2026-09-20-hanshin-01",
+      "startTimeJst": "09:45",
+      "finalRows": 6,
+      "sourceMinus2": 6,
+      "lockedAt": "2026-09-20T00:19:40.904Z",
+      "previewState": 1
+    },
+    {
+      "raceId": "2026-09-20-hanshin-02",
+      "startTimeJst": "10:20",
+      "finalRows": 0,
+      "sourceMinus2": 0,
+      "lockedAt": null,
+      "previewState": 1
+    },
+    {
+      "raceId": "2026-09-20-nakayama-02",
+      "startTimeJst": "10:35",
+      "finalRows": 0,
+      "sourceMinus2": 0,
+      "lockedAt": null,
+      "previewState": 1
+    },
+    {
+      "raceId": "2026-09-20-hanshin-03",
+      "startTimeJst": "10:50",
+      "finalRows": 0,
+      "sourceMinus2": 0,
+      "lockedAt": null,
+      "previewState": 1
+    }
+  ],
+  "home": {
+    "hasSep20Calendar": true,
+    "hasTodayConst": true,
+    "hasFalseEmpty": false,
+    "headers": "HTTP/2 200 \ndate: Sun, 20 Sep 2026 00:36:11 GMT\ncontent-type: text/html; charset=utf-8\ncache-control: no-store, max-age=0\nx-race-home-path: v37-normal-snapshot\nx-race-recovery-home-date: 2026-09-20\nx-race-ui-version: ten-year-completed-public-v37-free-tier-safe-snapshot-20260905\nreport-to: {\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=vIUXPCE1sNz0VBcbNcERDr2n%2BZWhuB%2FCPo5BUuX9FMuu299ZfmQKDeZqULwkfJBum4gDjw1lTCW0HfVhJA7BtjHDcxhyDdR4SHDZZQvCO49ohV%2F%2FvojdVov0%2FWZ48u%2BKAIgc3LWSTcZcvYBCJFMLF%2B2m3%2B6KW2%2BQJvAZXyE%3D\"}]}\nnel: {\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}\nserver: cloudflare\ncf-ray: a3dcc124983e67ee-SJC\nalt-svc: h3=\":443\"; ma=86400\n\n"
+  },
+  "day19States": {
+    "2026-09-19-hanshin-05": {
+      "code": "miss",
+      "label": "不的中",
+      "deadline": null
+    },
+    "2026-09-19-hanshin-06": {
+      "code": "miss",
+      "label": "不的中",
+      "deadline": null
+    }
+  },
+  "day20RaceCount": 24,
+  "day20SelectedCount": 10
+}
