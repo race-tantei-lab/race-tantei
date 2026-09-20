@@ -1,0 +1,49 @@
+name: Emergency Sep20 Now Probe
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/emergency-sep20-now-probe.yml"]
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CF_DB: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Probe D1 and health
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          q(){ jq -n --arg sql "$1" '{sql:$sql}' | curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/d1/database/$CF_DB/query" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'content-type: application/json' --data-binary @-; }
+          q "SELECT datetime('now','+9 hours') AS jstNow,r.race_id AS raceId,r.start_time_jst AS startTimeJst,ROUND((julianday(r.start_time_utc)-julianday('now'))*1440.0,2) AS remainingMin,(SELECT COUNT(*) FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||r.race_id) AS previewState,(SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS finalRows,(SELECT MIN(b.locked_at) FROM rt_public_bets b WHERE b.race_id=r.race_id) AS lockedAt FROM rt_races r WHERE r.race_id IN ('2026-09-20-hanshin-09','2026-09-20-nakayama-11','2026-09-20-nakayama-12') ORDER BY r.start_time_utc" > /tmp/races.json
+          q "SELECT state_key,updated_at,state_value FROM rt_system_state WHERE state_key IN ('live_deadline_driver:2026-09-20','worker_live_lock:2026-09-20','worker_deadline_guard:2026-09-20') ORDER BY state_key" > /tmp/state.json
+          curl -fsS https://race-tantei-live-deadline.race-tantei.workers.dev/health > /tmp/primary.json
+          curl -fsS https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health > /tmp/backup.json
+          python3 - <<'PY'
+          import json,pathlib
+          def cf(p):
+              x=json.load(open(p)); return ((x.get('result') or [{}])[0].get('results') or []) if x.get('success') else []
+          st=cf('/tmp/state.json')
+          parsed={}
+          for r in st:
+              try: parsed[r['state_key']]=json.loads(r['state_value'])
+              except: parsed[r['state_key']]=r.get('state_value')
+          out={'races':cf('/tmp/races.json'),'state':parsed,'primaryHealth':json.load(open('/tmp/primary.json')),'backupHealth':json.load(open('/tmp/backup.json'))}
+          pathlib.Path('ops/sep20-now-probe.json').write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding='utf-8')
+          print(json.dumps(out,ensure_ascii=False,indent=2))
+          PY
+      - name: Persist
+        run: |
+          git config user.name race-tantei-emergency-bot
+          git config user.email race-tantei-emergency-bot@users.noreply.github.com
+          git add ops/sep20-now-probe.json
+          git commit -m "ops: capture Sep 20 current remaining protection"
+          git pull --rebase origin main
+          git push origin HEAD:main
