@@ -211,7 +211,6 @@ def main() -> None:
         "MAX_OFFICIAL_PREVIEW_AGE_MS = 12 * 60 * 60 * 1000",
         "isDeadlineGuardMissed",
         "&& remainingMs < DEADLINE_GUARD_MS;",
-        "DEADLINE_GUARD_T15_MISSED",
         "JRA_OFFICIAL_ODDS_PARSER_VERSION",
         'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
     ):
@@ -247,7 +246,8 @@ def main() -> None:
         require_text(settlement, needle, "bounded settlement implementation")
     for forbidden in ("date('now','-14 days')", "rt_prediction_runners", "rt_predictions"):
         forbid_text(settlement, forbidden, "bounded settlement broad/legacy scan")
-    forbid_text(guard, "&& remainingMs > 0", "deadline guard post-start miss persistence")
+    require_text(guard, "if (remaining <= 0)", "deadline guard ignores already-started races")
+    require_text(guard, "if (remaining < DEADLINE_GUARD_MS)", "deadline guard audits sub-T15 races without retrying")
 
     migration_sql = read("scripts/install-race-day-runtime-guards.sql")
     for needle in (
