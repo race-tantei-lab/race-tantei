@@ -135,7 +135,7 @@ def main() -> None:
         "normalLockMinutes": 30,
         "deadlineGuardArmMinutes": 25,
         "hardDeadlineMinutes": 15,
-        "finalReflectionDeadlineMinutes": 10,
+        "finalReflectionDeadlineMinutes": 15,
         "officialOddsOnly": True,
         "syntheticOddsForbidden": True,
     }
@@ -188,9 +188,9 @@ def main() -> None:
         "PREVIEW_REQUIRED_MS = 30 * 60 * 1000",
         "FINAL_LOCK_ARM_MS = 30 * 60 * 1000",
         "DEADLINE_MS = 15 * 60 * 1000",
-        "FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000",
+        "FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000",
         "WORKER_FRESH_GENERATION_STARTED_AFTER_T15",
-        "WORKER_GENERATION_CROSSED_T10",
+        "WORKER_GENERATION_CROSSED_T15",
         'new Set(["jra-fast-official", "jra-crawl-official"])',
     ):
         require(live, marker, "live lock")
@@ -199,7 +199,7 @@ def main() -> None:
     for marker in (
         "DEADLINE_GUARD_MS = 15 * 60 * 1000",
         "DEADLINE_GUARD_ARM_MS = 25 * 60 * 1000",
-        "FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000",
+        "FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000",
         "remainingMs >= DEADLINE_GUARD_MS",
     ):
         require(guard, marker, "deadline guard")
@@ -236,7 +236,6 @@ def main() -> None:
         "**T-30**",
         "**T-25**",
         "**T-15**",
-        "**T-10**",
     ):
         require(handoff, marker, "HANDOFF")
     for marker in (
@@ -247,7 +246,6 @@ def main() -> None:
         "**T-30**",
         "**T-25**",
         "**T-15**",
-        "**T-10**",
         "CANONICAL_HANDOFF_OK",
     ):
         require(readme, marker, "README")
@@ -266,7 +264,7 @@ def main() -> None:
         "normal_lock=30m",
         "rescue_guard=25m",
         "fresh_start_deadline=15m",
-        "fresh_reflection_deadline=10m",
+        "fresh_reflection_deadline=15m",
         "runtime_schema_probe=false",
         "official_jra_odds_only=true",
     )
