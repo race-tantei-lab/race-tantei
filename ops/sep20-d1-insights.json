@@ -1,0 +1,241 @@
+{
+  "capturedAtUtc": "2026-09-20T00:19:03.758552+00:00",
+  "analyticsUtcDate": {
+    "data": {
+      "viewer": {
+        "accounts": [
+          {
+            "d1AnalyticsAdaptiveGroups": [
+              {
+                "dimensions": {
+                  "databaseId": "949b5e8b-d1a4-4c4e-80d1-d031afdc03de",
+                  "date": "2026-09-20"
+                },
+                "sum": {
+                  "readQueries": 1534,
+                  "rowsRead": 49340,
+                  "rowsWritten": 190,
+                  "writeQueries": 174
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "errors": null
+  },
+  "insights30m": [
+    {
+      "query": "\n    WITH per_race AS (\n      SELECT r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no,\n             SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS activeRunners,\n             MAX(CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END) AS hasEntryUrl\n      FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id\n      WHERE r.race_date>=? AND r.race_date<=?\n      GROUP BY r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no\n    )\n    SELECT race_date AS raceDate,venue,meeting_no AS meetingNo,meeting_day AS meetingDay,\n           SUM(CASE WHEN activeRunners>=3 AND hasEntryUrl=1 THEN 1 ELSE 0 END) AS readyRaces\n    FROM per_race GROUP BY race_date,venue,meeting_no,meeting_day HAVING readyRaces < 12\n    ORDER BY race_date,CASE venue WHEN '中京' THEN 0 WHEN '新潟' THEN 1 WHEN '札幌' THEN 2 ELSE 3 END,venue\n  ",
+      "totalRowsRead": 10032,
+      "numberOfTimesRun": 12,
+      "avgRowsRead": 836,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n    WITH per_race AS (\n      SELECT r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no,\n             MAX(CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END) AS hasEntryUrl,\n             SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners\n      FROM rt_races r\n      LEFT JOIN rt_runners rr ON rr.race_id=r.race_id\n      WHERE r.race_date>=? AND r.race_date<=?\n      GROUP BY r.race_id,r.race_date,r.venue,r.meeting_no,r.meeting_day,r.race_no\n    )\n    SELECT race_date AS raceDate,venue,meeting_no AS meetingNo,meeting_day AS meetingDay,\n           COUNT(*) AS storedRaces,\n           SUM(CASE WHEN activeRunners>=3 AND hasEntryUrl=1 THEN 1 ELSE 0 END) AS readyRaces\n    FROM per_race\n    GROUP BY race_date,venue,meeting_no,meeting_day\n    HAVING readyRaces < storedRaces\n    ORDER BY race_date,venue\n  ",
+      "totalRowsRead": 8360,
+      "numberOfTimesRun": 10,
+      "avgRowsRead": 836,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "SELECT race_id AS raceId,MAX(CASE WHEN COALESCE(return_yen,0)>0 THEN 1 ELSE 0 END) AS hit FROM rt_public_bets WHERE race_id IN (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) GROUP BY race_id",
+      "totalRowsRead": 4320,
+      "numberOfTimesRun": 60,
+      "avgRowsRead": 72,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "SELECT horse_name AS horseName,jockey,n,w,t FROM rt_ml_pair WHERE generation=? AND horse_name IN (SELECT value FROM json_each(?)) AND jockey IN (SELECT value FROM json_each(?))",
+      "totalRowsRead": 4032,
+      "numberOfTimesRun": 21,
+      "avgRowsRead": 192,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n      SELECT race_id AS raceId,course,COUNT(*) AS rows,\n             SUM(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settledRows,\n             SUM(CASE WHEN settlement_status='settled' THEN COALESCE(return_yen,0) ELSE 0 END) AS returnYen\n      FROM rt_public_bets WHERE race_id IN (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)\n      GROUP BY race_id,course\n    ",
+      "totalRowsRead": 3312,
+      "numberOfTimesRun": 46,
+      "avgRowsRead": 72,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n      SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,\n             b.stake_yen AS stakeYen,b.return_yen AS returnYen,b.settlement_status AS settlementStatus,\n             r.refund_horse_nos_json AS refundsJson\n      FROM rt_public_bets b\n      JOIN rt_races r ON r.race_id=b.race_id\n      WHERE r.race_date=? AND b.source_prediction_id=-2\n      ORDER BY b.race_id,b.course,b.id\n    ",
+      "totalRowsRead": 2782,
+      "numberOfTimesRun": 107,
+      "avgRowsRead": 26,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n    SELECT b.race_id AS raceId,b.bet_type AS betType,b.combination,b.stake_yen AS stakeYen,\n           b.return_yen AS returnYen,b.settlement_status AS settlementStatus,\n           r.refund_horse_nos_json AS refundsJson\n    FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id\n    WHERE b.race_id IN (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)\n    ORDER BY b.race_id,b.id\n  ",
+      "totalRowsRead": 2760,
+      "numberOfTimesRun": 20,
+      "avgRowsRead": 138,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n      SELECT race_id AS raceId,\n             MAX(CASE WHEN settlement_status='settled' THEN 1 ELSE 0 END) AS settled,\n             MAX(CASE WHEN settlement_status='settled' AND COALESCE(return_yen,0)>0 THEN 1 ELSE 0 END) AS hit\n      FROM rt_public_bets\n      WHERE race_id IN (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)\n      GROUP BY race_id\n    ",
+      "totalRowsRead": 2646,
+      "numberOfTimesRun": 40,
+      "avgRowsRead": 66,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "SELECT race_id AS raceId,bet_type AS betType,combination,payout_yen AS payoutYen FROM rt_payouts WHERE race_id IN (SELECT value FROM json_each(?)) ORDER BY race_id,bet_type,combination",
+      "totalRowsRead": 1440,
+      "numberOfTimesRun": 30,
+      "avgRowsRead": 48,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "SELECT race_id AS raceId, race_date AS raceDate, venue, race_no AS raceNo, race_name AS raceName, start_time_jst AS startTimeJst, start_time_utc AS startTimeUtc, surface, distance_m AS distanceM, status FROM rt_races WHERE race_date=? ORDER BY venue, race_no",
+      "totalRowsRead": 1400,
+      "numberOfTimesRun": 56,
+      "avgRowsRead": 25,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "SELECT race_id AS raceId,start_time_utc AS startTimeUtc FROM rt_races WHERE race_date=?",
+      "totalRowsRead": 925,
+      "numberOfTimesRun": 37,
+      "avgRowsRead": 25,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n    SELECT horse_no AS horseNo,frame_no AS frameNo,horse_name AS horseName,sex_age AS sexAge,coat_color AS coatColor,\n           horse_weight AS horseWeight,weight_change AS weightChange,jockey,assigned_weight AS assignedWeight,trainer,stable,\n           win_odds AS winOdds,popularity,runner_status AS runnerStatus\n    FROM rt_runners WHERE race_id=? ORDER BY horse_no\n  ",
+      "totalRowsRead": 834,
+      "numberOfTimesRun": 64,
+      "avgRowsRead": 13,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n      SELECT race_id AS raceId,race_date AS raceDate,venue,race_no AS raceNo,race_name AS raceName,\n             start_time_jst AS startTimeJst,start_time_utc AS startTimeUtc,surface,distance_m AS distanceM,status\n      FROM rt_races WHERE race_date=? ORDER BY venue,race_no\n    ",
+      "totalRowsRead": 475,
+      "numberOfTimesRun": 19,
+      "avgRowsRead": 25,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n    SELECT r.race_no AS raceNo,\n           SUM(CASE WHEN rr.runner_status='active' THEN 1 ELSE 0 END) AS activeRunners,\n           MAX(CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END) AS hasEntryUrl\n    FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id\n    WHERE r.race_date=? AND r.venue=?\n    GROUP BY r.race_id,r.race_no HAVING activeRunners < 3 OR hasEntryUrl=0 ORDER BY r.race_no\n  ",
+      "totalRowsRead": 464,
+      "numberOfTimesRun": 8,
+      "avgRowsRead": 58,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "SELECT horse_name AS horseName,n,w,t FROM rt_ml_horse_total WHERE generation=? AND horse_name IN (SELECT value FROM json_each(?))",
+      "totalRowsRead": 460,
+      "numberOfTimesRun": 10,
+      "avgRowsRead": 46,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "SELECT venue,COUNT(*) AS races,SUM(CASE WHEN entry_url IS NOT NULL AND TRIM(entry_url)<>'' THEN 1 ELSE 0 END) AS entryUrls,MIN((SELECT COUNT(*) FROM rt_runners rr WHERE rr.race_id=r.race_id AND COALESCE(rr.runner_status,'active')='active')) AS minActive FROM rt_races r WHERE race_date='2026-09-20' GROUP BY venue ORDER BY venue",
+      "totalRowsRead": 383,
+      "numberOfTimesRun": 1,
+      "avgRowsRead": 383,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "SELECT name,n,w,t FROM rt_ml_trainer WHERE generation=? AND name IN (SELECT value FROM json_each(?))",
+      "totalRowsRead": 336,
+      "numberOfTimesRun": 7,
+      "avgRowsRead": 48,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "SELECT start_time_utc AS startTimeUtc FROM rt_races WHERE race_id=? LIMIT ?",
+      "totalRowsRead": 208,
+      "numberOfTimesRun": 208,
+      "avgRowsRead": 1,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n    SELECT horse_no AS horseNo,horse_weight AS horseWeight,weight_change AS weightChange,runner_status AS runnerStatus\n    FROM rt_runners WHERE race_id=? ORDER BY horse_no\n  ",
+      "totalRowsRead": 180,
+      "numberOfTimesRun": 12,
+      "avgRowsRead": 15,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT ?",
+      "totalRowsRead": 176,
+      "numberOfTimesRun": 252,
+      "avgRowsRead": 0,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n    INSERT INTO rt_system_state(state_key,state_value,updated_at)\n    VALUES(?,?,CURRENT_TIMESTAMP)\n    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP\n  ",
+      "totalRowsRead": 122,
+      "numberOfTimesRun": 61,
+      "avgRowsRead": 2,
+      "totalRowsWritten": 61
+    },
+    {
+      "query": "\n    SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,b.return_yen AS returnYen,\n           b.settlement_status AS settlementStatus,r.refund_horse_nos_json AS refundsJson\n    FROM rt_public_bets b\n    JOIN rt_races r ON r.race_id=b.race_id\n    WHERE b.race_id IN (?,?,?,?,?,?,?,?,?,?)\n    ORDER BY b.race_id,b.id\n  ",
+      "totalRowsRead": 105,
+      "numberOfTimesRun": 5,
+      "avgRowsRead": 21,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n    SELECT race_id AS raceId,race_date AS raceDate,venue,meeting_no AS meetingNo,meeting_day AS meetingDay,race_no AS raceNo,\n           race_name AS raceName,conditions,surface,distance_m AS distanceM,direction,start_time_jst AS startTimeJst,start_time_utc AS startTimeUtc,\n           weather,track_condition AS trackCondition,entry_url AS entryUrl,result_url AS resultUrl,status\n    FROM rt_races WHERE race_id=? LIMIT ?\n  ",
+      "totalRowsRead": 104,
+      "numberOfTimesRun": 104,
+      "avgRowsRead": 1,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n    INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)\n    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP\n  ",
+      "totalRowsRead": 42,
+      "numberOfTimesRun": 21,
+      "avgRowsRead": 2,
+      "totalRowsWritten": 21
+    },
+    {
+      "query": "SELECT 1 AS ok FROM rt_system_state WHERE state_key=? LIMIT ?",
+      "totalRowsRead": 36,
+      "numberOfTimesRun": 36,
+      "avgRowsRead": 1,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n      UPDATE rt_runners\n      SET horse_weight=?,weight_change=?,runner_status=?\n      WHERE race_id=? AND horse_no=?\n    ",
+      "totalRowsRead": 30,
+      "numberOfTimesRun": 30,
+      "avgRowsRead": 1,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n    INSERT INTO rt_races (\n      race_id,race_date,venue,meeting_no,meeting_day,race_no,race_name,conditions,surface,distance_m,direction,\n      start_time_jst,start_time_utc,weather,track_condition,entry_url,result_url,status,entry_updated_at,updated_at\n    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)\n    ON CONFLICT(race_id) DO UPDATE SET\n      race_date=excluded.race_date, venue=excluded.venue, meeting_no=excluded.meeting_no, meeting_day=excluded.meeting_day,\n      race_no=excluded.race_no,\n      race_name=CASE\n        WHEN rt_races.race_name IS NULL OR trim(rt_races.race_name)=''\n          OR rt_races.race_name GLOB '[0-9]*レース'\n          OR rt_races.race_name GLOB '[0-9]*R'\n          OR rt_races.race_name IN ('検索ウィンドウ','検索メニュー','サイト内検索','検索','出馬表','レース','JRAホーム','メニューを開く','レース情報トップ')\n          OR rt_races.entry_url LIKE '%/keiba/calendar%'\n        THEN excluded.race_name ELSE rt_races.race_name END,\n      conditions=COALESCE(rt_races.conditions,excluded.conditions), surface=COALESCE(rt_races.surface,excluded.surface),\n      distance_m=COALESCE(rt_races.distance_m,excluded.distance_m), direction=COALESCE(rt_races.direction,excluded.direction),\n      start_time_jst=COALESCE(rt_races.start_time_jst,excluded.start_time_jst), start_time_utc=COALESCE(rt_races.start_time_utc,excluded.start_time_utc),\n      status=CASE WHEN rt_races.status='finished' THEN 'finished' ELSE rt_races.status END,\n      updated_at=CURRENT_TIMESTAMP\n  ",
+      "totalRowsRead": 30,
+      "numberOfTimesRun": 30,
+      "avgRowsRead": 1,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "SELECT owner,expires_at_epoch AS expiresAtEpoch FROM rt_live_deadline_lease WHERE lease_key=? LIMIT ?",
+      "totalRowsRead": 28,
+      "numberOfTimesRun": 28,
+      "avgRowsRead": 1,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n      SELECT race_id AS raceId,race_name AS raceName,start_time_utc AS startTimeUtc\n      FROM rt_races\n      WHERE race_date=? AND venue=? AND race_no=?\n      LIMIT ?\n    ",
+      "totalRowsRead": 26,
+      "numberOfTimesRun": 26,
+      "avgRowsRead": 1,
+      "totalRowsWritten": 0
+    },
+    {
+      "query": "\n    UPDATE rt_win5_driver_lease\n    SET owner=?,expires_at=?,updated_at=CURRENT_TIMESTAMP\n    WHERE id=1 AND expires_at<=?\n  ",
+      "totalRowsRead": 18,
+      "numberOfTimesRun": 18,
+      "avgRowsRead": 1,
+      "totalRowsWritten": 18
+    }
+  ],
+  "insightsError": ""
+}
