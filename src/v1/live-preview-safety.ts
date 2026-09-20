@@ -65,9 +65,14 @@ export async function ensureLivePreviewSafetySchema(_db: D1Database): Promise<vo
   return;
 }
 
-export async function acquireLiveDeadlineLease(db: D1Database, owner: string, ttlSeconds = 55): Promise<boolean> {
+export async function acquireNamedLiveDeadlineLease(
+  db: D1Database,
+  leaseKey: string,
+  owner: string,
+  ttlSeconds = 55,
+): Promise<boolean> {
   const nowEpoch = Math.floor(Date.now() / 1000);
-  const expiresAt = nowEpoch + Math.max(15, Math.trunc(ttlSeconds));
+  const expiresAt = nowEpoch + Math.max(10, Math.trunc(ttlSeconds));
   await db.prepare(`
     INSERT INTO rt_live_deadline_lease(lease_key,owner,expires_at_epoch,updated_at)
     VALUES(?,?,?,CURRENT_TIMESTAMP)
@@ -76,14 +81,22 @@ export async function acquireLiveDeadlineLease(db: D1Database, owner: string, tt
       expires_at_epoch=excluded.expires_at_epoch,
       updated_at=CURRENT_TIMESTAMP
     WHERE rt_live_deadline_lease.expires_at_epoch <= ? OR rt_live_deadline_lease.owner=excluded.owner
-  `).bind(LEASE_KEY, owner, expiresAt, nowEpoch).run();
+  `).bind(leaseKey, owner, expiresAt, nowEpoch).run();
   const row = await db.prepare("SELECT owner,expires_at_epoch AS expiresAtEpoch FROM rt_live_deadline_lease WHERE lease_key=? LIMIT 1")
-    .bind(LEASE_KEY).first<{ owner: string; expiresAtEpoch: number }>();
+    .bind(leaseKey).first<{ owner: string; expiresAtEpoch: number }>();
   return row?.owner === owner && Number(row.expiresAtEpoch) > nowEpoch;
 }
 
+export async function releaseNamedLiveDeadlineLease(db: D1Database, leaseKey: string, owner: string): Promise<void> {
+  await db.prepare("DELETE FROM rt_live_deadline_lease WHERE lease_key=? AND owner=?").bind(leaseKey, owner).run();
+}
+
+export async function acquireLiveDeadlineLease(db: D1Database, owner: string, ttlSeconds = 55): Promise<boolean> {
+  return acquireNamedLiveDeadlineLease(db, LEASE_KEY, owner, ttlSeconds);
+}
+
 export async function releaseLiveDeadlineLease(db: D1Database, owner: string): Promise<void> {
-  await db.prepare("DELETE FROM rt_live_deadline_lease WHERE lease_key=? AND owner=?").bind(LEASE_KEY, owner).run();
+  await releaseNamedLiveDeadlineLease(db, LEASE_KEY, owner);
 }
 
 export async function restoreNewestOfficialPreviewArchives(db: D1Database, date: string): Promise<string[]> {

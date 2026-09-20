@@ -121,9 +121,9 @@ def main() -> None:
     assert_public_gate(public_main)
 
     require(primary_cfg.get("triggers", {}).get("crons", []) == ["* * * * *"], "PRIMARY_CRON_CHANGED")
-    require(backup_cfg.get("triggers", {}).get("crons", []) == ["2-59/5 * * * *"], "BACKUP_CRON_NOT_FIVE_MINUTES")
+    require(backup_cfg.get("triggers", {}).get("crons", []) == ["1-59/2 * * * *"], "BACKUP_CRON_NOT_TWO_MINUTES")
 
-    print(f"RACE_DAY_GATE_OK public={public_main} live={primary_main} public_d1_guarded_for_race_or_preparation_day=true primary=1m backup=5m")
+    print(f"RACE_DAY_GATE_OK public={public_main} live={primary_main} public_d1_guarded_for_race_or_preparation_day=true primary=1m backup=2m")
 
 
 if __name__ == "__main__":

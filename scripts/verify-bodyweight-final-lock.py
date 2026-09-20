@@ -37,6 +37,8 @@ def main():
     require('WHERE race_date=? AND start_time_utc>?' in live,'SELECTION_DRIVEN_FUTURE_RACE_COVERAGE_MISSING')
     require('start_time_utc<=?' not in live,'FIXED_PREVIEW_OPEN_WINDOW_REINTRODUCED')
     require('PREVIEW_OPEN_MS' not in live,'FIXED_PREVIEW_OPEN_CONSTANT_REINTRODUCED')
+    require('const BODY_WEIGHT_ATTEMPT_OPEN_MS = 45 * 60 * 1000;' in live,'BODYWEIGHT_T45_OPTIONAL_OPEN_MISSING')
+    require('BODYWEIGHT_DEFERRED_UNTIL_T45' in live,'BODYWEIGHT_EARLY_DEFER_MARKER_MISSING')
     require('const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;' in live,'BODYWEIGHT_T30_FINAL_ARM_MISSING')
     require('const DEADLINE_MS = 15 * 60 * 1000;' in live,'BODYWEIGHT_T15_DEADLINE_MISSING')
     require('const FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000;' in live,'BODYWEIGHT_T15_REFLECTION_MISSING')
@@ -83,10 +85,11 @@ def main():
         require(forbidden not in guard,f'DEADLINE_GUARD_BODYWEIGHT_NETWORK_REINTRODUCED:{forbidden}')
 
     require('LIVE_DEADLINE_ROLE' in wrapper and 'role === "backup"' in wrapper,'LIVE_BACKUP_ROLE_MISSING')
-    require('if (await primaryIsAlive(env.DB)) return;' in wrapper,'LIVE_BACKUP_TRUE_STANDBY_GUARD_MISSING')
+    require('runCriticalDeadlineProtection' in wrapper,'LIVE_CRITICAL_GUARD_MISSING')
+    require('if (role === "backup" && await primaryIsAlive(env.DB)) return;' in wrapper,'LIVE_BACKUP_TRUE_STANDBY_GUARD_MISSING')
     require('const liveEnv = safeEnv(env);' in wrapper,'LIVE_FREE_TIER_SAFE_ENV_MISSING')
-    require(wrapper.count('await liveDeadlineV2.scheduled(controller, liveEnv);') >= 2,'LIVE_PRIMARY_OR_BACKUP_SAFE_WORKER_PATH_MISSING')
-    require('await liveDeadlineV2.scheduled(controller, env);' not in wrapper,'LIVE_RAW_DB_WORKER_PATH_REINTRODUCED')
+    require('runIsolatedLiveDeadlineTick(liveEnv' in wrapper,'LIVE_PRIMARY_OR_BACKUP_SAFE_WORKER_PATH_MISSING')
+    require(wrapper.index('runCriticalDeadlineProtection') < wrapper.index('runIsolatedLiveDeadlineTick(liveEnv'),'LIVE_GUARD_NOT_BEFORE_HEAVY_PATH')
 
     cfg=json.loads(text('config/ten-year-completed-model.json'))
     require(str(cfg['runnerProbabilityModel']['modelWeightsSha256'])==EXPECTED_MODEL_SHA,'MODEL_CONFIG_SHA_CHANGED')
@@ -104,7 +107,7 @@ def main():
         'actualGenerationStartRecheck':True,
         'freshReflectionDeadlineMinutes':15,
         'postT15GenerationStart':False,
-        'backupMode':'same_worker_true_standby_free_tier_safe_db',
+        'backupMode':'guard_first_two_minute_standby_free_tier_safe_db',
         'officialBodyweightAppliedWhenAvailable':True,
     },ensure_ascii=False))
 

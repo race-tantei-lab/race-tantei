@@ -150,7 +150,7 @@ def main() -> None:
         fail("backup live Worker identity mismatch")
     if primary.get("triggers", {}).get("crons") != ["* * * * *"]:
         fail("primary live cron mismatch")
-    if backup.get("triggers", {}).get("crons") != ["2-59/5 * * * *"]:
+    if backup.get("triggers", {}).get("crons") != ["1-59/2 * * * *"]:
         fail("backup live cron mismatch")
     if primary.get("vars", {}).get("LIVE_DEADLINE_ROLE") != "primary":
         fail("primary role mismatch")
@@ -166,28 +166,39 @@ def main() -> None:
         "shouldRunOnJraRaceDay",
         "if (!raceDay.shouldRun)",
         "PRIMARY_STALE_SECONDS = 150",
-        'if (role === "backup")',
-        "primaryIsAlive(env.DB)",
+        'PRIMARY_HEARTBEAT_KEY = "live_deadline_primary_heartbeat:v2"',
+        'CRITICAL_GUARD_LEASE_KEY = "live_deadline_critical_guard:v1"',
+        "runCriticalDeadlineProtection",
+        "runCompletedWorkerDeadlineGuard",
+        "restoreNewestOfficialPreviewArchives",
         "LIVE_RECENCY_HISTORY_SCAN_SKIPPED_FREE_TIER",
         "const liveEnv = safeEnv(env);",
-        "await liveDeadlineV2.scheduled(controller, liveEnv)",
+        "runIsolatedLiveDeadlineTick(liveEnv",
+        'if (role === "backup" && await primaryIsAlive(env.DB)) return;',
+        'String(result.status || "") !== "lease_busy"',
     ):
         require(wrapper, marker, "live v3 wrapper")
+    if wrapper.index("runCriticalDeadlineProtection") > wrapper.index("runIsolatedLiveDeadlineTick(liveEnv"):
+        fail("critical guard must execute before heavy live path")
 
     driver = read(prod["liveDeadlineDriverEntry"])
     for marker in (
         "acquireLiveDeadlineLease",
-        "runCompletedWorkerDeadlineGuard",
         "runCompletedWorkerLiveLock",
-        "LIVE_DEADLINE_HARD_T15_BREACH",
+        "Heavy work is intentionally isolated from critical finalization",
+        'status: "lease_busy"',
     ):
         require(driver, marker, "live v2 driver")
+    if "runCompletedWorkerDeadlineGuard" in driver or "restoreNewestOfficialPreviewArchives" in driver:
+        fail("critical guard must not live behind the CPU-heavy driver")
 
     live = read("src/v1/completed-worker-live-lock.ts")
     for marker in (
         "WHERE race_date=? AND start_time_utc>?",
         "MAX_PREVIEW_GENERATIONS_PER_TICK = 1",
         "MAX_PREVIEW_ATTEMPTS_PER_TICK = 2",
+        "BODY_WEIGHT_ATTEMPT_OPEN_MS = 45 * 60 * 1000",
+        "BODYWEIGHT_DEFERRED_UNTIL_T45",
         "PREVIEW_REQUIRED_MS = 30 * 60 * 1000",
         "FINAL_LOCK_ARM_MS = 30 * 60 * 1000",
         "DEADLINE_MS = 15 * 60 * 1000",
@@ -269,7 +280,7 @@ def main() -> None:
         "live_wrapper=v3",
         "live_driver=v2",
         "live_primary=1m",
-        "live_backup=5m_staggered",
+        "live_backup=2m_staggered",
         "preview_protection=selection_driven",
         "normal_lock=30m",
         "rescue_guard=25m",

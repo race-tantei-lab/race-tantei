@@ -46,7 +46,7 @@ def main() -> None:
     require(primary_main == backup_main, "primary/backup must use the exact same live entry")
     require(primary_main == "src/live-deadline-entry-v3.ts", f"unexpected live entry: {primary_main}")
     require(primary_cfg.get("triggers", {}).get("crons", []) == ["* * * * *"], "primary cron must remain every minute")
-    require(backup_cfg.get("triggers", {}).get("crons", []) == ["2-59/5 * * * *"], "backup cron must remain every five minutes")
+    require(backup_cfg.get("triggers", {}).get("crons", []) == ["1-59/2 * * * *"], "backup cron must run every two minutes")
     require(primary_cfg.get("vars", {}).get("LIVE_DEADLINE_ROLE") == "primary", "primary role mismatch")
     require(backup_cfg.get("vars", {}).get("LIVE_DEADLINE_ROLE") == "backup", "backup role mismatch")
 
@@ -106,10 +106,16 @@ def main() -> None:
     for needle in (
         "await shouldRunOnJraRaceDay",
         "if (!raceDay.shouldRun)",
-        'PRIMARY_HEARTBEAT_KEY = "live_deadline_primary_heartbeat:v1"',
+        'PRIMARY_HEARTBEAT_KEY = "live_deadline_primary_heartbeat:v2"',
         "PRIMARY_STALE_SECONDS = 150",
-        'if (role === "backup")',
-        "if (await primaryIsAlive(env.DB)) return;",
+        'CRITICAL_GUARD_LEASE_KEY = "live_deadline_critical_guard:v1"',
+        "runCriticalDeadlineProtection",
+        "runCompletedWorkerDeadlineGuard",
+        "acquireNamedLiveDeadlineLease",
+        "releaseNamedLiveDeadlineLease",
+        "restoreNewestOfficialPreviewArchives",
+        'if (role === "backup" && await primaryIsAlive(env.DB)) return;',
+        '"lease_busy"',
         "LIVE_DEADLINE_BACKUP_TAKEOVER",
         "function isHistoricalRecencyScan",
         'q.includes("marketprobability")',
@@ -122,11 +128,11 @@ def main() -> None:
         "function safeEnv",
         "LIVE_RECENCY_HISTORY_SCAN_SKIPPED_FREE_TIER",
         "const liveEnv = safeEnv(env);",
-        "await liveDeadlineV2.scheduled(controller, liveEnv);",
+        "await runIsolatedLiveDeadlineTick",
     ):
         require_text(live_entry, needle, "live entry")
-    require(live_entry.count("await liveDeadlineV2.scheduled(controller, liveEnv);") >= 2, "primary and backup must both use free-tier safe DB wrapper")
     forbid_text(live_entry, "await liveDeadlineV2.scheduled(controller, env);", "live entry raw DB path")
+    require(live_entry.index("runCriticalDeadlineProtection") < live_entry.index("runIsolatedLiveDeadlineTick(liveEnv"), "critical guard must execute before heavy live work")
 
     runtime_schema_sensitive = {
         primary_main: live_entry,
@@ -163,16 +169,15 @@ def main() -> None:
     driver = runtime_schema_sensitive["src/live-deadline-entry-v2.ts"]
     for needle in (
         "acquireLiveDeadlineLease",
-        "runCompletedWorkerDeadlineGuard",
         "runCompletedWorkerLiveLock",
         "selection_critical",
-        "predeadline_critical",
-        "LIVE_DEADLINE_HARD_T15_BREACH",
-        "slaAfter.previewMissingByT40RaceIds",
-        "slaAfter.finalMissingByT30RaceIds",
-        "slaAfter.finalMissingByT25RaceIds",
+        "lease_busy",
+        "Heavy work is intentionally isolated from critical finalization",
     ):
         require_text(driver, needle, "isolated live deadline driver")
+    forbid_text(driver, "runCompletedWorkerDeadlineGuard", "heavy driver must not own critical guard")
+    forbid_text(driver, "restoreNewestOfficialPreviewArchives", "heavy driver must not own archive rescue")
+    forbid_text(driver, "auditLiveDeadlineSla", "heavy driver must avoid post-generation SLA overhead")
     forbid_text(driver, "/_ops/live-tick", "isolated live deadline driver")
 
     lock = runtime_schema_sensitive["src/v1/completed-worker-live-lock.ts"]
@@ -206,7 +211,6 @@ def main() -> None:
         "MAX_OFFICIAL_PREVIEW_AGE_MS = 12 * 60 * 60 * 1000",
         "isDeadlineGuardMissed",
         "&& remainingMs < DEADLINE_GUARD_MS;",
-        "DEADLINE_GUARD_T15_MISSED",
         "JRA_OFFICIAL_ODDS_PARSER_VERSION",
         'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
     ):
@@ -242,7 +246,8 @@ def main() -> None:
         require_text(settlement, needle, "bounded settlement implementation")
     for forbidden in ("date('now','-14 days')", "rt_prediction_runners", "rt_predictions"):
         forbid_text(settlement, forbidden, "bounded settlement broad/legacy scan")
-    forbid_text(guard, "&& remainingMs > 0", "deadline guard post-start miss persistence")
+    require_text(guard, "if (remaining <= 0)", "deadline guard ignores already-started races")
+    require_text(guard, "if (remaining < DEADLINE_GUARD_MS)", "deadline guard audits sub-T15 races without retrying")
 
     migration_sql = read("scripts/install-race-day-runtime-guards.sql")
     for needle in (
@@ -283,7 +288,7 @@ def main() -> None:
     for obsolete in (".github/workflows/drive-live-tick.yml", ".github/workflows/auto-final-live-bets.yml"):
         require(not (ROOT / obsolete).exists(), f"obsolete workflow must remain removed: {obsolete}")
 
-    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=5m public_live_mutation=false free_tier_historical_scan=false")
+    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=2m guard_before_heavy=true public_live_mutation=false free_tier_historical_scan=false")
 
 
 if __name__ == "__main__":

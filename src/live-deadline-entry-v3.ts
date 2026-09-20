@@ -1,36 +1,38 @@
-import liveDeadlineV2 from "./live-deadline-entry-v2.js";
+import liveDeadlineV2, { runIsolatedLiveDeadlineTick } from "./live-deadline-entry-v2.js";
+import { runCompletedWorkerDeadlineGuard, type DeadlineGuardAudit } from "./v1/completed-worker-deadline-guard.js";
+import {
+  acquireNamedLiveDeadlineLease,
+  releaseNamedLiveDeadlineLease,
+  restoreNewestOfficialPreviewArchives,
+} from "./v1/live-preview-safety.js";
 import { shouldRunOnJraRaceDay } from "./v1/race-day-gate.js";
 import type { Env } from "./v1/types.js";
 
-const PRIMARY_HEARTBEAT_KEY = "live_deadline_primary_heartbeat:v1";
+const PRIMARY_HEARTBEAT_KEY = "live_deadline_primary_heartbeat:v2";
 const PRIMARY_STALE_SECONDS = 150;
+const CRITICAL_GUARD_LEASE_KEY = "live_deadline_critical_guard:v1";
+const CRITICAL_GUARD_LEASE_SECONDS = 20;
 
 type LiveRoleEnv = Env & { LIVE_DEADLINE_ROLE?: string };
 
+function errorText(error: unknown): string {
+  return error instanceof Error ? `${error.name}:${error.message}` : String(error);
+}
+
 function isHistoricalRecencyScan(sql: string): boolean {
   const q = sql.toLowerCase().replace(/\s+/g, " ");
-
-  // The runner recency SQL gained a candidate_races CTE, so matching only
-  // "WITH scored AS" stopped protecting Free D1. Match the invariant shape
-  // instead: historical date range + runners + results + market probability.
   const runnerScan = q.includes("race_date between")
     && q.includes("join rt_runners")
     && q.includes("join rt_results")
     && q.includes("marketprobability");
-
-  // Feature-state delta discovery was the other large race-day reader. When
-  // neutral recency is required on Free D1, an empty race-id set is correct and
-  // prevents the follow-up multi-thousand-row delta query as well.
   const featureDeltaScan = q.includes("select distinct ra.race_id as raceid")
     && q.includes("join rt_runners ru")
     && q.includes("ra.race_date>?")
     && q.includes("json_each(?)");
-
   const betScan = q.includes("from rt_public_bets b join rt_races r")
     && q.includes("race_date between")
     && q.includes("source_prediction_id=-2")
     && q.includes("settlement_status='settled'");
-
   return runnerScan || featureDeltaScan || betScan;
 }
 
@@ -67,8 +69,13 @@ function safeEnv(env: LiveRoleEnv): LiveRoleEnv {
   return { ...env, DB: freeTierSafeDb(env.DB) };
 }
 
-async function markPrimaryAlive(db: D1Database): Promise<void> {
-  const value = JSON.stringify({ role: "primary", checkedAt: new Date().toISOString() });
+async function markPrimaryAlive(db: D1Database, result: Record<string, unknown>): Promise<void> {
+  const value = JSON.stringify({
+    role: "primary",
+    checkedAt: new Date().toISOString(),
+    status: result.status ?? null,
+    driverVersion: result.version ?? null,
+  });
   await db.prepare(`
     INSERT INTO rt_system_state(state_key,state_value,updated_at)
     VALUES(?,?,CURRENT_TIMESTAMP)
@@ -84,6 +91,44 @@ async function primaryIsAlive(db: D1Database): Promise<boolean> {
   return Number(row?.alive ?? 0) === 1;
 }
 
+async function runCriticalDeadlineProtection(
+  env: LiveRoleEnv,
+  now: Date,
+  role: string,
+): Promise<{ acquired: boolean; guard: DeadlineGuardAudit | null; restored: string[] }> {
+  const owner = `critical-guard:${role}:${crypto.randomUUID()}`;
+  const acquired = await acquireNamedLiveDeadlineLease(
+    env.DB,
+    CRITICAL_GUARD_LEASE_KEY,
+    owner,
+    CRITICAL_GUARD_LEASE_SECONDS,
+  );
+  if (!acquired) return { acquired: false, guard: null, restored: [] };
+
+  try {
+    let guard = await runCompletedWorkerDeadlineGuard(env, now);
+    let restored: string[] = [];
+    if (guard.errors.some((row) => row.error.includes("DEADLINE_GUARD_PREVIEW_MISSING"))) {
+      restored = await restoreNewestOfficialPreviewArchives(env.DB, guard.date);
+      guard = await runCompletedWorkerDeadlineGuard(env, new Date());
+    }
+    if (guard.errors.length) {
+      console.error("LIVE_CRITICAL_GUARD_UNRESOLVED", JSON.stringify({
+        role,
+        dueRaceIds: guard.dueRaceIds,
+        errors: guard.errors,
+      }));
+    }
+    return { acquired: true, guard, restored };
+  } finally {
+    try {
+      await releaseNamedLiveDeadlineLease(env.DB, CRITICAL_GUARD_LEASE_KEY, owner);
+    } catch (error) {
+      console.error("LIVE_CRITICAL_GUARD_LEASE_RELEASE_FAILED", errorText(error));
+    }
+  }
+}
+
 export default {
   async fetch(request: Request): Promise<Response> {
     return liveDeadlineV2.fetch(request);
@@ -93,25 +138,44 @@ export default {
     const scheduledAt = Number.isFinite(controller.scheduledTime) ? new Date(controller.scheduledTime) : new Date();
     const raceDay = await shouldRunOnJraRaceDay(scheduledAt);
     if (!raceDay.shouldRun) {
-      console.log("LIVE_DEADLINE_NON_RACE_DAY_SKIP", JSON.stringify({ raceDate: raceDay.raceDate, role: env.LIVE_DEADLINE_ROLE || "primary", reason: raceDay.reason }));
+      console.log("LIVE_DEADLINE_NON_RACE_DAY_SKIP", JSON.stringify({
+        raceDate: raceDay.raceDate,
+        role: env.LIVE_DEADLINE_ROLE || "primary",
+        reason: raceDay.reason,
+      }));
       return;
     }
 
-    // Live ticks may use only bounded current-race/day reads. The 30-day recency
-    // feature scans are intentionally neutralized here: running them every minute
-    // exhausted the D1 Free rows_read allowance before midday.
     const liveEnv = safeEnv(env);
     const role = String(env.LIVE_DEADLINE_ROLE || "primary").toLowerCase();
-    if (role === "backup") {
-      if (await primaryIsAlive(env.DB)) return;
-      console.warn("LIVE_DEADLINE_BACKUP_TAKEOVER", new Date().toISOString());
-      await liveDeadlineV2.scheduled(controller, liveEnv);
+
+    // Critical finalization always runs before the CPU-heavy JRA/model path and
+    // outside the heavy-work lease. Therefore a killed/stuck preview invocation
+    // cannot prevent a previously stored official last-good from becoming final.
+    try {
+      await runCriticalDeadlineProtection(liveEnv, new Date(), role);
+    } catch (error) {
+      // Do not sacrifice preview generation if the guard itself has a transient
+      // D1 problem. The other role gets an independent guard attempt as well.
+      console.error("LIVE_CRITICAL_GUARD_FAILED", role, errorText(error));
+    }
+
+    if (role === "backup" && await primaryIsAlive(env.DB)) return;
+
+    const result = await runIsolatedLiveDeadlineTick(liveEnv, scheduledAt.toISOString());
+
+    if (role === "primary") {
+      // lease_busy means another invocation owns the heavy path; it is NOT proof
+      // that this primary completed useful work and must never refresh heartbeat.
+      if (String(result.status || "") !== "lease_busy" && result.ok !== false) {
+        await markPrimaryAlive(env.DB, result);
+      }
       return;
     }
 
-    // A heartbeat means the primary finished its live tick successfully. If the
-    // tick throws, the heartbeat stays stale and the standby can take over.
-    await liveDeadlineV2.scheduled(controller, liveEnv);
-    await markPrimaryAlive(env.DB);
+    console.warn("LIVE_DEADLINE_BACKUP_TAKEOVER", JSON.stringify({
+      checkedAt: new Date().toISOString(),
+      status: result.status ?? null,
+    }));
   },
 } satisfies ExportedHandler<LiveRoleEnv>;

@@ -75,7 +75,7 @@ jobs:
           NODE
           }
           check_schedule 'race-tantei-live-deadline' '* * * * *'
-          check_schedule 'race-tantei-live-deadline-backup' '2-59/5 * * * *'
+          check_schedule 'race-tantei-live-deadline-backup' '1-59/2 * * * *'
       - name: Verify public Worker cannot mutate live bets
         run: |
           code=$(curl --max-time 20 -sS -o /tmp/public-live-tick-body -w '%{http_code}' -X POST \
@@ -107,7 +107,7 @@ jobs:
         run: |
           set -euo pipefail
           heartbeat=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "SELECT unixepoch('now')-unixepoch(updated_at) AS ageSeconds FROM rt_system_state WHERE state_key='live_deadline_primary_heartbeat:v1' LIMIT 1")
+            "SELECT unixepoch('now')-unixepoch(updated_at) AS ageSeconds FROM rt_system_state WHERE state_key='live_deadline_primary_heartbeat:v2' LIMIT 1")
           echo "$heartbeat"
           HEARTBEAT="$heartbeat" node - <<'NODE'
           const p=JSON.parse(process.env.HEARTBEAT||'[]'); const r=p?.[0]?.results?.[0];
