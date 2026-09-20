@@ -1,7 +1,7 @@
 {
   "status": "production",
   "handoffVersion": 5,
-  "asOfJst": "2026-09-20T14:25:00+09:00",
+  "asOfJst": "2026-09-20T18:10:00+09:00",
   "repository": "race-tantei-lab/race-tantei",
   "branch": "main",
   "verifiedProductionBaselineCommit": "f3307364ea8d7680309077c1001c7175469285fb",
@@ -106,7 +106,13 @@
     "finalReflectionDeadlineMinutes": 15,
     "previewProtectionMode": "selection-driven-all-future-races",
     "firstGoodArchive": "one-jra-official-preview-per-selected-race",
-    "deadlineFallback": "official-jra-last-good-only"
+    "deadlineFallback": "official-jra-last-good-only",
+    "liveDeadlineArchitecture": "guard-first-cpu-isolated-v14",
+    "backupSchedule": "1-59/2 * * * *",
+    "criticalGuardLease": "live_deadline_critical_guard:v1",
+    "primaryHeartbeat": "live_deadline_primary_heartbeat:v2",
+    "bodyWeightAttemptOpenMinutes": 45,
+    "cpuFailureIsolation": true
   },
   "site": {
     "workerConfig": "wrangler.jsonc",
@@ -163,7 +169,7 @@
     "Past published picks and results are immutable.",
     "Live race-bet generation is owned only by the isolated live-deadline Workers; the public-site Worker and public requests cannot create or finalize race bets.",
     "After the daily selection is frozen, every selected future race immediately enters first-good protection. The Worker fills missing JRA-official previews before refresh work, keeps the newest valid official last-good through the race day, starts fresh finalization around T-30, arms stored-official rescue from T-25, and never starts or writes a new final at T-15 or later.",
-    "Primary live-deadline scheduling runs every minute and a separate staggered backup Worker runs every five minutes; a D1 lease prevents overlapping mutation while append-only preview archives preserve the newest last-good official preview.",
+    "Primary live-deadline scheduling runs every minute and a separate backup Worker runs every two minutes. Both roles run the lightweight stored-official T-25..T-15 guard before CPU-heavy preview/model work; the guard has its own short D1 lease, while the heavy path uses a separate lease and a truthful primary heartbeat that is never refreshed by lease_busy.",
     "JRA official odds are the only allowed market odds; synthetic, estimated, and probability-derived substitute odds are forbidden by both application validation and D1 final-state guards."
   ],
   "authoritativeRules": [
