@@ -99,7 +99,7 @@ jobs:
           ok=0
           for attempt in $(seq 1 10); do
             code=$(curl --retry 2 --retry-delay 1 --retry-all-errors -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$base?_rt_deploy=${GITHUB_RUN_ID}-$attempt" || true)
-            actual_ui=$(awk 'BEGIN{IGNORECASE=1} /^x-race-ui-version:/{gsub(/\\r/,""); sub(/^[^:]+:[[:space:]]*/,""); print; exit}' /tmp/home.headers)
+            actual_ui=$(awk 'BEGIN{IGNORECASE=1} /^x-race-ui-version:/{sub(/^[^:]+:[[:space:]]*/,""); print; exit}' /tmp/home.headers | tr -d '\r\n')
             echo "home attempt=$attempt http=$code ui=${actual_ui:-missing} expected=$EXPECTED_UI_VERSION"
             # The fallback copy may exist inside bundled client-side source even
             # when it is not the rendered page. HTTP 200 + the exact deployed UI
