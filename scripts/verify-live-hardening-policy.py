@@ -25,6 +25,8 @@ for token, label in [
     ("WHERE race_date=? AND start_time_utc>?", "selection-driven-future-coverage"),
     ("MAX_PREVIEW_GENERATIONS_PER_TICK = 1", "generation-budget"),
     ("MAX_PREVIEW_ATTEMPTS_PER_TICK = 2", "attempt-budget"),
+    ("BODY_WEIGHT_ATTEMPT_OPEN_MS = 45 * 60 * 1000", "deferred-bodyweight"),
+    ("BODYWEIGHT_DEFERRED_UNTIL_T45", "deferred-bodyweight-audit"),
     ("VERY_EARLY_PREVIEW_REFRESH_MS = 60 * 60 * 1000", "very-early-refresh"),
     ("EARLY_PREVIEW_REFRESH_MS = 20 * 60 * 1000", "early-refresh"),
     ("MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000", "mid-refresh"),
@@ -44,8 +46,9 @@ for token, label in [
     ("DEADLINE_GUARD_MS = 15 * 60 * 1000", "hard-t15"),
     ("DEADLINE_GUARD_ARM_MS = 25 * 60 * 1000", "guard-arm-t25"),
     ("MAX_OFFICIAL_PREVIEW_AGE_MS = 12 * 60 * 60 * 1000", "same-day-last-good"),
-    ('if (!official) return { status: "preview_missing"', "official-last-good-only"),
-    ("deadlineMissedRaceIds", "guard-miss-audit"),
+    ("This path is deliberately tiny", "critical-window-only"),
+    ("remaining < DEADLINE_GUARD_MS", "miss-audit"),
+    ("await latestOfficialPreview(env.DB, raceId, now, startMs)", "stored-official-only"),
 ]:
     require(guard, token, label)
 forbid(guard, "chooseCompletedProbabilityFallbackTickets", "fake-probability-final")
@@ -61,33 +64,37 @@ for token, label in [
     require(migration, token, label)
 
 for token, label in [
+    ("acquireNamedLiveDeadlineLease", "named-guard-lease"),
+    ("releaseNamedLiveDeadlineLease", "named-guard-release"),
     ("restoreNewestOfficialPreviewArchives", "archive-restore"),
-    ("previewMissingByT40RaceIds", "sla-t40"),
-    ("finalMissingByT25RaceIds", "sla-t25"),
-    ("remaining < 15 * 60_000", "sla-hard-t15"),
 ]:
     require(safety, token, label)
 
 for token, label in [
-    ("runCompletedWorkerLiveLock", "live-first"),
-    ("runCompletedWorkerDeadlineGuard", "guard-secondary"),
-    ("immutableMisses", "past-miss-isolation"),
-    ("LIVE_DEADLINE_HARD_T15_BREACH_RECORDED", "past-miss-record-only"),
+    ("runCompletedWorkerLiveLock", "isolated-heavy-live"),
+    ("Heavy work is intentionally isolated from critical finalization", "heavy-isolation-comment"),
+    ('status: "lease_busy"', "lease-busy-state"),
 ]:
     require(entry, token, label)
-require(entry, "runCompletedWorkerLiveLock(env, liveNow)", "live-first-call")
-require(entry, "runCompletedWorkerDeadlineGuard(env, priorityGuardNow)", "guard-call")
-if entry.index("runCompletedWorkerLiveLock(env, liveNow)") > entry.index("runCompletedWorkerDeadlineGuard(env, priorityGuardNow)"):
-    raise SystemExit("LIVE_HARDENING_POLICY_ORDER:live-must-run-before-guard")
+forbid(entry, "runCompletedWorkerDeadlineGuard", "heavy-driver-critical-guard")
+forbid(entry, "restoreNewestOfficialPreviewArchives", "heavy-driver-archive-rescue")
+forbid(entry, "auditLiveDeadlineSla", "heavy-driver-postwork-sla")
 
 for token, label in [
     ("function freeTierSafeDb", "free-tier-safe-db"),
     ("LIVE_RECENCY_HISTORY_SCAN_SKIPPED_FREE_TIER", "history-scan-block"),
-    ('role === "backup"', "backup-role"),
-    ("if (await primaryIsAlive(env.DB)) return;", "backup-standby"),
-    ("await markPrimaryAlive(env.DB);", "primary-heartbeat"),
+    ('CRITICAL_GUARD_LEASE_KEY = "live_deadline_critical_guard:v1"', "critical-guard-lease"),
+    ("runCriticalDeadlineProtection", "critical-guard"),
+    ("runCompletedWorkerDeadlineGuard", "critical-guard-call"),
+    ("restoreNewestOfficialPreviewArchives", "critical-archive-rescue"),
+    ("runIsolatedLiveDeadlineTick", "heavy-driver-call"),
+    ('PRIMARY_HEARTBEAT_KEY = "live_deadline_primary_heartbeat:v2"', "truthful-primary-heartbeat"),
+    ('if (role === "backup" && await primaryIsAlive(env.DB)) return;', "backup-standby-after-guard"),
+    ('String(result.status || "") !== "lease_busy"', "lease-busy-no-heartbeat"),
 ]:
     require(wrapper, token, label)
+if wrapper.index("runCriticalDeadlineProtection") > wrapper.index("runIsolatedLiveDeadlineTick(liveEnv"):
+    raise SystemExit("LIVE_HARDENING_POLICY_ORDER:critical-guard-must-run-before-heavy")
 
 for token, label in [
     ('"main": "src/live-deadline-entry-v3.ts"', "primary-v3"),
@@ -96,7 +103,7 @@ for token, label in [
     require(primary, token, label)
 for token, label in [
     ('"main": "src/live-deadline-entry-v3.ts"', "backup-v3"),
-    ('"crons": ["2-59/5 * * * *"]', "backup-five-minute-cron"),
+    ('"crons": ["1-59/2 * * * *"]', "backup-two-minute-cron"),
 ]:
     require(backup, token, label)
 
