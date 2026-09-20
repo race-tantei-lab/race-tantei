@@ -58,8 +58,14 @@ jobs:
           console.log('today summary api=ok',JSON.stringify(s));
           NODE
           has_predictions=$(node -e "const s=require('/tmp/summary.json');process.stdout.write(s.hasPredictions?'yes':'no')")
-          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS -D /tmp/home.headers "$BASE_URL/" -o /tmp/home.html
-          actual_home_ui=$(awk 'BEGIN{IGNORECASE=1} /^x-race-ui-version:/{gsub(/\r/,""); sub(/^[^:]+:[[:space:]]*/,""); print; exit}' /tmp/home.headers)
+          actual_home_ui=''
+          for attempt in $(seq 1 10); do
+            curl --retry 3 --retry-delay 1 --retry-all-errors -fsS -D /tmp/home.headers "$BASE_URL/?_rt_ui=${GITHUB_RUN_ID}-$attempt" -o /tmp/home.html
+            actual_home_ui=$(awk 'BEGIN{IGNORECASE=1} /^x-race-ui-version:/{gsub(/\\r/,""); sub(/^[^:]+:[[:space:]]*/,""); print; exit}' /tmp/home.headers)
+            echo "home-ui attempt=$attempt actual=${actual_home_ui:-missing} expected=$EXPECTED_UI_VERSION"
+            [[ "$actual_home_ui" = "$EXPECTED_UI_VERSION" ]] && break
+            sleep 3
+          done
           test "$actual_home_ui" = "$EXPECTED_UI_VERSION"
           if [[ "$has_predictions" == 'yes' ]]; then
             grep -q '今日の結果' /tmp/home.html
