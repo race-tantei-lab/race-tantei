@@ -29,7 +29,7 @@ const PREVIEW_OPEN_MS = 90 * 60 * 1000;
 const PREVIEW_REQUIRED_MS = 30 * 60 * 1000;
 const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
-const FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;
+const FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000;
 const EARLY_PREVIEW_REFRESH_MS = 10 * 60 * 1000;
 const MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000;
 const NEAR_PREVIEW_REFRESH_MS = 3 * 60 * 1000;
@@ -461,7 +461,7 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
   const generationStartedMs = Date.parse(String(snapshot.generationStartedAt || snapshot.generatedAt));
   if (finalizedFrom === "fresh") {
     if (!Number.isFinite(generationStartedMs) || startMs - generationStartedMs <= DEADLINE_MS) throw new Error(`WORKER_FRESH_GENERATION_STARTED_AFTER_T15:${raceId}`);
-    if (remainingAtCommit < FINAL_REFLECTION_DEADLINE_MS) throw new Error(`WORKER_FRESH_REFLECTION_CROSSED_T10:${raceId}`);
+    if (remainingAtCommit < FINAL_REFLECTION_DEADLINE_MS) throw new Error(`WORKER_FRESH_REFLECTION_CROSSED_T15:${raceId}`);
   } else if (remainingAtCommit < DEADLINE_MS) {
     throw new Error(`WORKER_NONFRESH_REFLECTION_CROSSED_T15:${raceId}`);
   }
@@ -479,7 +479,7 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
   `).bind(`${FINAL_PREFIX}${raceId}`, JSON.stringify({
     status: "locked", raceId, lockedAt, finalizedFrom,
     generationStartedAt: snapshot.generationStartedAt ?? null,
-    reflectionDeadlineMinutes: 10,
+    reflectionDeadlineMinutes: 15,
     sourceModel: COMPLETED_MODEL_VERSION, modelSha256: COMPLETED_MODEL_SHA256,
     previewGeneratedAt: snapshot.generatedAt,
     bodyWeightApplied: hasBodyWeight,
@@ -626,7 +626,7 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       const commitNow = new Date();
       const remainingAfterGeneration = startMs - commitNow.getTime();
       if (remainingAfterGeneration < FINAL_REFLECTION_DEADLINE_MS) {
-        errors.push({ raceId, error: `WORKER_GENERATION_CROSSED_T10:${raceId}` });
+        errors.push({ raceId, error: `WORKER_GENERATION_CROSSED_T15:${raceId}` });
         continue;
       }
       if (!fresh && remainingAfterGeneration < DEADLINE_MS) {
