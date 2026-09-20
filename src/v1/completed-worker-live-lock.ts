@@ -24,13 +24,13 @@ const SELECTION_PREFIX = "final_daily_selection:";
 const AUDIT_PREFIX = "worker_live_lock:";
 const PREVIEW_PREFIX = "worker_live_preview:";
 const FINAL_PREFIX = "worker_live_final:";
-const BODY_WEIGHT_REFRESH_OPEN_MS = 100 * 60 * 1000;
-const PREVIEW_OPEN_MS = 90 * 60 * 1000;
+const BODY_WEIGHT_REFRESH_OPEN_MS = 110 * 60 * 1000;
+const PREVIEW_OPEN_MS = 110 * 60 * 1000;
 const PREVIEW_REQUIRED_MS = 30 * 60 * 1000;
 const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
 const FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000;
-const EARLY_PREVIEW_REFRESH_MS = 10 * 60 * 1000;
+const EARLY_PREVIEW_REFRESH_MS = 20 * 60 * 1000;
 const MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000;
 const NEAR_PREVIEW_REFRESH_MS = 3 * 60 * 1000;
 const PREVIEW_HISTORY = 3;
@@ -592,15 +592,11 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       if (remaining <= 0) { alreadyStartedIncompleteRaceIds.push(raceId); continue; }
       if (remaining > BODY_WEIGHT_REFRESH_OPEN_MS) { notYetInWindowRaceIds.push(raceId); continue; }
 
-      if (remaining > PREVIEW_OPEN_MS) {
-        try {
-          await refreshOfficialBodyWeights(env.DB, race, raceNow);
-          refreshedBodyWeightRaceIds.add(raceId);
-        } catch {
-          bodyWeightPendingRaceIds.add(raceId);
-        }
-        continue;
-      }
+      // Candidate existence is the top priority. Do not spend a live tick on a
+      // bodyweight-only network refresh before the preview window; the preview
+      // generator resolves bodyweights itself and can still proceed when that
+      // optional refresh fails.
+      if (remaining > PREVIEW_OPEN_MS) continue;
 
       if (remaining <= DEADLINE_MS) {
         errors.push({ raceId, error: `WORKER_HARD_T15_START_MISSED:${raceId}` });
