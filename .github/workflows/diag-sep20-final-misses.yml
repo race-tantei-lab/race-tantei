@@ -89,6 +89,18 @@ jobs:
             WHERE race_id IN ('2026-09-20-nakayama-11','2026-09-20-nakayama-12')
             ORDER BY key,kind,updated_at
           "
+      - name: Dump live lease and lease-skip state
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT 'lease' AS kind,lease_key AS key,owner,expires_at_epoch,datetime(expires_at_epoch,'unixepoch') AS expiresAtUtc,updated_at,NULL AS payload
+            FROM rt_live_deadline_lease
+            UNION ALL
+            SELECT 'skip' AS kind,state_key AS key,NULL,NULL,NULL,updated_at,state_value AS payload
+            FROM rt_system_state
+            WHERE state_key='live_deadline_lease_skip:2026-09-20'
+          "
       - name: Dump public API truth
         run: |
           curl -fsS 'https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-09-20'
