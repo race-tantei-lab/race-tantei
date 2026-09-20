@@ -39,9 +39,8 @@ jobs:
           today=$(TZ=Asia/Tokyo date +%F)
           echo "date=$today" >> "$GITHUB_OUTPUT"
 
-          # Determine race-day status from the same JRA-aware gate used by the
-          # production Workers. Never infer "no racing" from weekday alone:
-          # holiday Mondays (for example 2026-09-21) are real JRA race days.
+          # Use the same JRA-aware gate as production. Weekday alone must never
+          # mean "no racing": JRA can and does hold holiday-Monday meetings.
           gate=$(npx tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{console.log(JSON.stringify(await shouldRunOnJraRaceDay(new Date())));})().catch(e=>{console.error(e);process.exit(1)})")
           echo "RACE_DAY_GATE=$gate"
           expected_race_day=$(GATE="$gate" node -e 'const g=JSON.parse(process.env.GATE||"{}"); process.stdout.write(g.shouldRun ? "true" : "false")')
@@ -96,139 +95,7 @@ jobs:
             print(json.dumps(rows,ensure_ascii=False))
           PY
           cat /tmp/program-state
-          if grep -q '^NO_RACE_DAY
-
-      - name: Assert persistent lookup indexes exist without D1 writes
-        if: steps.program.outputs.race_day == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Required indexes are persistent D1 schema objects. Never CREATE them
-          # on race morning: building ML indexes can exceed the 100k rows_written
-          # free-tier daily quota before any odds or bets can be persisted.
-          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-            "SELECT name FROM sqlite_master WHERE type='index' AND name IN ('rt_idx_races_date','rt_idx_public_bets_race','rt_idx_public_bets_settlement','rt_idx_ml_horse_hist_lookup','rt_idx_ml_horse_total_lookup','rt_idx_ml_horse_surface_lookup','rt_idx_ml_horse_dist_lookup','rt_idx_ml_horse_venue_lookup','rt_idx_ml_jockey_lookup','rt_idx_ml_trainer_lookup','rt_idx_ml_pair_lookup') ORDER BY name" \
-            > /tmp/indexes.json
-          python3 - <<'PY'
-          import json
-          required={'rt_idx_races_date','rt_idx_public_bets_race','rt_idx_public_bets_settlement','rt_idx_ml_horse_hist_lookup','rt_idx_ml_horse_total_lookup','rt_idx_ml_horse_surface_lookup','rt_idx_ml_horse_dist_lookup','rt_idx_ml_horse_venue_lookup','rt_idx_ml_jockey_lookup','rt_idx_ml_trainer_lookup','rt_idx_ml_pair_lookup'}
-          raw=json.load(open('/tmp/indexes.json')); rows=[]
-          for block in raw if isinstance(raw,list) else [raw]:
-            if isinstance(block,dict): rows += block.get('results') or []
-          found={str(r.get('name')) for r in rows}; missing=sorted(required-found)
-          print('PERSISTENT_INDEXES_FOUND',sorted(found))
-          if missing: raise SystemExit('MISSING_PREPROVISIONED_INDEXES:'+','.join(missing))
-          PY
-
-      - name: Wait for all real race entries from Cloudflare maintenance
-        if: steps.program.outputs.race_day == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          today='${{ steps.program.outputs.date }}'
-          query_entries() {
-            npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-              "WITH p AS (SELECT r.race_id,r.venue,r.race_no,SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS active FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id WHERE r.race_date='$today' GROUP BY r.race_id,r.venue,r.race_no) SELECT venue,COUNT(*) AS races,SUM(CASE WHEN active>=3 THEN 1 ELSE 0 END) AS ready,MIN(active) AS min_active FROM p GROUP BY venue ORDER BY venue" \
-              > /tmp/entries.json
-          }
-          ready=0
-          for attempt in $(seq 1 11); do
-            query_entries
-            if python3 - <<'PY'
-          import json,sys
-          raw=json.load(open('/tmp/entries.json')); rows=[]
-          for block in raw if isinstance(raw,list) else [raw]:
-            if isinstance(block,dict): rows += block.get('results') or []
-          print('ENTRY_READINESS',rows)
-          sys.exit(0 if len(rows)>=2 and all(int(r.get('races') or 0)==12 and int(r.get('ready') or 0)==12 for r in rows) else 1)
-          PY
-            then ready=1; break; fi
-            echo "ENTRY_WAIT_ATTEMPT=$attempt"
-            if [ "$attempt" -lt 11 ]; then sleep 120; fi
-          done
-          test "$ready" = 1
-          python3 - <<'PY'
-          import json
-          raw=json.load(open('/tmp/entries.json')); rows=[]
-          for block in raw if isinstance(raw,list) else [raw]:
-            if isinstance(block,dict): rows += block.get('results') or []
-          print('ENTRY_READINESS_FINAL',rows)
-          if len(rows)<2 or any(int(r.get('races') or 0)!=12 or int(r.get('ready') or 0)!=12 for r in rows):
-            raise SystemExit('RACE_DAY_ENTRIES_INCOMPLETE:'+json.dumps(rows,ensure_ascii=False))
-          PY
-
-      - name: Ensure Primary and Backup live workers are healthy
-        if: steps.program.outputs.race_day == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          primary='https://race-tantei-live-deadline.race-tantei.workers.dev/health'
-          backup='https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health'
-          p=$(curl --max-time 10 -sS -o /tmp/p -w '%{http_code}' "$primary" || true)
-          b=$(curl --max-time 10 -sS -o /tmp/b -w '%{http_code}' "$backup" || true)
-          echo "PRIMARY_HTTP=$p BACKUP_HTTP=$b"
-          if [ "$p" != 200 ] || [ "$b" != 200 ]; then
-            npx wrangler deploy --config wrangler.live-deadline.jsonc
-            npx wrangler deploy --config wrangler.live-deadline-backup.jsonc
-          fi
-          test "$(curl --max-time 10 -sS -o /tmp/p2 -w '%{http_code}' "$primary")" = 200
-          test "$(curl --max-time 10 -sS -o /tmp/b2 -w '%{http_code}' "$backup")" = 200
-
-      - name: Wait for authoritative venue-count-aware selection
-        if: steps.program.outputs.race_day == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          today='${{ steps.program.outputs.date }}'
-          found=0
-          for i in $(seq 1 25); do
-            npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
-              "SELECT state_value AS value FROM rt_system_state WHERE state_key='final_daily_selection:$today' LIMIT 1" > /tmp/selection.json
-            if python3 - <<'PY'
-          import collections,json,sys
-          raw=json.load(open('/tmp/selection.json')); rows=[]
-          for block in raw if isinstance(raw,list) else [raw]:
-            if isinstance(block,dict): rows += block.get('results') or []
-          if not rows or not rows[0].get('value'): sys.exit(1)
-          p=json.loads(str(rows[0]['value'])); selected=p.get('selected') or []
-          ids=[str(x.get('raceId') or '') for x in selected]
-          by=collections.Counter(str(x.get('venue') or '') for x in selected)
-          program={str(k):int(v) for k,v in (p.get('venueCounts') or {}).items()}
-          if p.get('sourceModel')!='ten-year-completed-model' or p.get('resultDataUsedForTargetDay') is not False: raise SystemExit('SELECTION_SOURCE_INVALID')
-          if len(program)<2 or any(v!=12 for v in program.values()): raise SystemExit('SELECTION_PROGRAM_INVALID:'+json.dumps(program,ensure_ascii=False))
-          expected=5*len(program)
-          if len(selected)!=expected or len(set(ids))!=expected or '' in ids or set(by)!=set(program) or any(v!=5 for v in by.values()): raise SystemExit('SELECTION_COUNT_INVALID:'+json.dumps({'program':program,'venues':dict(by),'ids':ids},ensure_ascii=False))
-          print('SELECTION_OK',len(selected),dict(by))
-          PY
-            then found=1; break; fi
-            echo "SELECTION_WAIT_ATTEMPT=$i"
-            sleep 60
-          done
-          test "$found" = 1
-
-      - name: Verify production day API and normal home after bootstrap
-        if: steps.program.outputs.race_day == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          today='${{ steps.program.outputs.date }}'
-          base='https://race-tantei-phase0.race-tantei.workers.dev'
-          curl --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -fsS "$base/api/public/day?date=$today" -o /tmp/day.json
-          python3 - <<'PY'
-          import json
-          body=json.load(open('/tmp/day.json',encoding='utf-8')); races=body.get('races') or []
-          by={}
-          for r in races: by[str(r.get('venue'))]=by.get(str(r.get('venue')),0)+1
-          if len(by)<2 or any(v!=12 for v in by.values()) or len(races)!=12*len(by): raise SystemExit('PRODUCTION_DAY_INCOMPLETE:'+json.dumps(by,ensure_ascii=False))
-          print('PRODUCTION_DAY_OK','RACES',len(races),'VENUES',by,'SOURCE',body.get('fallbackSource','live-d1'))
-          PY
-          code=$(curl --retry 3 --retry-delay 2 --retry-all-errors --max-time 15 -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$base/")
-          test "$code" = 200
-          for phrase in 'データを再接続しています' 'データ取得を再試行しています' 'データベースへ接続できない' '表示データの読み込みに失敗しました' '表示系の自動復旧モードです' '一時的にページを表示できません。'; do
-            if grep -Fq "$phrase" /tmp/home.html; then echo "FORBIDDEN_UI:$phrase" >&2; exit 1; fi
-          done
-          echo 'RACE_DAY_BOOTSTRAP_OK'
- /tmp/program-state; then
+          if grep -q '^NO_RACE_DAY$' /tmp/program-state; then
             if [ "$expected_race_day" = true ]; then
               echo "JRA gate says $today is a race day, but production D1 program remained empty after the maintenance window." >&2
               exit 1
