@@ -34,8 +34,9 @@ def main():
     require('worker_bodyweight_snapshot:' in body,'BODYWEIGHT_PROVENANCE_STATE_MISSING')
     require('BODYWEIGHT_D1_VERIFY_FAILED' in body,'BODYWEIGHT_D1_REREAD_VERIFY_MISSING')
 
-    require('const BODY_WEIGHT_REFRESH_OPEN_MS = 180 * 60 * 1000;' in live,'BODYWEIGHT_T110_REFRESH_WINDOW_MISSING')
-    require('const PREVIEW_OPEN_MS = 180 * 60 * 1000;' in live,'BODYWEIGHT_T110_PREVIEW_WINDOW_MISSING')
+    require('WHERE race_date=? AND start_time_utc>?' in live,'SELECTION_DRIVEN_FUTURE_RACE_COVERAGE_MISSING')
+    require('start_time_utc<=?' not in live,'FIXED_PREVIEW_OPEN_WINDOW_REINTRODUCED')
+    require('PREVIEW_OPEN_MS' not in live,'FIXED_PREVIEW_OPEN_CONSTANT_REINTRODUCED')
     require('const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;' in live,'BODYWEIGHT_T30_FINAL_ARM_MISSING')
     require('const DEADLINE_MS = 15 * 60 * 1000;' in live,'BODYWEIGHT_T15_DEADLINE_MISSING')
     require('const FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000;' in live,'BODYWEIGHT_T15_REFLECTION_MISSING')
@@ -96,8 +97,7 @@ def main():
         'status':'BODYWEIGHT_WORKER_NATIVE_PREDEADLINE_LOCK_OK',
         'modelSha256':EXPECTED_MODEL_SHA,
         'featureCount':56,
-        'refreshOpenMinutes':180,
-        'previewOpenMinutes':180,
+        'previewCoverage':'all-selected-future-races',
         'finalArmMinutes':30,
         'generationStartDeadlineMinutes':15,
         'generationStartBoundaryInclusive':True,
