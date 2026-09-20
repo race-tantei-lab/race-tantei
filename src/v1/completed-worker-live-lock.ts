@@ -376,13 +376,15 @@ async function savePreview(db: D1Database, snapshot: PreviewSnapshot): Promise<v
   }
 
   // Keep one append-only JRA-official insurance copy per selected race. The old
-  // database triggers archived every refresh and doubled race-day writes; one
-  // first-good archive gives us restore capability without unbounded growth.
-  await db.prepare(`
-    INSERT INTO rt_live_preview_archive(race_id,envelope_json,newest_generated_at,archived_at)
-    SELECT ?,?,?,CURRENT_TIMESTAMP
-    WHERE NOT EXISTS (SELECT 1 FROM rt_live_preview_archive WHERE race_id=? LIMIT 1)
-  `).bind(snapshot.raceId, JSON.stringify(envelope), snapshot.generatedAt, snapshot.raceId).run();
+  // database triggers archived every refresh and doubled race-day writes; archive
+  // only the first valid preview, reusing the pre-save lookup above so later
+  // refreshes add no archive read/write cost.
+  if (!existing) {
+    await db.prepare(`
+      INSERT INTO rt_live_preview_archive(race_id,envelope_json,newest_generated_at,archived_at)
+      VALUES(?,?,?,CURRENT_TIMESTAMP)
+    `).bind(snapshot.raceId, JSON.stringify(envelope), snapshot.generatedAt).run();
+  }
 }
 
 async function generatePreview(db: D1Database, model: CompletedModelRuntime, raceId: string, now: Date): Promise<PreviewSnapshot> {
