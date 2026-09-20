@@ -35,7 +35,7 @@ def main() -> None:
 
     require(public["triggers"]["crons"] == ["*/15 * * * *"], "public cron must stay 15m")
     require(live["triggers"]["crons"] == ["* * * * *"], "live primary cron must stay 1m")
-    require(live_backup["triggers"]["crons"] == ["2-59/5 * * * *"], "live backup cron must stay 5m staggered")
+    require(live_backup["triggers"]["crons"] == ["1-59/2 * * * *"], "live backup cron must stay 2m")
     require(win5["triggers"]["crons"] == ["* * * * *"], "WIN5 primary cron must stay 1m")
     require(win5_backup["triggers"]["crons"] == ["3-59/5 * * * *"], "WIN5 backup cron must stay 5m staggered")
     require(entry["triggers"]["crons"] == [], "standalone entry maintenance cron must stay disabled")
