@@ -188,7 +188,7 @@ export async function auditLiveDeadlineSla(db: D1Database, date: string, now = n
     if (remaining > 0 && remaining <= 25 * 60_000 && !finalReady) audit.finalMissingByT25RaceIds.push(raceId);
     if (remaining > 0 && remaining <= 17 * 60_000 && !finalReady) audit.finalMissingByT17RaceIds.push(raceId);
     if (remaining > 0 && remaining <= 16 * 60_000 && !finalReady) audit.finalMissingByT16RaceIds.push(raceId);
-    if (remaining > 0 && remaining < 10 * 60_000 && !finalReady) audit.deadlineMissedRaceIds.push(raceId);
+    if (remaining > 0 && remaining < 15 * 60_000 && !finalReady) audit.deadlineMissedRaceIds.push(raceId);
   }
   await persistSlaAuditIfNeeded(db, audit);
   return audit;
