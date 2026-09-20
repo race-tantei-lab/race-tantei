@@ -1,0 +1,96 @@
+name: Diagnose Sep20 Final Misses
+
+on:
+  push:
+    branches: [diag/sep20-final-misses]
+    paths:
+      - ".github/workflows/diag-sep20-final-misses.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Dump selected race finalization state
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            WITH sel AS (
+              SELECT json_extract(j.value,'$.raceId') AS raceId
+              FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j
+              WHERE s.state_key='final_daily_selection:2026-09-20'
+            )
+            SELECT
+              r.race_id AS raceId,
+              r.venue,
+              r.race_no AS raceNo,
+              r.start_time_jst AS startTimeJst,
+              r.start_time_utc AS startTimeUtc,
+              (SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS finalRows,
+              (SELECT settlement_status FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2 LIMIT 1) AS settlementStatus,
+              (SELECT updated_at FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||r.race_id) AS previewUpdatedAt,
+              (SELECT json_extract(state_value,'$.snapshots[0].generatedAt') FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||r.race_id) AS previewGeneratedAt,
+              (SELECT json_extract(state_value,'$.snapshots[0].generationStartedAt') FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||r.race_id) AS generationStartedAt,
+              (SELECT json_extract(state_value,'$.snapshots[0].oddsFetchedAt') FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||r.race_id) AS oddsFetchedAt,
+              (SELECT json_extract(state_value,'$.snapshots[0].oddsSource') FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||r.race_id) AS oddsSource,
+              (SELECT json_extract(state_value,'$.snapshots[0].bodyWeightApplied') FROM rt_system_state s WHERE s.state_key='worker_live_preview:'||r.race_id) AS bodyWeightApplied,
+              (SELECT updated_at FROM rt_system_state s WHERE s.state_key='worker_live_final:'||r.race_id) AS finalUpdatedAt,
+              (SELECT json_extract(state_value,'$.status') FROM rt_system_state s WHERE s.state_key='worker_live_final:'||r.race_id) AS finalStatus,
+              (SELECT json_extract(state_value,'$.finalizedFrom') FROM rt_system_state s WHERE s.state_key='worker_live_final:'||r.race_id) AS finalizedFrom,
+              (SELECT json_extract(state_value,'$.oddsSource') FROM rt_system_state s WHERE s.state_key='worker_live_final:'||r.race_id) AS finalOddsSource,
+              (SELECT COUNT(*) FROM rt_live_preview_archive a WHERE a.race_id=r.race_id) AS archiveRows,
+              (SELECT MIN(newest_generated_at) FROM rt_live_preview_archive a WHERE a.race_id=r.race_id) AS archivedGeneratedAt
+            FROM rt_races r JOIN sel ON sel.raceId=r.race_id
+            ORDER BY r.start_time_utc
+          "
+      - name: Dump driver and live audit states
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT state_key,updated_at,state_value
+            FROM rt_system_state
+            WHERE state_key IN (
+              'live_deadline_driver:2026-09-20',
+              'worker_live_lock:2026-09-20',
+              'live_deadline_sla:2026-09-20',
+              'live_deadline_primary_heartbeat:v1'
+            )
+            ORDER BY state_key
+          "
+      - name: Dump Nakayama 11 and 12 previews and archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT 'state' AS kind,state_key AS key,updated_at,state_value AS payload
+            FROM rt_system_state
+            WHERE state_key IN (
+              'worker_live_preview:2026-09-20-nakayama-11',
+              'worker_live_preview:2026-09-20-nakayama-12',
+              'worker_live_final:2026-09-20-nakayama-11',
+              'worker_live_final:2026-09-20-nakayama-12'
+            )
+            UNION ALL
+            SELECT 'archive' AS kind,race_id AS key,archived_at AS updated_at,envelope_json AS payload
+            FROM rt_live_preview_archive
+            WHERE race_id IN ('2026-09-20-nakayama-11','2026-09-20-nakayama-12')
+            ORDER BY key,kind,updated_at
+          "
+      - name: Dump public API truth
+        run: |
+          curl -fsS 'https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-09-20'
+          echo
+          curl -fsS 'https://race-tantei-phase0.race-tantei.workers.dev/api/public/today-summary'
