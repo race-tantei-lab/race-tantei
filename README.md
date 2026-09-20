@@ -41,11 +41,11 @@ JRA中央競馬を対象に、発走前情報を使って完成済み10年モデ
 - deployment: `.github/workflows/deploy-live-deadline.yml`
 - production readiness: `.github/workflows/verify-live-deadline-production.yml`
 - D1 leaseでprimary / backupの重複mutationを排他
-- official previewはappend-only archiveへ保存し、newest last-good official previewを復元可能
+- 各選定レースの最初のvalid official previewをarchiveへ1回だけ保存し、current last-good消失時に復元可能
 
 締切フロー:
 
-- **T-90**: JRA公式オッズでpreview作成開始
+- **selection is frozen / 選定確定直後**: 全選定済みfuture raceをfirst-good保護対象にし、JRA公式オッズ取得可能になったレースからmissing previewをrefreshより優先して作成
 - **T-40**: 早期SLA監査
 - **T-30**: official preview必須。fresh finalization window開始
 - **T-25**: 保存済みofficial previewによるrescue guard開始
