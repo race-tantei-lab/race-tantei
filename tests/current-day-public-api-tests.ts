@@ -22,9 +22,9 @@ function rows(status = "pending", returns: number[] = [0, 0, 0, 0, 0, 0], refund
 }
 
 assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T00:30:00Z")).code, "target");
-// T-15 is the hard finalization boundary. Before it, a selected race may
-// still be pending; at T-15 with no immutable six-row final it is overdue.
-assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T00:44:59Z")).code, "pending");
+// T-15 is the hard finalization boundary. Before it, the selected race remains
+// a target awaiting its immutable six-row final; at T-15 without that final it is overdue.
+assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T00:44:59Z")).code, "target");
 assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T00:45:00Z")).code, "overdue");
 assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T00:49:59Z")).code, "overdue");
 assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T01:00:00Z")).code, "missing");
