@@ -68,7 +68,8 @@ jobs:
           done
           test "$actual_home_ui" = "$EXPECTED_UI_VERSION"
           if [[ "$has_predictions" == 'yes' ]]; then
-            grep -q '今日の結果' /tmp/home.html
+            grep -q '日別回収率' /tmp/home.html
+            grep -q "$today" /tmp/home.html
           fi
           echo "PUBLIC_HOME_UI_VERSION_OK source=$EXPECTED_UI_SOURCE ui=$actual_home_ui deploy=$EXPECTED_DEPLOY_REVISION"
 
