@@ -1,10 +1,10 @@
 {
   "status": "production",
   "handoffVersion": 5,
-  "asOfJst": "2026-09-08T10:17:00+09:00",
+  "asOfJst": "2026-09-20T14:25:00+09:00",
   "repository": "race-tantei-lab/race-tantei",
   "branch": "main",
-  "verifiedProductionBaselineCommit": "19f85d50d3eb01d8f533e8387c51142313434cda",
+  "verifiedProductionBaselineCommit": "f3307364ea8d7680309077c1001c7175469285fb",
   "sourceOfTruth": "HANDOFF.md",
   "handoffVerification": {
     "script": "scripts/verify-canonical-handoff.py",
@@ -96,14 +96,17 @@
     "liveDeadlineDeployWorkflow": ".github/workflows/deploy-live-deadline.yml",
     "liveDeadlineReadinessWorkflow": ".github/workflows/verify-live-deadline-production.yml",
     "publicLiveMutationEnabled": false,
-    "previewOpenMinutes": 90,
+    "previewOpenMinutes": null,
     "previewRequiredMinutes": 30,
     "normalLockMinutes": 30,
     "hardDeadlineMinutes": 15,
     "officialOddsOnly": true,
     "syntheticOddsForbidden": true,
     "liveDeadlineDriverEntry": "src/live-deadline-entry-v2.ts",
-    "finalReflectionDeadlineMinutes": 15
+    "finalReflectionDeadlineMinutes": 15,
+    "previewProtectionMode": "selection-driven-all-future-races",
+    "firstGoodArchive": "one-jra-official-preview-per-selected-race",
+    "deadlineFallback": "official-jra-last-good-only"
   },
   "site": {
     "workerConfig": "wrangler.jsonc",
@@ -159,7 +162,7 @@
     "WIN5 target races and ticket rows must remain readable on mobile without horizontal scrolling.",
     "Past published picks and results are immutable.",
     "Live race-bet generation is owned only by the isolated live-deadline Workers; the public-site Worker and public requests cannot create or finalize race bets.",
-    "Official JRA-odds previews begin from 90 minutes before post time and are required by 30 minutes. The fresh finalization window begins around T-30; stored official-preview rescue is armed from T-25 through the exact T-15 boundary. No fresh calculation may start at T-15 or later and no newly computed or stored final may be written after the T-15 boundary.",
+    "After the daily selection is frozen, every selected future race immediately enters first-good protection. The Worker fills missing JRA-official previews before refresh work, keeps the newest valid official last-good through the race day, starts fresh finalization around T-30, arms stored-official rescue from T-25, and never starts or writes a new final at T-15 or later.",
     "Primary live-deadline scheduling runs every minute and a separate staggered backup Worker runs every five minutes; a D1 lease prevents overlapping mutation while append-only preview archives preserve the newest last-good official preview.",
     "JRA official odds are the only allowed market odds; synthetic, estimated, and probability-derived substitute odds are forbidden by both application validation and D1 final-state guards."
   ],
