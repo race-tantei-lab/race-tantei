@@ -1,6 +1,5 @@
 import {
   bodyWeightSnapshotMatchesRunners,
-  refreshOfficialBodyWeights,
   resolveOfficialBodyWeights,
   type OfficialBodyWeightSnapshot,
 } from "./bodyweight-refresh";
@@ -25,6 +24,7 @@ const AUDIT_PREFIX = "worker_live_lock:";
 const PREVIEW_PREFIX = "worker_live_preview:";
 const FINAL_PREFIX = "worker_live_final:";
 const PREVIEW_REQUIRED_MS = 30 * 60 * 1000;
+const BODY_WEIGHT_ATTEMPT_OPEN_MS = 45 * 60 * 1000;
 const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
 const FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000;
@@ -397,10 +397,18 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
 
   let bodyWeightSnapshot: OfficialBodyWeightSnapshot | null = null;
   let bodyWeightError: string | null = null;
-  try {
-    bodyWeightSnapshot = await resolveOfficialBodyWeights(db, race, initial.runners, now);
-  } catch (error) {
-    bodyWeightError = errorText(error);
+  const remainingAtGenerationStart = startMs - now.getTime();
+  if (remainingAtGenerationStart <= BODY_WEIGHT_ATTEMPT_OPEN_MS) {
+    try {
+      bodyWeightSnapshot = await resolveOfficialBodyWeights(db, race, initial.runners, now);
+    } catch (error) {
+      bodyWeightError = errorText(error);
+    }
+  } else {
+    // First-good protection must be cheap enough to survive the Free Worker CPU
+    // budget. Bodyweight is optional this early and will be picked up by later
+    // refreshes once the race is close enough.
+    bodyWeightError = "BODYWEIGHT_DEFERRED_UNTIL_T45";
   }
 
   const refreshed = await loadRace(db, raceId);
