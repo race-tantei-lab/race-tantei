@@ -38,7 +38,7 @@ def main():
     require('const PREVIEW_OPEN_MS = 90 * 60 * 1000;' in live,'BODYWEIGHT_T90_PREVIEW_WINDOW_MISSING')
     require('const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;' in live,'BODYWEIGHT_T30_FINAL_ARM_MISSING')
     require('const DEADLINE_MS = 15 * 60 * 1000;' in live,'BODYWEIGHT_T15_DEADLINE_MISSING')
-    require('const FINAL_REFLECTION_DEADLINE_MS = 10 * 60 * 1000;' in live,'BODYWEIGHT_T10_REFLECTION_MISSING')
+    require('const FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000;' in live,'BODYWEIGHT_T15_REFLECTION_MISSING')
     require('const FINALIZE_OPEN_MS' not in live,'BODYWEIGHT_OLD_POST_DEADLINE_FINALIZE_WINDOW_REINTRODUCED')
     require('bodyWeightApplied?: boolean' in live and 'bodyWeightSnapshot?: OfficialBodyWeightSnapshot | null' in live,'BODYWEIGHT_PREVIEW_PROVENANCE_MISSING')
     require('bodyWeightError = errorText(error)' in live,'BODYWEIGHT_FETCH_FAILURE_NOT_CAPTURED')
@@ -70,9 +70,9 @@ def main():
     vector=live.find('completedFeatureVector',feature)
     require(0 <= body_try < body_catch < reread < feature < vector,'BODYWEIGHT_REFRESH_NOT_ATTEMPTED_BEFORE_FEATURE_VECTOR')
 
-    require('remainingAfterGeneration < FINAL_REFLECTION_DEADLINE_MS' in live,'BODYWEIGHT_FRESH_T10_REFLECTION_GUARD_MISSING')
+    require('remainingAfterGeneration < FINAL_REFLECTION_DEADLINE_MS' in live,'BODYWEIGHT_FRESH_T15_REFLECTION_GUARD_MISSING')
     require('remainingAfterGeneration < DEADLINE_MS' in live,'BODYWEIGHT_NONFRESH_T15_REFLECTION_GUARD_MISSING')
-    require('WORKER_GENERATION_CROSSED_T10' in live,'BODYWEIGHT_FRESH_T10_GUARD_MISSING')
+    require('WORKER_GENERATION_CROSSED_T15' in live,'BODYWEIGHT_FRESH_T15_GUARD_MISSING')
     require('WORKER_FALLBACK_CROSSED_T15' in live,'BODYWEIGHT_NONFRESH_T15_GUARD_MISSING')
 
     require('bodyWeightApplied: snapshot.bodyWeightApplied === true' in guard,'DEADLINE_GUARD_BODYWEIGHT_PROVENANCE_MISSING')
@@ -102,7 +102,7 @@ def main():
         'generationStartDeadlineMinutes':15,
         'generationStartBoundaryInclusive':True,
         'actualGenerationStartRecheck':True,
-        'freshReflectionDeadlineMinutes':10,
+        'freshReflectionDeadlineMinutes':15,
         'postT15GenerationStart':False,
         'backupMode':'same_worker_true_standby_free_tier_safe_db',
         'officialBodyweightAppliedWhenAvailable':True,
