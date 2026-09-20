@@ -1,5 +1,6 @@
 import { saveResultBundle } from "./db.js";
-import { fetchJraPage, parseResultPage } from "./jra.js";
+import { extractResultLinks, fetchJraPage, pageLooksLikeResult, parseEntryPage, parseResultPage, toResultUrl } from "./jra.js";
+import { parseJraPayoutsFromHtml } from "./jra-payout-fallback.js";
 import type { Env } from "./types.js";
 
 const MAX_CANDIDATES_PER_TICK = 15;
@@ -10,6 +11,7 @@ type Candidate = {
   raceId: string;
   raceDate: string;
   entryUrl: string;
+  resultUrl: string | null;
   startTimeUtc: string;
 };
 
@@ -92,7 +94,7 @@ async function pendingCandidates(db: D1Database, now: Date): Promise<Candidate[]
   const throughDate = jstDate(now);
   const dueBefore = new Date(now.getTime() - RESULT_GRACE_MS).toISOString();
   const result = await db.prepare(`
-    SELECT r.race_id AS raceId,r.race_date AS raceDate,r.entry_url AS entryUrl,r.start_time_utc AS startTimeUtc
+    SELECT r.race_id AS raceId,r.race_date AS raceDate,r.entry_url AS entryUrl,r.result_url AS resultUrl,r.start_time_utc AS startTimeUtc
     FROM rt_public_bets b
     JOIN rt_races r ON r.race_id=b.race_id
     WHERE b.source_prediction_id=-2
@@ -173,18 +175,50 @@ export async function runBoundedResultSettlement(env: Env, now = new Date()): Pr
   for (const race of candidates) {
     try {
       const entry = await fetchJraPage(race.entryUrl);
-      const resultUrl = matchingResultUrl(entry.html, entry.url);
-      if (!resultUrl) {
-        audit.waitingRaceIds.push(race.raceId);
-        continue;
+      const resultUrls: string[] = [];
+      const seen = new Set<string>();
+      const addResultUrl = (value: string | null | undefined) => {
+        if (!value || seen.has(value)) return;
+        seen.add(value);
+        resultUrls.push(value);
+      };
+
+      // Prefer an already persisted official result URL, then use every official
+      // link advertised by the entry page, the parsed entry result URL, the
+      // legacy same-race matcher, and finally the deterministic JRA conversion.
+      // This mirrors the quota-free result renderer and avoids leaving a race
+      // pending just because one CNAME/link shape changed after race day.
+      addResultUrl(race.resultUrl);
+      for (const value of extractResultLinks(entry.html, entry.url)) addResultUrl(value);
+      try { addResultUrl(parseEntryPage(entry.html, entry.url).race.resultUrl); } catch { /* keep other candidates */ }
+      addResultUrl(matchingResultUrl(entry.html, entry.url));
+      addResultUrl(toResultUrl(race.entryUrl));
+
+      let page: Awaited<ReturnType<typeof fetchJraPage>> | null = null;
+      let bundle: ReturnType<typeof parseResultPage> | null = null;
+      for (const candidate of resultUrls) {
+        try {
+          const fetched = await fetchJraPage(candidate);
+          if (!pageLooksLikeResult(fetched.html)) continue;
+          const parsed = parseResultPage(fetched.html, fetched.url);
+          if (parsed.race.raceId !== race.raceId || parsed.results.length < 3) continue;
+
+          const payoutMap = new Map<string, (typeof parsed.payouts)[number]>();
+          for (const payout of [...parsed.payouts, ...parseJraPayoutsFromHtml(fetched.html)]) {
+            const key = `${payout.betType}:${canonical(payout.betType, payout.combination)}`;
+            payoutMap.set(key, { ...payout, combination: canonical(payout.betType, payout.combination) });
+          }
+          const payouts = [...payoutMap.values()];
+          if (!payouts.length) continue;
+
+          page = fetched;
+          bundle = { ...parsed, payouts };
+          break;
+        } catch {
+          // One stale official candidate must not block the other valid JRA URLs.
+        }
       }
-      const page = await fetchJraPage(resultUrl);
-      const bundle = parseResultPage(page.html, page.url);
-      if (
-        bundle.race.raceId !== race.raceId
-        || bundle.results.length < 3
-        || bundle.payouts.length === 0
-      ) {
+      if (!page || !bundle) {
         audit.waitingRaceIds.push(race.raceId);
         continue;
       }
