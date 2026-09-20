@@ -18,7 +18,7 @@
       "wrangler.jsonc actual public entry, deploy revision, model version and D1 identity",
       "actual primary/backup wrangler entries, roles and cron schedules",
       "race-day gate before D1 and no runtime sqlite_master/PRAGMA/DDL in live cron",
-      "official JRA odds only, T-15 fresh-generation start boundary and T-10 fresh-reflection boundary",
+      "official JRA odds only and a hard T-15 finalization boundary for both generation start and final reflection",
       "persistent D1 guard migration source and control-plane live-index verification",
       "README and HANDOFF current-runtime markers"
     ]
@@ -103,7 +103,7 @@
     "officialOddsOnly": true,
     "syntheticOddsForbidden": true,
     "liveDeadlineDriverEntry": "src/live-deadline-entry-v2.ts",
-    "finalReflectionDeadlineMinutes": 10
+    "finalReflectionDeadlineMinutes": 15
   },
   "site": {
     "workerConfig": "wrangler.jsonc",
@@ -159,7 +159,7 @@
     "WIN5 target races and ticket rows must remain readable on mobile without horizontal scrolling.",
     "Past published picks and results are immutable.",
     "Live race-bet generation is owned only by the isolated live-deadline Workers; the public-site Worker and public requests cannot create or finalize race bets.",
-    "Official JRA-odds previews begin from 90 minutes before post time and are required by 30 minutes. The fresh finalization window begins around T-30; stored official-preview rescue is armed from T-25 through the exact T-15 boundary. No fresh calculation may start at T-15 or later, while a fresh calculation that started before T-15 may be reflected only through the T-10 boundary.",
+    "Official JRA-odds previews begin from 90 minutes before post time and are required by 30 minutes. The fresh finalization window begins around T-30; stored official-preview rescue is armed from T-25 through the exact T-15 boundary. No fresh calculation may start at T-15 or later and no newly computed or stored final may be written after the T-15 boundary.",
     "Primary live-deadline scheduling runs every minute and a separate staggered backup Worker runs every five minutes; a D1 lease prevents overlapping mutation while append-only preview archives preserve the newest last-good official preview.",
     "JRA official odds are the only allowed market odds; synthetic, estimated, and probability-derived substitute odds are forbidden by both application validation and D1 final-state guards."
   ],
@@ -175,7 +175,7 @@
     "Do not use synthetic odds.",
     "Do not declare the handoff complete unless scripts/verify-canonical-handoff.py succeeds and emits CANONICAL_HANDOFF_OK on current main.",
     "Treat src/live-deadline-entry-v3.ts as the canonical live scheduler wrapper and src/live-deadline-entry-v2.ts as its isolated live driver; both wrangler.live-deadline*.jsonc files must point to v3, and public-site requests must not mutate live race bets.",
-    "T-15 is the hard fresh-generation start boundary: never start a new model/odds calculation at T-15 or later; only a fresh calculation started before T-15 may reflect until T-10, while stored/nonfresh finalization may not cross below T-15."
+    "T-15 is the hard finalization boundary: never start a new model/odds calculation at T-15 or later, and never write a newly computed or stored final after the T-15 boundary."
   ],
   "notAuthoritative": [
     {
