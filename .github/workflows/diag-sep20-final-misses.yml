@@ -101,6 +101,15 @@ jobs:
             FROM rt_system_state
             WHERE state_key='live_deadline_lease_skip:2026-09-20'
           "
+      - name: Capture live primary scheduled exception
+        shell: bash
+        run: |
+          set +e
+          timeout 75s npx wrangler tail race-tantei-live-deadline --format json > /tmp/tail.log 2>&1
+          rc=$?
+          echo "tail_rc=$rc"
+          tail -n 300 /tmp/tail.log
+          exit 0
       - name: Dump public API truth
         run: |
           curl -fsS 'https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-09-20'
