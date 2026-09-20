@@ -9,7 +9,7 @@ import {
 
 assert.equal(DEADLINE_GUARD_MS, 15 * 60 * 1000, "the public finalization deadline remains T-15");
 assert.equal(DEADLINE_GUARD_ARM_MS, 25 * 60 * 1000, "rescue guard arms at T-25 so public picks cannot remain missing near post");
-assert.equal(FINAL_REFLECTION_DEADLINE_MS, 10 * 60 * 1000);
+assert.equal(FINAL_REFLECTION_DEADLINE_MS, 15 * 60 * 1000, "fresh results may not be reflected after the hard T-15 finalization boundary");
 
 assert.equal(shouldDeadlineGuardLock(DEADLINE_GUARD_ARM_MS), true, "the T-25 rescue tick may arm the final");
 assert.equal(shouldDeadlineGuardLock(15 * 60 * 1000 + 1), true, "the finalization window remains open immediately before T-15");
