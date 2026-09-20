@@ -175,8 +175,7 @@ stakes:
 - **T-40**: 早期SLA監査
 - **T-30**: official preview必須。fresh finalization windowを開始
 - **T-25**: 保存済みofficial previewだけを使えるrescue guardを開始
-- **T-15**: fresh generation開始のhard boundary。ここから新しいモデル推論・オッズ取得・買い目計算を開始しない。stored/nonfresh finalizationもT-15未満へ持ち越さない
-- **T-10**: T-15より前に開始したfresh計算の最終反映限界。これを下回ったfresh結果は確定に使わない
+- **T-15**: 最終確定のhard boundary。ここから新しいモデル推論・オッズ取得・買い目計算を開始せず、T-15より前に開始したfresh計算も含め、新しいfinalを書き込まない。stored/nonfresh finalizationもT-15未満へ持ち越さない
 
 T-15境界以降に禁止されること:
 
@@ -236,7 +235,7 @@ locked後の公開買い目はD1 invariantでもimmutable。
 - 外部から叩けるライブmutation endpoint
 - primary/backupの重複mutation
 
-現在はv3 race-day gate / heartbeat wrapper + v2 isolated driver + lease + archive + T-90/T-30/T-25/T-15/T-10構成を正本とする。旧GitHub backup方式や公開サイト経由のlive-tickを現行経路として復活させない。
+現在はv3 race-day gate / heartbeat wrapper + v2 isolated driver + lease + archive + T-90/T-30/T-25/T-15 hard-final構成を正本とする。旧GitHub backup方式や公開サイト経由のlive-tickを現行経路として復活させない。
 
 ## 6. frozen history / 公開サイト
 
