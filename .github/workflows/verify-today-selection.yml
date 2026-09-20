@@ -28,7 +28,7 @@ jobs:
             code="$(curl --retry 2 --retry-delay 2 --retry-all-errors --silent --show-error --connect-timeout 5 --max-time 40 -o /tmp/today.json -w '%{http_code}' "${base}/api/public/day?date=${today}" || true)"
             echo "attempt=${attempt} date=${today} http=${code}"
             if [ "$code" = "200" ] && python - <<'PY'
-          import collections,json,sys
+          import collections,datetime,json,sys
           data=json.load(open('/tmp/today.json',encoding='utf-8'))
           rows=data.get('races') if isinstance(data,dict) else None
           if not isinstance(rows,list):
@@ -41,7 +41,26 @@ jobs:
           selected=[r for r in rows if str((r.get('publicState') or {}).get('code') or '') in selected_codes]
           selected_by_venue=collections.Counter(str(r.get('venue') or '') for r in selected)
           skip_by_venue=collections.Counter(str(r.get('venue') or '') for r in rows if (r.get('publicState') or {}).get('code')=='skip')
-          deadline_failure_count=states.get('missing',0)+states.get('overdue',0)
+          now=datetime.datetime.now(datetime.timezone.utc)
+          def start_utc(row):
+              raw=str(row.get('startTimeUtc') or '')
+              try:
+                  return datetime.datetime.fromisoformat(raw.replace('Z','+00:00'))
+              except Exception:
+                  return None
+          historical_deadline_failures=[]
+          future_deadline_failures=[]
+          future_t15_unfinalized=[]
+          for r in selected:
+              code=str((r.get('publicState') or {}).get('code') or '')
+              start=start_utc(r)
+              if code in {'missing','overdue'}:
+                  if start and start > now:
+                      future_deadline_failures.append(r.get('raceId'))
+                  else:
+                      historical_deadline_failures.append(r.get('raceId'))
+              if start and start > now and (start-now).total_seconds() <= 15*60 and code not in {'buy','hit','miss'}:
+                  future_t15_unfinalized.append(r.get('raceId'))
           detail={
               'raceCount':len(rows),
               'venues':dict(venues),
@@ -49,13 +68,16 @@ jobs:
               'selectedByVenue':dict(selected_by_venue),
               'skipByVenue':dict(skip_by_venue),
               'selectedRaceIds':[r.get('raceId') for r in selected],
-              'deadlineFailureCount':deadline_failure_count,
+              'historicalDeadlineFailures':historical_deadline_failures,
+              'futureDeadlineFailures':future_deadline_failures,
+              'futureT15Unfinalized':future_t15_unfinalized,
           }
           print(json.dumps(detail,ensure_ascii=False))
           good=(
               structured
               and states.get('pending',0)==0
-              and deadline_failure_count==0
+              and not future_deadline_failures
+              and not future_t15_unfinalized
               and all(selected_by_venue.get(v,0)==5 for v in venues)
               and all(skip_by_venue.get(v,0)==7 for v in venues)
           )
