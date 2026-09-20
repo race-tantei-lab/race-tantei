@@ -10,6 +10,7 @@ import { refreshPublicCalendarCache } from "./v1/public-calendar-cache.js";
 import type { Env, RaceBundle } from "./v1/types.js";
 
 const RECOVERY_PATH = "/_ops/entry-seed-sync-20260906-7f4c9d2a";
+const SEP19_SETTLEMENT_RECOVERY_PATH = "/_ops/settle-20260919-4c82bfa1";
 const HOME_PATHS = new Set(["/", "/index.html", "/races", "/races/"]);
 
 function esc(value: unknown): string {
@@ -101,6 +102,11 @@ async function runBoundedPublicMaintenance(env: Env, now: Date): Promise<void> {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (request.method === "POST" && url.pathname === SEP19_SETTLEMENT_RECOVERY_PATH) {
+      const audit = await runBoundedResultSettlement(env, new Date());
+      return Response.json(audit, { headers: { "cache-control": "no-store, max-age=0" } });
+    }
+    if (url.pathname === SEP19_SETTLEMENT_RECOVERY_PATH) return new Response("NOT_FOUND", { status: 404 });
     if (request.method === "POST" && url.pathname === RECOVERY_PATH) {
       const audit = await runConfiguredEntrySeedWriteOnly(env, "2026-09-06");
       return Response.json(audit, {
