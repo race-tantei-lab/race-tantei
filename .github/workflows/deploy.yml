@@ -79,6 +79,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Resolve expected deployed UI version
+        run: python3 scripts/resolve-public-ui-version.py --github-env
+
       - name: Deploy to Cloudflare Workers
         shell: bash
         run: |
@@ -94,10 +97,11 @@ jobs:
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev/'
           ok=0
-          for attempt in $(seq 1 6); do
-            code=$(curl --retry 2 --retry-delay 1 --retry-all-errors -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$base" || true)
-            echo "home attempt=$attempt http=$code"
-            if [[ "$code" = '200' ]] && ! grep -q '一時的にページを表示できません。' /tmp/home.html; then
+          for attempt in $(seq 1 10); do
+            code=$(curl --retry 2 --retry-delay 1 --retry-all-errors -sS -D /tmp/home.headers -o /tmp/home.html -w '%{http_code}' "$base?_rt_deploy=${GITHUB_RUN_ID}-$attempt" || true)
+            actual_ui=$(awk 'BEGIN{IGNORECASE=1} /^x-race-ui-version:/{gsub(/\\r/,""); sub(/^[^:]+:[[:space:]]*/,""); print; exit}' /tmp/home.headers)
+            echo "home attempt=$attempt http=$code ui=${actual_ui:-missing} expected=$EXPECTED_UI_VERSION"
+            if [[ "$code" = '200' ]] && [[ "$actual_ui" = "$EXPECTED_UI_VERSION" ]] && ! grep -q '一時的にページを表示できません。' /tmp/home.html; then
               ok=1
               break
             fi
