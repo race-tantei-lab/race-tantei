@@ -1,0 +1,323 @@
+{
+  "races": [
+    {
+      "jstNow": "2026-09-20 14:10:20",
+      "raceId": "2026-09-20-hanshin-09",
+      "startTimeJst": "14:10",
+      "remainingMin": -0.34,
+      "previewState": 0,
+      "finalRows": 0,
+      "lockedAt": null
+    },
+    {
+      "jstNow": "2026-09-20 14:10:20",
+      "raceId": "2026-09-20-nakayama-11",
+      "startTimeJst": "15:45",
+      "remainingMin": 94.66,
+      "previewState": 1,
+      "finalRows": 0,
+      "lockedAt": null
+    },
+    {
+      "jstNow": "2026-09-20 14:10:20",
+      "raceId": "2026-09-20-nakayama-12",
+      "startTimeJst": "16:30",
+      "remainingMin": 139.66,
+      "previewState": 0,
+      "finalRows": 0,
+      "lockedAt": null
+    }
+  ],
+  "state": {
+    "live_deadline_driver:2026-09-20": {
+      "version": "live-deadline-v12-preview-first-fallback-20260920",
+      "date": "2026-09-20",
+      "scheduledAt": "2026-09-20T05:09:23.000Z",
+      "startedAt": "2026-09-20T05:09:25.003Z",
+      "owner": "live-deadline-v12-preview-first-fallback-20260920:e855083b-e520-4cc7-8c28-9328f40ee556",
+      "status": "deadline_breach",
+      "phase": "complete",
+      "ok": false,
+      "priorityGuardCheckedAt": "2026-09-20T05:09:29.859Z",
+      "priorityGuard": {
+        "status": "error",
+        "checkedAt": "2026-09-20T05:09:29.859Z",
+        "dueRaceIds": [
+          "2026-09-20-nakayama-07",
+          "2026-09-20-hanshin-09"
+        ],
+        "lockedRaceIds": [],
+        "deadlineMissedRaceIds": [
+          "2026-09-20-nakayama-07",
+          "2026-09-20-hanshin-09"
+        ],
+        "skippedAlreadyLockedRaceIds": [
+          "2026-09-20-hanshin-01",
+          "2026-09-20-hanshin-02",
+          "2026-09-20-nakayama-02",
+          "2026-09-20-hanshin-03",
+          "2026-09-20-nakayama-03",
+          "2026-09-20-hanshin-06"
+        ],
+        "errors": [
+          {
+            "raceId": "2026-09-20-nakayama-07",
+            "error": "Error:DEADLINE_GUARD_T15_MISSED:2026-09-20-nakayama-07:-2669859"
+          },
+          {
+            "raceId": "2026-09-20-hanshin-09",
+            "error": "Error:DEADLINE_GUARD_T15_MISSED:2026-09-20-hanshin-09:30141"
+          }
+        ]
+      },
+      "selection": {
+        "status": "already_frozen"
+      },
+      "selectionCheckedAt": "2026-09-20T05:09:25.620Z",
+      "restoredBefore": [],
+      "slaBefore": null,
+      "guardBeforeCheckedAt": "2026-09-20T05:09:29.859Z",
+      "guardBefore": {
+        "status": "error",
+        "checkedAt": "2026-09-20T05:09:29.859Z",
+        "dueRaceIds": [
+          "2026-09-20-nakayama-07",
+          "2026-09-20-hanshin-09"
+        ],
+        "lockedRaceIds": [],
+        "deadlineMissedRaceIds": [
+          "2026-09-20-nakayama-07",
+          "2026-09-20-hanshin-09"
+        ],
+        "skippedAlreadyLockedRaceIds": [
+          "2026-09-20-hanshin-01",
+          "2026-09-20-hanshin-02",
+          "2026-09-20-nakayama-02",
+          "2026-09-20-hanshin-03",
+          "2026-09-20-nakayama-03",
+          "2026-09-20-hanshin-06"
+        ],
+        "errors": [
+          {
+            "raceId": "2026-09-20-nakayama-07",
+            "error": "Error:DEADLINE_GUARD_T15_MISSED:2026-09-20-nakayama-07:-2669859"
+          },
+          {
+            "raceId": "2026-09-20-hanshin-09",
+            "error": "Error:DEADLINE_GUARD_T15_MISSED:2026-09-20-hanshin-09:30141"
+          }
+        ]
+      },
+      "liveStartedAt": "2026-09-20T05:09:25.783Z",
+      "liveFailure": null,
+      "live": {
+        "status": "deadline_breach",
+        "checkedAt": "2026-09-20T05:09:25.783Z",
+        "completeBefore": 0,
+        "completeAfter": 0,
+        "refreshedPreviewRaceIds": [],
+        "previewAvailableRaceIds": [
+          "2026-09-20-nakayama-11"
+        ],
+        "lockedByWorker": [],
+        "incompleteRaceIds": [
+          "2026-09-20-hanshin-09",
+          "2026-09-20-nakayama-11"
+        ],
+        "deadlineBreachRaceIds": [
+          "2026-09-20-hanshin-09"
+        ],
+        "errors": [
+          {
+            "raceId": "2026-09-20-hanshin-09",
+            "error": "WORKER_HARD_T15_START_MISSED:2026-09-20-hanshin-09"
+          }
+        ]
+      },
+      "restoredAfter": [],
+      "guardAfterCheckedAt": "2026-09-20T05:09:32.876Z",
+      "guardAfter": {
+        "status": "error",
+        "checkedAt": "2026-09-20T05:09:32.876Z",
+        "dueRaceIds": [
+          "2026-09-20-nakayama-07",
+          "2026-09-20-hanshin-09"
+        ],
+        "lockedRaceIds": [],
+        "deadlineMissedRaceIds": [
+          "2026-09-20-nakayama-07",
+          "2026-09-20-hanshin-09"
+        ],
+        "skippedAlreadyLockedRaceIds": [
+          "2026-09-20-hanshin-01",
+          "2026-09-20-hanshin-02",
+          "2026-09-20-nakayama-02",
+          "2026-09-20-hanshin-03",
+          "2026-09-20-nakayama-03",
+          "2026-09-20-hanshin-06"
+        ],
+        "errors": [
+          {
+            "raceId": "2026-09-20-nakayama-07",
+            "error": "Error:DEADLINE_GUARD_T15_MISSED:2026-09-20-nakayama-07:-2672876"
+          },
+          {
+            "raceId": "2026-09-20-hanshin-09",
+            "error": "Error:DEADLINE_GUARD_T15_MISSED:2026-09-20-hanshin-09:27124"
+          }
+        ]
+      },
+      "slaAfter": {
+        "checkedAt": "2026-09-20T05:09:35.906Z",
+        "date": "2026-09-20",
+        "selectedRaceCount": 10,
+        "previewReadyRaceIds": [
+          "2026-09-20-hanshin-01",
+          "2026-09-20-hanshin-02",
+          "2026-09-20-hanshin-03",
+          "2026-09-20-hanshin-06",
+          "2026-09-20-nakayama-02",
+          "2026-09-20-nakayama-03",
+          "2026-09-20-nakayama-11"
+        ],
+        "finalReadyRaceIds": [
+          "2026-09-20-hanshin-01",
+          "2026-09-20-hanshin-02",
+          "2026-09-20-hanshin-03",
+          "2026-09-20-hanshin-06",
+          "2026-09-20-nakayama-02",
+          "2026-09-20-nakayama-03"
+        ],
+        "previewMissingByT40RaceIds": [
+          "2026-09-20-hanshin-09"
+        ],
+        "previewMissingByT30RaceIds": [
+          "2026-09-20-hanshin-09"
+        ],
+        "finalMissingByT30RaceIds": [
+          "2026-09-20-hanshin-09"
+        ],
+        "finalMissingByT25RaceIds": [
+          "2026-09-20-hanshin-09"
+        ],
+        "finalMissingByT17RaceIds": [
+          "2026-09-20-hanshin-09"
+        ],
+        "finalMissingByT16RaceIds": [
+          "2026-09-20-hanshin-09"
+        ],
+        "deadlineMissedRaceIds": [
+          "2026-09-20-hanshin-09"
+        ]
+      },
+      "unresolvedDueRaceIds": [],
+      "unresolvedGuardErrors": [],
+      "hardDeadlineBreachRaceIds": [
+        "2026-09-20-nakayama-07",
+        "2026-09-20-hanshin-09"
+      ],
+      "preDeadlineCriticalRaceIds": [],
+      "completedAt": "2026-09-20T05:09:36.745Z",
+      "durationMs": 11742
+    },
+    "worker_deadline_guard:2026-09-20": {
+      "status": "error",
+      "checkedAt": "2026-09-20T05:09:32.876Z",
+      "date": "2026-09-20",
+      "orderedSelectedRaceIds": [
+        "2026-09-20-hanshin-01",
+        "2026-09-20-hanshin-02",
+        "2026-09-20-nakayama-02",
+        "2026-09-20-hanshin-03",
+        "2026-09-20-nakayama-03",
+        "2026-09-20-hanshin-06",
+        "2026-09-20-nakayama-07",
+        "2026-09-20-hanshin-09",
+        "2026-09-20-nakayama-11",
+        "2026-09-20-nakayama-12"
+      ],
+      "dueRaceIds": [
+        "2026-09-20-nakayama-07",
+        "2026-09-20-hanshin-09"
+      ],
+      "lockedRaceIds": [],
+      "lockedOfficialPreviewRaceIds": [],
+      "lockedProbabilityFallbackRaceIds": [],
+      "skippedAlreadyLockedRaceIds": [
+        "2026-09-20-hanshin-01",
+        "2026-09-20-hanshin-02",
+        "2026-09-20-nakayama-02",
+        "2026-09-20-hanshin-03",
+        "2026-09-20-nakayama-03",
+        "2026-09-20-hanshin-06"
+      ],
+      "skippedOutsideWindowRaceIds": [
+        "2026-09-20-nakayama-11",
+        "2026-09-20-nakayama-12"
+      ],
+      "deadlineMissedRaceIds": [
+        "2026-09-20-nakayama-07",
+        "2026-09-20-hanshin-09"
+      ],
+      "errors": [
+        {
+          "raceId": "2026-09-20-nakayama-07",
+          "error": "Error:DEADLINE_GUARD_T15_MISSED:2026-09-20-nakayama-07:-2672876"
+        },
+        {
+          "raceId": "2026-09-20-hanshin-09",
+          "error": "Error:DEADLINE_GUARD_T15_MISSED:2026-09-20-hanshin-09:27124"
+        }
+      ]
+    },
+    "worker_live_lock:2026-09-20": {
+      "status": "deadline_breach",
+      "checkedAt": "2026-09-20T05:09:25.783Z",
+      "date": "2026-09-20",
+      "sourceModel": "ten-year-completed-model",
+      "selectedRaceCount": 10,
+      "completeBefore": 0,
+      "completeAfter": 0,
+      "lockedByWorker": [],
+      "refreshedBodyWeightRaceIds": [],
+      "bodyWeightPendingRaceIds": [],
+      "bodyWeightBreachRaceIds": [],
+      "refreshedPreviewRaceIds": [],
+      "previewAvailableRaceIds": [
+        "2026-09-20-nakayama-11"
+      ],
+      "previewMissingUrgentRaceIds": [],
+      "finalizedFromFreshRaceIds": [],
+      "finalizedFromFallbackRaceIds": [],
+      "latePromotedRaceIds": [],
+      "protectedRaceIds": [
+        "2026-09-20-nakayama-11"
+      ],
+      "incompleteRaceIds": [
+        "2026-09-20-hanshin-09",
+        "2026-09-20-nakayama-11"
+      ],
+      "deadlineBreachRaceIds": [
+        "2026-09-20-hanshin-09"
+      ],
+      "notYetInWindowRaceIds": [],
+      "alreadyStartedIncompleteRaceIds": [],
+      "errors": [
+        {
+          "raceId": "2026-09-20-hanshin-09",
+          "error": "WORKER_HARD_T15_START_MISSED:2026-09-20-hanshin-09"
+        }
+      ]
+    }
+  },
+  "primaryHealth": {
+    "service": "race-tantei-live-deadline",
+    "version": "live-deadline-v12-preview-first-fallback-20260920",
+    "status": "up"
+  },
+  "backupHealth": {
+    "service": "race-tantei-live-deadline",
+    "version": "live-deadline-v12-preview-first-fallback-20260920",
+    "status": "up"
+  }
+}
