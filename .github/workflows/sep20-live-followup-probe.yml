@@ -1,0 +1,51 @@
+name: Sep20 Live Followup Probe
+
+on:
+  push:
+    branches: [ops/sep20-live-hotfix]
+    paths:
+      - ".github/workflows/sep20-live-followup-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CF_DB: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify two autonomous primary ticks
+        shell: bash
+        run: |
+          set -euo pipefail
+          q() {
+            jq -n --arg sql "$1" '{sql:$sql}' | curl -fsS "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/d1/database/$CF_DB/query"               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'content-type: application/json' --data-binary @-
+          }
+          SQL="SELECT datetime('now','+9 hours') AS jstNow,(SELECT updated_at FROM rt_system_state WHERE state_key='live_deadline_driver:2026-09-20') AS driverUpdatedAt,(SELECT state_value FROM rt_system_state WHERE state_key='live_deadline_driver:2026-09-20') AS driver,(SELECT updated_at FROM rt_system_state WHERE state_key='live_deadline_primary_heartbeat:v1') AS heartbeatUpdatedAt,(SELECT COUNT(*) FROM rt_system_state WHERE state_key='worker_live_preview:2026-09-20-nakayama-11') AS nakayama11Preview,(SELECT COUNT(*) FROM rt_system_state WHERE state_key='worker_live_preview:2026-09-20-nakayama-12') AS nakayama12Preview,(SELECT COUNT(*) FROM rt_public_bets WHERE race_id='2026-09-20-nakayama-07') AS nakayama07IllegalRows,(SELECT COUNT(*) FROM rt_public_bets WHERE race_id='2026-09-20-hanshin-09') AS hanshin09IllegalRows"
+          q "$SQL" > /tmp/a.json
+          cat /tmp/a.json
+          sleep 65
+          q "$SQL" > /tmp/b.json
+          cat /tmp/b.json
+          python3 - <<'PY'
+          import json,datetime
+          def row(p):
+              x=json.load(open(p)); return ((x.get('result') or [{}])[0].get('results') or [{}])[0]
+          a,b=row('/tmp/a.json'),row('/tmp/b.json')
+          d=json.loads(b.get('driver') or '{}')
+          assert b.get('driverUpdatedAt') and b.get('driverUpdatedAt') != a.get('driverUpdatedAt'), (a,b)
+          assert d.get('version')=='live-deadline-v12-preview-first-fallback-20260920', d
+          assert d.get('phase')=='complete', d
+          assert int(b.get('nakayama11Preview') or 0)==1, b
+          assert int(b.get('nakayama07IllegalRows') or 0)==0, b
+          assert int(b.get('hanshin09IllegalRows') or 0)==0, b
+          hb=datetime.datetime.fromisoformat(str(b['heartbeatUpdatedAt']).replace(' ','T')+'+00:00')
+          now=datetime.datetime.now(datetime.timezone.utc)
+          assert (now-hb).total_seconds()<150, (now,hb,b)
+          print(json.dumps({'first':a,'second':b,'driverStatus':d.get('status'),'hardBreaches':d.get('hardDeadlineBreachRaceIds'),'preDeadlineCritical':d.get('preDeadlineCriticalRaceIds')},ensure_ascii=False))
+          PY
