@@ -33,7 +33,7 @@
 - deploy workflow: `.github/workflows/deploy-live-deadline.yml`
 - production readiness: `.github/workflows/verify-live-deadline-production.yml`
 - primary schedule: **毎分** (`* * * * *`)
-- backup schedule: **5分間隔で2分ずらし** (`2-59/5 * * * *`)
+- backup schedule: **2分間隔** (`1-59/2 * * * *`)
 - public live mutation: **disabled**
 - 旧 `/_ops/live-tick`: **本番404 / hard-disabled**
 
@@ -190,8 +190,10 @@ T-15境界以降に禁止されること:
 ### 冗長化と排他
 
 - primary Workerは毎分実行
-- backup Workerは5分ごとに2分ずらして実行
-- D1 leaseで同時mutationを排他
+- backup Workerは2分ごとに実行
+- critical deadline guardは重いpreview/model処理より必ず先に実行し、専用short D1 leaseでprimary/backupの重複final mutationを排他
+- heavy preview/model処理は別leaseで隔離。`lease_busy` は成功扱いせずprimary heartbeatを更新しない
+- optional bodyweight取得はT-45以降に限定し、first-good作成時のCPU負荷を下げる
 - 各選定レースの最初のvalid official previewをarchiveへ1回だけ保存（毎refreshの二重書込みは禁止）
 - 障害時はcurrent last-goodまたはarchive済みofficial previewを復元可能
 - 各工程で現在時刻を取り直し、古いscheduled timestampを締切判定へ流用しない
@@ -235,7 +237,7 @@ locked後の公開買い目はD1 invariantでもimmutable。
 - 外部から叩けるライブmutation endpoint
 - primary/backupの重複mutation
 
-現在はv3 race-day gate / heartbeat wrapper + v2 isolated driver + lease + selection-driven first-good protection + one-copy archive + T-30/T-25/T-15 hard-final構成を正本とする。旧GitHub backup方式や公開サイト経由のlive-tickを現行経路として復活させない。
+現在はv3 guard-first wrapper + v2 CPU-isolated heavy driver + separate critical/heavy leases + selection-driven first-good protection + one-copy archive + T-30/T-25/T-15 hard-final構成を正本とする。旧GitHub backup方式や公開サイト経由のlive-tickを現行経路として復活させない。
 
 ## 6. frozen history / 公開サイト
 
@@ -320,7 +322,7 @@ live production:
 - final ticketsは56-feature LightGBM + Plackett-Luce + JRA公式オッズ。
 - public live mutationはdisabled。
 - live schedulerは `src/live-deadline-entry-v2.ts`。
-- primary毎分 + backup 5分staggered + D1 lease。
+- primary毎分 + backup 2分 + guard-first + critical/heavy別D1 lease。
 - selection is frozen直後から全future選定レースをfirst-good保護 / T-30 required / T-25 rescue / T-15 hard no-new-final。
 - official oddsは `jra-fast-official` / `jra-crawl-official` のみ。
 - T-15後の新規finalはD1でも拒否。
