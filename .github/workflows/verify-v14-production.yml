@@ -1,0 +1,118 @@
+name: Verify V14 Production Runtime
+
+on:
+  push:
+    branches: [ops/verify-v14-production]
+    paths:
+      - ".github/workflows/verify-v14-production.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Verify deployed health and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='live-deadline-v14-guard-first-cpu-safe-20260920'
+          for u in             https://race-tantei-live-deadline.race-tantei.workers.dev/health             https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health
+          do
+            body=$(curl --max-time 20 --retry 5 --retry-delay 3 --fail-with-body -sS "$u")
+            echo "$body"
+            BODY="$body" EXPECTED="$expected" node - <<'NODE'
+          const b=JSON.parse(process.env.BODY||'{}');
+          if(b.status!=='up'||b.version!==process.env.EXPECTED) throw new Error('BAD_HEALTH_OR_VERSION');
+          NODE
+          done
+
+      - name: Verify actual Cloudflare cron schedules
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_schedule() {
+            script="$1"; expected="$2"
+            body=$(curl --max-time 20 --retry 4 --retry-delay 3 --fail-with-body -sS               "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${script}/schedules"               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
+            echo "$script $body"
+            BODY="$body" EXPECTED="$expected" node - <<'NODE'
+          const b=JSON.parse(process.env.BODY||'{}');
+          const s=Array.isArray(b.result?.schedules)?b.result.schedules.map(x=>String(x.cron)).sort():[];
+          if(b.success!==true||s.length!==1||s[0]!==process.env.EXPECTED) throw new Error('CRON_MISMATCH:'+JSON.stringify(s));
+          NODE
+          }
+          check_schedule race-tantei-live-deadline '* * * * *'
+          check_schedule race-tantei-live-deadline-backup '1-59/2 * * * *'
+
+      - name: Verify truthful heartbeat and independent leases
+        shell: bash
+        run: |
+          set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
+          state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT
+              datetime('now','+9 hours') AS jstNow,
+              (SELECT unixepoch('now')-unixepoch(updated_at) FROM rt_system_state WHERE state_key='live_deadline_primary_heartbeat:v2') AS primaryHeartbeatAge,
+              (SELECT state_value FROM rt_system_state WHERE state_key='live_deadline_primary_heartbeat:v2') AS primaryHeartbeat,
+              (SELECT unixepoch('now')-unixepoch(updated_at) FROM rt_system_state WHERE state_key='worker_deadline_guard:'||'$today') AS guardAuditAge,
+              (SELECT state_value FROM rt_system_state WHERE state_key='worker_deadline_guard:'||'$today') AS guardAudit,
+              (SELECT owner FROM rt_live_deadline_lease WHERE lease_key='live_deadline_critical_guard:v1') AS guardLeaseOwner,
+              (SELECT expires_at_epoch-unixepoch('now') FROM rt_live_deadline_lease WHERE lease_key='live_deadline_critical_guard:v1') AS guardLeaseRemaining,
+              (SELECT owner FROM rt_live_deadline_lease WHERE lease_key='live_deadline') AS heavyLeaseOwner,
+              (SELECT expires_at_epoch-unixepoch('now') FROM rt_live_deadline_lease WHERE lease_key='live_deadline') AS heavyLeaseRemaining
+          ")
+          echo "$state"
+          STATE="$state" node - <<'NODE'
+          const p=JSON.parse(process.env.STATE||'[]'); const r=p?.[0]?.results?.[0];
+          if(!r) throw new Error('STATE_MISSING');
+          const age=Number(r.primaryHeartbeatAge);
+          if(!Number.isFinite(age)||age < -30||age > 180) throw new Error('PRIMARY_HEARTBEAT_STALE:'+age);
+          const hb=JSON.parse(r.primaryHeartbeat||'{}');
+          if(hb.status==='lease_busy') throw new Error('LEASE_BUSY_FALSE_HEARTBEAT');
+          const ga=Number(r.guardAuditAge);
+          if(!Number.isFinite(ga)||ga < -30||ga > 180) throw new Error('GUARD_AUDIT_STALE:'+ga);
+          if(r.guardLeaseRemaining!=null && Number(r.guardLeaseRemaining)>25) throw new Error('CRITICAL_GUARD_LEASE_STUCK');
+          if(r.heavyLeaseRemaining!=null && Number(r.heavyLeaseRemaining)>60) throw new Error('HEAVY_LEASE_STUCK');
+          console.log(JSON.stringify({jstNow:r.jstNow,primaryHeartbeatAge:age,guardAuditAge:ga,heartbeatStatus:hb.status}));
+          NODE
+
+      - name: Capture real scheduled outcomes
+        shell: bash
+        run: |
+          set +e
+          timeout 130s npx wrangler tail race-tantei-live-deadline --format json > /tmp/primary.log 2>&1 &
+          p1=$!
+          timeout 130s npx wrangler tail race-tantei-live-deadline-backup --format json > /tmp/backup.log 2>&1 &
+          p2=$!
+          wait $p1; true
+          wait $p2; true
+          echo '--- primary ---'
+          tail -n 120 /tmp/primary.log
+          echo '--- backup ---'
+          tail -n 120 /tmp/backup.log
+          python3 - <<'PY'
+          import json,re
+          bad=[]
+          seen={}
+          for name,path in [('primary','/tmp/primary.log'),('backup','/tmp/backup.log')]:
+              text=open(path,encoding='utf-8',errors='ignore').read()
+              if '"outcome": "exceededCpu"' in text or '"outcome":"exceededCpu"' in text:
+                  bad.append(name)
+              seen[name]=len(re.findall(r'"outcome"\s*:',text))
+          print(json.dumps({'seenOutcomes':seen,'exceededCpu':bad}))
+          if bad:
+              raise SystemExit('EXCEEDED_CPU_STILL_PRESENT:'+','.join(bad))
+          if seen['primary'] < 1:
+              raise SystemExit('NO_PRIMARY_SCHEDULED_OUTCOME_CAPTURED')
+          PY
