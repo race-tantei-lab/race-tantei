@@ -1,7 +1,8 @@
 import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION } from "./completed-feature-runtime.js";
 import { ensureCompletedFinalImmutability } from "./completed-final-invariants.js";
 import { JRA_OFFICIAL_ODDS_PARSER_VERSION } from "./jra-official-odds-fetch.js";
-import { COMPLETED_COURSE_STAKES, type CompletedCourseBet, type CompletedTicket } from "./completed-ticket-runtime.js";
+import { COMPLETED_COURSE_STAKES, completedCourseBets, type CompletedCourseBet, type CompletedTicket } from "./completed-ticket-runtime.js";
+import { chooseCompletedProbabilityFallbackTickets, emergencyRunnerWeights } from "./completed-ticket-fallback.js";
 import type { Env } from "./types.js";
 
 const SELECTION_PREFIX = "final_daily_selection:";
@@ -40,7 +41,7 @@ type CachedOfficialPreview = {
 };
 type PreviewEnvelope = { version?: number; raceId?: string; snapshots?: CachedOfficialPreview[] };
 export type DeadlineEnsureResult = {
-  status: "locked" | "already_locked" | "outside_window" | "not_selected" | "preview_missing" | "deadline_missed";
+  status: "locked" | "locked_fallback" | "already_locked" | "outside_window" | "not_selected" | "preview_missing" | "deadline_missed";
   raceId: string;
   remainingMs: number;
 };
@@ -251,6 +252,62 @@ async function commitCourseBets(
   if (!strictComplete(await publicRows(db, raceId))) throw new Error(`DEADLINE_GUARD_POST_WRITE_GATE_FAILED:${raceId}`);
 }
 
+type ProbabilityFallbackRunnerRow = { horseNo: number; winOdds: number | null };
+
+async function probabilityFallbackForRace(db: D1Database, raceId: string): Promise<{
+  tickets: CompletedTicket[];
+  courseBets: CompletedCourseBet[];
+}> {
+  const result = await db.prepare(`
+    SELECT horse_no AS horseNo,win_odds AS winOdds
+    FROM rt_runners
+    WHERE race_id=? AND COALESCE(runner_status,'active')='active'
+    ORDER BY horse_no
+  `).bind(raceId).all<ProbabilityFallbackRunnerRow>();
+  const runners = (result.results ?? []).map((row) => ({
+    horseNo: Number(row.horseNo),
+    winOdds: row.winOdds == null ? null : Number(row.winOdds),
+  }));
+  if (runners.length < 3 || runners.some((row) => !Number.isInteger(row.horseNo) || row.horseNo <= 0)) {
+    throw new Error(`DEADLINE_GUARD_FALLBACK_RUNNERS_INVALID:${raceId}:${runners.length}`);
+  }
+  const weights = emergencyRunnerWeights(runners.map((row) => row.winOdds));
+  const tickets = chooseCompletedProbabilityFallbackTickets(
+    runners.map((row) => row.horseNo),
+    weights,
+    () => 1,
+  );
+  return { tickets, courseBets: completedCourseBets(tickets) };
+}
+
+async function commitProbabilityFallback(
+  db: D1Database,
+  raceId: string,
+  now: Date,
+  startMs: number,
+): Promise<void> {
+  const fallback = await probabilityFallbackForRace(db, raceId);
+  await commitCourseBets(db, raceId, fallback.courseBets, {
+    finalizedFrom: "persistent_probability_deadline_guard",
+    previewGeneratedAt: null,
+    bodyWeightApplied: false,
+    bodyWeightFetchedAt: null,
+    bodyWeightSource: null,
+    bodyWeightSnapshotSha256: null,
+    bodyWeights: null,
+    bodyWeightError: "official_preview_unavailable_before_deadline",
+    oddsMode: "probability_fallback",
+    oddsAvailable: false,
+    oddsFetchedAt: null,
+    oddsSource: null,
+    oddsParserVersion: null,
+    oddsSnapshotSha256: null,
+    onlineLearning: null,
+    runnerRecencyFactors: null,
+    tickets: fallback.tickets,
+  }, now, startMs);
+}
+
 async function commitOfficialPreview(
   db: D1Database,
   raceId: string,
@@ -311,9 +368,17 @@ export async function ensureCompletedRaceFinalAtDeadline(
   if (!shouldDeadlineGuardLock(remainingMs)) return { status: "outside_window", raceId, remainingMs };
 
   const official = await latestOfficialPreview(env.DB, raceId, now, startMs);
-  if (!official) return { status: "preview_missing", raceId, remainingMs };
-  await commitOfficialPreview(env.DB, raceId, official, now, startMs);
-  return { status: "locked", raceId, remainingMs };
+  if (official) {
+    await commitOfficialPreview(env.DB, raceId, official, now, startMs);
+    return { status: "locked", raceId, remainingMs };
+  }
+
+  // Absolute last resort: if the JRA-official preview path never produced a
+  // valid last-good, create a network-independent probability fallback while
+  // we are still safely before T-15. It still evaluates all six supported bet
+  // types and writes the canonical 2 tickets x 3 courses / source=-2 shape.
+  await commitProbabilityFallback(env.DB, raceId, now, startMs);
+  return { status: "locked_fallback", raceId, remainingMs };
 }
 
 async function saveAudit(db: D1Database, audit: DeadlineGuardAudit): Promise<void> {
@@ -372,9 +437,14 @@ export async function runCompletedWorkerDeadlineGuard(env: Env, now = new Date()
 
       audit.dueRaceIds.push(raceId);
       const result = await ensureCompletedRaceFinalAtDeadline(env, raceId, now);
-      if (result.status === "locked" || result.status === "already_locked") {
+      if (result.status === "locked") {
         audit.lockedRaceIds.push(raceId);
         audit.lockedOfficialPreviewRaceIds.push(raceId);
+      } else if (result.status === "locked_fallback") {
+        audit.lockedRaceIds.push(raceId);
+        audit.lockedProbabilityFallbackRaceIds.push(raceId);
+      } else if (result.status === "already_locked") {
+        audit.lockedRaceIds.push(raceId);
       } else if (result.status === "preview_missing") {
         throw new Error(`DEADLINE_GUARD_PREVIEW_MISSING:${raceId}`);
       } else if (result.status === "deadline_missed") {
