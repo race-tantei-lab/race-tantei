@@ -6,6 +6,7 @@ import { RECENT_PUBLIC_FINAL_EVIDENCE } from "./recent-public-final-evidence.js"
 import { projectCurrentPublicState } from "./v1/current-day-public-api.js";
 import { quotaFreeOfficialResultResponse } from "./v1/quota-free-jra-result-20260919.js";
 import { shell } from "./v1/public-ui.js";
+import { readPublicCalendarCache } from "./v1/public-calendar-cache.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v37-free-tier-safe-snapshot-20260905";
@@ -79,20 +80,52 @@ function staticRecentCalendar(): CalendarRow[] {
 }
 
 async function loadRecentCalendar(env: Env): Promise<CalendarRow[]> {
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const byKey = new Map<string, CalendarRow>();
+  for (const row of staticRecentCalendar()) {
+    byKey.set(`${row.raceDate}\u0000${row.venue}`, row);
+  }
+
   try {
-    const result = await env.DB.prepare(`
-      SELECT race_date AS raceDate, venue, COUNT(*) AS raceCount
-      FROM rt_races
-      WHERE race_date >= date('now','-45 days')
-      GROUP BY race_date, venue
-      ORDER BY race_date, venue
-    `).all<CalendarRow>();
-    const rows = (result.results ?? []).filter((row) => row.raceDate && row.venue && Number(row.raceCount) > 0);
-    if (rows.length) return rows.map((row) => ({ ...row, raceCount: Number(row.raceCount) }));
+    // One indexed system-state read on the normal path. The public maintenance
+    // cron refreshes this cache, so the home page does not scan historical races.
+    const cached = await readPublicCalendarCache(env.DB);
+    for (const row of cached) {
+      if (!row.raceDate || !row.venue || Number(row.raceCount) <= 0) continue;
+      byKey.set(`${row.raceDate}\u0000${row.venue}`, {
+        raceDate: String(row.raceDate),
+        venue: String(row.venue),
+        raceCount: Number(row.raceCount),
+      });
+    }
+
+    // If the cache was refreshed before today's card was loaded, repair only
+    // today's two/three venue rows. This keeps the request bounded and makes the
+    // current race day visible immediately instead of waiting for a 6h cache TTL.
+    const hasToday = [...byKey.values()].some((row) => row.raceDate === today);
+    if (!hasToday) {
+      const result = await env.DB.prepare(`
+        SELECT race_date AS raceDate, venue, COUNT(*) AS raceCount
+        FROM rt_races
+        WHERE race_date=?
+        GROUP BY race_date, venue
+        ORDER BY venue
+      `).bind(today).all<CalendarRow>();
+      for (const row of result.results ?? []) {
+        if (!row.raceDate || !row.venue || Number(row.raceCount) <= 0) continue;
+        byKey.set(`${row.raceDate}\u0000${row.venue}`, {
+          raceDate: String(row.raceDate),
+          venue: String(row.venue),
+          raceCount: Number(row.raceCount),
+        });
+      }
+    }
+
+    return [...byKey.values()].sort((a, b) => a.raceDate.localeCompare(b.raceDate) || a.venue.localeCompare(b.venue, "ja"));
   } catch (error) {
     console.error("V37_RECENT_CALENDAR_DB_FAILED", error);
+    return [...byKey.values()].sort((a, b) => a.raceDate.localeCompare(b.raceDate) || a.venue.localeCompare(b.venue, "ja"));
   }
-  return staticRecentCalendar();
 }
 
 function mergeRecentCalendar(html: string, rows: CalendarRow[]): string {
@@ -166,8 +199,8 @@ function embeddedTodayResultsHtml(): string {
   return '<section class="card today-results"><div class="section-title"><h2>今日の結果</h2><span class="muted">精算済み時点</span></div>' + rows + '</section>';
 }
 
-function embeddedNormalHome(): Response {
-  let html = rewriteEmbeddedToday(mergeRecentCalendar(NORMAL_HOME_SNAPSHOT, staticRecentCalendar()));
+function embeddedNormalHome(calendarRows: CalendarRow[] = staticRecentCalendar()): Response {
+  let html = rewriteEmbeddedToday(mergeRecentCalendar(NORMAL_HOME_SNAPSHOT, calendarRows));
   const todayResults = embeddedTodayResultsHtml();
   if (todayResults && !html.includes("今日の結果")) {
     html = html.replace('<div class="section-title"><h2>累計回収率</h2>', todayResults + '<div class="section-title"><h2>累計回収率</h2>');
@@ -296,8 +329,9 @@ async function fetchPublicDay(request: Request, env: Env, ctx: ExecutionContext,
   }
 }
 
-async function fetchNormalHome(_request: Request, _env: Env, _ctx: ExecutionContext): Promise<Response> {
-  return embeddedNormalHome();
+async function fetchNormalHome(_request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  const calendarRows = await loadRecentCalendar(env);
+  return embeddedNormalHome(calendarRows);
 }
 async function fetchRaceList(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const homeUrl = new URL(request.url);
