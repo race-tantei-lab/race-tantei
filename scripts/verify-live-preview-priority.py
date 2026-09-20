@@ -13,6 +13,8 @@ def require(condition: bool, message: str) -> None:
 def main() -> None:
     required = [
         "export const MAX_PREVIEW_GENERATIONS_PER_TICK = 1;",
+        "export const MAX_PREVIEW_ATTEMPTS_PER_TICK = 2;",
+        "WHERE race_date=? AND start_time_utc>?",
         "export function livePreviewPriorityRank(row: LivePreviewPriorityInput): number {",
         "if (!Number.isFinite(row.remainingMs) || row.remainingMs <= 0) return 99;",
         "if (row.remainingMs <= FINAL_LOCK_ARM_MS) return 0;",
@@ -55,7 +57,7 @@ def main() -> None:
         missing = [race_id for race_id in missing if race_id != chosen[0]]
 
     require(not missing, "LIVE_PREVIEW_15_RACES_NOT_COVERED_IN_15_TICKS")
-    print("LIVE_PREVIEW_PRIORITY_OK missing_before_refresh=true max_generations_per_tick=1 selected_coverage_ticks=15")
+    print("LIVE_PREVIEW_PRIORITY_OK selection_driven=true missing_before_refresh=true max_generations_per_tick=1 max_attempts_per_tick=2 selected_coverage_ticks=15")
 
 
 if __name__ == "__main__":
