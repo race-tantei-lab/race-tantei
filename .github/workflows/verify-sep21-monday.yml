@@ -1,0 +1,76 @@
+name: Verify Sep21 Monday Readiness
+
+on:
+  push:
+    branches: [fix/monday-race-day-bootstrap]
+    paths:
+      - ".github/workflows/verify-sep21-monday.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Verify Monday gate
+        run: |
+          npx tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{const r=await shouldRunOnJraRaceDay(new Date('2026-09-21T00:00:00+09:00')); console.log(JSON.stringify(r)); if(!r.shouldRun||r.raceDate!=='2026-09-21') process.exit(1)})()"
+      - name: Verify tomorrow D1 program and entries
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            WITH p AS (
+              SELECT r.race_id,r.venue,r.race_no,r.start_time_jst,r.start_time_utc,
+                     SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS active
+              FROM rt_races r
+              LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
+              WHERE r.race_date='2026-09-21'
+              GROUP BY r.race_id,r.venue,r.race_no,r.start_time_jst,r.start_time_utc
+            )
+            SELECT venue,COUNT(*) AS races,
+                   SUM(CASE WHEN start_time_utc IS NOT NULL THEN 1 ELSE 0 END) AS timed,
+                   SUM(CASE WHEN active>=3 THEN 1 ELSE 0 END) AS entryReady,
+                   MIN(active) AS minActive,
+                   MIN(start_time_jst) AS firstStartJst,
+                   MAX(start_time_jst) AS lastStartJst
+            FROM p GROUP BY venue ORDER BY venue
+          " > /tmp/program.json
+          cat /tmp/program.json
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT state_key,updated_at,
+                   json_extract(state_value,'$.sourceModel') AS sourceModel,
+                   json_array_length(json_extract(state_value,'$.selected')) AS selectedCount
+            FROM rt_system_state
+            WHERE state_key IN ('final_daily_selection:2026-09-21','worker_live_lock:2026-09-21','worker_deadline_guard:2026-09-21')
+            ORDER BY state_key
+          " > /tmp/state.json
+          cat /tmp/state.json
+          python3 - <<'PY'
+          import json
+          raw=json.load(open('/tmp/program.json')); rows=[]
+          for b in raw if isinstance(raw,list) else [raw]:
+              if isinstance(b,dict): rows += b.get('results') or []
+          assert len(rows)==2, rows
+          assert all(int(r.get('races') or 0)==12 for r in rows), rows
+          assert all(int(r.get('timed') or 0)==12 for r in rows), rows
+          assert all(int(r.get('entryReady') or 0)==12 for r in rows), rows
+          print('SEP21_PROGRAM_READY',rows)
+          PY
+      - name: Verify current live workers
+        run: |
+          set -euo pipefail
+          for u in https://race-tantei-live-deadline.race-tantei.workers.dev/health https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health; do
+            body=$(curl -fsS "$u"); echo "$body"; echo "$body" | grep -q 'live-deadline-v14-guard-first-cpu-safe-20260920'
+          done
