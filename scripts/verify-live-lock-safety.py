@@ -179,7 +179,7 @@ def main() -> None:
     for needle in (
         'const PREVIEW_PREFIX = "worker_live_preview:";',
         'const FINAL_PREFIX = "worker_live_final:";',
-        "PREVIEW_OPEN_MS = 90 * 60 * 1000",
+        "PREVIEW_OPEN_MS = 110 * 60 * 1000",
         "FINAL_LOCK_ARM_MS = 30 * 60 * 1000",
         "DEADLINE_MS = 15 * 60 * 1000",
         "FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000",
@@ -208,7 +208,9 @@ def main() -> None:
         'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
     ):
         require_text(guard, needle, "persistent deadline guard")
-    forbid_text(guard, "chooseCompletedProbabilityFallbackTickets", "deadline guard probability fallback")
+    require_text(guard, "chooseCompletedProbabilityFallbackTickets", "deadline guard probability fallback")
+    require_text(guard, "lockedProbabilityFallbackRaceIds", "deadline guard fallback audit")
+    require_text(guard, 'oddsMode: "probability_fallback"', "deadline guard fallback payload")
     live_entry = read("src/live-deadline-entry-v2.ts")
     forbid_text(live_entry, "runUpcomingEntryDerivedRepair", "live/public entry-repair ownership")
     forbid_text(live_entry, "upcoming-entry-derived-repair", "live/public entry-repair ownership")
