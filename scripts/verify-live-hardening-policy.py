@@ -1,118 +1,109 @@
 from pathlib import Path
 
-
 def read(path: str) -> str:
-    return Path(path).read_text()
-
+    return Path(path).read_text(encoding="utf-8")
 
 def require(text: str, token: str, label: str) -> None:
     if token not in text:
         raise SystemExit(f"LIVE_HARDENING_POLICY_MISSING:{label}:{token}")
 
+def forbid(text: str, token: str, label: str) -> None:
+    if token in text:
+        raise SystemExit(f"LIVE_HARDENING_POLICY_FORBIDDEN:{label}:{token}")
 
 live = read("src/v1/completed-worker-live-lock.ts")
 guard = read("src/v1/completed-worker-deadline-guard.ts")
-invariants = read("src/v1/completed-final-invariants.ts")
 safety = read("src/v1/live-preview-safety.ts")
 entry = read("src/live-deadline-entry-v2.ts")
-fast = read("src/v1/jra-official-odds-fetch.ts")
-crawl = read("src/v1/jra-official-odds.ts")
+wrapper = read("src/live-deadline-entry-v3.ts")
+migration = read("scripts/install-race-day-runtime-guards.sql")
 primary = read("wrangler.live-deadline.jsonc")
 backup = read("wrangler.live-deadline-backup.jsonc")
 deploy = read(".github/workflows/deploy-live-deadline.yml")
 
 for token, label in [
-    ("const PREVIEW_OPEN_MS = 90 * 60 * 1000;", "preview-opens-t90"),
-    ("const PREVIEW_REQUIRED_MS = 30 * 60 * 1000;", "preview-required-t30"),
-    ("const NORMAL_LOCK_MS = 25 * 60 * 1000;", "normal-final-t25"),
-    ("const DEADLINE_MS = 15 * 60 * 1000;", "hard-t15"),
-    ("const EARLY_PREVIEW_REFRESH_MS = 10 * 60 * 1000;", "early-refresh-cadence"),
-    ("const MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000;", "mid-refresh-cadence"),
-    ("const NEAR_PREVIEW_REFRESH_MS = 45 * 1000;", "near-refresh-cadence"),
-    ("previewIsFreshEnough", "preview-refresh-throttle"),
-    ('new Set(["jra-fast-official", "jra-crawl-official"])', "official-odds-only"),
-    ("cachedWorkerModel", "model-runtime-cache"),
-    ("WORKER_HARD_T15_MISSED", "no-post-t15-generation"),
+    ("WHERE race_date=? AND start_time_utc>?", "selection-driven-future-coverage"),
+    ("MAX_PREVIEW_GENERATIONS_PER_TICK = 1", "generation-budget"),
+    ("MAX_PREVIEW_ATTEMPTS_PER_TICK = 2", "attempt-budget"),
+    ("VERY_EARLY_PREVIEW_REFRESH_MS = 60 * 60 * 1000", "very-early-refresh"),
+    ("EARLY_PREVIEW_REFRESH_MS = 20 * 60 * 1000", "early-refresh"),
+    ("MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000", "mid-refresh"),
+    ("NEAR_PREVIEW_REFRESH_MS = 3 * 60 * 1000", "near-refresh"),
+    ("INSERT INTO rt_live_preview_archive", "first-good-archive"),
+    ("WORKER_HARD_T15_START_MISSED", "no-post-t15-generation"),
     ("WORKER_GENERATION_CROSSED_T15", "generation-cross-boundary-block"),
-    ("previewMissingUrgentRaceIds", "t30-preview-critical"),
+    ('new Set(["jra-fast-official", "jra-crawl-official"])', "official-odds-only"),
+    ("{ includeHistoricalDelta: false }", "precomputed-features-only"),
+    ("LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY", "neutral-recency"),
 ]:
     require(live, token, label)
+forbid(live, "PREVIEW_OPEN_MS", "fixed-preview-window")
+forbid(live, "start_time_utc<=?", "fixed-preview-upper-bound")
 
 for token, label in [
-    ("remainingMs >= DEADLINE_GUARD_MS", "guard-lower-bound-t15"),
-    ("remainingMs <= DEADLINE_GUARD_ARM_MS", "guard-upper-bound-t20"),
-    ("isDeadlineGuardMissed", "guard-hard-miss"),
+    ("DEADLINE_GUARD_MS = 15 * 60 * 1000", "hard-t15"),
+    ("DEADLINE_GUARD_ARM_MS = 25 * 60 * 1000", "guard-arm-t25"),
+    ("MAX_OFFICIAL_PREVIEW_AGE_MS = 12 * 60 * 60 * 1000", "same-day-last-good"),
+    ('if (!official) return { status: "preview_missing"', "official-last-good-only"),
     ("deadlineMissedRaceIds", "guard-miss-audit"),
 ]:
     require(guard, token, label)
+forbid(guard, "chooseCompletedProbabilityFallbackTickets", "fake-probability-final")
+forbid(guard, 'oddsMode: "probability_fallback"', "fake-probability-final")
 
 for token, label in [
-    ("FINAL_BET_DEADLINE_PASSED", "db-final-bet-deadline"),
-    ("FINAL_STATE_DEADLINE_PASSED", "db-final-state-deadline"),
-    ("OFFICIAL_JRA_ODDS_REQUIRED", "db-official-odds"),
-    ("PROBABILITY_FALLBACK_FORBIDDEN", "db-fake-odds-forbidden"),
+    ("rt_live_preview_archive", "preview-archive-table"),
+    ("rt_guard_probability_fallback_final_insert", "db-fake-odds-block"),
+    ("PROBABILITY_FALLBACK_FORBIDDEN", "db-fake-odds-error"),
+    ("rt_guard_official_odds_final_insert", "db-official-odds-guard"),
+    ("OFFICIAL_JRA_ODDS_REQUIRED", "db-official-odds-error"),
 ]:
-    require(invariants, token, label)
+    require(migration, token, label)
 
 for token, label in [
-    ("rt_live_preview_archive", "append-only-preview-archive"),
-    ("rt_archive_live_preview_insert", "preview-insert-archive-trigger"),
-    ("rt_archive_live_preview_update", "preview-update-archive-trigger"),
-    ("rt_live_deadline_lease", "driver-lease"),
-    ("restoreNewestOfficialPreviewArchives", "last-good-preview-restore"),
+    ("restoreNewestOfficialPreviewArchives", "archive-restore"),
     ("previewMissingByT40RaceIds", "sla-t40"),
-    ("previewMissingByT30RaceIds", "sla-t30"),
     ("finalMissingByT25RaceIds", "sla-t25"),
-    ("finalMissingByT20RaceIds", "sla-t20"),
-    ("deadlineMissedRaceIds", "sla-t15"),
+    ("remaining < 15 * 60_000", "sla-hard-t15"),
 ]:
     require(safety, token, label)
 
 for token, label in [
-    ("acquireLiveDeadlineLease", "entry-lease"),
-    ("LEASE_SKIP_PREFIX", "lease-skip-audit-isolation"),
-    ("restoreNewestOfficialPreviewArchives", "entry-archive-restore"),
-    ("auditLiveDeadlineSla", "entry-sla"),
-    ("runUpcomingEntryDerivedRepair", "selection-entry-repair"),
-    ("selection_critical", "selection-sla"),
-    ("remainingToFirstRaceMs", "selection-time-margin"),
-    ("previousState", "failure-audit-preservation"),
-    ("new Date()", "entry-wall-clock"),
-    ('return new Response("NOT_FOUND", { status: 404 });', "no-public-mutation-endpoint"),
+    ("runCompletedWorkerLiveLock", "live-first"),
+    ("runCompletedWorkerDeadlineGuard", "guard-secondary"),
+    ("immutableMisses", "past-miss-isolation"),
+    ("LIVE_DEADLINE_HARD_T15_BREACH_RECORDED", "past-miss-record-only"),
 ]:
     require(entry, token, label)
-if "/_ops/live-tick" in entry:
-    raise SystemExit("LIVE_HARDENING_POLICY_FORBIDDEN:public-live-tick-endpoint")
+require(entry, "runCompletedWorkerLiveLock(env, liveNow)", "live-first-call")
+require(entry, "runCompletedWorkerDeadlineGuard(env, priorityGuardNow)", "guard-call")
+if entry.index("runCompletedWorkerLiveLock(env, liveNow)") > entry.index("runCompletedWorkerDeadlineGuard(env, priorityGuardNow)"):
+    raise SystemExit("LIVE_HARDENING_POLICY_ORDER:live-must-run-before-guard")
 
 for token, label in [
-    ('"main": "src/live-deadline-entry-v2.ts"', "primary-v2-entry"),
-    ('"crons": ["* * * * *"]', "primary-every-minute"),
+    ("function freeTierSafeDb", "free-tier-safe-db"),
+    ("LIVE_RECENCY_HISTORY_SCAN_SKIPPED_FREE_TIER", "history-scan-block"),
+    ('role === "backup"', "backup-role"),
+    ("if (await primaryIsAlive(env.DB)) return;", "backup-standby"),
+    ("await markPrimaryAlive(env.DB);", "primary-heartbeat"),
+]:
+    require(wrapper, token, label)
+
+for token, label in [
+    ('"main": "src/live-deadline-entry-v3.ts"', "primary-v3"),
+    ('"crons": ["* * * * *"]', "primary-minute-cron"),
 ]:
     require(primary, token, label)
 for token, label in [
-    ('"name": "race-tantei-live-deadline-backup"', "backup-worker"),
-    ('"main": "src/live-deadline-entry-v2.ts"', "backup-v2-entry"),
-    ('"crons": ["2-59/5 * * * *"]', "backup-staggered-five-minute"),
+    ('"main": "src/live-deadline-entry-v3.ts"', "backup-v3"),
+    ('"crons": ["2-59/5 * * * *"]', "backup-five-minute-cron"),
 ]:
     require(backup, token, label)
+
 for token, label in [
     ("Deploy primary live deadline Worker", "primary-deploy"),
     ("Deploy backup live deadline Worker", "backup-deploy"),
-    ("production/live-deadline", "dual-deploy-status"),
 ]:
     require(deploy, token, label)
-
-for token, label in [
-    ("const FETCH_BUDGET_MS = 25_000;", "jra-total-budget"),
-    ("JRA_ODDS_FETCH_BUDGET_EXHAUSTED", "jra-fast-budget-enforcement"),
-    ("deadlineMs", "jra-fast-deadline-propagation"),
-]:
-    require(fast, token, label)
-for token, label in [
-    ("const CRAWL_PAGE_TIMEOUT_MS = 3_500;", "jra-crawl-page-timeout"),
-    ("deadlineMs = Number.POSITIVE_INFINITY", "jra-crawl-deadline"),
-    ("JRA_ODDS_CRAWL_BUDGET_EXHAUSTED", "jra-crawl-budget-enforcement"),
-]:
-    require(crawl, token, label)
 
 print("verify-live-hardening-policy: ok")
