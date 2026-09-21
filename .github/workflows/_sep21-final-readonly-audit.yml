@@ -1,0 +1,152 @@
+name: Sep21 final production read-only audit
+
+on:
+  push:
+    branches:
+      - ops/sep21-final-audit
+    paths:
+      - ".github/workflows/_sep21-final-readonly-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Verify deployed health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in \
+            https://race-tantei-live-deadline.race-tantei.workers.dev/health \
+            https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health; do
+            echo "HEALTH $url"
+            curl --max-time 20 --fail-with-body -sS "$url"
+            echo
+          done
+
+      - name: Read current D1 and follow Hanshin 6R deadline
+        shell: bash
+        run: |
+          set -euo pipefail
+          query_now() {
+            npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+              WITH selected AS (
+                SELECT json_extract(j.value,'$.raceId') AS raceId
+                FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j
+                WHERE s.state_key='final_daily_selection:2026-09-21'
+              )
+              SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.status,
+                     r.start_time_utc AS startTimeUtc,
+                     (SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS finalRows,
+                     (SELECT MAX(b.locked_at) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS lockedAt,
+                     ROUND((julianday((SELECT MAX(b.locked_at) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2))-julianday(r.start_time_utc))*1440.0,2) AS lockOffsetMin,
+                     json_extract(fs.state_value,'$.finalizedFrom') AS finalizedFrom,
+                     json_extract(fs.state_value,'$.oddsSource') AS oddsSource,
+                     json_extract(fs.state_value,'$.oddsParserVersion') AS oddsParserVersion,
+                     json_extract(p.state_value,'$.snapshots[0].generatedAt') AS previewGeneratedAt,
+                     json_extract(p.state_value,'$.snapshots[0].oddsSource') AS previewOddsSource,
+                     (SELECT COUNT(*) FROM rt_live_preview_archive a WHERE a.race_id=r.race_id) AS archiveRows
+              FROM rt_races r
+              JOIN selected x ON x.raceId=r.race_id
+              LEFT JOIN rt_system_state fs ON fs.state_key='worker_live_final:'||r.race_id
+              LEFT JOIN rt_system_state p ON p.state_key='worker_live_preview:'||r.race_id
+              ORDER BY r.start_time_utc,r.race_id
+            " > /tmp/current.json
+            cat /tmp/current.json
+          }
+          query_now
+          for i in $(seq 1 16); do
+            state=$(python3 - <<'PY'
+          import json,datetime
+          raw=json.load(open('/tmp/current.json')); rows=[]
+          for block in raw if isinstance(raw,list) else [raw]:
+              if isinstance(block,dict): rows += block.get('results') or []
+          r=next((x for x in rows if x.get('raceId')=='2026-09-21-hanshin-06'),{})
+          print('locked' if int(r.get('finalRows') or 0)==6 else 'pending')
+          PY
+            )
+            if [ "$state" = locked ]; then
+              echo "HANSHIN6_FINAL_OBSERVED iteration=$i"
+              break
+            fi
+            now_epoch=$(date -u +%s)
+            hard_epoch=$(date -u -d '2026-09-21T03:40:00Z' +%s)
+            if [ "$now_epoch" -ge "$hard_epoch" ]; then
+              echo "HANSHIN6_T15_REACHED_WITHOUT_FINAL" >&2
+              exit 1
+            fi
+            sleep 30
+            query_now
+          done
+          python3 - <<'PY'
+          import json,datetime
+          raw=json.load(open('/tmp/current.json')); rows=[]
+          for block in raw if isinstance(raw,list) else [raw]:
+              if isinstance(block,dict): rows += block.get('results') or []
+          active=[r for r in rows if r.get('venue')=='阪神']
+          cancelled=[r for r in rows if r.get('venue')=='中山']
+          h6=next(r for r in active if int(r.get('raceNo') or 0)==6)
+          assert int(h6.get('finalRows') or 0)==6, h6
+          assert float(h6.get('lockOffsetMin') or 0) <= -15.0, h6
+          assert h6.get('oddsSource') in ('jra-fast-official','jra-crawl-official'), h6
+          assert h6.get('oddsParserVersion')=='jra-semantic-table-parser-v3-20260823', h6
+          assert all(int(r.get('finalRows') or 0)==0 for r in cancelled), cancelled
+          print('HANSHIN6_T15_SAFE',json.dumps(h6,ensure_ascii=False))
+          print('CANCELLED_NAKAYAMA_FINALS_ZERO',len(cancelled))
+          PY
+
+      - name: Read heartbeat guard and Sep22 readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== HEARTBEAT_GUARD ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT state_key AS stateKey,updated_at AS updatedAt,
+                   unixepoch('now')-unixepoch(updated_at) AS ageSeconds,state_value AS stateValue
+            FROM rt_system_state
+            WHERE state_key IN ('live_deadline_primary_heartbeat:v2','worker_deadline_guard:2026-09-21','live_deadline_driver:2026-09-21')
+            ORDER BY state_key
+          "
+          echo '=== SEP22 ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            WITH p AS (
+              SELECT r.race_date AS raceDate,r.venue,r.race_id AS raceId,r.race_no AS raceNo,
+                     r.start_time_utc AS startTimeUtc,
+                     CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END AS hasEntryUrl,
+                     SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS active
+              FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
+              WHERE r.race_date='2026-09-22'
+              GROUP BY r.race_date,r.venue,r.race_id,r.race_no,r.start_time_utc,r.entry_url
+            )
+            SELECT venue,COUNT(*) AS races,
+                   SUM(CASE WHEN startTimeUtc IS NOT NULL THEN 1 ELSE 0 END) AS withStart,
+                   SUM(CASE WHEN hasEntryUrl=1 THEN 1 ELSE 0 END) AS withEntryUrl,
+                   SUM(CASE WHEN active>=3 THEN 1 ELSE 0 END) AS entryReady,
+                   MIN(active) AS minActive,MIN(raceNo) AS minRaceNo,MAX(raceNo) AS maxRaceNo
+            FROM p GROUP BY venue
+          "
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT state_key AS stateKey,updated_at AS updatedAt,state_value AS stateValue
+            FROM rt_system_state
+            WHERE state_key IN (
+              'worker_upcoming_calendar_day:2026-09-22',
+              'worker_upcoming_entry_repair',
+              'worker_upcoming_entry_derived_repair',
+              'final_daily_selection:2026-09-22'
+            )
+            ORDER BY state_key
+          "
