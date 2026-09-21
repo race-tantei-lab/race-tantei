@@ -1,0 +1,57 @@
+name: Light home production verify
+on:
+  push:
+    branches:
+      - diag/light-home-verify-20260921
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe production payload and browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          echo '=== HOME RAW ==='
+          curl -sS -D /tmp/home.h -o /tmp/home.html -w 'http=%{http_code} bytes=%{size_download} ttfb=%{time_starttransfer} total=%{time_total}\n' "$base/?_diag=${GITHUB_RUN_ID}"
+          grep -iE '^(content-type|content-length|content-encoding|x-race-ui-version|x-race-home-path|cache-control):' /tmp/home.h || true
+          echo "wc_bytes=$(wc -c </tmp/home.html)"
+          echo "embedded_calendar_prefix=$(grep -o 'const calendar=\[[^;]*' /tmp/home.html | head -c 180 || true)"
+          echo
+          echo '=== ARCHIVE ==='
+          curl -sS -D /tmp/archive.h -o /tmp/archive.json -w 'http=%{http_code} bytes=%{size_download} ttfb=%{time_starttransfer} total=%{time_total}\n' "$base/api/public/calendar-archive"
+          grep -iE '^(content-type|content-length|content-encoding|x-race-calendar-path|cache-control):' /tmp/archive.h || true
+          python - <<'PY'
+          import json
+          x=json.load(open('/tmp/archive.json'))
+          print('archive_rows=',len(x),'first=',x[0] if x else None,'last=',x[-1] if x else None)
+          PY
+          echo
+          echo '=== DAY API ==='
+          curl -sS -o /tmp/day.json -w 'http=%{http_code} bytes=%{size_download} ttfb=%{time_starttransfer} total=%{time_total}\n' "$base/api/public/day?date=2026-09-21&_diag=${GITHUB_RUN_ID}"
+          python - <<'PY'
+          import json
+          d=json.load(open('/tmp/day.json'))
+          rs=d.get('races') or []
+          print('ok=',d.get('ok'),'races=',len(rs),'venues=',sorted(set(r.get('venue') for r in rs)))
+          print('codes=',{c:sum(1 for r in rs if (r.get('publicState') or {}).get('code')==c) for c in sorted(set((r.get('publicState') or {}).get('code') for r in rs))})
+          PY
+          echo
+          echo '=== HEADLESS IPHONE-LIKE ==='
+          google-chrome --headless --no-sandbox --disable-gpu --window-size=390,844 --virtual-time-budget=9000 \
+            --user-agent='Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1' \
+            --dump-dom "$base/?_diag_browser=${GITHUB_RUN_ID}" > /tmp/dom.html 2>/tmp/chrome.err
+          python - <<'PY'
+          import re
+          s=open('/tmp/dom.html',encoding='utf-8').read()
+          print('dom_bytes=',len(s.encode()))
+          print('race_cards=',len(re.findall(r'class="race-card',s)))
+          print('load_error=', 'レース情報を取得できませんでした' in s)
+          print('loading_left=', 'レース情報を読み込み中' in s)
+          print('buy=', '買い目確定' in s)
+          print('target=', '買い目対象・確定前' in s)
+          yrs=re.search(r'id="years"[^>]*>(.*?)</div>',s,re.S)
+          print('years=',re.findall(r'>(20\d\d年)<',yrs.group(1)) if yrs else [])
+          PY
+          grep -Ei 'TypeError|ReferenceError|Uncaught|SyntaxError' /tmp/chrome.err && exit 1 || true
