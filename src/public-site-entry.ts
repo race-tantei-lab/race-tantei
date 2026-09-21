@@ -104,8 +104,8 @@ async function home(env: Env, ctx: ExecutionContext): Promise<string> {
 
 async function raceDetail(db: D1Database, raceId: string): Promise<string | null> {
   const [race, runners, publicBets] = await Promise.all([
-    db.prepare(`SELECT race_id AS raceId, race_date AS raceDate, venue, race_no AS raceNo, race_name AS raceName, start_time_jst AS startTimeJst, start_time_utc AS startTimeUtc, surface, distance_m AS distanceM, conditions, direction, weather, track_condition AS trackCondition, status FROM rt_races WHERE race_id=? LIMIT 1`).bind(raceId).first<RaceDetailRow>();,
-    db.prepare(`SELECT r.horse_no AS horseNo, r.frame_no AS frameNo, r.horse_name AS horseName, r.sex_age AS sexAge, r.horse_weight AS horseWeight, r.weight_change AS weightChange, r.jockey, r.assigned_weight AS assignedWeight, r.trainer, r.stable, r.win_odds AS winOdds, r.popularity, r.runner_status AS runnerStatus, x.finish_position AS finishPosition, x.result_status AS resultStatus FROM rt_runners r LEFT JOIN rt_results x ON x.race_id=r.race_id AND x.horse_no=r.horse_no WHERE r.race_id=? ORDER BY r.horse_no`).bind(raceId).all<RunnerRow>();,
+    db.prepare(`SELECT race_id AS raceId, race_date AS raceDate, venue, race_no AS raceNo, race_name AS raceName, start_time_jst AS startTimeJst, start_time_utc AS startTimeUtc, surface, distance_m AS distanceM, conditions, direction, weather, track_condition AS trackCondition, status FROM rt_races WHERE race_id=? LIMIT 1`).bind(raceId).first<RaceDetailRow>(),
+    db.prepare(`SELECT r.horse_no AS horseNo, r.frame_no AS frameNo, r.horse_name AS horseName, r.sex_age AS sexAge, r.horse_weight AS horseWeight, r.weight_change AS weightChange, r.jockey, r.assigned_weight AS assignedWeight, r.trainer, r.stable, r.win_odds AS winOdds, r.popularity, r.runner_status AS runnerStatus, x.finish_position AS finishPosition, x.result_status AS resultStatus FROM rt_runners r LEFT JOIN rt_results x ON x.race_id=r.race_id AND x.horse_no=r.horse_no WHERE r.race_id=? ORDER BY r.horse_no`).bind(raceId).all<RunnerRow>(),
     getPublicBets(db, raceId),
   ]);
   if (!race) return null;
