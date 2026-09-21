@@ -71,6 +71,14 @@ async function main(): Promise<void> {
   assert.equal(blockedSpecialMonday.shouldRun, true);
   assert.equal(blockedSpecialMonday.reason, "official_annual_schedule_fallback");
 
+  const blockedSubstituteTuesday = await shouldRunOnJraRaceDay(
+    new Date("2026-09-21T15:00:00.000Z"),
+    async () => { throw new Error("HTTP_403"); },
+  );
+  assert.equal(blockedSubstituteTuesday.raceDate, "2026-09-22");
+  assert.equal(blockedSubstituteTuesday.shouldRun, true);
+  assert.equal(blockedSubstituteTuesday.reason, "official_annual_schedule_fallback");
+
   const blockedBeforeSeason = await shouldRunOnJraRaceDay(
     new Date("2026-01-02T15:00:00.000Z"),
     async () => { throw new Error("HTTP_403"); },
