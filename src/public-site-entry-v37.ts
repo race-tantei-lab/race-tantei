@@ -9,7 +9,7 @@ import { shell } from "./v1/public-ui.js";
 import { readPublicCalendarCache } from "./v1/public-calendar-cache.js";
 import type { Env } from "./v1/types.js";
 
-const UI_VERSION = "ten-year-completed-public-v37-free-tier-safe-snapshot-20260905";
+const UI_VERSION = "ten-year-completed-public-v37-light-home-20260921";
 const FORBIDDEN_RECOVERY_TEXT = [
   "データ取得を一時的に再試行しています",
   "データ取得を再試行しています",
@@ -134,27 +134,43 @@ function mergeRecentCalendar(html: string, rows: CalendarRow[]): string {
   const end = html.indexOf(";const today=", start);
   if (start < 0 || end < 0 || !rows.length) return html;
 
-  try {
-    const raw = html.slice(start + marker.length, end);
-    const existing = JSON.parse(raw) as CalendarRow[];
-    const byKey = new Map<string, CalendarRow>();
-    for (const row of existing) {
-      const normalized = {
-        raceDate: String(row.raceDate),
-        venue: String(row.venue),
-        raceCount: Number(row.raceCount),
-      };
-      byKey.set(`${normalized.raceDate}\u0000${normalized.venue}`, normalized);
-    }
-    for (const row of rows) {
-      byKey.set(`${row.raceDate}\u0000${row.venue}`, row);
-    }
-    const merged = [...byKey.values()].sort((a, b) => a.raceDate.localeCompare(b.raceDate) || a.venue.localeCompare(b.venue, "ja"));
-    return `${html.slice(0, start + marker.length)}${JSON.stringify(merged)}${html.slice(end)}`;
-  } catch (error) {
-    console.error("V37_CALENDAR_MERGE_FAILED", error);
-    return html;
+  // Keep the initial document small. The legacy snapshot embeds ~10 years of
+  // calendar rows in the first blocking script; current-day rendering only
+  // needs the recent/current rows. Older years are restored lazily after the
+  // first paint from /api/public/calendar-archive.
+  const byKey = new Map<string, CalendarRow>();
+  for (const row of rows) {
+    const normalized = {
+      raceDate: String(row.raceDate),
+      venue: String(row.venue),
+      raceCount: Number(row.raceCount),
+    };
+    if (!normalized.raceDate || !normalized.venue || normalized.raceCount <= 0) continue;
+    byKey.set(`${normalized.raceDate}\u0000${normalized.venue}`, normalized);
   }
+  const recent = [...byKey.values()].sort((a, b) => a.raceDate.localeCompare(b.raceDate) || a.venue.localeCompare(b.venue, "ja"));
+  return `${html.slice(0, start + marker.length)}${JSON.stringify(recent)}${html.slice(end)}`;
+}
+
+function calendarArchiveResponse(): Response {
+  const marker = "const calendar=";
+  const start = NORMAL_HOME_SNAPSHOT.indexOf(marker);
+  const end = NORMAL_HOME_SNAPSHOT.indexOf(";const today=", start);
+  const raw = start >= 0 && end > start
+    ? NORMAL_HOME_SNAPSHOT.slice(start + marker.length, end)
+    : "[]";
+  return new Response(raw, {
+    status: 200,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "public, max-age=86400, stale-while-revalidate=604800",
+      "x-race-calendar-path": "snapshot-archive-v1",
+    },
+  });
+}
+
+function lazyCalendarArchiveScript(): string {
+  return `<script>(()=>{let started=false;async function hydrate(){if(started)return;started=true;try{const r=await fetch("/api/public/calendar-archive",{cache:"force-cache"});if(!r.ok)return;const old=await r.json();if(!Array.isArray(old)||!old.length)return;const seen=new Set(calendar.map(x=>x.raceDate+"\\u0000"+x.venue));for(const x of old){const d=String(x&&x.raceDate||""),v=String(x&&x.venue||""),n=Number(x&&x.raceCount||0);const k=d+"\\u0000"+v;if(d&&v&&n>0&&!seen.has(k)){calendar.push({raceDate:d,venue:v,raceCount:n});seen.add(k)}}calendar.sort((a,b)=>a.raceDate.localeCompare(b.raceDate)||a.venue.localeCompare(b.venue,"ja"));const p=parts(selectedDate),years=uniq(calendar.map(x=>x.raceDate.slice(0,4))).sort((a,b)=>b.localeCompare(a)),yr=byId("years");if(yr){yr.replaceChildren();years.forEach(y=>yr.append(button(y+"年",y===p.y,()=>{const ds=calendar.filter(x=>x.raceDate.startsWith(y+"-")).map(x=>x.raceDate);selectedDate=ds.at(-1);selectedVenue="";renderHierarchy();})))}}catch(_){}}const kick=()=>hydrate();const yr=byId("years");if(yr){yr.addEventListener("pointerenter",kick,{once:true});yr.addEventListener("touchstart",kick,{once:true,passive:true});yr.addEventListener("focusin",kick,{once:true})}if("requestIdleCallback"in window){window.requestIdleCallback(kick,{timeout:8000})}else{setTimeout(kick,5000)}})();</script>`;
 }
 
 function normalResponse(response: Response, html: string, path: string): Response {
@@ -205,6 +221,7 @@ function embeddedNormalHome(calendarRows: CalendarRow[] = staticRecentCalendar()
   if (todayResults && !html.includes("今日の結果")) {
     html = html.replace('<div class="section-title"><h2>累計回収率</h2>', todayResults + '<div class="section-title"><h2>累計回収率</h2>');
   }
+  html = html.replace("</body>", `${lazyCalendarArchiveScript()}</body>`);
   return new Response(html, {
     status: 200,
     headers: {
@@ -387,6 +404,7 @@ export default {
     const url = new URL(request.url);
     const pathname = url.pathname;
     if (pathname === "/_ops/live-tick") return new Response("NOT_FOUND", { status: 404, headers: { "cache-control": "no-store" } });
+    if (request.method === "GET" && pathname === "/api/public/calendar-archive") return calendarArchiveResponse();
     if (request.method === "GET" && pathname === "/api/public/day") return fetchPublicDay(request, env, ctx, url.searchParams.get("date") ?? "");
     if (request.method === "GET" && (pathname === "/" || pathname === "/index.html")) return fetchNormalHome(request, env, ctx);
     if (request.method === "GET" && (pathname === "/races" || pathname === "/races/")) return fetchRaceList(request, env, ctx);
