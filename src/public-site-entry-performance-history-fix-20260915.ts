@@ -5,6 +5,7 @@ import type { Env } from "./v1/types.js";
 type SnapshotRace = {
   raceId: string;
   refundsJson: string | null;
+  status?: string | null;
 };
 
 type SnapshotBet = {
@@ -86,7 +87,18 @@ function parseSelectionCountRaw(raw: string | null | undefined): number {
 }
 
 function parseSelectionCount(day: SnapshotDay): number {
-  return parseSelectionCountRaw(day.selection);
+  if (!day.selection) return 0;
+  try {
+    const parsed = JSON.parse(day.selection) as { selected?: Array<{ raceId?: unknown }> };
+    const selected = new Set((parsed.selected ?? []).map((row) => String(row?.raceId ?? "")).filter(Boolean));
+    const cancelled = new Set(["cancelled", "canceled", "postponed"]);
+    return (day.races ?? []).filter((race) =>
+      selected.has(String(race.raceId ?? ""))
+      && !cancelled.has(String(race.status ?? "scheduled").toLowerCase())
+    ).length;
+  } catch {
+    return 0;
+  }
 }
 
 function horseNos(combination: string): number[] {
@@ -200,14 +212,24 @@ async function boundedLiveDay(db: D1Database, date: string): Promise<DayPerforma
       WHERE r.race_date=? AND b.source_prediction_id=-2
       ORDER BY b.race_id,b.course,b.id
     `).bind(date).all<LiveBetRow>(),
-    db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
-      .bind(`final_daily_selection:${date}`).first<{ value: string | null }>(),
+    db.prepare(`
+      SELECT s.state_value AS value,
+             (
+               SELECT COUNT(*)
+               FROM json_each(json_extract(s.state_value,'$.selected')) j
+               JOIN rt_races r ON r.race_id=json_extract(j.value,'$.raceId')
+               WHERE lower(COALESCE(r.status,'scheduled')) NOT IN ('cancelled','canceled','postponed')
+             ) AS activeCount
+      FROM rt_system_state s
+      WHERE s.state_key=?
+      LIMIT 1
+    `).bind(`final_daily_selection:${date}`).first<{ value: string | null; activeCount: number | null }>(),
   ]);
 
   const rows = betResult.results ?? [];
   const races = new Map<string, SnapshotRace>();
   for (const row of rows) races.set(row.raceId, { raceId: row.raceId, refundsJson: row.refundsJson });
-  return summarizeDay(date, [...races.values()], rows, parseSelectionCountRaw(selectionRow?.value));
+  return summarizeDay(date, [...races.values()], rows, Number(selectionRow?.activeCount ?? parseSelectionCountRaw(selectionRow?.value)));
 }
 
 function performanceResponse(today: string, summary: DayPerformance, history: DayPerformance[], mode: string): Response {
