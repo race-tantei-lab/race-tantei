@@ -1,0 +1,21 @@
+name: Detail latency post-fix verify
+on:
+  push:
+    branches:
+      - diag/detail-latency-postfix-20260921
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          for r in 01 06 07 08 12; do
+            id="2026-09-21-hanshin-$r"
+            echo "=== $id ==="
+            for n in 1 2 3; do
+              curl --compressed -sS -D /tmp/h -o /tmp/b -w "try=$n http=%{http_code} bytes=%{size_download} ttfb=%{time_starttransfer} total=%{time_total}\n" "$base/races/$id?_postfix=${GITHUB_RUN_ID}-$n"
+              grep -iE '^(x-race-detail-path|x-race-nav-path|x-race-ui-version|x-race-finalization-ui|content-type):' /tmp/h | tr '\n' ' '; echo
+            done
+          done
