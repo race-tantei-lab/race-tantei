@@ -71,21 +71,24 @@ jobs:
             prepare(sql:string){ return new Bound(sql); }
             async batch(stmts:any[]){ return await Promise.all(stmts.map((s)=>s.all())); }
           }
-          const now=new Date('2026-09-22T08:01:00+09:00');
-          const result:any=await freezeCompletedWorkerSelectionIfNeeded({DB:new DB() as any} as any,now);
-          const p:any=result.payload;
-          console.log('DRYRUN_STATUS',result.status);
-          console.log('DRYRUN_DATE',result.date);
-          console.log('DRYRUN_MODEL',p?.sourceModel);
-          console.log('DRYRUN_RESULT_DATA_USED',p?.resultDataUsedForTargetDay);
-          console.log('DRYRUN_VENUE_COUNTS',JSON.stringify(p?.venueCounts));
-          console.log('DRYRUN_SELECTED_COUNTS',JSON.stringify(p?.selectedVenueCounts));
-          console.log('DRYRUN_SELECTED',JSON.stringify((p?.selected||[]).map((x:any)=>({raceId:x.raceId,venue:x.venue,raceNo:x.raceNo,raceScore:x.raceScore}))));
-          if(result.status!=='frozen') throw new Error('DRYRUN_NOT_FROZEN');
-          if(p?.sourceModel!=='ten-year-completed-model'||p?.resultDataUsedForTargetDay!==false) throw new Error('DRYRUN_SELECTION_INVARIANT');
-          if(JSON.stringify(p?.venueCounts)!==JSON.stringify({中山:12})) throw new Error('DRYRUN_PROGRAM_NOT_SINGLE_NAKAYAMA');
-          if(JSON.stringify(p?.selectedVenueCounts)!==JSON.stringify({中山:5})||(p?.selected||[]).length!==5) throw new Error('DRYRUN_SELECTED_NOT_FIVE');
-          console.log('NO_PRODUCTION_WRITES');
+          async function main(){
+            const now=new Date('2026-09-22T08:01:00+09:00');
+            const result:any=await freezeCompletedWorkerSelectionIfNeeded({DB:new DB() as any} as any,now);
+            const p:any=result.payload;
+            console.log('DRYRUN_STATUS',result.status);
+            console.log('DRYRUN_DATE',result.date);
+            console.log('DRYRUN_MODEL',p?.sourceModel);
+            console.log('DRYRUN_RESULT_DATA_USED',p?.resultDataUsedForTargetDay);
+            console.log('DRYRUN_VENUE_COUNTS',JSON.stringify(p?.venueCounts));
+            console.log('DRYRUN_SELECTED_COUNTS',JSON.stringify(p?.selectedVenueCounts));
+            console.log('DRYRUN_SELECTED',JSON.stringify((p?.selected||[]).map((x:any)=>({raceId:x.raceId,venue:x.venue,raceNo:x.raceNo,raceScore:x.raceScore}))));
+            if(result.status!=='frozen') throw new Error('DRYRUN_NOT_FROZEN');
+            if(p?.sourceModel!=='ten-year-completed-model'||p?.resultDataUsedForTargetDay!==false) throw new Error('DRYRUN_SELECTION_INVARIANT');
+            if(JSON.stringify(p?.venueCounts)!==JSON.stringify({中山:12})) throw new Error('DRYRUN_PROGRAM_NOT_SINGLE_NAKAYAMA');
+            if(JSON.stringify(p?.selectedVenueCounts)!==JSON.stringify({中山:5})||(p?.selected||[]).length!==5) throw new Error('DRYRUN_SELECTED_NOT_FIVE');
+            console.log('NO_PRODUCTION_WRITES');
+          }
+          main().catch((e)=>{console.error(e);process.exit(1)});
           TS
           npx tsx /tmp/sep22-selection-dryrun.ts
       - name: Audit Sep21 results available for prior-day learning
