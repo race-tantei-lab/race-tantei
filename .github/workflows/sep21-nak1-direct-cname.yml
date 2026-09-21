@@ -1,0 +1,40 @@
+name: Sep21 Nak1 Direct Cname Probe
+
+on:
+  push:
+    branches: [ops/sep21-final-preflight]
+    paths:
+      - ".github/workflows/sep21-nak1-direct-cname.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe guessed official CNAMEs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util,sys,pathlib
+          p=pathlib.Path('scripts/collect-jra-official-odds.py')
+          spec=importlib.util.spec_from_file_location('o',p); m=importlib.util.module_from_spec(spec);sys.modules['o']=m;spec.loader.exec_module(m)
+          suffix='0106202604070120260921/B4'
+          for bt,pfx in [('単勝','pw151ou'),('馬連','pw154ou'),('ワイド','pw155ou'),('馬単','pw156ou'),('3連複','pw157ou'),('3連単','pw158ou')]:
+              cname=pfx+suffix
+              try:
+                  page=m.fetch_url(m.JRA_ODDS_URL,cname=cname)
+                  rows=m.parse_odds_rows(page,bt)
+                  ident=m.parse_page_identity(page,cname)
+                  print(bt,cname,'identity=',ident,'rows=',len(rows),'hasTanpuku=',('tanpuku' in page))
+              except Exception as e:
+                  print(bt,cname,'ERR',type(e).__name__,str(e))
+          PY
