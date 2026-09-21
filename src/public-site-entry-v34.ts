@@ -120,11 +120,10 @@ async function rewriteHtml(response: Response, path: string): Promise<Response> 
   return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
-async function raceTransparency(response: Response, env: Env, path: string, now = new Date()): Promise<Response> {
+function loadRaceTransparencyRow(env: Env, path: string): Promise<RaceTransparencyRow | null> {
   const raceId = raceIdFromPath(path);
-  if (!raceId || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
-  try {
-    const row = await env.DB.prepare(`
+  if (!raceId) return Promise.resolve(null);
+  return env.DB.prepare(`
       SELECT r.race_id AS raceId,r.race_date AS raceDate,r.start_time_utc AS startTimeUtc,r.start_time_jst AS startTimeJst,
              (SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS finalRows,
              (SELECT MIN(locked_at) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS lockedAt,
@@ -132,66 +131,78 @@ async function raceTransparency(response: Response, env: Env, path: string, now 
              (SELECT state_value FROM rt_system_state s WHERE s.state_key='final_daily_selection:'||r.race_date LIMIT 1) AS selectionValue
       FROM rt_races r WHERE r.race_id=? LIMIT 1
     `).bind(raceId).first<RaceTransparencyRow>();
-    if (!row) return response;
-    const isSelected = selectedRace(row.selectionValue, raceId);
-    const finalRows = Number(row.finalRows ?? 0);
-    if (!isSelected && finalRows !== 6) return response;
+}
 
-    const startMs = Date.parse(String(row.startTimeUtc ?? ""));
-    let html = await response.text();
-    let cls = "before";
-    let title = "確定前";
-    let detail = "表示中の予想はまだ確定買い目ではありません。";
-
-    if (finalRows === 6) {
-      cls = "final";
-      title = "買い目確定・以後変更なし";
-      detail = "この買い目は確定済みです。確定後の組合せ・購入額は変更しません。";
-      try {
-        const state = row.finalState ? JSON.parse(row.finalState) as FinalStatePayload : null;
-        const generationStartedMs = Date.parse(String(state?.generationStartedAt ?? ""));
-        const lockedMs = Date.parse(String(row.lockedAt ?? state?.lockedAt ?? ""));
-        if (Number.isFinite(startMs) && Number.isFinite(generationStartedMs) && Number.isFinite(lockedMs)
-            && generationStartedMs <= startMs - START_DEADLINE_MS && lockedMs > startMs - START_DEADLINE_MS) {
-          detail = `発走15分前までに開始した最終計算を${fmtJst(row.lockedAt ?? state?.lockedAt) ?? "発走前"}に反映して確定しました。現在は確定済みで、以後変更しません。`;
+async function raceTransparency(response: Response, path: string, row: RaceTransparencyRow | null, now = new Date()): Promise<Response> {
+  const raceId = raceIdFromPath(path);
+  if (!raceId || !row || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
+  try {
+      if (!row) return response;
+      const isSelected = selectedRace(row.selectionValue, raceId);
+      const finalRows = Number(row.finalRows ?? 0);
+      if (!isSelected && finalRows !== 6) return response;
+    
+      const startMs = Date.parse(String(row.startTimeUtc ?? ""));
+      let html = await response.text();
+      let cls = "before";
+      let title = "確定前";
+      let detail = "表示中の予想はまだ確定買い目ではありません。";
+    
+      if (finalRows === 6) {
+        cls = "final";
+        title = "買い目確定・以後変更なし";
+        detail = "この買い目は確定済みです。確定後の組合せ・購入額は変更しません。";
+        try {
+          const state = row.finalState ? JSON.parse(row.finalState) as FinalStatePayload : null;
+          const generationStartedMs = Date.parse(String(state?.generationStartedAt ?? ""));
+          const lockedMs = Date.parse(String(row.lockedAt ?? state?.lockedAt ?? ""));
+          if (Number.isFinite(startMs) && Number.isFinite(generationStartedMs) && Number.isFinite(lockedMs)
+              && generationStartedMs <= startMs - START_DEADLINE_MS && lockedMs > startMs - START_DEADLINE_MS) {
+            detail = `発走15分前までに開始した最終計算を${fmtJst(row.lockedAt ?? state?.lockedAt) ?? "発走前"}に反映して確定しました。現在は確定済みで、以後変更しません。`;
+          }
+        } catch { /* keep generic final note */ }
+        html = html.replace(/<span class="status buy">買い目あり<\/span>/g, '<span class="status buy">買い目確定</span>');
+      } else if (Number.isFinite(startMs)) {
+        const remaining = startMs - now.getTime();
+        const t15 = minuteClock(startMs, 15);
+        const t10 = minuteClock(startMs, 10);
+        if (remaining >= START_DEADLINE_MS) {
+          cls = "before";
+          title = "確定前";
+          detail = `${t15}までに最終計算を開始し、遅くとも${t10}までに確定します。「買い目確定」と表示されるまでは内容が変わる可能性があります。`;
+        } else if (remaining >= FINAL_DEADLINE_MS) {
+          cls = "calculating";
+          title = "最終計算中（確定前）";
+          detail = `${t15}までに開始した最終計算を反映中です。${t10}までは買い目が変わる可能性があります。「買い目確定」と表示されるまでは確定ではありません。`;
+        } else if (remaining > 0) {
+          cls = "missed";
+          title = "最終確定期限を超過";
+          detail = `${t10}の最終確定期限を過ぎています。確定買い目として扱いません。`;
+        } else {
+          cls = "missed";
+          title = "買い目未生成";
+          detail = "発走前の最終確定に間に合わなかったため、確定買い目として扱いません。";
         }
-      } catch { /* keep generic final note */ }
-      html = html.replace(/<span class="status buy">買い目あり<\/span>/g, '<span class="status buy">買い目確定</span>');
-    } else if (Number.isFinite(startMs)) {
-      const remaining = startMs - now.getTime();
-      const t15 = minuteClock(startMs, 15);
-      const t10 = minuteClock(startMs, 10);
-      if (remaining >= START_DEADLINE_MS) {
-        cls = "before";
-        title = "確定前";
-        detail = `${t15}までに最終計算を開始し、遅くとも${t10}までに確定します。「買い目確定」と表示されるまでは内容が変わる可能性があります。`;
-      } else if (remaining >= FINAL_DEADLINE_MS) {
-        cls = "calculating";
-        title = "最終計算中（確定前）";
-        detail = `${t15}までに開始した最終計算を反映中です。${t10}までは買い目が変わる可能性があります。「買い目確定」と表示されるまでは確定ではありません。`;
-      } else if (remaining > 0) {
-        cls = "missed";
-        title = "最終確定期限を超過";
-        detail = `${t10}の最終確定期限を過ぎています。確定買い目として扱いません。`;
-      } else {
-        cls = "missed";
-        title = "買い目未生成";
-        detail = "発走前の最終確定に間に合わなかったため、確定買い目として扱いません。";
+        html = html.replace(/<span class="status (?:target|pending|overdue|buy)">[^<]*<\/span>/g, `<span class="status pending">${title}</span>`);
+        html = html.replace(/<h2>確定買い目<\/h2>/g, "<h2>予想（確定前）</h2>");
       }
-      html = html.replace(/<span class="status (?:target|pending|overdue|buy)">[^<]*<\/span>/g, `<span class="status pending">${title}</span>`);
-      html = html.replace(/<h2>確定買い目<\/h2>/g, "<h2>予想（確定前）</h2>");
+    
+      const banner = `<div class="race-finalization-state ${cls}" data-finalization-state="${cls}"><strong>${title}</strong><span>${detail}</span></div>`;
+      if (!html.includes("data-finalization-state=")) {
+        if (html.includes('<nav class="race-detail-tabs"')) html = html.replace('<nav class="race-detail-tabs"', `${banner}<nav class="race-detail-tabs"`);
+        else html = html.replace(/(<div class="section-title"><h2>)/, `${banner}$1`);
+      }
+      const headers = new Headers(response.headers);
+      headers.delete("content-length");
+      headers.set("x-race-ui-version", UI_VERSION);
+      headers.set("x-race-finalization-ui", TRANSPARENCY_VERSION);
+      return new Response(html, { status: response.status, statusText: response.statusText, headers });
+      } catch (error) {
+      console.error("RACE_FINALIZATION_TRANSPARENCY_FAILED", error);
+      return response;
+      }
     }
-
-    const banner = `<div class="race-finalization-state ${cls}" data-finalization-state="${cls}"><strong>${title}</strong><span>${detail}</span></div>`;
-    if (!html.includes("data-finalization-state=")) {
-      if (html.includes('<nav class="race-detail-tabs"')) html = html.replace('<nav class="race-detail-tabs"', `${banner}<nav class="race-detail-tabs"`);
-      else html = html.replace(/(<div class="section-title"><h2>)/, `${banner}$1`);
-    }
-    const headers = new Headers(response.headers);
-    headers.delete("content-length");
-    headers.set("x-race-ui-version", UI_VERSION);
-    headers.set("x-race-finalization-ui", TRANSPARENCY_VERSION);
-    return new Response(html, { status: response.status, statusText: response.statusText, headers });
+    
   } catch (error) {
     console.error("RACE_FINALIZATION_TRANSPARENCY_FAILED", error);
     return response;
@@ -212,9 +223,15 @@ export default {
       return dailyPerformanceResponse(env.DB, url.searchParams.get("date") ?? "");
     }
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
+    const transparencyPromise = raceIdFromPath(path)
+      ? loadRaceTransparencyRow(env, path).catch((error) => {
+          console.error("RACE_FINALIZATION_TRANSPARENCY_LOAD_FAILED", error);
+          return null;
+        })
+      : Promise.resolve<RaceTransparencyRow | null>(null);
     let response = await publicSite.fetch(request, env, ctx);
     response = await rewriteHtml(response, path);
-    response = await raceTransparency(response, env, path);
+    response = await raceTransparency(response, path, await transparencyPromise);
     if (path === "/") response = await enhanceDailyPerformanceHome(response);
     const headers = new Headers(response.headers);
     if (response.headers.get("content-type")?.includes("text/html")) {
