@@ -5,6 +5,7 @@ import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
 import { RECENT_PUBLIC_FINAL_EVIDENCE } from "./recent-public-final-evidence.js";
 import { projectCurrentPublicState } from "./v1/current-day-public-api.js";
 import { quotaFreeOfficialResultResponse } from "./v1/quota-free-jra-result-20260919.js";
+import { fastCurrentDayRaceDetailResponse } from "./v1/current-day-race-detail-fast.js";
 import { shell } from "./v1/public-ui.js";
 import { readPublicCalendarCache } from "./v1/public-calendar-cache.js";
 import type { Env } from "./v1/types.js";
@@ -412,7 +413,10 @@ export default {
     if (request.method === "GET" && (pathname === "/" || pathname === "/index.html")) return fetchNormalHome(request, env, ctx);
     if (request.method === "GET" && (pathname === "/races" || pathname === "/races/")) return fetchRaceList(request, env, ctx);
     if (request.method === "GET" && /^\/races\/20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}\/?$/i.test(pathname)) {
-      return fetchRaceDetail(request, env, ctx, decodeURIComponent(pathname.replace(/^\/races\//, "").replace(/\/$/, "")));
+      const raceId = decodeURIComponent(pathname.replace(/^\/races\//, "").replace(/\/$/, ""));
+      const direct = await fastCurrentDayRaceDetailResponse(env.DB, raceId);
+      if (direct) return direct;
+      return fetchRaceDetail(request, env, ctx, raceId);
     }
     return core.fetch(request, env, ctx);
   },
