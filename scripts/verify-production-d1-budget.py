@@ -126,11 +126,12 @@ def main() -> None:
         "entry maintenance must gate before first D1 maintenance call",
     )
 
-    # The race-day quota may be touched automatically only by bootstrap, Thu/Fri
-    # upcoming-program preflight, and Tuesday-night learning. Historical audits,
-    # ad-hoc diagnostics, and heavy selection generation are manual-only.
+    # The race-day quota may be touched automatically only by bootstrap, the
+    # bounded per-race T-45..T-15 recovery, Thu/Fri upcoming-program preflight,
+    # and Tuesday-night learning. Historical audits and ad-hoc diagnostics stay manual-only.
     auto_d1 = {
         "race-day-bootstrap.yml",
+        "critical-auto-bet-generation.yml",
         "verify-upcoming-production-program.yml",
         "continuous-final-rule-learning.yml",
     }
