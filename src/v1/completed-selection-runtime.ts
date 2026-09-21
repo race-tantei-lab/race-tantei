@@ -260,15 +260,21 @@ export function advanceCompletedSelectionState(state: CompletedSelectionState, b
   const byDate = new Map<string, CompletedSelectionBundle[]>();
   for (const bundle of bundles) { const date = bundle.race.raceDate; const bucket = byDate.get(date) ?? []; bucket.push(bundle); byDate.set(date, bucket); }
   for (const date of [...byDate.keys()].sort()) {
-    const day = byDate.get(date)!; quarterTransition(state, date);
-    for (const bundle of day) {
+    const day = byDate.get(date)!;
+    const activeDay = day.filter((bundle) => !["cancelled", "canceled", "postponed"].includes(String(bundle.race.status ?? "").toLowerCase()));
+    // Never convert missing official results/payouts into synthetic zero-return losses.
+    // Stop at the first incomplete historical day so late-arriving JRA results can
+    // still be incorporated on the next attempt instead of advancing throughDate.
+    if (activeDay.some((bundle) => bundle.results.filter((row) => row.finishPosition != null).length < 3 || bundle.payouts.length === 0)) break;
+    quarterTransition(state, date);
+    for (const bundle of activeDay) {
       const pays = payoutIndex(bundle);
       for (const ticket of candidateRows(state, bundle)) {
         const ret = pays.get(`${ticket.betType}\u0001${ticket.combo}`) ?? 0, bs = state.betStats.get(ticket.bt) ?? [0, 0]; bs[0] += 1; bs[1] += ret; state.betStats.set(ticket.bt, bs);
         for (const [axes, vals] of candidateKeys(ticket.bt, ticket.vals)) { const key = statsKey(ticket.bt, axes, vals), stat = state.stats.get(key) ?? [0, 0]; stat[0] += 1; stat[1] += ret; state.stats.set(key, stat); }
       }
     }
-    updateSelectionHistory(state, day); state.throughDate = date;
+    updateSelectionHistory(state, activeDay); state.throughDate = date;
   }
 }
 export function selectCompletedTargetRaces(state: CompletedSelectionState, bundles: CompletedSelectionBundle[], date: string): CompletedSelectedRace[] {
