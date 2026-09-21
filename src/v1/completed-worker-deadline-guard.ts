@@ -19,7 +19,7 @@ const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPL
 
 type SelectionPayload = { sourceModel?: string; resultDataUsedForTargetDay?: boolean; selected?: Array<{ raceId?: string; venue?: string; raceNo?: number }> };
 type RaceStartRow = { raceId: string; startTimeUtc: string | null };
-type RaceIdentityRow = { raceDate: string; startTimeUtc: string | null };
+type RaceIdentityRow = { raceDate: string; startTimeUtc: string | null; status: string };
 type PublicBetRow = { course: string; betType: string; combination: string; stakeYen: number; settlementStatus: string; sourcePredictionId: number | null };
 type CachedOfficialPreview = {
   version?: number;
@@ -41,7 +41,7 @@ type CachedOfficialPreview = {
 };
 type PreviewEnvelope = { version?: number; raceId?: string; snapshots?: CachedOfficialPreview[] };
 export type DeadlineEnsureResult = {
-  status: "locked" | "already_locked" | "outside_window" | "not_selected" | "preview_missing" | "deadline_missed";
+  status: "locked" | "already_locked" | "outside_window" | "not_selected" | "cancelled" | "preview_missing" | "deadline_missed";
   raceId: string;
   remainingMs: number;
 };
@@ -301,10 +301,13 @@ export async function ensureCompletedRaceFinalAtDeadline(
   await ensureCompletedFinalImmutability(env.DB);
   if (strictComplete(await publicRows(env.DB, raceId))) return { status: "already_locked", raceId, remainingMs: Number.NaN };
 
-  const race = await env.DB.prepare("SELECT race_date AS raceDate,start_time_utc AS startTimeUtc FROM rt_races WHERE race_id=? LIMIT 1")
+  const race = await env.DB.prepare("SELECT race_date AS raceDate,start_time_utc AS startTimeUtc,status FROM rt_races WHERE race_id=? LIMIT 1")
     .bind(raceId)
     .first<RaceIdentityRow>();
   if (!race) throw new Error(`DEADLINE_GUARD_RACE_MISSING:${raceId}`);
+  if (["cancelled", "canceled", "postponed"].includes(String(race.status || "").toLowerCase())) {
+    return { status: "cancelled", raceId, remainingMs: Number.NaN };
+  }
 
   const selected = await loadSelection(env.DB, race.raceDate);
   if (!selected.includes(raceId)) return { status: "not_selected", raceId, remainingMs: Number.NaN };
