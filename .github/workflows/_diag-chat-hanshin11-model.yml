@@ -1,0 +1,105 @@
+name: Chat-only Hanshin 11 model
+on:
+  push:
+    branches:
+      - diag/chat-hanshin11-model-20260921
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      JRA_ODDS_REQUEST_PAUSE_SECONDS: "0.35"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install model runtime
+        run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0" numpy
+      - name: Build chat-only selection
+        run: |
+          mkdir -p /tmp/race-tantei-chat
+          cat >/tmp/race-tantei-chat/selection.json <<'JSON'
+          {
+            "sourceModel":"ten-year-completed-model",
+            "resultDataUsedForTargetDay":false,
+            "selected":[
+              {"raceId":"2026-09-21-hanshin-11","raceDate":"2026-09-21","venue":"阪神","raceNo":11}
+            ]
+          }
+          JSON
+      - name: Collect JRA official odds without persistence
+        shell: bash
+        run: |
+          python - <<'PY'
+          import gzip, hashlib, importlib.util, json, pathlib, sys, time
+          from collections import defaultdict
+          from datetime import datetime, timezone
+
+          root=pathlib.Path('.').resolve()
+          p=root/'scripts'/'collect-current-jra-official-odds-fast.py'
+          spec=importlib.util.spec_from_file_location('chat_fast_odds',p)
+          m=importlib.util.module_from_spec(spec); sys.modules[spec.name]=m; spec.loader.exec_module(m)
+          current=m.current; runtime=m.runtime; base=m.base
+          race_id='2026-09-21-hanshin-11'
+          captured=datetime.now(timezone.utc); captured_iso=captured.isoformat()
+          source=base.upcoming_races()
+          races=[r for r in source if str(r.get('raceId'))==race_id]
+          if len(races)!=1:
+              raise RuntimeError(f'CHAT_TARGET_NOT_FOUND:{len(races)}')
+          race=races[0]
+          sec=base.seconds_to_start(race.get('startTimeUtc'),captured)
+          print(json.dumps({'target':race,'secondsToStart':sec},ensure_ascii=False))
+          if sec is None or sec<=0: raise RuntimeError('CHAT_TARGET_ALREADY_STARTED')
+          entry_url=race.get('entryUrl')
+          if not entry_url: raise RuntimeError('CHAT_ENTRY_URL_MISSING')
+          date_digits=str(race['raceDate']).replace('-',''); race_no=int(race['raceNo'])
+          records={}
+          def add(bt,cname,page,rows):
+              source_hash=hashlib.sha256(page.encode('utf-8',errors='replace')).hexdigest()
+              for combo,lo,hi in rows:
+                  records[(race_id,bt,combo)]={
+                    'raceId':race_id,'raceDate':race['raceDate'],'venue':race['venue'],'raceNo':race_no,
+                    'betType':bt,'combination':combo,'oddsMin':lo,'oddsMax':hi,'capturedAtUtc':captured_iso,
+                    'startTimeUtc':race.get('startTimeUtc'),'secondsToStart':base.seconds_to_start(race.get('startTimeUtc'),captured),
+                    'sourceCname':cname,'sourceHash':source_hash
+                  }
+          entry_html=runtime.fetch_url(entry_url)
+          actions=[c for c,_ in base.action_links(entry_html) if m.same_race_link(c,date_digits,race_no)]
+          wins=[c for c in actions if c.startswith(m.TYPE_PREFIX['単勝'])]
+          if not wins: raise RuntimeError('CHAT_WIN_CNAME_NOT_FOUND')
+          win_cname=wins[0]
+          win_page=runtime.fetch_url(base.JRA_ODDS_URL,cname=win_cname,referer=entry_url)
+          horses,win_rows=m.parse_win(win_page); add('単勝',win_cname,win_page,win_rows)
+          type_cnames=m.find_type_cnames(win_page,date_digits,race_no)
+          for bt in ['馬連','ワイド','馬単','3連複','3連単']:
+              cname=type_cnames.get(bt)
+              if not cname: raise RuntimeError(f'CHAT_{bt}_CNAME_NOT_FOUND')
+              page=runtime.fetch_url(base.JRA_ODDS_URL,cname=cname,referer=base.JRA_ODDS_URL)
+              identity=runtime.parse_page_identity(page,cname)
+              if identity!=(race['raceDate'],race['venue'],race_no):
+                  raise RuntimeError(f'CHAT_{bt}_IDENTITY_MISMATCH:{identity}')
+              rows=runtime.parse_odds_rows(page,bt)
+              if not rows: raise RuntimeError(f'CHAT_{bt}_NO_ROWS')
+              add(bt,cname,page,rows)
+              time.sleep(max(base.REQUEST_PAUSE_SECONDS,0.35))
+          rows=list(records.values())
+          out=pathlib.Path('/tmp/race-tantei-chat/odds.json.gz')
+          with gzip.open(out,'wt',encoding='utf-8') as fh: json.dump(rows,fh,ensure_ascii=False,separators=(',',':'))
+          counts=defaultdict(int)
+          for x in rows: counts[x['betType']]+=1
+          print(json.dumps({'capturedAt':captured_iso,'officialOddsRows':len(rows),'rowsByBetType':dict(counts),'horses':horses,'oddsFile':str(out)},ensure_ascii=False))
+          PY
+      - name: Run canonical completed model without insert
+        shell: bash
+        run: |
+          python scripts/generate-ten-year-live-bets.py             --date 2026-09-21             --selection /tmp/race-tantei-chat/selection.json             --odds-file /tmp/race-tantei-chat/odds.json.gz             --out /tmp/race-tantei-chat/result.json
+          echo '=== CHAT_ONLY_RESULT ==='
+          cat /tmp/race-tantei-chat/result.json
+      - name: Confirm no public bet write by this run
+        shell: bash
+        run: |
+          echo "Generator invoked without --insert. No write path executed."
