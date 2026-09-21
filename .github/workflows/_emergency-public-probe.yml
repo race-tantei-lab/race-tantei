@@ -42,3 +42,13 @@ jobs:
             echo "CHECK $f"
             node --check "$f"
           done
+          echo '=== HEADLESS BROWSER ==='
+          chrome=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)
+          echo "CHROME=$chrome"
+          if [[ -n "$chrome" ]]; then
+            "$chrome" --headless --no-sandbox --disable-gpu --virtual-time-budget=7000 --enable-logging=stderr --v=1 --dump-dom "$base/" >/tmp/dom.html 2>/tmp/chrome.log || true
+            echo 'DOM_RACE_STATUS'
+            grep -oE 'レース情報を[^<]*|この会場のレース情報[^<]*|[0-9]+R' /tmp/dom.html | tail -40 || true
+            echo 'CONSOLE_ERRORS'
+            grep -Ei 'error|exception|failed|TypeError|ReferenceError' /tmp/chrome.log | tail -120 || true
+          fi
