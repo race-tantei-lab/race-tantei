@@ -45,11 +45,14 @@ def main() -> None:
 
     wrapper = read("src/win5-entry-v3.ts")
     for needle in (
-        'const DRIVER_VERSION = "win5-entry-v3-race-day-gate-20260908";',
+        'const DRIVER_VERSION = "win5-entry-v4-no-sale-substitute-20260921";',
+        'const NO_WIN5_DATES = new Set(["2026-09-22"]);',
         'import { shouldRunOnJraRaceDay } from "./v1/race-day-gate.js";',
         "const raceDay = await shouldRunOnJraRaceDay(scheduledAt);",
         "if (!raceDay.shouldRun)",
         "WIN5_NON_RACE_DAY_SKIP",
+        "WIN5_NO_SALE_DAY_SKIP",
+        "if (NO_WIN5_DATES.has(raceDay.raceDate))",
         "await win5V2.scheduled(controller, env);",
     ):
         require(wrapper, needle, "WIN5 race-day gate wrapper")
