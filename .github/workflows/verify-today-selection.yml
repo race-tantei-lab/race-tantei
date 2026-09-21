@@ -8,7 +8,7 @@ on:
       - ".github/workflows/verify-today-selection.yml"
   workflow_dispatch:
   schedule:
-    - cron: "5 0 * * 6,0" # Sat/Sun 09:05 JST
+    - cron: "5 0 * * *" # 09:05 JST daily; official JRA gate below decides whether racing is scheduled
 
 permissions:
   contents: read
@@ -18,7 +18,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Resolve official JRA race-day gate
+        id: race_day
+        shell: bash
+        run: |
+          set -euo pipefail
+          gate=$(npx tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{console.log(JSON.stringify(await shouldRunOnJraRaceDay(new Date())));})().catch(e=>{console.error(e);process.exit(1)})")
+          echo "$gate"
+          should_run=$(GATE="$gate" node -e 'const g=JSON.parse(process.env.GATE||"{}"); process.stdout.write(g.shouldRun ? "true" : "false")')
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
       - name: Verify today's frozen selection is public
+        if: steps.race_day.outputs.should_run == 'true'
         run: |
           set -euo pipefail
           base="https://race-tantei-phase0.race-tantei.workers.dev"
@@ -36,7 +52,9 @@ jobs:
               sys.exit(1)
           venues=collections.Counter(str(r.get('venue') or '') for r in rows if r.get('venue'))
           states=collections.Counter(str((r.get('publicState') or {}).get('code') or '') for r in rows)
-          structured=len(venues)>=1 and all(n==12 for n in venues.values())
+          active_rows=[r for r in rows if str((r.get('publicState') or {}).get('code') or '')!='cancelled']
+          active_venues=collections.Counter(str(r.get('venue') or '') for r in active_rows if r.get('venue'))
+          structured=len(active_venues)>=1 and all(n==12 for n in active_venues.values())
           selected_codes={'target','buy','hit','miss','overdue','missing'}
           selected=[r for r in rows if str((r.get('publicState') or {}).get('code') or '') in selected_codes]
           selected_by_venue=collections.Counter(str(r.get('venue') or '') for r in selected)
@@ -65,6 +83,7 @@ jobs:
               'raceCount':len(rows),
               'venues':dict(venues),
               'states':dict(states),
+              'activeVenues':dict(active_venues),
               'selectedByVenue':dict(selected_by_venue),
               'skipByVenue':dict(skip_by_venue),
               'selectedRaceIds':[r.get('raceId') for r in selected],
@@ -78,8 +97,9 @@ jobs:
               and states.get('pending',0)==0
               and not future_deadline_failures
               and not future_t15_unfinalized
-              and all(selected_by_venue.get(v,0)==5 for v in venues)
-              and all(skip_by_venue.get(v,0)==7 for v in venues)
+              and all(selected_by_venue.get(v,0)==5 for v in active_venues)
+              and all(skip_by_venue.get(v,0)==7 for v in active_venues)
+              and not any(v not in active_venues for v in selected_by_venue)
           )
           if not good:
               print('TODAY_SELECTION_PUBLIC_PROJECTION_INVALID')
