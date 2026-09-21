@@ -1,0 +1,21 @@
+name: iOS URL production verify
+on:
+  push:
+    branches:
+      - diag/ios-url-verify-20260921
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          for p in '/' '/races/' '/api/public/day?date=2026-09-21'; do
+            echo "=== $p ==="
+            curl -sS --max-redirs 0 -D /tmp/h -o /tmp/b -w 'http=%{http_code} redirect=%{redirect_url} effective=%{url_effective} bytes=%{size_download} total=%{time_total}\n' "$base$p" || true
+            grep -iE '^(location|content-type|x-race-ui-version|x-race-home-path|server|cf-ray):' /tmp/h || true
+          done
+          echo '=== page URL-like tokens ==='
+          curl -sS "$base/" -o /tmp/home
+          grep -Eo 'data:text/html[^"<> ]*|https?://[^"<> ]+' /tmp/home | head -50 || true
