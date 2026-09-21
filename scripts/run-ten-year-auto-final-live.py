@@ -180,11 +180,11 @@ def main():
         return locked|started
     base.locked_races=locked_races_without_started_blockers
 
-    # Cloudflare Worker remains the primary every-minute path. GitHub Actions is
-    # the independent backup. Finalization is never allowed before 15 minutes,
-    # and remains eligible on every run until the recorded start time.
-    base.MIN_LOCK_SECONDS=0
-    base.MAX_LOCK_SECONDS=15*60
+    # Cloudflare Worker remains the primary every-minute path. The independent
+    # GitHub recovery path may finalize only while more than T-15 remains, and
+    # only once the race is inside T-45. Never create a new final at or after T-15.
+    base.MIN_LOCK_SECONDS=15*60
+    base.MAX_LOCK_SECONDS=45*60
     base.main()
 
 
