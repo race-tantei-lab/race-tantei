@@ -31,7 +31,7 @@ jobs:
           import datetime as dt,gzip,hashlib,importlib.util,json,pathlib,sys
           p=pathlib.Path('scripts/collect-jra-official-odds.py')
           spec=importlib.util.spec_from_file_location('o',p); m=importlib.util.module_from_spec(spec);sys.modules['o']=m;spec.loader.exec_module(m)
-          rid='2026-09-21-nakayama-02'; suffix='0206202604070120260921/B4'
+          rid='2026-09-21-nakayama-02'; suffix='0106202604070220260921/69'
           race=(m.d1_query("SELECT race_id AS raceId,race_date AS raceDate,venue,race_no AS raceNo,start_time_utc AS startTimeUtc FROM rt_races WHERE race_id=? LIMIT 1",[rid]) or [None])[0]
           if not race: raise SystemExit('RACE_MISSING')
           now=dt.datetime.now(dt.timezone.utc)
