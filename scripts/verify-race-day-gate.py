@@ -116,6 +116,8 @@ def main() -> None:
     require('shouldRun: false, reason: "not_listed_in_official_month_calendar"' in gate, "RACE_DAY_GATE_MONTH_STOP_RESULT_MISSING")
     require('reason: "probe_failed_fail_open"' in gate, "RACE_DAY_GATE_NETWORK_FAIL_OPEN_MISSING")
     require('reason: "unparsed_calendar_fail_open"' in gate, "RACE_DAY_GATE_PARSER_FAIL_OPEN_MISSING")
+    require('"2026-09-21"' in gate, "HOLIDAY_MONDAY_20260921_GATE_MISSING")
+    require('"2026-09-22"' in gate, "SUBSTITUTE_TUESDAY_20260922_GATE_MISSING")
 
     assert_gate_before_d1(primary_main, "LIVE")
     assert_public_gate(public_main)

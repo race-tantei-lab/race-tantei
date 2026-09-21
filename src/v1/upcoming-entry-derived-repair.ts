@@ -165,6 +165,7 @@ function targetRange(now: Date): { startDate: string; endDate: string } {
   if (weekday === 5) return { startDate: jstDate(now, 1), endDate: jstDate(now, 3) }; // Fri -> Sat/Sun/Mon
   if (weekday === 6) return { startDate: jstDate(now, 0), endDate: jstDate(now, 2) }; // Sat -> Sat/Sun/Mon
   if (weekday === 0) return { startDate: jstDate(now, 0), endDate: jstDate(now, 1) }; // Sun -> Sun/Mon
+  if (weekday === 1) return { startDate: jstDate(now, 0), endDate: jstDate(now, 1) }; // Mon -> holiday Monday + possible substitute Tuesday
   return { startDate: jstDate(now, 0), endDate: jstDate(now, 0) };
 }
 

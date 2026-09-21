@@ -34,7 +34,7 @@ type PerformancePayload = {
   history?: DayPerformance[];
   recent30?: unknown;
 };
-type SelectionStateRow = { value: string | null };
+type SelectionStateRow = { value: string | null; activeCount: number | null };
 
 type LiveBetRow = TodayPerformanceBetRow;
 
@@ -57,7 +57,12 @@ function parseSelectionCount(day: SnapshotDay | undefined): number {
   if (!day?.selection) return 0;
   try {
     const parsed = JSON.parse(day.selection) as { selected?: Array<{ raceId?: unknown }> };
-    return new Set((parsed.selected ?? []).map((row) => String(row?.raceId ?? "")).filter(Boolean)).size;
+    const selected = new Set((parsed.selected ?? []).map((row) => String(row?.raceId ?? "")).filter(Boolean));
+    const cancelled = new Set(["cancelled", "canceled", "postponed"]);
+    return (day.races ?? []).filter((race) =>
+      selected.has(String(race.raceId ?? ""))
+      && !cancelled.has(String(race.status ?? "scheduled").toLowerCase())
+    ).length;
   } catch {
     return 0;
   }
@@ -167,8 +172,18 @@ async function liveDayPerformance(db: D1Database, date: string): Promise<DayPerf
       WHERE r.race_date=? AND b.source_prediction_id=-2
       ORDER BY b.course,b.race_id,b.id
     `).bind(date).all<LiveBetRow>(),
-    db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
-      .bind(`final_daily_selection:${date}`).first<SelectionStateRow>(),
+    db.prepare(`
+      SELECT s.state_value AS value,
+             (
+               SELECT COUNT(*)
+               FROM json_each(json_extract(s.state_value,'$.selected')) j
+               JOIN rt_races r ON r.race_id=json_extract(j.value,'$.raceId')
+               WHERE lower(COALESCE(r.status,'scheduled')) NOT IN ('cancelled','canceled','postponed')
+             ) AS activeCount
+      FROM rt_system_state s
+      WHERE s.state_key=?
+      LIMIT 1
+    `).bind(`final_daily_selection:${date}`).first<SelectionStateRow>(),
   ]);
 
   const finalizedRows = completeFinalRows(betResult.results ?? []);
@@ -199,7 +214,7 @@ async function liveDayPerformance(db: D1Database, date: string): Promise<DayPerf
     ...base,
     date,
     courses,
-    targetRaces: parseSelectionCountFromValue(selectionRow?.value),
+    targetRaces: Number(selectionRow?.activeCount ?? parseSelectionCountFromValue(selectionRow?.value)),
   };
 }
 
