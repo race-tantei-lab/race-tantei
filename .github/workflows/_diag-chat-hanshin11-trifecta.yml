@@ -1,0 +1,90 @@
+name: Chat-only Hanshin 11 trifecta
+on:
+  push:
+    branches:
+      - diag/chat-hanshin11-trifecta-20260921
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      JRA_ODDS_REQUEST_PAUSE_SECONDS: "0.35"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0" numpy
+      - name: Compute trifecta only, no writes
+        shell: bash
+        run: |
+          python - <<'PY'
+          import gzip, hashlib, importlib.util, itertools, json, math, pathlib, sys, time
+          from datetime import datetime, timezone
+          import lightgbm as lgb
+          import numpy as np
+          root=pathlib.Path('.').resolve()
+          def load(path,name):
+              spec=importlib.util.spec_from_file_location(name,path)
+              m=importlib.util.module_from_spec(spec);sys.modules[name]=m;spec.loader.exec_module(m);return m
+          fast=load(root/'scripts'/'collect-current-jra-official-odds-fast.py','chat_fast')
+          core=load(root/'scripts'/'ten-year-production-core.py','chat_core')
+          learning=load(root/'scripts'/'live-recency-learning.py','chat_learning')
+          runtime=fast.runtime;base=fast.base
+          rid='2026-09-21-hanshin-11'; target_date='2026-09-21'
+          captured=datetime.now(timezone.utc); captured_iso=captured.isoformat()
+          race=[r for r in base.upcoming_races() if str(r.get('raceId'))==rid][0]
+          entry_url=race['entryUrl']; date_digits=target_date.replace('-',''); race_no=11
+          entry=runtime.fetch_url(entry_url)
+          actions=[c for c,_ in base.action_links(entry) if fast.same_race_link(c,date_digits,race_no)]
+          win_cname=[c for c in actions if c.startswith(fast.TYPE_PREFIX['単勝'])][0]
+          win_page=runtime.fetch_url(base.JRA_ODDS_URL,cname=win_cname,referer=entry_url)
+          type_cnames=fast.find_type_cnames(win_page,date_digits,race_no)
+          cname=type_cnames['3連単']
+          page=runtime.fetch_url(base.JRA_ODDS_URL,cname=cname,referer=base.JRA_ODDS_URL)
+          rows=runtime.parse_odds_rows(page,'3連単')
+          odds={combo:(lo+hi)/2 for combo,lo,hi in rows}
+          print(json.dumps({'capturedAt':captured_iso,'trifectaOddsRows':len(rows)},ensure_ascii=False))
+          
+          cfg=core.load_config()
+          state=core.load_feature_state()
+          delta=core.delta_bundles(base,state['throughDate'],target_date);core.advance_feature_state(state,delta)
+          same_day=core.bundles_from_d1(base,"race_date=? AND start_time_utc IS NOT NULL AND datetime(start_time_utc)<datetime(?) AND EXISTS (SELECT 1 FROM rt_results rr WHERE rr.race_id=rt_races.race_id AND rr.finish_position IS NOT NULL)",[target_date,captured_iso])
+          if same_day: core.update_feature_state_for_date(state,same_day)
+          bundle={str(b['race']['raceId']):b for b in core.target_bundles(base,target_date)}[rid]
+          runners=[r for r in bundle['runners'] if (r.get('runnerStatus') or 'active')=='active'];runners.sort(key=lambda r:int(r.get('horseNo') or 0))
+          features=list(cfg['runnerProbabilityModel']['features'])
+          booster=lgb.Booster(model_file=str(core.MODEL_PATH))
+          x=np.asarray([[float(core.ml_feature_row(state,bundle['race'],r,len(runners))[f]) for f in features] for r in runners],dtype=np.float64)
+          raw=np.asarray(booster.predict(x),dtype=np.float64); base_w=raw/raw.sum()
+          runner_rows,bet_rows=learning.load_recent_learning_rows(base,target_date,captured_iso)
+          factors,detail,audit=learning.build_runner_learning(runner_rows,bundle['race'],runners,captured_iso,target_date)
+          w=np.asarray([base_w[i]*float(factors[i]) for i in range(len(runners))],dtype=np.float64);w=w/w.sum()
+          bet_learning=learning.build_bet_learning(bet_rows,captured_iso,target_date)
+          horse_nos=[int(r['horseNo']) for r in runners]
+          candidates=[]
+          for pos in itertools.permutations(range(len(runners)),3):
+              combo='-'.join(str(horse_nos[i]) for i in pos)
+              odd=odds.get(combo)
+              if odd is None: continue
+              p=float(core.combination_probability('3連単',pos,w))
+              rf=float(learning.bet_factor(bet_learning,'3連単',str(bundle['race'].get('venue') or ''),odd))
+              vp=p*odd*rf
+              candidates.append({'combination':combo,'probability':p,'officialOdds':odd,'recencyFactor':rf,'valueProduct':vp})
+          candidates.sort(key=lambda x:(-x['valueProduct'],x['officialOdds'],x['combination']))
+          retained=candidates[:5]
+          for x in retained:
+              x['score']=math.log(x['probability'])+0.4*math.log(x['officialOdds'])+math.log(x['recencyFactor'])
+          retained.sort(key=lambda x:(-x['score'],-x['probability'],x['combination']))
+          top_by_score=retained[0]
+          print(json.dumps({
+              'runnerProbabilities':[{'horseNo':horse_nos[i],'probability':float(w[i])} for i in range(len(w))],
+              'sameDayFinishedRaces':audit.get('sameDayFinishedRaces'),
+              'top5ByValueThenRescored':retained,
+              'selectedTrifecta':top_by_score
+          },ensure_ascii=False,indent=2))
+          print("NO_WRITES_PERFORMED")
+          PY
