@@ -2,7 +2,8 @@ import win5V2 from "./win5-entry-v2.js";
 import { shouldRunOnJraRaceDay } from "./v1/race-day-gate.js";
 import type { Env } from "./v1/types.js";
 
-const DRIVER_VERSION = "win5-entry-v3-race-day-gate-20260908";
+const DRIVER_VERSION = "win5-entry-v4-no-sale-substitute-20260921";
+const NO_WIN5_DATES = new Set(["2026-09-22"]);
 
 export default {
   async fetch(request: Request): Promise<Response> {
@@ -23,6 +24,10 @@ export default {
     const raceDay = await shouldRunOnJraRaceDay(scheduledAt);
     if (!raceDay.shouldRun) {
       console.log("WIN5_NON_RACE_DAY_SKIP", JSON.stringify({ raceDate: raceDay.raceDate, reason: raceDay.reason }));
+      return;
+    }
+    if (NO_WIN5_DATES.has(raceDay.raceDate)) {
+      console.log("WIN5_NO_SALE_DAY_SKIP", JSON.stringify({ raceDate: raceDay.raceDate }));
       return;
     }
     await win5V2.scheduled(controller, env);
