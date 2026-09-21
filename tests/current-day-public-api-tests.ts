@@ -6,6 +6,7 @@ const race = {
   raceDate: "2026-08-15",
   startTimeJst: "10:00",
   startTimeUtc: "2026-08-15T01:00:00.000Z",
+  status: "scheduled",
 };
 const selected = new Set([race.raceId]);
 const unselected = new Set(["2026-08-15-niigata-01"]);
@@ -30,6 +31,7 @@ assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-1
 assert.equal(projectCurrentPublicState(race, selected, [], Date.parse("2026-08-15T01:00:00Z")).code, "missing");
 assert.equal(projectCurrentPublicState(race, unselected, [], Date.parse("2026-08-15T00:30:00Z")).code, "skip");
 assert.equal(projectCurrentPublicState(race, null, [], Date.parse("2026-08-15T00:30:00Z")).code, "pending");
+assert.equal(projectCurrentPublicState({ ...race, status: "cancelled" }, selected, [], Date.parse("2026-08-15T01:10:00Z")).code, "cancelled");
 
 assert.equal(projectCurrentPublicState(race, selected, rows("pending"), Date.parse("2026-08-15T00:50:00Z")).code, "buy");
 assert.equal(projectCurrentPublicState(race, selected, rows("settled", [5000, 0, 0, 0, 0, 0]), Date.parse("2026-08-15T01:10:00Z")).code, "hit");

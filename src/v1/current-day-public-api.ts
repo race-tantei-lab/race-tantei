@@ -26,7 +26,7 @@ type FrozenSelectionPayload = {
 };
 
 export type CurrentPublicState = {
-  code: "buy" | "hit" | "miss" | "refund" | "target" | "skip" | "overdue" | "missing" | "pending";
+  code: "buy" | "hit" | "miss" | "refund" | "target" | "skip" | "overdue" | "missing" | "pending" | "cancelled";
   label: string;
   deadline: string | null;
 };
@@ -112,11 +112,16 @@ function finalDeadlineText(startTimeJst: string | null): string {
 }
 
 export function projectCurrentPublicState(
-  race: Pick<CurrentRaceRow, "raceId" | "raceDate" | "startTimeJst" | "startTimeUtc">,
+  race: Pick<CurrentRaceRow, "raceId" | "raceDate" | "startTimeJst" | "startTimeUtc" | "status">,
   frozenSelection: Set<string> | null,
   betRows: CurrentBetRow[],
   nowMs: number,
 ): CurrentPublicState {
+  const normalizedStatus = String(race.status || "").toLowerCase();
+  if (normalizedStatus === "cancelled" || normalizedStatus === "canceled" || normalizedStatus === "postponed") {
+    return { code: "cancelled", label: "開催中止", deadline: null };
+  }
+
   const locked = finalState(betRows);
   if (locked) return locked;
 

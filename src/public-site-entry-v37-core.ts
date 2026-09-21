@@ -124,7 +124,15 @@ async function targetRaceCount(db: D1Database, date: string): Promise<number> {
       const raceId = String(selected?.raceId ?? "");
       if (raceId) raceIds.add(raceId);
     }
-    return raceIds.size;
+    if (!raceIds.size) return 0;
+    const ids = [...raceIds];
+    const placeholders = ids.map(() => "?").join(",");
+    const active = await db.prepare(`
+      SELECT COUNT(*) AS n FROM rt_races
+      WHERE race_id IN (${placeholders})
+        AND lower(COALESCE(status,'scheduled')) NOT IN ('cancelled','canceled','postponed')
+    `).bind(...ids).first<{ n: number }>();
+    return Number(active?.n ?? 0);
   } catch (error) {
     console.error("TARGET_RACE_COUNT_PARSE_FAILED", date, error);
     return 0;
