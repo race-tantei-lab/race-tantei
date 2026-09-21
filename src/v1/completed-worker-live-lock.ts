@@ -584,6 +584,7 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
   const futureResult = await env.DB.prepare(`
     SELECT race_id AS raceId FROM rt_races
     WHERE race_date=? AND start_time_utc>?
+      AND lower(COALESCE(status,'scheduled')) NOT IN ('cancelled','canceled','postponed')
   `).bind(date, iso(now)).all<{ raceId: string }>();
   const futureSet = new Set((futureResult.results ?? []).map((row) => String(row.raceId)));
   const ids = await orderLiveRaceIdsByPreviewPriority(env.DB, date, selectedIds.filter((raceId) => futureSet.has(raceId)), now);
