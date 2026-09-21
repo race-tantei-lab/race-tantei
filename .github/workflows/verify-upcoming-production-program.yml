@@ -3,7 +3,7 @@ name: Verify upcoming production program
 on:
   workflow_dispatch:
   schedule:
-    - cron: "35 12 * * 4,5" # 21:35 JST Thu/Fri
+    - cron: "35 12 * * *" # 21:35 JST daily; tomorrow gate decides whether a JRA race day needs verification
 
 permissions:
   contents: read
@@ -48,12 +48,16 @@ jobs:
             cat "/tmp/upcoming-$offset.json"
           done
 
-      - name: Verify tomorrow race-day gate without D1
+      - name: Resolve tomorrow race-day gate without D1
+        id: tomorrow_gate
         shell: bash
         run: |
           set -euo pipefail
           tomorrow=$(TZ=Asia/Tokyo date -d '+1 day' +%F)
-          TOMORROW="$tomorrow" npx --yes tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{const d=new Date(process.env.TOMORROW+'T03:00:00Z'); const r=await shouldRunOnJraRaceDay(d); console.log('TOMORROW_RACE_DAY_GATE',JSON.stringify(r)); if(!r.shouldRun) process.exit(2);})().catch(e=>{console.error(e);process.exit(1)})"
+          gate=$(TOMORROW="$tomorrow" npx --yes tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{const d=new Date(process.env.TOMORROW+'T03:00:00Z'); const r=await shouldRunOnJraRaceDay(d); console.log(JSON.stringify(r));})().catch(e=>{console.error(e);process.exit(1)})" | tail -n 1)
+          echo "TOMORROW_RACE_DAY_GATE $gate"
+          should_run=$(GATE="$gate" node -e 'const g=JSON.parse(process.env.GATE||"{}"); process.stdout.write(g.shouldRun ? "true" : "false")')
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
 
       - name: Verify model and selection runtime state
         shell: bash
@@ -116,9 +120,10 @@ jobs:
           }
           check_schedule 'race-tantei-phase0' '*/15 * * * *'
           check_schedule 'race-tantei-live-deadline' '* * * * *'
-          check_schedule 'race-tantei-live-deadline-backup' '2-59/5 * * * *'
+          check_schedule 'race-tantei-live-deadline-backup' '1-59/2 * * * *'
 
       - name: Dry-run tomorrow canonical race selection
+        if: steps.tomorrow_gate.outputs.should_run == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -133,7 +138,7 @@ jobs:
               raise SystemExit('DRY_SELECTION_MODEL_BAD')
           if p.get('resultDataUsedForTargetDay') is not False:
               raise SystemExit('DRY_SELECTION_TARGET_RESULT_LEAK')
-          if len(by)!=2 or any(v!=5 for v in by.values()) or len(selected)!=10:
+          if len(by)<1 or any(v!=5 for v in by.values()) or len(selected)!=5*len(by):
               raise SystemExit('DRY_SELECTION_COUNT_BAD:'+json.dumps(dict(by),ensure_ascii=False))
           print('TOMORROW_SELECTION_DRY_RUN_OK', {'selected':len(selected),'venues':dict(by),'raceIds':[r.get('raceId') for r in selected]})
           PY
@@ -149,15 +154,11 @@ jobs:
              ORDER BY state_key" > /tmp/maintenance-state.json
           cat /tmp/maintenance-state.json
 
-      - name: Require tomorrow card to be complete on Thu/Fri preparation runs
+      - name: Require tomorrow race-day card to be complete
+        if: steps.tomorrow_gate.outputs.should_run == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          weekday=$(TZ=Asia/Tokyo date +%u)
-          if [ "$weekday" != "4" ] && [ "$weekday" != "5" ]; then
-            echo "NOT_PREPARATION_DAY weekday=$weekday"
-            exit 0
-          fi
           python3 - <<'PY'
           import json
           raw=json.load(open('/tmp/upcoming-1.json'))
@@ -174,8 +175,11 @@ jobs:
                    or int(r.get('distanceM') or 0)<=0]
           print('TOMORROW_PROGRAM', {'venues':venues,'races':len(rows),'ready':len(rows)-len(missing)})
           print('TOMORROW_MISSING', missing)
-          # 2026-09-19 has two JRA venues (Nakayama/Hanshin), 12 races each.
-          if len(venues)!=2 or len(rows)!=24 or missing:
-              raise SystemExit(f'UPCOMING_PROGRAM_INCOMPLETE venues={len(venues)} races={len(rows)} missing={len(missing)}')
-          print('UPCOMING_PROGRAM_READY races=24 ready=24 venues=2 metadata=complete')
+          counts={}
+          for r in rows:
+              venue=str(r.get('venue') or '')
+              if venue: counts[venue]=counts.get(venue,0)+1
+          if not venues or any(counts.get(v)!=12 for v in venues) or len(rows)!=12*len(venues) or missing:
+              raise SystemExit(f'UPCOMING_PROGRAM_INCOMPLETE venues={len(venues)} races={len(rows)} counts={counts} missing={len(missing)}')
+          print(f'UPCOMING_PROGRAM_READY races={len(rows)} ready={len(rows)} venues={len(venues)} metadata=complete')
           PY
