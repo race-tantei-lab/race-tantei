@@ -24,3 +24,21 @@ jobs:
             head -c 5000 /tmp/b || true
             echo
           done
+          curl -L --connect-timeout 5 --max-time 30 -sS "$base/" -o /tmp/home.html
+          python3 - <<'PY'
+          import re, pathlib
+          html=pathlib.Path('/tmp/home.html').read_text(encoding='utf-8')
+          print('=== LOADING/ERROR TEXT MATCHES ===')
+          for pat in ['読み込','取得でき','レース情報','読み込み','api/public/day','fetch(']:
+              print(pat, [m.start() for m in re.finditer(re.escape(pat), html)][:30])
+          scripts=re.findall(r'<script[^>]*>([\s\S]*?)</script>', html, flags=re.I)
+          print('SCRIPT_COUNT',len(scripts))
+          for i,s in enumerate(scripts):
+              path=pathlib.Path(f'/tmp/script-{i}.js')
+              path.write_text(s,encoding='utf-8')
+              print('SCRIPT',i,'bytes',len(s))
+          PY
+          for f in /tmp/script-*.js; do
+            echo "CHECK $f"
+            node --check "$f"
+          done
