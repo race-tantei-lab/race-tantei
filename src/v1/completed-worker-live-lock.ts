@@ -179,7 +179,7 @@ function validateSelection(payload: SelectionPayload): string[] {
   if (payload.resultDataUsedForTargetDay !== false) throw new Error("WORKER_SELECTION_TARGET_RESULT_LEAK");
   if (!Array.isArray(payload.selected) || !payload.selected.length) throw new Error("WORKER_SELECTION_EMPTY");
   const venueCounts = payload.venueCounts && typeof payload.venueCounts === "object" ? Object.entries(payload.venueCounts) : [];
-  if (venueCounts.length < 2 || venueCounts.some(([venue, count]) => !venue || Number(count) !== 12)) {
+  if (venueCounts.length < 1 || venueCounts.some(([venue, count]) => !venue || Number(count) !== 12)) {
     throw new Error(`WORKER_SELECTION_PROGRAM_INVALID:${JSON.stringify(payload.venueCounts ?? null)}`);
   }
   const counts = new Map<string, number>();

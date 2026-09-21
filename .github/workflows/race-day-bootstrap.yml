@@ -60,7 +60,7 @@ jobs:
           print('PROGRAM_ROWS',rows)
           if not rows:
             print('EMPTY')
-          elif len(rows)>=2 and all(int(r.get('races') or 0)==12 and int(r.get('timed') or 0)==12 for r in rows):
+          elif len(rows)>=1 and all(int(r.get('races') or 0)==12 and int(r.get('timed') or 0)==12 for r in rows):
             print('READY')
           else:
             print('INCOMPLETE')
@@ -88,7 +88,7 @@ jobs:
             if isinstance(block,dict): rows += block.get('results') or []
           if not rows:
             print('NO_RACE_DAY')
-          elif len(rows)<2 or any(int(r.get('races') or 0)!=12 or int(r.get('timed') or 0)!=12 for r in rows):
+          elif len(rows)<1 or any(int(r.get('races') or 0)!=12 or int(r.get('timed') or 0)!=12 for r in rows):
             raise SystemExit('RACE_DAY_PROGRAM_INCOMPLETE:'+json.dumps(rows,ensure_ascii=False))
           else:
             print('RACE_DAY')
@@ -147,7 +147,7 @@ jobs:
           for block in raw if isinstance(raw,list) else [raw]:
             if isinstance(block,dict): rows += block.get('results') or []
           print('ENTRY_READINESS',rows)
-          sys.exit(0 if len(rows)>=2 and all(int(r.get('races') or 0)==12 and int(r.get('ready') or 0)==12 for r in rows) else 1)
+          sys.exit(0 if len(rows)>=1 and all(int(r.get('races') or 0)==12 and int(r.get('ready') or 0)==12 for r in rows) else 1)
           PY
             then ready=1; break; fi
             echo "ENTRY_WAIT_ATTEMPT=$attempt"
@@ -160,7 +160,7 @@ jobs:
           for block in raw if isinstance(raw,list) else [raw]:
             if isinstance(block,dict): rows += block.get('results') or []
           print('ENTRY_READINESS_FINAL',rows)
-          if len(rows)<2 or any(int(r.get('races') or 0)!=12 or int(r.get('ready') or 0)!=12 for r in rows):
+          if len(rows)<1 or any(int(r.get('races') or 0)!=12 or int(r.get('ready') or 0)!=12 for r in rows):
             raise SystemExit('RACE_DAY_ENTRIES_INCOMPLETE:'+json.dumps(rows,ensure_ascii=False))
           PY
 
@@ -202,7 +202,7 @@ jobs:
           by=collections.Counter(str(x.get('venue') or '') for x in selected)
           program={str(k):int(v) for k,v in (p.get('venueCounts') or {}).items()}
           if p.get('sourceModel')!='ten-year-completed-model' or p.get('resultDataUsedForTargetDay') is not False: raise SystemExit('SELECTION_SOURCE_INVALID')
-          if len(program)<2 or any(v!=12 for v in program.values()): raise SystemExit('SELECTION_PROGRAM_INVALID:'+json.dumps(program,ensure_ascii=False))
+          if len(program)<1 or any(v!=12 for v in program.values()): raise SystemExit('SELECTION_PROGRAM_INVALID:'+json.dumps(program,ensure_ascii=False))
           expected=5*len(program)
           if len(selected)!=expected or len(set(ids))!=expected or '' in ids or set(by)!=set(program) or any(v!=5 for v in by.values()): raise SystemExit('SELECTION_COUNT_INVALID:'+json.dumps({'program':program,'venues':dict(by),'ids':ids},ensure_ascii=False))
           print('SELECTION_OK',len(selected),dict(by))

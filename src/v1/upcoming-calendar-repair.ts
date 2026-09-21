@@ -43,7 +43,7 @@ function targetDates(now: Date): string[] {
   if (weekday === 5) return [jstDate(now, 1), jstDate(now, 2), jstDate(now, 3)]; // Fri -> Sat/Sun/Mon
   if (weekday === 6) return [jstDate(now, 0), jstDate(now, 1), jstDate(now, 2)]; // Sat -> Sat/Sun/Mon
   if (weekday === 0) return [jstDate(now, 0), jstDate(now, 1)]; // Sun -> Sun/Mon
-  if (weekday === 1) return [jstDate(now, 0)]; // Mon -> holiday Monday when applicable
+  if (weekday === 1) return [jstDate(now, 0), jstDate(now, 1)]; // Mon -> current holiday + possible substitute Tuesday; official gate filters normal Tuesdays
   return [];
 }
 

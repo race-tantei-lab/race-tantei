@@ -317,12 +317,12 @@ export async function freezeCompletedWorkerSelectionIfNeeded(env: Env, now = new
   if (jstHour(now) < 8) return { status: "before_selection_time", date };
   const structure = await env.DB.prepare(`SELECT venue,COUNT(*) AS races,SUM(CASE WHEN start_time_utc IS NOT NULL THEN 1 ELSE 0 END) AS timed,SUM(CASE WHEN EXISTS(SELECT 1 FROM rt_runners u WHERE u.race_id=r.race_id AND COALESCE(u.runner_status,'active')='active') THEN 1 ELSE 0 END) AS withRunners FROM rt_races r WHERE race_date=? GROUP BY venue ORDER BY venue`).bind(date).all<{ venue: string; races: number; timed: number; withRunners: number }>();
   const program = structure.results ?? [];
-  if (program.length < 2 || program.some((row) => Number(row.races) !== 12 || Number(row.timed) !== 12 || Number(row.withRunners) !== 12)) return { status: "waiting_complete_program", date, program };
+  if (program.length < 1 || program.some((row) => Number(row.races) !== 12 || Number(row.timed) !== 12 || Number(row.withRunners) !== 12)) return { status: "waiting_complete_program", date, program };
   const state = await loadCanonicalSelectionState(env.DB), baseThroughDate = state.throughDate;
   if (state.throughDate < date) advanceCompletedSelectionState(state, await loadBundles(env.DB, "race_date>? AND race_date<?", [state.throughDate, date]));
   const targets = await loadBundles(env.DB, "race_date=?", [date]), venueCounts = new Map<string, number>();
   for (const bundle of targets) venueCounts.set(bundle.race.venue, (venueCounts.get(bundle.race.venue) ?? 0) + 1);
-  if (venueCounts.size < 2 || [...venueCounts.values()].some((count) => count !== 12)) throw new Error(`TARGET_RACE_STRUCTURE_INCOMPLETE:${JSON.stringify(Object.fromEntries(venueCounts))}`);
+  if (venueCounts.size < 1 || [...venueCounts.values()].some((count) => count !== 12)) throw new Error(`TARGET_RACE_STRUCTURE_INCOMPLETE:${JSON.stringify(Object.fromEntries(venueCounts))}`);
   const selected = selectCompletedTargetRaces(state, targets, date), selectedCounts = new Map<string, number>();
   for (const row of selected) selectedCounts.set(row.venue, (selectedCounts.get(row.venue) ?? 0) + 1);
   if (selectedCounts.size !== venueCounts.size || [...selectedCounts.values()].some((count) => count !== 5)) throw new Error(`CANONICAL_SELECTION_NOT_FIVE_PER_VENUE:${JSON.stringify(Object.fromEntries(selectedCounts))}`);
@@ -333,7 +333,7 @@ export async function freezeCompletedWorkerSelectionIfNeeded(env: Env, now = new
   const finalPayload = JSON.parse(authoritative.value) as { sourceModel?: string; resultDataUsedForTargetDay?: boolean; selected?: CompletedSelectedRace[] };
   if (finalPayload.sourceModel !== COMPLETED_MODEL_VERSION || finalPayload.resultDataUsedForTargetDay !== false || !Array.isArray(finalPayload.selected)) throw new Error("WORKER_SELECTION_AUTHORITATIVE_INVALID");
   const finalCounts = new Map<string, number>(); for (const row of finalPayload.selected) finalCounts.set(String(row.venue), (finalCounts.get(String(row.venue)) ?? 0) + 1);
-  if (finalCounts.size < 2 || [...finalCounts.values()].some((count) => count !== 5)) throw new Error(`WORKER_SELECTION_AUTHORITATIVE_COUNTS_INVALID:${JSON.stringify(Object.fromEntries(finalCounts))}`);
+  if (finalCounts.size < 1 || [...finalCounts.values()].some((count) => count !== 5)) throw new Error(`WORKER_SELECTION_AUTHORITATIVE_COUNTS_INVALID:${JSON.stringify(Object.fromEntries(finalCounts))}`);
   const audit = { status: "frozen", date, sourceModel: COMPLETED_MODEL_VERSION, selectedRaceCount: finalPayload.selected.length, selectedVenueCounts: Object.fromEntries(finalCounts), selectedRaceIds: finalPayload.selected.map((row) => row.raceId), resultDataUsedForTargetDay: false };
   await env.DB.prepare("INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP").bind(`${AUDIT_PREFIX}${date}`, JSON.stringify(audit)).run();
   return { ...audit, payload: finalPayload };
