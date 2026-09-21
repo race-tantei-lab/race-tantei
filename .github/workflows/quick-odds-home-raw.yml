@@ -1,0 +1,30 @@
+name: Quick Odds Home Raw Search
+on:
+  push:
+    branches: [diag/sep21-current-miss]
+    paths: [".github/workflows/quick-odds-home-raw.yml"]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Search raw odds home
+        env:
+          CLOUDFLARE_API_TOKEN: x
+          CLOUDFLARE_ACCOUNT_ID: x
+          CLOUDFLARE_D1_DATABASE_ID: x
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import importlib.util,pathlib,sys,re,html as H
+          p=pathlib.Path('scripts/collect-jra-official-odds.py')
+          spec=importlib.util.spec_from_file_location('m',p);m=importlib.util.module_from_spec(spec);sys.modules['m']=m;spec.loader.exec_module(m)
+          x=m.fetch_url(m.JRA_ODDS_URL,cname=m.JRA_ODDS_HOME_CNAME)
+          for needle in ['中山7日','20260921','10062026040720260921','pw15orl1006']:
+            print('NEEDLE',needle,'COUNT',x.count(needle))
+            for z in re.finditer(re.escape(needle),x):
+              print('CTX',H.unescape(x[max(0,z.start()-500):z.end()+500]).replace('\n',' ')[:1300])
+          PY
