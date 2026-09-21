@@ -67,7 +67,7 @@ function validateSelection(date: string, state: SelectionState): SelectionRow[] 
     if (!venue) throw new Error(`DAILY_SELECTION_VENUE_MISSING:${row.raceId}`);
     venues.set(venue, (venues.get(venue) ?? 0) + 1);
   }
-  if (venues.size < 2 || [...venues.values()].some((count) => count !== 5)) {
+  if (venues.size < 1 || [...venues.values()].some((count) => count !== 5)) {
     throw new Error(`DAILY_SELECTION_NOT_FIVE_PER_VENUE:${date}:${JSON.stringify(Object.fromEntries(venues))}`);
   }
   return selected.map((row) => ({ ...row, raceId: String(row.raceId) }));
