@@ -108,7 +108,7 @@ async function loadSelection(db: D1Database, date: string): Promise<string[]> {
 
 async function selectedRaceSchedule(db: D1Database, date: string, ids: string[]): Promise<RaceStartRow[]> {
   const wanted = new Set(ids);
-  const rows = await db.prepare("SELECT race_id AS raceId,start_time_utc AS startTimeUtc FROM rt_races WHERE race_date=?")
+  const rows = await db.prepare("SELECT race_id AS raceId,start_time_utc AS startTimeUtc FROM rt_races WHERE race_date=? AND lower(COALESCE(status,'scheduled')) NOT IN ('cancelled','canceled','postponed')")
     .bind(date)
     .all<RaceStartRow>();
   return (rows.results ?? [])
