@@ -1,0 +1,46 @@
+name: Sep21 Independent Critical Rescue
+
+on:
+  push:
+    branches: [ops/sep21-final-preflight]
+    paths:
+      - ".github/workflows/sep21-independent-critical-rescue.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  rescue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      JRA_ODDS_REQUEST_PAUSE_SECONDS: "0.20"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install runtime
+        run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0" numpy
+      - name: Run per-race critical recovery
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python scripts/run-critical-auto-bet-generation.py | tee /tmp/critical.log
+      - name: Verify immediate races
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT r.race_id AS raceId,r.start_time_jst AS startTimeJst,
+                   ROUND((julianday(r.start_time_utc)-julianday('now'))*1440,2) AS remainingMin,
+                   (SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS finalRows,
+                   (SELECT MIN(locked_at) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS lockedAt
+            FROM rt_races r
+            WHERE r.race_id IN ('2026-09-21-nakayama-01','2026-09-21-hanshin-01','2026-09-21-nakayama-02')
+            ORDER BY r.start_time_utc
+          "
