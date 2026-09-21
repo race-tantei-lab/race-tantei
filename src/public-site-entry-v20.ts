@@ -120,13 +120,17 @@ async function fixDayApi(db: D1Database, response: Response, requestedDate: stri
   }
 }
 
-async function fixRaceDetail(db: D1Database, path: string, response: Response): Promise<Response> {
+async function loadRaceSettlementView(db: D1Database, path: string): Promise<SettlementView | null> {
+  if (!path.startsWith("/races/")) return null;
+  const raceId = decodeURIComponent(path.slice("/races/".length)).replace(/\/$/, "");
+  const raceDate = raceId.slice(0, 10);
+  if (/^20\d{2}-\d{2}-\d{2}$/.test(raceDate) && raceDate > jstDate()) return null;
+  return (await settlementViews(db, [raceId])).get(raceId) ?? null;
+}
+
+async function fixRaceDetail(path: string, response: Response, view: SettlementView | null): Promise<Response> {
   if (!path.startsWith("/races/") || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
   try {
-    const raceId = decodeURIComponent(path.slice("/races/".length));
-    const raceDate = raceId.slice(0, 10);
-    if (/^20\d{2}-\d{2}-\d{2}$/.test(raceDate) && raceDate > jstDate()) return response;
-    const view = (await settlementViews(db, [raceId])).get(raceId);
     if (!view?.hasBets) return response;
     const state = publicCode(view);
     let html = await response.text();
@@ -207,9 +211,12 @@ export default {
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
     const url = new URL(request.url);
     const path = url.pathname;
+    const settlementPromise = path.startsWith("/races/")
+      ? loadRaceSettlementView(env.DB, path).catch(() => null)
+      : Promise.resolve<SettlementView | null>(null);
     let response = await publicSite.fetch(request, env, ctx);
     if (path === "/api/public/day") response = await fixDayApi(env.DB, response, url.searchParams.get("date") ?? "");
-    response = await fixRaceDetail(env.DB, path, response);
+    response = await fixRaceDetail(path, response, await settlementPromise);
     return response;
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
