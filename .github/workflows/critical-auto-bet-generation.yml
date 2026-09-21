@@ -1,12 +1,15 @@
 name: Critical automatic bet generation
 
 on:
-  # Retained as a manual recovery tool only. Production timing is owned by the
-  # one-minute Worker last-good path plus the gated emergency fallback.
+  # Independent control-plane recovery. Every five minutes during the JRA
+  # daytime window, inspect only the frozen selection and races inside T-45..T-15.
+  # Official JRA odds are fetched per race; one failing race cannot block others.
+  schedule:
+    - cron: '*/5 0-7 * * *' # 09:00-16:59 JST
   workflow_dispatch:
 
 concurrency:
-  group: critical-auto-bet-generation-live
+  group: critical-auto-bet-generation-live-${{ github.event_name }}
   cancel-in-progress: false
 
 permissions:
@@ -29,7 +32,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install completed-model runtime
-        run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0"
+        run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0" numpy
       - name: Compile critical generator
         run: |
           python -m py_compile \

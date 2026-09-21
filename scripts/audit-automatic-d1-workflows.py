@@ -15,6 +15,7 @@ ALLOW_AUTOMATIC_D1 = {
     "deploy-live-deadline.yml",
     "verify-upcoming-production-program.yml",
     "race-day-bootstrap.yml",
+    "critical-auto-bet-generation.yml",  # bounded T-45..T-15 per-race recovery
     "continuous-final-rule-learning.yml",  # weekly Tuesday night only
 }
 

@@ -10,7 +10,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 BASE_PATH = ROOT / "scripts" / "run-auto-final-live.py"
 CANONICAL_PATH = ROOT / "scripts" / "run-ten-year-auto-final-live.py"
 HARD_DEADLINE_SECONDS = 15 * 60
-RECOVERY_OPEN_SECONDS = 15 * 60
+RECOVERY_OPEN_SECONDS = 45 * 60
 EXPECTED_COURSES = {"ライト": 2000, "スタンダード": 5000, "プレミアム": 10000}
 
 
@@ -187,7 +187,8 @@ def main():
     future = [rid for rid in ids if starts[rid] > now]
     pending = [
         rid for rid in future
-        if rid not in already and (starts[rid] - now).total_seconds() <= base.MAX_LOCK_SECONDS
+        if rid not in already
+        and HARD_DEADLINE_SECONDS < (starts[rid] - now).total_seconds() <= base.MAX_LOCK_SECONDS
     ]
     pending.sort(key=lambda rid: starts[rid])
 

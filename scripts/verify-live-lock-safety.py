@@ -288,6 +288,19 @@ def main() -> None:
     for obsolete in (".github/workflows/drive-live-tick.yml", ".github/workflows/auto-final-live-bets.yml"):
         require(not (ROOT / obsolete).exists(), f"obsolete workflow must remain removed: {obsolete}")
 
+    canonical_backup = read("scripts/run-ten-year-auto-final-live.py")
+    require_text(canonical_backup, "base.MIN_LOCK_SECONDS=15*60", "canonical backup T15 lower bound")
+    require_text(canonical_backup, "base.MAX_LOCK_SECONDS=45*60", "canonical backup T45 upper bound")
+    forbid_text(canonical_backup, "base.MIN_LOCK_SECONDS=0", "canonical backup post-T15 generation")
+
+    critical = read("scripts/run-critical-auto-bet-generation.py")
+    require_text(critical, "RECOVERY_OPEN_SECONDS = 45 * 60", "critical recovery T45 open")
+    require_text(critical, "HARD_DEADLINE_SECONDS < (starts[rid] - now).total_seconds() <= base.MAX_LOCK_SECONDS", "critical recovery pre-T15 only")
+
+    critical_workflow = read(".github/workflows/critical-auto-bet-generation.yml")
+    require_text(critical_workflow, "cron: '*/5 0-7 * * *'", "critical recovery schedule")
+    require_text(critical_workflow, "python scripts/run-critical-auto-bet-generation.py", "critical per-race generator")
+
     print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=2m guard_before_heavy=true public_live_mutation=false free_tier_historical_scan=false")
 
 
