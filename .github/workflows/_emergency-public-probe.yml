@@ -1,0 +1,26 @@
+name: Emergency public endpoint probe
+on:
+  push:
+    branches: [fix/cancelled-race-active-count-verifiers]
+    paths: [".github/workflows/_emergency-public-probe.yml"]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe production public endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          today=$(TZ=Asia/Tokyo date +%F)
+          for path in "/" "/races/" "/api/public/day?date=$today" "/api/public/calendar" "/api/public/today-summary" "/api/public/daily-performance?date=$today"; do
+            echo "=== $path ==="
+            code=$(curl -L --connect-timeout 5 --max-time 30 -sS -D /tmp/h -o /tmp/b -w '%{http_code} %{time_total} %{size_download}' "$base$path" || true)
+            echo "RESULT $code"
+            echo 'HEADERS'
+            sed -n '1,40p' /tmp/h
+            echo 'BODY_HEAD'
+            head -c 5000 /tmp/b || true
+            echo
+          done
