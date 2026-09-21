@@ -1,6 +1,6 @@
 import publicSite from "./public-site-entry-v21.js";
 import backgroundSyncSite from "./public-site-entry-v19.js";
-import { loadFixedTicketEvidence, type FixedTicketEvidence } from "./v1/completed-fixed-ticket-explanation.js";
+import { loadFixedTicketEvidence, loadFixedTicketEvidenceSnapshotOnly, type FixedTicketEvidence } from "./v1/completed-fixed-ticket-explanation.js";
 import { verifyPriorDayLearningReady, type PriorLearningReadiness } from "./v1/prior-day-learning-gate.js";
 import type { Env } from "./v1/types.js";
 
@@ -138,15 +138,19 @@ function addTabsUi(html: string): string {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
-    const response = await publicSite.fetch(request, env, ctx);
     const path = new URL(request.url).pathname;
-    if (!path.startsWith("/races/") || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
-    const raceId = decodeURIComponent(path.slice("/races/".length));
+    const raceId = path.startsWith("/races/") ? decodeURIComponent(path.slice("/races/".length)).replace(/\/$/, "") : "";
     const date = raceId.slice(0, 10);
+    const today = jstDate(new Date());
+    const currentEvidencePromise = /^20\d{2}-\d{2}-\d{2}$/.test(date) && date === today
+      ? loadFixedTicketEvidenceSnapshotOnly(env.DB, raceId).catch(() => [] as FixedTicketEvidence[])
+      : null;
+    const response = await publicSite.fetch(request, env, ctx);
+    if (!path.startsWith("/races/") || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
     if (!/^20\d{2}-\d{2}-\d{2}$/.test(date) || date <= CUTOFF) return response;
-    if (date > jstDate(new Date())) return response;
+    if (date > today) return response;
     try {
-      const tickets = await loadFixedTicketEvidence(env.DB, raceId);
+      const tickets = currentEvidencePromise ? await currentEvidencePromise : await loadFixedTicketEvidence(env.DB, raceId);
       if (tickets.length !== 2) return response;
       let html = stripOldPredictionReasons(await response.text());
       html = injectReasonBeforeRunners(html, reasonSection(tickets));
