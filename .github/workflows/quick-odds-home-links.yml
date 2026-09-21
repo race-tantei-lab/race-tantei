@@ -1,0 +1,31 @@
+name: Quick Odds Home Links
+on:
+  push:
+    branches: [diag/sep21-current-miss]
+    paths: [".github/workflows/quick-odds-home-links.yml"]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Print odds home links
+        env:
+          CLOUDFLARE_API_TOKEN: x
+          CLOUDFLARE_ACCOUNT_ID: x
+          CLOUDFLARE_D1_DATABASE_ID: x
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import importlib.util,pathlib,sys
+          p=pathlib.Path('scripts/collect-jra-official-odds.py')
+          spec=importlib.util.spec_from_file_location('m',p);m=importlib.util.module_from_spec(spec);sys.modules['m']=m;spec.loader.exec_module(m)
+          html=m.fetch_url(m.JRA_ODDS_URL,cname=m.JRA_ODDS_HOME_CNAME)
+          links=m.action_links(html)
+          print('COUNT',len(links))
+          for cname,ctx in links:
+              if '中山' in ctx or '阪神' in ctx or '9月21日' in ctx or '9月 21日' in ctx:
+                  print('ACTION',cname,'CTX',ctx[:300])
+          PY
