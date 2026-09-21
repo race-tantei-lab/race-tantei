@@ -148,6 +148,34 @@ async function recomputeFromPublicLock(db: D1Database, raceId: string, race: Rac
   });
 }
 
+export async function loadFixedTicketEvidenceSnapshotOnly(db: D1Database, raceId: string): Promise<FixedTicketEvidence[]> {
+  const [stateRow, runnerResult] = await Promise.all([
+    db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
+      .bind(`${FINAL_PREFIX}${raceId}`).first<{ value: string }>(),
+    db.prepare("SELECT horse_no AS horseNo,horse_name AS horseName FROM rt_runners WHERE race_id=? ORDER BY horse_no")
+      .bind(raceId).all<{ horseNo: number; horseName: string }>(),
+  ]);
+  if (!stateRow?.value) return [];
+  try {
+    const parsed = JSON.parse(stateRow.value) as FinalPayload;
+    if (parsed.sourceModel !== COMPLETED_MODEL_VERSION || parsed.modelSha256 !== COMPLETED_MODEL_SHA256
+        || !Array.isArray(parsed.tickets) || parsed.tickets.length !== 2) return [];
+    if (new Set(parsed.tickets.map((ticket) => ticket.betType)).size !== 2) return [];
+    if (parsed.tickets.some((ticket) => !ticket.combination
+        || !Number.isFinite(ticket.predictedProbability) || ticket.predictedProbability <= 0
+        || !Number.isFinite(ticket.officialOdds) || ticket.officialOdds <= 0
+        || !Number.isFinite(ticket.valueProduct) || !Number.isFinite(ticket.score))) return [];
+    const names = new Map((runnerResult.results ?? []).map((runner) => [Number(runner.horseNo), String(runner.horseName || "")]));
+    return parsed.tickets.map((ticket) => ({
+      ...ticket,
+      horseNames: ticket.horses.map((horseNo) => names.get(Number(horseNo)) || ""),
+      evidenceSource: "fixed-snapshot" as const,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function loadFixedTicketEvidence(db: D1Database, raceId: string): Promise<FixedTicketEvidence[]> {
   const { race, runners } = await loadRace(db, raceId);
   const exact = await finalSnapshot(db, raceId, runners);
