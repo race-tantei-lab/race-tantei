@@ -152,9 +152,22 @@ def main():
         return
 
     ids, venues = canonical.validate_selection(payload)
-    starts = base.selected_timing(collector, ids)
-    if len(starts) != len(ids):
-        raise RuntimeError(f"CRITICAL_SELECTED_START_TIMES_MISSING:{len(starts)}/{len(ids)}")
+    placeholders = ",".join("?" for _ in ids)
+    status_rows = collector.d1_query(
+        f"SELECT race_id AS raceId,status FROM rt_races WHERE race_id IN ({placeholders})",
+        ids,
+    )
+    cancelled = {
+        str(row.get("raceId") or "")
+        for row in status_rows
+        if str(row.get("status") or "scheduled").lower() in {"cancelled", "canceled", "postponed"}
+    }
+    operational_ids = [rid for rid in ids if rid not in cancelled]
+    if cancelled:
+        print(json.dumps({"event": "CRITICAL_CANCELLED_RACES_SKIPPED", "raceIds": sorted(cancelled)}, ensure_ascii=False), flush=True)
+    starts = base.selected_timing(collector, operational_ids)
+    if len(starts) != len(operational_ids):
+        raise RuntimeError(f"CRITICAL_SELECTED_START_TIMES_MISSING:{len(starts)}/{len(operational_ids)}")
 
     def collect_exact_race_official_odds(rid: str) -> dict:
         race_rows = collector.d1_query(
@@ -183,8 +196,8 @@ def main():
                 raise RuntimeError(f"CRITICAL_ODDS_TYPE_MISSING:{rid}:{bet_type}:{covered.get(bet_type)}")
         return report
 
-    initial_details, already, initial_partial = ticket_state(collector, ids)
-    future = [rid for rid in ids if starts[rid] > now]
+    initial_details, already, initial_partial = ticket_state(collector, operational_ids)
+    future = [rid for rid in operational_ids if starts[rid] > now]
     pending = [
         rid for rid in future
         if rid not in already
@@ -256,7 +269,7 @@ def main():
             }, ensure_ascii=False), flush=True)
             traceback.print_exc()
 
-    final_details, complete_after, partial_after = ticket_state(collector, ids)
+    final_details, complete_after, partial_after = ticket_state(collector, operational_ids)
     audit_now = dt.datetime.now(dt.timezone.utc)
     remaining_future = [rid for rid in ids if starts[rid] > audit_now and rid not in complete_after]
     remaining_future.sort(key=lambda rid: starts[rid])
@@ -269,7 +282,7 @@ def main():
         if (starts[rid] - audit_now).total_seconds() <= HARD_DEADLINE_SECONDS
     ]
     late_lock_breaches = []
-    for rid in ids:
+    for rid in operational_ids:
         if rid not in complete_after or starts[rid] <= audit_now:
             continue
         latest_locked = parse_utc(final_details[rid].get("latestLockedAt"))
