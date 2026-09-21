@@ -83,16 +83,23 @@ jobs:
             exit 0
           fi
           today=$(TZ=Asia/Tokyo date +%F)
-          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS "$BASE_URL/api/public/today-prediction-sample" -o /tmp/sample.json
+          # Result-published races intentionally render the official-result view,
+          # which does not contain the live prediction tabs. Verify those tabs on
+          # a currently locked, unresolved race instead of sampling an already
+          # settled race and reporting a false UI regression.
+          curl --retry 5 --retry-delay 2 --retry-all-errors -fsS "$BASE_URL/api/public/day?date=$today" -o /tmp/day.json
           race_id=$(TODAY="$today" node - <<'NODE'
           const fs=require('fs');
-          const p=JSON.parse(fs.readFileSync('/tmp/sample.json','utf8'));
-          if(p.date!==process.env.TODAY) throw new Error('prediction sample date mismatch');
-          if(!p.hasPredictions || !p.raceId) process.exit(2);
-          process.stdout.write(String(p.raceId));
+          const p=JSON.parse(fs.readFileSync('/tmp/day.json','utf8'));
+          if(p.date!==process.env.TODAY) throw new Error('public day date mismatch');
+          const race=(p.races||[]).find(r=>String(r?.publicState?.code||'')==='buy');
+          if(race?.raceId) process.stdout.write(String(race.raceId));
           NODE
           )
-          test -n "$race_id"
+          if [[ -z "$race_id" ]]; then
+            echo 'No unresolved buy-state race today; settled races use the official-result detail view, so prediction-tab verification is skipped.'
+            exit 0
+          fi
           curl --retry 5 --retry-delay 2 --retry-all-errors --connect-timeout 3 --max-time 25 -fsS -D /tmp/detail.headers "$BASE_URL/races/$race_id" -o /tmp/detail.html
           RACE_ID="$race_id" node - <<'NODE'
           const fs=require('fs');
