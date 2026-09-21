@@ -120,11 +120,10 @@ async function rewriteHtml(response: Response, path: string): Promise<Response> 
   return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
-async function raceTransparency(response: Response, env: Env, path: string, now = new Date()): Promise<Response> {
+function loadRaceTransparencyRow(env: Env, path: string): Promise<RaceTransparencyRow | null> {
   const raceId = raceIdFromPath(path);
-  if (!raceId || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
-  try {
-    const row = await env.DB.prepare(`
+  if (!raceId) return Promise.resolve(null);
+  return env.DB.prepare(`
       SELECT r.race_id AS raceId,r.race_date AS raceDate,r.start_time_utc AS startTimeUtc,r.start_time_jst AS startTimeJst,
              (SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS finalRows,
              (SELECT MIN(locked_at) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS lockedAt,
@@ -132,7 +131,12 @@ async function raceTransparency(response: Response, env: Env, path: string, now 
              (SELECT state_value FROM rt_system_state s WHERE s.state_key='final_daily_selection:'||r.race_date LIMIT 1) AS selectionValue
       FROM rt_races r WHERE r.race_id=? LIMIT 1
     `).bind(raceId).first<RaceTransparencyRow>();
-    if (!row) return response;
+}
+
+async function raceTransparency(response: Response, path: string, row: RaceTransparencyRow | null, now = new Date()): Promise<Response> {
+  const raceId = raceIdFromPath(path);
+  if (!raceId || !row || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
+  try {
     const isSelected = selectedRace(row.selectionValue, raceId);
     const finalRows = Number(row.finalRows ?? 0);
     if (!isSelected && finalRows !== 6) return response;
@@ -212,9 +216,15 @@ export default {
       return dailyPerformanceResponse(env.DB, url.searchParams.get("date") ?? "");
     }
     if (!publicSite.fetch) return new Response("NOT_FOUND", { status: 404 });
+    const transparencyPromise = raceIdFromPath(path)
+      ? loadRaceTransparencyRow(env, path).catch((error) => {
+          console.error("RACE_FINALIZATION_TRANSPARENCY_LOAD_FAILED", error);
+          return null;
+        })
+      : Promise.resolve<RaceTransparencyRow | null>(null);
     let response = await publicSite.fetch(request, env, ctx);
     response = await rewriteHtml(response, path);
-    response = await raceTransparency(response, env, path);
+    response = await raceTransparency(response, path, await transparencyPromise);
     if (path === "/") response = await enhanceDailyPerformanceHome(response);
     const headers = new Headers(response.headers);
     if (response.headers.get("content-type")?.includes("text/html")) {

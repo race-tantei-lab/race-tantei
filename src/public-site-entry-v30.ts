@@ -296,31 +296,26 @@ async function enhanceHome(response: Response, env: Env): Promise<Response> {
   }
 }
 
-async function enhanceRaceNavigation(response: Response, env: Env, path: string): Promise<Response> {
+async function enhanceRaceNavigation(response: Response, _env: Env, path: string): Promise<Response> {
   if (!path.startsWith("/races/") || !response.ok || !response.headers.get("content-type")?.includes("text/html")) return response;
   try {
-    const raceId = decodeURIComponent(path.slice("/races/".length));
-    const navRows = await env.DB.prepare(`
-      WITH current AS (
-        SELECT race_id,venue,race_no,race_date FROM rt_races WHERE race_id=? LIMIT 1
-      )
-      SELECT 'current' AS navKind,r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.race_date AS raceDate
-      FROM rt_races r JOIN current c ON r.race_id=c.race_id
-      UNION ALL
-      SELECT 'previous' AS navKind,r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.race_date AS raceDate
-      FROM rt_races r JOIN current c ON r.race_date=c.race_date AND r.venue=c.venue
-      WHERE r.race_no=(SELECT MAX(p.race_no) FROM rt_races p JOIN current x ON p.race_date=x.race_date AND p.venue=x.venue WHERE p.race_no<x.race_no)
-      UNION ALL
-      SELECT 'next' AS navKind,r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.race_date AS raceDate
-      FROM rt_races r JOIN current c ON r.race_date=c.race_date AND r.venue=c.venue
-      WHERE r.race_no=(SELECT MIN(n.race_no) FROM rt_races n JOIN current x ON n.race_date=x.race_date AND n.venue=x.venue WHERE n.race_no>x.race_no)
-    `).bind(raceId).all<RaceNavRow & { navKind: string }>();
-    const current = navRows.results.find((row) => row.navKind === "current") ?? null;
-    if (!current) return response;
-    const previous = navRows.results.find((row) => row.navKind === "previous") ?? null;
-    const next = navRows.results.find((row) => row.navKind === "next") ?? null;
-    const prevHtml = previous ? `<a href="/races/${encodeURIComponent(previous.raceId)}">← ${esc(previous.venue)} ${Number(previous.raceNo)}R</a>` : `<span>← 前のレースなし</span>`;
-    const nextHtml = next ? `<a href="/races/${encodeURIComponent(next.raceId)}">${esc(next.venue)} ${Number(next.raceNo)}R →</a>` : `<span>次のレースなし →</span>`;
+    const raceId = decodeURIComponent(path.slice("/races/".length)).replace(/\/$/, "");
+    const match = raceId.match(/^(20\d{2}-\d{2}-\d{2})-([a-z0-9-]+)-(\d{2})$/i);
+    if (!match) return response;
+    const raceNo = Number(match[3]);
+    if (!Number.isInteger(raceNo) || raceNo < 1 || raceNo > 12) return response;
+    const prefix = raceId.slice(0, -2);
+    const venueSlug = match[2].toLowerCase();
+    const venueMap: Record<string, string> = {
+      nakayama:"中山", tokyo:"東京", hanshin:"阪神", kyoto:"京都", chukyo:"中京",
+      niigata:"新潟", sapporo:"札幌", hakodate:"函館", fukushima:"福島", kokura:"小倉",
+    };
+    const venue = venueMap[venueSlug] ?? "";
+    const label = (n: number) => venue ? `${venue} ${n}R` : `${n}R`;
+    const previousId = raceNo > 1 ? `${prefix}${String(raceNo - 1).padStart(2, "0")}` : null;
+    const nextId = raceNo < 12 ? `${prefix}${String(raceNo + 1).padStart(2, "0")}` : null;
+    const prevHtml = previousId ? `<a href="/races/${encodeURIComponent(previousId)}">← ${esc(label(raceNo - 1))}</a>` : `<span>← 前のレースなし</span>`;
+    const nextHtml = nextId ? `<a href="/races/${encodeURIComponent(nextId)}">${esc(label(raceNo + 1))} →</a>` : `<span>次のレースなし →</span>`;
     const nav = `<nav class="race-sequence-nav" aria-label="前後のレース">${prevHtml}${nextHtml}</nav>`;
     let html = await response.text();
     if (!html.includes("race-sequence-nav")) {
@@ -328,7 +323,8 @@ async function enhanceRaceNavigation(response: Response, env: Env, path: string)
       else html = html.replace(/(<div class="race-title">)/, `${nav}$1`);
     }
     html = html.replace("</head>", `${homeUxStyles()}</head>`);
-    const headers = new Headers(response.headers);headers.delete("content-length");
+    const headers = new Headers(response.headers); headers.delete("content-length");
+    headers.set("x-race-nav-path", "deterministic-id-v1");
     return new Response(html,{status:response.status,statusText:response.statusText,headers});
   } catch (error) {
     console.error("RACE_SEQUENCE_NAV_FAILED", error);
