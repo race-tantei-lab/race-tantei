@@ -15,6 +15,7 @@ jobs:
           base='https://race-tantei-phase0.race-tantei.workers.dev'
           echo '=== HOME RAW ==='
           curl -sS -D /tmp/home.h -o /tmp/home.html -w 'http=%{http_code} bytes=%{size_download} ttfb=%{time_starttransfer} total=%{time_total}\n' "$base/?_diag=${GITHUB_RUN_ID}"
+          curl --compressed -sS -o /tmp/home.comp -w 'compressed_http=%{http_code} compressed_wire_bytes=%{size_download} compressed_total=%{time_total}\n' "$base/?_diag_comp=${GITHUB_RUN_ID}"
           grep -iE '^(content-type|content-length|content-encoding|x-race-ui-version|x-race-home-path|cache-control):' /tmp/home.h || true
           echo "wc_bytes=$(wc -c </tmp/home.html)"
           echo "embedded_calendar_prefix=$(grep -o 'const calendar=\[[^;]*' /tmp/home.html | head -c 180 || true)"
@@ -53,5 +54,36 @@ jobs:
           print('target=', '買い目対象・確定前' in s)
           yrs=re.search(r'id="years"[^>]*>(.*?)</div>',s,re.S)
           print('years=',re.findall(r'>(20\d\d年)<',yrs.group(1)) if yrs else [])
+          PY
+          python - <<'PY'
+          from html.parser import HTMLParser
+          import re
+          s=open('/tmp/dom.html',encoding='utf-8').read()
+          class Capture(HTMLParser):
+              def __init__(self,target):
+                  super().__init__(); self.target=target; self.stack=[]; self.capture=False; self.buf=[]
+              def handle_starttag(self,tag,attrs):
+                  attrs=dict(attrs)
+                  if not self.capture and attrs.get('id')==self.target:
+                      self.capture=True; self.stack=[tag]; self.buf.append(self.get_starttag_text()); return
+                  if self.capture:
+                      self.buf.append(self.get_starttag_text()); self.stack.append(tag)
+              def handle_endtag(self,tag):
+                  if self.capture:
+                      self.buf.append(f'</{tag}>')
+                      if self.stack: self.stack.pop()
+                      if not self.stack: self.capture=False
+              def handle_data(self,data):
+                  if self.capture: self.buf.append(data)
+          p=Capture('races'); p.feed(s); rail=''.join(p.buf)
+          y=Capture('years'); y.feed(s); yrs=''.join(y.buf)
+          print('rendered_rail_bytes=',len(rail.encode()))
+          print('rendered_race_cards=',len(re.findall(r'class="race-card',rail)))
+          print('rendered_load_error=', 'レース情報を取得できませんでした' in rail)
+          print('rendered_loading_left=', 'レース情報を読み込み中' in rail)
+          print('rendered_buy=', '買い目確定' in rail)
+          print('rendered_target=', '買い目対象・確定前' in rail)
+          print('rendered_years=',re.findall(r'>(20\\d\\d年)<',yrs))
+          print('rendered_rail_text=',re.sub(r'<[^>]+>',' ',rail)[:1200].replace('\\n',' '))
           PY
           grep -Ei 'TypeError|ReferenceError|Uncaught|SyntaxError' /tmp/chrome.err && exit 1 || true
