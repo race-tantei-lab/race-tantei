@@ -1,0 +1,132 @@
+name: Sep21 Final Preflight
+
+on:
+  push:
+    branches: [ops/sep21-final-preflight]
+    paths:
+      - ".github/workflows/sep21-final-preflight.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Probe Sep21 production state
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT
+              datetime('now','+9 hours') AS jstNow,
+              (SELECT state_value FROM rt_system_state WHERE state_key='final_daily_selection:2026-09-21') AS selection,
+              (SELECT updated_at FROM rt_system_state WHERE state_key='final_daily_selection:2026-09-21') AS selectionUpdatedAt,
+              (SELECT state_value FROM rt_system_state WHERE state_key='live_deadline_driver:2026-09-21') AS driver,
+              (SELECT updated_at FROM rt_system_state WHERE state_key='live_deadline_driver:2026-09-21') AS driverUpdatedAt,
+              (SELECT state_value FROM rt_system_state WHERE state_key='worker_deadline_guard:2026-09-21') AS guard,
+              (SELECT updated_at FROM rt_system_state WHERE state_key='worker_deadline_guard:2026-09-21') AS guardUpdatedAt,
+              (SELECT state_value FROM rt_system_state WHERE state_key='live_deadline_primary_heartbeat:v2') AS heartbeat,
+              (SELECT updated_at FROM rt_system_state WHERE state_key='live_deadline_primary_heartbeat:v2') AS heartbeatUpdatedAt
+          " > /tmp/top.json
+          cat /tmp/top.json
+
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            WITH sel AS (
+              SELECT
+                json_extract(j.value,'$.raceId') AS raceId,
+                json_extract(j.value,'$.venue') AS selectedVenue
+              FROM rt_system_state s,
+                   json_each(json_extract(s.state_value,'$.selected')) j
+              WHERE s.state_key='final_daily_selection:2026-09-21'
+            )
+            SELECT
+              r.race_id AS raceId,
+              r.venue,
+              r.race_no AS raceNo,
+              r.start_time_jst AS startTimeJst,
+              ROUND((julianday(r.start_time_utc)-julianday('now'))*1440,2) AS remainingMin,
+              (SELECT COUNT(*) FROM rt_public_bets b WHERE b.race_id=r.race_id AND b.source_prediction_id=-2) AS finalRows,
+              (SELECT updated_at FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id) AS previewUpdatedAt,
+              (SELECT json_extract(p.state_value,'$.snapshots[0].generatedAt') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id) AS previewGeneratedAt,
+              (SELECT json_extract(p.state_value,'$.snapshots[0].oddsSource') FROM rt_system_state p WHERE p.state_key='worker_live_preview:'||r.race_id) AS oddsSource,
+              (SELECT COUNT(*) FROM rt_live_preview_archive a WHERE a.race_id=r.race_id) AS archiveRows
+            FROM sel
+            JOIN rt_races r ON r.race_id=sel.raceId
+            ORDER BY r.start_time_utc
+          " > /tmp/races.json
+          cat /tmp/races.json
+
+          python3 - <<'PY'
+          import json,sys
+          def rows(path):
+              raw=json.load(open(path)); out=[]
+              for b in raw if isinstance(raw,list) else [raw]:
+                  if isinstance(b,dict): out += b.get('results') or []
+              return out
+          top=rows('/tmp/top.json')
+          races=rows('/tmp/races.json')
+          if not top: raise SystemExit('TOP_STATE_MISSING')
+          t=top[0]
+          sel=json.loads(t.get('selection') or '{}')
+          selected=sel.get('selected') or []
+          print('SUMMARY',json.dumps({
+              'jstNow':t.get('jstNow'),
+              'selectedCount':len(selected),
+              'sourceModel':sel.get('sourceModel'),
+              'selectionMode':sel.get('selectionMode'),
+              'resultDataUsedForTargetDay':sel.get('resultDataUsedForTargetDay'),
+              'driverUpdatedAt':t.get('driverUpdatedAt'),
+              'guardUpdatedAt':t.get('guardUpdatedAt'),
+              'heartbeatUpdatedAt':t.get('heartbeatUpdatedAt'),
+          },ensure_ascii=False))
+          if len(selected)!=10: raise SystemExit('SELECTION_NOT_10')
+          if sel.get('sourceModel')!='ten-year-completed-model': raise SystemExit('SELECTION_MODEL_BAD')
+          if sel.get('resultDataUsedForTargetDay') is not False: raise SystemExit('TARGET_DAY_LEAKAGE')
+          if len(races)!=10: raise SystemExit('SELECTED_RACE_ROWS_NOT_10')
+          bad=[]
+          critical=[]
+          for r in races:
+              rem=float(r.get('remainingMin') or -999)
+              preview=bool(r.get('previewGeneratedAt'))
+              final=int(r.get('finalRows') or 0)==6
+              if rem>15 and not (preview or final):
+                  bad.append(r['raceId'])
+              if 15 <= rem <= 30:
+                  critical.append({'raceId':r['raceId'],'remainingMin':rem,'preview':preview,'finalRows':int(r.get('finalRows') or 0),'archiveRows':int(r.get('archiveRows') or 0),'oddsSource':r.get('oddsSource')})
+          print('CRITICAL',json.dumps(critical,ensure_ascii=False))
+          print('UNPROTECTED_FUTURE',json.dumps(bad,ensure_ascii=False))
+          if bad: raise SystemExit('UNPROTECTED_FUTURE:'+','.join(bad))
+          PY
+
+      - name: Verify workers and actual crons
+        shell: bash
+        run: |
+          set -euo pipefail
+          for u in             https://race-tantei-live-deadline.race-tantei.workers.dev/health             https://race-tantei-live-deadline-backup.race-tantei.workers.dev/health
+          do
+            body=$(curl -fsS "$u"); echo "$body"; echo "$body" | grep -q 'live-deadline-v14-guard-first-cpu-safe-20260920'
+          done
+          check_schedule() {
+            script="$1"; expected="$2"
+            body=$(curl -fsS "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${script}/schedules" -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
+            echo "$body"
+            BODY="$body" EXPECTED="$expected" node - <<'NODE'
+          const b=JSON.parse(process.env.BODY||'{}');
+          const s=(b.result?.schedules||[]).map(x=>String(x.cron)).sort();
+          if(b.success!==true||s.length!==1||s[0]!==process.env.EXPECTED) throw new Error('CRON_BAD:'+JSON.stringify(s));
+          NODE
+          }
+          check_schedule race-tantei-live-deadline '* * * * *'
+          check_schedule race-tantei-live-deadline-backup '1-59/2 * * * *'
