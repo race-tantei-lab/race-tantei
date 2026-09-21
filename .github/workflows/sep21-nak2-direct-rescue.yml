@@ -1,0 +1,71 @@
+name: Sep21 Nak2 Direct Official Rescue
+
+on:
+  push:
+    branches: [diag/sep21-current-miss]
+    paths:
+      - ".github/workflows/sep21-nak2-direct-rescue.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  rescue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0" numpy
+      - name: Build direct JRA official odds file and generate Nakayama 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import datetime as dt,gzip,hashlib,importlib.util,json,pathlib,sys
+          p=pathlib.Path('scripts/collect-jra-official-odds.py')
+          spec=importlib.util.spec_from_file_location('o',p); m=importlib.util.module_from_spec(spec);sys.modules['o']=m;spec.loader.exec_module(m)
+          rid='2026-09-21-nakayama-02'; suffix='0206202604070120260921/B4'
+          race=(m.d1_query("SELECT race_id AS raceId,race_date AS raceDate,venue,race_no AS raceNo,start_time_utc AS startTimeUtc FROM rt_races WHERE race_id=? LIMIT 1",[rid]) or [None])[0]
+          if not race: raise SystemExit('RACE_MISSING')
+          now=dt.datetime.now(dt.timezone.utc)
+          start=dt.datetime.fromisoformat(str(race['startTimeUtc']).replace('Z','+00:00'))
+          if start.tzinfo is None: start=start.replace(tzinfo=dt.timezone.utc)
+          sec=(start-now).total_seconds()
+          print('SECONDS_TO_START_BEFORE_FETCH',sec)
+          if sec <= 15*60: raise SystemExit('T15_ALREADY_REACHED')
+          rows=[]
+          for bt,pfx in [('単勝','pw151ou'),('馬連','pw154ou'),('ワイド','pw155ou'),('馬単','pw156ou'),('3連複','pw157ou'),('3連単','pw158ou')]:
+              cname=pfx+suffix
+              page=m.fetch_url(m.JRA_ODDS_URL,cname=cname)
+              parsed=m.parse_odds_rows(page,bt)
+              if not parsed: raise SystemExit(f'NO_ROWS:{bt}')
+              h=hashlib.sha256(page.encode('utf-8',errors='replace')).hexdigest()
+              for combo,lo,hi in parsed:
+                  rows.append({'raceId':rid,'raceDate':'2026-09-21','venue':'中山','raceNo':2,'betType':bt,'combination':combo,'oddsMin':float(lo),'oddsMax':float(hi),'capturedAtUtc':now.isoformat(),'startTimeUtc':race['startTimeUtc'],'secondsToStart':sec,'sourceCname':cname,'sourceHash':h})
+              print('OFFICIAL_ROWS',bt,len(parsed),cname)
+          with gzip.open('current-selected-official-odds.json.gz','wt',encoding='utf-8') as fh: json.dump(rows,fh,ensure_ascii=False,separators=(',',':'))
+          state=m.d1_query("SELECT state_value AS value FROM rt_system_state WHERE state_key='final_daily_selection:2026-09-21' LIMIT 1")
+          if not state: raise SystemExit('SELECTION_MISSING')
+          pathlib.Path('/tmp/selection.json').write_text(json.dumps(json.loads(state[0]['value']),ensure_ascii=False),encoding='utf-8')
+          print('OFFICIAL_TOTAL',len(rows))
+          PY
+          python scripts/generate-ten-year-live-bets.py --repo . --date 2026-09-21 --selection /tmp/selection.json --out /tmp/nak2-final.json --odds-file current-selected-official-odds.json.gz --insert
+      - name: Verify pre-T15 immutable final
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT r.race_id AS raceId,r.start_time_jst AS startTimeJst,
+                   ROUND((julianday(r.start_time_utc)-julianday('now'))*1440,3) AS remainingMin,
+                   COUNT(b.id) AS finalRows,MIN(b.locked_at) AS lockedAt,MAX(b.locked_at) AS latestLockedAt
+            FROM rt_races r LEFT JOIN rt_public_bets b ON b.race_id=r.race_id AND b.source_prediction_id=-2
+            WHERE r.race_id='2026-09-21-nakayama-02'
+            GROUP BY r.race_id,r.start_time_jst,r.start_time_utc
+          "
