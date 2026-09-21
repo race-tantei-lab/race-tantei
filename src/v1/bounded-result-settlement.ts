@@ -95,19 +95,32 @@ async function pendingCandidates(db: D1Database, now: Date): Promise<Candidate[]
   const dueBefore = new Date(now.getTime() - RESULT_GRACE_MS).toISOString();
   const result = await db.prepare(`
     SELECT r.race_id AS raceId,r.race_date AS raceDate,r.entry_url AS entryUrl,r.result_url AS resultUrl,r.start_time_utc AS startTimeUtc
-    FROM rt_public_bets b
-    JOIN rt_races r ON r.race_id=b.race_id
-    WHERE b.source_prediction_id=-2
-      AND b.settlement_status='pending'
-      AND r.race_date>=? AND r.race_date<=?
+    FROM rt_races r
+    WHERE r.race_date>=? AND r.race_date<=?
+      AND lower(COALESCE(r.status,'scheduled')) NOT IN ('cancelled','canceled','postponed')
       AND r.entry_url IS NOT NULL AND LENGTH(TRIM(r.entry_url))>0
       AND r.start_time_utc IS NOT NULL
       AND datetime(r.start_time_utc)<=datetime(?)
-    GROUP BY r.race_id,r.race_date,r.entry_url,r.start_time_utc
+      AND (
+        NOT EXISTS (SELECT 1 FROM rt_results x WHERE x.race_id=r.race_id AND x.finish_position IS NOT NULL)
+        OR NOT EXISTS (SELECT 1 FROM rt_payouts p WHERE p.race_id=r.race_id)
+        OR EXISTS (
+          SELECT 1 FROM rt_public_bets b
+          WHERE b.race_id=r.race_id AND b.source_prediction_id=-2 AND b.settlement_status='pending'
+        )
+      )
     ORDER BY r.start_time_utc,r.race_id
     LIMIT ?
   `).bind(fromDate, throughDate, dueBefore, MAX_CANDIDATES_PER_TICK).all<Candidate>();
   return result.results ?? [];
+}
+
+async function pendingPublicBetCount(db: D1Database, raceId: string): Promise<number> {
+  const row = await db.prepare(`
+    SELECT COUNT(*) AS n FROM rt_public_bets
+    WHERE race_id=? AND source_prediction_id=-2 AND settlement_status='pending'
+  `).bind(raceId).first<{ n: number }>();
+  return Number(row?.n ?? 0);
 }
 
 async function settlePublicRows(db: D1Database, raceId: string, refundHorseNos: number[]): Promise<number> {
@@ -243,7 +256,8 @@ export async function runBoundedResultSettlement(env: Env, now = new Date()): Pr
       if (settled > 0) {
         audit.settledRaceIds.push(race.raceId);
         audit.settledRows += settled;
-      } else {
+      }
+      if (await pendingPublicBetCount(env.DB, race.raceId) > 0) {
         audit.waitingRaceIds.push(race.raceId);
       }
     } catch (error) {
