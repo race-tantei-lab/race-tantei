@@ -174,10 +174,22 @@ def main():
         starts=base.selected_timing(collector,ids)
         now_utc=base.dt.datetime.now(base.dt.timezone.utc)
         started={race_id for race_id,start in starts.items() if start<=now_utc}
+        placeholders=",".join("?" for _ in ids)
+        status_rows=collector.d1_query(
+            f"SELECT race_id AS raceId,status FROM rt_races WHERE race_id IN ({placeholders})",
+            list(ids),
+        ) if ids else []
+        cancelled={
+            str(row.get('raceId') or '')
+            for row in status_rows
+            if str(row.get('status') or 'scheduled').lower() in {'cancelled','canceled','postponed'}
+        }
         ignored=sorted(started-locked)
         if ignored:
             print(json.dumps({'operationallyClosedStartedMisses':ignored},ensure_ascii=False),file=sys.stderr)
-        return locked|started
+        if cancelled:
+            print(json.dumps({'operationallyClosedCancelledRaces':sorted(cancelled)},ensure_ascii=False),file=sys.stderr)
+        return locked|started|cancelled
     base.locked_races=locked_races_without_started_blockers
 
     # Cloudflare Worker remains the primary every-minute path. The independent
