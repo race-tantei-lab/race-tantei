@@ -158,6 +158,7 @@ export function postAug9DayResponse(date: string, now = new Date()): Response | 
       raceDate: String(race.race_date),
       startTimeJst: race.start_time_jst,
       startTimeUtc: race.start_time_utc,
+      status: String(race.status),
     };
     return {
       raceId: String(race.race_id),
