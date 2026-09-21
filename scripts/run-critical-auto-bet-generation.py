@@ -271,7 +271,7 @@ def main():
 
     final_details, complete_after, partial_after = ticket_state(collector, operational_ids)
     audit_now = dt.datetime.now(dt.timezone.utc)
-    remaining_future = [rid for rid in ids if starts[rid] > audit_now and rid not in complete_after]
+    remaining_future = [rid for rid in operational_ids if starts[rid] > audit_now and rid not in complete_after]
     remaining_future.sort(key=lambda rid: starts[rid])
     urgent_missing = [
         rid for rid in remaining_future
