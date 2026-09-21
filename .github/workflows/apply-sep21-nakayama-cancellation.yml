@@ -1,0 +1,109 @@
+name: Apply Sep21 Nakayama Cancellation
+
+on:
+  push:
+    branches: [ops/sep21-nakayama-cancellation]
+    paths:
+      - ".github/workflows/apply-sep21-nakayama-cancellation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Assert no Sep21 Nakayama final bets exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          rows=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT COUNT(*) AS n
+            FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
+            WHERE r.race_date='2026-09-21' AND r.venue='中山' AND b.source_prediction_id=-2
+          ")
+          echo "$rows"
+          ROWS="$rows" node - <<'NODE'
+          const x=JSON.parse(process.env.ROWS||'[]'); const n=Number(x?.[0]?.results?.[0]?.n ?? -1);
+          if(n!==0) throw new Error('CANCELLED_NAKAYAMA_HAS_FINAL_BETS:'+n);
+          NODE
+
+      - name: Mark Sep21 Nakayama cancelled with official evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            UPDATE rt_races
+            SET status='cancelled', updated_at=CURRENT_TIMESTAMP
+            WHERE race_date='2026-09-21' AND venue='中山';
+            INSERT INTO rt_system_state(state_key,state_value,updated_at)
+            VALUES(
+              'official_meeting_cancellation:2026-09-21:中山',
+              json_object(
+                'raceDate','2026-09-21',
+                'venue','中山',
+                'status','cancelled',
+                'officialSource','https://www.jra.go.jp/news/202609/092004.html',
+                'substituteDate','2026-09-22',
+                'reason','typhoon',
+                'recordedAt',datetime('now')
+              ),
+              CURRENT_TIMESTAMP
+            )
+            ON CONFLICT(state_key) DO UPDATE SET
+              state_value=excluded.state_value,
+              updated_at=CURRENT_TIMESTAMP;
+          "
+
+      - name: Verify D1 cancellation and Sep22 program readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          state=$(npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT
+              (SELECT COUNT(*) FROM rt_races WHERE race_date='2026-09-21' AND venue='中山' AND status='cancelled') AS cancelledNakayama,
+              (SELECT COUNT(*) FROM rt_races WHERE race_date='2026-09-21' AND venue='中山') AS sep21NakayamaTotal,
+              (SELECT COUNT(*) FROM rt_races WHERE race_date='2026-09-22' AND venue='中山') AS sep22NakayamaTotal,
+              (SELECT COUNT(*) FROM rt_races WHERE race_date='2026-09-22' AND venue='中山' AND start_time_utc IS NOT NULL) AS sep22Timed,
+              (SELECT COUNT(*) FROM rt_races r WHERE r.race_date='2026-09-22' AND r.venue='中山'
+                 AND (SELECT COUNT(*) FROM rt_runners rr WHERE rr.race_id=r.race_id AND COALESCE(rr.runner_status,'active')='active')>=3) AS sep22EntryReady
+          ")
+          echo "$state"
+          STATE="$state" node - <<'NODE'
+          const x=JSON.parse(process.env.STATE||'[]'); const r=x?.[0]?.results?.[0]||{};
+          if(Number(r.cancelledNakayama)!==12||Number(r.sep21NakayamaTotal)!==12) throw new Error('SEP21_CANCEL_STATE_BAD:'+JSON.stringify(r));
+          console.log(JSON.stringify(r));
+          NODE
+
+      - name: Wait for public deployment and verify API no longer reports false missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          ok=0
+          for i in $(seq 1 12); do
+            curl -fsS "https://race-tantei-phase0.race-tantei.workers.dev/api/public/day?date=2026-09-21&_cancel=$i" -o /tmp/day.json || true
+            if DAY=/tmp/day.json node - <<'NODE'
+          const fs=require('fs'); const b=JSON.parse(fs.readFileSync(process.env.DAY,'utf8'));
+          const nak=(b.races||[]).filter(r=>r.venue==='中山');
+          const han=(b.races||[]).filter(r=>r.venue==='阪神');
+          if(nak.length!==12||!nak.every(r=>r.publicState?.code==='cancelled')) process.exit(1);
+          if(nak.some(r=>r.publicState?.code==='missing')) process.exit(1);
+          const h1=han.find(r=>Number(r.raceNo)===1);
+          if(!h1||h1.publicState?.code!=='buy') process.exit(1);
+          console.log(JSON.stringify({nakayamaCancelled:nak.length,hanshin1:h1.publicState}));
+          NODE
+            then ok=1; break; fi
+            sleep 10
+          done
+          test "$ok" = 1
