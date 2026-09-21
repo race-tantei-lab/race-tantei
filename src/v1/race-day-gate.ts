@@ -18,7 +18,7 @@ type JraPageFetcher = (url: string) => Promise<FetchPageResult>;
 
 const CACHE_MS = 6 * 60 * 60 * 1000;
 const MONTH_SLUGS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"] as const;
-const JRA_2026_SPECIAL_MONDAYS = new Set(["2026-01-12", "2026-09-21", "2026-10-12", "2026-11-23"]);
+const JRA_2026_SPECIAL_RACE_DATES = new Set(["2026-01-12", "2026-09-21", "2026-09-22", "2026-10-12", "2026-11-23"]);
 let cachedGate: CachedGate | null = null;
 
 function errorCode(error: unknown): string {
@@ -53,7 +53,7 @@ function monthCalendarListsDay(html: string, raceDate: string): boolean {
 function officialAnnualScheduleFallback(raceDate: string): boolean | null {
   if (!raceDate.startsWith("2026-")) return null;
   if (raceDate < "2026-01-04" || raceDate > "2026-12-27") return false;
-  if (JRA_2026_SPECIAL_MONDAYS.has(raceDate)) return true;
+  if (JRA_2026_SPECIAL_RACE_DATES.has(raceDate)) return true;
   const [yearText, monthText, dayText] = raceDate.split("-");
   const year = Number(yearText);
   const month = Number(monthText);
