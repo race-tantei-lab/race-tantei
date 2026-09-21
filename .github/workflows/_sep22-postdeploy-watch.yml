@@ -1,0 +1,139 @@
+name: Sep22 postdeploy automatic readiness watch
+
+on:
+  push:
+    branches:
+      - ops/sep21-final-audit
+    paths:
+      - ".github/workflows/_sep22-postdeploy-watch.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+
+      - name: Verify selection metadata and settled rows
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== SELECTION_META ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT updated_at AS updatedAt,
+                   json_extract(state_value,'$.sourceModel') AS sourceModel,
+                   json_extract(state_value,'$.resultDataUsedForTargetDay') AS resultDataUsedForTargetDay,
+                   json_array_length(json_extract(state_value,'$.selected')) AS rawSelected
+            FROM rt_system_state
+            WHERE state_key='final_daily_selection:2026-09-21'
+          "
+          echo '=== SETTLED_SELECTED ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            WITH selected AS (
+              SELECT json_extract(j.value,'$.raceId') AS raceId
+              FROM rt_system_state s,json_each(json_extract(s.state_value,'$.selected')) j
+              WHERE s.state_key='final_daily_selection:2026-09-21'
+            )
+            SELECT r.race_id AS raceId,r.venue,r.race_no AS raceNo,r.status,
+                   COUNT(b.id) AS finalRows,
+                   SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END) AS settledRows,
+                   MIN(b.locked_at) AS lockedAt
+            FROM rt_races r JOIN selected x ON x.raceId=r.race_id
+            LEFT JOIN rt_public_bets b ON b.race_id=r.race_id AND b.source_prediction_id=-2
+            GROUP BY r.race_id,r.venue,r.race_no,r.status
+            ORDER BY r.start_time_utc
+          "
+          echo '=== FINAL_BET_SCHEMA_AND_HANSHIN1 ==='
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "PRAGMA table_info(rt_public_bets)"
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+            SELECT * FROM rt_public_bets
+            WHERE race_id='2026-09-21-hanshin-01' AND source_prediction_id=-2
+            ORDER BY id LIMIT 6
+          "
+
+      - name: Watch automatic Sep22 entry repair after deployed public cron
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for i in $(seq 1 14); do
+            echo "=== SEP22_CHECK iteration=$i utc=$(date -u +%FT%TZ) ==="
+            npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+              WITH p AS (
+                SELECT r.venue,r.race_id,r.race_no,r.start_time_utc,
+                       CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END AS hasEntryUrl,
+                       SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS active
+                FROM rt_races r LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
+                WHERE r.race_date='2026-09-22'
+                GROUP BY r.venue,r.race_id,r.race_no,r.start_time_utc,r.entry_url
+              )
+              SELECT venue,COUNT(*) AS races,
+                     SUM(CASE WHEN start_time_utc IS NOT NULL THEN 1 ELSE 0 END) AS withStart,
+                     SUM(CASE WHEN hasEntryUrl=1 THEN 1 ELSE 0 END) AS withEntryUrl,
+                     SUM(CASE WHEN active>=3 THEN 1 ELSE 0 END) AS entryReady,
+                     MIN(active) AS minActive
+              FROM p GROUP BY venue
+            " > /tmp/sep22.json
+            cat /tmp/sep22.json
+            npx wrangler d1 execute race-tantei-phase0 --remote --json --command "
+              SELECT state_key AS stateKey,updated_at AS updatedAt,state_value AS stateValue
+              FROM rt_system_state
+              WHERE state_key IN (
+                'worker_upcoming_calendar_day:2026-09-22',
+                'worker_upcoming_entry_repair',
+                'worker_upcoming_entry_derived_repair',
+                'final_daily_selection:2026-09-22'
+              )
+              ORDER BY state_key
+            " > /tmp/sep22state.json
+            cat /tmp/sep22state.json
+            if python3 - <<'PY'
+          import json
+          raw=json.load(open('/tmp/sep22.json'))
+          rows=[]
+          for block in raw if isinstance(raw,list) else [raw]:
+              if isinstance(block,dict): rows += block.get('results') or []
+          ok=bool(rows) and all(int(r.get('races') or 0)==12 and int(r.get('withStart') or 0)==12 and int(r.get('withEntryUrl') or 0)==12 and int(r.get('entryReady') or 0)==12 and int(r.get('minActive') or 0)>=3 for r in rows)
+          raise SystemExit(0 if ok else 1)
+          PY
+            then
+              ready=1
+              echo "SEP22_ENTRY_READY iteration=$i"
+              break
+            fi
+            sleep 30
+          done
+          if [ "$ready" != 1 ]; then
+            echo "SEP22_ENTRY_NOT_READY_WITHIN_WATCH"
+            exit 3
+          fi
+
+      - name: Validate Sep22 canonical selection from production D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/generate-ten-year-preday-selection.py --date 2026-09-22 --out /tmp/sep22-selection.json
+          python3 - <<'PY'
+          import collections,json
+          p=json.load(open('/tmp/sep22-selection.json'))
+          sel=p.get('selected') or []
+          by=collections.Counter(str(r.get('venue') or '') for r in sel)
+          out={'sourceModel':p.get('sourceModel'),'resultDataUsedForTargetDay':p.get('resultDataUsedForTargetDay'),'selected':len(sel),'venues':dict(by),'raceIds':[r.get('raceId') for r in sel]}
+          print('SEP22_SELECTION_OK',json.dumps(out,ensure_ascii=False))
+          assert p.get('sourceModel')=='ten-year-completed-model'
+          assert p.get('resultDataUsedForTargetDay') is False
+          assert len(by)>=1 and all(v==5 for v in by.values())
+          assert len(sel)==5*len(by)
+          PY
