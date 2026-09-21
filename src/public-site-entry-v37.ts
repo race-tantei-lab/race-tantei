@@ -9,7 +9,7 @@ import { shell } from "./v1/public-ui.js";
 import { readPublicCalendarCache } from "./v1/public-calendar-cache.js";
 import type { Env } from "./v1/types.js";
 
-const UI_VERSION = "ten-year-completed-public-v37-light-home-20260921";
+const UI_VERSION = "ten-year-completed-public-v37-instant-home-20260921";
 const FORBIDDEN_RECOVERY_TEXT = [
   "データ取得を一時的に再試行しています",
   "データ取得を再試行しています",
@@ -217,6 +217,8 @@ function embeddedTodayResultsHtml(): string {
 
 function embeddedNormalHome(calendarRows: CalendarRow[] = staticRecentCalendar()): Response {
   let html = rewriteEmbeddedToday(mergeRecentCalendar(NORMAL_HOME_SNAPSHOT, calendarRows));
+  const canonicalBase = '<base href="https://race-tantei-phase0.race-tantei.workers.dev/"><link rel="canonical" href="https://race-tantei-phase0.race-tantei.workers.dev/">';
+  if (!html.includes('<base href=')) html = html.replace('<head>', '<head>' + canonicalBase);
   const todayResults = embeddedTodayResultsHtml();
   if (todayResults && !html.includes("今日の結果")) {
     html = html.replace('<div class="section-title"><h2>累計回収率</h2>', todayResults + '<div class="section-title"><h2>累計回収率</h2>');
@@ -346,9 +348,10 @@ async function fetchPublicDay(request: Request, env: Env, ctx: ExecutionContext,
   }
 }
 
-async function fetchNormalHome(_request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
-  const calendarRows = await loadRecentCalendar(env);
-  return embeddedNormalHome(calendarRows);
+async function fetchNormalHome(_request: Request, _env: Env, _ctx: ExecutionContext): Promise<Response> {
+  // Do not block first paint on D1. Current/recent race days are embedded in the
+  // tiny recent snapshot, while historical years remain lazy-loaded.
+  return embeddedNormalHome(staticRecentCalendar());
 }
 async function fetchRaceList(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const homeUrl = new URL(request.url);
