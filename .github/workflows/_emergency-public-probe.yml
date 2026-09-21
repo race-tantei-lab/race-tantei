@@ -49,6 +49,14 @@ jobs:
             "$chrome" --headless --no-sandbox --disable-gpu --virtual-time-budget=7000 --enable-logging=stderr --v=1 --dump-dom "$base/" >/tmp/dom.html 2>/tmp/chrome.log || true
             echo 'DOM_RACE_STATUS'
             grep -oE 'レース情報を[^<]*|この会場のレース情報[^<]*|[0-9]+R' /tmp/dom.html | tail -40 || true
+            echo 'RACES_DOM_SLICE'
+            python3 - <<'PY'
+            from pathlib import Path
+            html=Path('/tmp/dom.html').read_text(encoding='utf-8',errors='replace')
+            marker='id="races"'
+            i=html.find(marker)
+            print(html[max(0,i-300):i+12000] if i>=0 else 'RACES_MARKER_NOT_FOUND')
+            PY
             echo 'CONSOLE_ERRORS'
             grep -Ei 'error|exception|failed|TypeError|ReferenceError' /tmp/chrome.log | tail -120 || true
           fi
