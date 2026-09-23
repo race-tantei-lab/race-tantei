@@ -1,0 +1,137 @@
+name: Old vs neutral logic A/B on common odds
+on:
+  push:
+    branches:
+      - diag/common-odds-logic-ab-20260923
+jobs:
+  ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0" "numpy<3"
+      - name: A/B replay
+        shell: bash
+        run: |
+          cat >/tmp/ab.py <<'PY'
+          import datetime as dt, importlib.util, itertools, json, math, pathlib, sys
+          import lightgbm as lgb
+          import numpy as np
+          ROOT=pathlib.Path('.').resolve()
+          def load(path,name):
+              spec=importlib.util.spec_from_file_location(name,path)
+              m=importlib.util.module_from_spec(spec);sys.modules[name]=m;spec.loader.exec_module(m);return m
+          core=load(ROOT/'scripts'/'ten-year-production-core.py','core')
+          learning=load(ROOT/'scripts'/'live-recency-learning.py','learning')
+          collector=load(ROOT/'scripts'/'collect-jra-official-odds.py','collector')
+          cfg=core.load_config(); booster=lgb.Booster(model_file=str(core.MODEL_PATH)); features=list(cfg['runnerProbabilityModel']['features'])
+          BET_ORDER=('単勝','ワイド','馬連','馬単','3連複','3連単')
+
+          def q(sql,p=None): return collector.d1_query(sql,p or [])
+          def positions(bt,n):
+              if bt=='単勝': return ((i,) for i in range(n))
+              if bt in ('ワイド','馬連'): return itertools.combinations(range(n),2)
+              if bt=='馬単': return itertools.permutations(range(n),2)
+              if bt=='3連複': return itertools.combinations(range(n),3)
+              if bt=='3連単': return itertools.permutations(range(n),3)
+          def combo(bt,pos,hn):
+              a=[hn[i] for i in pos]
+              if bt in ('ワイド','馬連','3連複'): a=sorted(a)
+              return '-'.join(map(str,a))
+          def choose(rid,runners,w,odds,factor):
+              hn=[int(r['horseNo']) for r in runners]; n=len(runners); tops=[]
+              for bt in BET_ORDER:
+                  cand=[]
+                  for pos in positions(bt,n):
+                      c=combo(bt,pos,hn); o=odds.get((bt,c))
+                      if o is None: continue
+                      p=float(core.combination_probability(bt,pos,w))
+                      if not math.isfinite(p) or p<=0: continue
+                      rf=float(factor(bt,o))
+                      cand.append({'betType':bt,'combination':c,'officialOdds':o,'predictedProbability':p,'recencyFactor':rf,'valueProduct':p*o*rf})
+                  if not cand: raise RuntimeError(f'MISSING:{rid}:{bt}')
+                  cand.sort(key=lambda x:(-x['valueProduct'],x['officialOdds'],x['combination']))
+                  keep=cand[:5]
+                  for x in keep:x['score']=math.log(x['predictedProbability'])+0.4*math.log(x['officialOdds'])+math.log(x['recencyFactor'])
+                  keep.sort(key=lambda x:(-x['score'],-x['predictedProbability'],x['combination']))
+                  tops.append(keep[0])
+              tops.sort(key=lambda x:(-x['score'],BET_ORDER.index(x['betType']),x['combination']))
+              return tops[:2]
+          def canon(bt,c):
+              if bt in ('ワイド','馬連','3連複'): return '-'.join(map(str,sorted(map(int,c.split('-')))))
+              return c
+
+          detail=[]
+          for date in ('2026-09-20','2026-09-21','2026-09-22'):
+              sr=q("SELECT state_value AS v FROM rt_system_state WHERE state_key=?",[f'final_daily_selection:{date}'])
+              if not sr: continue
+              sel=json.loads(sr[0]['v'])
+              ids=[str(x['raceId']) for x in sel.get('selected',[])]
+              # deterministic feature state strictly before target day
+              state=core.load_feature_state()
+              hist=core.bundles_from_d1(collector,"race_date>? AND race_date<?",[state['throughDate'],date])
+              core.advance_feature_state(state,hist)
+              target_map={str(b['race']['raceId']):b for b in core.target_bundles(collector,date)}
+              for rid in ids:
+                  b=target_map.get(rid)
+                  if not b: continue
+                  if str(b['race'].get('status') or '').lower() in ('cancelled','canceled','postponed'): continue
+                  # Use race start as cutoff: only information available before result, but common final odds input below.
+                  cutoff=str(b['race'].get('startTimeUtc') or '')
+                  if not cutoff: continue
+                  race_state=core.load_feature_state()
+                  hist2=core.bundles_from_d1(collector,"race_date>? AND race_date<?",[race_state['throughDate'],date])
+                  core.advance_feature_state(race_state,hist2)
+                  same=core.bundles_from_d1(collector,"race_date=? AND start_time_utc IS NOT NULL AND datetime(start_time_utc)<datetime(?) AND EXISTS (SELECT 1 FROM rt_results rr WHERE rr.race_id=rt_races.race_id AND rr.finish_position IS NOT NULL)",[date,cutoff])
+                  if same: core.update_feature_state_for_date(race_state,same)
+                  runners=[r for r in b['runners'] if (r.get('runnerStatus') or 'active')=='active']; runners.sort(key=lambda r:int(r['horseNo']))
+                  x=np.asarray([[float(core.ml_feature_row(race_state,b['race'],r,len(runners))[f]) for f in features] for r in runners],dtype=np.float64)
+                  raw=np.asarray(booster.predict(x),dtype=np.float64); base=raw/raw.sum()
+
+                  rr,br=learning.load_recent_learning_rows(collector,date,cutoff)
+                  fac,_,audit=learning.build_runner_learning(rr,b['race'],runners,cutoff,date)
+                  bl=learning.build_bet_learning(br,cutoff,date)
+                  oldw=np.asarray([base[i]*float(fac[i]) for i in range(len(runners))],dtype=np.float64); oldw=oldw/oldw.sum()
+                  neutralw=base/base.sum()
+
+                  # Common post-race official odds vector. Prefer stored latest rows, which are immutable official JRA values.
+                  ors=q("SELECT bet_type AS bt,combination AS c,odds_min AS lo,odds_max AS hi FROM rt_official_odds_latest WHERE race_id=?",[rid])
+                  by={(str(r['bt']),str(r['c'])):(float(r['lo'])+float(r['hi']))/2 for r in ors}
+                  types={bt for bt,_ in by}
+                  if len(types)<6:
+                      detail.append({'date':date,'raceId':rid,'status':'ODDS_INCOMPLETE','types':sorted(types),'rows':len(ors)}); continue
+                  try:
+                      old=choose(rid,runners,oldw,by,lambda bt,o:learning.bet_factor(bl,bt,str(b['race'].get('venue') or ''),o))
+                      neu=choose(rid,runners,neutralw,by,lambda bt,o:1.0)
+                  except Exception as e:
+                      detail.append({'date':date,'raceId':rid,'status':'ERROR','error':str(e)}); continue
+                  pays=q("SELECT bet_type AS bt,combination AS c,payout_yen AS p FROM rt_payouts WHERE race_id=?",[rid])
+                  pm={(str(r['bt']),canon(str(r['bt']),str(r['c']))):int(r['p']) for r in pays}
+                  def ret(ts):
+                      return sum(pm.get((t['betType'],canon(t['betType'],t['combination'])),0)*10 for t in ts)
+                  oldret,neuret=ret(old),ret(neu)
+                  detail.append({'date':date,'raceId':rid,'status':'OK',
+                    'oldTickets':[{k:t[k] for k in ('betType','combination','officialOdds','recencyFactor')} for t in old],
+                    'neutralTickets':[{k:t[k] for k in ('betType','combination','officialOdds','recencyFactor')} for t in neu],
+                    'changed':{(x['betType'],x['combination']) for x in old}!={(x['betType'],x['combination']) for x in neu},
+                    'oldHit':oldret>0,'neutralHit':neuret>0,'oldReturnLight':oldret,'neutralReturnLight':neuret,
+                    'runnerHistoryRaces':audit.get('runnerHistoryRaces'),'sameDayFinishedRaces':audit.get('sameDayFinishedRaces'),'betHistoryRaces':bl.get('audit',{}).get('betHistoryRaces')})
+          print('AB_DETAIL_BEGIN')
+          for x in detail: print(json.dumps(x,ensure_ascii=False))
+          print('AB_DETAIL_END')
+          for date in ('2026-09-20','2026-09-21','2026-09-22'):
+              rs=[x for x in detail if x.get('date')==date and x.get('status')=='OK']
+              print(json.dumps({'summaryDate':date,'races':len(rs),'changed':sum(x['changed'] for x in rs),
+                'oldHits':sum(x['oldHit'] for x in rs),'neutralHits':sum(x['neutralHit'] for x in rs),
+                'stake':len(rs)*2000,'oldReturn':sum(x['oldReturnLight'] for x in rs),'neutralReturn':sum(x['neutralReturnLight'] for x in rs)},ensure_ascii=False))
+          rs=[x for x in detail if x.get('status')=='OK']
+          print(json.dumps({'TOTAL':True,'races':len(rs),'changed':sum(x['changed'] for x in rs),'oldHits':sum(x['oldHit'] for x in rs),'neutralHits':sum(x['neutralHit'] for x in rs),'stake':len(rs)*2000,'oldReturn':sum(x['oldReturnLight'] for x in rs),'neutralReturn':sum(x['neutralReturnLight'] for x in rs)},ensure_ascii=False))
+          PY
+          python /tmp/ab.py
