@@ -1,8 +1,8 @@
-name: Old logic replay Sep20-22
+name: Old logic replay 2026-09-22
 on:
   push:
     branches:
-      - diag/old-logic-replay-20260923
+      - diag/old-replay-20260922-20260923
 jobs:
   replay:
     runs-on: ubuntu-latest
@@ -72,7 +72,7 @@ jobs:
               return by_type[:2]
 
           sels={}
-          for date in ('2026-09-20','2026-09-21','2026-09-22'):
+          for date in ('2026-09-22',):
               rows=q("SELECT state_value AS v FROM rt_system_state WHERE state_key=?",[f'final_daily_selection:{date}'])
               if not rows: continue
               p=json.loads(rows[0]['v']); sels[date]=[str(x['raceId']) for x in p.get('selected',[])]
@@ -154,7 +154,7 @@ jobs:
           print('REPLAY_DETAIL_BEGIN')
           for r in replay_rows: print(json.dumps(r,ensure_ascii=False))
           print('REPLAY_DETAIL_END')
-          for date in ('2026-09-20','2026-09-21','2026-09-22'):
+          for date in ('2026-09-22',):
               rs=[r for r in replay_rows if r.get('date')==date and r.get('status')=='OK']
               print(json.dumps({
                 'summaryDate':date,'races':len(rs),
