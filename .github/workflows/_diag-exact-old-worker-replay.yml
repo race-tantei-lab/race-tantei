@@ -37,7 +37,19 @@ jobs:
           class Bound {
             constructor(public sql:string,public params:unknown[]=[]){}
             bind(...p:unknown[]){return new Bound(this.sql,p)}
-            async all<T=any>(){return await exec(this.sql,this.params) as any}
+            async all<T=any>(){
+              if(this.params.length>50 && this.sql.includes('WHERE ra.race_id IN (')){
+                const out:any[]=[];
+                for(let i=0;i<this.params.length;i+=50){
+                  const chunk=this.params.slice(i,i+50);
+                  const sql=this.sql.replace(/WHERE ra\.race_id IN \([^)]*\)/, 'WHERE ra.race_id IN ('+chunk.map(()=>'?').join(',')+')');
+                  const x:any=await exec(sql,chunk); out.push(...(x.results||[]));
+                }
+                out.sort((a:any,b:any)=>String(a.raceDate||'').localeCompare(String(b.raceDate||''))||String(a.raceId||'').localeCompare(String(b.raceId||''))||Number(a.horseNo||0)-Number(b.horseNo||0));
+                return {results:out} as any;
+              }
+              return await exec(this.sql,this.params) as any;
+            }
             async first<T=any>(){const x:any=await exec(this.sql,this.params);return (x.results?.[0]??null) as T|null}
           }
           class DB {
