@@ -114,7 +114,7 @@ jobs:
             GROUP BY r.race_id,r.race_date,r.venue,r.race_no,r.result_url,r.start_time_utc
             ORDER BY r.race_date,r.venue,r.race_no
           """)
-          print('TARGET_COUNT',len(rows))
+          print('TARGET_COUNT',len(rows)); print('TARGET_ROWS',json.dumps(rows,ensure_ascii=False))
 
           # Fetch official historical final odds.
           fetched={}
