@@ -92,14 +92,18 @@ jobs:
                   same=core.bundles_from_d1(collector,"race_date=? AND start_time_utc IS NOT NULL AND datetime(start_time_utc)<datetime(?) AND EXISTS (SELECT 1 FROM rt_results rr WHERE rr.race_id=rt_races.race_id AND rr.finish_position IS NOT NULL)",[date,cutoff])
                   if same: core.update_feature_state_for_date(race_state,same)
                   runners=[r for r in b['runners'] if (r.get('runnerStatus') or 'active')=='active']; runners.sort(key=lambda r:int(r['horseNo']))
-                  x=np.asarray([[float(core.ml_feature_row(race_state,b['race'],r,len(runners))[f]) for f in features] for r in runners],dtype=np.float64)
-                  raw=np.asarray(booster.predict(x),dtype=np.float64); base=raw/raw.sum()
+                  x_old=np.asarray([[float(core.ml_feature_row(race_state,b['race'],r,len(runners))[f]) for f in features] for r in runners],dtype=np.float64)
+                  raw_old=np.asarray(booster.predict(x_old),dtype=np.float64); oldbase=raw_old/raw_old.sum()
+
+                  # Changed 9/19 live path: no historical delta and no same-day feature-state update.
+                  neutral_state=core.load_feature_state()
+                  x_neutral=np.asarray([[float(core.ml_feature_row(neutral_state,b['race'],r,len(runners))[f]) for f in features] for r in runners],dtype=np.float64)
+                  raw_neutral=np.asarray(booster.predict(x_neutral),dtype=np.float64); neutralw=raw_neutral/raw_neutral.sum()
 
                   rr,br=learning.load_recent_learning_rows(collector,date,cutoff)
                   fac,_,audit=learning.build_runner_learning(rr,b['race'],runners,cutoff,date)
                   bl=learning.build_bet_learning(br,cutoff,date)
-                  oldw=np.asarray([base[i]*float(fac[i]) for i in range(len(runners))],dtype=np.float64); oldw=oldw/oldw.sum()
-                  neutralw=base/base.sum()
+                  oldw=np.asarray([oldbase[i]*float(fac[i]) for i in range(len(runners))],dtype=np.float64); oldw=oldw/oldw.sum()
 
                   # Common post-race official odds vector. Prefer stored latest rows, which are immutable official JRA values.
                   ors=q("SELECT bet_type AS bt,combination AS c,odds_min AS lo,odds_max AS hi FROM rt_official_odds_latest WHERE race_id=?",[rid])
