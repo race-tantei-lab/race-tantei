@@ -144,12 +144,12 @@ jobs:
 
           target_maps={}
           old_base_states={}
+          st=core.load_feature_state()
           for date in sorted({r['raceDate'] for r in rows}):
               target_maps[date]={str(b['race']['raceId']):b for b in core.target_bundles(collector,date)}
-              st=core.load_feature_state()
               hist=core.bundles_from_d1(collector,"race_date>? AND race_date<?",[st['throughDate'],date])
               core.advance_feature_state(st,hist)
-              old_base_states[date]=st
+              old_base_states[date]=copy.deepcopy(st)
               print('BASE_STATE_READY',date,st.get('throughDate'),flush=True)
 
           output=[]
