@@ -1,8 +1,8 @@
-name: Old vs neutral logic A/B on common odds
+name: A/B 2026-09-20
 on:
   push:
     branches:
-      - diag/common-odds-logic-ab-20260923
+      - diag/common-ab-20260920-20260923
 jobs:
   ab:
     runs-on: ubuntu-latest
@@ -69,7 +69,7 @@ jobs:
               return c
 
           detail=[]
-          for date in ('2026-09-20','2026-09-21','2026-09-22'):
+          for date in ('2026-09-20',):
               sr=q("SELECT state_value AS v FROM rt_system_state WHERE state_key=?",[f'final_daily_selection:{date}'])
               if not sr: continue
               sel=json.loads(sr[0]['v'])
@@ -126,7 +126,7 @@ jobs:
           print('AB_DETAIL_BEGIN')
           for x in detail: print(json.dumps(x,ensure_ascii=False))
           print('AB_DETAIL_END')
-          for date in ('2026-09-20','2026-09-21','2026-09-22'):
+          for date in ('2026-09-20',):
               rs=[x for x in detail if x.get('date')==date and x.get('status')=='OK']
               print(json.dumps({'summaryDate':date,'races':len(rs),'changed':sum(x['changed'] for x in rs),
                 'oldHits':sum(x['oldHit'] for x in rs),'neutralHits':sum(x['neutralHit'] for x in rs),
