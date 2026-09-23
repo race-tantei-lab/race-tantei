@@ -21,7 +21,7 @@ jobs:
         shell: bash
         run: |
           cat >/tmp/replay_compare.py <<'PY'
-          import datetime as dt, importlib.util, itertools, json, math, pathlib, sys
+          import datetime as dt, importlib.util, itertools, json, math, pathlib, sys, concurrent.futures
           import numpy as np
           import lightgbm as lgb
           ROOT=pathlib.Path('.').resolve()
@@ -121,14 +121,17 @@ jobs:
           # Fetch official historical final odds.
           fetched={}
           failures=[]
-          for i,row in enumerate(rows,1):
-              try:
-                  rec=fetch_race(row); fetched[row['raceId']]=rec
-                  print('ODDS_OK',i,row['raceId'],json.dumps(rec['present'],ensure_ascii=False))
-              except Exception as e:
-                  failures.append({'raceId':row['raceId'],'error':f'{type(e).__name__}:{e}'})
-                  print('ODDS_FAIL',row['raceId'],failures[-1]['error'])
-          print('ODDS_FAILURES',json.dumps(failures,ensure_ascii=False))
+          with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+              fm={pool.submit(fetch_race,row):row for row in rows}
+              for i,fu in enumerate(concurrent.futures.as_completed(fm),1):
+                  row=fm[fu]
+                  try:
+                      rec=fu.result(); fetched[row['raceId']]=rec
+                      print('ODDS_OK',i,row['raceId'],json.dumps(rec['present'],ensure_ascii=False),flush=True)
+                  except Exception as e:
+                      failures.append({'raceId':row['raceId'],'error':f'{type(e).__name__}:{e}'})
+                      print('ODDS_FAIL',row['raceId'],failures[-1]['error'],flush=True)
+          print('ODDS_FAILURES',json.dumps(failures,ensure_ascii=False),flush=True)
 
           target_maps={}
           for date in sorted({r['raceDate'] for r in rows}):
