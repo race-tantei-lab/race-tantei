@@ -1,0 +1,123 @@
+name: Exact old Worker replay Sep20-22
+on:
+  push:
+    branches:
+      - diag/old-worker-exact-replay-20260923
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Exact replay
+        shell: bash
+        run: |
+          cat >/tmp/exact-replay.ts <<'TS'
+          import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION, completedFeatureVector, loadCompletedFeatureStateForRace } from '${{ github.workspace }}/src/v1/completed-feature-runtime.ts';
+          import { loadCompletedModelRuntime } from '${{ github.workspace }}/src/v1/completed-model-runtime.ts';
+          import { completedRecencyBetFactor, loadCompletedRecencyLearning } from '${{ github.workspace }}/src/v1/completed-recency-learning.ts';
+          import { chooseCompletedTwoTickets, normalizeCompletedWeights } from '${{ github.workspace }}/src/v1/completed-ticket-runtime.ts';
+
+          const endpoint=`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/d1/database/${process.env.CLOUDFLARE_D1_DATABASE_ID}/query`;
+          const token=process.env.CLOUDFLARE_API_TOKEN!;
+          async function exec(sql:string,params:unknown[]=[]){
+            const r=await fetch(endpoint,{method:'POST',headers:{authorization:`Bearer ${token}`,'content-type':'application/json'},body:JSON.stringify({sql,params})});
+            const b:any=await r.json(); if(!r.ok||!b.success) throw new Error('D1:'+JSON.stringify(b));
+            return b.result?.[0] ?? {results:[]};
+          }
+          class Bound {
+            constructor(public sql:string,public params:unknown[]=[]){}
+            bind(...p:unknown[]){return new Bound(this.sql,p)}
+            async all<T=any>(){return await exec(this.sql,this.params) as any}
+            async first<T=any>(){const x:any=await exec(this.sql,this.params);return (x.results?.[0]??null) as T|null}
+          }
+          class DB {
+            prepare(sql:string){return new Bound(sql)}
+            async batch(stmts:any[]){return await Promise.all(stmts.map((s)=>s.all()))}
+          }
+          const db:any=new DB();
+
+          function decodeB64(s:string){return Uint8Array.from(Buffer.from(s,'base64'))}
+          async function model(){
+            const mr:any=await db.prepare("SELECT key,value FROM rt_ml_model_meta").all();
+            const meta=new Map((mr.results||[]).map((r:any)=>[r.key,r.value]));
+            if(meta.get('ready')!=='1'||meta.get('modelVersion')!==COMPLETED_MODEL_VERSION||meta.get('sourceSha256')!==COMPLETED_MODEL_SHA256) throw new Error('MODEL_IDENTITY');
+            const gen=String(meta.get('generation')); const cc=Number(meta.get('chunkCount')); const bl=Number(meta.get('byteLength'));
+            const cr:any=await db.prepare("SELECT seq,data_b64 AS dataB64 FROM rt_ml_model_chunk WHERE generation=? ORDER BY seq").bind(gen).all();
+            const chunks=(cr.results||[]).map((r:any)=>decodeB64(r.dataB64));
+            if(chunks.length!==cc) throw new Error('MODEL_CHUNKS');
+            const merged=new Uint8Array(bl);let off=0;for(const c of chunks){merged.set(c,off);off+=c.byteLength}
+            return loadCompletedModelRuntime(merged.buffer);
+          }
+          async function race(rid:string){
+            const r:any=await db.prepare(`SELECT race_id AS raceId,race_date AS raceDate,venue,meeting_no AS meetingNo,meeting_day AS meetingDay,race_no AS raceNo,race_name AS raceName,conditions,surface,distance_m AS distanceM,direction,start_time_jst AS startTimeJst,start_time_utc AS startTimeUtc,weather,track_condition AS trackCondition,entry_url AS entryUrl,result_url AS resultUrl,status FROM rt_races WHERE race_id=?`).bind(rid).first();
+            const rr:any=await db.prepare(`SELECT horse_no AS horseNo,frame_no AS frameNo,horse_name AS horseName,sex_age AS sexAge,coat_color AS coatColor,horse_weight AS horseWeight,weight_change AS weightChange,jockey,assigned_weight AS assignedWeight,trainer,stable,win_odds AS winOdds,popularity,runner_status AS runnerStatus FROM rt_runners WHERE race_id=? ORDER BY horse_no`).bind(rid).all();
+            return {race:r,runners:(rr.results||[]).filter((x:any)=>(x.runnerStatus||'active')==='active')};
+          }
+          function canon(bt:string,c:string){if(['ワイド','馬連','3連複'].includes(bt))return c.split('-').map(Number).sort((a,b)=>a-b).join('-');return c}
+          async function main(){
+            const mdl=await model();
+            const detail:any[]=[];
+            for(const date of ['2026-09-20','2026-09-21','2026-09-22']){
+              const sr:any=await db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=?").bind('final_daily_selection:'+date).first();
+              if(!sr?.value) continue;
+              const sel=JSON.parse(sr.value);
+              for(const row of sel.selected||[]){
+                const rid=String(row.raceId);
+                const fr:any=await db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=?").bind('worker_live_final:'+rid).first();
+                if(!fr?.value) continue;
+                const fv=JSON.parse(fr.value);
+                const cutoff=String(fv.oddsFetchedAt||fv.previewGeneratedAt||fv.lockedAt||'');
+                if(!cutoff) continue;
+                const {race:rc,runners}=await race(rid);
+                const state=await loadCompletedFeatureStateForRace(db,rc,runners,cutoff);
+                const vectors=runners.map((r:any)=>completedFeatureVector(state,rc,r,runners.length));
+                const raw=vectors.map((v:any)=>mdl.predict(v));
+                const base=normalizeCompletedWeights(raw);
+                const learn=await loadCompletedRecencyLearning(db,rc,runners,cutoff);
+                const weights=normalizeCompletedWeights(base.map((v:number,i:number)=>v*learn.runnerFactors[i]));
+                const cap:any=await db.prepare(`SELECT captured_at_utc AS capturedAt,COUNT(*) AS n,COUNT(DISTINCT bet_type) AS types FROM rt_official_odds_snapshots WHERE race_id=? AND datetime(captured_at_utc)<=datetime(?) GROUP BY captured_at_utc HAVING COUNT(DISTINCT bet_type)=6 ORDER BY datetime(captured_at_utc) DESC LIMIT 1`).bind(rid,cutoff).first();
+                if(!cap){detail.push({date,raceId:rid,status:'NO_HISTORICAL_ODDS'});continue}
+                const or:any=await db.prepare(`SELECT bet_type AS betType,combination,odds_min AS oddsMin,odds_max AS oddsMax FROM rt_official_odds_snapshots WHERE race_id=? AND captured_at_utc=? ORDER BY bet_type,combination`).bind(rid,cap.capturedAt).all();
+                const oddsRows=(or.results||[]).map((x:any)=>({betType:String(x.betType),combination:String(x.combination),oddsMin:Number(x.oddsMin),oddsMax:Number(x.oddsMax)}));
+                const old=chooseCompletedTwoTickets(runners.map((r:any)=>Number(r.horseNo)),weights,oddsRows,(bt:string,odds:number)=>completedRecencyBetFactor(learn,bt,String(rc.venue),odds));
+                const actual=(fv.tickets||[]).map((t:any)=>({betType:String(t.betType),combination:String(t.combination),officialOdds:Number(t.officialOdds)}));
+                const pr:any=await db.prepare("SELECT bet_type AS betType,combination,payout_yen AS payoutYen FROM rt_payouts WHERE race_id=?").bind(rid).all();
+                const pm=new Map((pr.results||[]).map((p:any)=>[`${String(p.betType)}|${canon(String(p.betType),String(p.combination))}`,Number(p.payoutYen)]));
+                const ret=(ts:any[])=>ts.reduce((sum,t)=>sum+(pm.get(`${t.betType}|${canon(t.betType,t.combination)}`)||0)*10,0);
+                const oldRet=ret(old as any[]), actualRet=ret(actual);
+                const sig=(ts:any[])=>ts.map(t=>`${t.betType}:${t.combination}`).sort().join('|');
+                detail.push({
+                  date,raceId:rid,status:'OK',cutoff,oddsSnapshot:cap.capturedAt,
+                  oldTickets:(old as any[]).map(t=>({betType:t.betType,combination:t.combination,officialOdds:t.officialOdds,recencyFactor:t.recencyFactor,score:t.score})),
+                  actualTickets:actual,sameTickets:sig(old as any[])===sig(actual),
+                  oldHit:oldRet>0,actualHit:actualRet>0,oldReturnLight:oldRet,actualReturnLight:actualRet,
+                  learningStatus:learn.audit.status,runnerHistoryRaces:learn.audit.runnerHistoryRaces,sameDayFinishedRaces:learn.audit.sameDayFinishedRaces,betHistoryRaces:learn.audit.betHistoryRaces
+                });
+              }
+            }
+            console.log('EXACT_REPLAY_DETAIL_BEGIN');
+            for(const x of detail) console.log(JSON.stringify(x));
+            console.log('EXACT_REPLAY_DETAIL_END');
+            for(const date of ['2026-09-20','2026-09-21','2026-09-22']){
+              const rs=detail.filter(x=>x.date===date&&x.status==='OK');
+              console.log(JSON.stringify({
+                summaryDate:date,races:rs.length,changedTickets:rs.filter(x=>!x.sameTickets).length,
+                oldHits:rs.filter(x=>x.oldHit).length,actualHits:rs.filter(x=>x.actualHit).length,
+                oldStakeLight:rs.length*2000,oldReturnLight:rs.reduce((s,x)=>s+x.oldReturnLight,0),
+                actualReturnLight:rs.reduce((s,x)=>s+x.actualReturnLight,0)
+              }));
+            }
+          }
+          main().catch(e=>{console.error(e);process.exit(1)});
+          TS
+          npx tsx /tmp/exact-replay.ts
