@@ -1,0 +1,204 @@
+name: Old vs neutral final-odds replay Sep20-22
+on:
+  push:
+    branches:
+      - diag/final-odds-old-vs-neutral-20260923
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0" "numpy<3" beautifulsoup4
+      - name: Fetch JRA historical final odds and replay both logic versions
+        shell: bash
+        run: |
+          cat >/tmp/replay_compare.py <<'PY'
+          import datetime as dt, importlib.util, itertools, json, math, pathlib, sys
+          import numpy as np
+          import lightgbm as lgb
+          ROOT=pathlib.Path('.').resolve()
+
+          def load(path,name):
+              spec=importlib.util.spec_from_file_location(name,path)
+              m=importlib.util.module_from_spec(spec);sys.modules[name]=m;spec.loader.exec_module(m);return m
+          core=load(ROOT/'scripts'/'ten-year-production-core.py','core')
+          learning=load(ROOT/'scripts'/'live-recency-learning.py','learning')
+          collector=load(ROOT/'scripts'/'collect-jra-official-odds.py','collector')
+
+          # Load historical JRA fetch/parser definitions without executing its hardcoded bulk export.
+          src=(ROOT/'scripts'/'export-selected-historical-official-odds.py').read_text(encoding='utf-8')
+          defs=src.split("\nselection = json.loads",1)[0]
+          ns={}
+          exec(compile(defs,'historical_odds_defs.py','exec'),ns)
+          fetch_race=ns['fetch_race']
+
+          cfg=core.load_config(); booster=lgb.Booster(model_file=str(core.MODEL_PATH))
+          features=list(cfg['runnerProbabilityModel']['features'])
+          BET_ORDER=('単勝','ワイド','馬連','馬単','3連複','3連単')
+
+          def q(sql,params=None): return collector.d1_query(sql,params or [])
+          def combo_positions(kind,n):
+              if kind=='単勝': return ((i,) for i in range(n))
+              if kind in ('ワイド','馬連'): return itertools.combinations(range(n),2)
+              if kind=='馬単': return itertools.permutations(range(n),2)
+              if kind=='3連複': return itertools.combinations(range(n),3)
+              if kind=='3連単': return itertools.permutations(range(n),3)
+              raise RuntimeError(kind)
+          def combo_text(kind,pos,horse_nos):
+              vals=[horse_nos[i] for i in pos]
+              if kind in ('ワイド','馬連','3連複'): vals=sorted(vals)
+              return '-'.join(str(x) for x in vals)
+
+          def odds_map(rec):
+              h=rec['horses']; out={}
+              for i,x in enumerate(h):
+                  v=rec['win'][i]
+                  if v is not None: out[('単勝',str(x))]=float(v)
+              pairs=list(itertools.combinations(h,2))
+              for key,arr in [('馬連',rec['umaren']),('ワイド',rec['wide'])]:
+                  for i,p in enumerate(pairs):
+                      v=arr[i]
+                      if v is None: continue
+                      if isinstance(v,list): v=(float(v[0])+float(v[1]))/2
+                      out[(key,'-'.join(map(str,p)))]=float(v)
+              exactas=[(a,b) for a in h for b in h if a!=b]
+              for i,p in enumerate(exactas):
+                  v=rec['umatan'][i]
+                  if v is not None: out[('馬単','-'.join(map(str,p)))]=float(v)
+              trios=list(itertools.combinations(h,3))
+              for i,p in enumerate(trios):
+                  v=rec['trio'][i]
+                  if v is not None: out[('3連複','-'.join(map(str,p)))]=float(v)
+              tris=[(a,b,c) for a in h for b in h for c in h if len({a,b,c})==3]
+              for i,p in enumerate(tris):
+                  v=rec['trifecta'][i]
+                  if v is not None: out[('3連単','-'.join(map(str,p)))]=float(v)
+              return out
+
+          def choose(runners,w,odds,venue,bet_learning=None,neutral=False):
+              horse_nos=[int(r['horseNo']) for r in runners]; n=len(runners); by=[]
+              for bt in BET_ORDER:
+                  cand=[]
+                  for pos in combo_positions(bt,n):
+                      combo=combo_text(bt,pos,horse_nos); odd=odds.get((bt,combo))
+                      if odd is None: continue
+                      p=float(core.combination_probability(bt,pos,w))
+                      if p<=0 or not math.isfinite(p): continue
+                      rf=1.0 if neutral else float(learning.bet_factor(bet_learning,bt,venue,odd))
+                      cand.append({'betType':bt,'combination':combo,'officialOdds':odd,'predictedProbability':p,'recencyFactor':rf,'valueProduct':p*odd*rf})
+                  if not cand: raise RuntimeError(f'MISSING_{bt}')
+                  cand.sort(key=lambda x:(-x['valueProduct'],x['officialOdds'],x['combination']))
+                  top=cand[:5]
+                  for x in top: x['score']=math.log(x['predictedProbability'])+0.4*math.log(x['officialOdds'])+math.log(x['recencyFactor'])
+                  top.sort(key=lambda x:(-x['score'],-x['predictedProbability'],x['combination']))
+                  by.append(top[0])
+              by.sort(key=lambda x:(-x['score'],BET_ORDER.index(x['betType']),x['combination']))
+              return by[:2]
+
+          # Exactly races that actually received public final bets, excluding cancelled/operational misses.
+          rows=q("""
+            SELECT r.race_id AS raceId,r.race_date AS raceDate,r.venue,r.race_no AS raceNo,
+                   r.result_url AS resultUrl,r.start_time_utc AS startTimeUtc,
+                   MAX(b.locked_at) AS lockedAt
+            FROM rt_races r JOIN rt_public_bets b ON b.race_id=r.race_id
+            WHERE r.race_date BETWEEN '2026-09-20' AND '2026-09-22'
+              AND b.source_prediction_id=-2
+            GROUP BY r.race_id,r.race_date,r.venue,r.race_no,r.result_url,r.start_time_utc
+            ORDER BY r.race_date,r.venue,r.race_no
+          """)
+          print('TARGET_COUNT',len(rows))
+
+          # Fetch official historical final odds.
+          fetched={}
+          failures=[]
+          for i,row in enumerate(rows,1):
+              try:
+                  rec=fetch_race(row); fetched[row['raceId']]=rec
+                  print('ODDS_OK',i,row['raceId'],json.dumps(rec['present'],ensure_ascii=False))
+              except Exception as e:
+                  failures.append({'raceId':row['raceId'],'error':f'{type(e).__name__}:{e}'})
+                  print('ODDS_FAIL',row['raceId'],failures[-1]['error'])
+          print('ODDS_FAILURES',json.dumps(failures,ensure_ascii=False))
+
+          target_maps={}
+          for date in sorted({r['raceDate'] for r in rows}):
+              target_maps[date]={str(b['race']['raceId']):b for b in core.target_bundles(collector,date)}
+
+          output=[]
+          for row in rows:
+              rid=row['raceId']; date=row['raceDate']
+              if rid not in fetched: continue
+              b=target_maps[date].get(rid)
+              if not b: continue
+              runners=[r for r in b['runners'] if (r.get('runnerStatus') or 'active')=='active'];runners.sort(key=lambda r:int(r.get('horseNo') or 0))
+              odds=odds_map(fetched[rid])
+              cutoff=row['lockedAt'] or (dt.datetime.fromisoformat(row['startTimeUtc'].replace('Z','+00:00'))-dt.timedelta(minutes=15)).isoformat()
+
+              # OLD: historical feature delta + same-day finished results + runner/bet recency.
+              old_state=core.load_feature_state()
+              hist=core.bundles_from_d1(collector,"race_date>? AND race_date<?",[old_state['throughDate'],date])
+              core.advance_feature_state(old_state,hist)
+              same_day=core.bundles_from_d1(collector,
+                "race_date=? AND start_time_utc IS NOT NULL AND datetime(start_time_utc)<datetime(?) AND EXISTS (SELECT 1 FROM rt_results rr WHERE rr.race_id=rt_races.race_id AND rr.finish_position IS NOT NULL)",
+                [date,cutoff])
+              if same_day: core.update_feature_state_for_date(old_state,same_day)
+              xo=np.asarray([[float(core.ml_feature_row(old_state,b['race'],r,len(runners))[f]) for f in features] for r in runners],dtype=np.float64)
+              ro=np.asarray(booster.predict(xo),dtype=np.float64); bwo=ro/ro.sum()
+              rr,br=learning.load_recent_learning_rows(collector,date,cutoff)
+              factors,detail,audit=learning.build_runner_learning(rr,b['race'],runners,cutoff,date)
+              bl=learning.build_bet_learning(br,cutoff,date)
+              wo=np.asarray([bwo[i]*float(factors[i]) for i in range(len(runners))]);wo=wo/wo.sum()
+              old=choose(runners,wo,odds,str(b['race'].get('venue') or ''),bl,False)
+
+              # NEUTRAL: precomputed base only, no historical delta, no runner/bet recency.
+              new_state=core.load_feature_state()
+              xn=np.asarray([[float(core.ml_feature_row(new_state,b['race'],r,len(runners))[f]) for f in features] for r in runners],dtype=np.float64)
+              rn=np.asarray(booster.predict(xn),dtype=np.float64); wn=rn/rn.sum()
+              neutral=choose(runners,wn,odds,str(b['race'].get('venue') or ''),None,True)
+
+              # Actual site tickets and actual realized return on Light.
+              act=q("SELECT bet_type AS betType,combination,stake_yen AS stake,COALESCE(return_yen,0) AS ret,assumed_odds AS odds FROM rt_public_bets WHERE race_id=? AND course='ライト' AND source_prediction_id=-2 ORDER BY id",[rid])
+              pays=q("SELECT bet_type AS betType,combination,payout_yen AS pay FROM rt_payouts WHERE race_id=?",[rid])
+              pmap={(str(x['betType']),str(x['combination'])):int(x['pay']) for x in pays}
+              def calc(ts):
+                  return sum(pmap.get((t['betType'],t['combination']),0)*10 for t in ts)
+              oldret=calc(old); newret=calc(neutral); actret=sum(int(x['ret']) for x in act)
+              output.append({
+                'date':date,'raceId':rid,'raceNo':row['raceNo'],
+                'old':[(x['betType'],x['combination']) for x in old],
+                'neutral':[(x['betType'],x['combination']) for x in neutral],
+                'actual':[(x['betType'],x['combination']) for x in act],
+                'oldRet':oldret,'neutralRet':newret,'actualRet':actret,
+                'oldHit':oldret>0,'neutralHit':newret>0,'actualHit':actret>0,
+                'logicChanged':{(x['betType'],x['combination']) for x in old}!={(x['betType'],x['combination']) for x in neutral},
+                'oldLearning':{'runnerHistoryRaces':audit.get('runnerHistoryRaces'),'sameDayFinishedRaces':audit.get('sameDayFinishedRaces'),'betHistoryRaces':bl.get('audit',{}).get('betHistoryRaces')}
+              })
+
+          print('COMPARE_BEGIN')
+          for x in output: print(json.dumps(x,ensure_ascii=False))
+          print('COMPARE_END')
+          for date in ('2026-09-20','2026-09-21','2026-09-22'):
+              rs=[x for x in output if x['date']==date]
+              print(json.dumps({
+                'SUMMARY':date,'races':len(rs),'logicChangedRaces':sum(x['logicChanged'] for x in rs),
+                'oldHits':sum(x['oldHit'] for x in rs),'neutralHits':sum(x['neutralHit'] for x in rs),'actualHits':sum(x['actualHit'] for x in rs),
+                'oldReturn':sum(x['oldRet'] for x in rs),'neutralReturn':sum(x['neutralRet'] for x in rs),'actualReturn':sum(x['actualRet'] for x in rs),
+                'stake':len(rs)*2000
+              },ensure_ascii=False))
+          rs=output
+          print(json.dumps({
+            'TOTAL':True,'races':len(rs),'logicChangedRaces':sum(x['logicChanged'] for x in rs),
+            'oldHits':sum(x['oldHit'] for x in rs),'neutralHits':sum(x['neutralHit'] for x in rs),'actualHits':sum(x['actualHit'] for x in rs),
+            'oldReturn':sum(x['oldRet'] for x in rs),'neutralReturn':sum(x['neutralRet'] for x in rs),'actualReturn':sum(x['actualRet'] for x in rs),
+            'stake':len(rs)*2000
+          },ensure_ascii=False))
+          PY
+          python /tmp/replay_compare.py
