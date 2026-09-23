@@ -21,7 +21,7 @@ jobs:
         shell: bash
         run: |
           cat >/tmp/replay_compare.py <<'PY'
-          import datetime as dt, importlib.util, itertools, json, math, pathlib, sys, concurrent.futures, copy
+          import datetime as dt, importlib.util, itertools, json, math, pathlib, sys, concurrent.futures, copy, time
           import numpy as np
           import lightgbm as lgb
           ROOT=pathlib.Path('.').resolve()
@@ -32,6 +32,15 @@ jobs:
           core=load(ROOT/'scripts'/'ten-year-production-core.py','core')
           learning=load(ROOT/'scripts'/'live-recency-learning.py','learning')
           collector=load(ROOT/'scripts'/'collect-jra-official-odds.py','collector')
+          _d1=collector.d1_query
+          def d1_retry(sql,params=None):
+              last=None
+              for attempt in range(6):
+                  try: return _d1(sql,params or [])
+                  except Exception as e:
+                      last=e; print('D1_RETRY',attempt+1,type(e).__name__,str(e)[:180],flush=True); time.sleep(min(8,1.2*(attempt+1)))
+              raise last
+          collector.d1_query=d1_retry
 
           # Load historical JRA fetch/parser definitions without executing its hardcoded bulk export.
           src=(ROOT/'scripts'/'export-selected-historical-official-odds.py').read_text(encoding='utf-8')
