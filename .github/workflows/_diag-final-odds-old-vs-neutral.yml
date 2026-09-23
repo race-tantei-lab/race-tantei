@@ -36,7 +36,7 @@ jobs:
           # Load historical JRA fetch/parser definitions without executing its hardcoded bulk export.
           src=(ROOT/'scripts'/'export-selected-historical-official-odds.py').read_text(encoding='utf-8')
           defs=src.split("\nselection = json.loads",1)[0]
-          ns={}
+          ns={'__file__':str(ROOT/'scripts'/'export-selected-historical-official-odds.py')}
           exec(compile(defs,'historical_odds_defs.py','exec'),ns)
           fetch_race=ns['fetch_race']
 
