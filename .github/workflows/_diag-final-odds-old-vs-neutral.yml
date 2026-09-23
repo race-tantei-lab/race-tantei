@@ -21,7 +21,7 @@ jobs:
         shell: bash
         run: |
           cat >/tmp/replay_compare.py <<'PY'
-          import datetime as dt, importlib.util, itertools, json, math, pathlib, sys, concurrent.futures
+          import datetime as dt, importlib.util, itertools, json, math, pathlib, sys, concurrent.futures, copy
           import numpy as np
           import lightgbm as lgb
           ROOT=pathlib.Path('.').resolve()
@@ -134,8 +134,14 @@ jobs:
           print('ODDS_FAILURES',json.dumps(failures,ensure_ascii=False),flush=True)
 
           target_maps={}
+          old_base_states={}
           for date in sorted({r['raceDate'] for r in rows}):
               target_maps[date]={str(b['race']['raceId']):b for b in core.target_bundles(collector,date)}
+              st=core.load_feature_state()
+              hist=core.bundles_from_d1(collector,"race_date>? AND race_date<?",[st['throughDate'],date])
+              core.advance_feature_state(st,hist)
+              old_base_states[date]=st
+              print('BASE_STATE_READY',date,st.get('throughDate'),flush=True)
 
           output=[]
           for row in rows:
@@ -148,9 +154,7 @@ jobs:
               cutoff=row['lockedAt'] or (dt.datetime.fromisoformat(row['startTimeUtc'].replace('Z','+00:00'))-dt.timedelta(minutes=15)).isoformat()
 
               # OLD: historical feature delta + same-day finished results + runner/bet recency.
-              old_state=core.load_feature_state()
-              hist=core.bundles_from_d1(collector,"race_date>? AND race_date<?",[old_state['throughDate'],date])
-              core.advance_feature_state(old_state,hist)
+              old_state=copy.deepcopy(old_base_states[date])
               same_day=core.bundles_from_d1(collector,
                 "race_date=? AND start_time_utc IS NOT NULL AND datetime(start_time_utc)<datetime(?) AND EXISTS (SELECT 1 FROM rt_results rr WHERE rr.race_id=rt_races.race_id AND rr.finish_position IS NOT NULL)",
                 [date,cutoff])
