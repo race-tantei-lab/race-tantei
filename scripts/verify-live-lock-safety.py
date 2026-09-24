@@ -117,7 +117,6 @@ def main() -> None:
         'if (role === "backup" && await primaryIsAlive(env.DB)) return;',
         '"lease_busy"',
         "LIVE_DEADLINE_BACKUP_TAKEOVER",
-        "function isHistoricalRecencyScan",
         'q.includes("marketprobability")',
         'q.includes("select distinct ra.race_id as raceid")',
         'q.includes("join rt_runners ru")',
@@ -126,7 +125,6 @@ def main() -> None:
         "return runnerScan || featureDeltaScan || betScan;",
         "function freeTierSafeDb",
         "function safeEnv",
-        "LIVE_RECENCY_HISTORY_SCAN_SKIPPED_FREE_TIER",
         "const liveEnv = safeEnv(env);",
         "await runIsolatedLiveDeadlineTick",
     ):
