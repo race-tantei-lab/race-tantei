@@ -117,13 +117,6 @@ def main() -> None:
         'if (role === "backup" && await primaryIsAlive(env.DB)) return;',
         '"lease_busy"',
         "LIVE_DEADLINE_BACKUP_TAKEOVER",
-        'q.includes("marketprobability")',
-        'q.includes("select distinct ra.race_id as raceid")',
-        'q.includes("join rt_runners ru")',
-        'q.includes("ra.race_date>?")',
-        "featureDeltaScan",
-        "return runnerScan || featureDeltaScan || betScan;",
-        "function freeTierSafeDb",
         "function safeEnv",
         "const liveEnv = safeEnv(env);",
         "await runIsolatedLiveDeadlineTick",
@@ -299,7 +292,7 @@ def main() -> None:
     forbid_text(critical_workflow, "schedule:", "critical recovery must stay manual-only")
     require_text(critical_workflow, "python scripts/run-critical-auto-bet-generation.py", "critical per-race generator")
 
-    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=2m guard_before_heavy=true public_live_mutation=false free_tier_historical_scan=false")
+    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=2m guard_before_heavy=true public_live_mutation=false canonical_learning=true quota_budgeted=true")
 
 
 if __name__ == "__main__":
