@@ -67,7 +67,7 @@ def main() -> None:
 
     live_deploy = read(".github/workflows/deploy-live-deadline.yml")
     win5_deploy = read(".github/workflows/deploy-win5.yml")
-    require_text(live_deploy, '"src/v1/completed-recency-neutral.ts"', "live deploy trigger")
+    require_text(live_deploy, '"src/v1/completed-recency-learning.ts"', "live canonical recency deploy trigger")
     require_text(win5_deploy, '"src/v1/completed-recency-neutral.ts"', "WIN5 deploy trigger")
 
     # Browser GETs are display-only. The old v8/v9 mutation paths caused D1 use
@@ -91,12 +91,18 @@ def main() -> None:
     forbid_text(bounded_settlement, "date('now','-14 days')", "bounded settlement")
     forbid_text(bounded_settlement, "date('now','-30 days')", "bounded settlement")
 
-    # Standard live and WIN5 race-day scoring may use only precomputed ML tables;
-    # raw historical delta/recency scans are prohibited in automated Workers.
+    # Race-bet predictions must preserve the canonical completed-model learning.
+    # Quota protection is mechanical (refresh/attempt/run budgets), never a change
+    # to model inputs or ticket scoring. WIN5 keeps its separate bounded policy.
     live_lock = read("src/v1/completed-worker-live-lock.ts")
-    require_text(live_lock, "{ includeHistoricalDelta: false }", "live precomputed features")
-    require_text(live_lock, "LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY", "live neutral recency")
-    forbid_text(live_lock, "loadCompletedRecencyLearning(", "live raw recency")
+    require_text(live_lock, "loadCompletedRecencyLearning(", "live canonical recency")
+    require_text(live_lock, "completedRecencyBetFactor(", "live canonical bet recency")
+    require_text(live_lock, "MAX_PREVIEW_ATTEMPTS_PER_TICK = 1", "live attempt budget")
+    require_text(live_lock, "VERY_EARLY_PREVIEW_REFRESH_MS = 6 * 60 * 60 * 1000", "live very-early refresh budget")
+    forbid_text(live_lock, "LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY", "prediction-changing neutral fallback")
+
+    critical_workflow = read(".github/workflows/critical-auto-bet-generation.yml")
+    forbid_text(critical_workflow, "schedule:", "critical GitHub recovery must be manual-only")
 
     win5_core = read("src/v1/completed-win5.ts")
     require_text(win5_core, "{ includeHistoricalDelta: false }", "WIN5 precomputed features")
@@ -126,9 +132,9 @@ def main() -> None:
         "entry maintenance must gate before first D1 maintenance call",
     )
 
-    # The race-day quota may be touched automatically only by bootstrap, the
-    # bounded per-race T-45..T-15 recovery, Thu/Fri upcoming-program preflight,
-    # and Tuesday-night learning. Historical audits and ad-hoc diagnostics stay manual-only.
+    # The race-day quota may be touched automatically only by the two-run
+    # bootstrap, Thu/Fri upcoming-program preflight, and Tuesday-night learning.
+    # Critical GitHub recovery is manual-only; live Workers own automatic bets.
     auto_d1 = {
         "race-day-bootstrap.yml",
         "critical-auto-bet-generation.yml",
