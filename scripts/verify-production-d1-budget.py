@@ -60,9 +60,9 @@ def main() -> None:
 
     live_runtime = read("src/v1/completed-worker-live-lock.ts")
     win5_runtime = read("src/v1/completed-win5.ts")
-    require_text(live_runtime, 'from "./completed-recency-neutral"', "live neutral recency module")
+    require_text(live_runtime, 'from "./completed-recency-learning"', "live canonical recency module")
     require_text(win5_runtime, 'from "./completed-recency-neutral"', "WIN5 neutral recency module")
-    forbid_text(live_runtime, 'neutralCompletedRecencyLearning, type', "live runtime mixed raw recency import")
+    forbid_text(live_runtime, 'from "./completed-recency-neutral"', "live neutral recency module")
     forbid_text(win5_runtime, 'neutralCompletedRecencyLearning, type', "WIN5 runtime mixed raw recency import")
 
     live_deploy = read(".github/workflows/deploy-live-deadline.yml")
@@ -172,7 +172,7 @@ def main() -> None:
         "PRODUCTION_D1_BUDGET_SAFETY_OK",
         "browser_mutation=false",
         "legacy_14d_scan=false",
-        "live_raw_history=false",
+        "live_canonical_learning=true",
         "win5_raw_history=false",
         "entry_cron=disabled_public15m_owner",
         "guardian_crons=disabled",
