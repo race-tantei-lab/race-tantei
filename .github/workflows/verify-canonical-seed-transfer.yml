@@ -1,0 +1,44 @@
+name: Verify canonical history seed transfer
+
+on:
+  pull_request:
+    paths:
+      - 'seed-transfer/**'
+      - '.github/workflows/verify-canonical-seed-transfer.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reassemble and verify archive
+        run: |
+          set -euo pipefail
+          cat seed-transfer/part-*.txt > /tmp/seed.tar.xz.b64
+          test "$(wc -c < /tmp/seed.tar.xz.b64)" -eq 150416
+          base64 -d /tmp/seed.tar.xz.b64 > /tmp/seed.tar.xz
+          echo 'a7a13a224cb43350268ad3246b084d5d85b7042d025c527057fb55aac6f18782  /tmp/seed.tar.xz' | sha256sum -c -
+          mkdir -p /tmp/seed
+          tar -xJf /tmp/seed.tar.xz -C /tmp/seed
+          test "$(find /tmp/seed -type f -name 'chunk-*.json' | wc -l)" -eq 65
+      - name: Verify all 65 chunk hashes against production allow-list
+        run: |
+          python - <<'PY'
+          import hashlib,re
+          from pathlib import Path
+          src=Path('src/v1/canonical-history-seed.ts').read_text()
+          m=re.search(r'ALLOWED_CHUNK_HASHES\s*=\s*new Set(?:<string>)?\s*\(\s*\[(.*?)\]\s*\)',src,re.S)
+          if not m:
+              raise SystemExit('allow-list not found')
+          allowed=set(re.findall(r'[0-9a-f]{64}',m.group(1)))
+          files=sorted(Path('/tmp/seed').rglob('chunk-*.json'))
+          actual={hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
+          print({'allowed':len(allowed),'files':len(files),'actual_unique':len(actual)})
+          if len(allowed)!=65 or len(files)!=65 or actual!=allowed:
+              missing=sorted(allowed-actual); extra=sorted(actual-allowed)
+              raise SystemExit(f'hash mismatch missing={missing[:3]} extra={extra[:3]}')
+          print('CANONICAL_SEED_TRANSFER_VERIFIED')
+          PY
