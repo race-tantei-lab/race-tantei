@@ -171,7 +171,6 @@ def main() -> None:
         "runCriticalDeadlineProtection",
         "runCompletedWorkerDeadlineGuard",
         "restoreNewestOfficialPreviewArchives",
-        "LIVE_RECENCY_HISTORY_SCAN_SKIPPED_FREE_TIER",
         "const liveEnv = safeEnv(env);",
         "runIsolatedLiveDeadlineTick(liveEnv",
         'if (role === "backup" && await primaryIsAlive(env.DB)) return;',
@@ -196,7 +195,7 @@ def main() -> None:
     for marker in (
         "WHERE race_date=? AND start_time_utc>?",
         "MAX_PREVIEW_GENERATIONS_PER_TICK = 1",
-        "MAX_PREVIEW_ATTEMPTS_PER_TICK = 2",
+        "MAX_PREVIEW_ATTEMPTS_PER_TICK = 1",
         "BODY_WEIGHT_ATTEMPT_OPEN_MS = 45 * 60 * 1000",
         "BODYWEIGHT_DEFERRED_UNTIL_T45",
         "PREVIEW_REQUIRED_MS = 30 * 60 * 1000",
@@ -207,6 +206,8 @@ def main() -> None:
         "WORKER_FRESH_GENERATION_STARTED_AFTER_T15",
         "WORKER_GENERATION_CROSSED_T15",
         'new Set(["jra-fast-official", "jra-crawl-official"])',
+        "loadCompletedRecencyLearning(",
+        "completedRecencyBetFactor(",
     ):
         require(live, marker, "live lock")
     if "PREVIEW_OPEN_MS" in live or "start_time_utc<=?" in live:
