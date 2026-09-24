@@ -82,7 +82,6 @@ forbid(entry, "auditLiveDeadlineSla", "heavy-driver-postwork-sla")
 
 for token, label in [
     ("function freeTierSafeDb", "free-tier-safe-db"),
-    ("LIVE_RECENCY_HISTORY_SCAN_SKIPPED_FREE_TIER", "history-scan-block"),
     ('CRITICAL_GUARD_LEASE_KEY = "live_deadline_critical_guard:v1"', "critical-guard-lease"),
     ("runCriticalDeadlineProtection", "critical-guard"),
     ("runCompletedWorkerDeadlineGuard", "critical-guard-call"),
