@@ -117,16 +117,7 @@ def main() -> None:
         'if (role === "backup" && await primaryIsAlive(env.DB)) return;',
         '"lease_busy"',
         "LIVE_DEADLINE_BACKUP_TAKEOVER",
-        "function isHistoricalRecencyScan",
-        'q.includes("marketprobability")',
-        'q.includes("select distinct ra.race_id as raceid")',
-        'q.includes("join rt_runners ru")',
-        'q.includes("ra.race_date>?")',
-        "featureDeltaScan",
-        "return runnerScan || featureDeltaScan || betScan;",
-        "function freeTierSafeDb",
         "function safeEnv",
-        "LIVE_RECENCY_HISTORY_SCAN_SKIPPED_FREE_TIER",
         "const liveEnv = safeEnv(env);",
         "await runIsolatedLiveDeadlineTick",
     ):
@@ -188,7 +179,7 @@ def main() -> None:
         "DEADLINE_MS = 15 * 60 * 1000",
         "FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000",
         "MAX_PREVIEW_GENERATIONS_PER_TICK = 1",
-        "MAX_PREVIEW_ATTEMPTS_PER_TICK = 2",
+        "MAX_PREVIEW_ATTEMPTS_PER_TICK = 1",
         "WHERE race_date=? AND start_time_utc>?",
         "INSERT INTO rt_live_preview_archive",
         "WORKER_HARD_T15_START_MISSED",
@@ -196,8 +187,8 @@ def main() -> None:
         "WORKER_GENERATION_CROSSED_T15",
         "JRA_OFFICIAL_ODDS_PARSER_VERSION",
         'new Set(["jra-fast-official", "jra-crawl-official"])',
-        "{ includeHistoricalDelta: false }",
-        "LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY",
+        "loadCompletedRecencyLearning(",
+        "completedRecencyBetFactor(",
     ):
         require_text(lock, needle, "isolated live lock")
     forbid_text(lock, "PREVIEW_OPEN_MS", "selection-driven preview protection")
@@ -298,10 +289,10 @@ def main() -> None:
     require_text(critical, "HARD_DEADLINE_SECONDS < (starts[rid] - now).total_seconds() <= base.MAX_LOCK_SECONDS", "critical recovery pre-T15 only")
 
     critical_workflow = read(".github/workflows/critical-auto-bet-generation.yml")
-    require_text(critical_workflow, "cron: '*/5 0-7 * * *'", "critical recovery schedule")
+    forbid_text(critical_workflow, "schedule:", "critical recovery must stay manual-only")
     require_text(critical_workflow, "python scripts/run-critical-auto-bet-generation.py", "critical per-race generator")
 
-    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=2m guard_before_heavy=true public_live_mutation=false free_tier_historical_scan=false")
+    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=2m guard_before_heavy=true public_live_mutation=false canonical_learning=true quota_budgeted=true")
 
 
 if __name__ == "__main__":

@@ -24,10 +24,10 @@ deploy = read(".github/workflows/deploy-live-deadline.yml")
 for token, label in [
     ("WHERE race_date=? AND start_time_utc>?", "selection-driven-future-coverage"),
     ("MAX_PREVIEW_GENERATIONS_PER_TICK = 1", "generation-budget"),
-    ("MAX_PREVIEW_ATTEMPTS_PER_TICK = 2", "attempt-budget"),
+    ("MAX_PREVIEW_ATTEMPTS_PER_TICK = 1", "attempt-budget"),
     ("BODY_WEIGHT_ATTEMPT_OPEN_MS = 45 * 60 * 1000", "deferred-bodyweight"),
     ("BODYWEIGHT_DEFERRED_UNTIL_T45", "deferred-bodyweight-audit"),
-    ("VERY_EARLY_PREVIEW_REFRESH_MS = 60 * 60 * 1000", "very-early-refresh"),
+    ("VERY_EARLY_PREVIEW_REFRESH_MS = 6 * 60 * 60 * 1000", "very-early-refresh"),
     ("EARLY_PREVIEW_REFRESH_MS = 20 * 60 * 1000", "early-refresh"),
     ("MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000", "mid-refresh"),
     ("NEAR_PREVIEW_REFRESH_MS = 3 * 60 * 1000", "near-refresh"),
@@ -35,8 +35,8 @@ for token, label in [
     ("WORKER_HARD_T15_START_MISSED", "no-post-t15-generation"),
     ("WORKER_GENERATION_CROSSED_T15", "generation-cross-boundary-block"),
     ('new Set(["jra-fast-official", "jra-crawl-official"])', "official-odds-only"),
-    ("{ includeHistoricalDelta: false }", "precomputed-features-only"),
-    ("LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY", "neutral-recency"),
+    ("loadCompletedRecencyLearning(", "canonical-recency"),
+    ("completedRecencyBetFactor(", "canonical-bet-recency"),
 ]:
     require(live, token, label)
 forbid(live, "PREVIEW_OPEN_MS", "fixed-preview-window")
@@ -81,8 +81,6 @@ forbid(entry, "restoreNewestOfficialPreviewArchives", "heavy-driver-archive-resc
 forbid(entry, "auditLiveDeadlineSla", "heavy-driver-postwork-sla")
 
 for token, label in [
-    ("function freeTierSafeDb", "free-tier-safe-db"),
-    ("LIVE_RECENCY_HISTORY_SCAN_SKIPPED_FREE_TIER", "history-scan-block"),
     ('CRITICAL_GUARD_LEASE_KEY = "live_deadline_critical_guard:v1"', "critical-guard-lease"),
     ("runCriticalDeadlineProtection", "critical-guard"),
     ("runCompletedWorkerDeadlineGuard", "critical-guard-call"),

@@ -19,54 +19,10 @@ function errorText(error: unknown): string {
   return error instanceof Error ? `${error.name}:${error.message}` : String(error);
 }
 
-function isHistoricalRecencyScan(sql: string): boolean {
-  const q = sql.toLowerCase().replace(/\s+/g, " ");
-  const runnerScan = q.includes("race_date between")
-    && q.includes("join rt_runners")
-    && q.includes("join rt_results")
-    && q.includes("marketprobability");
-  const featureDeltaScan = q.includes("select distinct ra.race_id as raceid")
-    && q.includes("join rt_runners ru")
-    && q.includes("ra.race_date>?")
-    && q.includes("json_each(?)");
-  const betScan = q.includes("from rt_public_bets b join rt_races r")
-    && q.includes("race_date between")
-    && q.includes("source_prediction_id=-2")
-    && q.includes("settlement_status='settled'");
-  return runnerScan || featureDeltaScan || betScan;
-}
-
-function emptyPreparedStatement(): D1PreparedStatement {
-  const statement = {
-    bind: (..._values: unknown[]) => statement,
-    first: async () => null,
-    all: async () => ({ results: [], success: true, meta: {} }),
-    raw: async () => [],
-    run: async () => ({ success: true, meta: {} }),
-  };
-  return statement as unknown as D1PreparedStatement;
-}
-
-function freeTierSafeDb(db: D1Database): D1Database {
-  return new Proxy(db as object, {
-    get(target, prop, receiver) {
-      if (prop === "prepare") {
-        return (sql: string) => {
-          if (isHistoricalRecencyScan(sql)) {
-            console.warn("LIVE_RECENCY_HISTORY_SCAN_SKIPPED_FREE_TIER");
-            return emptyPreparedStatement();
-          }
-          return (db.prepare as (sql: string) => D1PreparedStatement).call(db, sql);
-        };
-      }
-      const value = Reflect.get(target, prop, receiver);
-      return typeof value === "function" ? value.bind(db) : value;
-    },
-  }) as unknown as D1Database;
-}
-
 function safeEnv(env: LiveRoleEnv): LiveRoleEnv {
-  return { ...env, DB: freeTierSafeDb(env.DB) };
+  // Prediction semantics must never be changed by a quota proxy. Quota control
+  // is handled by bounded refresh/attempt budgets and Worker role isolation.
+  return env;
 }
 
 async function markPrimaryAlive(db: D1Database, result: Record<string, unknown>): Promise<void> {

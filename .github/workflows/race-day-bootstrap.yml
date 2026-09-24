@@ -2,10 +2,8 @@ name: Race-day automatic bootstrap
 
 on:
   schedule:
-    - cron: '50 22 * * *' # 07:50 JST: pre-selection readiness before the 08:00 selection gate
-    - cron: '7 23 * * *'  # 08:07 JST: redundant post-selection verification; avoids top-of-hour scheduler congestion
-    - cron: '1 0 * * *'   # 09:01 JST: pre-first-race verification
-    - cron: '7 0 * * *'   # 09:07 JST: redundant pre-first-race verification if 09:01 is delayed/dropped
+    - cron: '50 22 * * *' # 07:50 JST: readiness + wait through the 08:00 selection gate
+    - cron: '1 0 * * *'   # 09:01 JST: one independent pre-first-race verification
   workflow_dispatch:
 
 permissions:

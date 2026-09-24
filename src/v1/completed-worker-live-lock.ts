@@ -5,8 +5,7 @@ import {
 } from "./bodyweight-refresh";
 import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION, completedFeatureVector, loadCompletedFeatureStateForRace } from "./completed-feature-runtime";
 import { loadCompletedModelRuntime, type CompletedModelRuntime } from "./completed-model-runtime";
-import { neutralCompletedRecencyLearning } from "./completed-recency-neutral";
-import type { CompletedRecencyAudit, CompletedRunnerRecencyDetail } from "./completed-recency-learning";
+import { completedRecencyBetFactor, loadCompletedRecencyLearning, type CompletedRecencyAudit, type CompletedRunnerRecencyDetail } from "./completed-recency-learning";
 import {
   COMPLETED_COURSE_STAKES,
   chooseCompletedTwoTickets,
@@ -28,14 +27,14 @@ const BODY_WEIGHT_ATTEMPT_OPEN_MS = 45 * 60 * 1000;
 const FINAL_LOCK_ARM_MS = 30 * 60 * 1000;
 const DEADLINE_MS = 15 * 60 * 1000;
 const FINAL_REFLECTION_DEADLINE_MS = 15 * 60 * 1000;
-const VERY_EARLY_PREVIEW_REFRESH_MS = 60 * 60 * 1000;
-const EARLY_PREVIEW_REFRESH_MS = 20 * 60 * 1000;
-const MID_PREVIEW_REFRESH_MS = 5 * 60 * 1000;
+const VERY_EARLY_PREVIEW_REFRESH_MS = 6 * 60 * 60 * 1000;
+const EARLY_PREVIEW_REFRESH_MS = 60 * 60 * 1000;
+const MID_PREVIEW_REFRESH_MS = 15 * 60 * 1000;
 const NEAR_PREVIEW_REFRESH_MS = 3 * 60 * 1000;
 const PREVIEW_HISTORY = 3;
 const PREVIEW_VERSION = 1;
 export const MAX_PREVIEW_GENERATIONS_PER_TICK = 1;
-export const MAX_PREVIEW_ATTEMPTS_PER_TICK = 2;
+export const MAX_PREVIEW_ATTEMPTS_PER_TICK = 1;
 const OFFICIAL_ODDS_SOURCES = new Set(["jra-fast-official", "jra-crawl-official"]);
 const COURSES = Object.keys(COMPLETED_COURSE_STAKES) as Array<keyof typeof COMPLETED_COURSE_STAKES>;
 
@@ -418,24 +417,25 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
   }
 
   const learningCutoff = iso(now);
-  // Race-day prediction must never scan historical raw tables. The canonical
-  // precomputed feature state is loaded with bounded entity lookups only; the
-  // historical delta/30-day recency paths are disabled at the call site.
-  // The live Worker proxy remains a second fail-safe, not the primary control.
+  // Canonical production behavior: advance the completed feature state through
+  // historical/same-day finished races, then apply the 30-day recency learning
+  // used by the completed production generator. Do not silently substitute a
+  // neutral model when learning fails: fail closed and let the stored official
+  // last-good preview protect the T-15 deadline.
   const state = await loadCompletedFeatureStateForRace(
     db,
     refreshed.race,
     refreshed.runners,
     learningCutoff,
-    { includeHistoricalDelta: false },
   );
   const vectors = refreshed.runners.map((runner) => completedFeatureVector(state, refreshed.race, runner, refreshed.runners.length));
   const raw = vectors.map((vector) => model.predict(vector));
   const baseWeights = normalizeCompletedWeights(raw);
-  const learning = neutralCompletedRecencyLearning(
+  const learning = await loadCompletedRecencyLearning(
+    db,
+    refreshed.race,
     refreshed.runners,
     learningCutoff,
-    "LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY",
   );
   const weights = normalizeCompletedWeights(baseWeights.map((value, index) => value * learning.runnerFactors[index]));
   const fetched = await fetchFastJraOfficialOddsForRace(refreshed.race.entryUrl, { raceDate: refreshed.race.raceDate, venue: refreshed.race.venue, raceNo: refreshed.race.raceNo });
@@ -444,7 +444,7 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     refreshed.runners.map((runner) => Number(runner.horseNo)),
     weights,
     fetched.rows,
-    () => 1,
+    (betType, odds) => completedRecencyBetFactor(learning, betType, refreshed.race.venue, odds),
   );
   const courseBets = completedCourseBets(tickets);
   const snapshot: PreviewSnapshot = {

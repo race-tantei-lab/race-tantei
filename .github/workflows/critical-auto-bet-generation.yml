@@ -1,11 +1,9 @@
 name: Critical automatic bet generation
 
 on:
-  # Independent control-plane recovery. Every five minutes during the JRA
-  # daytime window, inspect only the frozen selection and races inside T-45..T-15.
-  # Official JRA odds are fetched per race; one failing race cannot block others.
-  schedule:
-    - cron: '*/5 0-7 * * *' # 09:00-16:59 JST
+  # Manual emergency recovery only. The every-five-minute schedule previously
+  # consumed up to 96 GitHub Actions runs per race day and is intentionally
+  # disabled. Primary/backup Cloudflare Workers own automatic finalization.
   workflow_dispatch:
 
 concurrency:
