@@ -1,0 +1,154 @@
+name: JRA odds link diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Find recent real JRA entry page
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
+            "SELECT race_id AS raceId, race_date AS raceDate, venue, race_no AS raceNo, entry_url AS entryUrl FROM rt_races WHERE entry_url LIKE 'https://%/JRADB/accessD.html?%' ORDER BY race_date DESC, updated_at DESC LIMIT 12" \
+            > /tmp/d1.json
+          python - <<'PY' >/tmp/entry_url.txt
+          import json,sys
+          data=json.load(open('/tmp/d1.json')); rows=[]
+          def walk(x):
+              if isinstance(x,dict):
+                  if isinstance(x.get('results'),list): rows.extend(x['results'])
+                  for v in x.values(): walk(v)
+              elif isinstance(x,list):
+                  for v in x: walk(v)
+          walk(data)
+          seen=set(); rows=[r for r in rows if isinstance(r,dict) and r.get('entryUrl') and not (r['entryUrl'] in seen or seen.add(r['entryUrl']))]
+          if not rows: raise SystemExit('NO_REAL_ENTRY_URL')
+          row=rows[0]; print(row['entryUrl']); print('ENTRY_META',row.get('raceId'),row.get('raceDate'),row.get('venue'),row.get('raceNo'),file=sys.stderr)
+          PY
+
+      - name: Download entry page with session and reproduce form
+        run: |
+          set -euo pipefail
+          url="$(head -n1 /tmp/entry_url.txt)"
+          ua='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
+          curl --silent --show-error --fail --location --max-time 30 \
+            -A "$ua" -H 'Accept-Language: ja-JP,ja;q=0.9' \
+            -c /tmp/jra.cookies -b /tmp/jra.cookies "$url" -o /tmp/entry.bin
+
+          ENTRY_URL="$url" python - <<'PY'
+          from pathlib import Path
+          import html,re,urllib.parse,os
+          raw=Path('/tmp/entry.bin').read_bytes(); text=raw.decode('shift_jis',errors='ignore')
+          Path('/tmp/entry.html').write_text(text,encoding='utf-8')
+          form=re.search(r'<form\b[^>]*id=["\']commForm01["\'][^>]*>([\s\S]*?)</form>',text,re.I)
+          if not form: raise SystemExit('FORM_NOT_FOUND')
+          head=text[form.start():form.start()+text[form.start():].find('>')+1]
+          print('FORM_HEAD',re.sub(r'\s+',' ',head))
+          inputs=[]
+          for tag in re.findall(r'<input\b[^>]*>',form.group(0),re.I):
+              nm=re.search(r'\bname=["\']([^"\']+)["\']',tag,re.I)
+              if not nm: continue
+              vm=re.search(r'\bvalue=["\']([^"\']*)["\']',tag,re.I)
+              typ=re.search(r'\btype=["\']([^"\']+)["\']',tag,re.I)
+              name=html.unescape(nm.group(1)); value=html.unescape(vm.group(1) if vm else '')
+              inputs.append((name,value))
+              print('FORM_INPUT',typ.group(1) if typ else '',name,value[:180])
+          cnames=re.findall(r"doAction\(\s*['\"]\/JRADB\/accessO\.html['\"]\s*,\s*['\"]([^'\"]+)['\"]",text,re.I)
+          cnames=[html.unescape(x) for x in cnames if re.search(r'20\d{6}',x) and not x.endswith('oli00/6D')]
+          if not cnames: raise SystemExit('NO_ODDS_CNAME')
+          target=cnames[0]; print('TARGET_CNAME',target)
+          payload=[]; replaced=False
+          for name,value in inputs:
+              if name.upper()=='CNAME': value=target; replaced=True
+              payload.append((name,value))
+          if not replaced: payload.append(('CNAME',target))
+          Path('/tmp/post-body.txt').write_text(urllib.parse.urlencode(payload),encoding='utf-8')
+          Path('/tmp/odds_cname.txt').write_text(target+'\n',encoding='utf-8')
+          # Find doAction implementation in inline JS too.
+          for m in re.finditer(r'function\s+doAction\s*\([^)]*\)\s*\{[\s\S]{0,3000}?\}',text,re.I):
+              print('INLINE_DOACTION',re.sub(r'\s+',' ',m.group(0))[:3000])
+          PY
+
+      - name: Find doAction implementation in referenced JavaScript
+        run: |
+          set -euo pipefail
+          python - <<'PY' >/tmp/scripts.txt
+          import re,html,urllib.parse
+          text=open('/tmp/entry.html',encoding='utf-8').read()
+          seen=[]
+          for m in re.finditer(r'<script\b[^>]*\bsrc=["\']([^"\']+)["\']',text,re.I):
+              u=urllib.parse.urljoin('https://www.jra.go.jp/',html.unescape(m.group(1)))
+              if u not in seen: seen.append(u)
+          print('\n'.join(seen))
+          PY
+          n=0
+          while IFS= read -r src; do
+            n=$((n+1)); [ "$n" -le 40 ] || break
+            out="/tmp/js-${n}.txt"
+            code="$(curl --silent --show-error --location --max-time 20 -A 'Mozilla/5.0' -o "$out" -w '%{http_code}' "$src" || true)"
+            [ "$code" = 200 ] || continue
+            SRC="$src" OUT="$out" python - <<'PY'
+          import os,re
+          text=open(os.environ['OUT'],encoding='utf-8',errors='ignore').read()
+          if 'doAction' not in text: raise SystemExit(0)
+          print('DOACTION_SOURCE',os.environ['SRC'])
+          for m in re.finditer(r'(?:function\s+doAction\s*\([^)]*\)\s*\{|doAction\s*=)[\s\S]{0,4000}',text,re.I):
+              print('DOACTION_CODE',re.sub(r'\s+',' ',m.group(0))[:4000])
+              break
+          PY
+          done </tmp/scripts.txt
+
+      - name: Replay odds POST with cookies and all hidden fields
+        run: |
+          set -euo pipefail
+          entry="$(head -n1 /tmp/entry_url.txt)"
+          ua='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
+          code="$(curl --silent --show-error --location --max-time 30 \
+            -A "$ua" -H 'Accept-Language: ja-JP,ja;q=0.9' \
+            -H 'Content-Type: application/x-www-form-urlencoded' \
+            -H "Referer: ${entry}" -c /tmp/jra.cookies -b /tmp/jra.cookies \
+            --data-binary @/tmp/post-body.txt \
+            -o /tmp/odds.bin -w '%{http_code}' 'https://www.jra.go.jp/JRADB/accessO.html' || true)"
+          echo "ODDS_POST_HTTP ${code} BYTES $(wc -c </tmp/odds.bin 2>/dev/null || echo 0)"
+          python - <<'PY'
+          from pathlib import Path
+          import re,html
+          raw=Path('/tmp/odds.bin').read_bytes(); text=raw.decode('shift_jis',errors='ignore')
+          Path('/tmp/odds.html').write_text(text,encoding='utf-8')
+          title=re.search(r'<title[^>]*>(.*?)</title>',text,re.I|re.S)
+          print('ODDS_TITLE',re.sub(r'\s+',' ',html.unescape(title.group(1))).strip() if title else '')
+          labels=['単勝','複勝','枠連','馬連','ワイド','馬単','3連複','3連単','オッズ']
+          print('ODDS_LABEL_COUNTS',{x:text.count(x) for x in labels})
+          actions=[]
+          for m in re.finditer(r"doAction\(\s*['\"]\/JRADB\/accessO\.html['\"]\s*,\s*['\"]([^'\"]+)['\"]",text,re.I):
+              v=html.unescape(m.group(1))
+              if v not in actions: actions.append(v)
+          print('ODDS_ACTION_COUNT',len(actions))
+          for v in actions[:100]: print('ODDS_ACTION',v)
+          plain=re.sub(r'\s+',' ',html.unescape(re.sub(r'<[^>]+>',' ',text)))
+          for key in labels[:-1]:
+              pos=plain.find(key)
+              if pos>=0: print('ODDS_SAMPLE',key,plain[max(0,pos-150):pos+1300])
+          PY
