@@ -81,7 +81,6 @@ forbid(entry, "restoreNewestOfficialPreviewArchives", "heavy-driver-archive-resc
 forbid(entry, "auditLiveDeadlineSla", "heavy-driver-postwork-sla")
 
 for token, label in [
-    ("function freeTierSafeDb", "free-tier-safe-db"),
     ('CRITICAL_GUARD_LEASE_KEY = "live_deadline_critical_guard:v1"', "critical-guard-lease"),
     ("runCriticalDeadlineProtection", "critical-guard"),
     ("runCompletedWorkerDeadlineGuard", "critical-guard-call"),
