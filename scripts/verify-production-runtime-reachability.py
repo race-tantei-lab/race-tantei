@@ -72,11 +72,11 @@ def main() -> None:
     win5 = closures["wrangler.win5.jsonc"] | closures["wrangler.win5-backup.jsonc"]
     public = closures["wrangler.jsonc"]
 
-    heavy = Path("src/v1/completed-recency-learning.ts")
-    if heavy in live:
-        raise AssertionError("raw recency module is runtime-reachable from live Worker")
-    if heavy in win5:
-        raise AssertionError("raw recency module is runtime-reachable from WIN5 Worker")
+    canonical_recency = Path("src/v1/completed-recency-learning.ts")
+    if canonical_recency not in live:
+        raise AssertionError("canonical recency module is not runtime-reachable from live Worker")
+    if canonical_recency in win5:
+        raise AssertionError("canonical recency module is runtime-reachable from WIN5 Worker")
 
     violations: list[tuple[str, str]] = []
     forbid("src/public-site-entry.ts", ("runPublicDataSync(", "ctx.waitUntil("), violations)
@@ -92,9 +92,9 @@ def main() -> None:
         "publicModules": len(public),
         "liveModules": len(live),
         "win5Modules": len(win5),
-        "rawRecencyInPublic": heavy in public,
-        "rawRecencyInLive": heavy in live,
-        "rawRecencyInWin5": heavy in win5,
+        "canonicalRecencyInPublic": canonical_recency in public,
+        "canonicalRecencyInLive": canonical_recency in live,
+        "canonicalRecencyInWin5": canonical_recency in win5,
         "publicRequestMutationViolations": violations,
     }, ensure_ascii=False))
 
