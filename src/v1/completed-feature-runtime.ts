@@ -12,6 +12,7 @@ const PRIOR_WIN = 0.08;
 const PRIOR_TOP3 = 0.24;
 const SMOOTH = 12;
 const SEP = "\u0001";
+const DELTA_RACE_ID_BATCH_SIZE = 64;
 
 export const COMPLETED_FEATURE_NAMES = [
   "horseNoRaw", "venue", "raceNo", "surface", "distanceM", "direction", "fieldSize", "monthSin", "monthCos", "raceClass", "weather", "trackCondition",
@@ -360,19 +361,26 @@ export async function loadCompletedFeatureStateForRace(
     ).bind(throughDate, race.raceDate, race.raceDate, effectiveCutoff, horseJson, jockeyJson, trainerJson).all<{ raceId: string }>();
     const ids = (raceIds.results ?? []).map((row) => row.raceId);
     if (ids.length) {
-      // Use direct race_id placeholders rather than json_each(). The latter
-      // prevented D1 from using the race_id lookup efficiently and repeatedly
-      // scanned ~11k rows per prediction on race day.
-      const placeholders = ids.map(() => "?").join(",");
-      const delta = await db.prepare(
-        `SELECT ra.race_id AS raceId,ra.race_date AS raceDate,ra.venue,ra.surface,ra.distance_m AS distanceM,ru.horse_no AS horseNo,ru.horse_name AS horseName,ru.jockey,ru.trainer,ru.runner_status AS runnerStatus,re.finish_position AS finishPosition,re.time_text AS timeText,re.final3f
-         FROM rt_races ra
-         JOIN rt_runners ru ON ru.race_id=ra.race_id
-         LEFT JOIN rt_results re ON re.race_id=ru.race_id AND re.horse_no=ru.horse_no
-         WHERE ra.race_id IN (${placeholders})
-         ORDER BY ra.race_date,ra.venue,ra.race_no,ru.horse_no`
-      ).bind(...ids).all<DeltaRow>();
-      advanceRelevantCompletedFeatureState(state, (delta.results ?? []) as DeltaRow[], new Set(horses), new Set(jockeys), new Set(trainers));
+      // Preserve the direct indexed race_id lookup, but keep each statement
+      // below D1/SQLite's bind-variable ceiling. This is semantically identical
+      // to the single IN-list query: every candidate race is loaded exactly once
+      // and advanceRelevantCompletedFeatureState() applies the same deterministic
+      // raceDate/raceId ordering after the batches are combined.
+      const deltaRows: DeltaRow[] = [];
+      for (let offset = 0; offset < ids.length; offset += DELTA_RACE_ID_BATCH_SIZE) {
+        const batchIds = ids.slice(offset, offset + DELTA_RACE_ID_BATCH_SIZE);
+        const placeholders = batchIds.map(() => "?").join(",");
+        const delta = await db.prepare(
+          `SELECT ra.race_id AS raceId,ra.race_date AS raceDate,ra.venue,ra.surface,ra.distance_m AS distanceM,ru.horse_no AS horseNo,ru.horse_name AS horseName,ru.jockey,ru.trainer,ru.runner_status AS runnerStatus,re.finish_position AS finishPosition,re.time_text AS timeText,re.final3f
+           FROM rt_races ra
+           JOIN rt_runners ru ON ru.race_id=ra.race_id
+           LEFT JOIN rt_results re ON re.race_id=ru.race_id AND re.horse_no=ru.horse_no
+           WHERE ra.race_id IN (${placeholders})
+           ORDER BY ra.race_date,ra.venue,ra.race_no,ru.horse_no`
+        ).bind(...batchIds).all<DeltaRow>();
+        deltaRows.push(...((delta.results ?? []) as DeltaRow[]));
+      }
+      advanceRelevantCompletedFeatureState(state, deltaRows, new Set(horses), new Set(jockeys), new Set(trainers));
     }
   }
   return state;
