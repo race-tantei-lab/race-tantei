@@ -3,10 +3,12 @@ import { pageLooksLikeEntry, parseEntryPage, toResultUrl } from "./jra.js";
 import type { Env } from "./types.js";
 
 const STATE_KEY = "worker_upcoming_entry_derived_repair";
-const FETCH_TIMEOUT_MS = 5_000;
-const FETCH_CONCURRENCY = 4;
+const FETCH_TIMEOUT_MS = 8_000;
+const FETCH_CONCURRENCY = 1;
+const FETCH_PACE_MS = 350;
+const RETRY_DELAY_MS = 750;
 const MAX_GROUPS_PER_PASS = 3;
-const RETRIES_PER_RACE = 2;
+const RETRIES_PER_RACE = 3;
 
 const VENUE_CODES: Record<string, string> = {
   札幌: "01", 函館: "02", 福島: "03", 新潟: "04", 東京: "05",
@@ -29,6 +31,7 @@ type GroupAudit = {
 type Audit = { checkedAt: string; status: string; savedRaceIds: string[]; groups: GroupAudit[]; errors: string[] };
 
 function errorText(error: unknown): string { return error instanceof Error ? `${error.name}:${error.message}` : String(error); }
+function sleep(ms: number): Promise<void> { return new Promise((resolve) => setTimeout(resolve, ms)); }
 function jstDate(now = new Date(), offsetDays = 0): string {
   return new Date(now.getTime() + 9 * 60 * 60 * 1000 + offsetDays * 86400_000).toISOString().slice(0, 10);
 }
@@ -258,10 +261,17 @@ async function repairGroup(env: Env, group: MissingGroup): Promise<GroupAudit> {
         try {
           const raceId = await saveDerivedRace(env, group, raceNo, cnameForRace(race1Cname, raceNo));
           if (raceId) saved.add(raceId);
-        } catch (error) { audit.errors.push(`${group.venue}:${raceNo}R:${errorText(error)}`); }
+        } catch (error) {
+          audit.errors.push(`${group.venue}:${raceNo}R:${errorText(error)}`);
+        } finally {
+          // Pace official-page reads even when one host is slow/blocked. This is
+          // deliberately one-at-a-time so a partial venue cannot trigger a burst.
+          await sleep(FETCH_PACE_MS);
+        }
       }
     }));
     pending = await missingRaceNos(env.DB, group);
+    if (pending.length) await sleep(RETRY_DELAY_MS);
   }
   audit.savedRaceIds = [...saved].sort();
   audit.status = pending.length === 0 ? "repaired" : audit.savedRaceIds.length ? "partial" : "derived_entries_unavailable";

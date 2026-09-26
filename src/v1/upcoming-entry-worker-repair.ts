@@ -5,9 +5,9 @@ import type { Env, RaceRecord } from "./types.js";
 const REPAIR_STATE_KEY = "worker_upcoming_entry_repair";
 const ROTATION_STATE_KEY = "worker_upcoming_entry_rotation";
 const PROBE_PREFIX = "worker_upcoming_entry_probe:";
-const PROBE_BATCH = 48;
-const FETCH_CONCURRENCY = 8;
-const FETCH_TIMEOUT_MS = 4_000;
+const PROBE_BATCH = 16;
+const FETCH_CONCURRENCY = 1;
+const FETCH_TIMEOUT_MS = 6_000;
 
 const VENUE_CODES: Record<string, string> = {
   札幌: "01", 函館: "02", 福島: "03", 新潟: "04", 東京: "05",

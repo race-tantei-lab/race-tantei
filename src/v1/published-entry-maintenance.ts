@@ -10,7 +10,7 @@ import type { Env } from "./types.js";
 
 const STATE_KEY = "worker_published_entry_maintenance";
 const MAX_CNAME_PAGES = 18;
-const FETCH_CONCURRENCY = 6;
+const FETCH_CONCURRENCY = 1;
 
 type MissingGroup = {
   raceDate: string;

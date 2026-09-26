@@ -91,9 +91,30 @@ async function runBoundedPublicMaintenance(env: Env, now: Date): Promise<void> {
   // These three bounded repairs are the normal automatic maintenance duties.
   const errors: string[] = [];
   try { await runUpcomingCalendarRepair(env, now); } catch (error) { errors.push(`calendar:${String(error)}`); }
-  try { await runUpcomingEntryWorkerRepair(env, now); } catch (error) { errors.push(`entry:${String(error)}`); }
-  try { await runUpcomingEntryDerivedRepair(env, now); } catch (error) { errors.push(`derived:${String(error)}`); }
-  try { await runPublishedEntryMaintenance(env, now); } catch (error) { errors.push(`published:${String(error)}`); }
+
+  // Use the deterministic CNAME derivation first. Running every discovery/probe
+  // strategy on the same cron created a burst of parallel requests to JRA and
+  // could leave one venue partially populated. Broader discovery is fallback-only.
+  let entryReady = false;
+  try {
+    const derived = await runUpcomingEntryDerivedRepair(env, now);
+    entryReady = derived.status === "ready" || derived.status === "repaired";
+  } catch (error) {
+    errors.push(`derived:${String(error)}`);
+  }
+  if (!entryReady) {
+    try {
+      const published = await runPublishedEntryMaintenance(env, now);
+      entryReady = published.status === "ready" || published.status === "repaired";
+    } catch (error) {
+      errors.push(`published:${String(error)}`);
+    }
+  }
+  if (!entryReady) {
+    try { await runUpcomingEntryWorkerRepair(env, now); }
+    catch (error) { errors.push(`entry:${String(error)}`); }
+  }
+
   try { await refreshPublicCalendarCache(env, now); } catch (error) { errors.push(`calendar-cache:${String(error)}`); }
   if (errors.length) console.error("PUBLIC_MAINTENANCE_PARTIAL", JSON.stringify(errors));
 }

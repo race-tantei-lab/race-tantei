@@ -14,7 +14,7 @@ const VENUE_CODES: Record<string, string> = {
 };
 const FETCH_TIMEOUT_MS = 6_000;
 const MAX_VALIDATE = 32;
-const VALIDATE_CONCURRENCY = 8;
+const VALIDATE_CONCURRENCY = 1;
 
 type Meeting = {
   raceDate: string;
@@ -125,7 +125,8 @@ async function validateCandidate(cname: string, meeting: Meeting): Promise<Publi
 }
 
 export async function discoverPublishedEntryAnchor(meeting: Meeting): Promise<PublishedEntryAnchor | null> {
-  const landingPages = await Promise.all(LANDING_URLS.map((url) => fetchOfficial(url)));
+  const landingPages: Array<{ html: string; url: string } | null> = [];
+  for (const url of LANDING_URLS) landingPages.push(await fetchOfficial(url));
   const candidates = [...new Set(landingPages.flatMap((page) => page ? extractPublishedEntryCnames(page.html) : []))]
     .filter((cname) => candidateMatchesMeeting(cname, meeting))
     .slice(0, MAX_VALIDATE);
