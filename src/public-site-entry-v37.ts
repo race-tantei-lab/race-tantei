@@ -349,10 +349,12 @@ async function fetchPublicDay(request: Request, env: Env, ctx: ExecutionContext,
   }
 }
 
-async function fetchNormalHome(_request: Request, _env: Env, _ctx: ExecutionContext): Promise<Response> {
-  // Do not block first paint on D1. Current/recent race days are embedded in the
-  // tiny recent snapshot, while historical years remain lazy-loaded.
-  return embeddedNormalHome(staticRecentCalendar());
+async function fetchNormalHome(_request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  // Keep first paint bounded, but source the current/recent calendar from the
+  // maintained cache so today's card is actually selectable on the public site.
+  // loadRecentCalendar performs one indexed cache read and only falls back to a
+  // bounded exact-date GROUP BY when today's venue rows are absent.
+  return embeddedNormalHome(await loadRecentCalendar(env));
 }
 async function fetchRaceList(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const homeUrl = new URL(request.url);
