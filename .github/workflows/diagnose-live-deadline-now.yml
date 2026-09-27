@@ -1,11 +1,8 @@
 name: Diagnose live deadline now
 
 on:
+  # Manual-only. Production D1 diagnostics must never auto-run from pushes.
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/diagnose-live-deadline-now.yml"
 
 permissions:
   contents: read
