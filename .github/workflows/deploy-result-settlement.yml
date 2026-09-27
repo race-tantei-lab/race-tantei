@@ -1,0 +1,65 @@
+name: Deploy result settlement Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/result-settlement-entry.ts"
+      - "src/v1/bounded-result-settlement.ts"
+      - "src/v1/jra.ts"
+      - "src/v1/jra-payout-fallback.ts"
+      - "src/v1/db.ts"
+      - "src/v1/live-preview-safety.ts"
+      - "src/v1/race-day-gate.ts"
+      - "wrangler.result-settlement.jsonc"
+      - "scripts/verify-production-d1-budget.py"
+      - ".github/workflows/deploy-result-settlement.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-race-tantei-result-settlement
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Verify production D1 budget safety
+        run: python3 scripts/verify-production-d1-budget.py
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Validate result settlement Worker bundle
+        run: npx wrangler deploy --dry-run --config wrangler.result-settlement.jsonc --outdir dist-result-settlement
+      - name: Deploy result settlement Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 3c6d1826b573b2e68cb13ec37e9e8ade
+          command: deploy --config wrangler.result-settlement.jsonc
+      - name: Verify production health
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://race-tantei-result-settlement.race-tantei.workers.dev/health'
+          for attempt in $(seq 1 10); do
+            code=$(curl --max-time 10 -sS -o /tmp/health -w '%{http_code}' "$url" || true)
+            echo "HEALTH_ATTEMPT=$attempt HTTP=$code"
+            if [ "$code" = 200 ] && grep -q 'result-settlement-v1-5m-priority-20260927' /tmp/health; then
+              cat /tmp/health
+              exit 0
+            fi
+            sleep 3
+          done
+          echo 'RESULT_SETTLEMENT_HEALTH_FAILED' >&2
+          cat /tmp/health 2>/dev/null || true
+          exit 1

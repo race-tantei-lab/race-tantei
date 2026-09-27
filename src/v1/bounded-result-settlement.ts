@@ -1,11 +1,17 @@
 import { saveResultBundle } from "./db.js";
 import { extractResultLinks, fetchJraPage, pageLooksLikeResult, parseEntryPage, parseResultPage, toResultUrl } from "./jra.js";
 import { parseJraPayoutsFromHtml } from "./jra-payout-fallback.js";
+import { acquireNamedLiveDeadlineLease, releaseNamedLiveDeadlineLease } from "./live-preview-safety.js";
 import type { Env } from "./types.js";
 
 const MAX_CANDIDATES_PER_TICK = 15;
 const RESULT_GRACE_MS = 4 * 60 * 1000;
+const URGENT_RESULT_GRACE_MS = 2 * 60 * 1000;
+const SETTLEMENT_LEASE_KEY = "result-settlement:v1";
+const SETTLEMENT_LEASE_SECONDS = 180;
 const UNORDERED = new Set(["ワイド", "馬連", "3連複"]);
+
+export type SettlementMode = "all" | "public-bets-only";
 
 type Candidate = {
   raceId: string;
@@ -30,6 +36,9 @@ type PayoutRow = {
 
 export type BoundedSettlementAudit = {
   checkedAt: string;
+  mode: SettlementMode;
+  leaseAcquired: boolean;
+  skippedReason: string | null;
   candidates: string[];
   resultSavedRaceIds: string[];
   settledRaceIds: string[];
@@ -89,29 +98,43 @@ function matchingResultUrl(entryHtml: string, entryUrl: string): string | null {
     ?? null;
 }
 
-async function pendingCandidates(db: D1Database, now: Date): Promise<Candidate[]> {
+async function pendingCandidates(db: D1Database, now: Date, mode: SettlementMode): Promise<Candidate[]> {
   const fromDate = jstDate(now, -1);
   const throughDate = jstDate(now);
-  const dueBefore = new Date(now.getTime() - RESULT_GRACE_MS).toISOString();
+  const graceMs = mode === "public-bets-only" ? URGENT_RESULT_GRACE_MS : RESULT_GRACE_MS;
+  const dueBefore = new Date(now.getTime() - graceMs).toISOString();
   const result = await db.prepare(`
-    SELECT r.race_id AS raceId,r.race_date AS raceDate,r.entry_url AS entryUrl,r.result_url AS resultUrl,r.start_time_utc AS startTimeUtc
-    FROM rt_races r
-    WHERE r.race_date>=? AND r.race_date<=?
-      AND lower(COALESCE(r.status,'scheduled')) NOT IN ('cancelled','canceled','postponed')
-      AND r.entry_url IS NOT NULL AND LENGTH(TRIM(r.entry_url))>0
-      AND r.start_time_utc IS NOT NULL
-      AND datetime(r.start_time_utc)<=datetime(?)
-      AND (
-        NOT EXISTS (SELECT 1 FROM rt_results x WHERE x.race_id=r.race_id AND x.finish_position IS NOT NULL)
-        OR NOT EXISTS (SELECT 1 FROM rt_payouts p WHERE p.race_id=r.race_id)
-        OR EXISTS (
+    WITH candidate_state AS (
+      SELECT
+        r.race_id AS raceId,
+        r.race_date AS raceDate,
+        r.entry_url AS entryUrl,
+        r.result_url AS resultUrl,
+        r.start_time_utc AS startTimeUtc,
+        CASE WHEN EXISTS (
           SELECT 1 FROM rt_public_bets b
           WHERE b.race_id=r.race_id AND b.source_prediction_id=-2 AND b.settlement_status='pending'
-        )
-      )
-    ORDER BY r.start_time_utc,r.race_id
+        ) THEN 1 ELSE 0 END AS hasPendingPublicBet,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM rt_results x WHERE x.race_id=r.race_id AND x.finish_position IS NOT NULL
+        ) THEN 1 ELSE 0 END AS hasResult,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM rt_payouts p WHERE p.race_id=r.race_id
+        ) THEN 1 ELSE 0 END AS hasPayout
+      FROM rt_races r
+      WHERE r.race_date>=? AND r.race_date<=?
+        AND lower(COALESCE(r.status,'scheduled')) NOT IN ('cancelled','canceled','postponed')
+        AND r.entry_url IS NOT NULL AND LENGTH(TRIM(r.entry_url))>0
+        AND r.start_time_utc IS NOT NULL
+        AND datetime(r.start_time_utc)<=datetime(?)
+    )
+    SELECT raceId,raceDate,entryUrl,resultUrl,startTimeUtc
+    FROM candidate_state
+    WHERE hasPendingPublicBet=1
+       OR (?='all' AND (hasResult=0 OR hasPayout=0))
+    ORDER BY hasPendingPublicBet DESC,startTimeUtc,raceId
     LIMIT ?
-  `).bind(fromDate, throughDate, dueBefore, MAX_CANDIDATES_PER_TICK).all<Candidate>();
+  `).bind(fromDate, throughDate, dueBefore, mode, MAX_CANDIDATES_PER_TICK).all<Candidate>();
   return result.results ?? [];
 }
 
@@ -171,9 +194,16 @@ async function settlePublicRows(db: D1Database, raceId: string, refundHorseNos: 
   return updates.length;
 }
 
-export async function runBoundedResultSettlement(env: Env, now = new Date()): Promise<BoundedSettlementAudit> {
+export async function runBoundedResultSettlement(
+  env: Env,
+  now = new Date(),
+  mode: SettlementMode = "all",
+): Promise<BoundedSettlementAudit> {
   const audit: BoundedSettlementAudit = {
     checkedAt: now.toISOString(),
+    mode,
+    leaseAcquired: false,
+    skippedReason: null,
     candidates: [],
     resultSavedRaceIds: [],
     settledRaceIds: [],
@@ -182,88 +212,112 @@ export async function runBoundedResultSettlement(env: Env, now = new Date()): Pr
     errors: [],
   };
 
-  const candidates = await pendingCandidates(env.DB, now);
-  audit.candidates = candidates.map((race) => race.raceId);
+  // Cheap preflight: if nothing is due, avoid a lease write entirely.
+  let candidates = await pendingCandidates(env.DB, now, mode);
+  if (!candidates.length) return audit;
 
-  for (const race of candidates) {
-    try {
-      const entry = await fetchJraPage(race.entryUrl);
-      const resultUrls: string[] = [];
-      const seen = new Set<string>();
-      const addResultUrl = (value: string | null | undefined) => {
-        if (!value || seen.has(value)) return;
-        seen.add(value);
-        resultUrls.push(value);
-      };
+  const owner = `result-settlement:${mode}:${crypto.randomUUID()}`;
+  const acquired = await acquireNamedLiveDeadlineLease(
+    env.DB,
+    SETTLEMENT_LEASE_KEY,
+    owner,
+    SETTLEMENT_LEASE_SECONDS,
+  );
+  if (!acquired) {
+    audit.skippedReason = "lease_busy";
+    return audit;
+  }
+  audit.leaseAcquired = true;
 
-      // Prefer an already persisted official result URL, then use every official
-      // link advertised by the entry page, the parsed entry result URL, the
-      // legacy same-race matcher, and finally the deterministic JRA conversion.
-      // This mirrors the quota-free result renderer and avoids leaving a race
-      // pending just because one CNAME/link shape changed after race day.
-      addResultUrl(race.resultUrl);
-      for (const value of extractResultLinks(entry.html, entry.url)) addResultUrl(value);
-      try { addResultUrl(parseEntryPage(entry.html, entry.url).race.resultUrl); } catch { /* keep other candidates */ }
-      addResultUrl(matchingResultUrl(entry.html, entry.url));
-      addResultUrl(toResultUrl(race.entryUrl));
+  try {
+    // Re-read after acquiring the lease so two cron paths cannot settle the same
+    // pending rows based on a stale preflight view.
+    candidates = await pendingCandidates(env.DB, new Date(), mode);
+    audit.candidates = candidates.map((race) => race.raceId);
 
-      let page: Awaited<ReturnType<typeof fetchJraPage>> | null = null;
-      let bundle: ReturnType<typeof parseResultPage> | null = null;
-      for (const candidate of resultUrls) {
-        try {
-          const fetched = await fetchJraPage(candidate);
-          if (!pageLooksLikeResult(fetched.html)) continue;
-          const parsed = parseResultPage(fetched.html, fetched.url);
-          if (parsed.race.raceId !== race.raceId || parsed.results.length < 3) continue;
+    for (const race of candidates) {
+      try {
+        const entry = await fetchJraPage(race.entryUrl);
+        const resultUrls: string[] = [];
+        const seen = new Set<string>();
+        const addResultUrl = (value: string | null | undefined) => {
+          if (!value || seen.has(value)) return;
+          seen.add(value);
+          resultUrls.push(value);
+        };
 
-          const payoutMap = new Map<string, (typeof parsed.payouts)[number]>();
-          for (const payout of [...parsed.payouts, ...parseJraPayoutsFromHtml(fetched.html)]) {
-            const key = `${payout.betType}:${canonical(payout.betType, payout.combination)}`;
-            payoutMap.set(key, { ...payout, combination: canonical(payout.betType, payout.combination) });
+        // Prefer an already persisted official result URL, then use every official
+        // link advertised by the entry page, the parsed entry result URL, the
+        // legacy same-race matcher, and finally the deterministic JRA conversion.
+        addResultUrl(race.resultUrl);
+        for (const value of extractResultLinks(entry.html, entry.url)) addResultUrl(value);
+        try { addResultUrl(parseEntryPage(entry.html, entry.url).race.resultUrl); } catch { /* keep other candidates */ }
+        addResultUrl(matchingResultUrl(entry.html, entry.url));
+        addResultUrl(toResultUrl(race.entryUrl));
+
+        let page: Awaited<ReturnType<typeof fetchJraPage>> | null = null;
+        let bundle: ReturnType<typeof parseResultPage> | null = null;
+        for (const candidate of resultUrls) {
+          try {
+            const fetched = await fetchJraPage(candidate);
+            if (!pageLooksLikeResult(fetched.html)) continue;
+            const parsed = parseResultPage(fetched.html, fetched.url);
+            if (parsed.race.raceId !== race.raceId || parsed.results.length < 3) continue;
+
+            const payoutMap = new Map<string, (typeof parsed.payouts)[number]>();
+            for (const payout of [...parsed.payouts, ...parseJraPayoutsFromHtml(fetched.html)]) {
+              const key = `${payout.betType}:${canonical(payout.betType, payout.combination)}`;
+              payoutMap.set(key, { ...payout, combination: canonical(payout.betType, payout.combination) });
+            }
+            const payouts = [...payoutMap.values()];
+            if (!payouts.length) continue;
+
+            page = fetched;
+            bundle = { ...parsed, payouts };
+            break;
+          } catch {
+            // One stale official candidate must not block the other valid JRA URLs.
           }
-          const payouts = [...payoutMap.values()];
-          if (!payouts.length) continue;
-
-          page = fetched;
-          bundle = { ...parsed, payouts };
-          break;
-        } catch {
-          // One stale official candidate must not block the other valid JRA URLs.
         }
-      }
-      if (!page || !bundle) {
-        audit.waitingRaceIds.push(race.raceId);
-        continue;
-      }
+        if (!page || !bundle) {
+          audit.waitingRaceIds.push(race.raceId);
+          continue;
+        }
 
-      await saveResultBundle(env.DB, bundle);
-      await env.DB.batch([
-        env.DB.prepare(`
-          UPDATE rt_races
-          SET result_url=?,result_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
-          WHERE race_id=?
-        `).bind(page.url, race.raceId),
-        env.DB.prepare(`
-          UPDATE rt_race_sources
-          SET result_url=?,status='complete',last_result_fetch_at=CURRENT_TIMESTAMP,
-              last_error=NULL,updated_at=CURRENT_TIMESTAMP
-          WHERE race_id=? AND entry_url=?
-        `).bind(page.url, race.raceId, race.entryUrl),
-      ]);
-      audit.resultSavedRaceIds.push(race.raceId);
+        await saveResultBundle(env.DB, bundle);
+        await env.DB.batch([
+          env.DB.prepare(`
+            UPDATE rt_races
+            SET result_url=?,result_updated_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP
+            WHERE race_id=?
+          `).bind(page.url, race.raceId),
+          env.DB.prepare(`
+            UPDATE rt_race_sources
+            SET result_url=?,status='complete',last_result_fetch_at=CURRENT_TIMESTAMP,
+                last_error=NULL,updated_at=CURRENT_TIMESTAMP
+            WHERE race_id=? AND entry_url=?
+          `).bind(page.url, race.raceId, race.entryUrl),
+        ]);
+        audit.resultSavedRaceIds.push(race.raceId);
 
-      const settled = await settlePublicRows(env.DB, race.raceId, bundle.refundHorseNos ?? []);
-      if (settled > 0) {
-        audit.settledRaceIds.push(race.raceId);
-        audit.settledRows += settled;
+        const settled = await settlePublicRows(env.DB, race.raceId, bundle.refundHorseNos ?? []);
+        if (settled > 0) {
+          audit.settledRaceIds.push(race.raceId);
+          audit.settledRows += settled;
+        }
+        if (await pendingPublicBetCount(env.DB, race.raceId) > 0) {
+          audit.waitingRaceIds.push(race.raceId);
+        }
+      } catch (error) {
+        audit.errors.push({ raceId: race.raceId, error: errorText(error) });
       }
-      if (await pendingPublicBetCount(env.DB, race.raceId) > 0) {
-        audit.waitingRaceIds.push(race.raceId);
-      }
+    }
+    return audit;
+  } finally {
+    try {
+      await releaseNamedLiveDeadlineLease(env.DB, SETTLEMENT_LEASE_KEY, owner);
     } catch (error) {
-      audit.errors.push({ raceId: race.raceId, error: errorText(error) });
+      console.error("RESULT_SETTLEMENT_LEASE_RELEASE_FAILED", errorText(error));
     }
   }
-
-  return audit;
 }
