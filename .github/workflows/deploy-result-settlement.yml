@@ -2,19 +2,8 @@ name: Deploy result settlement Worker
 # Dedicated 5-minute pending-bet settlement deploy.
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "src/result-settlement-entry.ts"
-      - "src/v1/bounded-result-settlement.ts"
-      - "src/v1/jra.ts"
-      - "src/v1/jra-payout-fallback.ts"
-      - "src/v1/db.ts"
-      - "src/v1/live-preview-safety.ts"
-      - "src/v1/race-day-gate.ts"
-      - "wrangler.result-settlement.jsonc"
-      - "scripts/verify-production-d1-budget.py"
-      - ".github/workflows/deploy-result-settlement.yml"
+  # Standalone settlement Worker is intentionally unscheduled because the account
+  # cron allocation is full. Production settlement runs through the public Worker.
   workflow_dispatch:
 
 permissions:

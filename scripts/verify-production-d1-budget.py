@@ -34,13 +34,13 @@ def main() -> None:
     guardian = cfg("wrangler.live-deadline-guardian.jsonc")
     guardian_backup = cfg("wrangler.live-deadline-guardian-backup.jsonc")
 
-    require(public["triggers"]["crons"] == ["*/15 * * * *"], "public cron must stay 15m")
+    require(public["triggers"]["crons"] == ["*/5 * * * *"], "public cron must stay 5m for urgent settlement")
     require(live["triggers"]["crons"] == ["* * * * *"], "live primary cron must stay 1m")
     require(live_backup["triggers"]["crons"] == ["1-59/2 * * * *"], "live backup cron must stay 2m")
     require(win5["triggers"]["crons"] == ["* * * * *"], "WIN5 primary cron must stay 1m")
     require(win5_backup["triggers"]["crons"] == ["3-59/5 * * * *"], "WIN5 backup cron must stay 5m staggered")
     require(entry["triggers"]["crons"] == [], "standalone entry maintenance cron must stay disabled")
-    require(result_settlement["triggers"]["crons"] == ["2-59/5 * * * *"], "result settlement cron must stay 5m staggered")
+    require(result_settlement["triggers"]["crons"] == [], "standalone result settlement cron must stay disabled")
     require(guardian["triggers"]["crons"] == [], "obsolete guardian primary cron must stay disabled")
     require(guardian_backup["triggers"]["crons"] == [], "obsolete guardian backup cron must stay disabled")
 
@@ -88,21 +88,14 @@ def main() -> None:
 
     recovery = read("src/public-site-entry-recovery-20260906.ts")
     bounded_settlement = read("src/v1/bounded-result-settlement.ts")
-    result_settlement_entry = read("src/result-settlement-entry.ts")
-    require_text(recovery, "await runBoundedResultSettlement(env, now)", "public bounded settlement fallback")
+    require_text(recovery, 'runBoundedResultSettlement(env, now, "public-bets-only")', "public 5m urgent settlement")
+    require_text(recovery, 'runBoundedResultSettlement(env, now, "all")', "public 15m settlement fallback")
+    require_text(recovery, "if (!quarterHourTick) return;", "public maintenance remains 15m")
     require_text(bounded_settlement, "MAX_CANDIDATES_PER_TICK = 15", "bounded settlement cap")
     require_text(bounded_settlement, "URGENT_RESULT_GRACE_MS = 2 * 60 * 1000", "urgent settlement grace")
     require_text(bounded_settlement, 'mode: SettlementMode = "all"', "settlement mode default")
     require_text(bounded_settlement, 'hasPendingPublicBet DESC', "pending public bets priority")
     require_text(bounded_settlement, 'SETTLEMENT_LEASE_KEY = "result-settlement:v1"', "settlement shared lease")
-    require_text(result_settlement_entry, 'runBoundedResultSettlement(env, now, "public-bets-only")', "5m urgent settlement mode")
-    require_text(result_settlement_entry, "if (minute < ACTIVE_FROM_MINUTE || minute > ACTIVE_THROUGH_MINUTE)", "settlement time gate")
-    require_text(result_settlement_entry, "if (!raceDay.shouldRun)", "settlement race-day gate")
-    require(
-        result_settlement_entry.index("if (!raceDay.shouldRun)")
-        < result_settlement_entry.index('runBoundedResultSettlement(env, now, "public-bets-only")'),
-        "result settlement must race-day gate before first D1 settlement call",
-    )
     forbid_text(bounded_settlement, "date('now','-14 days')", "bounded settlement")
     forbid_text(bounded_settlement, "date('now','-30 days')", "bounded settlement")
 
@@ -195,8 +188,8 @@ def main() -> None:
         "legacy_14d_scan=false",
         "live_canonical_learning=true",
         "win5_raw_history=false",
-        "entry_cron=disabled_public15m_owner",
-        "result_settlement=5m_pending_bets_first",
+        "entry_cron=disabled_public15m_maintenance",
+        "result_settlement=public5m_pending_bets_first",
         "guardian_crons=disabled",
         "research_push_d1=false",
     )

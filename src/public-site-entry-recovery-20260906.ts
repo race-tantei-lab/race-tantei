@@ -11,6 +11,8 @@ import type { Env, RaceBundle } from "./v1/types.js";
 
 const RECOVERY_PATH = "/_ops/entry-seed-sync-20260906-7f4c9d2a";
 const HOME_PATHS = new Set(["/", "/index.html", "/races", "/races/"]);
+const URGENT_SETTLEMENT_FROM_MINUTE = 9 * 60 + 30;
+const URGENT_SETTLEMENT_THROUGH_MINUTE = 18 * 60 + 30;
 
 function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -24,6 +26,16 @@ function jstToday(): string {
 
 function jstWeekday(now: Date): number {
   return new Date(now.getTime() + 9 * 60 * 60 * 1000).getUTCDay();
+}
+
+function jstMinuteOfDay(now: Date): number {
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return jst.getUTCHours() * 60 + jst.getUTCMinutes();
+}
+
+function isQuarterHourTick(now: Date): boolean {
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return jst.getUTCMinutes() % 15 === 0;
 }
 
 function isPreRacePreparationDay(now: Date): boolean {
@@ -139,25 +151,51 @@ export default {
   },
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     const now = Number.isFinite(controller.scheduledTime) ? new Date(controller.scheduledTime) : new Date();
-
-    // Result/payout settlement must not depend on someone opening the website.
-    // Keep this bounded to pending final public bets from today/yesterday and run
-    // it even on a non-race day so a prior-day outage can recover automatically.
-    try {
-      const settlement = await runBoundedResultSettlement(env, now);
-      if (settlement.candidates.length || settlement.errors.length) {
-        console.log("PUBLIC_BOUNDED_RESULT_SETTLEMENT", JSON.stringify(settlement));
-      }
-    } catch (error) {
-      console.error("PUBLIC_BOUNDED_RESULT_SETTLEMENT_FAILED", error);
-    }
-
     const raceDay = await shouldRunOnJraRaceDay(now);
     const preparationDay = isPreRacePreparationDay(now);
+    const minuteOfDay = jstMinuteOfDay(now);
+    const quarterHourTick = isQuarterHourTick(now);
+    const urgentSettlementTick = raceDay.shouldRun
+      && minuteOfDay >= URGENT_SETTLEMENT_FROM_MINUTE
+      && minuteOfDay <= URGENT_SETTLEMENT_THROUGH_MINUTE;
+
+    // The public Worker owns the single existing cron slot. Every 5 minutes on a
+    // race day it checks only pending final public bets; every 15 minutes it also
+    // performs the previous all-race result backfill. This keeps settlement timely
+    // without tripling entry/result crawling or consuming another cron allocation.
+    if (urgentSettlementTick) {
+      try {
+        const settlement = await runBoundedResultSettlement(env, now, "public-bets-only");
+        if (settlement.candidates.length || settlement.waitingRaceIds.length || settlement.errors.length || settlement.skippedReason) {
+          console.log("PUBLIC_URGENT_RESULT_SETTLEMENT", JSON.stringify(settlement));
+        }
+      } catch (error) {
+        console.error("PUBLIC_URGENT_RESULT_SETTLEMENT_FAILED", error);
+      }
+    }
+
+    if (quarterHourTick) {
+      try {
+        const settlement = await runBoundedResultSettlement(env, now, "all");
+        if (settlement.candidates.length || settlement.waitingRaceIds.length || settlement.errors.length || settlement.skippedReason) {
+          console.log("PUBLIC_BOUNDED_RESULT_SETTLEMENT", JSON.stringify(settlement));
+        }
+      } catch (error) {
+        console.error("PUBLIC_BOUNDED_RESULT_SETTLEMENT_FAILED", error);
+      }
+    }
+
     if (!raceDay.shouldRun && !preparationDay) {
-      console.log("PUBLIC_NON_RACE_DAY_SKIP", JSON.stringify({ raceDate: raceDay.raceDate, reason: raceDay.reason }));
+      if (quarterHourTick) {
+        console.log("PUBLIC_NON_RACE_DAY_SKIP", JSON.stringify({ raceDate: raceDay.raceDate, reason: raceDay.reason }));
+      }
       return;
     }
+
+    // Entry/calendar maintenance stays at the old 15-minute cadence even though
+    // the Worker cron itself now wakes every five minutes for urgent settlement.
+    if (!quarterHourTick) return;
+
     if (preparationDay && !raceDay.shouldRun) {
       console.log("PUBLIC_PRE_RACE_MAINTENANCE", JSON.stringify({ raceDate: raceDay.raceDate, reason: raceDay.reason }));
     }
