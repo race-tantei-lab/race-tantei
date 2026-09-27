@@ -218,8 +218,11 @@ def main() -> None:
     settlement = read("src/v1/bounded-result-settlement.ts")
     for needle in (
         'import { runBoundedResultSettlement } from "./v1/bounded-result-settlement.js";',
-        "await runBoundedResultSettlement(env, now)",
+        'await runBoundedResultSettlement(env, now, "public-bets-only")',
+        'await runBoundedResultSettlement(env, now, "all")',
+        "PUBLIC_URGENT_RESULT_SETTLEMENT",
         "PUBLIC_BOUNDED_RESULT_SETTLEMENT",
+        "if (!quarterHourTick) return;",
     ):
         require_text(recovery, needle, "bounded automatic result settlement")
     require_text(
@@ -231,6 +234,9 @@ def main() -> None:
         "b.source_prediction_id=-2",
         "b.settlement_status='pending'",
         "MAX_CANDIDATES_PER_TICK = 15",
+        "URGENT_RESULT_GRACE_MS = 2 * 60 * 1000",
+        'SETTLEMENT_LEASE_KEY = "result-settlement:v1"',
+        "hasPendingPublicBet DESC",
         "saveResultBundle(env.DB, bundle)",
         "settlement_status='settled'",
     ):
