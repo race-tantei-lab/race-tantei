@@ -64,7 +64,7 @@ function canonical(betType: string, combination: string): string {
 function jraRaceKey(url: string): string | null {
   try {
     const cname = decodeURIComponent(new URL(url).searchParams.get("CNAME") ?? "");
-    const match = cname.match(/(?:pw|sw)01(?:dde01|sde01|sde10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})\//i);
+    const match = cname.match(/(?:pw|sw)01(?:dde01|dde10|sde01|sde10)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})\//i);
     return match ? match.slice(1, 7).join(":") : null;
   } catch {
     return null;
@@ -246,14 +246,34 @@ export async function runBoundedResultSettlement(
           resultUrls.push(value);
         };
 
-        // Prefer an already persisted official result URL, then use every official
-        // link advertised by the entry page, the parsed entry result URL, the
-        // legacy same-race matcher, and finally the deterministic JRA conversion.
-        addResultUrl(race.resultUrl);
-        for (const value of extractResultLinks(entry.html, entry.url)) addResultUrl(value);
-        try { addResultUrl(parseEntryPage(entry.html, entry.url).race.resultUrl); } catch { /* keep other candidates */ }
+        // Prefer only same-race result links that JRA actually advertises on the
+        // freshly fetched entry page. Persisted result_url may be an old
+        // deterministic dde->sde guess with the wrong checksum suffix; trying it
+        // first can spend the whole scheduled invocation on a timeout and starve
+        // every later selected race.
+        const targetKey = jraRaceKey(race.entryUrl);
+        const publishedSameRaceLinks = extractResultLinks(entry.html, entry.url)
+          .filter((value) => targetKey !== null && jraRaceKey(value) === targetKey);
+        for (const value of publishedSameRaceLinks) addResultUrl(value);
+        try {
+          const parsedResultUrl = parseEntryPage(entry.html, entry.url).race.resultUrl;
+          if (parsedResultUrl && targetKey !== null && jraRaceKey(parsedResultUrl) === targetKey) addResultUrl(parsedResultUrl);
+        } catch { /* keep other candidates */ }
         addResultUrl(matchingResultUrl(entry.html, entry.url));
-        addResultUrl(toResultUrl(race.entryUrl));
+
+        // Urgent pending-bet settlement never brute-forces a guessed result URL.
+        // If JRA has not published the same-race link yet, move on immediately so
+        // one race cannot starve the rest. The 15-minute all-race backfill retains
+        // the persisted/deterministic fallbacks for eventual recovery.
+        if (!resultUrls.length && mode === "public-bets-only") {
+          audit.waitingRaceIds.push(race.raceId);
+          continue;
+        }
+        if (!resultUrls.length) {
+          const persistedKey = race.resultUrl ? jraRaceKey(race.resultUrl) : null;
+          if (race.resultUrl && targetKey !== null && persistedKey === targetKey) addResultUrl(race.resultUrl);
+          addResultUrl(toResultUrl(race.entryUrl));
+        }
 
         let page: Awaited<ReturnType<typeof fetchJraPage>> | null = null;
         let bundle: ReturnType<typeof parseResultPage> | null = null;
