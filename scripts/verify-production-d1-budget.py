@@ -146,9 +146,12 @@ def main() -> None:
 
     # The race-day quota may be touched automatically only by the two-run
     # bootstrap, Thu/Fri upcoming-program preflight, and Tuesday-night learning.
-    # Critical GitHub recovery is manual-only; live Workers own automatic bets.
+    # Critical bet recovery is manual-only; live Workers own automatic bets.
+    # The only automatic entry fallback is the bounded direct sync, gated by a
+    # tiny today/tomorrow readiness query and scheduled only evening/race morning.
     auto_d1 = {
         "race-day-bootstrap.yml",
+        "sync-upcoming-entries-direct.yml",
         "critical-auto-bet-generation.yml",
         "verify-upcoming-production-program.yml",
         "continuous-final-rule-learning.yml",

@@ -15,6 +15,7 @@ ALLOW_AUTOMATIC_D1 = {
     "deploy-live-deadline.yml",
     "verify-upcoming-production-program.yml",
     "race-day-bootstrap.yml",
+    "sync-upcoming-entries-direct.yml",  # bounded pre-race fallback; heavy sync only when entry readiness is incomplete
     "critical-auto-bet-generation.yml",  # bounded T-45..T-15 per-race recovery
     "continuous-final-rule-learning.yml",  # weekly Tuesday night only
 }
