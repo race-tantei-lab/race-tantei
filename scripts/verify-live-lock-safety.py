@@ -210,8 +210,16 @@ def main() -> None:
     forbid_text(guard, 'oddsMode: "probability_fallback"', "deadline guard fake odds fallback")
     require_text(guard, 'if (!official) return { status: "preview_missing"', "official last-good only")
     live_entry = read("src/live-deadline-entry-v2.ts")
-    forbid_text(live_entry, "runUpcomingEntryDerivedRepair", "live/public entry-repair ownership")
-    forbid_text(live_entry, "upcoming-entry-derived-repair", "live/public entry-repair ownership")
+    for needle in (
+        'import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";',
+        "LIVE_SELECTION_REPAIR_THRESHOLD_MS = 30 * 60 * 1000",
+        "LIVE_SELECTION_REPAIR_MIN_INTERVAL_MS = 5 * 60 * 1000",
+        "runLiveSelectionEntryRepairIfDue(",
+        "LIVE_SELECTION_T30_ENTRY_REPAIR",
+    ):
+        require_text(live_entry, needle, "bounded live T-30 selection self-heal")
+    forbid_text(live_entry, "runPublishedEntryMaintenance", "live broad entry discovery fallback")
+    forbid_text(live_entry, "runUpcomingEntryWorkerRepair", "live probe fallback ownership")
 
     recovery = read("src/public-site-entry-recovery-20260906.ts")
     quota_recovery = read("src/public-site-entry-quota-recovery-20260912.ts")

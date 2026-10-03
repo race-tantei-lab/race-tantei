@@ -106,6 +106,13 @@ def main() -> None:
     # Race-bet predictions must preserve the canonical completed-model learning.
     # Quota protection is mechanical (refresh/attempt/run budgets), never a change
     # to model inputs or ticket scoring. WIN5 keeps its separate bounded policy.
+    live_entry = read("src/live-deadline-entry-v2.ts")
+    require_text(live_entry, "LIVE_SELECTION_REPAIR_THRESHOLD_MS = 30 * 60 * 1000", "live T-30 entry repair threshold")
+    require_text(live_entry, "LIVE_SELECTION_REPAIR_MIN_INTERVAL_MS = 5 * 60 * 1000", "live T-30 entry repair throttle")
+    require_text(live_entry, "runUpcomingEntryDerivedRepair(env, now)", "live deterministic missing-only entry repair")
+    forbid_text(live_entry, "runPublishedEntryMaintenance", "live broad published-link crawl")
+    forbid_text(live_entry, "runUpcomingEntryWorkerRepair", "live broad entry probe")
+
     live_lock = read("src/v1/completed-worker-live-lock.ts")
     require_text(live_lock, "loadCompletedRecencyLearning(", "live canonical recency")
     require_text(live_lock, "completedRecencyBetFactor(", "live canonical bet recency")

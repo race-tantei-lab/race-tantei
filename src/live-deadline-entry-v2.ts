@@ -1,4 +1,5 @@
 import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";
+import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";
 import {
   acquireLiveDeadlineLease,
@@ -11,6 +12,9 @@ export const DRIVER_VERSION = "live-deadline-v14-guard-first-cpu-safe-20260920";
 const DRIVER_STATE_PREFIX = "live_deadline_driver:";
 const LEASE_SKIP_PREFIX = "live_deadline_lease_skip:";
 const SELECTION_PREFIX = "final_daily_selection:";
+const LIVE_SELECTION_REPAIR_PREFIX = "live_selection_entry_repair:";
+const LIVE_SELECTION_REPAIR_THRESHOLD_MS = 30 * 60 * 1000;
+const LIVE_SELECTION_REPAIR_MIN_INTERVAL_MS = 5 * 60 * 1000;
 
 function iso(now = new Date()): string { return now.toISOString(); }
 function jstDate(now = new Date()): string { return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10); }
@@ -36,6 +40,62 @@ async function saveDriverState(db: D1Database, date: string, payload: Record<str
 
 async function saveLeaseSkipState(db: D1Database, date: string, payload: Record<string, unknown>): Promise<void> {
   await saveState(db, `${LEASE_SKIP_PREFIX}${date}`, payload);
+}
+
+async function runLiveSelectionEntryRepairIfDue(
+  env: Env,
+  date: string,
+  now: Date,
+  remainingToFirstRaceMs: number,
+): Promise<Record<string, unknown>> {
+  if (!Number.isFinite(remainingToFirstRaceMs) || remainingToFirstRaceMs > LIVE_SELECTION_REPAIR_THRESHOLD_MS) {
+    return { attempted: false, reason: "outside_t30", remainingToFirstRaceMs };
+  }
+
+  const stateKey = `${LIVE_SELECTION_REPAIR_PREFIX}${date}`;
+  const previous = await env.DB.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
+    .bind(stateKey).first<{ value: string }>();
+  if (previous?.value) {
+    try {
+      const parsed = JSON.parse(previous.value) as { checkedAt?: string };
+      const previousMs = Date.parse(String(parsed.checkedAt || ""));
+      if (Number.isFinite(previousMs) && now.getTime() - previousMs < LIVE_SELECTION_REPAIR_MIN_INTERVAL_MS) {
+        return { attempted: false, reason: "throttled", checkedAt: parsed.checkedAt ?? null, remainingToFirstRaceMs };
+      }
+    } catch { /* stale audit state must not block recovery */ }
+  }
+
+  const checkedAt = iso(now);
+  let status = "error";
+  let savedRaceIds: string[] = [];
+  let groups: unknown[] = [];
+  let errors: string[] = [];
+  try {
+    // Live is only the last-resort T-30 fallback. Keep this deterministic and
+    // missing-only: broad published-link discovery/probing remains owned by the
+    // public 5-minute repair pipeline to avoid duplicate JRA traffic.
+    const repair = await runUpcomingEntryDerivedRepair(env, now);
+    status = repair.status;
+    savedRaceIds = repair.savedRaceIds;
+    groups = repair.groups;
+    errors = repair.errors;
+  } catch (error) {
+    errors = [errorText(error)];
+  }
+
+  const audit = {
+    attempted: true,
+    checkedAt,
+    date,
+    remainingToFirstRaceMs,
+    status,
+    savedRaceIds,
+    groups,
+    errors,
+  };
+  await saveState(env.DB, stateKey, audit);
+  console.warn("LIVE_SELECTION_T30_ENTRY_REPAIR", JSON.stringify(audit));
+  return audit;
 }
 
 function auditLive(live: Awaited<ReturnType<typeof runCompletedWorkerLiveLock>>) {
@@ -92,22 +152,37 @@ export async function runIsolatedLiveDeadlineTick(
       ).bind(date).first<{ firstStart: string | null }>();
       const firstStartMs = Date.parse(String(firstRace?.firstStart || ""));
       const remainingToFirstRaceMs = Number.isFinite(firstStartMs) ? firstStartMs - Date.now() : Number.NaN;
-      const selectionCritical = Number.isFinite(remainingToFirstRaceMs) && remainingToFirstRaceMs <= 110 * 60_000;
-      const completed = new Date();
-      const result = {
-        ...base,
-        status: selectionCritical ? "selection_critical" : "waiting_selection",
-        phase: "complete",
-        ok: !selectionCritical,
-        selection,
-        selectionCheckedAt: iso(selectionNow),
+
+      const selectionRepair = await runLiveSelectionEntryRepairIfDue(
+        env,
+        date,
+        new Date(),
         remainingToFirstRaceMs,
-        completedAt: iso(completed),
-        durationMs: completed.getTime() - started.getTime(),
-      };
-      await saveDriverState(env.DB, date, result);
-      if (selectionCritical) throw new Error(`LIVE_DEADLINE_SELECTION_CRITICAL:${date}:${remainingToFirstRaceMs}`);
-      return result;
+      );
+      if (selectionRepair.attempted === true) {
+        selection = await freezeCompletedWorkerSelectionIfNeeded(env, new Date()) as unknown as Record<string, unknown>;
+        selectionReady = await hasSelection(env.DB, date);
+      }
+
+      if (!selectionReady) {
+        const selectionCritical = Number.isFinite(remainingToFirstRaceMs) && remainingToFirstRaceMs <= 110 * 60_000;
+        const completed = new Date();
+        const result = {
+          ...base,
+          status: selectionCritical ? "selection_critical" : "waiting_selection",
+          phase: "complete",
+          ok: !selectionCritical,
+          selection,
+          selectionRepair,
+          selectionCheckedAt: iso(selectionNow),
+          remainingToFirstRaceMs,
+          completedAt: iso(completed),
+          durationMs: completed.getTime() - started.getTime(),
+        };
+        await saveDriverState(env.DB, date, result);
+        if (selectionCritical) throw new Error(`LIVE_DEADLINE_SELECTION_CRITICAL:${date}:${remainingToFirstRaceMs}`);
+        return result;
+      }
     }
 
     // Heavy work is intentionally isolated from critical finalization. The v3
