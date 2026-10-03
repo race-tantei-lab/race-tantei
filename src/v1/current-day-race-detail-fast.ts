@@ -1,6 +1,7 @@
 import { shell } from "./public-ui.js";
 
 const PATH_VERSION = "current-day-detail-direct-batch-v1-20260921";
+const UI_VERSION = "ten-year-completed-public-v37-instant-home-20260921";
 const COURSES = ["ライト","スタンダード","プレミアム"] as const;
 const BUDGETS: Record<string, number> = {"ライト":2000,"スタンダード":5000,"プレミアム":10000};
 
@@ -100,9 +101,15 @@ function reasonHtml(finalRaw:string|null,runners:RunnerRow[]):string {
     const cards=parsed.tickets.map((t)=>{
       const horses=Array.isArray(t.horses)?t.horses.map(Number).filter(Number.isFinite):[];
       const horseText=horses.map((n)=>n+"番 "+(names.get(n)||"")).join(" / ");
-      return '<article class="reason-card"><div class="reason-head"><b>'+esc(t.betType)+' '+esc(t.combination)+'</b><span>'+esc(horseText)+'</span></div>'
-        +'<div class="reason-metrics"><span>推定確率 <b>'+pct(t.predictedProbability)+'</b></span><span>JRA公式オッズ <b>'+Number(t.officialOdds||0).toFixed(1)+'倍</b></span></div>'
-        +'<p>確定時に保存された予測とJRA公式オッズに基づく買い目です。</p></article>';
+      const probability=Number(t.predictedProbability);
+      const officialOdds=Number(t.officialOdds);
+      const valueProduct=Number(t.valueProduct);
+      const score=Number(t.score);
+      const reasonKey=String(t.betType??"")+":"+String(t.combination??"");
+      return '<article class="reason-card" data-ticket-reason="'+esc(reasonKey)+'"><div class="reason-head"><b>'+esc(t.betType)+' '+esc(t.combination)+'</b><span>'+esc(horseText)+'</span></div>'
+        +'<div class="reason-metrics"><span>この組合せが当たる推定確率：<b>'+(Number.isFinite(probability)?(probability*100).toFixed(2)+"%":"—")+'</b></span><span>JRA公式オッズ：<b>'+(Number.isFinite(officialOdds)?officialOdds.toFixed(1)+"倍":"—")+'</b></span></div>'
+        +'<div class="reason-metrics"><span>推定確率 × 公式オッズ：<b>'+(Number.isFinite(valueProduct)?valueProduct.toFixed(4):"—")+'</b></span><span>買い目の評価点：<b>'+(Number.isFinite(score)?score.toFixed(6):"—")+'</b></span></div>'
+        +'<p><b>選ばれた理由：</b>発走前に保存された最終確定時の予測値とJRA公式オッズです。確定後は再計算せず、固定済みの正本を表示しています。</p></article>';
     }).join("");
     return '<section id="race-panel-reason" class="card reason-panel" data-race-panel="reason" hidden><div class="section-title"><h2>買い目の理由</h2></div>'+cards+'</section>';
   } catch { return ""; }
@@ -116,7 +123,7 @@ function styles():string {
   return '<style>.status.hit{background:#124b37;color:#bdf5dc;border:1px solid #287d5b}.status.miss{background:#4a2528;color:#ffc3c3;border:1px solid #784047}.status.target{background:#15483a;color:#baf4dd;border:1px solid #2d806c}.race-sequence-nav{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 12px}.race-sequence-nav a,.race-sequence-nav span{padding:9px 10px;border:1px solid var(--line);border-radius:11px;background:var(--panel2);font-size:12px;text-align:center}.race-final-note{padding:10px 12px;margin:-5px 0 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);font-size:12px;color:var(--muted)}.race-detail-tabs{display:flex;gap:7px;margin:12px 0}.race-detail-tabs button{border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--text);padding:8px 11px;font:inherit}.race-detail-tabs button.active{border-color:var(--green);background:var(--green2)}.reason-panel{padding:14px}.reason-card{padding:12px 0;border-bottom:1px solid var(--line)}.reason-card:last-child{border-bottom:0}.reason-head{display:grid;gap:4px}.reason-head span,.reason-card p{font-size:11px;color:var(--muted);line-height:1.6}.reason-metrics{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.reason-metrics span{padding:6px 8px;border:1px solid var(--line);border-radius:9px;font-size:10px}.reason-metrics b{color:var(--green)}@media(max-width:760px){.race-sequence-nav a,.race-sequence-nav span{font-size:10px}.runner-table table{min-width:720px}}</style>';
 }
 function script():string {
-  return '<script>(()=>{const buttons=[...document.querySelectorAll("[data-race-tab]")],panels=[...document.querySelectorAll("[data-race-panel]")];if(!buttons.length)return;function open(name){buttons.forEach(b=>b.classList.toggle("active",b.dataset.raceTab===name));panels.forEach(p=>p.hidden=p.getAttribute("data-race-panel")!==name)}buttons.forEach(b=>b.addEventListener("click",()=>open(b.dataset.raceTab||"bets")));open("bets")})();</script>';
+  return '<script>(()=>{const buttons=[...document.querySelectorAll("[data-race-tab]")],panels=[...document.querySelectorAll("[data-race-panel]")];if(!buttons.length)return;function activate(name){buttons.forEach(b=>{const active=b.dataset.raceTab===name;b.classList.toggle("active",active);b.setAttribute("aria-selected",active?"true":"false")});panels.forEach(p=>p.hidden=p.getAttribute("data-race-panel")!==name)}buttons.forEach(b=>b.addEventListener("click",()=>activate(b.dataset.raceTab||"bets")));activate("bets")})();</script>';
 }
 
 export async function fastCurrentDayRaceDetailResponse(db:D1Database,raceId:string,now=new Date()):Promise<Response|null> {
@@ -144,7 +151,7 @@ export async function fastCurrentDayRaceDetailResponse(db:D1Database,raceId:stri
   const reasons=reasonHtml(states.get(finalKey)??null,runners);
   const betsBlock=betHtml(bets);
   const hasReasons=Boolean(reasons);
-  const tabNav='<nav class="race-detail-tabs"><button type="button" class="active" data-race-tab="bets">予想買い目</button>'+(hasReasons?'<button type="button" data-race-tab="reason">買い目の理由</button>':'')+'<button type="button" data-race-tab="horses">出走馬</button></nav>';
+  const tabNav='<nav class="race-detail-tabs" data-race-tabs><button type="button" class="active" data-race-tab="bets" aria-selected="true">予想買い目</button>'+(hasReasons?'<button type="button" data-race-tab="reason" aria-selected="false">買い目の理由</button>':'')+'<button type="button" data-race-tab="horses" aria-selected="false">出走馬</button></nav>';
   const betsPanel='<section data-race-panel="bets">'+(betsBlock||'<div class="section-title"><h2>買い目</h2><span class="status '+view.code+'">'+view.label+'</span></div><div class="notice">'+esc(view.note)+'</div>')+'</section>';
   const body='<a class="back" href="/">← レース一覧へ</a>'+navHtml(raceId,race.venue,race.raceNo)
     +'<section class="hero today-hero"><div class="race-title"><span class="race-no">'+race.raceNo+'R</span><h1>'+esc(race.raceName||race.raceNo+"R")+'</h1><span class="status '+view.code+'">'+view.label+'</span></div><p>'+esc(meta)+'</p>'+(race.conditions?'<p>'+esc(race.conditions)+'</p>':'')+'</section>'
@@ -155,7 +162,7 @@ export async function fastCurrentDayRaceDetailResponse(db:D1Database,raceId:stri
     "content-type":"text/html; charset=utf-8",
     "cache-control":"no-store, max-age=0",
     "x-race-detail-path":PATH_VERSION,
-    "x-race-ui-version":"ten-year-completed-public-v37-direct-current-detail-20260921",
+    "x-race-ui-version":UI_VERSION,
     "x-content-type-options":"nosniff",
     "referrer-policy":"no-referrer"
   }});

@@ -35,6 +35,7 @@ def main() -> None:
     top = read(ROOT / "src" / "public-site-entry-v31.ts")
     entry = read(ROOT / "src" / "public-site-entry-v30.ts")
     current = read(CURRENT_DAY)
+    current_detail = read(ROOT / "src" / "v1" / "current-day-race-detail-fast.ts")
     recency = read(RECENCY)
     deadline = read(DEADLINE)
     migration = read(MIGRATION)
@@ -101,6 +102,26 @@ def main() -> None:
     require("FINAL_DEADLINE_MS = 15 * 60 * 1000" in current, "CURRENT_DAY_T15_FINAL_BOUNDARY_MISSING")
     require("発走15分前までに確定" in current, "CURRENT_DAY_BOUNDARY_COPY_MISSING")
     require("確定買い目として扱いません" in current, "CURRENT_DAY_LATE_FINAL_FAIL_CLOSED_COPY_MISSING")
+
+    # The direct current-day detail page is the normal path for unresolved buy
+    # races. Keep it feature-equivalent to the public v37 detail contract rather
+    # than silently dropping the final ticket rationale on the fast path.
+    detail_markers = [
+        'data-race-tabs',
+        'data-race-tab="bets"',
+        'data-race-tab="reason"',
+        'data-race-tab="horses"',
+        'data-ticket-reason=',
+        'この組合せが当たる推定確率',
+        'JRA公式オッズ',
+        '推定確率 × 公式オッズ',
+        '買い目の評価点',
+        '選ばれた理由：',
+        'function activate(name)',
+        'UI_VERSION = "ten-year-completed-public-v37-instant-home-20260921"',
+    ]
+    for marker in detail_markers:
+        require(marker in current_detail, f"CURRENT_DAY_DETAIL_FEATURE_MISSING:{marker}")
 
     # Runtime schema introspection is intentionally gone. Verify the actual
     # persistent DB guard definitions in the migration source instead.
