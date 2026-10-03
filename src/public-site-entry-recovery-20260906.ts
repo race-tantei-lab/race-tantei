@@ -14,6 +14,7 @@ const RECOVERY_PATH = "/_ops/entry-seed-sync-20260906-7f4c9d2a";
 const HOME_PATHS = new Set(["/", "/index.html", "/races", "/races/"]);
 const URGENT_SETTLEMENT_FROM_MINUTE = 9 * 60 + 30;
 const URGENT_SETTLEMENT_THROUGH_MINUTE = 18 * 60 + 30;
+const PREP_ENTRY_REPAIR_FROM_MINUTE = 12 * 60;
 const SELECTION_PREFIX = "final_daily_selection:";
 
 function esc(value: unknown): string {
@@ -299,6 +300,22 @@ export default {
       if (raceDay.shouldRun) {
         try { await runUrgentEntryRepairIfNeeded(env, now); }
         catch (error) { console.error("PUBLIC_URGENT_ENTRY_REPAIR_FAILED", error); }
+      } else if (preparationDay && minuteOfDay >= PREP_ENTRY_REPAIR_FROM_MINUTE) {
+        // Preload upcoming weekend entry pages before race morning. The repair
+        // pipeline is missing-only, so a ready program exits without re-fetching
+        // every race. This removes GitHub schedule timing from the critical path.
+        try {
+          const prep = await runEntryRepairPipeline(env, now);
+          if (!prep.ready || prep.errors.length) {
+            console.log("PUBLIC_PREP_ENTRY_REPAIR", JSON.stringify({
+              checkedAt: now.toISOString(),
+              ready: prep.ready,
+              errors: prep.errors,
+            }));
+          }
+        } catch (error) {
+          console.error("PUBLIC_PREP_ENTRY_REPAIR_FAILED", error);
+        }
       }
       return;
     }
