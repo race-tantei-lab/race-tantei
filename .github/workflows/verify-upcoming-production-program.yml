@@ -24,11 +24,11 @@ jobs:
           cache: npm
       - run: npm ci --prefer-offline --no-audit --no-fund
 
-      - name: Inspect next three JST days in production D1
+      - name: Inspect current and next two JST days in production D1
         shell: bash
         run: |
           set -euo pipefail
-          for offset in 1 2 3; do
+          for offset in 0 1 2; do
             date=$(TZ=Asia/Tokyo date -d "+${offset} day" +%F)
             echo "=== UPCOMING_DATE=$date OFFSET=$offset ==="
             npx wrangler d1 execute race-tantei-phase0 --remote --json --command \
@@ -48,16 +48,35 @@ jobs:
             cat "/tmp/upcoming-$offset.json"
           done
 
-      - name: Resolve tomorrow race-day gate without D1
-        id: tomorrow_gate
+      - name: Resolve nearest race-day target without D1
+        id: target_gate
         shell: bash
         run: |
           set -euo pipefail
+          today=$(TZ=Asia/Tokyo date +%F)
           tomorrow=$(TZ=Asia/Tokyo date -d '+1 day' +%F)
-          gate=$(TOMORROW="$tomorrow" npx --yes tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{const d=new Date(process.env.TOMORROW+'T03:00:00Z'); const r=await shouldRunOnJraRaceDay(d); console.log(JSON.stringify(r));})().catch(e=>{console.error(e);process.exit(1)})" | tail -n 1)
-          echo "TOMORROW_RACE_DAY_GATE $gate"
-          should_run=$(GATE="$gate" node -e 'const g=JSON.parse(process.env.GATE||"{}"); process.stdout.write(g.shouldRun ? "true" : "false")')
-          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+          gate_for() {
+            TARGET_DATE="$1" npx --yes tsx -e "import { shouldRunOnJraRaceDay } from './src/v1/race-day-gate.ts'; (async()=>{const d=new Date(process.env.TARGET_DATE+'T03:00:00Z'); const r=await shouldRunOnJraRaceDay(d); console.log(JSON.stringify(r));})().catch(e=>{console.error(e);process.exit(1)})" | tail -n 1
+          }
+          today_gate=$(gate_for "$today")
+          tomorrow_gate=$(gate_for "$tomorrow")
+          echo "TODAY_RACE_DAY_GATE $today_gate"
+          echo "TOMORROW_RACE_DAY_GATE $tomorrow_gate"
+          today_run=$(GATE="$today_gate" node -e 'const g=JSON.parse(process.env.GATE||"{}"); process.stdout.write(g.shouldRun ? "true" : "false")')
+          tomorrow_run=$(GATE="$tomorrow_gate" node -e 'const g=JSON.parse(process.env.GATE||"{}"); process.stdout.write(g.shouldRun ? "true" : "false")')
+          if [ "$today_run" = true ]; then
+            echo "target_date=$today" >> "$GITHUB_OUTPUT"
+            echo "target_offset=0" >> "$GITHUB_OUTPUT"
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          elif [ "$tomorrow_run" = true ]; then
+            echo "target_date=$tomorrow" >> "$GITHUB_OUTPUT"
+            echo "target_offset=1" >> "$GITHUB_OUTPUT"
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "target_date=$tomorrow" >> "$GITHUB_OUTPUT"
+            echo "target_offset=1" >> "$GITHUB_OUTPUT"
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Verify model and selection runtime state
         shell: bash
@@ -118,17 +137,17 @@ jobs:
           console.log('CRON_READY',process.env.SCRIPT,process.env.EXPECTED);
           NODE
           }
-          check_schedule 'race-tantei-phase0' '*/15 * * * *'
+          check_schedule 'race-tantei-phase0' '*/5 * * * *'
           check_schedule 'race-tantei-live-deadline' '* * * * *'
           check_schedule 'race-tantei-live-deadline-backup' '1-59/2 * * * *'
 
       - name: Dry-run tomorrow canonical race selection
-        if: steps.tomorrow_gate.outputs.should_run == 'true'
+        if: steps.target_gate.outputs.should_run == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          tomorrow=$(TZ=Asia/Tokyo date -d '+1 day' +%F)
-          python scripts/generate-ten-year-preday-selection.py --date "$tomorrow" --out /tmp/tomorrow-selection.json
+          target='${{ steps.target_gate.outputs.target_date }}'
+          python scripts/generate-ten-year-preday-selection.py --date "$target" --out /tmp/tomorrow-selection.json
           python3 - <<'PY'
           import collections,json
           p=json.load(open('/tmp/tomorrow-selection.json'))
@@ -155,13 +174,14 @@ jobs:
           cat /tmp/maintenance-state.json
 
       - name: Require tomorrow race-day card to be complete
-        if: steps.tomorrow_gate.outputs.should_run == 'true'
+        if: steps.target_gate.outputs.should_run == 'true'
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json
-          raw=json.load(open('/tmp/upcoming-1.json'))
+          offset='${{ steps.target_gate.outputs.target_offset }}'
+          raw=json.load(open(f'/tmp/upcoming-{offset}.json'))
           rows=[]
           for block in raw if isinstance(raw,list) else [raw]:
               if isinstance(block,dict):
