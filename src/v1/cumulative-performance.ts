@@ -53,6 +53,7 @@ const HISTORICAL_VENUES = [
 const EOD_FROM_MINUTE = 18 * 60 + 35;
 const EOD_THROUGH_MINUTE = 23 * 60 + 5;
 const EOD_SLOT_OFFSET = 5;
+const CATCHUP_SLOT_MINUTE = 25;
 const CACHE_MS = 60_000;
 
 let cache: { expiresAt: number; value: CumulativePerformanceSnapshot } | null = null;
@@ -114,8 +115,8 @@ export async function loadCumulativePerformance(db: D1Database): Promise<Cumulat
   return value;
 }
 
-function jstDate(now: Date): string {
-  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+function jstDate(now: Date, offsetDays = 0): string {
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000 + offsetDays * 86400_000).toISOString().slice(0, 10);
 }
 
 function jstMinuteOfDay(now: Date): number {
@@ -166,17 +167,22 @@ export type CumulativeRefreshAudit = {
 
 export async function refreshCumulativePerformanceIfDue(env: Env, now = new Date()): Promise<CumulativeRefreshAudit> {
   const today = jstDate(now);
-  if (!dueForNightlyRefresh(now)) {
+  const yesterday = jstDate(now, -1);
+  const minute = jstMinuteOfDay(now);
+  const nightly = dueForNightlyRefresh(now);
+  const catchupSlot = minute % 60 === CATCHUP_SLOT_MINUTE;
+  if (!nightly && !catchupSlot) {
     return { status: "outside_window", asOfDate: "", throughDate: today, addedRaces: 0, incompleteRaceIds: [] };
   }
 
   const current = await readStored(env.DB) ?? historicalCumulativeBaseline();
-  if (current.asOfDate >= today) {
+  const throughDate = nightly ? today : yesterday;
+  if (current.asOfDate >= throughDate) {
     cache = { expiresAt: Date.now() + CACHE_MS, value: current };
-    return { status: "up_to_date", asOfDate: current.asOfDate, throughDate: today, addedRaces: 0, incompleteRaceIds: [] };
+    return { status: "up_to_date", asOfDate: current.asOfDate, throughDate, addedRaces: 0, incompleteRaceIds: [] };
   }
 
-  const rows = await deltaRows(env.DB, current.asOfDate, today);
+  const rows = await deltaRows(env.DB, current.asOfDate, throughDate);
   const incomplete = rows.filter((row) =>
     row.rowCount !== 2 || row.settledRows !== 2 || row.stakeYen !== 2_000
   );
@@ -184,7 +190,7 @@ export async function refreshCumulativePerformanceIfDue(env: Env, now = new Date
     return {
       status: "waiting_settlement",
       asOfDate: current.asOfDate,
-      throughDate: today,
+      throughDate,
       addedRaces: 0,
       incompleteRaceIds: incomplete.map((row) => row.raceId),
     };
@@ -222,7 +228,7 @@ export async function refreshCumulativePerformanceIfDue(env: Env, now = new Date
   );
   const next: CumulativePerformanceSnapshot = {
     ...current,
-    asOfDate: today,
+    asOfDate: throughDate,
     updatedAt: now.toISOString(),
     total: nextTotal,
     venues: [...venues.values()],
@@ -239,7 +245,7 @@ export async function refreshCumulativePerformanceIfDue(env: Env, now = new Date
   return {
     status: "updated",
     asOfDate: next.asOfDate,
-    throughDate: today,
+    throughDate,
     addedRaces: rows.length,
     incompleteRaceIds: [],
   };
