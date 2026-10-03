@@ -211,6 +211,7 @@ def main() -> None:
     require_text(guard, 'if (!official) return { status: "preview_missing"', "official last-good only")
     live_entry = read("src/live-deadline-entry-v2.ts")
     for needle in (
+        'import { acquireEntryRepairLease, releaseEntryRepairLease } from "./v1/entry-repair-lease.js";',
         'import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";',
         "LIVE_SELECTION_REPAIR_THRESHOLD_MS = 30 * 60 * 1000",
         "LIVE_SELECTION_REPAIR_MIN_INTERVAL_MS = 5 * 60 * 1000",
@@ -234,8 +235,14 @@ def main() -> None:
         "runUrgentEntryRepairIfNeeded(env, now)",
         "PUBLIC_URGENT_ENTRY_REPAIR",
         "currentDayEntryReadiness(env.DB, date)",
+        "acquireEntryRepairLease(env.DB, owner)",
+        "releaseEntryRepairLease(env.DB, owner)",
     ):
         require_text(recovery, needle, "bounded automatic result settlement")
+    entry_lease = read("src/v1/entry-repair-lease.ts")
+    require_text(entry_lease, 'ENTRY_REPAIR_LEASE_KEY = "entry-readiness-repair:v1"', "shared entry repair lease")
+    require_text(entry_lease, "ENTRY_REPAIR_LEASE_SECONDS = 360", "shared entry repair lease ttl")
+
     require_text(
         quota_recovery,
         'live.headers.get("x-race-current-day-bet-state") === "degraded"',

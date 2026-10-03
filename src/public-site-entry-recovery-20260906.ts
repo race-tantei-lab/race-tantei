@@ -7,6 +7,7 @@ import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.
 import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import { runPublishedEntryMaintenance } from "./v1/published-entry-maintenance.js";
 import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";
+import { acquireEntryRepairLease, releaseEntryRepairLease } from "./v1/entry-repair-lease.js";
 import { refreshPublicCalendarCache } from "./v1/public-calendar-cache.js";
 import type { Env, RaceBundle } from "./v1/types.js";
 
@@ -142,11 +143,15 @@ async function currentDayEntryReadiness(db: D1Database, date: string): Promise<{
   };
 }
 
-async function runEntryRepairPipeline(env: Env, now: Date): Promise<{ ready: boolean; errors: string[] }> {
+async function runEntryRepairPipeline(env: Env, now: Date): Promise<{ ready: boolean; errors: string[]; leaseBusy: boolean }> {
   const errors: string[] = [];
+  const owner = `public-entry-repair:${crypto.randomUUID()}`;
+  const acquired = await acquireEntryRepairLease(env.DB, owner);
+  if (!acquired) return { ready: false, errors, leaseBusy: true };
 
-  // Deterministic CNAME derivation first; broader discovery/probing is fallback-only.
-  let entryReady = false;
+  try {
+    // Deterministic CNAME derivation first; broader discovery/probing is fallback-only.
+    let entryReady = false;
   try {
     const derived = await runUpcomingEntryDerivedRepair(env, now);
     entryReady = derived.status === "ready" || derived.status === "repaired";
@@ -161,15 +166,19 @@ async function runEntryRepairPipeline(env: Env, now: Date): Promise<{ ready: boo
       errors.push(`published:${String(error)}`);
     }
   }
-  if (!entryReady) {
-    try {
-      const fallback = await runUpcomingEntryWorkerRepair(env, now);
-      entryReady = fallback.status === "ready" || fallback.status === "repaired";
-    } catch (error) {
-      errors.push(`entry:${String(error)}`);
+    if (!entryReady) {
+      try {
+        const fallback = await runUpcomingEntryWorkerRepair(env, now);
+        entryReady = fallback.status === "ready" || fallback.status === "repaired";
+      } catch (error) {
+        errors.push(`entry:${String(error)}`);
+      }
     }
+    return { ready: entryReady, errors, leaseBusy: false };
+  } finally {
+    try { await releaseEntryRepairLease(env.DB, owner); }
+    catch (error) { console.error("PUBLIC_ENTRY_REPAIR_LEASE_RELEASE_FAILED", error); }
   }
-  return { ready: entryReady, errors };
 }
 
 async function freezeSelectionIfReady(env: Env, now: Date, source: string): Promise<boolean> {
@@ -211,6 +220,7 @@ async function runUrgentEntryRepairIfNeeded(env: Env, now: Date): Promise<void> 
     before: before.rows,
     after: after.rows,
     pipelineReady: repair.ready,
+    leaseBusy: repair.leaseBusy,
     errors: repair.errors,
   }));
   if (repair.errors.length) {

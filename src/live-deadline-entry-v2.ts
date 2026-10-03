@@ -1,4 +1,5 @@
 import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";
+import { acquireEntryRepairLease, releaseEntryRepairLease } from "./v1/entry-repair-lease.js";
 import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import { runCompletedWorkerLiveLock } from "./v1/completed-worker-live-lock.js";
 import {
@@ -65,6 +66,12 @@ async function runLiveSelectionEntryRepairIfDue(
     } catch { /* stale audit state must not block recovery */ }
   }
 
+  const owner = `live-selection-entry-repair:${crypto.randomUUID()}`;
+  const acquired = await acquireEntryRepairLease(env.DB, owner);
+  if (!acquired) {
+    return { attempted: false, reason: "shared_entry_repair_lease_busy", remainingToFirstRaceMs };
+  }
+
   const checkedAt = iso(now);
   let status = "error";
   let savedRaceIds: string[] = [];
@@ -81,6 +88,9 @@ async function runLiveSelectionEntryRepairIfDue(
     errors = repair.errors;
   } catch (error) {
     errors = [errorText(error)];
+  } finally {
+    try { await releaseEntryRepairLease(env.DB, owner); }
+    catch (error) { console.error("LIVE_SELECTION_ENTRY_REPAIR_LEASE_RELEASE_FAILED", errorText(error)); }
   }
 
   const audit = {
