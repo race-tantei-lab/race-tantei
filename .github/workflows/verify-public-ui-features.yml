@@ -67,6 +67,13 @@ jobs:
             sleep 3
           done
           test "$actual_home_ui" = "$EXPECTED_UI_VERSION"
+          grep -Fq '予想・買い目は各レース詳細で確認' /tmp/home.html
+          for forbidden in '次の買い目を確認中' '予想は当日も継続更新' '発走10分前まで買い目が変わる可能性があります' '予想の公開タイミング'; do
+            if grep -Fq "$forbidden" /tmp/home.html; then
+              echo "REMOVED_HOME_CLUTTER_RETURNED:$forbidden" >&2
+              exit 1
+            fi
+          done
           if [[ "$has_predictions" == 'yes' ]]; then
             grep -q '日別回収率' /tmp/home.html
             grep -q "$today" /tmp/home.html
