@@ -6,6 +6,7 @@ import { runUpcomingCalendarRepair } from "./v1/upcoming-calendar-repair.js";
 import { runUpcomingEntryWorkerRepair } from "./v1/upcoming-entry-worker-repair.js";
 import { runUpcomingEntryDerivedRepair } from "./v1/upcoming-entry-derived-repair.js";
 import { runPublishedEntryMaintenance } from "./v1/published-entry-maintenance.js";
+import { freezeCompletedWorkerSelectionIfNeeded } from "./v1/completed-selection-runtime.js";
 import { refreshPublicCalendarCache } from "./v1/public-calendar-cache.js";
 import type { Env, RaceBundle } from "./v1/types.js";
 
@@ -170,12 +171,36 @@ async function runEntryRepairPipeline(env: Env, now: Date): Promise<{ ready: boo
   return { ready: entryReady, errors };
 }
 
+async function freezeSelectionIfReady(env: Env, now: Date, source: string): Promise<boolean> {
+  const date = jstDate(now);
+  if (await selectionExists(env.DB, date)) return true;
+
+  const readiness = await currentDayEntryReadiness(env.DB, date);
+  if (!readiness.ready) return false;
+
+  const result = await freezeCompletedWorkerSelectionIfNeeded(env, now);
+  const frozen = await selectionExists(env.DB, date);
+  console.log("PUBLIC_SELECTION_HANDOFF", JSON.stringify({
+    checkedAt: now.toISOString(),
+    date,
+    source,
+    frozen,
+    readiness: readiness.rows,
+    result,
+  }));
+  if (!frozen) throw new Error(`PUBLIC_SELECTION_HANDOFF_FAILED:${date}:${source}`);
+  return true;
+}
+
 async function runUrgentEntryRepairIfNeeded(env: Env, now: Date): Promise<void> {
   const date = jstDate(now);
   if (await selectionExists(env.DB, date)) return;
 
   const before = await currentDayEntryReadiness(env.DB, date);
-  if (before.ready) return;
+  if (before.ready) {
+    await freezeSelectionIfReady(env, now, "already-ready");
+    return;
+  }
 
   const repair = await runEntryRepairPipeline(env, now);
   const after = await currentDayEntryReadiness(env.DB, date);
@@ -190,6 +215,7 @@ async function runUrgentEntryRepairIfNeeded(env: Env, now: Date): Promise<void> 
   if (repair.errors.length) {
     console.error("PUBLIC_URGENT_ENTRY_REPAIR_PARTIAL", JSON.stringify(repair.errors));
   }
+  if (after.ready) await freezeSelectionIfReady(env, new Date(), "urgent-repair");
 }
 
 async function runBoundedPublicMaintenance(env: Env, now: Date): Promise<void> {
@@ -281,5 +307,13 @@ export default {
       console.log("PUBLIC_PRE_RACE_MAINTENANCE", JSON.stringify({ raceDate: raceDay.raceDate, reason: raceDay.reason }));
     }
     await runBoundedPublicMaintenance(env, now);
+
+    // Quarter-hour maintenance may be the invocation that completes the final
+    // missing runner page. Freeze selection immediately in the same invocation
+    // rather than waiting for a later Live Worker tick or delayed GitHub schedule.
+    if (raceDay.shouldRun) {
+      try { await freezeSelectionIfReady(env, new Date(), "quarter-hour-maintenance"); }
+      catch (error) { console.error("PUBLIC_SELECTION_HANDOFF_FAILED", error); }
+    }
   },
 } satisfies ExportedHandler<Env>;
