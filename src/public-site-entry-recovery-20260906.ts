@@ -13,6 +13,7 @@ const RECOVERY_PATH = "/_ops/entry-seed-sync-20260906-7f4c9d2a";
 const HOME_PATHS = new Set(["/", "/index.html", "/races", "/races/"]);
 const URGENT_SETTLEMENT_FROM_MINUTE = 9 * 60 + 30;
 const URGENT_SETTLEMENT_THROUGH_MINUTE = 18 * 60 + 30;
+const SELECTION_PREFIX = "final_daily_selection:";
 
 function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -20,8 +21,12 @@ function esc(value: unknown): string {
   }[ch] ?? ch));
 }
 
+function jstDate(now: Date): string {
+  return new Date(now.getTime() + (9 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+}
+
 function jstToday(): string {
-  return new Date(Date.now() + (9 * 60 * 60 * 1000)).toISOString().slice(0, 10);
+  return jstDate(new Date());
 }
 
 function jstWeekday(now: Date): number {
@@ -97,16 +102,48 @@ async function enrichRaceDetail(request: Request, env: Env, ctx: ExecutionContex
   return new Response(html, { status: 200, headers });
 }
 
-async function runBoundedPublicMaintenance(env: Env, now: Date): Promise<void> {
-  // Deliberately bypass the legacy public scheduler: v37 core still contains
-  // per-cron schema-index creation. Persistent indexes are deploy-time schema.
-  // These three bounded repairs are the normal automatic maintenance duties.
-  const errors: string[] = [];
-  try { await runUpcomingCalendarRepair(env, now); } catch (error) { errors.push(`calendar:${String(error)}`); }
+type EntryReadinessRow = { venue: string; races: number; ready: number; minActive: number };
 
-  // Use the deterministic CNAME derivation first. Running every discovery/probe
-  // strategy on the same cron created a burst of parallel requests to JRA and
-  // could leave one venue partially populated. Broader discovery is fallback-only.
+async function selectionExists(db: D1Database, date: string): Promise<boolean> {
+  const row = await db.prepare("SELECT 1 AS ok FROM rt_system_state WHERE state_key=? LIMIT 1")
+    .bind(`${SELECTION_PREFIX}${date}`).first<{ ok: number }>();
+  return Number(row?.ok ?? 0) === 1;
+}
+
+async function currentDayEntryReadiness(db: D1Database, date: string): Promise<{ ready: boolean; rows: EntryReadinessRow[] }> {
+  const result = await db.prepare(`
+    WITH per_race AS (
+      SELECT r.race_id,r.venue,
+             MAX(CASE WHEN LENGTH(TRIM(COALESCE(r.entry_url,'')))>0 THEN 1 ELSE 0 END) AS hasEntryUrl,
+             SUM(CASE WHEN rr.race_id IS NOT NULL AND COALESCE(rr.runner_status,'active')='active' THEN 1 ELSE 0 END) AS activeRunners
+      FROM rt_races r
+      LEFT JOIN rt_runners rr ON rr.race_id=r.race_id
+      WHERE r.race_date=?
+      GROUP BY r.race_id,r.venue
+    )
+    SELECT venue,COUNT(*) AS races,
+           SUM(CASE WHEN activeRunners>=3 AND hasEntryUrl=1 THEN 1 ELSE 0 END) AS ready,
+           MIN(activeRunners) AS minActive
+    FROM per_race
+    GROUP BY venue
+    ORDER BY venue
+  `).bind(date).all<EntryReadinessRow>();
+  const rows = (result.results ?? []).map((row) => ({
+    venue: String(row.venue),
+    races: Number(row.races),
+    ready: Number(row.ready),
+    minActive: Number(row.minActive),
+  }));
+  return {
+    ready: rows.length >= 1 && rows.every((row) => row.races === 12 && row.ready === 12),
+    rows,
+  };
+}
+
+async function runEntryRepairPipeline(env: Env, now: Date): Promise<{ ready: boolean; errors: string[] }> {
+  const errors: string[] = [];
+
+  // Deterministic CNAME derivation first; broader discovery/probing is fallback-only.
   let entryReady = false;
   try {
     const derived = await runUpcomingEntryDerivedRepair(env, now);
@@ -123,9 +160,46 @@ async function runBoundedPublicMaintenance(env: Env, now: Date): Promise<void> {
     }
   }
   if (!entryReady) {
-    try { await runUpcomingEntryWorkerRepair(env, now); }
-    catch (error) { errors.push(`entry:${String(error)}`); }
+    try {
+      const fallback = await runUpcomingEntryWorkerRepair(env, now);
+      entryReady = fallback.status === "ready" || fallback.status === "repaired";
+    } catch (error) {
+      errors.push(`entry:${String(error)}`);
+    }
   }
+  return { ready: entryReady, errors };
+}
+
+async function runUrgentEntryRepairIfNeeded(env: Env, now: Date): Promise<void> {
+  const date = jstDate(now);
+  if (await selectionExists(env.DB, date)) return;
+
+  const before = await currentDayEntryReadiness(env.DB, date);
+  if (before.ready) return;
+
+  const repair = await runEntryRepairPipeline(env, now);
+  const after = await currentDayEntryReadiness(env.DB, date);
+  console.log("PUBLIC_URGENT_ENTRY_REPAIR", JSON.stringify({
+    checkedAt: now.toISOString(),
+    date,
+    before: before.rows,
+    after: after.rows,
+    pipelineReady: repair.ready,
+    errors: repair.errors,
+  }));
+  if (repair.errors.length) {
+    console.error("PUBLIC_URGENT_ENTRY_REPAIR_PARTIAL", JSON.stringify(repair.errors));
+  }
+}
+
+async function runBoundedPublicMaintenance(env: Env, now: Date): Promise<void> {
+  // Deliberately bypass the legacy public scheduler: persistent indexes are
+  // deploy-time schema. Full calendar/cache maintenance stays on the 15m path.
+  const errors: string[] = [];
+  try { await runUpcomingCalendarRepair(env, now); } catch (error) { errors.push(`calendar:${String(error)}`); }
+
+  const entry = await runEntryRepairPipeline(env, now);
+  errors.push(...entry.errors);
 
   try { await refreshPublicCalendarCache(env, now); } catch (error) { errors.push(`calendar-cache:${String(error)}`); }
   if (errors.length) console.error("PUBLIC_MAINTENANCE_PARTIAL", JSON.stringify(errors));
@@ -192,9 +266,16 @@ export default {
       return;
     }
 
-    // Entry/calendar maintenance stays at the old 15-minute cadence even though
-    // the Worker cron itself now wakes every five minutes for urgent settlement.
-    if (!quarterHourTick) return;
+    // On a race day, selection must not wait 15 minutes for a missing runner page.
+    // Before selection exists, use the existing 5m public cron to run entry-only
+    // self-healing, and only when readiness is actually incomplete.
+    if (!quarterHourTick) {
+      if (raceDay.shouldRun) {
+        try { await runUrgentEntryRepairIfNeeded(env, now); }
+        catch (error) { console.error("PUBLIC_URGENT_ENTRY_REPAIR_FAILED", error); }
+      }
+      return;
+    }
 
     if (preparationDay && !raceDay.shouldRun) {
       console.log("PUBLIC_PRE_RACE_MAINTENANCE", JSON.stringify({ raceDate: raceDay.raceDate, reason: raceDay.reason }));

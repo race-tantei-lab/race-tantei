@@ -90,7 +90,11 @@ def main() -> None:
     bounded_settlement = read("src/v1/bounded-result-settlement.ts")
     require_text(recovery, 'runBoundedResultSettlement(env, now, "public-bets-only")', "public 5m urgent settlement")
     require_text(recovery, 'runBoundedResultSettlement(env, now, "all")', "public 15m settlement fallback")
-    require_text(recovery, "if (!quarterHourTick) return;", "public maintenance remains 15m")
+    require_text(recovery, "if (!quarterHourTick)", "public 5m conditional branch")
+    require_text(recovery, "runUrgentEntryRepairIfNeeded(env, now)", "public 5m pre-selection entry repair")
+    require_text(recovery, "PUBLIC_URGENT_ENTRY_REPAIR", "public urgent entry audit")
+    require_text(recovery, "currentDayEntryReadiness(env.DB, date)", "public readiness gate")
+    require_text(recovery, "await selectionExists(env.DB, date)", "public selection short-circuit")
     require_text(bounded_settlement, "MAX_CANDIDATES_PER_TICK = 15", "bounded settlement cap")
     require_text(bounded_settlement, "URGENT_RESULT_GRACE_MS = 2 * 60 * 1000", "urgent settlement grace")
     require_text(bounded_settlement, 'mode: SettlementMode = "all"', "settlement mode default")
@@ -188,7 +192,7 @@ def main() -> None:
         "legacy_14d_scan=false",
         "live_canonical_learning=true",
         "win5_raw_history=false",
-        "entry_cron=disabled_public15m_maintenance",
+        "entry_cron=disabled_public5m_preselection_self_heal",
         "result_settlement=public5m_pending_bets_first",
         "guardian_crons=disabled",
         "research_push_d1=false",

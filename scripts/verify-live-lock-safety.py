@@ -222,7 +222,10 @@ def main() -> None:
         'await runBoundedResultSettlement(env, now, "all")',
         "PUBLIC_URGENT_RESULT_SETTLEMENT",
         "PUBLIC_BOUNDED_RESULT_SETTLEMENT",
-        "if (!quarterHourTick) return;",
+        "if (!quarterHourTick)",
+        "runUrgentEntryRepairIfNeeded(env, now)",
+        "PUBLIC_URGENT_ENTRY_REPAIR",
+        "currentDayEntryReadiness(env.DB, date)",
     ):
         require_text(recovery, needle, "bounded automatic result settlement")
     require_text(
