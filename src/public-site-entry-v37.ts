@@ -8,6 +8,7 @@ import { quotaFreeOfficialResultResponse } from "./v1/quota-free-jra-result-2026
 import { fastCurrentDayRaceDetailResponse } from "./v1/current-day-race-detail-fast.js";
 import { shell } from "./v1/public-ui.js";
 import { readPublicCalendarCache } from "./v1/public-calendar-cache.js";
+import { loadCumulativePerformance, type CumulativePerformanceSnapshot } from "./v1/cumulative-performance.js";
 import type { Env } from "./v1/types.js";
 
 const UI_VERSION = "ten-year-completed-public-v37-instant-home-20260921";
@@ -216,8 +217,43 @@ function embeddedTodayResultsHtml(): string {
   return '<section class="card today-results"><div class="section-title"><h2>今日の結果</h2><span class="muted">精算済み時点</span></div>' + rows + '</section>';
 }
 
-function embeddedNormalHome(calendarRows: CalendarRow[] = staticRecentCalendar()): Response {
+function applyCumulativePerformance(html: string, snapshot: CumulativePerformanceSnapshot): string {
+  const dateLabel = snapshot.asOfDate.replace(/^(\d{4})-(\d{2})-(\d{2})$/, (_, y, m, d) => `${Number(y)}/${Number(m)}/${Number(d)}`);
+  const total = snapshot.total;
+  const totalSection = '<section class="metrics shared-roi"><article class="card metric cumulative-live-card"><b>全体</b><strong>'
+    + total.roiPct.toFixed(1) + '%</strong><small>' + total.races.toLocaleString("ja-JP") + 'R　購入 '
+    + total.stakeYen.toLocaleString("ja-JP") + '円 / 払戻 ' + total.returnYen.toLocaleString("ja-JP") + '円</small></article></section>';
+
+  html = html.replace(
+    '<div class="section-title"><h2>累計回収率</h2><span class="muted">タップで月別表示</span></div>',
+    '<div class="section-title"><h2>累計回収率（ライト）</h2><span class="muted">10年検証＋本番・〜' + dateLabel + '</span></div>',
+  );
+  const totalStart = html.indexOf('<section class="metrics shared-roi">');
+  if (totalStart >= 0) {
+    const totalEnd = html.indexOf('</section>', totalStart);
+    if (totalEnd > totalStart) html = html.slice(0, totalStart) + totalSection + html.slice(totalEnd + '</section>'.length);
+  }
+
+  const venueCards = snapshot.venues.map((row) =>
+    '<article class="venue-roi-card"><div class="venue-roi-head"><b>' + esc(row.venue) + '</b><span>'
+    + row.races.toLocaleString("ja-JP") + 'R</span></div><strong class="venue-roi-value venue-roi-plus">'
+    + row.roiPct.toFixed(1) + '%</strong></article>'
+  ).join("");
+  const venueBlock = '<div class="section-title venue-roi-title"><h2>会場別回収率（ライト）</h2><span class="muted">〜'
+    + dateLabel + '・' + total.races.toLocaleString("ja-JP") + 'R</span></div><div class="venue-roi-rail shared-venue-roi">'
+    + venueCards + '</div>';
+  const venueStart = html.indexOf('<div class="section-title venue-roi-title">');
+  const venueEnd = html.indexOf('<section class="daily-performance-wrap"', venueStart);
+  if (venueStart >= 0 && venueEnd > venueStart) html = html.slice(0, venueStart) + venueBlock + html.slice(venueEnd);
+
+  const cumulativeCss = '<style>.cumulative-live-card{padding:16px}.cumulative-live-card b,.cumulative-live-card strong,.cumulative-live-card small{display:block}.cumulative-live-card strong{font-size:36px;color:var(--green);margin:5px 0}.cumulative-live-card small{color:var(--muted);line-height:1.6}.shared-roi{grid-template-columns:1fr!important}</style>';
+  if (!html.includes(".cumulative-live-card{")) html = html.replace("</head>", cumulativeCss + "</head>");
+  return html;
+}
+
+function embeddedNormalHome(calendarRows: CalendarRow[] = staticRecentCalendar(), cumulative?: CumulativePerformanceSnapshot): Response {
   let html = rewriteEmbeddedToday(mergeRecentCalendar(NORMAL_HOME_SNAPSHOT, calendarRows));
+  if (cumulative) html = applyCumulativePerformance(html, cumulative);
   const canonicalBase = '<base href="https://race-tantei-phase0.race-tantei.workers.dev/"><link rel="canonical" href="https://race-tantei-phase0.race-tantei.workers.dev/">';
   if (!html.includes('<base href=')) html = html.replace('<head>', '<head>' + canonicalBase);
   const todayResults = embeddedTodayResultsHtml();
@@ -354,7 +390,11 @@ async function fetchNormalHome(_request: Request, env: Env, _ctx: ExecutionConte
   // maintained cache so today's card is actually selectable on the public site.
   // loadRecentCalendar performs one indexed cache read and only falls back to a
   // bounded exact-date GROUP BY when today's venue rows are absent.
-  return embeddedNormalHome(await loadRecentCalendar(env));
+  const [calendar, cumulative] = await Promise.all([
+    loadRecentCalendar(env),
+    loadCumulativePerformance(env.DB),
+  ]);
+  return embeddedNormalHome(calendar, cumulative);
 }
 async function fetchRaceList(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const homeUrl = new URL(request.url);

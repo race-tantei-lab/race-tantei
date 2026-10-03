@@ -1,5 +1,6 @@
 import base from "./public-site-entry-quota-recovery-20260912.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
+import { cumulativePerformanceResponse, refreshCumulativePerformanceIfDue } from "./v1/cumulative-performance.js";
 import type { Env } from "./v1/types.js";
 
 type SnapshotRace = {
@@ -251,6 +252,9 @@ function performanceResponse(today: string, summary: DayPerformance, history: Da
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/api/public/cumulative-performance") {
+      return cumulativePerformanceResponse(env.DB);
+    }
     if (request.method === "GET" && url.pathname === "/api/public/daily-performance") {
       const today = jstDate();
       const requested = url.searchParams.get("date");
@@ -287,6 +291,23 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    if (base.scheduled) await base.scheduled(controller, env, ctx);
+    let baseFailure: unknown = null;
+    try {
+      if (base.scheduled) await base.scheduled(controller, env, ctx);
+    } catch (error) {
+      baseFailure = error;
+    }
+
+    const now = Number.isFinite(controller.scheduledTime) ? new Date(controller.scheduledTime) : new Date();
+    try {
+      const audit = await refreshCumulativePerformanceIfDue(env, now);
+      if (audit.status === "updated" || audit.status === "waiting_settlement") {
+        console.log("PUBLIC_CUMULATIVE_NIGHTLY", JSON.stringify(audit));
+      }
+    } catch (error) {
+      console.error("PUBLIC_CUMULATIVE_NIGHTLY_FAILED", error);
+    }
+
+    if (baseFailure) throw baseFailure;
   },
 } satisfies ExportedHandler<Env>;
