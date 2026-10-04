@@ -1,0 +1,81 @@
+name: Compare 431.7 vs recency forward
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/compare-4317-vs-recency-forward.py"
+      - ".github/workflows/compare-4317-vs-recency-forward.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4 lightgbm==4.6.0 'numpy<3'
+      - name: Build actual future selection set
+        run: |
+          python - <<'PY'
+          import json,os,urllib.request
+          from pathlib import Path
+          A=os.environ['CLOUDFLARE_ACCOUNT_ID'];D=os.environ['CLOUDFLARE_D1_DATABASE_ID'];T=os.environ['CLOUDFLARE_API_TOKEN']
+          U=f'https://api.cloudflare.com/client/v4/accounts/{A}/d1/database/{D}/query'
+          def q(sql,p=None):
+            req=urllib.request.Request(U,data=json.dumps({'sql':sql,'params':p or []}).encode(),method='POST',headers={'Authorization':f'Bearer {T}','Content-Type':'application/json'})
+            with urllib.request.urlopen(req,timeout=120) as r:x=json.loads(r.read().decode())
+            if not x.get('success'):raise RuntimeError(x)
+            return (x.get('result') or [{}])[0].get('results') or []
+          states=q("SELECT state_key k,state_value v FROM rt_system_state WHERE state_key LIKE 'final_daily_selection:%' ORDER BY state_key")
+          ids=[]
+          for z in states:
+            d=str(z['k']).split(':')[-1]
+            if not ('2026-08-10'<=d<='2026-10-03'):continue
+            p=json.loads(z['v'])
+            if p.get('sourceModel')!='ten-year-completed-model' or p.get('resultDataUsedForTargetDay') is not False:continue
+            ids.extend(str(a['raceId']) for a in p.get('selected',[]) if a.get('raceId'))
+          ids=list(dict.fromkeys(ids))
+          good=[]
+          for off in range(0,len(ids),40):
+            c=ids[off:off+40];ph=','.join('?' for _ in c)
+            rows=q(f"SELECT r.race_id raceId FROM rt_races r WHERE r.race_id IN ({ph}) AND r.status='finished' AND r.result_url IS NOT NULL AND EXISTS(SELECT 1 FROM rt_results x WHERE x.race_id=r.race_id AND x.finish_position IS NOT NULL) AND EXISTS(SELECT 1 FROM rt_payouts p WHERE p.race_id=r.race_id)",c)
+            good.extend(x['raceId'] for x in rows)
+          good=set(good);eligible=[x for x in ids if x in good]
+          Path('analysis-results/fixed-oos-five-races-per-venue-day.json').write_text(json.dumps({'races':eligible},ensure_ascii=False)+'\n')
+          Path('artifacts').mkdir(exist_ok=True)
+          Path('artifacts/forward-selection-meta.json').write_text(json.dumps({'selected':len(ids),'eligibleComplete':len(eligible),'excludedIncomplete':len(ids)-len(eligible)},ensure_ascii=False,indent=2)+'\n')
+          print(json.dumps({'selected':len(ids),'eligibleComplete':len(eligible),'excludedIncomplete':len(ids)-len(eligible)},ensure_ascii=False))
+          PY
+      - name: Prepare JRA historical odds exporter for future set
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/export-selected-historical-official-odds.py');s=p.read_text()
+          s=s.replace("START = '2024-05-04'","START = '2026-08-10'")
+          s=s.replace("END_EXCLUSIVE = '2026-08-03'","END_EXCLUSIVE = '2026-10-04'")
+          s=s.replace("WORKERS = 20","WORKERS = 12")
+          s=s.replace("            tab[m.group(2)] = m.group(1)","            tab['15' + m.group(2)] = m.group(1)",1)
+          p.write_text(s)
+          PY
+      - name: Fetch JRA historical official odds
+        run: python scripts/export-selected-historical-official-odds.py
+      - name: Compare exact 431.7 logic with old recency logic
+        run: python scripts/compare-4317-vs-recency-forward.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: forward-4317-vs-recency
+          path: |
+            artifacts/forward-4317-vs-recency.json
+            artifacts/selected-historical-official-odds-meta.json
+            artifacts/forward-selection-meta.json
+          if-no-files-found: warn
+          retention-days: 14
