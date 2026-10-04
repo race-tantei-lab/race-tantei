@@ -27,6 +27,8 @@ jobs:
         run: python scripts/verify-race-day-gate.py
       - name: Verify live-lock safety
         run: python scripts/verify-live-lock-safety.py
+      - name: Verify exact 431.7 model parity
+        run: python scripts/verify-completed-4317-parity.py
       - name: Verify production D1 budget safety
         run: python scripts/verify-production-d1-budget.py
       - name: Verify production runtime import reachability

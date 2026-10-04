@@ -206,10 +206,13 @@ def main() -> None:
         "WORKER_FRESH_GENERATION_STARTED_AFTER_T15",
         "WORKER_GENERATION_CROSSED_T15",
         'new Set(["jra-fast-official", "jra-crawl-official"])',
-        "loadCompletedRecencyLearning(",
-        "completedRecencyBetFactor(",
+        "{ includeHistoricalDelta: true, includeSameDayDelta: false }",
+        "const weights = normalizeCompletedWeights(raw);",
     ):
         require(live, marker, "live lock")
+    for forbidden in ("loadCompletedRecencyLearning(", "completedRecencyBetFactor(", "runnerFactors[index]", "recencyFactor"):
+        if forbidden in live:
+            fail(f"431.7 completed-model parity violated: {forbidden}")
     if "PREVIEW_OPEN_MS" in live or "start_time_utc<=?" in live:
         fail("fixed preview opening window reintroduced")
 
@@ -289,6 +292,9 @@ def main() -> None:
         "fresh_reflection_deadline=15m",
         "runtime_schema_probe=false",
         "official_jra_odds_only=true",
+        "completed_roi_logic=431.6505898681471",
+        "recency_overlay=false",
+        "same_day_feature_delta=false",
     )
 
 
