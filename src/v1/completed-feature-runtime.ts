@@ -309,7 +309,7 @@ export async function loadCompletedFeatureStateForRace(
   race: RaceRecord,
   runners: RunnerRecord[],
   cutoffUtc?: string,
-  options: { includeHistoricalDelta?: boolean } = {},
+  options: { includeHistoricalDelta?: boolean; includeSameDayDelta?: boolean } = {},
 ): Promise<CompletedFeatureState> {
   const metadataRows = await db.prepare("SELECT key,value FROM rt_ml_feature_meta").all<{ key: string; value: string }>();
   const metadata = new Map((metadataRows.results ?? []).map((row) => [row.key, row.value]));
@@ -355,10 +355,15 @@ export async function loadCompletedFeatureStateForRace(
 
   const state = hydrateCompletedFeatureState(payload);
   if (options.includeHistoricalDelta !== false && throughDate < race.raceDate) {
+    const includeSameDayDelta = options.includeSameDayDelta !== false;
     const effectiveCutoff = cutoffUtc ?? race.startTimeUtc ?? new Date().toISOString();
-    const raceIds = await db.prepare(
-      "SELECT DISTINCT ra.race_id AS raceId FROM rt_races ra JOIN rt_runners ru ON ru.race_id=ra.race_id WHERE ra.race_date>? AND (ra.race_date<? OR (ra.race_date=? AND ra.start_time_utc IS NOT NULL AND datetime(ra.start_time_utc)<datetime(?) AND EXISTS (SELECT 1 FROM rt_results rr WHERE rr.race_id=ra.race_id AND rr.finish_position IS NOT NULL))) AND (ru.horse_name IN (SELECT value FROM json_each(?)) OR COALESCE(ru.jockey,'') IN (SELECT value FROM json_each(?)) OR COALESCE(ru.trainer,'') IN (SELECT value FROM json_each(?))) ORDER BY ra.race_date,ra.race_id"
-    ).bind(throughDate, race.raceDate, race.raceDate, effectiveCutoff, horseJson, jockeyJson, trainerJson).all<{ raceId: string }>();
+    const raceIds = includeSameDayDelta
+      ? await db.prepare(
+          "SELECT DISTINCT ra.race_id AS raceId FROM rt_races ra JOIN rt_runners ru ON ru.race_id=ra.race_id WHERE ra.race_date>? AND (ra.race_date<? OR (ra.race_date=? AND ra.start_time_utc IS NOT NULL AND datetime(ra.start_time_utc)<datetime(?) AND EXISTS (SELECT 1 FROM rt_results rr WHERE rr.race_id=ra.race_id AND rr.finish_position IS NOT NULL))) AND (ru.horse_name IN (SELECT value FROM json_each(?)) OR COALESCE(ru.jockey,'') IN (SELECT value FROM json_each(?)) OR COALESCE(ru.trainer,'') IN (SELECT value FROM json_each(?))) ORDER BY ra.race_date,ra.race_id"
+        ).bind(throughDate, race.raceDate, race.raceDate, effectiveCutoff, horseJson, jockeyJson, trainerJson).all<{ raceId: string }>()
+      : await db.prepare(
+          "SELECT DISTINCT ra.race_id AS raceId FROM rt_races ra JOIN rt_runners ru ON ru.race_id=ra.race_id WHERE ra.race_date>? AND ra.race_date<? AND (ru.horse_name IN (SELECT value FROM json_each(?)) OR COALESCE(ru.jockey,'') IN (SELECT value FROM json_each(?)) OR COALESCE(ru.trainer,'') IN (SELECT value FROM json_each(?))) ORDER BY ra.race_date,ra.race_id"
+        ).bind(throughDate, race.raceDate, horseJson, jockeyJson, trainerJson).all<{ raceId: string }>();
     const ids = (raceIds.results ?? []).map((row) => row.raceId);
     if (ids.length) {
       // Preserve the direct indexed race_id lookup, but keep each statement

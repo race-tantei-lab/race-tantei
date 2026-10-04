@@ -5,7 +5,6 @@ import {
 } from "./bodyweight-refresh";
 import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION, completedFeatureVector, loadCompletedFeatureStateForRace } from "./completed-feature-runtime";
 import { loadCompletedModelRuntime, type CompletedModelRuntime } from "./completed-model-runtime";
-import { completedRecencyBetFactor, loadCompletedRecencyLearning, type CompletedRecencyAudit, type CompletedRunnerRecencyDetail } from "./completed-recency-learning";
 import {
   COMPLETED_COURSE_STAKES,
   chooseCompletedTwoTickets,
@@ -72,8 +71,6 @@ type PreviewSnapshot = {
   oddsSource: string;
   oddsParserVersion: string;
   oddsSnapshotSha256: string;
-  onlineLearning?: CompletedRecencyAudit;
-  runnerRecencyFactors?: CompletedRunnerRecencyDetail[];
   tickets: CompletedTicket[];
   courseBets: CompletedCourseBet[];
 };
@@ -416,35 +413,25 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     bodyWeightSnapshot = null;
   }
 
-  const learningCutoff = iso(now);
-  // Canonical production behavior: advance the completed feature state through
-  // historical/same-day finished races, then apply the 30-day recency learning
-  // used by the completed production generator. Do not silently substitute a
-  // neutral model when learning fails: fail closed and let the stored official
-  // last-good preview protect the T-15 deadline.
+  // Exact 431.6505898681471% completed-model production logic:
+  // use the frozen ten-year model and prior-day historical feature state only.
+  // Do not add same-day results or any 30-day runner/bet-type overlay.
   const state = await loadCompletedFeatureStateForRace(
     db,
     refreshed.race,
     refreshed.runners,
-    learningCutoff,
+    undefined,
+    { includeHistoricalDelta: true, includeSameDayDelta: false },
   );
   const vectors = refreshed.runners.map((runner) => completedFeatureVector(state, refreshed.race, runner, refreshed.runners.length));
   const raw = vectors.map((vector) => model.predict(vector));
-  const baseWeights = normalizeCompletedWeights(raw);
-  const learning = await loadCompletedRecencyLearning(
-    db,
-    refreshed.race,
-    refreshed.runners,
-    learningCutoff,
-  );
-  const weights = normalizeCompletedWeights(baseWeights.map((value, index) => value * learning.runnerFactors[index]));
+  const weights = normalizeCompletedWeights(raw);
   const fetched = await fetchFastJraOfficialOddsForRace(refreshed.race.entryUrl, { raceDate: refreshed.race.raceDate, venue: refreshed.race.venue, raceNo: refreshed.race.raceNo });
   const oddsFetchedAt = iso();
   const tickets = chooseCompletedTwoTickets(
     refreshed.runners.map((runner) => Number(runner.horseNo)),
     weights,
     fetched.rows,
-    (betType, odds) => completedRecencyBetFactor(learning, betType, refreshed.race.venue, odds),
   );
   const courseBets = completedCourseBets(tickets);
   const snapshot: PreviewSnapshot = {
@@ -461,8 +448,6 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     oddsSource: fetched.source,
     oddsParserVersion: JRA_OFFICIAL_ODDS_PARSER_VERSION,
     oddsSnapshotSha256: await sha256Hex(canonicalOddsRows(fetched.rows)),
-    onlineLearning: learning.audit,
-    runnerRecencyFactors: learning.runnerDetails,
     tickets,
     courseBets,
   };
@@ -511,8 +496,6 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
     oddsFetchedAt: snapshot.oddsFetchedAt, oddsSource: snapshot.oddsSource,
     oddsParserVersion: snapshot.oddsParserVersion,
     oddsSnapshotSha256: snapshot.oddsSnapshotSha256,
-    onlineLearning: snapshot.onlineLearning ?? null,
-    runnerRecencyFactors: snapshot.runnerRecencyFactors ?? null,
     tickets: snapshot.tickets,
   })));
   for (const bet of snapshot.courseBets) {
