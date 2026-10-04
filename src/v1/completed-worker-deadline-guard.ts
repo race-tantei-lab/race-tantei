@@ -1,5 +1,6 @@
 import { COMPLETED_MODEL_SHA256, COMPLETED_MODEL_VERSION } from "./completed-feature-runtime.js";
 import { ensureCompletedFinalImmutability } from "./completed-final-invariants.js";
+import { COMPLETED_PREDICTION_POLICY } from "./completed-prediction-policy.js";
 import { JRA_OFFICIAL_ODDS_PARSER_VERSION } from "./jra-official-odds-fetch.js";
 import { COMPLETED_COURSE_STAKES, type CompletedCourseBet, type CompletedTicket } from "./completed-ticket-runtime.js";
 import type { Env } from "./types.js";
@@ -26,6 +27,7 @@ type CachedOfficialPreview = {
   raceId?: string;
   sourceModel?: string;
   modelSha256?: string;
+  predictionPolicy?: string;
   generatedAt?: string;
   bodyWeightApplied?: boolean;
   bodyWeightSnapshot?: { fetchedAt?: string; sourceUrl?: string; snapshotSha256?: string; activeRunners?: unknown[] } | null;
@@ -163,6 +165,7 @@ function validOfficialPreview(
     || snapshot.raceId !== raceId
     || snapshot.sourceModel !== COMPLETED_MODEL_VERSION
     || snapshot.modelSha256 !== COMPLETED_MODEL_SHA256
+    || snapshot.predictionPolicy !== COMPLETED_PREDICTION_POLICY
   ) return false;
 
   const generatedMs = Date.parse(String(snapshot.generatedAt || ""));
@@ -251,6 +254,7 @@ async function commitCourseBets(
     lockedAt,
     sourceModel: COMPLETED_MODEL_VERSION,
     modelSha256: COMPLETED_MODEL_SHA256,
+    predictionPolicy: COMPLETED_PREDICTION_POLICY,
   })));
   await db.batch(statements);
   if (!strictComplete(await publicRows(db, raceId))) throw new Error(`DEADLINE_GUARD_POST_WRITE_GATE_FAILED:${raceId}`);
@@ -287,8 +291,7 @@ async function commitOfficialPreview(
     oddsSource: snapshot.oddsSource,
     oddsParserVersion: snapshot.oddsParserVersion,
     oddsSnapshotSha256: snapshot.oddsSnapshotSha256,
-    onlineLearning: snapshot.onlineLearning ?? null,
-    runnerRecencyFactors: snapshot.runnerRecencyFactors ?? null,
+    predictionPolicy: COMPLETED_PREDICTION_POLICY,
     tickets: snapshot.tickets,
   }, now, startMs);
 }

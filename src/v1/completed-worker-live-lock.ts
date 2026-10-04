@@ -15,6 +15,7 @@ import {
 } from "./completed-ticket-runtime";
 import { JRA_OFFICIAL_ODDS_PARSER_VERSION, fetchFastJraOfficialOddsForRace, type OfficialOddsRow } from "./jra-official-odds-fetch";
 import { ensureCompletedFinalImmutability } from "./completed-final-invariants";
+import { COMPLETED_PREDICTION_POLICY } from "./completed-prediction-policy";
 import type { Env, RaceRecord, RunnerRecord } from "./types";
 
 const SELECTION_PREFIX = "final_daily_selection:";
@@ -62,6 +63,7 @@ type PreviewSnapshot = {
   raceId: string;
   sourceModel: string;
   modelSha256: string;
+  predictionPolicy: typeof COMPLETED_PREDICTION_POLICY;
   generatedAt: string;
   generationStartedAt?: string;
   bodyWeightApplied?: boolean;
@@ -269,6 +271,7 @@ function snapshotHasOfficialBodyWeight(snapshot: PreviewSnapshot): boolean {
 function validSnapshot(snapshot: PreviewSnapshot, raceId: string): boolean {
   if (snapshot.version !== PREVIEW_VERSION || snapshot.raceId !== raceId) return false;
   if (snapshot.sourceModel !== COMPLETED_MODEL_VERSION || snapshot.modelSha256 !== COMPLETED_MODEL_SHA256) return false;
+  if (snapshot.predictionPolicy !== COMPLETED_PREDICTION_POLICY) return false;
   if (!Number.isFinite(Date.parse(snapshot.generatedAt)) || !Number.isFinite(Date.parse(snapshot.oddsFetchedAt))) return false;
   if (snapshot.generationStartedAt != null && !Number.isFinite(Date.parse(snapshot.generationStartedAt))) return false;
   if (snapshot.bodyWeightApplied === true && !validBodyWeightSnapshot(snapshot.bodyWeightSnapshot, raceId)) return false;
@@ -439,6 +442,7 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     raceId,
     sourceModel: COMPLETED_MODEL_VERSION,
     modelSha256: COMPLETED_MODEL_SHA256,
+    predictionPolicy: COMPLETED_PREDICTION_POLICY,
     generatedAt: iso(),
     generationStartedAt: iso(now),
     bodyWeightApplied: Boolean(bodyWeightSnapshot),
@@ -486,6 +490,7 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
     generationStartedAt: snapshot.generationStartedAt ?? null,
     reflectionDeadlineMinutes: 15,
     sourceModel: COMPLETED_MODEL_VERSION, modelSha256: COMPLETED_MODEL_SHA256,
+    predictionPolicy: COMPLETED_PREDICTION_POLICY,
     previewGeneratedAt: snapshot.generatedAt,
     bodyWeightApplied: hasBodyWeight,
     bodyWeightFetchedAt: bodyWeightSnapshot?.fetchedAt ?? null,

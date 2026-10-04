@@ -188,6 +188,7 @@ def main() -> None:
         "JRA_OFFICIAL_ODDS_PARSER_VERSION",
         'new Set(["jra-fast-official", "jra-crawl-official"])',
         "{ includeHistoricalDelta: true, includeSameDayDelta: false }",
+        "predictionPolicy: COMPLETED_PREDICTION_POLICY",
     ):
         require_text(lock, needle, "isolated live lock")
     forbid_text(lock, "PREVIEW_OPEN_MS", "selection-driven preview protection")
@@ -203,6 +204,7 @@ def main() -> None:
         "&& remainingMs < DEADLINE_GUARD_MS;",
         "JRA_OFFICIAL_ODDS_PARSER_VERSION",
         'snapshot.oddsSource !== "jra-fast-official" && snapshot.oddsSource !== "jra-crawl-official"',
+        "snapshot.predictionPolicy !== COMPLETED_PREDICTION_POLICY",
     ):
         require_text(guard, needle, "persistent deadline guard")
     forbid_text(guard, "chooseCompletedProbabilityFallbackTickets", "deadline guard fake odds fallback")
