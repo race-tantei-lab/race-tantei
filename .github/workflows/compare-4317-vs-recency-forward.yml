@@ -38,7 +38,7 @@ jobs:
           ids=[]
           for z in states:
             d=str(z['k']).split(':')[-1]
-            if not ('2026-08-10'<=d<='2026-10-03'):continue
+            if not ('2026-08-10'<=d<='2026-09-13'):continue
             p=json.loads(z['v'])
             if p.get('sourceModel')!='ten-year-completed-model' or p.get('resultDataUsedForTargetDay') is not False:continue
             ids.extend(str(a['raceId']) for a in p.get('selected',[]) if a.get('raceId'))
@@ -60,7 +60,7 @@ jobs:
           from pathlib import Path
           p=Path('scripts/export-selected-historical-official-odds.py');s=p.read_text()
           s=s.replace("START = '2024-05-04'","START = '2026-08-10'")
-          s=s.replace("END_EXCLUSIVE = '2026-08-03'","END_EXCLUSIVE = '2026-10-04'")
+          s=s.replace("END_EXCLUSIVE = '2026-08-03'","END_EXCLUSIVE = '2026-09-14'")
           s=s.replace("WORKERS = 20","WORKERS = 12")
           s=s.replace("            tab[m.group(2)] = m.group(1)","            tab['15' + m.group(2)] = m.group(1)",1)
           p.write_text(s)

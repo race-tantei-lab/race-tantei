@@ -7,7 +7,7 @@ import numpy as np
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 ODDS_PATH=ROOT/"artifacts"/"selected-historical-official-odds.jsonl.gz"
 OUT=ROOT/"artifacts"/"forward-4317-vs-recency.json"
-START="2026-08-10"; END="2026-10-03"; HISTORY_START="2026-07-16"
+START="2026-08-10"; END="2026-09-13"; HISTORY_START="2026-07-16"
 ACCOUNT=os.environ["CLOUDFLARE_ACCOUNT_ID"]; DB=os.environ["CLOUDFLARE_D1_DATABASE_ID"]; TOKEN=os.environ["CLOUDFLARE_API_TOKEN"]
 URL=f"https://api.cloudflare.com/client/v4/accounts/{ACCOUNT}/d1/database/{DB}/query"
 
