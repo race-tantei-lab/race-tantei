@@ -301,11 +301,11 @@ export default {
     const now = Number.isFinite(controller.scheduledTime) ? new Date(controller.scheduledTime) : new Date();
     try {
       const audit = await refreshCumulativePerformanceIfDue(env, now);
-      if (audit.status === "updated" || audit.status === "waiting_settlement") {
-        console.log("PUBLIC_CUMULATIVE_NIGHTLY", JSON.stringify(audit));
+      if (audit.status === "updated") {
+        console.log("PUBLIC_CUMULATIVE_5M", JSON.stringify(audit));
       }
     } catch (error) {
-      console.error("PUBLIC_CUMULATIVE_NIGHTLY_FAILED", error);
+      console.error("PUBLIC_CUMULATIVE_5M_FAILED", error);
     }
 
     if (baseFailure) throw baseFailure;

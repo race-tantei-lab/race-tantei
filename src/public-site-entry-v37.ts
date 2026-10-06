@@ -219,6 +219,10 @@ function embeddedTodayResultsHtml(): string {
 
 function applyCumulativePerformance(html: string, snapshot: CumulativePerformanceSnapshot): string {
   const dateLabel = snapshot.asOfDate.replace(/^(\d{4})-(\d{2})-(\d{2})$/, (_, y, m, d) => `${Number(y)}/${Number(m)}/${Number(d)}`);
+  const updatedLabel = snapshot.updatedAt
+    ? new Date(Date.parse(snapshot.updatedAt) + 9 * 60 * 60 * 1000).toISOString().slice(11, 16)
+    : null;
+  const freshnessLabel = updatedLabel ? `・更新 ${updatedLabel}` : "";
   const total = snapshot.total;
   const totalSection = '<section class="metrics shared-roi"><article class="card metric cumulative-live-card"><b>全体</b><strong>'
     + total.roiPct.toFixed(1) + '%</strong><small>' + total.races.toLocaleString("ja-JP") + 'R　購入 '
@@ -240,7 +244,7 @@ function applyCumulativePerformance(html: string, snapshot: CumulativePerformanc
     + row.roiPct.toFixed(1) + '%</strong></article>'
   ).join("");
   const venueBlock = '<div class="section-title venue-roi-title"><h2>会場別回収率（ライト）</h2><span class="muted">〜'
-    + dateLabel + '・' + total.races.toLocaleString("ja-JP") + 'R</span></div><div class="venue-roi-rail shared-venue-roi">'
+    + dateLabel + freshnessLabel + '・' + total.races.toLocaleString("ja-JP") + 'R</span></div><div class="venue-roi-rail shared-venue-roi">'
     + venueCards + '</div>';
   const venueStart = html.indexOf('<div class="section-title venue-roi-title">');
   const venueEnd = html.indexOf('<section class="daily-performance-wrap"', venueStart);
