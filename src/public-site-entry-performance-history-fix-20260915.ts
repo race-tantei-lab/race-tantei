@@ -50,6 +50,16 @@ type DayPerformance = CoursePerformance & {
 
 type LiveBetRow = SnapshotBet & { refundsJson: string | null };
 
+type StoredDailyHistory = {
+  version: string;
+  throughDate: string;
+  updatedAt: string;
+  unresolvedDates: string[];
+  days: DayPerformance[];
+};
+
+let dailyHistoryCache: { expiresAt: number; value: StoredDailyHistory | null } | null = null;
+
 const DAYS = RECENT_PUBLIC_DAY_SNAPSHOT as unknown as Record<string, SnapshotDay>;
 const COURSES: readonly CourseName[] = ["ライト", "スタンダード", "プレミアム"];
 const COURSE_STAKE_YEN: Readonly<Record<CourseName, number>> = {
@@ -57,7 +67,12 @@ const COURSE_STAKE_YEN: Readonly<Record<CourseName, number>> = {
   "スタンダード": 5_000,
   "プレミアム": 10_000,
 };
-const HISTORY_SOURCE = "snapshot-history-plus-date-bounded-live-v4";
+const HISTORY_SOURCE = "stored-daily-history-plus-snapshot-v8";
+const DAILY_HISTORY_STATE_KEY = "public_daily_performance_history:v1";
+const DAILY_HISTORY_VERSION = "daily-performance-history-v1";
+const DAILY_HISTORY_MAX_DAYS = 30;
+const DAILY_HISTORY_REFRESH_HOUR_JST = 19;
+const DAILY_HISTORY_REFRESH_MINUTE_JST = 5;
 const D1_READ_BACKOFF_MS = 60_000;
 let d1ReadBackoffUntilMs = 0;
 
@@ -189,13 +204,120 @@ function summarizeSnapshotDay(date: string, day: SnapshotDay): DayPerformance {
   return summarizeDay(date, day.races ?? [], day.bets ?? [], parseSelectionCount(day));
 }
 
-function snapshotHistory(overrides: DayPerformance[] = []): DayPerformance[] {
+function snapshotHistory(stored: DayPerformance[] = [], overrides: DayPerformance[] = []): DayPerformance[] {
   const byDate = new Map<string, DayPerformance>();
   for (const [date, day] of Object.entries(DAYS)) {
     if (day?.races?.length) byDate.set(date, summarizeSnapshotDay(date, day));
   }
+  for (const row of stored) if (row?.date) byDate.set(row.date, row);
   for (const row of overrides) if (row?.date) byDate.set(row.date, row);
-  return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
+  return [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, DAILY_HISTORY_MAX_DAYS);
+}
+
+function dueForDailyHistoryRefresh(now: Date): boolean {
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return jst.getUTCHours() === DAILY_HISTORY_REFRESH_HOUR_JST
+    && jst.getUTCMinutes() === DAILY_HISTORY_REFRESH_MINUTE_JST;
+}
+
+function previousDate(date: string): string {
+  const parsed = new Date(date + "T00:00:00Z");
+  parsed.setUTCDate(parsed.getUTCDate() - 1);
+  return parsed.toISOString().slice(0, 10);
+}
+
+async function readStoredDailyHistory(db: D1Database): Promise<StoredDailyHistory | null> {
+  if (dailyHistoryCache && dailyHistoryCache.expiresAt > Date.now()) return dailyHistoryCache.value;
+  const row = await db.prepare("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1")
+    .bind(DAILY_HISTORY_STATE_KEY)
+    .first<{ value: string }>();
+  let value: StoredDailyHistory | null = null;
+  if (row?.value) {
+    try {
+      const parsed = JSON.parse(row.value) as StoredDailyHistory;
+      if (
+        parsed.version === DAILY_HISTORY_VERSION
+        && /^20\d{2}-\d{2}-\d{2}$/.test(parsed.throughDate)
+        && Array.isArray(parsed.days)
+      ) value = parsed;
+    } catch { value = null; }
+  }
+  dailyHistoryCache = { expiresAt: Date.now() + 5 * 60_000, value };
+  return value;
+}
+
+async function refreshStoredDailyHistoryIfDue(env: Env, now: Date): Promise<{ status: string; throughDate: string; days: number; unresolvedDates: string[] }> {
+  const today = jstDate(now);
+  if (!dueForDailyHistoryRefresh(now)) {
+    return { status: "outside_window", throughDate: "", days: 0, unresolvedDates: [] };
+  }
+
+  const stored = await readStoredDailyHistory(env.DB);
+  const unresolved = stored?.unresolvedDates ?? [];
+  const earliestUnresolved = unresolved.length ? [...unresolved].sort()[0] : null;
+  const afterDate = earliestUnresolved
+    ? previousDate(earliestUnresolved)
+    : (stored?.throughDate ?? "2026-09-19");
+
+  const [betResult, selectionResult] = await Promise.all([
+    env.DB.prepare(`
+      SELECT r.race_date AS raceDate,b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,
+             b.stake_yen AS stakeYen,b.return_yen AS returnYen,b.settlement_status AS settlementStatus,
+             r.refund_horse_nos_json AS refundsJson
+      FROM rt_public_bets b
+      JOIN rt_races r ON r.race_id=b.race_id
+      WHERE r.race_date>? AND r.race_date<=? AND b.source_prediction_id=-2
+      ORDER BY r.race_date,b.race_id,b.course,b.id
+    `).bind(afterDate, today).all<LiveBetRow & { raceDate: string }>(),
+    env.DB.prepare(`
+      SELECT substr(state_key,23) AS raceDate,state_value AS value
+      FROM rt_system_state
+      WHERE state_key LIKE 'final_daily_selection:%'
+        AND state_key>? AND state_key<=?
+      ORDER BY state_key
+    `).bind(`final_daily_selection:${afterDate}`, `final_daily_selection:${today}`)
+      .all<{ raceDate: string; value: string | null }>(),
+  ]);
+
+  const betsByDate = new Map<string, Array<LiveBetRow & { raceDate: string }>>();
+  for (const row of betResult.results ?? []) {
+    const date = String(row.raceDate);
+    const list = betsByDate.get(date) ?? [];
+    list.push(row);
+    betsByDate.set(date, list);
+  }
+  const selectionByDate = new Map((selectionResult.results ?? []).map((row) => [String(row.raceDate), row.value]));
+
+  const touchedDates = new Set<string>([...betsByDate.keys(), ...selectionByDate.keys()]);
+  const refreshed: DayPerformance[] = [];
+  const nextUnresolved: string[] = [];
+  for (const date of [...touchedDates].sort()) {
+    const rows = betsByDate.get(date) ?? [];
+    const races = new Map<string, SnapshotRace>();
+    for (const row of rows) races.set(row.raceId, { raceId: row.raceId, refundsJson: row.refundsJson });
+    const summary = summarizeDay(date, [...races.values()], rows, parseSelectionCountRaw(selectionByDate.get(date)));
+    refreshed.push(summary);
+    if (summary.courses.some((course) => course.finalizedRaces > course.settledRaces)) nextUnresolved.push(date);
+  }
+
+  const merged = new Map<string, DayPerformance>();
+  for (const row of stored?.days ?? []) merged.set(row.date, row);
+  for (const row of refreshed) merged.set(row.date, row);
+  const days = [...merged.values()].sort((a, b) => b.date.localeCompare(a.date)).slice(0, DAILY_HISTORY_MAX_DAYS);
+  const next: StoredDailyHistory = {
+    version: DAILY_HISTORY_VERSION,
+    throughDate: today,
+    updatedAt: now.toISOString(),
+    unresolvedDates: nextUnresolved,
+    days,
+  };
+  await env.DB.prepare(`
+    INSERT INTO rt_system_state(state_key,state_value,updated_at)
+    VALUES(?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(state_key) DO UPDATE SET state_value=excluded.state_value,updated_at=CURRENT_TIMESTAMP
+  `).bind(DAILY_HISTORY_STATE_KEY, JSON.stringify(next)).run();
+  dailyHistoryCache = { expiresAt: Date.now() + 5 * 60_000, value: next };
+  return { status: "updated", throughDate: today, days: days.length, unresolvedDates: nextUnresolved };
 }
 
 function emptyDay(date: string): DayPerformance {
@@ -260,12 +382,19 @@ export default {
       const requested = url.searchParams.get("date");
       const date = validDate(requested) ? requested : today;
       const snapshotDay = DAYS[date];
+      const storedHistory = await readStoredDailyHistory(env.DB);
+      const storedDay = storedHistory?.days.find((row) => row.date === date);
+      const history = snapshotHistory(storedHistory?.days ?? []);
+
+      if (date !== today && storedDay) {
+        return performanceResponse(today, storedDay, history, "stored-historical");
+      }
 
       // Historical dates are immutable in the embedded snapshot and must never
       // spend D1 rows_read on a web request.
       if (date !== today && snapshotDay?.races?.length) {
         const summary = summarizeSnapshotDay(date, snapshotDay);
-        return performanceResponse(today, summary, snapshotHistory([summary]), "snapshot-historical");
+        return performanceResponse(today, summary, snapshotHistory(storedHistory?.days ?? [], [summary]), "snapshot-historical");
       }
 
       // Current day is deliberately bounded to only that date's final public
@@ -273,16 +402,16 @@ export default {
       // this isolate backs off instead of retrying on every browser poll.
       if (d1ReadBackoffActive()) {
         const summary = snapshotDay?.races?.length ? summarizeSnapshotDay(date, snapshotDay) : emptyDay(date);
-        return performanceResponse(today, summary, snapshotHistory([summary]), "quota-free-backoff-snapshot");
+        return performanceResponse(today, summary, snapshotHistory(storedHistory?.days ?? [], [summary]), "quota-free-backoff-snapshot");
       }
       try {
         const summary = await boundedLiveDay(env.DB, date);
-        return performanceResponse(today, summary, snapshotHistory([summary]), "bounded-current-day");
+        return performanceResponse(today, summary, snapshotHistory(storedHistory?.days ?? [], [summary]), "bounded-current-day");
       } catch (error) {
         tripD1ReadBackoff();
         console.error("DAILY_PERFORMANCE_BOUNDED_D1_FALLBACK", date, error);
         const summary = snapshotDay?.races?.length ? summarizeSnapshotDay(date, snapshotDay) : emptyDay(date);
-        return performanceResponse(today, summary, snapshotHistory([summary]), "quota-free-snapshot");
+        return performanceResponse(today, summary, snapshotHistory(storedHistory?.days ?? [], [summary]), "quota-free-snapshot");
       }
     }
 
@@ -306,6 +435,15 @@ export default {
       }
     } catch (error) {
       console.error("PUBLIC_CUMULATIVE_DAILY_FAILED", error);
+    }
+
+    try {
+      const historyAudit = await refreshStoredDailyHistoryIfDue(env, now);
+      if (historyAudit.status === "updated") {
+        console.log("PUBLIC_DAILY_HISTORY_DAILY", JSON.stringify(historyAudit));
+      }
+    } catch (error) {
+      console.error("PUBLIC_DAILY_HISTORY_DAILY_FAILED", error);
     }
 
     if (baseFailure) throw baseFailure;

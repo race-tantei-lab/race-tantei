@@ -43,6 +43,13 @@ jobs:
         run: python scripts/resolve-public-ui-version.py
       - name: Verify cumulative performance safety
         run: python scripts/verify-cumulative-performance.py
+      - name: Verify daily performance history storage
+        run: |
+          grep -q 'public_daily_performance_history:v1' src/public-site-entry-performance-history-fix-20260915.ts
+          grep -q 'DAILY_HISTORY_REFRESH_HOUR_JST = 19' src/public-site-entry-performance-history-fix-20260915.ts
+          grep -q 'DAILY_HISTORY_REFRESH_MINUTE_JST = 5' src/public-site-entry-performance-history-fix-20260915.ts
+          grep -q 'if (!dueForDailyHistoryRefresh(now))' src/public-site-entry-performance-history-fix-20260915.ts
+          grep -q 'PUBLIC_DAILY_HISTORY_DAILY' src/public-site-entry-performance-history-fix-20260915.ts
       - name: Typecheck
         run: npm run typecheck
       - name: Build test bundle
