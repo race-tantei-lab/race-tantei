@@ -158,12 +158,14 @@ def main() -> None:
         "entry maintenance must gate before first D1 maintenance call",
     )
 
-    # The race-day quota may be touched automatically only by the two-run
-    # bootstrap, Thu/Fri upcoming-program preflight, and Tuesday-night learning.
+    # The race-day quota may be touched automatically only by the bounded
+    # production workflows below. deploy.yml has one read-only cumulative
+    # arithmetic audit and does not mutate D1.
     # Critical bet recovery is manual-only; live Workers own automatic bets.
     # The only automatic entry fallback is the bounded direct sync, gated by a
     # tiny today/tomorrow readiness query and scheduled only evening/race morning.
     auto_d1 = {
+        "deploy.yml",
         "race-day-bootstrap.yml",
         "sync-upcoming-entries-direct.yml",
         "critical-auto-bet-generation.yml",

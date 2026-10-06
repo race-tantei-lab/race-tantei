@@ -19,8 +19,11 @@ def q(sql,params=None):
     z=body.get("result") or []
     return (z[0].get("results") or []) if z else []
 
-with urllib.request.urlopen(PUBLIC+"?_exact_audit=1",timeout=60) as r:
-    snap=json.loads(r.read().decode())
+state=q("SELECT state_value AS value FROM rt_system_state WHERE state_key=? LIMIT 1",["public_cumulative_performance:v1"])
+if not state or not state[0].get("value"): raise RuntimeError("CUMULATIVE_STATE_MISSING")
+snap=json.loads(state[0]["value"])
+if snap.get("version")!="cumulative-performance-v2-five-minute-light":
+    raise RuntimeError("CUMULATIVE_STATE_VERSION_INVALID:"+str(snap.get("version")))
 closed=str(snap.get("closedThroughDate") or "")
 if not closed: raise RuntimeError("CLOSED_THROUGH_DATE_MISSING")
 
