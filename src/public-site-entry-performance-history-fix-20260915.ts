@@ -358,7 +358,7 @@ async function boundedLiveDay(db: D1Database, date: string): Promise<DayPerforma
 function performanceResponse(today: string, summary: DayPerformance, history: DayPerformance[], mode: string): Response {
   return Response.json({
     ok: true,
-    version: "daily-performance-v7-bounded-current-plus-snapshot-history",
+    version: "daily-performance-v8-stored-history",
     today,
     summary,
     history,
