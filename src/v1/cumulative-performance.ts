@@ -1,6 +1,6 @@
 import type { Env } from "./types.js";
 
-export const CUMULATIVE_PERFORMANCE_VERSION = "cumulative-performance-v2-five-minute-light";
+export const CUMULATIVE_PERFORMANCE_VERSION = "cumulative-performance-v3-daily-light";
 export const CUMULATIVE_PERFORMANCE_STATE_KEY = "public_cumulative_performance:v1";
 export const CUMULATIVE_HISTORICAL_THROUGH = "2026-08-09";
 export const CUMULATIVE_LIVE_FROM = "2026-08-10";
@@ -43,7 +43,10 @@ type DeltaRaceRow = {
   returnYen: number;
 };
 
-const LEGACY_VERSION = "cumulative-performance-v1-nightly-light";
+const LEGACY_VERSIONS = new Set([
+  "cumulative-performance-v1-nightly-light",
+  "cumulative-performance-v2-five-minute-light",
+]);
 const HISTORICAL_TOTAL = { races: 14410, stakeYen: 28820000, returnYen: 124401700 } as const;
 const HISTORICAL_VENUES = [
   { venue: "札幌", races: 670, stakeYen: 1340000, returnYen: 5330600 },
@@ -102,7 +105,7 @@ function normalizeStored(value: unknown): CumulativePerformanceSnapshot | null {
     || !row.total
     || !Array.isArray(row.venues)
     || !row.live
-    || (row.version !== CUMULATIVE_PERFORMANCE_VERSION && row.version !== LEGACY_VERSION)
+    || (row.version !== CUMULATIVE_PERFORMANCE_VERSION && !LEGACY_VERSIONS.has(String(row.version ?? "")))
   ) return null;
 
   const total = row.total as CumulativeMetric;
@@ -149,6 +152,15 @@ export async function loadCumulativePerformance(db: D1Database): Promise<Cumulat
 
 function jstDate(now: Date, offsetDays = 0): string {
   return new Date(now.getTime() + 9 * 60 * 60 * 1000 + offsetDays * 86400_000).toISOString().slice(0, 10);
+}
+
+const DAILY_REFRESH_HOUR_JST = 19;
+const DAILY_REFRESH_MINUTE_JST = 5;
+
+function dueForDailyRefresh(now: Date): boolean {
+  const jst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return jst.getUTCHours() === DAILY_REFRESH_HOUR_JST
+    && jst.getUTCMinutes() === DAILY_REFRESH_MINUTE_JST;
 }
 
 async function rowsByDateRange(db: D1Database, afterDate: string, throughDate: string): Promise<DeltaRaceRow[]> {
@@ -267,7 +279,7 @@ function stableSignature(value: CumulativePerformanceSnapshot): string {
 }
 
 export type CumulativeRefreshAudit = {
-  status: "up_to_date" | "updated";
+  status: "outside_window" | "up_to_date" | "updated";
   asOfDate: string;
   closedThroughDate: string;
   currentDate: string;
@@ -280,6 +292,23 @@ export type CumulativeRefreshAudit = {
 export async function refreshCumulativePerformanceIfDue(env: Env, now = new Date()): Promise<CumulativeRefreshAudit> {
   const today = jstDate(now);
   const yesterday = jstDate(now, -1);
+
+  // The public Worker still runs every five minutes for settlement/maintenance,
+  // but cumulative ROI must not consume D1 on every tick. Only the scheduled
+  // 19:05 JST tick is allowed past this guard.
+  if (!dueForDailyRefresh(now)) {
+    return {
+      status: "outside_window",
+      asOfDate: "",
+      closedThroughDate: "",
+      currentDate: today,
+      currentSettledRaces: 0,
+      unresolvedRaceIds: [],
+      addedClosedRaces: 0,
+      reconciledRaces: 0,
+    };
+  }
+
   const stored = await readStored(env.DB) ?? historicalCumulativeBaseline();
   const before = stableSignature(stored);
 

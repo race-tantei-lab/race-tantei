@@ -10,7 +10,7 @@ required=[
     "races: 14410, stakeYen: 28820000, returnYen: 124401700",
     '{ venue: "東京", races: 2230, stakeYen: 4460000, returnYen: 17897900 }',
     '{ venue: "京都", races: 1705, stakeYen: 3410000, returnYen: 13982100 }',
-    'CUMULATIVE_PERFORMANCE_VERSION = "cumulative-performance-v2-five-minute-light"',
+    'CUMULATIVE_PERFORMANCE_VERSION = "cumulative-performance-v3-daily-light"',
     'CUMULATIVE_PERFORMANCE_STATE_KEY = "public_cumulative_performance:v1"',
     "r.race_date>? AND r.race_date<=?",
     "r.race_date=?",
@@ -21,6 +21,9 @@ required=[
     "closedThroughDate",
     "unresolvedRaceIds",
     "rowsForRaceIds",
+    "DAILY_REFRESH_HOUR_JST = 19",
+    "DAILY_REFRESH_MINUTE_JST = 5",
+    "if (!dueForDailyRefresh(now))",
 ]
 for needle in required:
     if needle not in src:
@@ -31,6 +34,7 @@ for forbidden in (
     "EOD_THROUGH_MINUTE",
     "CATCHUP_SLOT_MINUTE",
     "dueForNightlyRefresh",
+    "cumulative-performance-v2-five-minute-light\";",
     "tenYearRaces(",
     "date('now','-14 days')",
     "date('now','-30 days')",
@@ -51,12 +55,15 @@ for needle in (
 for needle in (
     'url.pathname === "/api/public/cumulative-performance"',
     "refreshCumulativePerformanceIfDue(env, now)",
-    "PUBLIC_CUMULATIVE_5M",
+    "PUBLIC_CUMULATIVE_DAILY",
 ):
     if needle not in perf:
-        raise AssertionError("five-minute cumulative integration missing: "+needle)
+        raise AssertionError("daily cumulative integration missing: "+needle)
+
+if "PUBLIC_CUMULATIVE_5M" in perf:
+    raise AssertionError("five-minute cumulative logging remains")
 
 if "PUBLIC_CUMULATIVE_NIGHTLY" in perf:
     raise AssertionError("nightly-only cumulative logging remains")
 
-print("CUMULATIVE_PERFORMANCE_SAFETY_OK baseline=exact refresh=5m settled-only light=2000 unresolved=reconciled")
+print("CUMULATIVE_PERFORMANCE_SAFETY_OK baseline=exact refresh=daily_1905_jst zero_d1_outside_slot=true settled-only light=2000 unresolved=reconciled")
