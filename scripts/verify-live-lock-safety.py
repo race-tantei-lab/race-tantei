@@ -187,7 +187,8 @@ def main() -> None:
         "WORKER_GENERATION_CROSSED_T15",
         "JRA_OFFICIAL_ODDS_PARSER_VERSION",
         'new Set(["jra-fast-official", "jra-crawl-official"])',
-        "{ includeHistoricalDelta: true, includeSameDayDelta: false }",
+        "loadCompletedRecencyLearning(",
+        "completedRecencyBetFactor(",
         "predictionPolicy: COMPLETED_PREDICTION_POLICY",
     ):
         require_text(lock, needle, "isolated live lock")
@@ -317,9 +318,7 @@ def main() -> None:
     forbid_text(critical_workflow, "schedule:", "critical recovery must stay manual-only")
     require_text(critical_workflow, "python scripts/run-critical-auto-bet-generation.py", "critical per-race generator")
 
-    for forbidden in ("loadCompletedRecencyLearning(", "completedRecencyBetFactor(", "runnerFactors[index]", "recencyFactor"):
-        forbid_text(lock, forbidden, "431.7 completed-model parity")
-    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=2m guard_before_heavy=true public_live_mutation=false canonical_4317_logic=true recency_overlay=false same_day_feature_delta=false quota_budgeted=true")
+    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=2m guard_before_heavy=true public_live_mutation=false canonical_learning=true prediction_policy=completed-recency-v2 quota_budgeted=true")
 
 
 if __name__ == "__main__":

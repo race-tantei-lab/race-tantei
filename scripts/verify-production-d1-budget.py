@@ -62,15 +62,14 @@ def main() -> None:
 
     live_runtime = read("src/v1/completed-worker-live-lock.ts")
     win5_runtime = read("src/v1/completed-win5.ts")
-    require_text(live_runtime, "{ includeHistoricalDelta: true, includeSameDayDelta: false }", "live exact 431.7 feature scope")
+    require_text(live_runtime, 'from "./completed-recency-learning"', "live canonical recency module")
     require_text(win5_runtime, 'from "./completed-recency-neutral"', "WIN5 neutral recency module")
-    forbid_text(live_runtime, 'from "./completed-recency-learning"', "live 30-day recency overlay")
     forbid_text(live_runtime, 'from "./completed-recency-neutral"', "live neutral recency module")
     forbid_text(win5_runtime, 'neutralCompletedRecencyLearning, type', "WIN5 runtime mixed raw recency import")
 
     live_deploy = read(".github/workflows/deploy-live-deadline.yml")
     win5_deploy = read(".github/workflows/deploy-win5.yml")
-    require_text(live_deploy, '"scripts/verify-completed-4317-parity.py"', "live exact 431.7 parity deploy trigger")
+    require_text(live_deploy, '"src/v1/completed-recency-learning.ts"', "live canonical recency deploy trigger")
     require_text(win5_deploy, '"src/v1/completed-recency-neutral.ts"', "WIN5 deploy trigger")
 
     # Browser GETs are display-only. The old v8/v9 mutation paths caused D1 use
@@ -109,9 +108,9 @@ def main() -> None:
     forbid_text(bounded_settlement, "date('now','-14 days')", "bounded settlement")
     forbid_text(bounded_settlement, "date('now','-30 days')", "bounded settlement")
 
-    # Race-bet predictions must preserve the exact 431.7% completed-model logic.
-    # Quota protection is mechanical only; same-day/30-day overlays are forbidden.
-    # WIN5 keeps its separate bounded policy.
+    # Race-bet predictions must preserve the canonical completed-model learning.
+    # Quota protection is mechanical (refresh/attempt/run budgets), never a change
+    # to model inputs or ticket scoring. WIN5 keeps its separate bounded policy.
     live_entry = read("src/live-deadline-entry-v2.ts")
     require_text(live_entry, "LIVE_SELECTION_REPAIR_THRESHOLD_MS = 30 * 60 * 1000", "live T-30 entry repair threshold")
     require_text(live_entry, "LIVE_SELECTION_REPAIR_MIN_INTERVAL_MS = 5 * 60 * 1000", "live T-30 entry repair throttle")
@@ -122,10 +121,8 @@ def main() -> None:
     forbid_text(live_entry, "runUpcomingEntryWorkerRepair", "live broad entry probe")
 
     live_lock = read("src/v1/completed-worker-live-lock.ts")
-    require_text(live_lock, "{ includeHistoricalDelta: true, includeSameDayDelta: false }", "live exact 431.7 feature scope")
-    require_text(live_lock, "const weights = normalizeCompletedWeights(raw);", "live exact 431.7 runner weights")
-    forbid_text(live_lock, "loadCompletedRecencyLearning(", "live 30-day runner recency")
-    forbid_text(live_lock, "completedRecencyBetFactor(", "live 30-day bet recency")
+    require_text(live_lock, "loadCompletedRecencyLearning(", "live canonical recency")
+    require_text(live_lock, "completedRecencyBetFactor(", "live canonical bet recency")
     require_text(live_lock, "MAX_PREVIEW_ATTEMPTS_PER_TICK = 1", "live attempt budget")
     require_text(live_lock, "VERY_EARLY_PREVIEW_REFRESH_MS = 6 * 60 * 60 * 1000", "live very-early refresh budget")
     forbid_text(live_lock, "LIVE_HISTORY_DISABLED_FREE_TIER_PRECOMPUTED_ONLY", "prediction-changing neutral fallback")

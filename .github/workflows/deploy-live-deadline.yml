@@ -30,7 +30,6 @@ on:
       - "tests/completed-worker-deadline-guard-tests.ts"
       - "scripts/verify-race-day-gate.py"
       - "scripts/verify-live-lock-safety.py"
-      - "scripts/verify-completed-4317-parity.py"
       - "scripts/verify-bodyweight-final-lock.py"
       - "wrangler.live-deadline.jsonc"
       - "wrangler.live-deadline-backup.jsonc"
@@ -72,8 +71,6 @@ jobs:
         run: python3 scripts/verify-bodyweight-final-lock.py
       - name: Verify static live isolation and quota safety
         run: python3 scripts/verify-live-lock-safety.py
-      - name: Verify exact 431.7 model parity
-        run: python3 scripts/verify-completed-4317-parity.py
       - name: Verify live deadline regression suite
         run: |
           npx --yes tsx tests/race-day-gate-tests.ts

@@ -15,6 +15,12 @@ OUT = ROOT / "worker-ticket-parity.json"
 BET_ORDER = ("単勝", "ワイド", "馬連", "馬単", "3連複", "3連単")
 
 
+class NeutralLearning:
+    @staticmethod
+    def bet_factor(_state, _bet_type: str, _venue: str, _odds: float) -> float:
+        return 1.0
+
+
 def load(path: pathlib.Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
     if spec is None or spec.loader is None:
@@ -44,6 +50,7 @@ def combo(kind: str, pos: tuple[int, ...], horses: list[int]) -> str:
 def main() -> int:
     generator = load(GENERATOR, "worker_ticket_parity_generator")
     core = load(CORE, "worker_ticket_parity_core")
+    neutral_learning = NeutralLearning()
     rng = random.Random(20260815)
     cases = []
     for case_index in range(96):
@@ -65,7 +72,7 @@ def main() -> int:
                 odds[(race_id, bet_type, combination)] = odd
                 rows.append({"betType": bet_type, "combination": combination, "oddsMin": low, "oddsMax": high})
         runners = [{"horseNo": horse_no} for horse_no in horse_nos]
-        chosen = generator.choose_two(core, race_id, runners, weights, odds)
+        chosen = generator.choose_two(core, neutral_learning, race_id, runners, weights, odds, {}, "parity")
         cases.append({"id": race_id, "horseNos": horse_nos, "weights": weights, "odds": rows, "expected": chosen})
     OUT.write_text(json.dumps({"cases": cases}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(json.dumps({"status": "TICKET_FIXTURE_OK", "cases": len(cases)}, ensure_ascii=False))

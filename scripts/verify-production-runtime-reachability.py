@@ -73,14 +73,10 @@ def main() -> None:
     public = closures["wrangler.jsonc"]
 
     canonical_recency = Path("src/v1/completed-recency-learning.ts")
-    feature_runtime = Path("src/v1/completed-feature-runtime.ts")
-    ticket_runtime = Path("src/v1/completed-ticket-runtime.ts")
-    if canonical_recency in live:
-        raise AssertionError("30-day recency module must not be runtime-reachable from exact 431.7 live Worker")
+    if canonical_recency not in live:
+        raise AssertionError("canonical recency module is not runtime-reachable from live Worker")
     if canonical_recency in win5:
         raise AssertionError("canonical recency module is runtime-reachable from WIN5 Worker")
-    if feature_runtime not in live or ticket_runtime not in live:
-        raise AssertionError("exact 431.7 feature/ticket runtime is not reachable from live Worker")
 
     violations: list[tuple[str, str]] = []
     forbid("src/public-site-entry.ts", ("runPublicDataSync(", "ctx.waitUntil("), violations)
@@ -98,8 +94,6 @@ def main() -> None:
         "win5Modules": len(win5),
         "canonicalRecencyInPublic": canonical_recency in public,
         "canonicalRecencyInLive": canonical_recency in live,
-        "exact4317FeatureRuntimeInLive": feature_runtime in live,
-        "exact4317TicketRuntimeInLive": ticket_runtime in live,
         "canonicalRecencyInWin5": canonical_recency in win5,
         "publicRequestMutationViolations": violations,
     }, ensure_ascii=False))

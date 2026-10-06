@@ -292,6 +292,8 @@ async function commitOfficialPreview(
     oddsParserVersion: snapshot.oddsParserVersion,
     oddsSnapshotSha256: snapshot.oddsSnapshotSha256,
     predictionPolicy: COMPLETED_PREDICTION_POLICY,
+    onlineLearning: snapshot.onlineLearning ?? null,
+    runnerRecencyFactors: snapshot.runnerRecencyFactors ?? null,
     tickets: snapshot.tickets,
   }, now, startMs);
 }
