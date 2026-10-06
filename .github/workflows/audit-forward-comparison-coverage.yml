@@ -1,11 +1,7 @@
 name: Audit forward comparison coverage
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/audit-forward-comparison-coverage.py"
-      - ".github/workflows/audit-forward-comparison-coverage.yml"
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:

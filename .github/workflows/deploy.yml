@@ -122,21 +122,10 @@ jobs:
           ok=0
           for attempt in $(seq 1 14); do
             curl -fsS "$base/api/public/cumulative-performance?_rt_cumulative=${GITHUB_RUN_ID}-$attempt" -o /tmp/cumulative.json
-            python3 - "$expected_yesterday" <<'PY'
-import json,sys
-x=json.load(open('/tmp/cumulative.json'))
-expected=sys.argv[1]
-assert x.get('ok') is True
-assert x.get('version') == 'cumulative-performance-v2-five-minute-light'
-assert x.get('basis') == 'ten-year-backtest-plus-production-light'
-assert int(x.get('total',{}).get('stakeYen',0)) >= 28820000
-closed=str(x.get('closedThroughDate') or '')
-print(json.dumps({'version':x.get('version'),'asOfDate':x.get('asOfDate'),'closedThroughDate':closed,'currentSettledRaces':x.get('currentSettledRaces'),'updatedAt':x.get('updatedAt'),'roiPct':x.get('total',{}).get('roiPct')},ensure_ascii=False))
-if closed < expected:
-    raise SystemExit(2)
-PY
-            rc=$?
-            if [[ "$rc" = '0' ]]; then ok=1; break; fi
+            if python3 -c "import json,sys; x=json.load(open('/tmp/cumulative.json')); expected=sys.argv[1]; assert x.get('ok') is True; assert x.get('version') == 'cumulative-performance-v2-five-minute-light'; assert x.get('basis') == 'ten-year-backtest-plus-production-light'; assert int(x.get('total',{}).get('stakeYen',0)) >= 28820000; closed=str(x.get('closedThroughDate') or ''); print(json.dumps({'version':x.get('version'),'asOfDate':x.get('asOfDate'),'closedThroughDate':closed,'currentSettledRaces':x.get('currentSettledRaces'),'updatedAt':x.get('updatedAt'),'roiPct':x.get('total',{}).get('roiPct')},ensure_ascii=False)); assert closed >= expected" "$expected_yesterday"; then
+              ok=1
+              break
+            fi
             sleep 30
           done
           test "$ok" = '1'

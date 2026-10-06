@@ -1,11 +1,7 @@
 name: Compare 431.7 vs recency forward
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/compare-4317-vs-recency-forward.py"
-      - ".github/workflows/compare-4317-vs-recency-forward.yml"
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:
