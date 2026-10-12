@@ -9,6 +9,8 @@ export const COMPLETED_COURSE_STAKES = {
 
 export type CompletedCourse = keyof typeof COMPLETED_COURSE_STAKES;
 
+export const COMPLETED_ODDS_SCORE_POWER = 0.2 as const;
+
 export interface OfficialOddsRow {
   betType: CompletedBetType;
   combination: string;
@@ -182,13 +184,14 @@ export function chooseCompletedTwoTickets(
       candidates.push(ticket);
     }
     if (!candidates.length) throw new Error(`OFFICIAL_ODDS_MISSING_BET_TYPE:${betType}`);
-    candidates.sort((a, b) => (b.valueProduct - a.valueProduct) || (a.officialOdds - b.officialOdds) || compareText(a.combination, b.combination));
-    const retained = candidates.slice(0, 5).map((ticket) => ({
+    const scored = candidates.map((ticket) => ({
       ...ticket,
-      score: Math.log(ticket.predictedProbability) + 0.4 * Math.log(ticket.officialOdds) + Math.log(ticket.recencyFactor ?? 1),
+      score: Math.log(ticket.predictedProbability)
+        + COMPLETED_ODDS_SCORE_POWER * Math.log(ticket.officialOdds)
+        + Math.log(ticket.recencyFactor ?? 1),
     }));
-    retained.sort((a, b) => (b.score - a.score) || (b.predictedProbability - a.predictedProbability) || compareText(a.combination, b.combination));
-    bestByType.push(retained[0]);
+    scored.sort((a, b) => (b.score - a.score) || (b.predictedProbability - a.predictedProbability) || compareText(a.combination, b.combination));
+    bestByType.push(scored[0]);
   }
   bestByType.sort((a, b) => (b.score - a.score) || (COMPLETED_BET_ORDER.indexOf(a.betType) - COMPLETED_BET_ORDER.indexOf(b.betType)) || compareText(a.combination, b.combination));
   const chosen: CompletedTicket[] = [];
