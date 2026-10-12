@@ -318,7 +318,16 @@ def main() -> None:
     forbid_text(critical_workflow, "schedule:", "critical recovery must stay manual-only")
     require_text(critical_workflow, "python scripts/run-critical-auto-bet-generation.py", "critical per-race generator")
 
-    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=2m guard_before_heavy=true public_live_mutation=false canonical_learning=true prediction_policy=completed-recency-v2 quota_budgeted=true")
+    policy = read("src/v1/completed-prediction-policy.ts")
+    tickets = read("src/v1/completed-ticket-runtime.ts")
+    python_tickets = read("scripts/generate-ten-year-live-bets.py")
+    require_text(policy, "completed-recency-v3-consistent-p02", "production policy identity")
+    require_text(tickets, "COMPLETED_ODDS_SCORE_POWER = 0.2", "ticket scoring")
+    require_text(python_tickets, "ODDS_SCORE_POWER=0.2", "Python ticket parity")
+    require_text(tickets, "scored.sort(", "single-stage candidate scoring")
+    forbid_text(tickets, "candidates.sort((a, b) => (b.valueProduct", "legacy high-odds prefilter")
+
+    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=2m guard_before_heavy=true public_live_mutation=false canonical_learning=true prediction_policy=completed-recency-v3-consistent-p02 quota_budgeted=true")
 
 
 if __name__ == "__main__":

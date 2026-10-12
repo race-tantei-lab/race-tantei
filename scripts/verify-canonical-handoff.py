@@ -292,7 +292,7 @@ def main() -> None:
         "official_jra_odds_only=true",
         "recency_overlay=true",
         "same_day_feature_delta=true",
-        "prediction_policy=completed-recency-v2",
+        "prediction_policy=completed-recency-v3-consistent-p02",
     )
 
 
