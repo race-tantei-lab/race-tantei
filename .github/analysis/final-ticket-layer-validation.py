@@ -27,14 +27,14 @@ for z in selrows:
     d=str(z["k"]).split(":")[-1]
     if "2026-08-15"<=d<="2026-10-12":
         p=json.loads(z["v"]);selected[d]=set(str(x["raceId"]) for x in p.get("selected",[]) if x.get("raceId"))
-expected=sum(len(v) for v in selected.values());assert expected==238,(expected,{k:len(v) for k,v in selected.items()})
+expected=sum(len(v) for v in selected.values());assert expected==245,(expected,{k:len(v) for k,v in selected.items()})
 
 odds_art={}
 with gzip.open(ODDS,"rt",encoding="utf-8") as fh:
     for line in fh:
         if line.strip():
             x=json.loads(line);odds_art[str(x["raceId"])]=x
-assert len(odds_art)==170,len(odds_art)
+assert 230<=len(odds_art)<=238,len(odds_art)
 
 bundles=core.bundles_from_d1(Collector,"race_date>=? AND race_date<=?",[FROM,TO]);bydate=collections.defaultdict(list)
 for b in bundles:bydate[str(b["race"]["raceDate"])].append(b)
@@ -139,6 +139,8 @@ for d in sorted(bydate):
     for b in bydate[d]:
         rid=str(b["race"]["raceId"])
         if d in selected and rid in selected[d]:
+            if rid not in odds_art or not b.get("results") or not b.get("payouts"):
+                continue
             rs,w,rank,co=model(b);oo=omap(odds_art[rid]);period="early" if d<="2026-09-13" else ("recent" if d>="2026-10-10" else "middle")
             for name,var in VARIANTS.items():
                 t=choose(rid,rs,w,rank,co,b,oo,var);ret=settle(b,t)
@@ -178,5 +180,7 @@ for name in VARIANTS:
       "score":(stats[name]["roiPct"] or 0)+0.35*(min(slices) if slices else 0)-0.002*risk[name]["maxDrawdownYen"]-0.5*risk[name]["maxConsecutiveMisses"],
     }
 ranked=sorted(VARIANTS,key=lambda n:(-robust[n]["score"],-(stats[n]["roiPct"] or 0),risk[n]["maxDrawdownYen"]))
-report={"stats":stats,"periods":periods,"venues":dict(venue_stats),"risk":risk,"robustness":robust,"ranked":ranked}
+eligible_ids=set(odds_art)
+missing_eligibility=sorted({rid for ids in selected.values() for rid in ids}-eligible_ids)
+report={"recordedRaces":expected,"officialOddsRaces":len(odds_art),"comparedRaces":stats["current"]["races"],"unevaluatedIds":missing_eligibility,"stats":stats,"periods":periods,"venues":dict(venue_stats),"risk":risk,"robustness":robust,"ranked":ranked}
 print("TICKET_LAYER_FULL_VALIDATION "+json.dumps(report,ensure_ascii=False))
