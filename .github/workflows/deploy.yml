@@ -133,7 +133,16 @@ jobs:
         run: |
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev'
-          expected_yesterday=$(TZ=Asia/Tokyo date -d 'yesterday' +%F)
+          # The cumulative snapshot is calculated only once per day at 19:05 JST.
+          # Before that run (plus a short scheduling grace period), the latest
+          # *required* closed date is the day before yesterday, not yesterday.
+          jst_hhmm=$(TZ=Asia/Tokyo date +%H%M)
+          if [[ "$jst_hhmm" < '1915' ]]; then
+            expected_yesterday=$(TZ=Asia/Tokyo date -d '2 days ago' +%F)
+          else
+            expected_yesterday=$(TZ=Asia/Tokyo date -d 'yesterday' +%F)
+          fi
+          echo "Cumulative daily close required through=$expected_yesterday (JST clock=$jst_hhmm; 19:05 run + 10m grace)"
           ok=0
           for attempt in $(seq 1 14); do
             curl -fsS "$base/api/public/cumulative-performance?_rt_cumulative=${GITHUB_RUN_ID}-$attempt" -o /tmp/cumulative.json
