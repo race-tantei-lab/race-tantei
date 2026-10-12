@@ -1,11 +1,5 @@
 name: Verify recency strength 2026-10-12
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/analysis/recency-strength-20261012.py"
-      - ".github/analysis/fetch-current-day-official-odds.py"
-      - ".github/workflows/verify-recency-strength-20261012.yml"
   workflow_dispatch:
 
 permissions:
