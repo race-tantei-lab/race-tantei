@@ -47,7 +47,7 @@ jobs:
           rs=q("SELECT race_id raceId,result_url resultUrl FROM rt_races WHERE race_id IN ("+','.join('?' for _ in ids)+") ORDER BY race_id",ids)
           print(json.dumps({'selected':len(ids),'mobile':sum('sp.jra.jp' in str(x.get('resultUrl') or '') or 'CNAME=sw' in str(x.get('resultUrl') or '') for x in rs),'urls':rs},ensure_ascii=False))
           PY
-      - name: Fetch JRA historical official odds
+      - name: Fetch JRA official odds for all 30 races
         run: |
           cp scripts/export-selected-historical-official-odds.py /tmp/export.py
           python - <<'PY'
@@ -61,8 +61,28 @@ jobs:
           s=s.replace("            tab[m.group(2)] = m.group(1)","            tab['15' + m.group(2)] = m.group(1)",1)
           p.write_text(s)
           PY
-          python /tmp/export.py
-          cp artifacts/selected-historical-official-odds.jsonl.gz artifacts/mobile-historical-official-odds-retry.jsonl.gz
+          python /tmp/export.py || true
+          python .github/analysis/fetch-current-day-official-odds.py
+          python - <<'PY'
+          import gzip
+          from pathlib import Path
+          files=[Path('artifacts/selected-historical-official-odds.jsonl.gz'),Path('artifacts/current-day-selected-official-odds.jsonl.gz')]
+          out=Path('artifacts/mobile-historical-official-odds-retry.jsonl.gz')
+          seen=set();rows=[]
+          for p in files:
+            if not p.exists():continue
+            with gzip.open(p,'rt',encoding='utf-8') as fh:
+              for line in fh:
+                if not line.strip():continue
+                import json
+                x=json.loads(line);rid=str(x['raceId'])
+                if rid in seen:continue
+                seen.add(rid);rows.append(x)
+          with gzip.open(out,'wt',encoding='utf-8') as fh:
+            for x in rows:fh.write(json.dumps(x,ensure_ascii=False,separators=(',',':'))+'\n')
+          print({'mergedOfficialOddsRaces':len(rows),'ids':sorted(seen)})
+          assert len(rows)==30,(len(rows),sorted(seen))
+          PY
 
       - name: Compare recency strengths
         run: python .github/analysis/recency-strength-20261012.py
@@ -72,6 +92,7 @@ jobs:
           name: recency-strength-20261012
           path: |
             artifacts/recency-strength-20261012.json
-            artifacts/mobile-historical-official-odds-retry-meta.json
+            artifacts/selected-historical-official-odds-meta.json
+            artifacts/current-day-selected-official-odds.jsonl.gz
           if-no-files-found: warn
           retention-days: 14
