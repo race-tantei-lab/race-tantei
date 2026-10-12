@@ -49,17 +49,21 @@ jobs:
           PY
       - name: Fetch JRA historical official odds
         run: |
-          cp scripts/export-mobile-historical-official-odds-retry.py /tmp/export.py
+          cp scripts/export-selected-historical-official-odds.py /tmp/export.py
           python - <<'PY'
           from pathlib import Path
           p=Path('/tmp/export.py');s=p.read_text()
           s=s.replace("ROOT = Path(__file__).resolve().parents[1]","ROOT = Path.cwd()")
           s=s.replace("START = '2024-05-04'","START = '2026-10-10'")
           s=s.replace("END_EXCLUSIVE = '2026-08-03'","END_EXCLUSIVE = '2026-10-13'")
-          s=s.replace("WORKERS = 6","WORKERS = 4")
+          s=s.replace("WORKERS = 20","WORKERS = 6")
+          s=s.replace("r'pw01sde10", "r'pw01sde(?:10|01)")
+          s=s.replace("            tab[m.group(2)] = m.group(1)","            tab['15' + m.group(2)] = m.group(1)",1)
           p.write_text(s)
           PY
           python /tmp/export.py
+          cp artifacts/selected-historical-official-odds.jsonl.gz artifacts/mobile-historical-official-odds-retry.jsonl.gz
+
       - name: Compare recency strengths
         run: python .github/analysis/recency-strength-20261012.py
       - uses: actions/upload-artifact@v4
