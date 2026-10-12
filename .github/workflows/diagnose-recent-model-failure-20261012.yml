@@ -1,10 +1,5 @@
 name: Diagnose recent model failure 2026-10-12
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/analysis/root-cause-20261012.py"
-      - ".github/workflows/diagnose-recent-model-failure-20261012.yml"
   workflow_dispatch:
 
 permissions:

@@ -1,11 +1,7 @@
 name: Validate ticket-layer challengers
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/analysis/validate-ticket-layer-challengers.py"
-      - ".github/workflows/validate-ticket-layer-challengers.yml"
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:
