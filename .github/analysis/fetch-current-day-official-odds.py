@@ -45,6 +45,10 @@ for race in races:
         win_cname=seeds[0]
         win_page=runtime.fetch_url(base.JRA_ODDS_URL,cname=win_cname,referer=entry)
         horses,win_rows=fast.parse_win(win_page)
+        active_rows=q("SELECT horse_no horseNo FROM rt_runners WHERE race_id=? AND COALESCE(runner_status,'active')='active' ORDER BY horse_no",[rid])
+        active_horses={int(x["horseNo"]) for x in active_rows}
+        horses=[int(h) for h in horses if int(h) in active_horses]
+        win_rows=[row for row in win_rows if int(row[0]) in active_horses]
         type_cnames=fast.find_type_cnames(win_page,race_date_digits,race_no)
         maps={"単勝":{str(c):val(lo,hi) for c,lo,hi in win_rows}}
         for bt in ["馬連","ワイド","馬単","3連複","3連単"]:
