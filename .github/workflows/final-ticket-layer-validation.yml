@@ -1,11 +1,7 @@
 name: Final ticket-layer validation
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/analysis/final-ticket-layer-validation.py"
-      - ".github/workflows/final-ticket-layer-validation.yml"
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:
