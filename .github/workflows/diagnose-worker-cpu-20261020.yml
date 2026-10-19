@@ -1,0 +1,59 @@
+name: Diagnose Cloudflare Worker CPU exceedance (read-only)
+on:
+  push:
+    branches: ["diagnostics/cpu-20261020"]
+    paths: [".github/workflows/diagnose-worker-cpu-20261020.yml"]
+permissions:
+  contents: read
+jobs:
+  metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Read Workers CPU and outcome metrics - no D1 access
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,urllib.request,urllib.error
+          account="3c6d1826b573b2e68cb13ec37e9e8ade"
+          token=os.getenv("CLOUDFLARE_API_TOKEN","")
+          if not token: raise SystemExit("CLOUDFLARE_TOKEN_NOT_SET")
+          periods={
+            "incident_previous_24h_jst_morning":("2026-10-18T23:00:00Z","2026-10-19T23:00:00Z"),
+            "oct19_jst":("2026-10-18T15:00:00Z","2026-10-19T15:00:00Z"),
+            "oct18_jst":("2026-10-17T15:00:00Z","2026-10-18T15:00:00Z"),
+          }
+          for label,(start,end) in periods.items():
+            query=('query { viewer { accounts(filter:{accountTag:"'+account+'"}) { '
+              'workersInvocationsAdaptive(limit:1000,filter:{datetime_geq:"'+start+'",datetime_leq:"'+end+'"},orderBy:[sum_requests_DESC]) '
+              '{ dimensions { scriptName status } sum { requests errors } quantiles { cpuTimeP50 cpuTimeP99 } } '
+              '} } }')
+            req=urllib.request.Request(
+              "https://api.cloudflare.com/client/v4/graphql",
+              data=json.dumps({"query":query}).encode(),method="POST",
+              headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"})
+            try:
+              with urllib.request.urlopen(req,timeout=30) as rsp:
+                payload=json.load(rsp)
+            except urllib.error.HTTPError as e:
+              print("ANALYTICS_HTTP_ERROR",label,e.code,e.read().decode(errors="replace")[:1500])
+              raise
+            errors=payload.get("errors") or []
+            if errors:
+              print("ANALYTICS_GRAPHQL_ERROR",label,json.dumps(errors)[:1500])
+              continue
+            accts=payload.get("data",{}).get("viewer",{}).get("accounts",[])
+            rows=(accts[0].get("workersInvocationsAdaptive",[]) if accts else [])
+            cleaned=[]
+            for entry in rows:
+              d=entry.get("dimensions") or {}
+              sums=entry.get("sum") or {}
+              q=entry.get("quantiles") or {}
+              cleaned.append({"worker":d.get("scriptName"),"status":d.get("status"),
+                              "requests":sums.get("requests"),"errors":sums.get("errors"),
+                              "cpuP50":q.get("cpuTimeP50"),"cpuP99":q.get("cpuTimeP99")})
+            cleaned.sort(key=lambda x: (0 if 'exceed' in str(x['status']).lower() else 1,-int(x['requests'] or 0)))
+            print("WORKERS_CPU_METRICS",label,json.dumps(cleaned,ensure_ascii=False,separators=(',',':')))
+          PY
