@@ -84,4 +84,23 @@ jobs:
               locks=[dt(r.get("lockedAt")) for r in rr]
               if start and any(x is None or (start-x).total_seconds()<15*60 for x in locks):late.append(raceId)
             print("PREDICTION_AUDIT",json.dumps({"date":d,"selected":len(targets),"lockedTwoType":complete,"settled":settled,"missing":missing,"late":late,"raceRows":len([x for x in items if x[0]==d])},ensure_ascii=False))
+          for d in dates:
+            targets=sel.get(d,set())
+            if not targets: continue
+            by_course={}
+            for course in ("ライト","スタンダード","プレミアム"):
+              done=0; timed=0; settled=0; missing=[]
+              for raceId in sorted(targets):
+                rr=[x for x in items.get((d,raceId),[]) if x.get("course")==course]
+                good=len(rr)==2 and len({x.get("betType") for x in rr})==2
+                if not good:
+                  missing.append(raceId)
+                  continue
+                done+=1
+                st=dt(rr[0].get("startUtc"))
+                lk=[dt(x.get("lockedAt")) for x in rr]
+                if st and all(x is not None and (st-x).total_seconds()>=900 for x in lk):timed+=1
+                if all(x.get("settlementStatus")=="settled" for x in rr):settled+=1
+              by_course[course]={"finalized":done,"timelyT15":timed,"settled":settled,"missing":missing}
+            print("THREE_COURSE_FINAL_AUDIT",json.dumps({"date":d,"selected":len(targets),"courses":by_course},ensure_ascii=False))
           PY
