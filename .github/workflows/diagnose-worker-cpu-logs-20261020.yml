@@ -1,0 +1,41 @@
+name: Diagnose historical CPU failures via Workers Logs (read-only)
+on:
+  push:
+    branches: ["diagnostics/cpu-20261020"]
+    paths: [".github/workflows/diagnose-worker-cpu-logs-20261020.yml"]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Query historical failed invocations only (no D1)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,urllib.request,urllib.error
+          account="3c6d1826b573b2e68cb13ec37e9e8ade"
+          url="https://api.cloudflare.com/client/v4/accounts/"+account+"/workers/observability/telemetry/query"
+          token=os.environ["CLOUDFLARE_API_TOKEN"]
+          def ts(t):
+            return int(datetime.datetime.fromisoformat(t.replace("Z","+00:00")).timestamp()*1000)
+          base={"queryId":"cpu-investigation-20261020","dry":True,"view":"events","limit":15,
+            "timeframe":{"from":ts("2026-10-17T23:00:00Z"),"to":ts("2026-10-18T09:00:00Z")}}
+          for outcome in ("exceededCpu","exceededResources"):
+            data=dict(base)
+            data["parameters"]={"datasets":[],"filterCombination":"and","filters":[
+              {"key":"$workers.outcome","operation":"eq","type":"string","value":outcome},
+              {"key":"$workers.scriptName","operation":"eq","type":"string","value":"race-tantei-live-deadline"}]}
+            req=urllib.request.Request(url,data=json.dumps(data).encode(),method="POST",
+              headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"})
+            try:
+              with urllib.request.urlopen(req,timeout=30) as resp: response=json.load(resp)
+              print("HISTORICAL_LOG_QUERY",outcome,json.dumps(response,ensure_ascii=False)[:8000])
+            except urllib.error.HTTPError as e:
+              print("HISTORICAL_LOG_DENIED",outcome,"HTTP",e.code,e.read().decode(errors="replace")[:1200])
+            except Exception as e:
+              print("HISTORICAL_LOG_QUERY_ERROR",outcome,str(e)[:1000])
+          PY
