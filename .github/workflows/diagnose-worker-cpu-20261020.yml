@@ -24,6 +24,8 @@ jobs:
             "incident_previous_24h_jst_morning":("2026-10-18T23:00:00Z","2026-10-19T23:00:00Z"),
             "oct19_jst":("2026-10-18T15:00:00Z","2026-10-19T15:00:00Z"),
             "oct18_jst":("2026-10-17T15:00:00Z","2026-10-18T15:00:00Z"),
+            "oct17_jst":("2026-10-16T15:00:00Z","2026-10-17T15:00:00Z"),
+            "oct12_jst":("2026-10-11T15:00:00Z","2026-10-12T15:00:00Z"),
           }
           for label,(start,end) in periods.items():
             query=('query { viewer { accounts(filter:{accountTag:"'+account+'"}) { '
@@ -56,4 +58,30 @@ jobs:
                               "cpuP50":q.get("cpuTimeP50"),"cpuP99":q.get("cpuTimeP99")})
             cleaned.sort(key=lambda x: (0 if 'exceed' in str(x['status']).lower() else 1,-int(x['requests'] or 0)))
             print("WORKERS_CPU_METRICS",label,json.dumps(cleaned,ensure_ascii=False,separators=(',',':')))
+ 
+          # Hourly outcome breakdown identifies the failure window without touching D1.
+          start,end=periods["oct18_jst"]
+          query=('query { viewer { accounts(filter:{accountTag:"'+account+'"}) { '
+            'workersInvocationsAdaptive(limit:1000,filter:{datetime_geq:"'+start+'",datetime_leq:"'+end+'"}) '
+            '{ dimensions { scriptName status datetimeHour } sum { requests errors } quantiles { cpuTimeP50 cpuTimeP99 } } '
+            '} } }')
+          req=urllib.request.Request(
+            "https://api.cloudflare.com/client/v4/graphql",
+            data=json.dumps({"query":query}).encode(),method="POST",
+            headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"})
+          with urllib.request.urlopen(req,timeout=30) as rsp: payload=json.load(rsp)
+          if payload.get("errors"):
+            print("HOURLY_GRAPHQL_ERROR",json.dumps(payload["errors"])[:1500])
+          else:
+            accts=payload.get("data",{}).get("viewer",{}).get("accounts",[])
+            rows=(accts[0].get("workersInvocationsAdaptive",[]) if accts else [])
+            out=[]
+            for row in rows:
+              d=row.get("dimensions") or {}
+              if d.get("status") not in ("exceededResources","exceededCpu"): continue
+              out.append({"utcHour":d.get("datetimeHour"),"worker":d.get("scriptName"),
+                          "status":d.get("status"),"count":(row.get("sum") or {}).get("requests")})
+            out.sort(key=lambda x:(str(x["utcHour"]),str(x["worker"])))
+            print("HOURLY_CPU_EXCEEDS_OCT18",json.dumps(out,ensure_ascii=False,separators=(',',':')))
+
           PY
