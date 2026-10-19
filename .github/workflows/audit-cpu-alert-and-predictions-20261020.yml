@@ -1,0 +1,87 @@
+name: Audit CPU alert timing and public prediction completeness
+on:
+  push:
+    branches: ["diagnostics/cpu-20261020"]
+    paths: [".github/workflows/audit-cpu-alert-and-predictions-20261020.yml"]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Read Cloudflare notifications history and policy metadata
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request,urllib.error
+          account="3c6d1826b573b2e68cb13ec37e9e8ade"
+          root=f"https://api.cloudflare.com/client/v4/accounts/{account}/alerting/v3/"
+          for endpoint in ("history","policies"):
+            req=urllib.request.Request(root+endpoint,headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"]})
+            try:
+              with urllib.request.urlopen(req,timeout=25) as response: data=json.load(response)
+              print("ALERT_API",endpoint,"success",data.get("success"),"errors",data.get("errors"))
+              rows=data.get("result") or []
+              if isinstance(rows,dict): rows=rows.get("items") or []
+              for row in rows[:100]:
+                if endpoint=="history":
+                  print("ALERT_HISTORY",json.dumps({k:row.get(k) for k in ("sent","alert_type","name","description","mechanism_type","policy_id")},ensure_ascii=False))
+                else:
+                  print("ALERT_POLICY",json.dumps({k:row.get(k) for k in ("alert_type","name","created","modified","enabled","alert_interval")},ensure_ascii=False))
+            except urllib.error.HTTPError as e:
+              print("ALERT_API_HTTP",endpoint,e.code,e.read().decode(errors="replace")[:350])
+            except Exception as e: print("ALERT_API_FAILED",endpoint,str(e)[:350])
+          PY
+      - name: Read narrow production bet and selection facts without writes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import datetime,json,os,urllib.request,collections
+          account="3c6d1826b573b2e68cb13ec37e9e8ade"; dbid="949b5e8b-d1a4-4c4e-80d1-d031afdc03de"
+          url=f"https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{dbid}/query"
+          dates=["2026-09-20","2026-09-27","2026-10-04","2026-10-11","2026-10-12","2026-10-17","2026-10-18"]
+          ins=",".join("'"+d+"'" for d in dates)
+          def query(sql):
+            req=urllib.request.Request(url,data=json.dumps({"sql":sql}).encode(),method="POST",headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"],"Content-Type":"application/json"})
+            with urllib.request.urlopen(req,timeout=35) as r:data=json.load(r)
+            if not data.get("success"):raise RuntimeError(str(data.get("errors"))[:400])
+            rows=[]
+            for item in data.get("result") or []: rows+=item.get("results") or []
+            return rows
+          selects=query("SELECT state_key AS stateKey,state_value AS stateValue FROM rt_system_state WHERE state_key IN ("+",".join("'final_daily_selection:"+d+"'" for d in dates)+")")
+          bets=query(f"""SELECT r.race_date AS raceDate,r.race_id AS raceId,r.start_time_utc AS startUtc,r.status AS raceStatus,
+                          b.course AS course,b.bet_type AS betType,b.locked_at AS lockedAt,b.settlement_status AS settlementStatus,b.source_prediction_id AS source
+                          FROM rt_races r LEFT JOIN rt_public_bets b ON b.race_id=r.race_id AND b.source_prediction_id=-2
+                          WHERE r.race_date IN ({ins}) ORDER BY r.race_date,r.race_id,b.course,b.id""")
+          sel={}
+          for v in selects:
+            date=v["stateKey"].split(":")[-1]
+            try:sel[date]={str(z.get("raceId")) for z in (json.loads(v["stateValue"]).get("selected") or [])}
+            except:sel[date]=set()
+          items=collections.defaultdict(list)
+          for b in bets:items[(b["raceDate"],b["raceId"])].append(b)
+          def dt(x):
+            if not x:return None
+            raw=str(x).strip().replace(" ","T")
+            if raw.endswith("Z"):raw=raw[:-1]+"+00:00"
+            if "+" not in raw[10:] and "-" not in raw[10:]:raw+="+00:00"
+            try:return datetime.datetime.fromisoformat(raw)
+            except:return None
+          for d in dates:
+            targets=sel.get(d,set()); missing=[]; late=[]; complete=0; settled=0; race_counts=collections.Counter()
+            for raceId in sorted(targets):
+              rr=items.get((d,raceId),[])
+              rr=[r for r in rr if r.get("course")=="ライト"]
+              race_counts[raceId.split("-")[3] if len(raceId.split("-"))>3 else "?"]+=1
+              good=len(rr)==2 and len({r.get("betType") for r in rr})==2
+              if not good:missing.append({"race":raceId,"betRows":len(rr),"types":[r.get("betType") for r in rr]});continue
+              complete+=1
+              if all(r.get("settlementStatus")=="settled" for r in rr):settled+=1
+              start=dt(rr[0].get("startUtc"))
+              locks=[dt(r.get("lockedAt")) for r in rr]
+              if start and any(x is None or (start-x).total_seconds()<15*60 for x in locks):late.append(raceId)
+            print("PREDICTION_AUDIT",json.dumps({"date":d,"selected":len(targets),"lockedTwoType":complete,"settled":settled,"missing":missing,"late":late,"raceRows":len([x for x in items if x[0]==d])},ensure_ascii=False))
+          PY
