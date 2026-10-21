@@ -24,6 +24,7 @@ const META = path.resolve(arg("--meta", `analysis-results/research-history-${STA
 const LIMIT = Number(arg("--limit", "0"));
 const CONCURRENCY = Math.max(1, Math.min(8, Number(arg("--concurrency", "4"))));
 const MAX_ATTEMPTS = 4;
+const DISCOVERY_ATTEMPTS = Math.max(2, Math.min(6, Number(arg("--discovery-attempts", "3"))));
 
 function parseYm(value) {
   if (!/^\d{6}$/.test(value)) throw new Error(`INVALID_MONTH:${value}`);
@@ -52,6 +53,26 @@ async function retry(fn) {
     }
   }
   throw last;
+}
+
+async function discoverMonth(month) {
+  const all = new Set();
+  const attemptCounts = [];
+  let stable = 0;
+  let previous = -1;
+  for (let attempt = 1; attempt <= DISCOVERY_ATTEMPTS; attempt += 1) {
+    const urls = await getArchiveResultUrls(month);
+    for (const url of urls) all.add(url);
+    attemptCounts.push({ attempt, returned: urls.length, union: all.size });
+    console.log(JSON.stringify({ month, discoveryAttempt: attempt, returned: urls.length, union: all.size }));
+    if (all.size === previous) stable += 1;
+    else stable = 0;
+    previous = all.size;
+    if (stable >= 1 && attempt >= 2) break;
+    if (attempt < DISCOVERY_ATTEMPTS) await new Promise((r) => setTimeout(r, 700 * attempt));
+  }
+  if (all.size === 0) throw new Error(`ARCHIVE_MONTH_EMPTY:${month}`);
+  return { month, urls: [...all], attemptCounts };
 }
 
 async function mapConcurrent(values, concurrency, mapper) {
@@ -99,9 +120,9 @@ async function main() {
   const months = monthsBetween(START_MONTH, END_MONTH);
   const monthRows = [];
   for (const month of months) {
-    const urls = await getArchiveResultUrls(month);
-    monthRows.push({ month, count: urls.length, urls });
-    console.log(JSON.stringify({ month, discovered: urls.length }));
+    const discovered = await discoverMonth(month);
+    monthRows.push(discovered);
+    console.log(JSON.stringify({ month, discovered: discovered.urls.length, attempts: discovered.attemptCounts.length }));
   }
   let urls = [...new Set(monthRows.flatMap((x) => x.urls))];
   if (LIMIT > 0) urls = urls.slice(0, LIMIT);
@@ -109,7 +130,7 @@ async function main() {
   const bundles = await mapConcurrent(urls, CONCURRENCY, async (url, i) => {
     try {
       const bundle = await fetchBundle(url);
-      if ((i + 1) % 20 === 0 || i + 1 === urls.length) console.log(JSON.stringify({ fetched: i + 1, total: urls.length }));
+      if ((i + 1) % 50 === 0 || i + 1 === urls.length) console.log(JSON.stringify({ fetched: i + 1, total: urls.length }));
       return bundle;
     } catch (error) {
       failures.push({ url, error: error instanceof Error ? `${error.name}:${error.message}` : String(error) });
@@ -126,11 +147,12 @@ async function main() {
   const meta = {
     scope: { startMonth: START_MONTH, endMonth: END_MONTH, months },
     purpose: "research_only_no_production_write",
-    discovered: monthRows.map(({ month, count }) => ({ month, count })),
+    discovered: monthRows.map(({ month, urls, attemptCounts }) => ({ month, count: urls.length, attemptCounts })),
     requestedUrls: urls.length,
     completed: ok.length,
     failures,
     concurrency: CONCURRENCY,
+    discoveryAttempts: DISCOVERY_ATTEMPTS,
     syntheticOddsUsed: false,
     productionDatabaseWritten: false
   };
