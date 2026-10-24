@@ -1,0 +1,44 @@
+name: Validate isolated ad-hoc implementation
+on:
+  push:
+    branches: ["feature/adhoc-race-request-20261024"]
+    paths: [".github/workflows/adhoc-validation.yml"]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck without changing canonical behavior
+        run: npm run typecheck
+      - name: Run regression suite
+        run: npm run build:test && npm run test:unit
+      - name: Bundle public Worker without deployment
+        run: |
+          npm run build
+          node --check scripts/adhoc-race-runner.mjs
+      - name: Validate client JS parses and important safety invariants
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync } from "node:fs";
+          import assert from "node:assert/strict";
+          const page=readFileSync("src/adhoc/page.ts","utf8");
+          const code=page.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+          assert(code,"Browser code must exist");
+          new Function(code);
+          const ctrl=readFileSync("src/adhoc/controller.ts","utf8");
+          assert(ctrl.includes("REQUEST_LEAD_MS = 75 * 60_000"));
+          assert(ctrl.includes("FINAL_LEAD_MS = 15 * 60_000"));
+          assert(ctrl.includes("routeAdhoc"));
+          const runner=readFileSync("scripts/adhoc-race-runner.mjs","utf8");
+          for(const v of ["MAX_JOB_ROWS","MAX_BEFORE_ROWS","checkAccountBudget","assertBefore","chooseCompletedTwoTickets","completedRecencyBetFactor"])assert(runner.includes(v),v);
+          assert(!runner.includes("INSERT INTO rt_public_bets"));
+          console.log("ADHOC_STATIC_SAFETY_VALIDATION_PASSED");
+          JS

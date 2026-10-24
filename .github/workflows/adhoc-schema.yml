@@ -1,0 +1,45 @@
+name: Install isolated ad-hoc request table
+on:
+  push:
+    branches: ["main", "feature/adhoc-race-request-20261024"]
+    paths: [".github/workflows/adhoc-schema.yml", "migrations/20261024_adhoc_requests.sql"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: adhoc-schema-install
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: CREATE only isolated table, index and trigger
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import os,urllib.request,json,urllib.error
+          acc="3c6d1826b573b2e68cb13ec37e9e8ade"
+          db="949b5e8b-d1a4-4c4e-80d1-d031afdc03de"
+          endpoint=f"https://api.cloudflare.com/client/v4/accounts/{acc}/d1/database/{db}/query"
+          statements=open("migrations/20261024_adhoc_requests.sql",encoding="utf8").read()
+          # Fixed source-controlled statements. Comments discarded. Trigger's
+          # last internal semicolon is preserved.
+          pieces=[statements[statements.index("CREATE TABLE"):statements.index("CREATE INDEX")].strip(),
+                  statements[statements.index("CREATE INDEX"):statements.index("CREATE TRIGGER")].strip(),
+                  statements[statements.index("CREATE TRIGGER"):].strip()]
+          for part in pieces:
+            sql="\n".join(line for line in part.splitlines() if not line.strip().startswith("--")).strip()
+            req=urllib.request.Request(endpoint,data=json.dumps({"sql":sql}).encode(),headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"],"Content-Type":"application/json"},method="POST")
+            with urllib.request.urlopen(req,timeout=35) as f:
+              payload=json.load(f)
+            if not payload.get("success"):raise RuntimeError(str(payload.get("errors"))[:400])
+            print("ADHOC_SCHEMA_OK",sql.split("(")[0][:95])
+          # A single low-cost smoke query to verify table access and schema.
+          req=urllib.request.Request(endpoint,data=json.dumps({"sql":"SELECT count(*) AS n FROM rt_adhoc_requests"}).encode(),headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"],"Content-Type":"application/json"},method="POST")
+          with urllib.request.urlopen(req,timeout=30) as f:data=json.load(f)
+          assert data.get("success"),data.get("errors")
+          print("ADHOC_SCHEMA_READY",data["result"][0]["results"])
+          PY

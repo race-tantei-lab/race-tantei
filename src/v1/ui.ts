@@ -10,7 +10,7 @@ a{color:inherit;text-decoration:none}.wrap{max-width:980px;margin:auto;padding:1
 `;
 
 function layout(title: string, body: string): string {
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0f14"><title>${escapeHtml(title)}｜レース探偵</title><style>${CSS}</style></head><body><main class="wrap"><div class="top"><a class="brand" href="/"><span>レース</span>探偵</a><nav><a href="/">予想</a><a href="/performance">成績</a><a href="/methodology">予想方法</a><a href="/system">稼働状況</a></nav></div>${body}<footer class="footer">本サイトは独自の統計モデルによる非公式の予想記録サイトで、JRAおよび関係団体とは関係ありません。的中や利益を保証しません。表示する収支は発走前にロックされたモデル買い目を購入したと仮定した成績です。馬券は20歳になってから、無理のない範囲でお楽しみください。</footer></main></body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b0f14"><title>${escapeHtml(title)}｜レース探偵</title><style>${CSS}</style></head><body><main class="wrap"><div class="top"><a class="brand" href="/"><span>レース</span>探偵</a><nav><a href="/">予想</a><a href="/performance">成績</a><a href="/adhoc">指定予想</a><a href="/methodology">予想方法</a><a href="/system">稼働状況</a></nav></div>${body}<footer class="footer">本サイトは独自の統計モデルによる非公式の予想記録サイトで、JRAおよび関係団体とは関係ありません。的中や利益を保証しません。表示する収支は発走前にロックされたモデル買い目を購入したと仮定した成績です。馬券は20歳になってから、無理のない範囲でお楽しみください。</footer></main></body></html>`;
 }
 
 function pct(value: number | null, digits = 1): string {
