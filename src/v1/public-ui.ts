@@ -33,7 +33,7 @@ export function redirect(path: string): Response {
 }
 
 export function shell(title: string, body: string, script = ""): string {
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#07111b"><title>${escapeHtml(title)}｜レース探偵</title><style>${STYLE}</style></head><body><main class="wrap"><header class="top"><a class="brand" href="/">レース探偵</a><nav class="nav"><a href="/">レース</a><a href="/conditions">条件詳細</a><a href="/guide">見方</a></nav></header>${body}</main>${script ? `<script>${script}</script>` : ""}</body></html>`;
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#07111b"><title>${escapeHtml(title)}｜レース探偵</title><style>${STYLE}</style></head><body><main class="wrap"><header class="top"><a class="brand" href="/">レース探偵</a><nav class="nav"><a href="/">レース</a><a href="/conditions">条件詳細</a><a href="/adhoc">指定予想</a><a href="/guide">見方</a></nav></header>${body}</main>${script ? `<script>${script}</script>` : ""}</body></html>`;
 }
 
 export function conditionsPage(): string {
