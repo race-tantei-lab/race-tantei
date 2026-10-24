@@ -148,6 +148,13 @@ async function predict(raceId,startUtc){
   await checkNotSelected(raceId,race.raceDate);
   const startPrediction=new Date(); // Exact as-of cutoff: no future results.
   const bodyApplied=await officialInputs(race,runners,cutoffMs);
+  if(!bodyApplied)throw Error("JRA_OFFICIAL_BODYWEIGHT_NOT_AVAILABLE");
+  // Do not load a 3MB model or scan history until all six JRA odds types exist.
+  // Next cron retries as an independent read-only attempt when data appears.
+  const fetched=await fetchFastJraOfficialOddsForRace(race.entryUrl,{raceDate:race.raceDate,venue:race.venue,raceNo:race.raceNo});
+  if(!["jra-fast-official","jra-crawl-official"].includes(fetched.source))throw Error("JRA_OFFICIAL_ODDS_SOURCE_NOT_AVAILABLE");
+  const kinds=new Set(fetched.rows.map(x=>x.betType));
+  if(["単勝","ワイド","馬連","馬単","3連複","3連単"].some(k=>!kinds.has(k)))throw Error("JRA_OFFICIAL_ODDS_NOT_ALL_PUBLISHED");
   const model=await modelRuntime();
   const state=await loadCompletedFeatureStateForRace(database(),race,runners,startPrediction.toISOString());
   const vectors=runners.map(r=>completedFeatureVector(state,race,r,runners.length));
@@ -156,8 +163,6 @@ async function predict(raceId,startUtc){
   const learning=await loadCompletedRecencyLearning(database(),race,runners,startPrediction.toISOString());
   const weights=normalizeCompletedWeights(base.map((w,i)=>w*learning.runnerFactors[i]));
   assertBefore(cutoffMs);
-  const fetched=await fetchFastJraOfficialOddsForRace(race.entryUrl,{raceDate:race.raceDate,venue:race.venue,raceNo:race.raceNo});
-  if(!["jra-fast-official","jra-crawl-official"].includes(fetched.source))throw Error("UNVERIFIED_ODDS_SOURCE");
   const tickets=chooseCompletedTwoTickets(runners.map(r=>Number(r.horseNo)),weights,fetched.rows,(type,odds)=>completedRecencyBetFactor(learning,type,race.venue,odds));
   if(tickets.length!==2||tickets[0].betType===tickets[1].betType)throw Error("TWO_DIFFERENT_TYPES_REQUIRED");
   // An incomplete or late result is never published, even if computation succeeded.
@@ -174,7 +179,7 @@ async function predict(raceId,startUtc){
 }
 async function main(){
   // We do not charge a model load on empty schedule ticks.
-  const requests=await sql("SELECT race_id AS raceId,start_time_utc AS startTimeUtc,race_date AS raceDate FROM rt_adhoc_requests WHERE status='queued' ORDER BY requested_at,race_id LIMIT 1");
+  const requests=await sql("SELECT race_id AS raceId,start_time_utc AS startTimeUtc,race_date AS raceDate,attempts FROM rt_adhoc_requests WHERE status='queued' AND unixepoch('now')>=unixepoch(start_time_utc)-3300 AND unixepoch('now')<unixepoch(start_time_utc)-900 ORDER BY start_time_utc,requested_at,race_id LIMIT 1");
   if(!requests.length){console.log("ADHOC_QUEUE_EMPTY");return;}
   const task=requests[0];
   if(!await claim(task.raceId)){console.log("ADHOC_QUEUE_CLAIM_SKIPPED");return;}
@@ -189,8 +194,16 @@ async function main(){
   }catch(err){
     const reason=String(err?.message||err).slice(0,165);
     console.error("ADHOC_PREDICTION_FAILED",JSON.stringify({raceId:task.raceId,reason,rowsRead}));
-    try {await setError(task.raceId,reason,Date.now()>=hardDeadline(task.startTimeUtc));}
-    catch(e){console.error("ADHOC_ERROR_STATE_FAILED",String(e).slice(0,150));}
+    const expired=Date.now()>=hardDeadline(task.startTimeUtc);
+    const recoverable=/(?:JRA_|BODYWEIGHT|OFFICIAL_ODDS|OFFICIAL_ENTRY_PAGE|ODDS_MISSING|fetch failed|network|HTTP 5\\d\\d)/i.test(reason);
+    try {
+      if(!expired && recoverable && Number(task.attempts)<7) {
+        await updateOnlyAdhoc("UPDATE rt_adhoc_requests SET status='queued',message=? WHERE race_id=? AND status='running' AND unixepoch('now')<unixepoch(start_time_utc)-900",[reason.slice(0,120),task.raceId]);
+        console.log("ADHOC_RETRY_QUEUED",JSON.stringify({raceId:task.raceId,reason,attempts:Number(task.attempts)+1}));
+      } else {
+        await setError(task.raceId,reason,expired);
+      }
+    } catch(e){console.error("ADHOC_ERROR_STATE_FAILED",String(e).slice(0,150));}
     // Do not fail scheduled GitHub runs for a user-level quota/deadline rejection.
     process.exitCode=1;
   }
