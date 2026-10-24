@@ -35,6 +35,11 @@ jobs:
           const race=(await sql("SELECT race_id AS raceId,race_date AS raceDate,venue,meeting_no AS meetingNo,meeting_day AS meetingDay,race_no AS raceNo,race_name AS raceName,conditions,surface,distance_m AS distanceM,direction,start_time_jst AS startTimeJst,start_time_utc AS startTimeUtc,weather,track_condition AS trackCondition,entry_url AS entryUrl,result_url AS resultUrl,status FROM rt_races WHERE race_id=?",[rid]))[0];
           const runners=await sql("SELECT horse_no AS horseNo,frame_no AS frameNo,horse_name AS horseName,sex_age AS sexAge,coat_color AS coatColor,horse_weight AS horseWeight,weight_change AS weightChange,jockey,assigned_weight AS assignedWeight,trainer,stable,win_odds AS winOdds,popularity,runner_status AS runnerStatus FROM rt_runners WHERE race_id=? ORDER BY horse_no",[rid]);
           if(!race||runners.length!==13)throw Error("INCOMPLETE_RACE");
+// Before-post official JRA entry data: rain, yielding turf, all 13 declared weights.
+race.weather="雨";race.trackCondition="稍重";race.direction="左";
+const bodyweights=[[462,2],[430,-6],[460,10],[464,-4],[502,8],[434,4],[476,2],[450,2],[470,6],[472,6],[476,-4],[454,6],[460,8]];
+for(const r of runners){const a=bodyweights[r.horseNo-1];r.horseWeight=a[0];r.weightChange=a[1];}
+console.log("JRA_OFFICIAL_CONDITIONS",JSON.stringify({weather:race.weather,track:race.trackCondition,weights:runners.map(x=>[x.horseNo,x.horseWeight,x.weightChange])}));
           console.log("ADHOC_INPUT",JSON.stringify({race,runnerCount:runners.length,createdAt:new Date().toISOString()}));
           const meta=new Map((await sql("SELECT key,value FROM rt_ml_model_meta")).map(x=>[x.key,x.value]));
           if(meta.get("ready")!=="1"||meta.get("sourceSha256")!=="63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5")throw Error("MODEL_MISMATCH");
