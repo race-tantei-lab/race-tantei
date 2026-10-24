@@ -1,8 +1,5 @@
 name: Install isolated ad-hoc request table
 on:
-  push:
-    branches: ["main", "feature/adhoc-race-request-20261024"]
-    paths: [".github/workflows/adhoc-schema.yml", "migrations/20261024_adhoc_requests.sql"]
   workflow_dispatch:
 permissions:
   contents: read
