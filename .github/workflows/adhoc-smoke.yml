@@ -1,0 +1,53 @@
+name: Smoke isolated requested-race endpoint
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/adhoc-smoke.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify deployed page, API, invalid requests and isolation
+        run: |
+          python3 - <<'PY'
+          import urllib.request, urllib.error, json
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          def fetch(path,method="GET",body=None,headers=None):
+            req=urllib.request.Request(base+path,method=method,data=(json.dumps(body).encode() if body is not None else None),
+              headers={"User-Agent":"race-tantei-ad-hoc-smoke/1",**(headers or {})})
+            try:
+              with urllib.request.urlopen(req,timeout=18) as f: return f.status,f.headers, f.read().decode()
+            except urllib.error.HTTPError as e: return e.code,e.headers,e.read().decode()
+          code,headers,html=fetch("/adhoc")
+          assert code==200,(code,html[:300])
+          assert "指定レース予想" in html and "このレースを予想する" in html
+          assert "noindex" in str(headers.get("x-robots-tag",""))
+          print("ADHOC_PAGE_OK",code,len(html))
+          code,_,text=fetch("/api/adhoc/races")
+          j=json.loads(text)
+          assert code==200 and j.get("ok") is True and isinstance(j.get("races"),list),(code,text[:400])
+          assert all("raceId" in r and "accepting" in r for r in j["races"])
+          print("ADHOC_RACE_LIST_OK",len(j["races"]),sum(bool(x["accepting"]) for x in j["races"]))
+          code,_,text=fetch("/api/adhoc/status?raceId=2026-10-24-tokyo-11")
+          j=json.loads(text);assert code==200 and j.get("ok") is True,(code,text[:400])
+          assert j["status"] in ["none","queued","running","ready","failed","expired"],j
+          print("ADHOC_STATUS_OK",j["status"])
+          code,_,text=fetch("/api/adhoc/status?raceId=../../")
+          assert code==400,(code,text[:350])
+          print("ADHOC_ID_VALIDATION_OK",code)
+          code,_,text=fetch("/api/adhoc/request",method="POST",body={"raceId":"2026-10-24-tokyo-11"},headers={"Content-Type":"application/json"})
+          assert code==403,(code,text[:350])
+          print("ADHOC_CSRF_REJECTION_OK",code)
+          code,_,text=fetch("/api/adhoc/request",method="POST",body={"raceId":"2026-10-24-tokyo-11"},
+            headers={"Content-Type":"application/json","Origin":base})
+          assert code in (422,409),(code,text[:350])
+          print("ADHOC_POST_START_REJECTION_OK",code)
+          code,_,html=fetch("/")
+          assert code==200,(code,html[:200])
+          print("CANONICAL_HOME_INTACT",code)
+          print("ADHOC_SMOKE_ALL_PASSED")
+          PY
