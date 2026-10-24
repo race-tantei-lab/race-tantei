@@ -3,7 +3,7 @@
  * This HTML is static; dynamic user content always goes through textContent.
  */
 export function adhocPage(): Response {
-  const html = String.raw\`<!doctype html>
+  const html = String.raw`<!doctype html>
 <html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#07131d"><title>指定レース予想｜レース探偵</title>
 <style>
@@ -95,7 +95,7 @@ table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}th,td{p
  });
  fetch("/api/adhoc/races",{cache:"no-store"}).then(x=>{if(!x.ok)throw Error("API");return x.json()}).then(j=>{races=j.races||[];dates()}).catch(()=>{err("出走表を取得できません。少し経ってから再読み込みしてください。");$("date").replaceChildren()});
 })();
-</script></body></html>\`;
+</script></body></html>`;
   return new Response(html, {
     headers: {
       "content-type": "text/html; charset=utf-8",
