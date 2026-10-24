@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: CREATE only isolated table, index and trigger
         env:
-          CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           python3 - <<'PY'
           import os,urllib.request,json,urllib.error
