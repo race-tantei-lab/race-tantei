@@ -1,0 +1,42 @@
+name: Verify visible specified-race button on homepage
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/adhoc-home-button-smoke.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Check homepage and predict-page link end-to-end without writes
+        run: |
+          python3 - <<'PY'
+          import time,urllib.request,re
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          def get(path):
+            req=urllib.request.Request(base+path,headers={"User-Agent":"race-tantei-home-cta-smoke/1","Cache-Control":"no-cache"})
+            with urllib.request.urlopen(req,timeout=18) as r:return r.status,r.headers,r.read().decode("utf-8","replace")
+          last=""
+          for n in range(18):
+            try:
+              status,headers,html=get("/?home_button_smoke="+str(n))
+              assert status==200,(status,html[:160])
+              cta=re.search(r'<a[^>]*id="adhoc-home-button"[^>]*href="/adhoc"',html)
+              assert cta, "CTA anchor is not in the actual HTML"
+              assert html.count('id="adhoc-home-button"')==1, "CTA duplicated"
+              assert '指定レースを予想する' in html,"CTA visible label missing"
+              assert headers.get("x-race-adhoc-entry")=="homepage-visible-v1","Missing runtime inject marker"
+              assert html.index('id="adhoc-home-button"') < html.index("</main>"),"CTA not in main content"
+              direct,_,page=get("/adhoc")
+              assert direct==200 and "このレースを予想する" in page,"destination not available"
+              print("HOME_ADHOC_NAVIGATION_PASS","HTTP",status,"cta_count",html.count('id="adhoc-home-button"'),"destination",direct,"html_bytes",len(html))
+              break
+            except Exception as e:
+              last=repr(e)
+              print("retry",n+1,"reason",last[:160])
+              time.sleep(10)
+          else:raise RuntimeError("HOME_ADHOC_NAVIGATION_FAILED "+last)
+          PY
