@@ -1,0 +1,52 @@
+name: Ad hoc Artemis exact core model (read-only)
+on:
+  push:
+    branches: ["diagnostics/cpu-20261020"]
+    paths: [".github/workflows/adhoc-artemis-20261024.yml"]
+permissions:
+  contents: read
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: diagnostics/cpu-20261020
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts && npm run build:test
+      - name: Exact trained model and same-day recency; D1 READ ONLY
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          import {loadCompletedFeatureStateForRace,completedFeatureVector} from "./dist-test/src/v1/completed-feature-runtime.js";
+          import {loadCompletedModelRuntime} from "./dist-test/src/v1/completed-model-runtime.js";
+          import {loadCompletedRecencyLearning,completedRecencyBetFactor} from "./dist-test/src/v1/completed-recency-learning.js";
+          import {normalizeCompletedWeights,chooseCompletedTwoTickets} from "./dist-test/src/v1/completed-ticket-runtime.js";
+          import {fetchFastJraOfficialOddsForRace} from "./dist-test/src/v1/jra-official-odds-fetch.js";
+          const account="3c6d1826b573b2e68cb13ec37e9e8ade",did="949b5e8b-d1a4-4c4e-80d1-d031afdc03de",token=process.env.CF_TOKEN;
+          async function sql(q,args=[]){let ix=0;let patched=q.replace(/\?/g,()=>{const v=args[ix++];return v===null?"NULL":typeof v==="number"?String(v):"'"+String(v).replaceAll("'","''")+"'"});const r=await fetch("https://api.cloudflare.com/client/v4/accounts/"+account+"/d1/database/"+did+"/query",{method:"POST",headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({sql:patched})});let j=await r.json();if(!j.success)throw Error("QUERY "+r.status+" "+JSON.stringify(j.errors).slice(0,300));return j.result?.[0]?.results||[];}
+          const db={prepare(q){let values=[];return{bind(...p){values=p;return this},async all(){return{results:await sql(q,values)}},async first(){return(await sql(q,values))[0]??null}}}};
+          const rid="2026-10-24-tokyo-11";
+          const race=(await sql("SELECT race_id AS raceId,race_date AS raceDate,venue,meeting_no AS meetingNo,meeting_day AS meetingDay,race_no AS raceNo,race_name AS raceName,conditions,surface,distance_m AS distanceM,direction,start_time_jst AS startTimeJst,start_time_utc AS startTimeUtc,weather,track_condition AS trackCondition,entry_url AS entryUrl,result_url AS resultUrl,status FROM rt_races WHERE race_id=?",[rid]))[0];
+          const runners=await sql("SELECT horse_no AS horseNo,frame_no AS frameNo,horse_name AS horseName,sex_age AS sexAge,coat_color AS coatColor,horse_weight AS horseWeight,weight_change AS weightChange,jockey,assigned_weight AS assignedWeight,trainer,stable,win_odds AS winOdds,popularity,runner_status AS runnerStatus FROM rt_runners WHERE race_id=? ORDER BY horse_no",[rid]);
+          if(!race||runners.length!==13)throw Error("INCOMPLETE_RACE");
+          console.log("ADHOC_INPUT",JSON.stringify({race,runnerCount:runners.length,createdAt:new Date().toISOString()}));
+          const meta=new Map((await sql("SELECT key,value FROM rt_ml_model_meta")).map(x=>[x.key,x.value]));
+          if(meta.get("ready")!=="1"||meta.get("sourceSha256")!=="63e35910123b6b187b6f29a6036e2362a6a6f1fd15e331525dd5e323ada453a5")throw Error("MODEL_MISMATCH");
+          let buffers=[];for(let i=0;i<Number(meta.get("chunkCount"));i++){let rows=await sql("SELECT data_b64 AS dataB64 FROM rt_ml_model_chunk WHERE generation=? AND seq=?",[meta.get("generation"),i]);if(rows.length!==1)throw Error("MISSING_CHUNK "+i);buffers.push(Buffer.from(rows[0].dataB64,"base64"));}
+          let bytes=Buffer.concat(buffers);let model=loadCompletedModelRuntime(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength));console.log("MODEL_LOADED",JSON.stringify({features:model.featureCount,trees:model.treeCount}));
+          const cutoff=new Date("2026-10-24T06:43:00Z").toISOString();
+          const state=await loadCompletedFeatureStateForRace(db,race,runners,cutoff);
+          const vectors=runners.map(x=>completedFeatureVector(state,race,x,runners.length));
+          const raw=vectors.map(x=>model.predict(x));
+          const learning=await loadCompletedRecencyLearning(db,race,runners,cutoff);
+          const weights=normalizeCompletedWeights(normalizeCompletedWeights(raw).map((x,i)=>x*learning.runnerFactors[i]));
+          console.log("MODEL_PROBABILITIES",JSON.stringify(runners.map((x,i)=>({no:x.horseNo,name:x.horseName,prob:weights[i],base:raw[i],factor:learning.runnerFactors[i]})).sort((a,b)=>b.prob-a.prob)));
+          try{let fetched=await fetchFastJraOfficialOddsForRace(race.entryUrl,{raceDate:race.raceDate,venue:race.venue,raceNo:race.raceNo});const bets=chooseCompletedTwoTickets(runners.map(x=>Number(x.horseNo)),weights,fetched.rows,(betType,odds)=>completedRecencyBetFactor(learning,betType,race.venue,odds));console.log("MODEL_BETS",JSON.stringify({source:fetched.source,tickets:bets}));}catch(e){console.log("ODDS_UNAVAILABLE",String(e).slice(0,1500));}
+          
+          JS
