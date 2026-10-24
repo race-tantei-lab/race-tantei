@@ -1,4 +1,5 @@
 import base from "./public-site-entry-quota-recovery-20260912.js";
+import { routeAdhoc } from "./adhoc/controller.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
 import { cumulativePerformanceResponse, refreshCumulativePerformanceIfDue } from "./v1/cumulative-performance.js";
 import type { Env } from "./v1/types.js";
@@ -374,6 +375,8 @@ function performanceResponse(today: string, summary: DayPerformance, history: Da
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const adhoc = await routeAdhoc(request, env);
+    if (adhoc) return adhoc;
     if (request.method === "GET" && url.pathname === "/api/public/cumulative-performance") {
       return cumulativePerformanceResponse(env.DB);
     }
