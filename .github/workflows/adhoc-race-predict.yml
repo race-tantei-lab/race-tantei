@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      CLOUDFLARE_API_TOKEN: \${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Lightweight peek; zero ML/D1 history reads without a queued job
@@ -58,6 +58,7 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           npm run build:test
+          npm run typecheck
           node --check scripts/adhoc-race-runner.mjs
       - name: Compute at most one queued race with quota guards
         if: steps.peek.outputs.pending == 'yes'
