@@ -18,6 +18,7 @@ ALLOW_AUTOMATIC_D1 = {
     "sync-upcoming-entries-direct.yml",  # bounded pre-race fallback; heavy sync only when entry readiness is incomplete
     "critical-auto-bet-generation.yml",  # bounded T-45..T-15 per-race recovery
     "continuous-final-rule-learning.yml",  # weekly Tuesday night only
+    "adhoc-race-predict.yml",  # isolated 3/day hard cap; checks account D1 headroom before heavy prediction
 }
 
 D1_MARKERS = (
@@ -76,6 +77,22 @@ print(json.dumps({
     "violations": violations,
     "allowlist": sorted(ALLOW_AUTOMATIC_D1),
 }, ensure_ascii=False, indent=2))
+
+# The sole newly authorized ad-hoc automatic reader must preserve a strict
+# D1 headroom check, per-job row budget and canonical-write block. Fail closed
+# if anyone removes one of these guards later.
+adhoc = ROOT / "scripts" / "adhoc-race-runner.mjs"
+adhoc_workflow = WF / "adhoc-race-predict.yml"
+if adhoc_workflow.exists() and adhoc.exists():
+    runner = adhoc.read_text(encoding="utf-8")
+    workflow = adhoc_workflow.read_text(encoding="utf-8")
+    for symbol in ("MAX_BEFORE_ROWS", "MAX_JOB_ROWS", "checkAccountBudget()", "CANONICAL_D1_WRITE_BLOCKED", "assertBefore(cutoffMs)", "claim(task.raceId)"):
+        if symbol not in runner:
+            violations.append({"workflow": adhoc_workflow.name, "guardMissing": symbol})
+    if "steps.peek.outputs.pending == 'yes'" not in workflow:
+        violations.append({"workflow": adhoc_workflow.name, "guardMissing": "queue_pending_gate"})
+else:
+    violations.append({"workflow": "adhoc-race-predict.yml", "guardMissing": "guarded_runner_or_workflow_file"})
 
 if violations:
     print("\nAUTO_D1_POLICY_VIOLATION", file=sys.stderr)
