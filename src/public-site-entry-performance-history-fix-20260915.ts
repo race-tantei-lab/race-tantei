@@ -372,6 +372,36 @@ function performanceResponse(today: string, summary: DayPerformance, history: Da
   });
 }
 
+// The public homepage is frequently served from frozen HTML snapshots. Editing
+// a renderer's navigation alone does NOT make new features discoverable. Insert
+// a fixed link at the final response boundary, independent of the home source.
+async function addRequestedRaceHomeButton(response: Response): Promise<Response> {
+  if (response.status !== 200 || !response.headers.get("content-type")?.includes("text/html")) return response;
+  const source = await response.text();
+  if (!/<main\\b/i.test(source)) {
+    return new Response(source, { status: response.status, statusText: response.statusText, headers: response.headers });
+  }
+  const navLink = '<a href="/adhoc" data-adhoc-nav="true" style="font-weight:800;color:#42dfba">指定レース予想</a>';
+  const banner = '<section id="adhoc-home-entry" aria-label="指定レース予想" style="margin:12px 0 20px;padding:17px 20px;border:1px solid #287c72;border-radius:17px;background:linear-gradient(115deg,#103b39,#102535);color:#e9f9f4;display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap">'
+    + '<div style="min-width:200px;flex:1"><strong style="font-size:17px">選定外のレースも予想できます</strong><div style="margin-top:5px;font-size:12px;color:#bddbd5;line-height:1.6">レースを指定して、レース探偵の同じモデルで予想</div></div>'
+    + '<a id="adhoc-home-button" href="/adhoc" style="display:inline-block;text-align:center;background:#42dfba;color:#05251e;border-radius:11px;padding:13px 19px;font-weight:900;font-size:14px;text-decoration:none;white-space:nowrap;box-shadow:0 3px 12px #071c1e">指定レースを予想する →</a></section>';
+  let html = source;
+  if (!/<a\\b[^>]*href=["']\\/adhoc(?:["'?#/])/i.test(html)) {
+    html = html.replace(/(<nav\\b[^>]*>)/i, '$1' + navLink);
+  }
+  if (!html.includes('id="adhoc-home-button"')) {
+    if (html.includes("</header>")) {
+      html = html.replace("</header>", "</header>" + banner);
+    } else {
+      html = html.replace(/(<main\\b[^>]*>)/i, '$1' + banner);
+    }
+  }
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  headers.set("x-race-adhoc-entry", "homepage-visible-v1");
+  return new Response(html, { status: response.status, statusText: response.statusText, headers });
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -419,7 +449,9 @@ export default {
     }
 
     if (!base.fetch) return new Response("NOT_FOUND", { status: 404 });
-    return base.fetch(request, env, ctx);
+    const response = await base.fetch(request, env, ctx);
+    if (request.method === "GET" && url.pathname === "/") return addRequestedRaceHomeButton(response);
+    return response;
   },
 
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
