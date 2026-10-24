@@ -1,0 +1,33 @@
+name: Read-only D1 rows budgets for ad hoc prediction feasibility
+on:
+  push:
+    branches: ["diagnostics/cpu-20261020"]
+    paths: [".github/workflows/measure-adhoc-budget-20261024.yml"]
+permissions: {contents: read}
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Inspect existing D1 rows read/write count by UTC day only
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request,urllib.error
+          acc="3c6d1826b573b2e68cb13ec37e9e8ade"
+          query="""query { viewer { accounts(filter:{accountTag:"%s"}) {
+          d1AnalyticsAdaptiveGroups(limit:100,filter:{date_geq:"2026-10-10",date_leq:"2026-10-24"}) {
+          dimensions {date databaseId} sum{readQueries writeQueries rowsRead rowsWritten}
+          } } } }"""%acc
+          r=urllib.request.Request("https://api.cloudflare.com/client/v4/graphql",method="POST",headers={"Authorization":"Bearer "+os.environ["CF_TOKEN"],"Content-Type":"application/json"},data=json.dumps({"query":query}).encode())
+          try:
+            with urllib.request.urlopen(r,timeout=35) as x:obj=json.load(x)
+            if obj.get("errors"):print("GRAPHQL_ERROR",json.dumps(obj["errors"])[:1000])
+            else:
+              for acct in obj.get("data",{}).get("viewer",{}).get("accounts",[]):
+                for row in acct.get("d1AnalyticsAdaptiveGroups",[]):
+                  print("D1_QUOTA",json.dumps(row,ensure_ascii=False))
+          except urllib.error.HTTPError as e:print("GRAPHQL_HTTP",e.code,e.read().decode(errors="replace")[:1000])
+          PY
