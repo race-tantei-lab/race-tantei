@@ -1,0 +1,37 @@
+name: Diagnose on-demand queue 2026-10-25
+on:
+  push:
+    branches: ["diagnostics/adhoc-queue-20261025"]
+    paths: [".github/workflows/diagnose-adhoc-queue-20261025.yml"]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Read-only D1 request queue
+        run: |
+          python3 - <<'PY'
+          import os,urllib.request,json,datetime,urllib.error
+          acc="3c6d1826b573b2e68cb13ec37e9e8ade";db="949b5e8b-d1a4-4c4e-80d1-d031afdc03de"
+          url=f"https://api.cloudflare.com/client/v4/accounts/{acc}/d1/database/{db}/query"
+          def query(q):
+            req=urllib.request.Request(url,data=json.dumps({"sql":q}).encode(),headers={"Authorization":"Bearer "+os.environ["CF_TOKEN"],"Content-Type":"application/json"},method="POST")
+            try:
+              with urllib.request.urlopen(req,timeout=25) as f:j=json.load(f)
+              if not j.get("success"):print("QUEUE_ERROR",j.get("errors"));return []
+              return j["result"][0]["results"]
+            except urllib.error.HTTPError as e: print("QUEUE_HTTP",e.code,e.read().decode()[:500]);return []
+          now=datetime.datetime.now(datetime.timezone.utc)
+          print("NOW_UTC",now.isoformat())
+          rows=query("SELECT r.race_id AS raceId,r.race_date AS date,r.status,r.requested_at AS requested,r.claimed_at AS claimed,r.completed_at AS completed,r.attempts,r.message,r.start_time_utc AS startUtc,CASE WHEN r.result_json IS NULL THEN 0 ELSE 1 END AS hasResult FROM rt_adhoc_requests r ORDER BY r.requested_at DESC LIMIT 20")
+          for row in rows:
+            start=datetime.datetime.fromisoformat(row["startUtc"].replace("Z","+00:00"))
+            row["startJST"]=start.astimezone(datetime.timezone(datetime.timedelta(hours=9))).strftime("%H:%M")
+            row["untilStartMin"]=round((start-now).total_seconds()/60,1)
+            print("QUEUE_ROW",json.dumps(row,ensure_ascii=False))
+          print("COUNT",len(rows))
+          PY
