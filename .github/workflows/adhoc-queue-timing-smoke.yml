@@ -1,0 +1,29 @@
+name: Verify ad-hoc queued-start display on public site
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/adhoc-queue-timing-smoke.yml"]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Confirm 55 minute prediction delay is clearly shown in production
+        run: |
+          python3 - <<'PY'
+          import urllib.request,json
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          with urllib.request.urlopen(base+"/adhoc",timeout=20) as f:
+            html=f.read().decode("utf-8")
+            print("SITE_STATUS",f.status)
+          for text in ["発走55分前","受付済み（開始待ち）","計算開始予定時刻になりましたが","公開期限は","Github"]:
+            if text=="Github":continue
+            assert text in html,"Missing timeline label: "+text
+          with urllib.request.urlopen(base+"/api/adhoc/status?raceId=2026-10-25-kyoto-11",timeout=20) as f:
+            status=json.load(f)
+          assert status["ok"] and status["raceId"]=="2026-10-25-kyoto-11",status
+          print("LIVE_QUEUE",json.dumps({"raceId":status["raceId"],"status":status["status"]},ensure_ascii=False))
+          print("TIMING_UI_PRODUCTION_SMOKE_OK")
+          PY
