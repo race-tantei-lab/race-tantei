@@ -28,7 +28,7 @@ table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}th,td{p
 <label for="date">開催日</label><select id="date" aria-label="開催日"><option value="">取得中…</option></select>
 <label for="race">レース</label><select id="race" aria-label="レース"><option value="">開催日を選んでください</option></select>
 <button id="request" disabled>このレースを予想する</button><div id="error" role="alert"></div>
-<div class="info">発走75分前まで受付（予定数に達すると終了）。計算はGitHub Actionsで実行するため、結果反映まで時間がかかる場合があります。発走15分前までに完了できなければ未成立として扱います。</div>
+<div class="info">発走75分前まで受付（予定数に達すると終了）。<strong>予想計算は原則として発走55分前から始まります。</strong> GitHub Actionsの実行に遅延があるため、開始時刻・完成は保証できません。発走15分前までに完了できなければ未成立として扱います。</div>
 <div class="note">無料枠を保護するため、1開催日あたり最大3レース。処理余力が足りない場合は自動で停止します。同一レースの再依頼は新規計算せず結果を共有します。</div>
 </div><div class="panel" aria-live="polite"><h2>予想ステータス</h2><div class="state"><span class="dot" aria-hidden="true"></span><span id="state">待機中</span></div><p id="statusText">レースを選択すると、予想の有無を確認できます。</p>
 <div id="prediction" class="prediction"><div class="top"><small>モデル内の最上位馬</small><strong id="bestHorse"></strong><span id="bestProb"></span></div><div class="bets" id="bets"></div><h3>モデル確率ランキング</h3><table><thead><tr><th>順位</th><th>馬番 / 馬名</th><th>勝利確率</th></tr></thead><tbody id="ranking"></tbody></table><div class="note" id="provenance"></div></div>
@@ -56,6 +56,15 @@ table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}th,td{p
   sorted.forEach((r,i)=>{const tr=document.createElement("tr");cell(tr,i+1);cell(tr,r.horseNo+" "+r.horseName);cell(tr,fmt(r.winProbability));$("ranking").append(tr)});
   $("provenance").textContent="生成 "+p.generatedAtJst+" / 56特徴量・学習済み500本の決定木 / 直近30日の学習補正 / JRA公式オッズ / 馬体重 "+(p.officialBodyWeightApplied?"反映済み":"発表前または未取得");
  }
+ function predictionWindow(){
+  const row=races.find(x=>x.raceId===requestRace);
+  if(!row)return null;
+  const start=new Date(row.startTimeUtc).getTime();
+  if(!Number.isFinite(start))return null;
+  const hhmm=timestamp=>new Date(timestamp).toLocaleTimeString("ja-JP",{timeZone:"Asia/Tokyo",hour:"2-digit",minute:"2-digit",hour12:false});
+  return {readyFrom:start-55*60000,deadline:start-15*60000,start:start,
+    fromLabel:hhmm(start-55*60000),deadlineLabel:hhmm(start-15*60000),startLabel:hhmm(start)};
+ }
  function formatRow(x){return x.venue+" "+String(x.raceNo).padStart(2,"0")+"R　"+x.raceName+"　"+x.startTimeJst}
  function selectRace(){
   clearInterval(poll);poll=null;requestRace=$("race").value;$("prediction").classList.remove("visible");err("");
@@ -68,7 +77,13 @@ table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px}th,td{p
   if(!requestRace)return;
   try{const r=await fetch("/api/adhoc/status?raceId="+encodeURIComponent(requestRace),{cache:"no-store"});const j=await r.json();if(requestRace!==j.raceId)return;
    if(j.status==="ready"){show("予想完成","このレースの予想が完成しました。");render(j);clearInterval(poll);poll=null}
-   else if(j.status==="queued"||j.status==="running"){show(j.status==="queued"?"受付済み":"計算中","無料枠を確認しながら予想しています。発走前に完了しない場合は公開されません。")}
+   else if(j.status==="queued"||j.status==="running"){
+    const w=predictionWindow();
+    if(j.status==="running"){show("計算中",w?"計算を実行中です。予想の公開期限は"+w.deadlineLabel+"です。":"計算を実行中です。")}
+    else if(w&&Date.now()<w.readyFrom){show("受付済み（開始待ち）","発走"+w.startLabel+"のレースです。予想の計算は"+w.fromLabel+"以降に開始予定、公開期限は"+w.deadlineLabel+"です。今はまだ計算を開始していません。")}
+    else if(w){show("受付済み（実行待ち）","計算開始予定時刻になりましたが、GitHubの自動実行待ちです。定期実行は遅れる場合があります。公開期限は"+w.deadlineLabel+"です。")}
+    else {show("受付済み（開始待ち）","計算開始時刻を確認しています。発走15分前までに予想が成立しなければ非公開になります。")}
+   }
    else if(j.status==="failed"||j.status==="expired"){show("予想未成立",j.message||"締切または無料枠の制約により、予想を公開できませんでした。");clearInterval(poll);poll=null}
    else show("未依頼","レースを指定して予想を依頼できます。");
   }catch(e){show("取得失敗","通信が不安定です。自動的に再確認します。")}
