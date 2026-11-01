@@ -1,5 +1,6 @@
 name: Verify Nov 1 post-fix official previews (read-only)
 # subsequent heartbeat after successful Tokyo 1R official T-15 lock
+# Verify next canonical race preview under real T15 timeline
 on:
   push:
     branches: ["diagnostics/d1-near-cap-20261101"]
