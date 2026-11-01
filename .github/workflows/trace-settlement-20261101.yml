@@ -26,6 +26,8 @@ jobs:
           print("OBS_TIME",datetime.datetime.now(datetime.timezone.utc).isoformat())
           patterns=q("SELECT race_date AS date,COUNT(*) AS races,SUM(CASE WHEN entry_url LIKE '%CNAME=sw%' THEN 1 ELSE 0 END) AS mobile,SUM(CASE WHEN entry_url LIKE '%CNAME=pw%' THEN 1 ELSE 0 END) AS desktop FROM rt_races WHERE race_date IN ('2026-10-25','2026-10-31','2026-11-01') GROUP BY race_date")
           print("JRA_SOURCE_SHIFT",json.dumps(patterns,ensure_ascii=False))
+          overview=q("SELECT r.race_id AS id,r.start_time_utc AS startUtc,r.status AS status,COUNT(b.id) AS bets,SUM(CASE WHEN b.settlement_status='settled' THEN 1 ELSE 0 END) AS settled,SUM(CASE WHEN b.settlement_status='pending' THEN 1 ELSE 0 END) AS pending FROM rt_races r LEFT JOIN rt_public_bets b ON b.race_id=r.race_id WHERE r.race_date='2026-11-01' AND r.race_id IN ('2026-11-01-kyoto-01','2026-11-01-tokyo-01','2026-11-01-tokyo-02','2026-11-01-kyoto-03','2026-11-01-tokyo-03','2026-11-01-kyoto-04','2026-11-01-tokyo-07','2026-11-01-kyoto-11','2026-11-01-tokyo-11','2026-11-01-kyoto-12') GROUP BY r.race_id ORDER BY startUtc")
+          print("TODAY_SELECTED_SETTLEMENT_OVERVIEW",json.dumps(overview,ensure_ascii=False))
           for rid in ["2026-11-01-kyoto-01","2026-11-01-tokyo-01","2026-11-01-tokyo-02","2026-11-01-kyoto-03"]:
             races=q("SELECT race_id AS id,status,result_url AS resultUrl,entry_url AS entryUrl FROM rt_races WHERE race_id=? LIMIT 1",[rid])
             bets=q("SELECT course,bet_type AS type,settlement_status AS settled,return_yen AS paid FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type",[rid])
