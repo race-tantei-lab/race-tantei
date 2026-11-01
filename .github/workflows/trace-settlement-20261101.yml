@@ -1,0 +1,33 @@
+name: Trace Nov 1 settlement status and official result links
+on:
+  push:
+    branches: ["diagnostics/d1-near-cap-20261101"]
+    paths: [".github/workflows/trace-settlement-20261101.yml"]
+permissions: { contents: read }
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Bounded read-only selected-race settlement inspection
+        run: |
+          python3 - <<'PY'
+          import urllib.request,json,os,datetime
+          url="https://api.cloudflare.com/client/v4/accounts/3c6d1826b573b2e68cb13ec37e9e8ade/d1/database/949b5e8b-d1a4-4c4e-80d1-d031afdc03de/query"
+          def q(sql,params=[]):
+            req=urllib.request.Request(url,data=json.dumps({"sql":sql,"params":params}).encode(),method="POST",headers={"Authorization":"Bearer "+os.environ["CF_TOKEN"],"Content-Type":"application/json"})
+            with urllib.request.urlopen(req,timeout=25) as f:r=json.load(f)
+            if not r.get("success"):print("SQL_ERROR",json.dumps(r.get("errors")));return []
+            t=r["result"][0];print("READ_COST",t.get("meta",{}).get("rows_read"));return t.get("results") or []
+          print("OBS_TIME",datetime.datetime.now(datetime.timezone.utc).isoformat())
+          for rid in ["2026-11-01-kyoto-01","2026-11-01-tokyo-01","2026-11-01-tokyo-02","2026-11-01-kyoto-03"]:
+            races=q("SELECT race_id AS id,status,result_url AS resultUrl,entry_url AS entryUrl,results_updated_at AS resultsUpdatedAt FROM rt_races WHERE race_id=? LIMIT 1",[rid])
+            bets=q("SELECT course,bet_type AS type,settlement_status AS settled,return_yen AS paid FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type",[rid])
+            results=q("SELECT count(*) AS cnt FROM rt_results WHERE race_id=?",[rid])
+            payouts=q("SELECT count(*) AS cnt FROM rt_payouts WHERE race_id=?",[rid])
+            print("SETTLEMENT_RACE",json.dumps({"race":races,"bets":bets,"resultRows":results,"payoutRows":payouts},ensure_ascii=False)[:6500])
+          st=q("SELECT state_key AS k,state_value AS v,updated_at AS t FROM rt_system_state WHERE state_key LIKE 'worker_result_settlement:2026-11-01%' OR state_key LIKE 'public_result_settlement:2026-11-01%' LIMIT 10")
+          for x in st:print("SETTLEMENT_AUDIT",json.dumps(x,ensure_ascii=False)[:2500])
+          PY
