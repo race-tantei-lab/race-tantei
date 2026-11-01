@@ -16,13 +16,16 @@ jobs:
           python3 - <<'PY'
           import os,json,urllib.request,urllib.error,re,html,urllib.parse
           db="https://api.cloudflare.com/client/v4/accounts/3c6d1826b573b2e68cb13ec37e9e8ade/d1/database/949b5e8b-d1a4-4c4e-80d1-d031afdc03de/query"
-          ids=["2026-11-01-kyoto-03","2026-11-01-tokyo-02"]
+          ids=["2026-11-01-kyoto-01","2026-11-01-kyoto-03","2026-11-01-tokyo-01","2026-11-01-tokyo-02"]
           for rid in ids:
             req=urllib.request.Request(db,data=json.dumps({"sql":"SELECT race_id AS id,entry_url AS url,venue,race_no AS raceNo FROM rt_races WHERE race_id=?","params":[rid]}).encode(),method="POST",headers={"Authorization":"Bearer "+os.environ["CF_TOKEN"],"Content-Type":"application/json"})
             with urllib.request.urlopen(req,timeout=15) as x:j=json.load(x)
             race=j["result"][0]["results"][0]
             print("ENTRY_ROW",json.dumps(race,ensure_ascii=False))
             urls=[race["url"]]
+            # Validate whether JRA desktop rejects a mobile-origin s-prefix CNAME.
+            if "CNAME=s" in race["url"]:
+              urls.append(race["url"].replace("CNAME=s","CNAME=p",1))
             for host in ("www.jra.go.jp","sp.jra.jp"):
               try:
                 u=urllib.parse.urlparse(race["url"])
