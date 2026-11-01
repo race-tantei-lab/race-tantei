@@ -1,0 +1,44 @@
+name: Validate real JRA mobile settlement parsing Nov1
+on:
+  push:
+    branches: ["diagnostics/d1-near-cap-20261101"]
+    paths: [".github/workflows/validate-mobile-result-20261101.yml"]
+permissions: { contents: read }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22',cache: npm}
+      - run: npm ci --ignore-scripts --no-audit --no-fund && npm run build:test
+      - name: Read JRA official result pages, validate race identity and payouts
+        run: |
+          node --input-type=module <<'JS'
+          import {fetchJraPage,extractResultLinks,parseResultPage,pageLooksLikeResult} from './dist-test/src/v1/jra.js';
+          import {parseJraPayoutsFromHtml} from './dist-test/src/v1/jra-payout-fallback.js';
+          const tests=[
+            {venue:'東京',raceNo:1,entry:'https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0105202604110120261101%2FE1',id:'2026-11-01-tokyo-01'},
+            {venue:'東京',raceNo:2,entry:'https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0105202604110220261101%2F96',id:'2026-11-01-tokyo-02'},
+            {venue:'京都',raceNo:3,entry:'https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0108202604110320261101%2F9C',id:'2026-11-01-kyoto-03'}
+          ];
+          for(const race of tests){
+            try{
+              const page=await fetchJraPage(race.entry);
+              const links=extractResultLinks(page.html,page.url).filter(x=>x.includes('20261101')&&new RegExp('(0'+race.raceNo+')20261101').test(decodeURIComponent(x)));
+              console.log('OFFICIAL_LINKS',race.id,links.slice(0,10));
+              let good=false;
+              for(const url of links.slice(0,3)){
+                try{
+                  const result=await fetchJraPage(url);
+                  const parsed=parseResultPage(result.html,result.url);
+                  const payoutRows=[...parsed.payouts,...parseJraPayoutsFromHtml(result.html)];
+                  console.log('OFFICIAL_RESULT',JSON.stringify({id:race.id,url,parsedId:parsed.race.raceId,status:pageLooksLikeResult(result.html),resultCount:parsed.results.length,payoutCount:payoutRows.length,payoutTypes:[...new Set(payoutRows.map(x=>x.betType))]}));
+                  if(parsed.race.raceId===race.id&&parsed.results.length>=3&&payoutRows.length>0){good=true;break;}
+                }catch(e){console.log('OFFICIAL_PARSE_ERROR',race.id,String(e).slice(0,350));}
+              }
+              console.log('RESULT_PARSE_SUCCESS',race.id,good);
+            }catch(e){console.log('ENTRY_FETCH_ERROR',race.id,String(e).slice(0,400));}
+          }
+          JS
