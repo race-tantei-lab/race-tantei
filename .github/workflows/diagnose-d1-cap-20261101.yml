@@ -70,7 +70,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import subprocess,json,os
-          for period in ("1d","7d"):
+          for period in ("30m","1d","7d"):
             cmd=["npx","wrangler","d1","insights","race-tantei-phase0","--time-period",period,"--sort-type","sum","--sort-by","reads","--sort-direction","DESC","--limit","35","--json"]
             try:
               p=subprocess.run(cmd,capture_output=True,text=True,timeout=105,env=os.environ)
