@@ -37,8 +37,29 @@ function decodePage(buffer: ArrayBuffer, contentType: string | null): string {
   return new TextDecoder("utf-8").decode(buffer);
 }
 
+/**
+ * Repair historical signed smartphone race URLs that were persisted on the
+ * desktop hostname. JRA uses a different CNAME checksum namespace for each
+ * domain: a sw01dde/sw01sde token is valid only on sp.jra.jp. Keep that token
+ * byte-for-byte, changing only the official source host before any fetch.
+ *
+ * This protects bodyweight refresh, official result sync and entry maintenance
+ * for old D1 rows as well as newly discovered links. It never rewrites normal
+ * desktop 'pw' URLs, third-party URLs or non-race pages.
+ */
+export function officialJraFetchUrl(rawUrl: string): string {
+  const url = validateUrl(rawUrl);
+  const cname = url.searchParams.get("CNAME") ?? "";
+  if (/^\\/JRADB\\/access[DS]\\.html$/i.test(url.pathname)
+      && /^sw01(?:dde|sde)/i.test(cname)
+      && url.hostname !== "sp.jra.jp") {
+    url.hostname = "sp.jra.jp";
+  }
+  return url.toString();
+}
+
 export async function fetchJraPage(rawUrl: string, fetchImpl: typeof fetch = fetch): Promise<FetchPageResult> {
-  const initial = validateUrl(rawUrl);
+  const initial = validateUrl(officialJraFetchUrl(rawUrl));
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
