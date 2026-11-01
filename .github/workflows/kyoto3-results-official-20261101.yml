@@ -1,0 +1,31 @@
+name: Verify Kyoto3 official same-race result publication
+on:
+  push:
+    branches: ["diagnostics/d1-near-cap-20261101"]
+    paths: [".github/workflows/kyoto3-results-official-20261101.yml"]
+permissions: {contents: read}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Check entry vs result index, exact race identity
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.parse,re,json
+          base="https://www.jra.go.jp/JRADB/accessS.html"
+          url="https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0108202604110320261101%2F9C"
+          def get(url,cname=None):
+            body=urllib.parse.urlencode({"cname":cname}).encode() if cname else None
+            req=urllib.request.Request(url,data=body,headers={"User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/136 Safari/537.36","Content-Type":"application/x-www-form-urlencoded"})
+            with urllib.request.urlopen(req,timeout=15) as x:text=x.read(700000).decode("shift_jis","replace");final=x.url
+            direct=re.findall(r'href=[\x27\x22]([^\x27\x22]*accessS\.html[^\x27\x22]*)',text,re.I)
+            actions=re.findall(r'doAction\(\s*[\x27\x22]/JRADB/accessS\.html[\x27\x22]\s*,\s*[\x27\x22]([^\x27\x22]+)',text,re.I)
+            return final,direct,actions,text
+          for tag,source,cname in [("kyoto3_entry",url,None),("kyoto_meeting",base,"pw01srl00082026041120261101/D9")]:
+            try:
+              final,hrefs,actions,text=get(source,cname)
+              matching=[x for x in hrefs+actions if "20261101" in x and re.search(r'03(?:20261101)',x)]
+              print("KYOTO_OFFICIAL_RESULT",json.dumps({"source":tag,"final":final,"pageHasCurrentResult":bool(matching),"matches":matching[:10],"allToday":len([x for x in hrefs+actions if "20261101" in x]),"title":re.findall(r'<title[^>]*>(.*?)</title>',text,re.S|re.I)[:1]},ensure_ascii=False))
+            except Exception as e:print("KYOTO_OFFICIAL_RESULT_ERROR",tag,repr(e))
+          PY
