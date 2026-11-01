@@ -28,6 +28,10 @@ jobs:
           assert missing.get("code") in ("missing","overdue"),missing
           req2=urllib.request.Request(base+"/api/public/daily-performance?date=2026-11-01",headers={"User-Agent":"race-tantei-official-settlement-smoke/1"})
           with urllib.request.urlopen(req2,timeout=18) as f:perf=json.load(f)
-          print("PUBLIC_DAILY_PERFORMANCE",json.dumps({k:perf.get(k) for k in ["date","source","courses","targetRaces","ok"]},ensure_ascii=False)[:2800])
+          summary=perf.get("summary") or {}
+          print("PUBLIC_DAILY_PERFORMANCE",json.dumps({"today":perf.get("today"),"summary":summary,"mode":perf.get("version")},ensure_ascii=False)[:3400])
+          assert summary.get("date")=="2026-11-01",summary
+          assert len(summary.get("courses") or [])==3,summary
+          assert all(int(c.get("settledRaces") or 0)>=3 for c in summary["courses"]),summary
           print("PUBLIC_SETTLEMENT_DISPLAY_VERIFIED")
           PY
