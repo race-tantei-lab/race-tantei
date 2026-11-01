@@ -59,7 +59,8 @@ function jstWeekday(now = new Date()): number {
 }
 
 function canonicalEntryUrl(cname: string): string {
-  return `https://www.jra.go.jp/JRADB/accessD.html?CNAME=${encodeURIComponent(cname)}`;
+  const host = /^sw01dde/i.test(cname) ? "sp.jra.jp" : "www.jra.go.jp";
+  return `https://${host}/JRADB/accessD.html?CNAME=${encodeURIComponent(cname)}`;
 }
 
 function cnameFromEntryUrl(entryUrl: string): string | null {
@@ -74,11 +75,11 @@ function cnameFromEntryUrl(entryUrl: string): string | null {
 
 function officialCandidateUrls(cname: string): string[] {
   const encoded = encodeURIComponent(cname);
-  return [
-    `https://www.jra.go.jp/JRADB/accessD.html?CNAME=${encoded}`,
-    `https://sp.jra.jp/JRADB/accessD.html?CNAME=${encoded}`,
-    `https://app.jra.jp/JRADB/accessD.html?CNAME=${encoded}`,
-  ];
+  const desktop = `https://www.jra.go.jp/JRADB/accessD.html?CNAME=${encoded}`;
+  const smartphone = `https://sp.jra.jp/JRADB/accessD.html?CNAME=${encoded}`;
+  return /^sw01dde/i.test(cname)
+    ? [smartphone, desktop, `https://app.jra.jp/JRADB/accessD.html?CNAME=${encoded}`]
+    : [desktop, smartphone, `https://app.jra.jp/JRADB/accessD.html?CNAME=${encoded}`];
 }
 
 function decodeOfficialPage(bytes: ArrayBuffer, contentType: string | null): string {
