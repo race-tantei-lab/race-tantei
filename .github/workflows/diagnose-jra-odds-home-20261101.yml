@@ -1,0 +1,30 @@
+name: Inspect JRA official odds homepage routes
+on:
+  push:
+    branches: ["diagnostics/d1-near-cap-20261101"]
+    paths: [".github/workflows/diagnose-jra-odds-home-20261101.yml"]
+permissions: {contents: read}
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Inspect official JRA market pages only; no D1
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.parse,re,json
+          roots=["https://www.jra.go.jp/JRADB/accessO.html","https://sp.jra.jp/JRADB/accessO.html"]
+          cnames=["pw15oli00/6D","pw151ouS308202604110320261101Z/3F"]
+          for root in roots:
+            for cname in cnames:
+              data=urllib.parse.urlencode({"cname":cname}).encode()
+              req=urllib.request.Request(root,data=data,headers={"User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/136 Safari/537.36","Content-Type":"application/x-www-form-urlencoded","Referer":root})
+              try:
+                with urllib.request.urlopen(req,timeout=10) as x:
+                  raw=x.read(1200000); url=x.url;status=x.status
+                text=raw.decode("shift_jis","replace")
+                actions=re.findall(r'doAction\(\s*[\x27\x22]([^\x27\x22]+)[\x27\x22]\s*,\s*[\x27\x22]([^\x27\x22]+)',text,re.I)
+                title=re.findall(r'<title[^>]*>(.*?)</title>',text,re.S|re.I)
+                print("ODDS_HOME",json.dumps({"root":root,"cname":cname,"url":url,"status":status,"bytes":len(raw),"title":title[:1],"actionCount":len(actions),"actions":actions[:30],"oddsCnames":[a[1] for a in actions if a[1].startswith("pw15")][:35],"hasTokyo":("東京" in text),"hasKyoto":("京都" in text)},ensure_ascii=False))
+              except Exception as e:print("ODDS_HOME_ERROR",root,cname,repr(e)[:160])
+          PY
