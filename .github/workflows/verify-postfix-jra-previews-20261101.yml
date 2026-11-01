@@ -1,0 +1,33 @@
+name: Verify Nov 1 post-fix official previews (read-only)
+on:
+  push:
+    branches: ["diagnostics/d1-near-cap-20261101"]
+    paths: [".github/workflows/verify-postfix-jra-previews-20261101.yml"]
+permissions: {contents: read}
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Inspect only chosen race preview states and driver errors
+        run: |
+          python3 - <<'PY'
+          import urllib.request,json,os,datetime
+          u="https://api.cloudflare.com/client/v4/accounts/3c6d1826b573b2e68cb13ec37e9e8ade/d1/database/949b5e8b-d1a4-4c4e-80d1-d031afdc03de/query"
+          def q(sql,p=[]):
+            req=urllib.request.Request(u,data=json.dumps({"sql":sql,"params":p}).encode(),method="POST",headers={"Authorization":"Bearer "+os.environ["CF_TOKEN"],"Content-Type":"application/json"})
+            with urllib.request.urlopen(req,timeout=20) as x:j=json.load(x)
+            if not j.get("success"):raise RuntimeError(j.get("errors"))
+            return j["result"][0]["results"]
+          print("PROOF_AT",datetime.datetime.now(datetime.timezone.utc).isoformat())
+          state=q("SELECT state_value AS value,updated_at AS at FROM rt_system_state WHERE state_key='worker_live_lock:2026-11-01'")
+          for x in state:
+            p=json.loads(x["value"]);print("LIVE_STATUS",json.dumps({k:p.get(k) for k in ["status","checkedAt","completeAfter","refreshedPreviewRaceIds","previewAvailableRaceIds","lockedByWorker","deadlineBreachRaceIds","errors"]},ensure_ascii=False)[:6000])
+          selected=["2026-11-01-kyoto-01","2026-11-01-tokyo-01","2026-11-01-tokyo-02","2026-11-01-kyoto-03","2026-11-01-tokyo-03","2026-11-01-kyoto-04","2026-11-01-tokyo-07","2026-11-01-kyoto-11","2026-11-01-tokyo-11","2026-11-01-kyoto-12"]
+          for rid in selected:
+            st=q("SELECT state_key AS k,updated_at AS at FROM rt_system_state WHERE state_key IN (?,?)",["worker_live_preview:"+rid,"worker_live_final:"+rid])
+            bet=q("SELECT course,bet_type AS type,locked_at AS locked FROM rt_public_bets WHERE race_id=?",[rid])
+            print("LIVE_RACE",json.dumps({"id":rid,"previews":st,"bets":len(bet),"locked":[x["locked"] for x in bet[:2]]},ensure_ascii=False))
+          PY
