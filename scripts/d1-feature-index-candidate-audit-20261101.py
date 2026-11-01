@@ -35,3 +35,82 @@ for race in sel:
  a=[z["raceId"] for z in o];b=[z["raceId"] for z in n]
  print("FEATURE_PARITY",json.dumps({"race":race["raceId"],"oldCount":len(a),"newCount":len(b),"same":a==b,"oldRowsRead":oread,"newRowsRead":nread,"readReductionPct":round((1-nread/max(oread,1))*100,1),"onlyOld":list(set(a)-set(b))[:5],"onlyNew":list(set(b)-set(a))[:5]},ensure_ascii=False))
  if a!=b:raise RuntimeError("RESULT_MISMATCH")
+
+
+# The 30-day recency extraction must keep its full-window partitions unchanged:
+# the candidate race set is index-driven, scoring query and final ordering are identical.
+old_recency="""WITH candidate_races AS (
+      SELECT r.race_id
+      FROM rt_races r
+      WHERE r.race_date BETWEEN ? AND ?
+        AND r.start_time_utc IS NOT NULL
+        AND datetime(r.start_time_utc) < datetime(?)
+        AND (
+          (r.venue=? AND COALESCE(r.surface,'')=?)
+          OR EXISTS (
+            SELECT 1 FROM rt_runners z WHERE z.race_id=r.race_id
+              AND COALESCE(z.runner_status,'active')='active'
+              AND (z.horse_name IN (SELECT value FROM json_each(?))
+                OR COALESCE(z.jockey,'') IN (SELECT value FROM json_each(?))
+                OR COALESCE(z.trainer,'') IN (SELECT value FROM json_each(?)))
+          )
+        )
+    ),
+    scored AS (
+      SELECT r.race_id AS raceId,r.race_date AS raceDate,r.start_time_utc AS startTimeUtc,r.venue,r.surface,
+             x.horse_no AS horseNo,x.horse_name AS horseName,x.jockey,x.trainer,
+             CAST(y.finish_position AS INTEGER) AS finishPosition,
+             CASE WHEN SUM(CASE WHEN CAST(x.win_odds AS REAL)>1.0 THEN 1 ELSE 0 END) OVER (PARTITION BY r.race_id)
+                    = COUNT(*) OVER (PARTITION BY r.race_id)
+               THEN (1.0 / CAST(x.win_odds AS REAL)) /
+                    SUM(1.0 / CAST(x.win_odds AS REAL)) OVER (PARTITION BY r.race_id)
+               ELSE 1.0 / COUNT(*) OVER (PARTITION BY r.race_id) END AS marketProbability,
+             COUNT(*) OVER (PARTITION BY r.race_id) AS fieldSize
+      FROM candidate_races c
+      JOIN rt_races r ON r.race_id=c.race_id
+      JOIN rt_runners x ON x.race_id=r.race_id
+      JOIN rt_results y ON y.race_id=x.race_id AND y.horse_no=x.horse_no
+      WHERE COALESCE(x.runner_status,'active')='active'
+        AND y.finish_position IS NOT NULL AND CAST(y.finish_position AS INTEGER)>0
+    )
+    SELECT * FROM scored
+    WHERE finishPosition>0 AND (
+      horseName IN (SELECT value FROM json_each(?))
+      OR COALESCE(jockey,'') IN (SELECT value FROM json_each(?))
+      OR COALESCE(trainer,'') IN (SELECT value FROM json_each(?))
+      OR (venue=? AND COALESCE(surface,'')=?)
+    )
+    ORDER BY startTimeUtc,raceId,horseNo"""
+new_recency=old_recency.replace(old_recency[old_recency.index("WITH candidate_races AS ("):old_recency.index("    scored AS (")],"""WITH matched_races AS (
+      SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_horse WHERE COALESCE(runner_status,'active')='active' AND horse_name IN (SELECT value FROM json_each(?))
+      UNION SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_jockey WHERE COALESCE(runner_status,'active')='active' AND jockey IN (SELECT value FROM json_each(?))
+      UNION SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_jockey WHERE COALESCE(runner_status,'active')='active' AND jockey IS NULL AND EXISTS(SELECT 1 FROM json_each(?) WHERE value='')
+      UNION SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_trainer WHERE COALESCE(runner_status,'active')='active' AND trainer IN (SELECT value FROM json_each(?))
+      UNION SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_trainer WHERE COALESCE(runner_status,'active')='active' AND trainer IS NULL AND EXISTS(SELECT 1 FROM json_each(?) WHERE value='')
+    ),
+    candidate_races AS (
+      SELECT r.race_id FROM rt_races r
+      WHERE r.race_date BETWEEN ? AND ? AND r.start_time_utc IS NOT NULL AND datetime(r.start_time_utc)<datetime(?)
+        AND r.venue=? AND COALESCE(r.surface,'')=?
+      UNION
+      SELECT r.race_id FROM matched_races m JOIN rt_races r ON r.race_id=m.race_id
+      WHERE r.race_date BETWEEN ? AND ? AND r.start_time_utc IS NOT NULL AND datetime(r.start_time_utc)<datetime(?)
+    ),
+""")
+from datetime import date,timedelta
+for race in sel:
+ rows,_=run("SELECT horse_name AS horseName,jockey,trainer FROM rt_runners WHERE race_id=? ORDER BY horse_no",(race["raceId"],))
+ horses=json.dumps(list(dict.fromkeys(x["horseName"] for x in rows if x["horseName"])),ensure_ascii=False)
+ jockeys=json.dumps(list(dict.fromkeys(x["jockey"] or "" for x in rows)),ensure_ascii=False)
+ trainers=json.dumps(list(dict.fromkeys(x["trainer"] or "" for x in rows)),ensure_ascii=False)
+ date_=race["raceDate"]
+ start=(date.fromisoformat(date_)-timedelta(days=30)).isoformat()
+ cutoff=race["startUtc"]
+ venue=race["raceId"].split("-")[3]
+ v={"tokyo":"東京","kyoto":"京都","hanshin":"阪神","nakayama":"中山","chukyo":"中京"}.get(venue,venue)
+ sur=run("SELECT surface FROM rt_races WHERE race_id=?",(race["raceId"],))[0][0]["surface"] or ""
+ o,oread=run(old_recency,(start,date_,cutoff,v,sur,horses,jockeys,trainers,horses,jockeys,trainers,v,sur))
+ n,nread=run(new_recency,(horses,jockeys,jockeys,trainers,trainers,start,date_,cutoff,v,sur,start,date_,cutoff,horses,jockeys,trainers,v,sur))
+ eq=o==n
+ print("RECENCY_PARITY",json.dumps({"race":race["raceId"],"oldCount":len(o),"newCount":len(n),"same":eq,"oldRowsRead":oread,"newRowsRead":nread,"readReductionPct":round((1-nread/max(oread,1))*100,1)},ensure_ascii=False))
+ if not eq:raise RuntimeError("RECENCY_RESULT_MISMATCH")
