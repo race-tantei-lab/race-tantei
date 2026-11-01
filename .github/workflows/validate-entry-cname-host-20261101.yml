@@ -1,0 +1,45 @@
+name: Validate entry CNAME host pairing without D1 writes
+on:
+  push:
+    branches: ["fix/jra-entry-cname-host-parity-20261101"]
+    paths:
+      - "scripts/sync-upcoming-entries-direct.mjs"
+      - "src/v1/upcoming-entry-worker-repair.ts"
+      - ".github/workflows/validate-entry-cname-host-20261101.yml"
+permissions: { contents: read }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 11
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22',cache: npm}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Full typecheck, unit tests and syntax
+        run: |
+          npm run typecheck && npm run build:test && npm run test:unit
+          node --check scripts/sync-upcoming-entries-direct.mjs
+      - name: Test source canonicalizer for signed JRA PC and smartphone links
+        run: |
+          node --input-type=module <<'JS'
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+          import vm from "node:vm";
+          const source=fs.readFileSync("scripts/sync-upcoming-entries-direct.mjs","utf8");
+          const a=source.indexOf("function normalizeActionCname("),b=source.indexOf("function appEntryUrl(");
+          assert(a>0&&b>a);
+          const context=vm.createContext({URL,decodeURIComponent,encodeURIComponent,accessDUrl:"https://www.jra.go.jp/JRADB/accessD.html"});
+          vm.runInContext(source.slice(a,b),context);
+          const desktop="https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0108202604110320261101%2F9C";
+          const mobile="https://www.jra.go.jp/JRADB/accessD.html?CNAME=sw01dde0105202604110120261101%2FE1";
+          assert.equal(vm.runInContext("canonicalEntryUrl("+JSON.stringify(desktop)+")",context),desktop);
+          const normalized=vm.runInContext("canonicalEntryUrl("+JSON.stringify(mobile)+")",context);
+          assert.equal(new URL(normalized).hostname,"sp.jra.jp");
+          assert.equal(new URL(normalized).searchParams.get("CNAME"),new URL(mobile).searchParams.get("CNAME"));
+          const repair=fs.readFileSync("src/v1/upcoming-entry-worker-repair.ts","utf8");
+          assert(repair.includes('^sw01dde/i.test(cname) ? "sp.jra.jp" : "www.jra.go.jp"'));
+          console.log("CANONICAL_JRA_HOST_CNAME_PARITY_PASSED");
+          JS
+      - name: Bundle public Worker without changing production
+        run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir /tmp/entry-canonical-dryrun
