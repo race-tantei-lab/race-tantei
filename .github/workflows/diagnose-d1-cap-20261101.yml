@@ -1,0 +1,62 @@
+name: Audit D1 free cap warning November 1 (read only)
+on:
+  push:
+    branches: ["diagnostics/d1-near-cap-20261101"]
+    paths: [".github/workflows/diagnose-d1-cap-20261101.yml"]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: D1 daily totals from Cloudflare analytics, all databases
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import urllib.request,os,json,datetime,urllib.error
+          acct=os.environ["CLOUDFLARE_ACCOUNT_ID"]; token=os.environ["CLOUDFLARE_API_TOKEN"]
+          query='query {viewer {accounts(filter:{accountTag:"'+acct+'"}) {d1AnalyticsAdaptiveGroups(limit:90,filter:{date_geq:"2026-10-21",date_leq:"2026-11-01"}) {dimensions {date databaseId} sum {rowsRead rowsWritten readQueries writeQueries}}}}}'
+          req=urllib.request.Request("https://api.cloudflare.com/client/v4/graphql",data=json.dumps({"query":query}).encode(),method="POST",headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"})
+          try:
+            with urllib.request.urlopen(req,timeout=35) as r:j=json.load(r)
+            if j.get("errors"):print("GRAPHQL_ERROR",str(j["errors"])[:1000])
+            else:
+              for acc in j.get("data",{}).get("viewer",{}).get("accounts",[]):
+                arr=acc.get("d1AnalyticsAdaptiveGroups",[])
+                grouped={}
+                for row in arr:
+                  d=row["dimensions"]["date"]; sum_=row["sum"]; a=grouped.setdefault(d,{"read":0,"write":0})
+                  a["read"]+=int(sum_.get("rowsRead") or 0);a["write"]+=int(sum_.get("rowsWritten") or 0)
+                  print("D1_DAILY_DB",json.dumps({"date":d,"db":row["dimensions"]["databaseId"],"reads":sum_.get("rowsRead"),"writes":sum_.get("rowsWritten"),"readQueries":sum_.get("readQueries")},ensure_ascii=False))
+                for d,a in sorted(grouped.items()): print("D1_DAILY_TOTAL",json.dumps({"date":d,**a}))
+          except urllib.error.HTTPError as e:print("D1_GRAPHQL_HTTP",e.code,e.read().decode()[:600])
+          except Exception as e:print("D1_GRAPHQL_FAILED",repr(e)[:600])
+          PY
+      - name: Identify expensive SQL by actual Cloudflare query insights
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import subprocess,json,os
+          for period in ("1d","7d"):
+            cmd=["npx","wrangler","d1","insights","race-tantei-phase0","--time-period",period,"--sort-type","sum","--sort-by","reads","--sort-direction","DESC","--limit","35","--json"]
+            try:
+              p=subprocess.run(cmd,capture_output=True,text=True,timeout=105,env=os.environ)
+              print("INSIGHTS_STATUS",period,p.returncode,p.stderr[-650:])
+              if p.returncode: print("INSIGHTS_ERROR",period,p.stdout[-600:]);continue
+              out=json.loads(p.stdout)
+              if isinstance(out,dict):out=out.get("results",out.get("data",[]))
+              if isinstance(out,list):
+                for idx,x in enumerate(out[:35]):print("D1_SQL_TOP",json.dumps({"period":period,"rank":idx+1,"totalRowsRead":x.get("totalRowsRead"),"avgRowsRead":x.get("avgRowsRead"),"times":x.get("numberOfTimesRun"),"query":str(x.get("query")or"")[:520]},ensure_ascii=False))
+              else:print("INSIGHTS_SHAPE",str(out)[:850])
+            except Exception as e:print("INSIGHTS_FAILED",period,repr(e)[:650])
+          PY
