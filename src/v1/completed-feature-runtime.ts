@@ -357,13 +357,55 @@ export async function loadCompletedFeatureStateForRace(
   if (options.includeHistoricalDelta !== false && throughDate < race.raceDate) {
     const includeSameDayDelta = options.includeSameDayDelta !== false;
     const effectiveCutoff = cutoffUtc ?? race.startTimeUtc ?? new Date().toISOString();
+    // The previous DISTINCT race-first JOIN scanned roughly 11k-12k D1 rows
+    // on EVERY preview. The three production indexes already exist; seek
+    // only runners related to the current field and then apply the EXACT
+    // original race dates, cutoff and completed-results conditions.
+    //
+    // UNION preserves the old DISTINCT semantics. Explicit NULL branches
+    // preserve COALESCE(jockey/trainer,'') if a current name is empty.
+    const indexedMatches = `
+      WITH matches AS (
+        SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_horse
+        WHERE horse_name IN (SELECT value FROM json_each(?))
+        UNION
+        SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_jockey
+        WHERE jockey IN (SELECT value FROM json_each(?))
+        UNION
+        SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_jockey
+        WHERE jockey IS NULL AND EXISTS (SELECT 1 FROM json_each(?) WHERE value='')
+        UNION
+        SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_trainer
+        WHERE trainer IN (SELECT value FROM json_each(?))
+        UNION
+        SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_trainer
+        WHERE trainer IS NULL AND EXISTS (SELECT 1 FROM json_each(?) WHERE value='')
+      )
+      SELECT ra.race_id AS raceId
+      FROM matches m JOIN rt_races ra ON ra.race_id=m.race_id
+    `;
     const raceIds = includeSameDayDelta
-      ? await db.prepare(
-          "SELECT DISTINCT ra.race_id AS raceId FROM rt_races ra JOIN rt_runners ru ON ru.race_id=ra.race_id WHERE ra.race_date>? AND (ra.race_date<? OR (ra.race_date=? AND ra.start_time_utc IS NOT NULL AND datetime(ra.start_time_utc)<datetime(?) AND EXISTS (SELECT 1 FROM rt_results rr WHERE rr.race_id=ra.race_id AND rr.finish_position IS NOT NULL))) AND (ru.horse_name IN (SELECT value FROM json_each(?)) OR COALESCE(ru.jockey,'') IN (SELECT value FROM json_each(?)) OR COALESCE(ru.trainer,'') IN (SELECT value FROM json_each(?))) ORDER BY ra.race_date,ra.race_id"
-        ).bind(throughDate, race.raceDate, race.raceDate, effectiveCutoff, horseJson, jockeyJson, trainerJson).all<{ raceId: string }>()
-      : await db.prepare(
-          "SELECT DISTINCT ra.race_id AS raceId FROM rt_races ra JOIN rt_runners ru ON ru.race_id=ra.race_id WHERE ra.race_date>? AND ra.race_date<? AND (ru.horse_name IN (SELECT value FROM json_each(?)) OR COALESCE(ru.jockey,'') IN (SELECT value FROM json_each(?)) OR COALESCE(ru.trainer,'') IN (SELECT value FROM json_each(?))) ORDER BY ra.race_date,ra.race_id"
-        ).bind(throughDate, race.raceDate, horseJson, jockeyJson, trainerJson).all<{ raceId: string }>();
+      ? await db.prepare(`${indexedMatches}
+          WHERE ra.race_date>? AND (
+            ra.race_date<? OR (
+              ra.race_date=? AND ra.start_time_utc IS NOT NULL
+              AND datetime(ra.start_time_utc)<datetime(?)
+              AND EXISTS (SELECT 1 FROM rt_results rr
+                          WHERE rr.race_id=ra.race_id AND rr.finish_position IS NOT NULL)
+            )
+          )
+          ORDER BY ra.race_date,ra.race_id
+        `).bind(
+          horseJson, jockeyJson, jockeyJson, trainerJson, trainerJson,
+          throughDate, race.raceDate, race.raceDate, effectiveCutoff,
+        ).all<{ raceId: string }>()
+      : await db.prepare(`${indexedMatches}
+          WHERE ra.race_date>? AND ra.race_date<?
+          ORDER BY ra.race_date,ra.race_id
+        `).bind(
+          horseJson, jockeyJson, jockeyJson, trainerJson, trainerJson,
+          throughDate, race.raceDate,
+        ).all<{ raceId: string }>();
     const ids = (raceIds.results ?? []).map((row) => row.raceId);
     if (ids.length) {
       // Preserve the direct indexed race_id lookup, but keep each statement
