@@ -50,7 +50,7 @@ function decodePage(buffer: ArrayBuffer, contentType: string | null): string {
 export function officialJraFetchUrl(rawUrl: string): string {
   const url = validateUrl(rawUrl);
   const cname = url.searchParams.get("CNAME") ?? "";
-  if (/^\\/JRADB\\/access[DS]\\.html$/i.test(url.pathname)
+  if (/^\/JRADB\/access[DS]\.html$/i.test(url.pathname)
       && /^sw01(?:dde|sde)/i.test(cname)
       && url.hostname !== "sp.jra.jp") {
     url.hostname = "sp.jra.jp";
