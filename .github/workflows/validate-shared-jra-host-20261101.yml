@@ -1,0 +1,40 @@
+name: Validate shared JRA signed-url fetch hardening
+on:
+  push:
+    branches: ["fix/jra-sw-fetch-host-safety-20261101"]
+    paths: ["src/v1/jra.ts",".github/workflows/validate-shared-jra-host-20261101.yml"]
+permissions: { contents: read }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22',cache: npm}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: All existing tests and typecheck, no model changes
+        run: npm run typecheck && npm run build:test && npm run test:unit
+      - name: Exact official URL invariant and real site check
+        run: |
+          node --input-type=module <<'JS'
+          import assert from "node:assert/strict";
+          import {officialJraFetchUrl,fetchJraPage,parseEntryPage} from "./dist-test/src/v1/jra.js";
+          const orig="https://www.jra.go.jp/JRADB/accessD.html?CNAME=sw01dde0105202604110120261101%2FE1";
+          const fixed=officialJraFetchUrl(orig);
+          assert.equal(new URL(fixed).hostname,"sp.jra.jp");
+          assert.equal(new URL(fixed).searchParams.get("CNAME"),new URL(orig).searchParams.get("CNAME"));
+          assert.equal(officialJraFetchUrl("https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0108202604110320261101%2F9C"),"https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0108202604110320261101%2F9C");
+          const resultOrig="https://www.jra.go.jp/JRADB/accessS.html?CNAME=sw01sde0105202604110120261101%2F9D";
+          assert.equal(new URL(officialJraFetchUrl(resultOrig)).hostname,"sp.jra.jp");
+          assert.equal(officialJraFetchUrl("https://www.jra.go.jp/JRADB/accessO.html?CNAME=sw15oli00%2F3A"),"https://www.jra.go.jp/JRADB/accessO.html?CNAME=sw15oli00%2F3A");
+          const page=await fetchJraPage(orig);
+          assert.equal(new URL(page.url).hostname,"sp.jra.jp");
+          assert.equal(parseEntryPage(page.html,page.url).race.raceId,"2026-11-01-tokyo-01");
+          console.log("SHARED_SIGNED_CNAME_JRA_FETCH_LIVE_TEST_OK");
+          JS
+      - name: Bundle all three active Workers with normal code
+        run: |
+          npx wrangler deploy --dry-run --config wrangler.jsonc --outdir /tmp/dry-public
+          npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir /tmp/dry-primary
+          npx wrangler deploy --dry-run --config wrangler.live-deadline-backup.jsonc --outdir /tmp/dry-backup
