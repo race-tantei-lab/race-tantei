@@ -23,7 +23,7 @@ jobs:
             t=r["result"][0];print("READ_COST",t.get("meta",{}).get("rows_read"));return t.get("results") or []
           print("OBS_TIME",datetime.datetime.now(datetime.timezone.utc).isoformat())
           for rid in ["2026-11-01-kyoto-01","2026-11-01-tokyo-01","2026-11-01-tokyo-02","2026-11-01-kyoto-03"]:
-            races=q("SELECT race_id AS id,status,result_url AS resultUrl,entry_url AS entryUrl,results_updated_at AS resultsUpdatedAt FROM rt_races WHERE race_id=? LIMIT 1",[rid])
+            races=q("SELECT race_id AS id,status,result_url AS resultUrl,entry_url AS entryUrl FROM rt_races WHERE race_id=? LIMIT 1",[rid])
             bets=q("SELECT course,bet_type AS type,settlement_status AS settled,return_yen AS paid FROM rt_public_bets WHERE race_id=? ORDER BY course,bet_type",[rid])
             results=q("SELECT count(*) AS cnt FROM rt_results WHERE race_id=?",[rid])
             payouts=q("SELECT count(*) AS cnt FROM rt_payouts WHERE race_id=?",[rid])
