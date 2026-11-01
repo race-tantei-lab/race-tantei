@@ -182,17 +182,19 @@ function validateWinMarketSanity(pages: FastJraOddsPage[]): void {
   }
 }
 
-async function fetchFastDirect(entryUrl: string, target: JraOddsIdentity, deadlineMs: number): Promise<FastJraOddsResult> {
-  const session = new JraFetchSession(deadlineMs);
+type OfficialOddsBootstrap = { session: JraFetchSession; winHtml: string; winCname: string };
+
+async function fetchFastDirect(entryUrl: string, target: JraOddsIdentity, deadlineMs: number, bootstrap?: OfficialOddsBootstrap): Promise<FastJraOddsResult> {
+  const session = bootstrap?.session ?? new JraFetchSession(deadlineMs);
   const dateDigits = target.raceDate.replaceAll("-", "");
-  const oddsUrl = jraOddsUrlForEntry(entryUrl);
-  const entryHtml = await session.html(entryUrl);
+  const oddsUrl = "https://www.jra.go.jp/JRADB/accessO.html";
+  const entryHtml = bootstrap?.winHtml ?? await session.html(entryUrl);
   const entryLinks = jraActionLinks(entryHtml).filter((link) => sameFastJraRaceLink(link.cname, dateDigits, target.raceNo));
   const entryCnames = findFastJraTypeCnames(entryHtml, dateDigits, target.raceNo);
-  const winCname = entryCnames["単勝"] ?? entryLinks.find((link) => link.cname.startsWith(JRA_FAST_TYPE_PREFIX["単勝"]))?.cname;
+  const winCname = bootstrap?.winCname ?? entryCnames["単勝"] ?? entryLinks.find((link) => link.cname.startsWith(JRA_FAST_TYPE_PREFIX["単勝"]))?.cname;
   if (!winCname) throw new Error("WIN_CNAME_NOT_FOUND");
 
-  const winPage = await session.html(oddsUrl, { cname: winCname, referer: entryUrl });
+  const winPage = bootstrap?.winHtml ?? await session.html(oddsUrl, { cname: winCname, referer: entryUrl });
   const winIdentity = parseFastJraOddsIdentity(winPage, winCname);
   if (!sameIdentity(winIdentity, target)) throw new Error(`WIN_IDENTITY_MISMATCH:${JSON.stringify(winIdentity)}`);
   const winRows = parseFastJraOfficialOddsRows(winPage, "単勝");
@@ -244,6 +246,47 @@ async function fetchFastDirect(entryUrl: string, target: JraOddsIdentity, deadli
   };
 }
 
+/**
+ * Official odds-site navigation fallback for entry URLs collected from JRA's
+ * smartphone domain. Those have CNAME=sw... and return a desktop parameter-error
+ * page; changing only the prefix breaks JRA's CNAME checksum.
+ *
+ * Follow JRA's OWN live odds homepage -> meeting -> race win market instead.
+ * Validate full date, venue and race number on the official odds page BEFORE
+ * parsing any ticket markets. Never synthesize CNAMEs or odds.
+ */
+async function fetchFastFromOfficialOddsIndex(
+  entryUrl: string,
+  target: JraOddsIdentity,
+  deadlineMs: number,
+): Promise<FastJraOddsResult> {
+  const session = new JraFetchSession(deadlineMs);
+  const oddsUrl = "https://www.jra.go.jp/JRADB/accessO.html";
+  const homeHtml = await session.html(oddsUrl, { cname: "pw15oli00/6D", referer: oddsUrl });
+  const dateDigits = target.raceDate.replaceAll("-", "");
+  const meetings = [...new Set(jraActionLinks(homeHtml)
+    .map((link) => link.cname)
+    .filter((cname) => cname.startsWith("pw15orl") && cname.includes(dateDigits)))].slice(0, 5);
+  if (!meetings.length) throw new Error("JRA_ODDS_INDEX_DATE_NOT_FOUND");
+
+  for (const meetingCname of meetings) {
+    if (Date.now() >= deadlineMs) break;
+    const meetingHtml = await session.html(oddsUrl, { cname: meetingCname, referer: oddsUrl });
+    const candidates = [...new Set(jraActionLinks(meetingHtml)
+      .map((link) => link.cname)
+      .filter((cname) => cname.startsWith(JRA_FAST_TYPE_PREFIX["単勝"])
+        && sameFastJraRaceLink(cname, dateDigits, target.raceNo)))].slice(0, 4);
+    for (const winCname of candidates) {
+      if (Date.now() >= deadlineMs) break;
+      const winHtml = await session.html(oddsUrl, { cname: winCname, referer: oddsUrl });
+      if (!sameIdentity(parseFastJraOddsIdentity(winHtml, winCname), target)) continue;
+      const result = await fetchFastDirect(entryUrl, target, deadlineMs, { session, winHtml, winCname });
+      return { ...result, fallbackReason: "JRA_OFFICIAL_ODDS_INDEX_DISCOVERY" };
+    }
+  }
+  throw new Error("JRA_ODDS_INDEX_RACE_IDENTITY_NOT_FOUND");
+}
+
 async function fetchOfficialCrawlFallback(entryUrl: string, target: JraOddsIdentity, fastError: unknown, deadlineMs: number): Promise<FastJraOddsResult> {
   const crawl = await crawlJraOfficialOddsForRace(entryUrl, target, deadlineMs);
   if (crawl.missingBetTypes.length) {
@@ -274,6 +317,18 @@ export async function fetchFastJraOfficialOddsForRace(entryUrl: string, target: 
   const attemptedHosts: string[] = [];
   const fastErrors: string[] = [];
   const deadlineMs = Date.now() + FETCH_BUDGET_MS;
+
+  // Smartphone-derived links are valid on sp.jra.jp but deliberately invalid
+  // on the desktop domain and expose no desktop odds links. Prefer the exact
+  // official odds index, leaving the production six-market parser untouched.
+  if (/[?&]CNAME=sw/i.test(entryUrl)) {
+    try {
+      const viaIndex = await fetchFastFromOfficialOddsIndex(entryUrl, target, deadlineMs);
+      return { ...viaIndex, attemptedHosts: ["www.jra.go.jp"] };
+    } catch (error) {
+      fastErrors.push("official-index:" + errorText(error));
+    }
+  }
 
   for (const candidate of candidates) {
     if (Date.now() >= deadlineMs) {
