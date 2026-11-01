@@ -1,0 +1,30 @@
+name: Validate exact D1 historical feature delta optimization
+on:
+  push:
+    branches: ["fix/d1-indexed-feature-delta-20261101"]
+    paths:
+      - "src/v1/completed-feature-runtime.ts"
+      - ".github/workflows/validate-d1-feature-index-20261101.yml"
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check every runtime and model interface
+        run: npm run typecheck
+      - name: Execute existing unit and recency regressions
+        run: npm run build:test && npm run test:unit
+      - name: Verify CPU and race gate guarantees
+        run: python3 scripts/verify-live-lock-safety.py && python3 scripts/verify-race-day-gate.py
+      - name: Bundle both primary and backup Worker without deploying
+        run: |
+          npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir /tmp/primary
+          npx wrangler deploy --dry-run --config wrangler.live-deadline-backup.jsonc --outdir /tmp/backup
