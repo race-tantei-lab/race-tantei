@@ -98,6 +98,22 @@ function matchingResultUrl(entryHtml: string, entryUrl: string): string | null {
     ?? null;
 }
 
+/**
+ * JRA uses checksum-protected CNAMEs. A smartphone "sw..." race-link is valid on
+ * sp.jra.jp, but returns a parameter-error page when its hostname is stored as
+ * www.jra.go.jp. Rewriting CNAME to "pw..." also invalidates the checksum.
+ *
+ * Normalize ONLY the hostname and keep JRA's original signed CNAME intact.
+ * Never accept any third-party domain and never infer/result-guess a CNAME.
+ */
+export function officialSettlementEntryUrl(entryUrl: string): string {
+  const url = new URL(entryUrl);
+  if (!["www.jra.go.jp", "jra.jp", "sp.jra.jp"].includes(url.hostname)) return entryUrl;
+  const cname = url.searchParams.get("CNAME") ?? "";
+  if (/^sw01dde/i.test(cname)) url.hostname = "sp.jra.jp";
+  return url.toString();
+}
+
 async function pendingCandidates(db: D1Database, now: Date, mode: SettlementMode): Promise<Candidate[]> {
   const fromDate = jstDate(now, -1);
   const throughDate = jstDate(now);
@@ -237,7 +253,15 @@ export async function runBoundedResultSettlement(
 
     for (const race of candidates) {
       try {
-        const entry = await fetchJraPage(race.entryUrl);
+        // The canonical race ID and original database URL stay immutable.
+        // Only the network source is corrected for the official mobile CNAME.
+        const sourceEntryUrl = officialSettlementEntryUrl(race.entryUrl);
+        const entry = await fetchJraPage(sourceEntryUrl);
+        // An error page or wrong race must not be used to settle public bets.
+        if (!pageLooksLikeResult(entry.html) && !/出馬表/.test(entry.html)) {
+          audit.waitingRaceIds.push(race.raceId);
+          continue;
+        }
         const resultUrls: string[] = [];
         const seen = new Set<string>();
         const addResultUrl = (value: string | null | undefined) => {
@@ -251,7 +275,7 @@ export async function runBoundedResultSettlement(
         // deterministic dde->sde guess with the wrong checksum suffix; trying it
         // first can spend the whole scheduled invocation on a timeout and starve
         // every later selected race.
-        const targetKey = jraRaceKey(race.entryUrl);
+        const targetKey = jraRaceKey(sourceEntryUrl);
         const publishedSameRaceLinks = extractResultLinks(entry.html, entry.url)
           .filter((value) => targetKey !== null && jraRaceKey(value) === targetKey);
         for (const value of publishedSameRaceLinks) addResultUrl(value);
