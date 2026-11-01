@@ -1,0 +1,42 @@
+name: Validate JRA official odds index fallback against live race
+on:
+  push:
+    branches: ["fix/jra-official-odds-index-fallback-20261101"]
+    paths:
+      - ".github/workflows/validate-jra-odds-index-20261101.yml"
+      - "src/v1/jra-official-odds-fetch.ts"
+permissions: {contents: read}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Types, full unit regression and existing JRA parser contract
+        run: npm run typecheck && npm run build:test && npm run test:unit
+      - name: Live JRA official six-market identity test for smartphone CNAME
+        timeout-minutes: 2
+        run: |
+          node --input-type=module <<'JS'
+          import assert from "node:assert/strict";
+          import { fetchFastJraOfficialOddsForRace } from "./dist-test/src/v1/jra-official-odds-fetch.js";
+          const race = { raceDate:"2026-11-01",venue:"東京",raceNo:2 };
+          const entry="https://www.jra.go.jp/JRADB/accessD.html?CNAME=sw01dde0105202604110220261101%2F96";
+          const r=await fetchFastJraOfficialOddsForRace(entry,race);
+          assert.equal(r.pages.length,6,"six distinct official market pages");
+          assert.equal(new Set(r.pages.map(x=>x.betType)).size,6);
+          for(const p of r.pages){
+            assert.deepEqual(p.identity,race);
+            assert(p.rows.length>0,"each type has official odds");
+            assert(p.cname.startsWith("pw15"));
+          }
+          assert.equal(r.fallbackReason,"JRA_OFFICIAL_ODDS_INDEX_DISCOVERY");
+          console.log("LIVE_OFFICIAL_INDEX_FALLBACK_PASSED",JSON.stringify({race,source:r.source,types:r.pages.map(x=>x.betType),rows:r.rows.length,hosts:r.attemptedHosts}));
+          JS
+      - name: Cloudflare primary and backup Worker bundles without live deployment
+        run: |
+          npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir /tmp/dry-primary
+          npx wrangler deploy --dry-run --config wrangler.live-deadline-backup.jsonc --outdir /tmp/dry-backup
