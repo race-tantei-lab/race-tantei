@@ -1,0 +1,38 @@
+name: Probe JRA official result links from real index
+on:
+  push:
+    branches: ["diagnostics/d1-near-cap-20261101"]
+    paths: [".github/workflows/trace-jra-result-index-20261101.yml"]
+permissions: { contents: read }
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Official result index and smartphone entry exploration (no D1)
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.parse,json,re,html
+          UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/136 Safari/537.36"
+          def get(url,cname=None):
+            p=urllib.parse.urlencode({"cname":cname}).encode() if cname else None
+            req=urllib.request.Request(url,data=p,headers={"User-Agent":UA,"Content-Type":"application/x-www-form-urlencoded","Accept-Language":"ja-JP,ja;q=0.9"})
+            with urllib.request.urlopen(req,timeout=12) as f:
+              body=f.read(800000);final=f.url
+            text=body.decode("shift_jis","replace")
+            matches=re.findall(r'doAction\(\s*[\x27\x22]([^\x27\x22]+)[\x27\x22]\s*,\s*[\x27\x22]([^\x27\x22]+)',text,re.I)
+            hrefs=re.findall(r'href=[\x27\x22]([^\x27\x22]*accessS\.html[^\x27\x22]*)',text,re.I)
+            return {"final":final,"title":re.findall(r'<title[^>]*>(.*?)</title>',text,re.S|re.I)[:1],"bytes":len(body),"actions":matches,"hrefs":hrefs[:10],"hasResults":"レース結果" in text}
+          tests=[
+            ("desktop result home","https://www.jra.go.jp/JRADB/accessS.html",None),
+            ("desktop result default","https://www.jra.go.jp/JRADB/accessS.html","pw01sli00/AF"),
+            ("mobile result home","https://sp.jra.jp/JRADB/accessS.html",None),
+            ("mobile result default","https://sp.jra.jp/JRADB/accessS.html","pw01sli00/AF"),
+            ("mobile Tokyo1 entry","https://sp.jra.jp/JRADB/accessD.html?CNAME=sw01dde0105202604110120261101%2FE1",None),
+            ("desktop Kyoto3 entry","https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0108202604110320261101%2F9C",None),
+          ]
+          for label,url,cname in tests:
+            try:
+              r=get(url,cname);matches=[x for x in r["actions"] if x[0].endswith("accessS.html")];print("JRA_RESULT_ROUTE",json.dumps({"test":label,"final":r["final"],"title":r["title"],"hasResults":r["hasResults"],"resultActions":matches[:45],"resultActionsCount":len(matches),"hrefs":r["hrefs"]},ensure_ascii=False))
+            except Exception as e:print("JRA_RESULT_FAILED",label,repr(e)[:180])
+          PY
