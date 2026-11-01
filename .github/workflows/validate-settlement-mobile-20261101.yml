@@ -1,0 +1,62 @@
+name: Validate mobile-origin JRA result settlement fix
+on:
+  push:
+    branches: ["fix/settlement-mobile-entry-20261101"]
+    paths:
+      - "src/v1/bounded-result-settlement.ts"
+      - ".github/workflows/validate-settlement-mobile-20261101.yml"
+permissions: { contents: read }
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22',cache: npm}
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck, regressions, canonical model invariants
+        run: npm run typecheck && npm run build:test && npm run test:unit
+      - name: Fetch real official JRA result pages through corrected host
+        timeout-minutes: 3
+        run: |
+          node --input-type=module <<'JS'
+          import assert from "node:assert/strict";
+          import { officialSettlementEntryUrl } from "./dist-test/src/v1/bounded-result-settlement.js";
+          import { fetchJraPage,extractResultLinks,parseEntryPage,parseResultPage,pageLooksLikeResult } from "./dist-test/src/v1/jra.js";
+          import { parseJraPayoutsFromHtml } from "./dist-test/src/v1/jra-payout-fallback.js";
+          const cases=[
+            {entry:"https://www.jra.go.jp/JRADB/accessD.html?CNAME=sw01dde0105202604110120261101%2FE1",id:"2026-11-01-tokyo-01"},
+            {entry:"https://www.jra.go.jp/JRADB/accessD.html?CNAME=sw01dde0105202604110220261101%2F96",id:"2026-11-01-tokyo-02"},
+            {entry:"https://www.jra.go.jp/JRADB/accessD.html?CNAME=pw01dde0108202604110320261101%2F9C",id:"2026-11-01-kyoto-03"}
+          ];
+          for(const [i,c] of cases.entries()){
+            const fixed=officialSettlementEntryUrl(c.entry);
+            assert.equal(new URL(fixed).hostname, i<2?"sp.jra.jp":"www.jra.go.jp");
+            const page=await fetchJraPage(fixed);
+            let entry;
+            try {entry=parseEntryPage(page.html,page.url);}catch(e){throw Error("ENTRY_PARSING_FAILED "+c.id+" "+String(e));}
+            assert.equal(entry.race.raceId,c.id);
+            const links=extractResultLinks(page.html,page.url);
+            console.log("OFFICIAL_ENTRY_PARITY",JSON.stringify({id:c.id,url:fixed,parsedId:entry.race.raceId,links:links.length}));
+            let complete=false;
+            for(const link of links){
+              if(!link.includes("20261101"))continue;
+              try{
+                const result=await fetchJraPage(link);
+                if(!pageLooksLikeResult(result.html))continue;
+                const p=parseResultPage(result.html,result.url);
+                if(p.race.raceId!==c.id)continue;
+                const payouts=[...p.payouts,...parseJraPayoutsFromHtml(result.html)];
+                assert(p.results.length>=3 && payouts.length>0);
+                console.log("LIVE_OFFICIAL_SETTLEMENT_PROOF",JSON.stringify({race:c.id,resultUrl:result.url,finishRows:p.results.length,payoutRows:payouts.length,betTypes:[...new Set(payouts.map(x=>x.betType))]}));
+                complete=true;break;
+              }catch(e){console.log("CANDIDATE_REJECTED",c.id,String(e).slice(0,180))}
+            }
+            if(i<2)assert(complete,"Official published result required for already finished Tokyo1/2");
+          }
+          assert.equal(officialSettlementEntryUrl("https://example.org/JRADB/accessD.html?CNAME=sw01dde"),"https://example.org/JRADB/accessD.html?CNAME=sw01dde");
+          console.log("OFFICIAL_RESULT_SETTLEMENT_LIVE_TEST_PASSED");
+          JS
+      - name: Public Worker dry-run, no production changes
+        run: npx wrangler deploy --dry-run --config wrangler.jsonc --outdir /tmp/settlement-dryrun
