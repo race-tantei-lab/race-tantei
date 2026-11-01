@@ -74,7 +74,8 @@ function canonicalEntryUrl(rawUrl) {
   }
   const cname = normalizeActionCname(decodeURIComponent(parsed.searchParams.get("CNAME") || ""));
   if (!/(?:pw|sw)01dde/i.test(cname)) throw new Error(`ENTRY_URL_CNAME_INVALID:${rawUrl}`);
-  return `${accessDUrl}?CNAME=${encodeURIComponent(cname)}`;
+  const officialHost = /^sw01dde/i.test(cname) ? "https://sp.jra.jp/JRADB/accessD.html" : accessDUrl;
+  return `${officialHost}?CNAME=${encodeURIComponent(cname)}`;
 }
 
 function appEntryUrl(canonicalUrl) {
@@ -124,7 +125,7 @@ async function loadEntryBundle(canonicalUrl) {
     if (!pageLooksLikeEntry(page.html)) throw new Error("ENTRY_PAGE_SIGNATURE_MISSING");
     const bundle = parseEntryPage(page.html, canonicalUrl);
     if (bundle.runners.filter((runner) => runner.runnerStatus === "active").length < 3) throw new Error("ACTIVE_RUNNERS_TOO_FEW");
-    return { page, bundle, source: "www.jra.go.jp" };
+    return { page, bundle, source: new URL(canonicalUrl).hostname };
   } catch (error) {
     errors.push(`www:${error?.name || "Error"}:${error?.message || String(error)}`);
   }
@@ -153,7 +154,8 @@ function actionEntryUrls(html) {
     for (const match of html.matchAll(pattern)) {
       const cname = normalizeActionCname(match[1] || "");
       if (!/(?:pw|sw)01dde/i.test(cname)) continue;
-      const url = `${accessDUrl}?CNAME=${encodeURIComponent(cname)}`;
+      const officialHost = /^sw01dde/i.test(cname) ? "https://sp.jra.jp/JRADB/accessD.html" : accessDUrl;
+      const url = `${officialHost}?CNAME=${encodeURIComponent(cname)}`;
       found.set(cname, url);
     }
   }
