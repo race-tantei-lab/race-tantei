@@ -1,0 +1,33 @@
+name: Verify current public hit states after official settlement
+on:
+  push:
+    branches: ["diagnostics/d1-near-cap-20261101"]
+    paths: [".github/workflows/verify-public-hit-states-20261101.yml"]
+permissions: { contents: read }
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Confirm production API displays real settled hits
+        run: |
+          python3 - <<'PY'
+          import urllib.request,json
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          req=urllib.request.Request(base+"/api/public/day?date=2026-11-01",headers={"User-Agent":"race-tantei-official-settlement-smoke/1"})
+          with urllib.request.urlopen(req,timeout=18) as f:
+            day=json.load(f);status=f.status;headers=dict(f.headers)
+          assert day.get("ok") and len(day.get("races") or [])==24,(status,day.keys())
+          by={str(r["raceId"]):r for r in day["races"]}
+          for id in ["2026-11-01-tokyo-01","2026-11-01-tokyo-02","2026-11-01-kyoto-03"]:
+            r=by[id];state=r.get("publicState") or {}
+            print("PUBLIC_HIT_STATUS",json.dumps({"id":id,"state":state,"startUtc":r.get("startTimeUtc")},ensure_ascii=False)[:1400])
+            assert state.get("code")=="hit",("Expected hit",id,state)
+          missing=by["2026-11-01-kyoto-01"].get("publicState") or {}
+          print("MISSING_PREDICTION_CORRECTLY_PRESERVED",json.dumps({"id":"2026-11-01-kyoto-01","state":missing},ensure_ascii=False))
+          assert missing.get("code") in ("missing","overdue"),missing
+          req2=urllib.request.Request(base+"/api/public/daily-performance?date=2026-11-01",headers={"User-Agent":"race-tantei-official-settlement-smoke/1"})
+          with urllib.request.urlopen(req2,timeout=18) as f:perf=json.load(f)
+          print("PUBLIC_DAILY_PERFORMANCE",json.dumps({k:perf.get(k) for k in ["date","source","courses","targetRaces","ok"]},ensure_ascii=False)[:2800])
+          print("PUBLIC_SETTLEMENT_DISPLAY_VERIFIED")
+          PY
