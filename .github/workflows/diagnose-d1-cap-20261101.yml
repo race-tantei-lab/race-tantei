@@ -63,7 +63,7 @@ jobs:
           ex=q(query,["2026-09-30","2026-11-01","2026-11-01","2026-11-01T00:05:00Z",h,j,t])
           for p in ex["results"]:print("D1_FEATURE_PLAN",json.dumps(p,ensure_ascii=False))
           PY
-      - name: Benchmark indexed rewrite against exact canonical race candidates
+      - name: Benchmark indexed rewrite against canonical candidates and recency
         run: python3 scripts/d1-feature-index-candidate-audit-20261101.py
       - name: Identify expensive SQL by actual Cloudflare query insights
         shell: bash
