@@ -1,5 +1,6 @@
 name: Trace Nov 1 settlement status and official result links
 # Post-production deploy 0ba004c, verify actual scheduled settlement (2026-11-01)
+# Measure first public five-minute tick outcome after 10:55 JST
 on:
   push:
     branches: ["diagnostics/d1-near-cap-20261101"]
