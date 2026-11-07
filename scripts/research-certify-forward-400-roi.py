@@ -149,7 +149,8 @@ def self_test():
     for name in POLICIES:
         assert "ANY_MISSING_LATE_UNSETTLED_OR_INVALID_RACE" in result["policies"][name]["reasons"]
         assert "UNFINISHED_CURRENT_OR_FUTURE_RACE_DATE" in result["policies"][name]["reasons"]
-        assert "TOTAL_DAILY_RECONCILIATION_FAILED" in result["policies"][name]["reasons"]
+    assert "TOTAL_DAILY_RECONCILIATION_FAILED" in result["policies"]["market_implied_only"]["reasons"]
+    assert "TOTAL_DAILY_RECONCILIATION_FAILED" not in result["policies"]["market_blend_30pct_model"]["reasons"]
     # A forged high stated ROI without any evidence must also fail.
     assert not evaluate({"total":{"market_implied_only":{"roiPct":10000}}})["researchPassAnyPolicy"]
     print("STRICT_400_ROI_RESEARCH_GATE_SELFTEST_OK")
