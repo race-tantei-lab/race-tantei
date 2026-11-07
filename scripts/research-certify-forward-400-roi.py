@@ -133,7 +133,7 @@ def self_test():
         "payoutSource":"persisted JRA D1 payout table, not externally JRA-reverified",
         "excluded":{"shadow_not_captured":2},
         "total":{"canonical":{"races":300,"stakeYen":600000,"returnYen":200000},
-           "market_implied_only":{"races":300,"stakeYen":600000,"returnYen":3000000},
+           "market_implied_only":{"races":300,"stakeYen":600000,"returnYen":3050000},
            "market_blend_30pct_model":{"races":300,"stakeYen":600000,"returnYen":3000000}},
         "byDate":{d:{
             "canonical":{"races":12 if i!=23 else 24,"stakeYen":24000 if i!=23 else 48000,"returnYen":0},
