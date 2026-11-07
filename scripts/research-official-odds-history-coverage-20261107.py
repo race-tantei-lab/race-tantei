@@ -40,6 +40,40 @@ def main():
                 out[table][start+".."+end]=result[0] if result else {}
             except Exception as e:
                 out[table][start+".."+end]={"error":str(e)[:350]}
+    # Join the historical live winners to stored JRA payouts: a required
+    # precondition for any future shadow-combination comparison.
+    paid=query("""
+      SELECT b.race_id AS raceId,b.bet_type AS betType,b.combination,
+        b.stake_yen AS stakeYen,b.return_yen AS returnYen,
+        MAX(p.payout_yen) AS payout100,
+        r.refund_horse_nos_json AS refundHorses
+      FROM rt_public_bets b
+      JOIN rt_races r ON r.race_id=b.race_id
+      LEFT JOIN rt_payouts p ON p.race_id=b.race_id
+        AND p.bet_type=b.bet_type AND p.combination=b.combination
+      WHERE b.race_id>=? AND b.race_id<?
+        AND b.course='ライト' AND b.source_prediction_id=-2
+        AND b.settlement_status='settled'
+        AND b.return_yen>0
+      GROUP BY b.id ORDER BY b.race_id,b.id LIMIT 500
+    """,("2026-08-10-","2026-11-08-"))
+    okay=0;refunds=0;mismatches=[]
+    for row in paid:
+        stake=int(row["stakeYen"])
+        returned=int(row["returnYen"])
+        payout=row.get("payout100")
+        if payout is not None and int(payout)*stake//100 == returned:
+            okay+=1;continue
+        cancelled={int(x) for x in json.loads(row.get("refundHorses") or "[]")}
+        numbers={int(v) for v in row["combination"].split("-")}
+        if numbers & cancelled and stake==returned:
+            refunds+=1;continue
+        mismatches.append({"raceId":row["raceId"],"betType":row["betType"],"combination":row["combination"],"payout100":payout,"stakeYen":stake,"returnYen":returned})
+    out["positiveProductionTicketPayoutJoin"]={
+        "positiveTickets":len(paid),"exactMatched":okay,"correctlyRefunded":refunds,
+        "mismatchCount":len(mismatches),"firstMismatches":mismatches[:8],
+        "warning":"stored D1 JRA data, not independent website verification"
+    }
     print("RESEARCH_HISTORICAL_TICKET_OFFICIAL_ODDS_COVERAGE",json.dumps(out,ensure_ascii=False,separators=(",",":")))
 
 if __name__=="__main__":main()
