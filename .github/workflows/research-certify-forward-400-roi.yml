@@ -8,6 +8,12 @@ on:
       - scripts/research-forward-topk-shadow-roi.py
       - .github/workflows/research-certify-forward-400-roi.yml
   workflow_dispatch:
+    inputs:
+      run_live_readonly:
+        description: 'Read settled future JRA shadows and report 3/4/5 ROI (no writes)'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -26,3 +32,46 @@ jobs:
         run: |
           python3 -m py_compile scripts/research-forward-topk-shadow-roi.py
           python3 scripts/research-forward-topk-shadow-roi.py --self-test
+
+  read-only-live-forward-audit:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_live_readonly }}
+    needs: guard-selftest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch date-bounded future official T15 settled races without D1 writes
+        run: python3 scripts/research-forward-topk-shadow-roi.py --live --output-dir artifacts/forward400
+      - name: Certify all predeclared top-3, top-4, top-5 policies and keep no-promotion boundary
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, subprocess, sys
+          from pathlib import Path
+          out=Path("artifacts/forward400")
+          decisions={}
+          for k in (3,4,5):
+              src=out/f"shadow-k{k}.json"
+              dest=out/f"certification-k{k}.json"
+              cmd=[sys.executable,"scripts/research-certify-forward-400-roi.py","--input",str(src),"--output",str(dest)]
+              p=subprocess.run(cmd,capture_output=True,text=True)
+              if p.returncode not in (0,2):
+                  print(p.stdout[-1000:],p.stderr[-1000:])
+                  raise RuntimeError(f"certification error for k={k}: {p.returncode}")
+              result=json.loads(dest.read_text(encoding="utf-8"))
+              decisions[str(k)]={"researchPassAnyPolicy":result["researchPassAnyPolicy"],
+                  "productionPromotionAuthorized":False}
+          print("400_ROI_FUTURE_SHADOW_RESEARCH_GATE",json.dumps(decisions,ensure_ascii=False))
+          PY
+      - name: Preserve immutable results; never treat successful CI as profitability
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-forward-400-3-4-5
+          path: artifacts/forward400/
+          if-no-files-found: warn
+          retention-days: 14
