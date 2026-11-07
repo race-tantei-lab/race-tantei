@@ -243,7 +243,7 @@ def main():
        ["worker_live_final:"+start,"worker_live_final:"+end],600),
       ("bets","SELECT race_id AS raceId,bet_type AS betType,combination,stake_yen AS stakeYen,return_yen AS returnYen,settlement_status AS settlement,locked_at AS lockedAt FROM rt_public_bets WHERE race_id>=? AND race_id<? AND course='ライト' AND source_prediction_id=-2 ORDER BY race_id,id LIMIT 1000",
        [start+"-",end+"-"],1000),
-      ("payouts","SELECT race_id AS raceId,bet_type AS betType,combination,payout_yen AS payout100 FROM rt_payouts WHERE race_id>=? AND race_id<? ORDER BY race_id LIMIT 10000",
+      ("payouts","SELECT race_id AS raceId,bet_type AS betType,combination,payout_yen AS payout100 FROM rt_payouts WHERE race_id>=? AND race_id<? AND bet_type IN ('単勝','ワイド','馬連','馬単','3連複','3連単') ORDER BY race_id LIMIT 10000",
        [start+"-",end+"-"],10000),
       ("races","SELECT race_id AS raceId, status,refund_horse_nos_json AS refunds FROM rt_races WHERE race_id>=? AND race_id<? ORDER BY race_id LIMIT 600",
        [start+"-",end+"-"],600),
