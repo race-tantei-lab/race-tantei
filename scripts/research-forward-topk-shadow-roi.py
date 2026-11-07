@@ -229,6 +229,47 @@ def selftest():
     assert all(not r["total"]["canonical"]["races"] for r in reports.values())
     assert utc_before_t15("2026-11-08T01:44:00Z",d,"11:00")
     assert not utc_before_t15("2026-11-08T01:46:00Z",d,"11:00")
+    # Synthetic, independent full-pipeline test of immutable shadow settlement.
+    valid={"selection":[sel],"finals":[],"bets":[],"payouts":[],"races":[]}
+    for i,race in enumerate(rows):
+        rid=race["raceId"]
+        shadow=[{"policy":"market_implied_only","tickets":[
+            {"betType":"単勝","combination":"3","officialOdds":3.5},
+            {"betType":"ワイド","combination":"1-3","officialOdds":2.6}]},
+            {"policy":"market_blend_30pct_model","tickets":[
+            {"betType":"単勝","combination":"1","officialOdds":1.9},
+            {"betType":"ワイド","combination":"1-3","officialOdds":2.6}]}]
+        snap={"lockedAt":"2026-11-08T01:00:00Z",
+              "oddsFetchedAt":"2026-11-08T00:58:00Z",
+              "previewGeneratedAt":"2026-11-08T00:59:00Z",
+              "oddsSource":"jra-fast-official",
+              "oddsSnapshotSha256":"a"*64,"shadowResearch":shadow}
+        valid["finals"].append({"k":"worker_live_final:"+rid,"v":json.dumps(snap)})
+        for typ,combo in (("単勝","1"),("ワイド","1-2")):
+            valid["bets"].append({"raceId":rid,"betType":typ,
+                "combination":combo,"stakeYen":1000,"returnYen":0,
+                "settlement":"settled","lockedAt":"2026-11-08T01:00:00Z"})
+        valid["races"].append({"raceId":rid,"raceDate":d,"status":"finished","refunds":"[]"})
+        for typ in BET_TYPES:
+            valid["payouts"].append({"raceId":rid,"betType":typ,
+                "combination":"1" if typ=="単勝" else "1-2",
+                "payout100":120 if typ=="単勝" else 160})
+        valid["payouts"].extend([
+            {"raceId":rid,"betType":"単勝","combination":"3","payout100":350 if i==0 else 0},
+            {"raceId":rid,"betType":"ワイド","combination":"1-3","payout100":260 if i==0 else 0},
+        ])
+    success,errors=evaluate_day(valid,d,original)
+    assert not errors and success[3]["out"]["total"]["canonical"]["races"]==3
+    assert success[4]["out"]["total"]["market_implied_only"]["races"]==4
+    assert success[5]["out"]["total"]["market_blend_30pct_model"]["races"]==5
+    assert success[3]["out"]["total"]["market_implied_only"]["returnYen"]==6100
+    assert not success[3]["issues"]
+    bad=json.loads(valid["finals"][0]["v"])
+    bad["oddsFetchedAt"]="2026-11-08T01:46:00Z"
+    valid["finals"][0]["v"]=json.dumps(bad)
+    unsafe,_=evaluate_day(valid,d,original)
+    assert unsafe[3]["out"]["total"]["canonical"]["races"]==2
+    assert unsafe[3]["issues"]["MISSING_ON_TIME_COMPLETE_RACES"]==1
     print("FORWARD_TOPK_SHADOW_RESEARCH_SELFTEST_OK")
 
 def main():
