@@ -316,7 +316,7 @@ def main() -> None:
     bets = query("""
       SELECT race_id AS raceId, course, stake_yen AS stakeYen,
              return_yen AS returnYen, settlement_status AS settlementStatus,
-             locked_at AS lockedAt,bet_type AS betType,assumed_odds AS assumedOdds
+             locked_at AS lockedAt,bet_type AS betType,combination,assumed_odds AS assumedOdds
       FROM rt_public_bets
       WHERE race_id>=? AND race_id<?
         AND source_prediction_id=-2
