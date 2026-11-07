@@ -58,8 +58,8 @@ def main():
     FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished'
       AND result_url IS NOT NULL ORDER BY race_date,race_id LIMIT 3""",[start,end])
   late_samples=query("""SELECT race_id raceId,result_url resultUrl
-    FROM rt_races WHERE race_date IN ('2026-09-20','2026-10-03','2026-11-07')
-      AND race_no=1 ORDER BY race_date,race_id LIMIT 12""",[])
+    FROM rt_races WHERE race_date IN ('2026-09-26','2026-10-31','2026-11-01','2026-11-07')
+      AND race_no=1 ORDER BY race_date,race_id LIMIT 20""",[])
   strange=query("""SELECT race_id raceId,result_url resultUrl
     FROM rt_races WHERE race_date IN ('2026-10-31','2026-11-01','2026-11-07')
       AND race_no IN (1,2,3,4) ORDER BY race_date,race_id LIMIT 34""",[])
