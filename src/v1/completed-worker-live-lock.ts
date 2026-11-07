@@ -651,8 +651,21 @@ export async function runCompletedWorkerLiveLock(env: Env, now = new Date()): Pr
       }
       const existingPreview = await latestPreview(env.DB, raceId);
       if (remaining > FINAL_LOCK_ARM_MS && existingPreview && previewIsFreshEnough(existingPreview, remaining, raceNow)) continue;
-      if (generatedThisTick >= MAX_PREVIEW_GENERATIONS_PER_TICK && remaining > FINAL_LOCK_ARM_MS) continue;
-      if (attemptedThisTick >= MAX_PREVIEW_ATTEMPTS_PER_TICK && remaining > FINAL_LOCK_ARM_MS) continue;
+      // Cloudflare Free CPU safeguard: being within T-30 must NOT bypass the
+      // per-cron cap on costly JRA six-market odds and model generation.
+      if (generatedThisTick >= MAX_PREVIEW_GENERATIONS_PER_TICK ||
+          attemptedThisTick >= MAX_PREVIEW_ATTEMPTS_PER_TICK) {
+        // The T-25 watchdog finalizes saved official last-good independently.
+        // This additional bounded path protects when other races spent the
+        // cron's generation allowance first. No artificial/final odds.
+        if (remaining <= 25 * 60 * 1000 && existingPreview) {
+          if (!snapshotHasOfficialBodyWeight(existingPreview)) bodyWeightBreachRaceIds.add(raceId);
+          await commitSnapshot(env.DB, raceId, existingPreview, new Date(), "last_good");
+          lockedByWorker.push(raceId);
+          finalizedFromFallbackRaceIds.push(raceId);
+        }
+        continue;
+      }
       attemptedThisTick += 1;
       const generationStartedAt = new Date();
       const remainingAtGenerationStart = startMs - generationStartedAt.getTime();
