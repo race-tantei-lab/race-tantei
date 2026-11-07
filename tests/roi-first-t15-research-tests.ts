@@ -2,6 +2,12 @@ import { strict as assert } from "node:assert";
 import { researchRoiFirstPair } from "../src/v1/roi-first-t15-research.js";
 import { chooseCompletedTwoTickets, type OfficialOddsRow } from "../src/v1/completed-ticket-runtime.js";
 
+function expectThrows(fn:()=>unknown, pattern:RegExp):void {
+  let message:string|undefined;
+  try {fn();} catch(error) { message=String(error); }
+  assert.ok(message && pattern.test(message), "expected error matching "+pattern+", received "+message);
+}
+
 const horseNos=[1,2,3,4];
 const weights=[0.4,0.3,0.2,0.1];
 const official: OfficialOddsRow[]=[
@@ -23,7 +29,7 @@ assert.equal(chosen!.researchOnly,true);
 assert.equal(chosen!.selectionBeforeT15,true);
 assert.equal(chosen!.stakeYen,2000);
 assert.equal(chosen!.ticket1.stakeYen+chosen!.ticket2.stakeYen,2000);
-assert.notEqual(chosen!.ticket1.betType,chosen!.ticket2.betType);
+assert.ok(chosen!.ticket1.betType !== chosen!.ticket2.betType);
 assert.ok(chosen!.estimatedPairedHitPct>=20);
 assert.ok(chosen!.estimatedRoiPct>0);
 assert.equal(chosen!.estimationStatus,"UNCALIBRATED_PL_PROBABILITY_HYPOTHESIS_NOT_REAL_JRA_ROI");
@@ -32,14 +38,14 @@ assert.deepEqual(chooseCompletedTwoTickets(horseNos,weights,official),canonical,
   "research EV scoring must never modify public model/canonical bets");
 assert.equal(researchRoiFirstPair(horseNos,weights,official.filter(x=>x.betType!=="馬連"),
   "2026-11-08T09:44:00+09:00","2026-11-08T10:00:00+09:00"),null);
-assert.throws(()=>researchRoiFirstPair(horseNos,weights,official,
+expectThrows(()=>researchRoiFirstPair(horseNos,weights,official,
   "2026-11-08T09:46:00+09:00","2026-11-08T10:00:00+09:00"),
   /UNVERIFIED_OFFICIAL_PRE_T15_ODDS_TIMESTAMP/);
-assert.throws(()=>researchRoiFirstPair(horseNos,weights,official,"2026-11-08T09:45:00",
+expectThrows(()=>researchRoiFirstPair(horseNos,weights,official,"2026-11-08T09:45:00",
    "2026-11-08T10:00:00+09:00"),/UNVERIFIED_OFFICIAL_PRE_T15_ODDS_TIMESTAMP/);
-assert.throws(()=>researchRoiFirstPair(horseNos,weights,[...official,official[0]!],
+expectThrows(()=>researchRoiFirstPair(horseNos,weights,[...official,official[0]!],
    "2026-11-08T09:45:00+09:00","2026-11-08T10:00:00+09:00"),/DUPLICATED_OFFICIAL_ODDS_ROW/);
-assert.throws(()=>researchRoiFirstPair(horseNos,[0.5,0.3,0.3,0.1],official,
+expectThrows(()=>researchRoiFirstPair(horseNos,[0.5,0.3,0.3,0.1],official,
    "2026-11-08T09:45:00+09:00","2026-11-08T10:00:00+09:00"),/UNCALIBRATED_MODEL_PROBABILITIES_INVALID/);
 console.log("RESEARCH_ROI_FIRST_T15_ALL_SIX_TYPES_PAIRED_OK",JSON.stringify({
   selected:chosen!.ticket1.betType+"+"+chosen!.ticket2.betType,
