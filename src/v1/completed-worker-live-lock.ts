@@ -17,6 +17,7 @@ import {
 import { JRA_OFFICIAL_ODDS_PARSER_VERSION, fetchFastJraOfficialOddsForRace, type OfficialOddsRow } from "./jra-official-odds-fetch";
 import { ensureCompletedFinalImmutability } from "./completed-final-invariants";
 import { shadowCompletedPortfolioResearch, type CompletedShadowPortfolio } from "./completed-ticket-shadow-research";
+import { roiFirstOfficialShadow, type RoiFirstPreT15Shadow } from "./roi-first-shadow-research";
 import { COMPLETED_PREDICTION_POLICY } from "./completed-prediction-policy";
 import type { Env, RaceRecord, RunnerRecord } from "./types";
 
@@ -81,6 +82,8 @@ type PreviewSnapshot = {
   courseBets: CompletedCourseBet[];
   shadowResearch?: CompletedShadowPortfolio[];
   shadowResearchError?: string | null;
+  roiFirstResearch?: RoiFirstPreT15Shadow | null;
+  roiFirstResearchError?: string | null;
 };
 
 type PreviewEnvelope = {
@@ -469,6 +472,20 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     shadowResearchError = errorText(error);
     shadowResearch = undefined;
   }
+  // Strictly counterfactual: the riskier EV strategy is persisted only as a
+  // research shadow, never substituted for the official frozen two tickets.
+  // Reuses the already fetched and timestamped JRA official six-market odds.
+  let roiFirstResearch: RoiFirstPreT15Shadow | null = null;
+  let roiFirstResearchError: string | null = null;
+  try {
+    roiFirstResearch = roiFirstOfficialShadow(
+      refreshed.runners.map((runner) => Number(runner.horseNo)), weights,
+      fetched.rows, oddsFetchedAt, String(refreshed.race.startTimeUtc),
+    );
+  } catch (error) {
+    // Research must never prevent live canonical predictions or T-15 locks.
+    roiFirstResearchError = errorText(error);
+  }
   const snapshot: PreviewSnapshot = {
     version: PREVIEW_VERSION,
     raceId,
@@ -490,6 +507,8 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     courseBets,
     shadowResearch,
     shadowResearchError,
+    roiFirstResearch,
+    roiFirstResearchError,
   };
   if (!validSnapshot(snapshot, raceId)) throw new Error(`WORKER_GENERATED_PREVIEW_GATE_FAILED:${raceId}`);
   await savePreview(db, snapshot);
@@ -543,6 +562,8 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
     // Immutable research-only candidate comparison, not a public prediction.
     shadowResearch: snapshot.shadowResearch ?? null,
     shadowResearchError: snapshot.shadowResearchError ?? null,
+    roiFirstResearch: snapshot.roiFirstResearch ?? null,
+    roiFirstResearchError: snapshot.roiFirstResearchError ?? null,
   })));
   for (const bet of snapshot.courseBets) {
     statements.push(db.prepare(`
