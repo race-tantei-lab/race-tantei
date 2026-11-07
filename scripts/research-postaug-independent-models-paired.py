@@ -25,18 +25,34 @@ START="2026-08-10"
 END="2026-11-08"
 TYPES=("単勝","ワイド","馬連","馬単","3連複","3連単")
 UNORDERED={"ワイド","馬連","3連複"}
-PAIRS={
+DEFAULT_TICKET={"単勝":(0,),"ワイド":(0,1),"馬連":(0,1),
+                "馬単":(0,1),"3連複":(0,1,2),"3連単":(0,1,2)}
+PAIRS={a+"__"+b:((a,DEFAULT_TICKET[a]),(b,DEFAULT_TICKET[b]))
+       for a,b in itertools.combinations(TYPES,2)}
+# Additional predeclared horse/position variants, no outcome-based construction.
+PAIRS.update({
  "win1_wide12":(("単勝",(0,)),("ワイド",(0,1))),
  "win2_wide12":(("単勝",(1,)),("ワイド",(0,1))),
+ "win3_wide12":(("単勝",(2,)),("ワイド",(0,1))),
+ "win1_wide13":(("単勝",(0,)),("ワイド",(0,2))),
+ "win2_wide13":(("単勝",(1,)),("ワイド",(0,2))),
+ "wide13_quinella12":(("ワイド",(0,2)),("馬連",(0,1))),
+ "wide23_quinella12":(("ワイド",(1,2)),("馬連",(0,1))),
+ "wide12_quinella13":(("ワイド",(0,1)),("馬連",(0,2))),
+ "wide12_exacta21":(("ワイド",(0,1)),("馬単",(1,0))),
+ "wide12_exacta12":(("ワイド",(0,1)),("馬単",(0,1))),
+ "win2_quinella12":(("単勝",(1,)),("馬連",(0,1))),
+ "win1_trio123":(("単勝",(0,)),("3連複",(0,1,2))),
+ "win2_trio123":(("単勝",(1,)),("3連複",(0,1,2))),
+ "win1_exacta12":(("単勝",(0,)),("馬単",(0,1))),
+ "wide12_trifecta123":(("ワイド",(0,1)),("3連単",(0,1,2))),
  "win1_quinella12":(("単勝",(0,)),("馬連",(0,1))),
  "wide12_quinella12":(("ワイド",(0,1)),("馬連",(0,1))),
  "wide12_trio123":(("ワイド",(0,1)),("3連複",(0,1,2))),
- "win1_exacta12":(("単勝",(0,)),("馬単",(0,1))),
- "wide12_trifecta123":(("ワイド",(0,1)),("3連単",(0,1,2))),
-}
+})
 KS=(3,4,5)
-STAKES=((1000,1000),(1400,600),(600,1400))
-RANKERS=("top1","top2","gap")
+STAKES=((1000,1000),(1400,600),(600,1400),(1800,200),(200,1800))
+RANKERS=("top1","top2","gap","top3","entropy")
 RESEARCH_OUTPUT=ROOT/"analysis-results/postaug-independent-paired-model-search-20261107.json"
 
 def load(path,name):
@@ -198,6 +214,8 @@ def rankscore(p,rule):
     if rule=="top1":return float(p[order[0]])
     if rule=="top2":return float(p[order[0]]+p[order[1]])
     if rule=="gap":return float(p[order[0]]-p[order[1]])
+    if rule=="top3":return float(p[order[0]]+p[order[1]]+p[order[2]])
+    if rule=="entropy":return float(-sum(q*math.log(q) for q in p))
     raise ValueError(rule)
 
 def run(records):
@@ -255,6 +273,18 @@ def run(records):
       "chosenByAugSepDiscoveryThenOctoberValidation":chosen,
       "topFiveOctoberValidationAmongAugSepFrozen40":sorted(shortlist,key=lambda x:-dual(x,"validateOct"))[:5],
       "topFiveNovemberHindsightDiagnosticNOTSelection":topnov,
+      "highestOverallRoiWithAtLeast50PctHitInAllThreePeriods_DIAGNOSTIC_ONLY":
+         sorted((s for s in strategies if all(s["periods"][p]["hitRacePct"]>=50 for p in
+             ("trainAugSep","validateOct","testNov"))),
+           key=lambda s:-s["all"]["roiPct"])[:10],
+      "highestOverallHitWithAtLeast90PctRoi_DIAGNOSTIC_ONLY":
+         sorted((s for s in strategies if s["all"]["roiPct"]>=90),
+           key=lambda s:-s["all"]["hitRacePct"])[:10],
+      "profitableEveryPeriodWithAtLeast35PctHit_DIAGNOSTIC_ONLY":
+         sorted((s for s in strategies if all(s["periods"][p]["roiPct"]>=100 and
+             s["periods"][p]["hitRacePct"]>=35 for p in
+             ("trainAugSep","validateOct","testNov"))),
+           key=lambda s:-s["all"]["roiPct"])[:10],
       "strategyRequirements":"3/4/5 per venue and exactly two distinct JRA bet types, original Light budget 2000 yen per race",
       "promotionEligible":False}
     RESEARCH_OUTPUT.parent.mkdir(parents=True,exist_ok=True)
@@ -262,6 +292,9 @@ def run(records):
     print("PAIRED_MODEL_SELECTION_AND_FUTURE_DIAGNOSTIC",json.dumps({
       "strategyCount":len(strategies),"completeVenueDays":len(good),
       "chosen":chosen,"top5Validation":evidence["topFiveOctoberValidationAmongAugSepFrozen40"],
+      "bestAllRoiAtLeast50Hit":evidence["highestOverallRoiWithAtLeast50PctHitInAllThreePeriods_DIAGNOSTIC_ONLY"][:3],
+      "bestAllHitAtLeast90Roi":evidence["highestOverallHitWithAtLeast90PctRoi_DIAGNOSTIC_ONLY"][:3],
+      "allPeriodsProfitable":evidence["profitableEveryPeriodWithAtLeast35PctHit_DIAGNOSTIC_ONLY"][:3],
       "promotionEligible":False},ensure_ascii=False),flush=True)
 
 def main():
