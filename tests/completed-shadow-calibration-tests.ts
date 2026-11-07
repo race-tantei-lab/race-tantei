@@ -35,7 +35,7 @@ for (const p of after) {
     for (let b=a+1; b<p.candidatesByType.length; b+=1) {
       const first = p.candidatesByType[a]!;
       const second = p.candidatesByType[b]!;
-      assert.notEqual(first.betType,second.betType);
+      assert.ok(first.betType !== second.betType);
       pairs.push(first.betType+"+"+second.betType);
     }
   }
