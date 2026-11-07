@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Chronological independent model comparison, paired JRA hit + actual ROI.
+"""ROI-FIRST 20%-min hit chronological model comparison, paired JRA hit + actual ROI.
 
 Train strictly before each test year; evaluate 2024 and 2025 separately.
 The 2024 race dates have been seen previously; this is RESEARCH, not pristine
@@ -180,13 +180,12 @@ def evaluate_matrix(pays,months,pairnames,model,rank):
                 entries.append(entry)
     return entries
 
-def paired_quality(m):
-    # Rates are not guaranteed profitable. Both metrics enter every ranking,
-    # and one largest jackpot is held out for ROI quality risk.
-    hit=m["hitRacePct"]
-    roi=m["roiPct"]
-    robust=m["roiMinusLargestPaidRacePct"]
-    return round((hit/45)*(min(roi,180)/100)*(min(robust,150)/100),6)
+def roi_first_quality(m):
+    """ROI-ranked candidate with hard 20%-minimum race hit, never max hit."""
+    if m["hitRacePct"] < 20.0:
+        return None
+    return (m["roiMinusLargestPaidRacePct"],m["roiPct"],m["hitRacePct"])
+
 
 def crossvalidate(byyear):
     key=lambda e:(e["model"],e["raceSelector"],e["ticketPair"],
@@ -194,32 +193,48 @@ def crossvalidate(byyear):
     past={key(x):x for x in byyear["2024"]}
     fut={key(x):x for x in byyear["2025"]}
     assert len(past)==len(fut) and len(past)>=5000,(len(past),len(fut))
-    ranked=sorted(past.values(),key=lambda x:(-paired_quality(x["metrics"]),
-            -x["metrics"]["hitRacePct"],str(key(x))))
-    candidate_top40=ranked[:40]
+    eligible=[x for x in past.values() if roi_first_quality(x["metrics"]) is not None]
+    if not eligible:raise RuntimeError("NO_TWENTY_PERCENT_HIT_RATE_CANDIDATES_IN_2024")
+    def rank2024(e):
+        return tuple(-v for v in roi_first_quality(e["metrics"]))+(str(key(e)),)
+    ranked=sorted(eligible,key=rank2024)
+    shortlist=ranked[:40]
     def evidence(e):
         identity=key(e)
         return {"policy":{k:v for k,v in e.items() if k!="metrics"},
                 "discovery2024":e["metrics"],"validation2025":fut[identity]["metrics"],
-                "discoverComposite":paired_quality(e["metrics"]),
-                "validationComposite":paired_quality(fut[identity]["metrics"])}
-    shortlisted=[evidence(x) for x in candidate_top40]
-    winner=shortlisted[0]
-    # Report ALL shortlisted, rather than cherry-pick the 2025 winner after viewing it.
-    # The top candidate is frozen by *2024 alone* and 2025 is evaluated exactly once.
+                "roiFirstScore2024":roi_first_quality(e["metrics"]),
+                "validation2025Pass20pctGate":fut[identity]["metrics"]["hitRacePct"]>=20}
+    shown=[evidence(x) for x in shortlist]
+    winner=shown[0]
+    # 2025 is *only* a report of previously selected 2024 policies; NEVER use
+    # its information to revise choice. 2025 is NOT pristine after prior audits.
     inpositive=sum(z["validation2025"]["roiPct"]>=100 and
-                   z["validation2025"]["hitRacePct"]>=40 for z in shortlisted)
+                   z["validation2025"]["hitRacePct"]>=20 for z in shown)
     bymodel={}
     for name in MODELS:
-        opts=[v for v in past.values() if v["model"]==name]
-        best=sorted(opts,key=lambda x:-paired_quality(x["metrics"]))[0]
+        opts=[v for v in eligible if v["model"]==name]
+        best=sorted(opts,key=rank2024)[0]
         bymodel[name]=evidence(best)
+    forward_profitable_all=[e for e in fut.values()
+        if e["metrics"]["hitRacePct"]>=20 and e["metrics"]["roiPct"]>=100]
+    forward_robust_all=[e for e in forward_profitable_all
+        if e["metrics"]["roiMinusLargestPaidRacePct"]>=100]
+    hindsight_top=sorted(forward_profitable_all,key=lambda e:
+        (-e["metrics"]["roiMinusLargestPaidRacePct"],-e["metrics"]["roiPct"],str(key(e))))[:5]
     return {"candidateUniverse":len(past),
-            "selectionPredeclared":"2024 only. 2025 never used to pick a winner",
+            "2024EligibleHit20Candidates":len(eligible),
+            "selectionPredeclared":"2024 historical 20%-min-hit gate then highest largest-payout-removed ROI; 2025 NEVER used to choose",
             "best2024SelectedAnd2025ForwardEvaluated":winner,
-            "top40By2024WithPaired2025Validation":shortlisted,
-            "top40With2025HitAtLeast40AndROIAtLeast100":inpositive,
-            "one2024WinnerPerModelAndIts2025Validation":bymodel,
+            "top40By2024WithPaired2025Validation":shown,
+            "top40With2025HitAtLeast20AndROIAtLeast100":inpositive,
+            "top40With2025HitAtLeast20AndROIAtLeast100AndLargestPayoutRemoved":
+              sum(x["validation2025"]["hitRacePct"]>=20 and
+                  x["validation2025"]["roiMinusLargestPaidRacePct"]>=100 for x in shown),
+            "one2024ROIFirstWinnerPerModelAndIts2025Validation":bymodel,
+            "hindsightOnly2025NumberHit20AndROI100AmongALL":len(forward_profitable_all),
+            "hindsightOnly2025NumberHit20AndTrimmedROI100AmongALL":len(forward_robust_all),
+            "hindsightOnly2025MostRobustProfitExamples_NOT_CANDIDATES":hindsight_top,
             "2025WasPreviouslyInspected":True,
             "productionEligible":False}
 
@@ -300,8 +315,12 @@ def run():
     print("MULTIFAMILY_CHRONO_PAIRED_COMPARE",json.dumps({
         "candidates":comparison["candidateUniverse"],
         "years":yearcounts,"selected":comparison["best2024SelectedAnd2025ForwardEvaluated"],
-        "top40ForwardProfitableAndHit40":comparison["top40With2025HitAtLeast40AndROIAtLeast100"],
-        "perFamily":comparison["one2024WinnerPerModelAndIts2025Validation"],
+        "top40ForwardProfitableAndHit20":comparison["top40With2025HitAtLeast20AndROIAtLeast100"],
+        "top40ForwardRobustProfitAndHit20":comparison["top40With2025HitAtLeast20AndROIAtLeast100AndLargestPayoutRemoved"],
+        "hindsight2025PositiveOptionsAmongAll":comparison["hindsightOnly2025NumberHit20AndROI100AmongALL"],
+        "hindsight2025RobustPositiveAmongAll":comparison["hindsightOnly2025NumberHit20AndTrimmedROI100AmongALL"],
+        "hindsight2025TopFive_DIAGNOSTIC_ONLY":comparison["hindsightOnly2025MostRobustProfitExamples_NOT_CANDIDATES"],
+        "perFamily":comparison["one2024ROIFirstWinnerPerModelAndIts2025Validation"],
         "promotionEligible":False},ensure_ascii=False),flush=True)
 
 if __name__=="__main__":
