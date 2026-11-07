@@ -180,9 +180,21 @@ def evaluate_matrix(pays,months,pairnames,model,rank):
                 entries.append(entry)
     return entries
 
+def meets_exact_hit20(m):
+    """Use integer race counts, not rounded percentages, for the 20% gate."""
+    if "hitRaces" in m and "races" in m:
+        hits=int(m["hitRaces"])
+        races=int(m["races"])
+        if races<=0 or hits<0 or hits>races:
+            raise AssertionError("INVALID_HIT_RACE_COUNTS")
+        return 5*hits>=races
+    # Synthetic regression fixtures only. Real evaluations always have counts.
+    return float(m["hitRacePct"])>=20.0
+
+
 def roi_first_quality(m):
-    """ROI-ranked candidate with hard 20%-minimum race hit, never max hit."""
-    if m["hitRacePct"] < 20.0:
+    """ROI-ranked candidate with an exact 20%-minimum race hit gate."""
+    if not meets_exact_hit20(m):
         return None
     return (m["roiMinusLargestPaidRacePct"],m["roiPct"],m["hitRacePct"])
 
@@ -204,20 +216,20 @@ def crossvalidate(byyear):
         return {"policy":{k:v for k,v in e.items() if k!="metrics"},
                 "discovery2024":e["metrics"],"validation2025":fut[identity]["metrics"],
                 "roiFirstScore2024":roi_first_quality(e["metrics"]),
-                "validation2025Pass20pctGate":fut[identity]["metrics"]["hitRacePct"]>=20}
+                "validation2025Pass20pctGate":meets_exact_hit20(fut[identity]["metrics"])}
     shown=[evidence(x) for x in shortlist]
     winner=shown[0]
     # 2025 is *only* a report of previously selected 2024 policies; NEVER use
     # its information to revise choice. 2025 is NOT pristine after prior audits.
     inpositive=sum(z["validation2025"]["roiPct"]>=100 and
-                   z["validation2025"]["hitRacePct"]>=20 for z in shown)
+                   meets_exact_hit20(z["validation2025"]) for z in shown)
     bymodel={}
     for name in MODELS:
         opts=[v for v in eligible if v["model"]==name]
         best=sorted(opts,key=rank2024)[0]
         bymodel[name]=evidence(best)
     forward_profitable_all=[e for e in fut.values()
-        if e["metrics"]["hitRacePct"]>=20 and e["metrics"]["roiPct"]>=100]
+        if meets_exact_hit20(e["metrics"]) and e["metrics"]["roiPct"]>=100]
     forward_robust_all=[e for e in forward_profitable_all
         if e["metrics"]["roiMinusLargestPaidRacePct"]>=100]
     hindsight_top=sorted(forward_profitable_all,key=lambda e:
@@ -229,7 +241,7 @@ def crossvalidate(byyear):
             "top40By2024WithPaired2025Validation":shown,
             "top40With2025HitAtLeast20AndROIAtLeast100":inpositive,
             "top40With2025HitAtLeast20AndROIAtLeast100AndLargestPayoutRemoved":
-              sum(x["validation2025"]["hitRacePct"]>=20 and
+              sum(meets_exact_hit20(x["validation2025"]) and
                   x["validation2025"]["roiMinusLargestPaidRacePct"]>=100 for x in shown),
             "one2024ROIFirstWinnerPerModelAndIts2025Validation":bymodel,
             "hindsightOnly2025NumberHit20AndROI100AmongALL":len(forward_profitable_all),
@@ -267,6 +279,16 @@ def selftest():
         synthetic("low_hit",90.0,900,800),
         synthetic("robust",25.0,65,50),
         synthetic("fragile",50.0,500,490)]
+    # 1 hit / 5 races qualifies; 1999 / 10000 does not, even if a
+    # displayed percentage was rounded upward to 20.00.
+    assert meets_exact_hit20({"hitRaces":1,"races":5,"hitRacePct":20.0})
+    assert not meets_exact_hit20({"hitRaces":1999,"races":10000,"hitRacePct":20.0})
+    assert not meets_exact_hit20({"hitRaces":0,"races":5,"hitRacePct":20.0})
+    try:
+        meets_exact_hit20({"hitRaces":6,"races":5,"hitRacePct":100.0})
+        raise AssertionError("INVALID_COUNTS_WERE_ACCEPTED")
+    except AssertionError as e:
+        assert str(e)=="INVALID_HIT_RACE_COUNTS"
     assert roi_first_quality(past[0]["metrics"]) is None
     assert roi_first_quality(past[1]["metrics"]) is not None
     assert sorted(past[1:],key=lambda e:tuple(-v for v in roi_first_quality(e["metrics"])))[0]["model"]=="robust"
