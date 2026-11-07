@@ -43,6 +43,8 @@ jobs:
         run: python scripts/verify-public-language.py
       - name: Verify public UI version resolver
         run: python scripts/resolve-public-ui-version.py
+      - name: Verify frozen-model ticket policy matches the live implementations
+        run: python3 scripts/verify-completed-ticket-contract.py
       - name: Verify actual ROI audit classification without D1 access
         run: python3 scripts/audit-production-live-roi-readonly.py --self-test
       - name: Verify immutable shadow ROI accounting without D1

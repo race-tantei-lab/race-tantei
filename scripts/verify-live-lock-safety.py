@@ -321,13 +321,14 @@ def main() -> None:
     policy = read("src/v1/completed-prediction-policy.ts")
     tickets = read("src/v1/completed-ticket-runtime.ts")
     python_tickets = read("scripts/generate-ten-year-live-bets.py")
-    require_text(policy, "completed-recency-v3-consistent-p02", "production policy identity")
-    require_text(tickets, "COMPLETED_ODDS_SCORE_POWER = 0.2", "ticket scoring")
-    require_text(python_tickets, "ODDS_SCORE_POWER=0.2", "Python ticket parity")
-    require_text(tickets, "scored.sort(", "single-stage candidate scoring")
+    require_text(policy, "completed-recency-v4-frozen-ev5-p04", "production policy identity")
+    require_text(tickets, "COMPLETED_ODDS_SCORE_POWER = 0.4", "ticket scoring")
+    require_text(python_tickets, "ODDS_SCORE_POWER=0.4", "Python ticket parity")
+    require_text(tickets, "candidates.slice(0, 5)", "historical top-five EV candidate gate")
+    require_text(tickets, "scored.sort(", "final score ranking")
     forbid_text(tickets, "candidates.sort((a, b) => (b.valueProduct", "legacy high-odds prefilter")
 
-    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=2m guard_before_heavy=true public_live_mutation=false canonical_learning=true prediction_policy=completed-recency-v3-consistent-p02 quota_budgeted=true")
+    print("LIVE_LOCK_SAFETY_OK runtime_schema_probe=false runtime_ddl=false primary=1m backup=2m guard_before_heavy=true public_live_mutation=false canonical_learning=true prediction_policy=completed-recency-v4-frozen-ev5-p04 quota_budgeted=true")
 
 
 if __name__ == "__main__":
