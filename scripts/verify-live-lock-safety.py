@@ -192,6 +192,24 @@ def main() -> None:
         "predictionPolicy: COMPLETED_PREDICTION_POLICY",
     ):
         require_text(lock, needle, "isolated live lock")
+    # Prevent a Free-plan CPU spike whenever three venues overlap in T-30.
+    # Existing primary/backup T-25 rescue remains guard-first and uses only
+    # verified pre-T15 official previews; no betting result or dummy odds.
+    require_text(lock,
+                 "if (generatedThisTick >= MAX_PREVIEW_GENERATIONS_PER_TICK ||",
+                 "T30 bounded generation")
+    require_text(lock,
+                 "attemptedThisTick >= MAX_PREVIEW_ATTEMPTS_PER_TICK)",
+                 "T30 bounded attempts")
+    require_text(lock,
+                 "await commitSnapshot(env.DB, raceId, existingPreview, new Date(), \"last_good\");",
+                 "T25 official last-good fallback")
+    forbid_text(lock,
+                "MAX_PREVIEW_ATTEMPTS_PER_TICK && remaining > FINAL_LOCK_ARM_MS",
+                "T30 CPU cap bypass")
+    forbid_text(lock,
+                "MAX_PREVIEW_GENERATIONS_PER_TICK && remaining > FINAL_LOCK_ARM_MS",
+                "T30 CPU cap bypass")
     forbid_text(lock, "PREVIEW_OPEN_MS", "selection-driven preview protection")
     forbid_text(lock, "start_time_utc<=?", "selection-driven preview protection")
 
