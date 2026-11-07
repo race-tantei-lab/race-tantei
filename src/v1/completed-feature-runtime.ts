@@ -357,55 +357,43 @@ export async function loadCompletedFeatureStateForRace(
   if (options.includeHistoricalDelta !== false && throughDate < race.raceDate) {
     const includeSameDayDelta = options.includeSameDayDelta !== false;
     const effectiveCutoff = cutoffUtc ?? race.startTimeUtc ?? new Date().toISOString();
-    // The previous DISTINCT race-first JOIN scanned roughly 11k-12k D1 rows
-    // on EVERY preview. The three production indexes already exist; seek
-    // only runners related to the current field and then apply the EXACT
-    // original race dates, cutoff and completed-results conditions.
+    // Restrict the indexed race-date window FIRST, then probe runners of each
+    // eligible race. The previous global UNION searched all ten years of
+    // horse/jockey/trainer indexes before filtering dates. Production analytics
+    // observed ~2.48m rows/day from that query alone despite the cutoff date.
     //
-    // UNION preserves the old DISTINCT semantics. Explicit NULL branches
-    // preserve COALESCE(jockey/trainer,'') if a current name is empty.
-    const indexedMatches = `
-      WITH matches AS (
-        SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_horse
-        WHERE horse_name IN (SELECT value FROM json_each(?))
-        UNION
-        SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_jockey
-        WHERE jockey IN (SELECT value FROM json_each(?))
-        UNION
-        SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_jockey
-        WHERE jockey IS NULL AND EXISTS (SELECT 1 FROM json_each(?) WHERE value='')
-        UNION
-        SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_trainer
-        WHERE trainer IN (SELECT value FROM json_each(?))
-        UNION
-        SELECT race_id FROM rt_runners INDEXED BY rt_idx_runners_trainer
-        WHERE trainer IS NULL AND EXISTS (SELECT 1 FROM json_each(?) WHERE value='')
-      )
+    // EXISTS returns one race ID exactly when the former UNION did; it keeps
+    // NULL/empty jockey and trainer matching and the immutable same-day
+    // completed-result cutoff. This is a read-only optimizer change, not a
+    // change to the completed 56-feature model or settled history.
+    const dateWindowSql = includeSameDayDelta
+      ? `ra.race_date>? AND (
+           ra.race_date<? OR (
+             ra.race_date=? AND ra.start_time_utc IS NOT NULL
+             AND datetime(ra.start_time_utc)<datetime(?)
+             AND EXISTS (SELECT 1 FROM rt_results rr
+                         WHERE rr.race_id=ra.race_id AND rr.finish_position IS NOT NULL)
+           )
+         )`
+      : "ra.race_date>? AND ra.race_date<?";
+    const dateBindings = includeSameDayDelta
+      ? [throughDate, race.raceDate, race.raceDate, effectiveCutoff]
+      : [throughDate, race.raceDate];
+    const raceIds = await db.prepare(`
       SELECT ra.race_id AS raceId
-      FROM matches m JOIN rt_races ra ON ra.race_id=m.race_id
-    `;
-    const raceIds = includeSameDayDelta
-      ? await db.prepare(`${indexedMatches}
-          WHERE ra.race_date>? AND (
-            ra.race_date<? OR (
-              ra.race_date=? AND ra.start_time_utc IS NOT NULL
-              AND datetime(ra.start_time_utc)<datetime(?)
-              AND EXISTS (SELECT 1 FROM rt_results rr
-                          WHERE rr.race_id=ra.race_id AND rr.finish_position IS NOT NULL)
+      FROM rt_races ra
+      WHERE ${dateWindowSql}
+        AND EXISTS (
+          SELECT 1 FROM rt_runners ru
+          WHERE ru.race_id=ra.race_id
+            AND (
+              ru.horse_name IN (SELECT value FROM json_each(?))
+              OR COALESCE(ru.jockey,'') IN (SELECT value FROM json_each(?))
+              OR COALESCE(ru.trainer,'') IN (SELECT value FROM json_each(?))
             )
-          )
-          ORDER BY ra.race_date,ra.race_id
-        `).bind(
-          horseJson, jockeyJson, jockeyJson, trainerJson, trainerJson,
-          throughDate, race.raceDate, race.raceDate, effectiveCutoff,
-        ).all<{ raceId: string }>()
-      : await db.prepare(`${indexedMatches}
-          WHERE ra.race_date>? AND ra.race_date<?
-          ORDER BY ra.race_date,ra.race_id
-        `).bind(
-          horseJson, jockeyJson, jockeyJson, trainerJson, trainerJson,
-          throughDate, race.raceDate,
-        ).all<{ raceId: string }>();
+        )
+      ORDER BY ra.race_date,ra.race_id
+    `).bind(...dateBindings, horseJson, jockeyJson, trainerJson).all<{ raceId: string }>();
     const ids = (raceIds.results ?? []).map((row) => row.raceId);
     if (ids.length) {
       // Preserve the direct indexed race_id lookup, but keep each statement
