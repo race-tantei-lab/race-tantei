@@ -42,6 +42,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: postaug-independent-models-hit-roi-no-promotion
-          path: analysis-results/postaug-independent-paired-model-search-20261107.json
+          path: |
+            analysis-results/postaug-independent-paired-model-search-20261107.json
+            analysis-results/model-packages/postaug-extra-trees-120.joblib
+            analysis-results/model-packages/postaug-extra-trees-120-manifest.json
           if-no-files-found: warn
           retention-days: 30
