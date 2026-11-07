@@ -10,6 +10,9 @@ examples=[
  ("aug_desktop","https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202602070120260815/56","pw151ou","1007202602070120260815"),
  ("sep_mobile","https://app.jra.jp/JRADB/accessS.html?CNAME=sw01sde0101202602050620260905/0C","sw151ou","1001202602050620260905"),
  ("oct_desktop","https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0108202604010120261003/DD","pw151ou","1008202604010120261003"),
+ ("oct31_mobile","https://www.jra.go.jp/JRADB/accessS.html?CNAME=sw01sde0108202604100120261031/9B","sw151ou","1008202604100120261031"),
+ ("nov01_sp","https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde0105202604110120261101/9D","sw151ou","1005202604110120261101"),
+ ("nov07_desktop","https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0105202605010120261107/9F","pw151ou","1005202605010120261107"),
 ]
 for title,url,prefix,marker in examples:
  try:
