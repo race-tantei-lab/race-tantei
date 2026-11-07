@@ -71,6 +71,41 @@ def fetch_readonly(start=START,end_exclusive=END_EXCLUSIVE):
         raise RuntimeError("D1_READ_LIMIT_REACHED_REPORT_INVALID")
     return {"selectionStates":selections,"bets":bets}
 
+def hit_coverage(rows):
+    """Hit coverage on ORIGINAL two distinct locked tickets; never infer odds."""
+    n=len(rows)
+    if not n:return {"races":0,"hitRaces":0,"hitRacePct":None,
+        "winningTickets":0,"tickets":0,"hitTicketPct":None,"bothTicketsHitRaces":0,
+        "profitableRaces":0,"profitableRacePct":None}
+    if any(not x["valid"] for x in rows):
+        raise AssertionError("HIT_COVERAGE_MUST_EXCLUDE_INVALID_RACES")
+    paid=sum(x["hitTickets"] for x in rows)
+    hit=sum(x["hitTickets"]>0 for x in rows)
+    both=sum(x["hitTickets"]==2 for x in rows)
+    profit=sum(x["return"]>x["stake"] for x in rows)
+    return {"races":n,"hitRaces":hit,
+        "hitRacePct":round(100*hit/n,2),"winningTickets":paid,
+        "tickets":2*n,"hitTicketPct":round(100*paid/(2*n),2),
+        "bothTicketsHitRaces":both,"profitableRaces":profit,
+        "profitableRacePct":round(100*profit/n,2)}
+
+
+def venue_day_hit_sweeps(complete,k):
+    """Only count fully complete k-ticket races per venue/day."""
+    if k not in TOP_KS:raise ValueError("COUNT_BELOW_3_FORBIDDEN")
+    cohorts=[rows[:k] for rows in complete.values()]
+    if any(len(rows)!=k or any(not x["valid"] for x in rows) for rows in cohorts):
+        raise AssertionError("INCOMPLETE_VENUE_DAY")
+    full=sum(all(x["hitTickets"]>0 for x in rows) for rows in cohorts)
+    zero=sum(all(x["hitTickets"]==0 for x in rows) for rows in cohorts)
+    eighty=sum(sum(x["hitTickets"]>0 for x in rows)>=math.ceil(0.8*k)
+               for rows in cohorts)
+    return {"completeVenueDays":len(cohorts),"allRacesHitVenueDays":full,
+        "noRacesHitVenueDays":zero,"atLeast80PctRacesHitVenueDays":eighty,
+        "allRacesHitVenueDayPct":round(100*full/len(cohorts),2) if cohorts else None,
+        "atLeast80PctRacesHitVenueDayPct":round(100*eighty/len(cohorts),2) if cohorts else None}
+
+
 def matched_complete_days(compiled):
     """Paired fair comparison: identical date+venue cohorts with all five T-15 bets."""
     by_venue=collections.defaultdict(list)
@@ -97,6 +132,9 @@ def matched_complete_days(compiled):
           "races":len(subset),"stakeYen":stake,"returnYen":payout,
           "roiPct":round(100*payout/stake,2) if stake else None,
           "roiWithoutLargestRacePayoutPct":round(100*(payout-max_r)/stake,2) if stake else None,
+          "largestRacePayoutSharePct":round(100*max_r/payout,2) if payout else None,
+          "hitCoverage":hit_coverage(subset),
+          "venueDayCoverage":venue_day_hit_sweeps(complete,k),
           "months":monthly
         }
     for rank in range(1,6):
@@ -199,7 +237,9 @@ def evaluate(source):
                 compiled.append({"date":date,"venue":venue,"raceId":rid,
                     "rank":rank,"score":rows[rank-1][0],"valid":reason is None,
                     "failure":reason,"stake":stake if reason is None else 0,
-                    "return":refund if reason is None else 0})
+                    "return":refund if reason is None else 0,
+                    "hitTickets":sum(int(x.get("returnYen") or 0)>0 for x in actual)
+                      if reason is None else 0})
     summaries={}
     by_month={}
     for k in TOP_KS:
@@ -215,6 +255,8 @@ def evaluate(source):
                                     for d,v in {(x["date"],x["venue"]) for x in subset}),
             "stakeYen":stake,"returnYen":payout,
             "roiOnValidBetsPct":round(payout*100/stake,2) if stake else None,
+            "roiWithoutLargestRacePayoutPct":round(100*(payout-max((r["return"] for r in valid),default=0))/stake,2) if stake else None,
+            "hitCoverageOnValidRaces":hit_coverage(valid),
             "allPlannedBetsVerified":len(subset)==len(valid)}
         summaries[str(k)]=summary
         for month in sorted({x["date"][:7] for x in subset}):
@@ -223,7 +265,8 @@ def evaluate(source):
             p=sum(x["return"] for x in v)
             by_month.setdefault(month,{})[str(k)]={"validRaces":len(v),
                 "plannedRaces":sum(x["date"].startswith(month) for x in subset),
-                "roiOnValidBetsPct":round(p*100/s,2) if s else None}
+                "roiOnValidBetsPct":round(p*100/s,2) if s else None,
+                "hitCoverageOnValidRaces":hit_coverage(v)}
     return {"status":"RETROSPECTIVE_RESEARCH_NOT_PROMOTION","basis":"actual immutable locked bets, ranked by original persisted raceScore", "dateFrom":min((x["date"] for x in compiled),default=None),
         "dateThrough":max((x["date"] for x in compiled),default=None),
         "strategies":summaries,"byMonth":by_month,"invalidReasons":dict(rejected),
@@ -253,6 +296,16 @@ def selftest():
     assert outcome["strategies"]["3"]["roiOnValidBetsPct"]==150.0,outcome
     assert outcome["strategies"]["4"]["roiOnValidBetsPct"]==112.5,outcome
     assert outcome["strategies"]["5"]["roiOnValidBetsPct"]==90.0,outcome
+    assert outcome["strategies"]["3"]["hitCoverageOnValidRaces"]["hitRacePct"]==66.67
+    assert outcome["strategies"]["5"]["hitCoverageOnValidRaces"]["hitRacePct"]==40.0
+    assert outcome["strategies"]["5"]["hitCoverageOnValidRaces"]["hitTicketPct"]==20.0
+    assert outcome["strategies"]["5"]["hitCoverageOnValidRaces"]["profitableRaces"]==2
+    complete=outcome["fairPairedCompleteDays"]["topKs"]
+    assert complete["3"]["venueDayCoverage"]["allRacesHitVenueDays"]==0
+    assert complete["5"]["venueDayCoverage"]["allRacesHitVenueDays"]==0
+    assert complete["5"]["venueDayCoverage"]["completeVenueDays"]==1
+    assert complete["5"]["hitCoverage"]["hitRaces"]==2
+    assert all(int(k)>=3 for k in TOP_KS)
     bets[0]["lockedAt"]=day+"T04:30:00Z" # Misses T-15
     out=evaluate({"selectionStates":states,"bets":bets})
     assert out["strategies"]["3"]["validRaces"]==2
