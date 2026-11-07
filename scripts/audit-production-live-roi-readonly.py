@@ -368,6 +368,35 @@ def main() -> None:
             "savedTickets": [{k:t.get(k) for k in ("betType","combination","stakeYen","returnYen")} for t in pay]})
         if len(samples) == 4:
             break
+    by_month = collections.defaultdict(lambda: {"wins":0,"sameHorseNoOdds":0,"onTimeWins":0,"onTimeSame":0,"oddsDifferFromLockedRow":0})
+    recent_examples = []
+    selections = {str(x.get("raceId")): (date,x) for date,rr in decode_selected(states).items() for x in rr}
+    for fr in final_rows:
+        rid=str(fr.get("stateKey") or "").removeprefix("worker_live_final:")
+        if rid not in selections:
+            continue
+        payload=json.loads(fr.get("stateValue") or "{}")
+        date, sel = selections[rid]
+        bs=[b for b in bets if str(b.get("raceId")) == rid and b.get("course")=="ライト"]
+        timely = len(bs)==2 and locked_on_time(bs,sel,date)
+        for t in payload.get("tickets") or []:
+            if t.get("betType") != "単勝":
+                continue
+            month=date[:7]
+            x=by_month[month]
+            x["wins"]+=1
+            same=abs(float(t.get("officialOdds") or 0)-float(t.get("combination") or 0))<1e-8
+            x["sameHorseNoOdds"]+=int(same)
+            x["onTimeWins"]+=int(timely)
+            x["onTimeSame"]+=int(timely and same)
+            br=next((b for b in bs if b.get("betType")=="単勝"),None)
+            if br and abs(float(br.get("assumedOdds") or 0)-float(t.get("officialOdds") or 0))>.001:
+                x["oddsDifferFromLockedRow"]+=1
+            if date>="2026-10-24" and len(recent_examples)<8:
+                recent_examples.append({"raceId":rid,"combination":t.get("combination"),"officialOdds":t.get("officialOdds"),
+                "predictedProbability":t.get("predictedProbability"),"assumedOdds":br.get("assumedOdds") if br else None,
+                "timely":timely})
+    print("SUSPECT_WIN_ODDS_SAME_AS_HORSE_NUMBER", json.dumps({"monthly":dict(sorted(by_month.items())),"recentExamples":recent_examples}, ensure_ascii=False,separators=(",",":")))
     print("LIVE_MODEL_SNAPSHOT_SAMPLES", json.dumps(samples, ensure_ascii=False, separators=(",",":")))
     report["queries"] = 5
     print("LIVE_MODEL_PROBABILITY_VS_RESULTS", json.dumps(inspect_prediction_calibration(states,bets,final_rows), ensure_ascii=False, separators=(",",":")))
