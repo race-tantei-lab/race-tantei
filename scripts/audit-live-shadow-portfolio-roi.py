@@ -56,6 +56,23 @@ def evaluate(selection_rows,final_rows,bet_rows,payout_rows,race_rows):
             raise AssertionError("CONFLICTING_STORED_JRA_PAYOUT "+str(key))
         payouts[key]=v
     refunds={r["raceId"]:{int(x) for x in json.loads(r.get("refunds") or "[]")} for r in race_rows}
+    race_status={r["raceId"]:r.get("status") for r in race_rows}
+    payout_types=collections.defaultdict(set)
+    for race_id,typ,_ in payouts:
+        payout_types[race_id].add(typ)
+    required_types={"単勝","ワイド","馬連","馬単","3連複","3連単"}
+    def paid_ticket(rid,bet_type,combination,stake):
+        """The paid stake is refunded on scratches; a refund is NOT a hit."""
+        try:
+            horse_nos={int(n) for n in str(combination).split("-")}
+        except ValueError:
+            raise ValueError("INVALID_STORED_BET_COMBINATION") from None
+        if not horse_nos or any(not 1<=n<=18 for n in horse_nos):
+            raise ValueError("INVALID_STORED_BET_COMBINATION")
+        if horse_nos & refunds[rid]:
+            return (stake,False,True)
+        payout100=payouts.get((rid,bet_type,combination),0)
+        return (stake*int(payout100)//100,bool(payout100),False)
     # Same race, same stake, same pre-T15 selection for paired metrics.
     # Do NOT compare standalone hit rate or standalone ROI on different cohorts.
     def empty():
@@ -107,31 +124,62 @@ def evaluate(selection_rows,final_rows,bet_rows,payout_rows,race_rows):
         if snap.get("oddsSource") not in ("jra-fast-official","jra-crawl-official"):
             excluded["shadow_not_from_official_JRA"]+=1
             continue
+        # Every normal finished race must have all six official payout
+        # markets. Missing result-table market rows cannot be treated as
+        # zero-value losing tickets because that would bias paired ROI.
+        if race_status.get(rid)!="finished" or payout_types[rid]!=required_types:
+            excluded["official_six_market_settlement_incomplete"]+=1
+            continue
+        official_actual=[]
+        for bet in actual:
+            try:
+                calculated=paid_ticket(rid,bet["betType"],bet["combination"],1000)
+            except ValueError:
+                excluded["invalid_canonical_bet_combination"]+=1
+                break
+            official_actual.append(calculated)
+        if len(official_actual)!=2:
+            continue
+        if any(int(bet["returnYen"])!=calculated[0]
+               for bet,calculated in zip(actual,official_actual)):
+            excluded["canonical_D1_return_disagrees_with_official_payout"]+=1
+            continue
+        shadow_ticket_results={}
+        all_shadow_valid=True
+        for policy in shadow:
+            try:
+                shadow_ticket_results[policy["policy"]]=[
+                    paid_ticket(rid,t["betType"],t["combination"],1000)
+                    for t in policy["tickets"]
+                ]
+            except ValueError:
+                all_shadow_valid=False
+                break
+        if not all_shadow_valid:
+            excluded["invalid_shadow_bet_combination"]+=1
+            continue
         paired_race_ids.append(rid)
-        def accrue(name, ticket_returns):
-            if len(ticket_returns)!=2 or any(v<0 for v in ticket_returns):
+        def accrue(name,ticket_outcomes):
+            if len(ticket_outcomes)!=2 or any(v<0 for v,_,__ in ticket_outcomes):
                 raise AssertionError("PAIR_MUST_CONTAIN_TWO_SETTLED_TICKETS")
-            returned=sum(ticket_returns)
+            returned=sum(v for v,_,__ in ticket_outcomes)
+            won_count=sum(int(won) for _,won,__ in ticket_outcomes)
+            refunded_count=sum(int(refund) for _,__,refund in ticket_outcomes)
+            hit=int(won_count>0)
             for target in (totals[name],dates[date][name]):
                 target["races"]+=1
                 target["stakeYen"]+=2000
                 target["returnYen"]+=returned
-                target["paidTickets"]+=sum(v>0 for v in ticket_returns)
-                target["hitRaces"]+=int(any(v>0 for v in ticket_returns))
-                target["bothTicketsHitRaces"]+=int(all(v>0 for v in ticket_returns))
+                target["paidTickets"]+=won_count
+                target["refundedTickets"]=target.get("refundedTickets",0)+refunded_count
+                target["hitRaces"]+=hit
+                target["bothTicketsHitRaces"]+=int(won_count==2)
                 target["profitableRaces"]+=int(returned>2000)
                 target["largestRaceReturnYen"]=max(target["largestRaceReturnYen"],returned)
-            all_groups[name][date].append(int(any(v>0 for v in ticket_returns)))
-        accrue("canonical",[int(x["returnYen"]) for x in actual])
+            all_groups[name][date].append(hit)
+        accrue("canonical",official_actual)
         for policy in shadow:
-            name=policy["policy"]
-            ticket_returns=[]
-            for ticket in policy["tickets"]:
-                horses={int(x) for x in str(ticket["combination"]).split("-")}
-                if horses & refunds.get(rid,set()):payout100=100
-                else:payout100=payouts.get((rid,ticket["betType"],ticket["combination"]),0)
-                ticket_returns.append(1000*int(payout100)//100)
-            accrue(name,ticket_returns)
+            accrue(policy["policy"],shadow_ticket_results[policy["policy"]])
     def finish(x):
         stake=x["stakeYen"]
         n=x["races"]
@@ -153,6 +201,9 @@ def evaluate(selection_rows,final_rows,bet_rows,payout_rows,race_rows):
             for name,group in sorted(all_groups.items())},
         "outcomesProvenOnlyForCompletePairedCohort":len(excluded)==0,
         "shadowOnlyNotActualBets":True,
+        "refundCountsAsHit":False,
+        "fullSixMarketPayoutRequired":True,
+        "canonicalPayoutReconciledWithD1":True,
         "payoutSource":"persisted JRA D1 payout table, not externally JRA-reverified"}
 
 def self_test():
@@ -167,8 +218,12 @@ def self_test():
     bets=[{"raceId":rid,"betType":"単勝","combination":"1","stakeYen":1000,"returnYen":0,"settlement":"settled","lockedAt":"2026-11-08T01:00:00Z"},
           {"raceId":rid,"betType":"ワイド","combination":"1-2","stakeYen":1000,"returnYen":0,"settlement":"settled","lockedAt":"2026-11-08T01:00:00Z"}]
     pays=[{"raceId":rid,"betType":"単勝","combination":"3","payout100":350},
-          {"raceId":rid,"betType":"ワイド","combination":"1-3","payout100":260}]
-    report=evaluate(selection,final,bets,pays,[{"raceId":rid,"refunds":"[]"}])
+          {"raceId":rid,"betType":"ワイド","combination":"1-3","payout100":260},
+          {"raceId":rid,"betType":"馬連","combination":"1-3","payout100":540},
+          {"raceId":rid,"betType":"馬単","combination":"3-1","payout100":900},
+          {"raceId":rid,"betType":"3連複","combination":"1-2-3","payout100":1200},
+          {"raceId":rid,"betType":"3連単","combination":"3-1-2","payout100":7500}]
+    report=evaluate(selection,final,bets,pays,[{"raceId":rid,"refunds":"[]","status":"finished"}])
     assert report["total"]["canonical"]["roiPct"]==0
     assert report["total"]["canonical"]["hitRacePct"]==0
     assert report["total"]["canonical"]["hitTicketPct"]==0
@@ -183,6 +238,29 @@ def self_test():
     assert report["pairedRaceCount"]==1
     assert all(v["roiPct"] is not None and v["hitRacePct"] is not None
                for v in report["total"].values())
+    # Do not misclassify a scratched/refunded ticket as a winner:
+    # the full stake is returned but hit rate stays zero for that ticket.
+    refunded=[dict(x) for x in bets]
+    refunded[0]["returnYen"]=1000
+    refunded[1]["returnYen"]=1000
+    report=evaluate(selection,final,refunded,pays,[{"raceId":rid,"refunds":"[1,2]","status":"finished"}])
+    assert report["pairedRaceCount"]==1
+    assert report["total"]["canonical"]["roiPct"]==100.0
+    assert report["total"]["canonical"]["hitRacePct"]==0.0
+    assert report["total"]["canonical"]["hitTicketPct"]==0.0
+    assert report["total"]["canonical"]["refundedTickets"]==2
+    assert report["total"]["market_implied_only"]["roiPct"]==225.0
+    assert report["total"]["market_implied_only"]["hitTicketPct"]==50.0
+    # Missing official payout market or mismatch between actual settled
+    # return and JRA payout table invalidates the *entire paired race*.
+    report=evaluate(selection,final,bets,pays[:-1],[{"raceId":rid,"refunds":"[]","status":"finished"}])
+    assert report["pairedRaceCount"]==0
+    assert report["excluded"]["official_six_market_settlement_incomplete"]==1
+    mismatch=[dict(x) for x in bets]
+    mismatch[0]["returnYen"]=7000
+    report=evaluate(selection,final,mismatch,pays,[{"raceId":rid,"refunds":"[]","status":"finished"}])
+    assert report["pairedRaceCount"]==0
+    assert report["excluded"]["canonical_D1_return_disagrees_with_official_payout"]==1
     print("SHADOW_PAIRED_HIT_AND_ROI_SELFTEST_OK")
 
 def main():
@@ -201,7 +279,7 @@ def main():
         AND source_prediction_id=-2 ORDER BY race_id,id LIMIT 1000""",[START+"-",bound+"-",COURSE])
     payouts=query("""SELECT race_id AS raceId,bet_type AS betType,combination,payout_yen AS payout100
       FROM rt_payouts WHERE race_id>=? AND race_id<? ORDER BY race_id LIMIT 2500""",[START+"-",bound+"-"])
-    races=query("""SELECT race_id AS raceId,refund_horse_nos_json AS refunds
+    races=query("""SELECT race_id AS raceId,refund_horse_nos_json AS refunds,status
       FROM rt_races WHERE race_id>=? AND race_id<? ORDER BY race_id LIMIT 500""",[START+"-",bound+"-"])
     if any((len(data)>=limit for data,limit in ((selections,150),(finals,350),(bets,1000),(payouts,2500),(races,500)))):
         raise AssertionError("SHADOW_AUDIT_QUERY_ROW_LIMIT_REACHED")
