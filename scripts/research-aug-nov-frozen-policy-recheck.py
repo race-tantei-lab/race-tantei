@@ -225,7 +225,7 @@ def parse_mobile_win_odds(html):
 def get_official_final_win(row,historic):
     url=row["resultUrl"]
     raw_url=__import__("urllib.parse").parse.unquote(url)
-    match=re.search(r"(?:pw|sw)01sde(?:10|01)(\\d{2})(\\d{4})(\\d{2})(\\d{2})(\\d{2})(\\d{8})",raw_url,re.I)
+    match=re.search(r"(?:pw|sw)01sde(?:10|01)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})",raw_url,re.I)
     if not match:
         raise ValueError("OFFICIAL_JRA_RESULT_URL_NOT_RECOGNIZED")
     venue,year,meeting,day,race_no,ymd=match.groups()
