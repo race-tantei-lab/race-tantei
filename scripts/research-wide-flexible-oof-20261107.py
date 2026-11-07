@@ -230,7 +230,11 @@ def main():
                     and yy[name]["dates"]>=16 for yy in (train,validation,shadow))]
     def best_in_year(pool,results):
         name=max(pool,key=lambda k:(results[k]["roiPct"] or 0,k)) if pool else None
-        return witness(name) if name else None
+        if name is None:return None
+        return witness(name) if name in selected else {
+            "strategy":json.loads(name),"2024_discovery_only":results[name],
+            "notCrossYearEvaluated":True
+        }
     best_across_years=max(all_years,key=lambda k:(
         min(train[k]["roiPct"],validation[k]["roiPct"],shadow[k]["roiPct"]),k)) if all_years else None
     peak_years={
