@@ -192,6 +192,23 @@ def main() -> None:
         "predictionPolicy: COMPLETED_PREDICTION_POLICY",
     ):
         require_text(lock, needle, "isolated live lock")
+    # Optional two shadow model policies can enumerate many JRA outcomes; they
+    # must never delay the real two-ticket lock during the final 30 minutes.
+    require_text(lock,
+                 "if (startMs - Date.now() > FINAL_LOCK_ARM_MS) {",
+                 "optional research deferred during critical T30")
+    require_text(lock,
+                 'shadowResearchError = "SKIPPED_OPTIONAL_RESEARCH_TO_PROTECT_LIVE_T30";',
+                 "shadow research has explicit T30 skip marker")
+    require_text(lock,
+                 'roiFirstResearchError = "SKIPPED_OPTIONAL_RESEARCH_TO_PROTECT_LIVE_T30";',
+                 "ROI research has explicit T30 skip marker")
+    require(
+        lock.index("const courseBets = completedCourseBets(tickets);")
+        < lock.index("if (startMs - Date.now() > FINAL_LOCK_ARM_MS) {")
+        < lock.index("const snapshot: PreviewSnapshot = {"),
+        "canonical ticket computation must precede optional T30 research"
+    )
     # Prevent a Free-plan CPU spike whenever three venues overlap in T-30.
     # Existing primary/backup T-25 rescue remains guard-first and uses only
     # verified pre-T15 official previews; no betting result or dummy odds.

@@ -456,35 +456,38 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     (betType, odds) => completedRecencyBetFactor(learning, betType, refreshed.race.venue, odds),
   );
   const courseBets = completedCourseBets(tickets);
-  // Shadow-only: the official public tickets above MUST NOT depend on this research.
-  // Reuse the same T-15 official odds snapshot; never fetch again or write other bets.
+  // Both optional research policies are CPU-heavy and counterfactual.
+  // NEVER run either when we are inside the T-30 live ticket protection window.
+  // This is evaluated AFTER JRA odds fetch, at the actual current time, so a
+  // long fetch crossing T-30 cannot accidentally start research on the deadline.
+  // Canonical tickets and official six-market odds were already computed above.
   let shadowResearch: CompletedShadowPortfolio[] | undefined;
   let shadowResearchError: string | null = null;
-  try {
-    shadowResearch = shadowCompletedPortfolioResearch(
-      refreshed.runners.map((runner) => Number(runner.horseNo)), weights, fetched.rows,
-    );
-    if (shadowResearch.some((row) => row.tickets.length !== 2 || row.tickets[0]?.betType === row.tickets[1]?.betType)) {
-      throw new Error("SHADOW_TWO_DISTINCT_TYPES_REQUIRED");
-    }
-  } catch (error) {
-    // Never compromise the canonical frozen production tickets or T-15 lock.
-    shadowResearchError = errorText(error);
-    shadowResearch = undefined;
-  }
-  // Strictly counterfactual: the riskier EV strategy is persisted only as a
-  // research shadow, never substituted for the official frozen two tickets.
-  // Reuses the already fetched and timestamped JRA official six-market odds.
   let roiFirstResearch: RoiFirstPreT15Shadow | null = null;
   let roiFirstResearchError: string | null = null;
-  try {
-    roiFirstResearch = roiFirstOfficialShadow(
-      refreshed.runners.map((runner) => Number(runner.horseNo)), weights,
-      fetched.rows, oddsFetchedAt, String(refreshed.race.startTimeUtc),
-    );
-  } catch (error) {
-    // Research must never prevent live canonical predictions or T-15 locks.
-    roiFirstResearchError = errorText(error);
+  if (startMs - Date.now() > FINAL_LOCK_ARM_MS) {
+    try {
+      shadowResearch = shadowCompletedPortfolioResearch(
+        refreshed.runners.map((runner) => Number(runner.horseNo)), weights, fetched.rows,
+      );
+      if (shadowResearch.some((row) => row.tickets.length !== 2 || row.tickets[0]?.betType === row.tickets[1]?.betType)) {
+        throw new Error("SHADOW_TWO_DISTINCT_TYPES_REQUIRED");
+      }
+    } catch (error) {
+      shadowResearchError = errorText(error);
+      shadowResearch = undefined;
+    }
+    try {
+      roiFirstResearch = roiFirstOfficialShadow(
+        refreshed.runners.map((runner) => Number(runner.horseNo)), weights,
+        fetched.rows, oddsFetchedAt, String(refreshed.race.startTimeUtc),
+      );
+    } catch (error) {
+      roiFirstResearchError = errorText(error);
+    }
+  } else {
+    shadowResearchError = "SKIPPED_OPTIONAL_RESEARCH_TO_PROTECT_LIVE_T30";
+    roiFirstResearchError = "SKIPPED_OPTIONAL_RESEARCH_TO_PROTECT_LIVE_T30";
   }
   const snapshot: PreviewSnapshot = {
     version: PREVIEW_VERSION,
