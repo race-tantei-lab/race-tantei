@@ -60,6 +60,10 @@ def main():
   late_samples=query("""SELECT race_id raceId,result_url resultUrl
     FROM rt_races WHERE race_date IN ('2026-09-20','2026-10-03','2026-11-07')
       AND race_no=1 ORDER BY race_date,race_id LIMIT 12""",[])
+  strange=query("""SELECT race_id raceId,result_url resultUrl
+    FROM rt_races WHERE race_date IN ('2026-10-31','2026-11-01','2026-11-07')
+      AND race_no IN (1,2,3,4) ORDER BY race_date,race_id LIMIT 34""",[])
+  print("AUG_NOV_URL_VARIANTS_LATE",json.dumps(strange,ensure_ascii=False),flush=True)
   print("AUG_NOV_LATER_RESULT_LINK_FORMATS",json.dumps(late_samples,ensure_ascii=False),flush=True)
   print("AUG_NOV_RETROSPECTIVE_FEASIBILITY",json.dumps({"races":races,"runners":runners,"results":results,"preT15WinSnapshots":snapshots,"resultLinkCoverage":links,"field12Plus":fields,"sampleLinks":examples,
     "limitation":"end-of-day or final win odds unverified for T-15; unknown complete prior-runner continuity; no counterfactual ROI yet",
