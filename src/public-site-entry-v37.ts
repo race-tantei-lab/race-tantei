@@ -390,15 +390,24 @@ async function fetchPublicDay(request: Request, env: Env, ctx: ExecutionContext,
 }
 
 async function fetchNormalHome(_request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
-  // Keep first paint bounded, but source the current/recent calendar from the
-  // maintained cache so today's card is actually selectable on the public site.
-  // loadRecentCalendar performs one indexed cache read and only falls back to a
-  // bounded exact-date GROUP BY when today's venue rows are absent.
-  const [calendar, cumulative] = await Promise.all([
-    loadRecentCalendar(env),
-    loadCumulativePerformance(env.DB),
-  ]);
-  return embeddedNormalHome(calendar, cumulative);
+  // Keep the home page available even when D1 cannot serve the cumulative
+  // state read (for example during an account-level free-tier quota lockout).
+  // Read-only presentation fallback must never generate or change live bets.
+  const calendar = await loadRecentCalendar(env);
+  try {
+    const cumulative = await loadCumulativePerformance(env.DB);
+    return embeddedNormalHome(calendar, cumulative);
+  } catch (error) {
+    console.error("V37_HOME_CUMULATIVE_UNAVAILABLE_USING_STATIC_SNAPSHOT", error);
+    // The historical snapshot is explicitly marked as stale; do not present
+    // frozen cumulative figures as fresh production results.
+    const response = embeddedNormalHome(calendar);
+    const notice = '<div role="status" style="margin:12px auto;padding:12px 16px;max-width:1050px;border:1px solid #b68d50;border-radius:10px;background:#30261a;color:#fff1d4;font-size:14px">累計回収率の最新データを一時取得できないため、保存済みの表示を使用しています。最新成績は復旧後に更新されます。</div>';
+    const html = (await response.text()).replace(/<main\b[^>]*>/i, (match) => match + notice);
+    const headers = new Headers(response.headers);
+    headers.set("x-race-home-data-status", "cumulative-stale-snapshot");
+    return new Response(html, { status: 200, headers });
+  }
 }
 async function fetchRaceList(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const homeUrl = new URL(request.url);
