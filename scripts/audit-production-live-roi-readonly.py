@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Read-only production audit: actual bets, missing T-15 locks, settlements and ROI.
 
-Only two date-bounded D1 queries; no migrations, writes, backfills, model
+Date-bounded production D1 reads; no migrations, writes, backfills, model
 changes or website modifications. Excludes still-running JST race day.
 Historical backtest is deliberately NOT included in actual production ROI.
 """
@@ -16,7 +16,7 @@ import urllib.request
 
 JST = dt.timezone(dt.timedelta(hours=9))
 COURSES = ("ライト", "スタンダード", "プレミアム")
-LIMIT = 2000
+LIMIT = 5000
 
 def query(sql: str, params: list[str]) -> list[dict]:
     a = os.environ["CLOUDFLARE_ACCOUNT_ID"]
@@ -149,36 +149,100 @@ def self_test() -> None:
     assert report["lateCount"] == 0
     print("ACTUAL_ROI_READ_ONLY_AUDIT_SELFTEST_OK")
 
+
+def summarize_live_records(states: list[dict], bets: list[dict], calendar: list[dict]) -> dict:
+    """Separate all recorded settlement from strictly T-15-locked settlement.
+
+    Only frozen selected races; use light course once to avoid triplicate bets.
+    Never treat a missing prediction as a realized loss or imply that a
+    post-deadline lock was a legitimate pre-race prediction.
+    """
+    selected = decode_selected(states)
+    by_id = collections.defaultdict(list)
+    for b in bets:
+        by_id[(str(b.get("raceId") or ""), str(b.get("course") or ""))].append(b)
+    modes = {}
+    for mode in ("recorded", "deadline_valid"):
+        sums = collections.defaultdict(lambda: {"races": 0, "tickets": 0, "stakeYen": 0, "returnYen": 0, "hits": 0})
+        by_date = collections.defaultdict(lambda: {"races": 0, "stakeYen": 0, "returnYen": 0})
+        for date, races in sorted(selected.items()):
+            for race in races:
+                rid = str(race.get("raceId") or "")
+                rows = by_id.get((rid, "ライト"), [])
+                if len(rows) != 2 or any(str(b.get("settlementStatus")) != "settled" for b in rows):
+                    continue
+                if mode == "deadline_valid" and not locked_on_time(rows, race, date):
+                    continue
+                if any(b.get("returnYen") is None or int(b.get("stakeYen") or 0) <= 0 for b in rows):
+                    continue
+                venue = rid.split("-")[3] if len(rid.split("-")) >= 5 else "unknown"
+                day = by_date[date]
+                day["races"] += 1
+                for b in rows:
+                    stake = int(b["stakeYen"])
+                    returned = int(b["returnYen"])
+                    typ = str(b.get("betType") or "unknown")
+                    odds = float(b.get("assumedOdds") or 0)
+                    bucket = ("missing" if odds <= 0 else "1-3" if odds < 3 else "3-10" if odds < 10 else "10-30" if odds < 30 else "30-100" if odds < 100 else "100+")
+                    for key in (("total", "all"), ("betType", typ), ("venue", venue), ("oddsBand", bucket)):
+                        entry = sums[key]
+                        entry["tickets"] += 1
+                        entry["stakeYen"] += stake
+                        entry["returnYen"] += returned
+                        entry["hits"] += int(returned > 0)
+                    day["stakeYen"] += stake
+                    day["returnYen"] += returned
+                for key in (("total", "all"), ("venue", venue)):
+                    sums[key]["races"] += 1
+        def format_entry(e):
+            return {**e, "roiPct": round(100 * e["returnYen"] / e["stakeYen"], 2) if e["stakeYen"] else None,
+                    "profitYen": e["returnYen"] - e["stakeYen"]}
+        modes[mode] = {"byDate": {date: format_entry(v) for date, v in sorted(by_date.items())},
+                       "byBreakdown": {kind: {name: format_entry(v) for (k, name), v in sorted(sums.items()) if k == kind}
+                                       for kind in ("total", "betType", "venue", "oddsBand")}}
+    missing_calendar_dates = sorted({str(row.get("raceDate")) for row in calendar} - set(selected))
+    return {"basis": "real-selected-light-course-two-bets-only", "modes": modes,
+            "calendarRaceDates": len(calendar), "frozenSelectionDates": len(selected),
+            "calendarDatesMissingFrozenSelection": missing_calendar_dates,
+            "calendar": calendar}
+
 def main() -> None:
     if "--self-test" in sys.argv:
         self_test()
         return
     now = dt.datetime.now(JST).date()
     yesterday = now - dt.timedelta(days=1)
-    start = max(dt.date(2026, 10, 1), yesterday - dt.timedelta(days=40))
+    start = dt.date(2026, 8, 10)
     end_exclusive = yesterday + dt.timedelta(days=1)
     # Both queries are bounded and use only already persisted rows.
     states = query("""
       SELECT state_key AS stateKey, state_value AS stateValue
       FROM rt_system_state WHERE state_key>=? AND state_key<?
-      ORDER BY state_key LIMIT 60
+      ORDER BY state_key LIMIT 150
     """, ["final_daily_selection:" + str(start), "final_daily_selection:" + str(end_exclusive)])
     bets = query("""
       SELECT race_id AS raceId, course, stake_yen AS stakeYen,
              return_yen AS returnYen, settlement_status AS settlementStatus,
-             locked_at AS lockedAt
+             locked_at AS lockedAt,bet_type AS betType,assumed_odds AS assumedOdds
       FROM rt_public_bets
       WHERE race_id>=? AND race_id<?
         AND source_prediction_id=-2
-      ORDER BY race_id, course, id LIMIT 2000
+      ORDER BY race_id, course, id LIMIT 5000
     """, [str(start) + "-", str(end_exclusive) + "-"])
+    calendar = query("""
+      SELECT race_date AS raceDate, COUNT(*) AS races
+      FROM rt_races
+      WHERE race_date>=? AND race_date<?
+      GROUP BY race_date ORDER BY race_date LIMIT 150
+    """, [str(start), str(end_exclusive)])
     if not states:
         raise AssertionError("NO_PRODUCTION_SELECTION_ROWS: audit cannot assert actual results")
     if len(bets) >= LIMIT:
         raise AssertionError("ROW_LIMIT_REACHED: refuse incomplete ROI audit")
     report = audit(states, bets)
     report["period"] = {"from": str(start), "through": str(yesterday)}
-    report["queries"] = 2
+    report["queries"] = 3
+    print("FULL_PERIOD_LIVE_ROI_DETAIL", json.dumps(summarize_live_records(states, bets, calendar), ensure_ascii=False, separators=(",",":")))
     print("ACTUAL_PRODUCTION_ROI_READONLY_AUDIT", json.dumps(report, ensure_ascii=False, separators=(",",":")))
     if report["missingCount"] or report["lateCount"] or report["unsettledCount"]:
         raise AssertionError("ACTUAL_PRODUCTION_BETS_OR_SETTLEMENT_INCOMPLETE: do not certify ROI")
