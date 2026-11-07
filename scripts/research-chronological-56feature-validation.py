@@ -251,6 +251,63 @@ def paired_archived_market_diagnostic(model, X, counts, offsets, winners, ix, ma
             "note":"archived odds timestamp unverified; 2026 opened diagnostic, no tuning/promotion and no T15 ROI conclusion"}
 
 
+def archived_single_win_ticket_diagnostic(model, X, counts, offsets, winners, ix, market, dates):
+    """Explore predeclared alternatives with archived FINAL odds. NOT JRA T-15 ROI.
+
+    This is not the required two-distinct-type production strategy and lacks
+    official settlement corroboration. Purely tests whether any OOF odds/value
+    candidates might be worth prospectively shadowing with real pre-T15 odds.
+    """
+    start=int(offsets[ix[0]])
+    raw=model.predict_proba(X[start:int(offsets[ix[-1]+1])])[:,1]
+    policies={
+        "top_model_probability":lambda pairs:max(pairs,key=lambda v:v[1])[0],
+        "market_favorite":lambda pairs:min(pairs,key=lambda v:v[2])[0],
+        "max_model_ev":lambda pairs:max(pairs,key=lambda v:v[1]*v[2])[0],
+        "max_ev_at_least_2":lambda pairs:next((v[0] for v in
+            sorted(pairs,key=lambda v:-v[1]*v[2]) if v[1]*v[2]>=2),None),
+        "max_ev_at_least_3":lambda pairs:next((v[0] for v in
+            sorted(pairs,key=lambda v:-v[1]*v[2]) if v[1]*v[2]>=3),None),
+        "odds_10_to_50_ev_2":lambda pairs:next((v[0] for v in
+            sorted(pairs,key=lambda v:-v[1]*v[2]) if 10<=v[2]<=50 and v[1]*v[2]>=2),None),
+        "odds_20_to_100_ev_2":lambda pairs:next((v[0] for v in
+            sorted(pairs,key=lambda v:-v[1]*v[2]) if 20<=v[2]<=100 and v[1]*v[2]>=2),None),
+    }
+    ledgers={name:[] for name in policies}
+    for index in ix:
+        odds=market[index]
+        if not all(isinstance(o,(float,int)) and math.isfinite(o) and o>1.0 for o in odds):continue
+        a=int(offsets[index])-start;b=int(offsets[index+1])-start
+        p=np.maximum(raw[a:b],1e-15)
+        p=p/p.sum()
+        pairs=[(i,float(p[i]),float(o)) for i,o in enumerate(odds)]
+        for name,policy in policies.items():
+            choice=policy(pairs)
+            if choice is None:continue
+            # Hypothetical 100-yen returns at ARCHIVED odds, not payout-table audit.
+            hit=choice==int(winners[index])
+            payout=round(100*float(odds[choice])) if hit else 0
+            ledgers[name].append((str(dates[index]),payout))
+    out={}
+    for name,rows in ledgers.items():
+        n=len(rows);returned=sum(x[1] for x in rows)
+        bymonth={}
+        for month in sorted({d[:7] for d,_ in rows}):
+            pay=sum(v for d,v in rows if d.startswith(month))
+            bets=sum(d.startswith(month) for d,_ in rows)
+            bymonth[month]={"bets":bets,"hypotheticalRoiPct":round(pay/bets,2) if bets else None}
+        largest=max((v for _,v in rows),default=0)
+        out[name]={"bets":n,"hypotheticalRoiPct":round(returned/n,2) if n else None,
+            "withoutLargestPayoutPct":round((returned-largest)/n,2) if n else None,
+            "payoutYenAssuming100YenStake":returned,
+            "months":bymonth}
+    return {"status":"hypothetical_preT15_unverified_win_only_archived_odds_not_actual_roi",
+        "productionEligible":False,
+        "markets":"only single win, NOT two distinct ticket types",
+        "parameters":"predeclared not selected on this report",
+        "policies":out}
+
+
 def fit(X,y,offsets,train_ix,params):
     assert len(train_ix) >= 8000, len(train_ix)
     limit = int(offsets[train_ix[-1]+1])
@@ -302,6 +359,9 @@ def main():
             assert dates[train_ix[-1]] < dates[eval_ix[0]]
             model=fit(X,y,offsets,train_ix,params)
             scores[label]=score(model,X,counts,offsets,winners,eval_ix)
+            if name=="adopted_complexity_500x127":
+                report.setdefault("archivedFinalOddsWinOnlyExploration",{})[label]=(
+                    archived_single_win_ticket_diagnostic(model,X,counts,offsets,winners,eval_ix,market,dates))
             print("CHRONO_VALIDATION", name, label, json.dumps(scores[label]),flush=True)
             del model
         total_races = sum(s["raceCount"] for s in scores.values())
@@ -321,6 +381,8 @@ def main():
     report["untouched2026Holdout"]=score(model,X,counts,offsets,winners,holdout_ix)
     report["pairedArchivedMarketDiagnostic"]=paired_archived_market_diagnostic(
         model,X,counts,offsets,winners,holdout_ix,market)
+    report.setdefault("archivedFinalOddsWinOnlyExploration",{})["2026"] = (
+        archived_single_win_ticket_diagnostic(model,X,counts,offsets,winners,holdout_ix,market,dates))
     report["holdoutRows"]=len(holdout_ix)
     report["elapsedSeconds"]=round(time.monotonic()-start,1)
     report["promotionEligible"]=False
@@ -336,6 +398,12 @@ def main():
         "selected":selected,"validation":validation_sums,
         "holdout":report["untouched2026Holdout"],
         "pairedArchivedMarketDiagnostic":report["pairedArchivedMarketDiagnostic"],
+        "hypotheticalWinOnlySummary":{
+            year:{name:{"bets":v["bets"],"hypotheticalRoiPct":v["hypotheticalRoiPct"],
+                        "withoutLargestPayoutPct":v["withoutLargestPayoutPct"]}
+                  for name,v in summary["policies"].items()}
+            for year,summary in report["archivedFinalOddsWinOnlyExploration"].items()
+        },
         "promotionEligible":False,"elapsedSeconds":report["elapsedSeconds"],
     },ensure_ascii=False),flush=True)
 
