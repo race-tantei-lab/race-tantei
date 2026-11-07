@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - scripts/research-topk-production-bets-readonly.py
+      - scripts/research-archived-market-benchmark-20261107.py
       - .github/workflows/research-topk-production-bets-readonly.yml
   workflow_dispatch:
 
@@ -20,3 +21,5 @@ jobs:
       - run: python3 -m py_compile scripts/research-topk-production-bets-readonly.py
       - name: Validate 3/4/5 real-money denominators, deadlines and missing races
         run: python3 scripts/research-topk-production-bets-readonly.py --self-test
+      - name: Compare frozen 2026 model with archived-odds market benchmark (not live T15)
+        run: python3 scripts/research-archived-market-benchmark-20261107.py
