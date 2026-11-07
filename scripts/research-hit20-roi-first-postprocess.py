@@ -73,7 +73,16 @@ def inspect(report):
       "2024FrozenBest":{"policy":{k:v for k,v in winner.items() if k!="metrics"},
         "discovery2024":winner["metrics"],"diagnostic2025":future["metrics"]},
       "year2025NeverUsedToSelect":True,
-      "winnerValidatedPositiveProfit":gate(future["metrics"]) and future["metrics"]["roiPct"]>100,
+      # Previously inspected years cannot prove fresh independent profit.
+      "winnerRetrospectiveBothYearsHit20AndProfitable":(
+          gate(winner["metrics"]) and gate(future["metrics"])
+          and winner["metrics"]["roiPct"]>100 and future["metrics"]["roiPct"]>100),
+      "winnerRetrospectiveBothYearsRobustlyProfitable":(
+          gate(winner["metrics"]) and gate(future["metrics"])
+          and winner["metrics"]["roiMinusLargestPaidRacePct"]>100
+          and future["metrics"]["roiMinusLargestPaidRacePct"]>100),
+      "winnerValidatedPositiveProfit":False,
+      "forwardIndependentValidationAvailable":False,
       "promoteToProduction":False,
       "limitations":["2024 and 2025 were inspected previously; not pristine holdout",
                      "archived T-15 odds not available","no per-month or venue data in summary artifact",
@@ -97,6 +106,20 @@ def selftest():
     assert x["bothYearsHit20AndTrimmedROIOver100CountDiagnosticOnly"]==2349
     assert x["frozen2024Top40Forward2025ROIOver100Count"]==40
     assert x["2024FrozenBestHasRobustROIOver100"] is True
+    assert x["winnerValidatedPositiveProfit"] is False
+    assert x["forwardIndependentValidationAvailable"] is False
+    assert x["winnerRetrospectiveBothYearsRobustlyProfitable"] is True
+    # Changing discovery-period return cannot turn retrospective data into validation.
+    changed=json.loads(json.dumps(r))
+    for entry in changed["allCandidatesByYear"]["2024"]:
+        if entry["model"]=="m4998":
+            entry["metrics"]["roiPct"]=90
+            entry["metrics"]["roiMinusLargestPaidRacePct"]=85
+            entry["metrics"]["returnYen"]=540000
+            entry["metrics"]["netYen"]=-60000
+    y=inspect(changed)
+    assert y["winnerValidatedPositiveProfit"] is False
+    assert y["forwardIndependentValidationAvailable"] is False
     bad=json.loads(json.dumps(r));bad["allCandidatesByYear"]["2025"].pop()
     try:inspect(bad);raise AssertionError("EXPECTED_MISSING_DETECTED")
     except ValueError as e:assert "MISSING" in str(e)
