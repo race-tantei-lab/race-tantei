@@ -354,6 +354,21 @@ def main() -> None:
         raise AssertionError("ROW_LIMIT_REACHED: refuse incomplete ROI audit")
     report = audit(states, bets)
     report["period"] = {"from": str(start), "through": str(yesterday)}
+    samples = []
+    for state_row in final_rows:
+        rid = str(state_row.get("stateKey") or "").removeprefix("worker_live_final:")
+        if not any(str(b.get("raceId")) == rid and str(b.get("course")) == "ライト" for b in bets):
+            continue
+        pay = [b for b in bets if str(b.get("raceId")) == rid and str(b.get("course")) == "ライト"]
+        if len(pay) != 2:
+            continue
+        raw = json.loads(state_row.get("stateValue") or "{}")
+        samples.append({"raceId": rid, "payloadKeys": sorted(list(raw))[:30],
+            "previewTickets": [{k:t.get(k) for k in ("betType","combination","predictedProbability","officialOdds","valueProduct","score")} for t in (raw.get("tickets") or [])[:2]],
+            "savedTickets": [{k:t.get(k) for k in ("betType","combination","stakeYen","returnYen")} for t in pay]})
+        if len(samples) == 4:
+            break
+    print("LIVE_MODEL_SNAPSHOT_SAMPLES", json.dumps(samples, ensure_ascii=False, separators=(",",":")))
     report["queries"] = 5
     print("LIVE_MODEL_PROBABILITY_VS_RESULTS", json.dumps(inspect_prediction_calibration(states,bets,final_rows), ensure_ascii=False, separators=(",",":")))
     print("LIVE_PAYOUTS_VS_STORED_JRA", json.dumps(inspect_payout_consistency(payouts), ensure_ascii=False, separators=(",",":")))
