@@ -1,0 +1,22 @@
+name: Verify read-only real T15 two-ticket shadow hit+ROI pairing
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/audit-live-shadow-portfolio-roi.py
+      - .github/workflows/research-paired-shadow-hit-roi.yml
+
+permissions:
+  contents: read
+
+jobs:
+  shadow-hit-roi-cohort-selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax check without database access
+        run: python3 -m py_compile scripts/audit-live-shadow-portfolio-roi.py
+      - name: Require equal T15 pre-result cohorts and valid hit+ROI together
+        run: python3 scripts/audit-live-shadow-portfolio-roi.py --self-test

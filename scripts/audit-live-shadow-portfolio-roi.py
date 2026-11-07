@@ -56,14 +56,29 @@ def evaluate(selection_rows,final_rows,bet_rows,payout_rows,race_rows):
             raise AssertionError("CONFLICTING_STORED_JRA_PAYOUT "+str(key))
         payouts[key]=v
     refunds={r["raceId"]:{int(x) for x in json.loads(r.get("refunds") or "[]")} for r in race_rows}
-    totals=collections.defaultdict(lambda:{"races":0,"stakeYen":0,"returnYen":0,"paidTickets":0})
-    dates=collections.defaultdict(lambda:collections.defaultdict(lambda:{"races":0,"stakeYen":0,"returnYen":0}))
+    # Same race, same stake, same pre-T15 selection for paired metrics.
+    # Do NOT compare standalone hit rate or standalone ROI on different cohorts.
+    def empty():
+        return {"races":0,"stakeYen":0,"returnYen":0,"paidTickets":0,
+                "hitRaces":0,"bothTicketsHitRaces":0,"profitableRaces":0,
+                "largestRaceReturnYen":0}
+    totals=collections.defaultdict(empty)
+    dates=collections.defaultdict(lambda:collections.defaultdict(empty))
+    all_groups=collections.defaultdict(lambda:collections.defaultdict(list))
+    paired_race_ids=[]
     excluded=collections.Counter()
     for rid,(date,start_jst) in sorted(selections.items()):
         snap=final.get(rid)
         actual=bets.get(rid,[])
         if snap is None or len(actual)!=2 or any(x["settlement"]!="settled" for x in actual):
             excluded["no_final_or_two_settled_actual_bets"]+=1
+            continue
+        if len({x.get("betType") for x in actual})!=2:
+            excluded["canonical_bet_types_not_distinct"]+=1
+            continue
+        if any(int(x.get("stakeYen") or 0)!=1000 or x.get("returnYen") is None
+               or int(x["returnYen"])<0 for x in actual):
+            excluded["canonical_stake_or_payout_invalid"]+=1
             continue
         if not deadline_ok(snap.get("lockedAt"),date,start_jst):
             excluded["final_not_proven_T15"]+=1
@@ -75,31 +90,68 @@ def evaluate(selection_rows,final_rows,bet_rows,payout_rows,race_rows):
         if not isinstance(shadow,list) or len(shadow)!=2:
             excluded["shadow_not_captured"]+=1
             continue
-        if not all(isinstance(p,dict) and len(p.get("tickets") or [])==2
-                   and len({x.get("betType") for x in p["tickets"]})==2 for p in shadow):
+        if (not all(isinstance(p,dict) and len(p.get("tickets") or [])==2
+                    and len({x.get("betType") for x in p["tickets"]})==2
+                    and all(t.get("betType") in ("単勝","ワイド","馬連","馬単","3連複","3連単")
+                            for t in p["tickets"]) for p in shadow)
+                or {p.get("policy") for p in shadow} !=
+                   {"market_implied_only","market_blend_30pct_model"}):
             excluded["shadow_invalid"]+=1
             continue
-        current=totals["canonical"];current["races"]+=1;current["stakeYen"]+=sum(int(x["stakeYen"]) for x in actual)
-        current["returnYen"]+=sum(int(x["returnYen"]) for x in actual)
-        current["paidTickets"]+=sum(int(int(x["returnYen"])>0) for x in actual)
-        daily=dates[date]["canonical"];daily["races"]+=1;daily["stakeYen"]+=sum(int(x["stakeYen"]) for x in actual)
-        daily["returnYen"]+=sum(int(x["returnYen"]) for x in actual)
+        # A payout without the official frozen market timestamp is not a
+        # comparable proof of a T-15 counterfactual bet.
+        if not all(deadline_ok(snap.get(k),date,start_jst)
+                   for k in ("previewGeneratedAt","oddsFetchedAt")):
+            excluded["shadow_official_odds_or_preview_not_proven_T15"]+=1
+            continue
+        if snap.get("oddsSource") not in ("jra-fast-official","jra-crawl-official"):
+            excluded["shadow_not_from_official_JRA"]+=1
+            continue
+        paired_race_ids.append(rid)
+        def accrue(name, ticket_returns):
+            if len(ticket_returns)!=2 or any(v<0 for v in ticket_returns):
+                raise AssertionError("PAIR_MUST_CONTAIN_TWO_SETTLED_TICKETS")
+            returned=sum(ticket_returns)
+            for target in (totals[name],dates[date][name]):
+                target["races"]+=1
+                target["stakeYen"]+=2000
+                target["returnYen"]+=returned
+                target["paidTickets"]+=sum(v>0 for v in ticket_returns)
+                target["hitRaces"]+=int(any(v>0 for v in ticket_returns))
+                target["bothTicketsHitRaces"]+=int(all(v>0 for v in ticket_returns))
+                target["profitableRaces"]+=int(returned>2000)
+                target["largestRaceReturnYen"]=max(target["largestRaceReturnYen"],returned)
+            all_groups[name][date].append(int(any(v>0 for v in ticket_returns)))
+        accrue("canonical",[int(x["returnYen"]) for x in actual])
         for policy in shadow:
             name=policy["policy"]
-            if name not in ("market_implied_only","market_blend_30pct_model"):raise AssertionError("UNKNOWN_SHADOW_POLICY")
-            out=0
+            ticket_returns=[]
             for ticket in policy["tickets"]:
                 horses={int(x) for x in str(ticket["combination"]).split("-")}
                 if horses & refunds.get(rid,set()):payout100=100
                 else:payout100=payouts.get((rid,ticket["betType"],ticket["combination"]),0)
-                out+=1000*int(payout100)//100
-            tgt=totals[name];tgt["races"]+=1;tgt["stakeYen"]+=2000;tgt["returnYen"]+=out;tgt["paidTickets"]+=int(out>0)
-            dy=dates[date][name];dy["races"]+=1;dy["stakeYen"]+=2000;dy["returnYen"]+=out
-    def finish(x):return {**x,"roiPct":round(100*x["returnYen"]/x["stakeYen"],2) if x["stakeYen"] else None}
+                ticket_returns.append(1000*int(payout100)//100)
+            accrue(name,ticket_returns)
+    def finish(x):
+        stake=x["stakeYen"]
+        n=x["races"]
+        return {**x,
+            "profitYen":x["returnYen"]-stake,
+            "roiPct":round(100*x["returnYen"]/stake,2) if stake else None,
+            "roiMinusLargestRaceReturnPct":round(100*(x["returnYen"]-x["largestRaceReturnYen"])/stake,2) if stake else None,
+            "hitRacePct":round(100*x["hitRaces"]/n,2) if n else None,
+            "hitTicketPct":round(100*x["paidTickets"]/(2*n),2) if n else None,
+            "profitableRacePct":round(100*x["profitableRaces"]/n,2) if n else None}
     return {"basis":"strict-same-race-pre-T15-official-odds-shadow-vs-actual-no-missing-backfill",
         "total":{key:finish(val) for key,val in sorted(totals.items())},
         "byDate":{date:{key:finish(v) for key,v in sorted(choices.items())} for date,choices in sorted(dates.items())},
         "excluded":dict(excluded),
+        "pairedRaceCount":len(paired_race_ids),
+        "sameRaceCohortForHitAndRoi":True,
+        "allRacesHitOnEachDate":{name:{
+            date:int(all(hits)) for date,hits in sorted(group.items())}
+            for name,group in sorted(all_groups.items())},
+        "outcomesProvenOnlyForCompletePairedCohort":len(excluded)==0,
         "shadowOnlyNotActualBets":True,
         "payoutSource":"persisted JRA D1 payout table, not externally JRA-reverified"}
 
@@ -107,6 +159,9 @@ def self_test():
     d="2026-11-08";rid=d+"-tokyo-01"
     selection=[{"k":"final_daily_selection:"+d,"v":json.dumps({"selected":[{"raceId":rid,"startTimeJst":"11:00"}]})}]
     final=[{"k":"worker_live_final:"+rid,"v":json.dumps({"lockedAt":"2026-11-08T01:00:00Z",
+        "previewGeneratedAt":"2026-11-08T01:00:00Z",
+        "oddsFetchedAt":"2026-11-08T00:58:00Z",
+        "oddsSource":"jra-fast-official",
         "shadowResearch":[{"policy":"market_implied_only","tickets":[{"betType":"単勝","combination":"3"},{"betType":"ワイド","combination":"1-3"}]},
         {"policy":"market_blend_30pct_model","tickets":[{"betType":"単勝","combination":"1"},{"betType":"ワイド","combination":"1-3"}]}]})}]
     bets=[{"raceId":rid,"betType":"単勝","combination":"1","stakeYen":1000,"returnYen":0,"settlement":"settled","lockedAt":"2026-11-08T01:00:00Z"},
@@ -115,9 +170,20 @@ def self_test():
           {"raceId":rid,"betType":"ワイド","combination":"1-3","payout100":260}]
     report=evaluate(selection,final,bets,pays,[{"raceId":rid,"refunds":"[]"}])
     assert report["total"]["canonical"]["roiPct"]==0
+    assert report["total"]["canonical"]["hitRacePct"]==0
+    assert report["total"]["canonical"]["hitTicketPct"]==0
     assert report["total"]["market_implied_only"]["roiPct"]==305
+    assert report["total"]["market_implied_only"]["hitRacePct"]==100
+    assert report["total"]["market_implied_only"]["hitTicketPct"]==100
+    assert report["total"]["market_implied_only"]["bothTicketsHitRaces"]==1
     assert report["total"]["market_blend_30pct_model"]["roiPct"]==130
-    print("SHADOW_LIVE_ROI_SELFTEST_OK")
+    assert report["total"]["market_blend_30pct_model"]["hitRacePct"]==100
+    assert report["total"]["market_blend_30pct_model"]["hitTicketPct"]==50
+    assert report["sameRaceCohortForHitAndRoi"] is True
+    assert report["pairedRaceCount"]==1
+    assert all(v["roiPct"] is not None and v["hitRacePct"] is not None
+               for v in report["total"].values())
+    print("SHADOW_PAIRED_HIT_AND_ROI_SELFTEST_OK")
 
 def main():
     if "--self-test" in sys.argv:
