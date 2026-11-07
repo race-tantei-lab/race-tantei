@@ -32,7 +32,16 @@ def main():
     sum(CASE WHEN finish_position=1 THEN 1 ELSE 0 END) winRows
     FROM rt_results WHERE race_id>=? AND race_id<?
     GROUP BY 1 ORDER BY 1""",[start+"-",end+"-"])
-  print("AUG_NOV_RETROSPECTIVE_FEASIBILITY",json.dumps({"races":races,"runners":runners,"results":results,
+  # The archived live odds snapshot table may cover selected races only.
+  # Count T-15 source rows to distinguish missing runner win odds from
+  # any independently preserved pre-race quotes. Bounded by race_id range.
+  snapshots=query("""SELECT substr(race_id,1,7) month,
+    count(*) preT15WinQuoteRows,count(DISTINCT race_id) preT15WinQuoteRaces
+    FROM rt_official_odds_snapshots
+    WHERE race_id>=? AND race_id<? AND bet_type='単勝'
+      AND odds_source='jra_official' AND seconds_to_start>=900
+    GROUP BY 1 ORDER BY 1""",[start+"-",end+"-"])
+  print("AUG_NOV_RETROSPECTIVE_FEASIBILITY",json.dumps({"races":races,"runners":runners,"results":results,"preT15WinSnapshots":snapshots,
     "limitation":"end-of-day or final win odds unverified for T-15; unknown complete prior-runner continuity; no counterfactual ROI yet",
     "allReadOnly":True},ensure_ascii=False))
 if __name__=="__main__":main()
