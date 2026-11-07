@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - scripts/research-certify-forward-400-roi.py
+      - scripts/research-forward-topk-shadow-roi.py
       - .github/workflows/research-certify-forward-400-roi.yml
   workflow_dispatch:
 
@@ -21,3 +22,7 @@ jobs:
         run: python3 -m py_compile scripts/research-certify-forward-400-roi.py
       - name: Reject synthetic 400% ROI and mismatched totals or missing dates
         run: python3 scripts/research-certify-forward-400-roi.py --self-test
+      - name: Test day-scoped, actual two-ticket JRA shadow 3/4/5 integration
+        run: |
+          python3 -m py_compile scripts/research-forward-topk-shadow-roi.py
+          python3 scripts/research-forward-topk-shadow-roi.py --self-test
