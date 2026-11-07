@@ -24,10 +24,19 @@ export type CompletedShadowTicket = {
 export type CompletedShadowPortfolio = {
   policy: "market_implied_only" | "market_blend_30pct_model";
   blendModelFraction: number;
+  // The original live research uses only these TWO immutable candidate bets.
+  // They are unchanged; the additional research candidates below never
+  // influence canonical public bets or market selection.
   tickets: CompletedShadowTicket[];
+  // Six (one per JRA bet type) PRE-result candidates from the exact SAME
+  // official odds snapshot and existing frozen model. Future payout audits
+  // can reconstruct all 15 DISTINCT pairs without re-fetching odds after
+  // the race or adding any D1 query. Never backfill missing historical pairs.
+  candidatesByType: CompletedShadowTicket[];
 };
 
-const BET_TYPES = new Set<CompletedBetType>(["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"]);
+const BET_TYPE_ORDER: readonly CompletedBetType[] = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"];
+const BET_TYPES = new Set<CompletedBetType>(BET_TYPE_ORDER);
 const UNORDERED = new Set<CompletedBetType>(["ワイド", "馬連", "3連複"]);
 const MAX_ODDS_CANDIDATES = 12000;
 
@@ -95,6 +104,15 @@ export function shadowCompletedPortfolioResearch(
     }
     const sorted = [...bestByType.values()].sort((a, b) =>
       (b.score - a.score) || a.betType.localeCompare(b.betType) || a.combination.localeCompare(b.combination));
-    return {policy, blendModelFraction: alpha, tickets: sorted.slice(0, 2)};
+    // This is an in-memory copy of the already calculated six best-by-type
+    // candidates. No extra official fetch, no model infer/retrain, no new D1
+    // SELECT/INSERT. Remains at most 6 compact records per policy/snapshot.
+    const candidatesByType = [...bestByType.values()].sort((a, b) =>
+      BET_TYPE_ORDER.indexOf(a.betType) - BET_TYPE_ORDER.indexOf(b.betType));
+    // Important operational isolation: when JRA has not published one
+    // official market, retain the ORIGINAL two shadow choices unchanged.
+    // The 15-pair audit will reject partial candidates, but the research
+    // extension itself must never introduce a new public finalization risk.
+    return {policy, blendModelFraction: alpha, tickets: sorted.slice(0, 2), candidatesByType};
   });
 }

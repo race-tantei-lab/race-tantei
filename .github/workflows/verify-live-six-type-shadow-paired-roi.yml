@@ -1,0 +1,34 @@
+name: Verify all 15 prospective six-type T15 shadow pairs (read-only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - src/v1/completed-ticket-shadow-research.ts
+      - tests/completed-shadow-calibration-tests.ts
+      - scripts/audit-live-six-type-paired-shadow-roi.py
+      - .github/workflows/verify-live-six-type-shadow-paired-roi.yml
+
+permissions:
+  contents: read
+
+jobs:
+  six-market-future-paired-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Do not touch D1 or live Worker during CI
+        run: |
+          python3 -m py_compile scripts/audit-live-six-type-paired-shadow-roi.py
+          python3 scripts/audit-live-six-type-paired-shadow-roi.py --self-test
+      - name: Verify 15 candidate pairs have existing-model odds from six distinct types
+        run: |
+          npm ci --ignore-scripts
+          npm run build:test
+          node dist-test/tests/completed-shadow-calibration-tests.js
+      - name: Compile Worker without deploying
+        run: npx wrangler deploy --dry-run --outdir /tmp/race-tantei-shadow-six-test
