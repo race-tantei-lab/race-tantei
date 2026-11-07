@@ -221,6 +221,26 @@ def main():
         for yy in (train,validation,shadow))]
     ranked2025=sorted(evaluated,key=lambda name:(-stable_priority(validation[name]),name))
     best2025=sorted(selected,key=lambda name:(-(validation[name]["roiPct"] or 0),name))
+    candidates2024=[name for name in train if math.isfinite(stable_priority(train[name]))]
+    candidates2025=[name for name in selected if validation[name]["bets"]>=MIN_YEAR_BETS
+                    and validation[name]["dates"]>=16]
+    candidates2026=[name for name in selected if shadow[name]["bets"]>=MIN_YEAR_BETS
+                    and shadow[name]["dates"]>=16]
+    all_years=[name for name in selected if all(yy[name]["bets"]>=MIN_YEAR_BETS
+                    and yy[name]["dates"]>=16 for yy in (train,validation,shadow))]
+    def best_in_year(pool,results):
+        name=max(pool,key=lambda k:(results[k]["roiPct"] or 0,k)) if pool else None
+        return witness(name) if name else None
+    best_across_years=max(all_years,key=lambda k:(
+        min(train[k]["roiPct"],validation[k]["roiPct"],shadow[k]["roiPct"]),k)) if all_years else None
+    peak_years={
+        "highest2024All5702DiscoveryPatterns":best_in_year(candidates2024,train),
+        "highest2025Among2024Frozen100":best_in_year(candidates2025,validation),
+        "highest2026Among2024Frozen100":best_in_year(candidates2026,shadow),
+        "highestMinimumYearROIWithin2024Frozen100":witness(best_across_years) if best_across_years else None,
+        "2026NotFresh2026AlreadyOpened":True,
+        "singleWinFinalOddsNotT15":True,
+    }
     report={
       "status":"RESEARCH_ONLY_FINAL_WIN_ODDS_NOT_T15_NOT_PRODUCTION",
       "truthfulScope":"2016-2026 56-feature LightGBM, trained before each of three evaluation years",
@@ -231,6 +251,7 @@ def main():
       "2024Shortlist":len(selected),
       "2025EligibleShortlist":len(evaluated),
       "2024_2025_2026AllYearsTrimmed400":len(robust),
+      "highestObservedROIs":peak_years,
       "survivors": [witness(k) for k in robust[:12]],
       "topBy2024":[witness(k) for k in selected[:12]],
       "topBy2025":[witness(k) for k in ranked2025[:12]],
@@ -251,6 +272,7 @@ def main():
     print("BROAD_PATTERN_OOF_RESEARCH_RESULT",json.dumps({
         "scenarios":scenarios,"2024Valid":report["testable2024Patterns"],
         "2025Eligible":len(evaluated),"threeYearRobust400Count":len(robust),
+        "highestObservedROIs":peak_years,
         "bestBy2024":report["topBy2024"][:3],
         "bestBy2025":report["topBy2025"][:3],
         "elapsedSeconds":report["elapsedSeconds"],"productionEligible":False,
