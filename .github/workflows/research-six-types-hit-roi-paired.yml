@@ -1,0 +1,23 @@
+name: Research all 15 distinct six-type pairs with both hit rate and ROI (NO deployment)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/research-six-types-hit-roi-paired.py
+      - .github/workflows/research-six-types-hit-roi-paired.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  strict-paired-hit-and-roi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile existing-model all-pairs research; no DB/network/model writes
+        run: python3 -m py_compile scripts/research-six-types-hit-roi-paired.py
+      - name: Prove all 15 pairs, 3-5 venue races, same-cohort hit and ROI and hard T15 rejection
+        run: python3 scripts/research-six-types-hit-roi-paired.py --self-test
