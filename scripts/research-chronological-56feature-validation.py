@@ -172,7 +172,8 @@ def chronological_features(core, by_date):
     assert len(X) == len(y) == int(offsets[-1])
     assert X.shape[1] == 56
     assert np.all(np.isfinite(X))
-    assert first_date == "2016-08-10" and prev_date == "2026-08-09"
+    # Archive date range starts midweek; the first actually raced date can be later.
+    assert "2016-08-10" <= first_date < "2016-09-01" and prev_date == "2026-08-09", (first_date,prev_date)
     return X,y,counts,dates,offsets,np.asarray(race_winners),dict(dropped),total_races
 
 def score(model, X, counts, offsets, winners, ix):
