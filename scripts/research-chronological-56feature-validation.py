@@ -215,6 +215,9 @@ def paired_archived_market_diagnostic(model, X, counts, offsets, winners, ix, ma
     high = int(offsets[ix[-1] + 1])
     raw = model.predict_proba(X[low:high])[:,1]
     n=0; model_hits=market_hits=0; model_loss=market_loss=0.0
+    # Pre-specified, non-tuned diagnostic blends. This evaluation has already
+    # been inspected; NO weight may be promoted from these 2026 outcomes.
+    blends={w:{"hits":0,"sumLoss":0.0} for w in (0.0,0.25,0.5,0.75,1.0)}
     for index in ix:
         odds=market[index]
         if len(odds)!=int(counts[index]) or not all(
@@ -230,13 +233,22 @@ def paired_archived_market_diagnostic(model, X, counts, offsets, winners, ix, ma
         market_hits+=int(np.argmax(implied)==win)
         model_loss+=-math.log(max(1e-12,float(pred[win])))
         market_loss+=-math.log(max(1e-12,float(implied[win])))
+        for w,metric in blends.items():
+            mix=w*pred+(1.0-w)*implied
+            metric["hits"]+=int(np.argmax(mix)==win)
+            metric["sumLoss"]+=-math.log(max(1e-12,float(mix[win])))
         n+=1
     return {"pairedRaceCount":n,"modelTopPickWinPct":round(model_hits*100/n,3),
             "archivedMarketFavoriteWinPct":round(market_hits*100/n,3),
             "modelWinnerLogLoss":round(model_loss/n,7),
             "archivedMarketWinnerLogLoss":round(market_loss/n,7),
             "oddsT15Verified":False,
-            "note":"archived odds timestamp unverified; no causal T15 market ROI conclusion"}
+            "fixedMixtureDiagnostics":[{"modelWeight":w,
+                "marketWeight":round(1.0-w,2),
+                "topPickWinPct":round(100*v["hits"]/n,3),
+                "winnerLogLoss":round(v["sumLoss"]/n,7)}
+                for w,v in sorted(blends.items())],
+            "note":"archived odds timestamp unverified; 2026 opened diagnostic, no tuning/promotion and no T15 ROI conclusion"}
 
 
 def fit(X,y,offsets,train_ix,params):
