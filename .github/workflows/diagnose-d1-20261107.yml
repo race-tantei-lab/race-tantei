@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  statuses: write
 jobs:
   d1:
     runs-on: ubuntu-latest
@@ -14,6 +15,14 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
     steps:
+      - name: Publish read-only diagnostic link
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=pending -f context=diagnostics/d1-read-probe \
+            -f description="Checking D1 REST rejection reason (read-only)" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
       - name: Read one harmless D1 row and expose the Cloudflare error reason
         shell: bash
         run: |
@@ -34,3 +43,12 @@ jobs:
               print("D1_DIAG_HTTP_ERROR", exc.code)
               print("D1_DIAG_ERROR_BODY", exc.read().decode("utf-8", "replace")[:1500])
           PY
+      - name: Mark diagnostic completed
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -f state=success -f context=diagnostics/d1-read-probe \
+            -f description="Read-only D1 probe finished; inspect diagnostic log" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
