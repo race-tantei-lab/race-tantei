@@ -181,7 +181,7 @@ def self_test():
             {"betType":"単勝","combination":"1","assumedOdds":3.2,"stakeYen":1000,"returnYen":3000 if i%2 else 0},
             {"betType":"ワイド","combination":"1-2","assumedOdds":8.4,"stakeYen":1000,"returnYen":5000 if i==2 else 0}]})
     assert summarize(races,"equal_1000_1000")["stakeYen"]==8000
-    assert summarize(races,"nonwide_1500_500")["returnYen"]==1500*(3)+500*(5)
+    assert summarize(races,"nonwide_1500_500")["returnYen"]==1500*(6)+500*(5)
     assert allocate("nonwide_1900_100",races[0])==(1900,100)
     assert allocate("wide_1500_500",races[0])==(500,1500)
     print("LIVE_STAKE_WALKFORWARD_SELFTEST_OK")
