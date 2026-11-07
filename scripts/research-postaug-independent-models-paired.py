@@ -172,7 +172,7 @@ def gather_data():
       "selectionStatus":"RETROSPECTIVE_HINDSIGHT_NOT_APPROVED_FOR_LIVE",
       "requiresProspectiveForwardAudit":True}
     (package/"postaug-extra-trees-120-manifest.json").write_text(
-        json.dumps(manifest,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+        json.dumps(manifest,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     print("POSTAUG_EXTRATREES_SERIALIZED_PARITY_OK",json.dumps({
         "sha256":digest,"bytes":filename.stat().st_size,
         "trainingRows":len(y),"features":manifest["featureCount"]}),flush=True)
