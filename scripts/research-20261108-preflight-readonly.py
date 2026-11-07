@@ -69,7 +69,25 @@ def main():
                      for r in chosen],
         "raceSelectionUsedTargetDayResult":parsed.get("resultDataUsedForTargetDay"),
         "historicalFinalOddsUsed":parsed.get("historicalFinalOddsUsedForSelection")}
-    valid=(len(chosen)==15 and set(by_venue)==EXPECTED
+    # Fail closed on duplicate race IDs, duplicated race numbers, invalid
+    # start times and races that are not from the expected three venues.
+    # These invariants do not require a second D1 query or any live writes.
+    ids=[str(r.get("raceId") or "") for r in chosen]
+    unique_ids=len(ids)==len(set(ids))
+    unique_numbers=all(len({str(r.get("raceNo")) for r in chosen
+        if r.get("venue")==venue})==by_venue[venue] for venue in EXPECTED)
+    valid_times=True
+    for race in chosen:
+        try:
+            t=dt.datetime.strptime(str(race.get("startTimeJst")),"%H:%M").time()
+            if not (dt.time(9,0)<=t<=dt.time(17,0)):
+                valid_times=False
+        except (ValueError,TypeError):
+            valid_times=False
+    evidence["selection"]["uniqueRaceIds"]=unique_ids
+    evidence["selection"]["uniqueRaceNumbersPerVenue"]=unique_numbers
+    evidence["selection"]["validRaceStartTimesJst"]=valid_times
+    valid=(unique_ids and unique_numbers and valid_times and len(chosen)==15 and set(by_venue)==EXPECTED
         and all(by_venue[v]==5 for v in EXPECTED)
         and not bad
         and parsed.get("sourceModel")=="ten-year-completed-model"
