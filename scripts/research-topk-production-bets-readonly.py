@@ -19,6 +19,7 @@ import datetime as dt
 import json
 import math
 import os
+import random
 from pathlib import Path
 import urllib.request
 
@@ -69,6 +70,73 @@ def fetch_readonly(start=START,end_exclusive=END_EXCLUSIVE):
     if len(selections)>=MAX_SELECTION_ROWS or len(bets)>=MAX_BET_ROWS:
         raise RuntimeError("D1_READ_LIMIT_REACHED_REPORT_INVALID")
     return {"selectionStates":selections,"bets":bets}
+
+def matched_complete_days(compiled):
+    """Paired fair comparison: identical date+venue cohorts with all five T-15 bets."""
+    by_venue=collections.defaultdict(list)
+    for row in compiled:
+        by_venue[(row["date"],row["venue"])].append(row)
+    complete={key:sorted(rows,key=lambda x:x["rank"]) for key,rows in by_venue.items()
+              if len(rows)==5 and all(x["valid"] for x in rows)}
+    by_date=collections.defaultdict(list)
+    for (day,venue),rows in complete.items():
+        by_date[day].append(rows)
+    summary={"matchedCompleteVenueDays":len(complete),"matchedRaceDates":len(by_date),
+             "topKs":{},"rankOutcomes":{}}
+    for k in TOP_KS:
+        subset=[r for rows in complete.values() for r in rows[:k]]
+        stake=sum(x["stake"] for x in subset)
+        payout=sum(x["return"] for x in subset)
+        monthly={}
+        for m in sorted({x["date"][:7] for x in subset}):
+            x=[r for r in subset if r["date"].startswith(m)]
+            s=sum(r["stake"] for r in x)
+            monthly[m]=round(100*sum(r["return"] for r in x)/s,2) if s else None
+        max_r=max((x["return"] for x in subset),default=0)
+        summary["topKs"][str(k)]={
+          "races":len(subset),"stakeYen":stake,"returnYen":payout,
+          "roiPct":round(100*payout/stake,2) if stake else None,
+          "roiWithoutLargestRacePayoutPct":round(100*(payout-max_r)/stake,2) if stake else None,
+          "months":monthly
+        }
+    for rank in range(1,6):
+        xs=[r for rows in complete.values() for r in rows if r["rank"]==rank]
+        s=sum(r["stake"] for r in xs)
+        summary["rankOutcomes"][str(rank)]={
+            "races":len(xs),"roiPct":round(100*sum(r["return"] for r in xs)/s,2) if s else None
+        }
+    # Cluster bootstrap by race DATE (not individual race), to preserve same-day dependence.
+    rng=random.Random(20261107)
+    dates=sorted(by_date)
+    differences={("3","5"):[],("4","5"):[],("3","4"):[]}
+    if dates:
+        day_totals={}
+        for day in dates:
+            day_totals[day]={k:(
+                sum(r["stake"] for rows in by_date[day] for r in rows[:k]),
+                sum(r["return"] for rows in by_date[day] for r in rows[:k]))
+                for k in TOP_KS}
+        for _ in range(10000):
+            sample=[dates[rng.randrange(len(dates))] for __ in dates]
+            roi={}
+            for k in TOP_KS:
+                stake=sum(day_totals[d][k][0] for d in sample)
+                ret=sum(day_totals[d][k][1] for d in sample)
+                roi[str(k)]=100*ret/stake
+            for (a,b),vec in differences.items():
+                vec.append(roi[a]-roi[b])
+        paired={}
+        for key,x in differences.items():
+            x.sort()
+            paired["vs".join(key)]={
+               "observedDiffPctPoints":round(summary["topKs"][key[0]]["roiPct"]-
+                                             summary["topKs"][key[1]]["roiPct"],2),
+               "dayClusterBootstrap95PctInterval":[round(x[250],2),round(x[9750],2)],
+               "positiveDifferenceSamplesPct":round(100*sum(v>0 for v in x)/len(x),2)}
+        summary["pairedDifferences"]=paired
+    summary["bootstrapCaveat"]="resampling dates describes this historical cohort only; not a future guarantee"
+    return summary
+
 
 def evaluate(source):
     states=source["selectionStates"]
@@ -159,6 +227,7 @@ def evaluate(source):
     return {"status":"RETROSPECTIVE_RESEARCH_NOT_PROMOTION","basis":"actual immutable locked bets, ranked by original persisted raceScore", "dateFrom":min((x["date"] for x in compiled),default=None),
         "dateThrough":max((x["date"] for x in compiled),default=None),
         "strategies":summaries,"byMonth":by_month,"invalidReasons":dict(rejected),
+        "fairPairedCompleteDays":matched_complete_days(compiled),
         "limitations":["Only the five previously selected races can be compared; never a model that selected different races",
             "Historical pre-race score capture timestamps are not independently verified here",
             "Missing or late bets are counted, not silently erased",
