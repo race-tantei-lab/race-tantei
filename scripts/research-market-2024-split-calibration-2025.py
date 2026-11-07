@@ -81,7 +81,7 @@ def fit_residual_model(groups):
             p=r["horseProbability"]["ranker_only"]
             q=r["marketQ"]
             X=model_vs_market_x(p,q)
-            win=[t[1][0] for t in r["payout"].items() if t[0][0]=="単勝" and t[1]>0]
+            win=[key[1][0] for key,payout100 in r["payout"].items() if key[0]=="単勝" and payout100>0]
             if len(win)!=1:
                 raise ValueError("MARKET_RESIDUAL_WON_HORSE_NOT_UNIQUE")
             horse=win[0]
