@@ -403,7 +403,7 @@ async function fetchNormalHome(_request: Request, env: Env, _ctx: ExecutionConte
     // frozen cumulative figures as fresh production results.
     const response = embeddedNormalHome(calendar);
     const notice = '<div role="status" style="margin:12px auto;padding:12px 16px;max-width:1050px;border:1px solid #b68d50;border-radius:10px;background:#30261a;color:#fff1d4;font-size:14px">累計回収率の最新データを一時取得できないため、保存済みの表示を使用しています。最新成績は復旧後に更新されます。</div>';
-    const html = (await response.text()).replace(/<main\\b[^>]*>/i, (match) => match + notice);
+    const html = (await response.text()).replace(/<main\b[^>]*>/i, (match) => match + notice);
     const headers = new Headers(response.headers);
     headers.set("x-race-home-data-status", "cumulative-stale-snapshot");
     return new Response(html, { status: 200, headers });
