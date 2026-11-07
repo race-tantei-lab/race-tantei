@@ -9,6 +9,7 @@ on:
       - scripts/research-postaug-independent-models-paired.py
       - scripts/research-extra-trees-2024-2025-paired-jra.py
       - .github/workflows/research-multifamily-yearwise-paired-jra.yml
+      - scripts/research-hit20-roi-first-postprocess.py
 
 permissions:
   contents: read
@@ -36,13 +37,19 @@ jobs:
         run: |
           python -m py_compile scripts/research-multifamily-yearwise-paired-jra.py
           python -u scripts/research-multifamily-yearwise-paired-jra.py --self-test
+          python -u scripts/research-hit20-roi-first-postprocess.py --self-test
       - name: Fit independent families on years before target and audit 2024-discovered policies on 2025 real JRA payouts
         run: python -u scripts/research-multifamily-yearwise-paired-jra.py
+      - name: ROI-first hit >=20% research-only selection on 2024, 2025 diagnostic
+        run: |
+          python -u scripts/research-hit20-roi-first-postprocess.py --input analysis-results/research-2024-2025-multifamily-paired-jra-roi.json --output analysis-results/research-hit20-roi-first-2024-2025.json
       - name: Preserve retrospective paired hit+ROI for all candidates and historical coverage
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: research-multifamily-yearwise-paired-real-jra-returns
-          path: analysis-results/research-2024-2025-multifamily-paired-jra-roi.json
+          path: |
+            analysis-results/research-2024-2025-multifamily-paired-jra-roi.json
+            analysis-results/research-hit20-roi-first-2024-2025.json
           if-no-files-found: warn
           retention-days: 30
