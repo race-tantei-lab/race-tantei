@@ -23,6 +23,28 @@ for (const p of after) {
   assert.equal(p.tickets.length,2);
   assert.equal(new Set(p.tickets.map(t=>t.betType)).size,2);
   assert.ok(p.tickets.every(t=>Number.isFinite(t.score)&&t.officialOdds>=1&&t.rawModelProbability>0&&t.blendedProbability>0));
+  const allSixTypes = ["単勝", "ワイド", "馬連", "馬単", "3連複", "3連単"];
+  assert.deepEqual(p.candidatesByType.map(t=>t.betType), allSixTypes,
+    "shadow must make all six real official JRA types available for 15-pair prospective study");
+  assert.equal(new Set(p.candidatesByType.map(t=>t.betType)).size,6);
+  assert.ok(p.candidatesByType.every(t =>
+    Number.isFinite(t.score) && t.officialOdds >= 1 &&
+    t.rawModelProbability > 0 && t.blendedProbability > 0));
+  const pairs: string[] = [];
+  for (let a=0; a<p.candidatesByType.length; a+=1) {
+    for (let b=a+1; b<p.candidatesByType.length; b+=1) {
+      const first = p.candidatesByType[a]!;
+      const second = p.candidatesByType[b]!;
+      assert.notEqual(first.betType,second.betType);
+      pairs.push(first.betType+"+"+second.betType);
+    }
+  }
+  assert.equal(pairs.length,15);
+  assert.equal(new Set(pairs).size,15);
+  for (const chosen of p.tickets) {
+    assert.deepEqual(p.candidatesByType.find(t=>t.betType===chosen.betType),chosen,
+      "existing shadow choices must remain unchanged and copied from exactly six immutable candidates");
+  }
 }
 const single = after[0]!.tickets.find(x=>x.betType==="単勝");
 assert.ok(single);
@@ -32,6 +54,8 @@ assert.ok(Math.abs(check.blendedProbability-(0.3*check.rawModelProbability+0.7*c
 assert.equal(JSON.stringify(rows), copy, "shadow research must never mutate official JRA odds");
 assert.deepEqual(chooseCompletedTwoTickets(horseNos,weights,rows),canonical,
   "shadow policies must not alter canonical production two-ticket selection");
+assert.ok(JSON.stringify(after).length < 8000,
+  "six-type candidate shadows must remain compact and protect D1 state storage budget");
 let invalidWeightsRejected = false;
 try { shadowCompletedPortfolioResearch(horseNos,[0.9,0.3,0.2,0.1],rows); }
 catch (error) { invalidWeightsRejected = String(error).includes("SHADOW_WEIGHTS_INVALID"); }
