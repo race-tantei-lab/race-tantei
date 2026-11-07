@@ -201,35 +201,68 @@ def train_and_predict(by_date,base,core):
         "incompleteHistoricalDates":sorted(set(incomplete_history_dates))}),flush=True)
     return predictions,venue_day_problems,sorted(set(incomplete_history_dates))
 
+def parse_mobile_win_odds(html):
+    """JRA smartphone official historical odds: class umaban + oztan rows."""
+    soup=BeautifulSoup(html,"html.parser")
+    out={}
+    for tr in soup.find_all("tr"):
+        umaban=tr.find("td",class_="umaban")
+        oztan=tr.find("td",class_="oztan")
+        if umaban is None or oztan is None:
+            continue
+        try:
+            horse_no=int(umaban.get_text(" ",strip=True))
+            odds=float(oztan.get_text(" ",strip=True).replace(",",""))
+        except (TypeError,ValueError):
+            continue
+        if not (1<=horse_no<=18 and math.isfinite(odds) and odds>=1):
+            continue
+        if horse_no in out and out[horse_no]!=odds:
+            raise RuntimeError("CONFLICTING_MOBILE_OFFICIAL_WIN_ODDS")
+        out[horse_no]=odds
+    return out
+
 def get_official_final_win(row,historic):
     url=row["resultUrl"]
     raw_url=__import__("urllib.parse").parse.unquote(url)
-    match=re.search(r"pw01sde(?:10|01)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})",raw_url,re.I)
+    match=re.search(r"(?:pw|sw)01sde(?:10|01)(\\d{2})(\\d{4})(\\d{2})(\\d{2})(\\d{2})(\\d{8})",raw_url,re.I)
     if not match:
         raise ValueError("OFFICIAL_JRA_RESULT_URL_NOT_RECOGNIZED")
     venue,year,meeting,day,race_no,ymd=match.groups()
     if ymd!=row["date"].replace("-","") or int(race_no)!=row["raceNo"]:
         raise ValueError("JRA_RESULT_RACE_IDENTITY_MISMATCH")
+    # JRA desktop HTTP origins may redirect a smartphone 'sw' result ID
+    # to the home page; use the official smartphone host for 'sw' IDs.
+    if re.search(r"CNAME=sw01",url,re.I):
+        from urllib.parse import urlsplit,urlunsplit
+        parsed=urllib.parse.urlsplit(url)
+        url=urllib.parse.urlunsplit(parsed._replace(netloc="sp.jra.jp"))
     jar=historic.http.cookiejar.CookieJar()
     opener=historic.urllib.request.build_opener(historic.urllib.request.HTTPCookieProcessor(jar))
     req=historic.urllib.request.Request(url,
         headers={"User-Agent":historic.USER_AGENT,"Accept-Language":"ja-JP,ja;q=0.9"})
     raw,_=historic.open_retry(opener,req,attempts=3,timeout=25)
     page=raw.decode("cp932","replace")
-    marker=f"10{venue}{year}{meeting}{day}{race_no}{ymd}"
-    candidates=historic.extract_odds_cnames(page,"pw151ou",marker)
+    # Accept exact per-race identity with PC '10', current-race 'S3',
+    # or smartphone '10' official result page link prefixes.
+    core_id=venue+year+meeting+day+race_no+ymd
+    candidates=sorted(set(re.findall(r"(?:pw|sw)151ou(?:10|S3)"
+                         +re.escape(core_id)+r"Z/[0-9A-Fa-f]{2}",
+                         page,re.I)))
     if len(candidates)!=1:
         raise RuntimeError("JRA_HISTORICAL_WIN_LINK_MISSING_OR_DUPLICATED:"+str(len(candidates)))
-    html,source=historic.post_odds(opener,candidates[0],url)
-    quotes=historic.parse_win(BeautifulSoup(html,"html.parser"))
+    cname=candidates[0]
+    html,source=historic.post_odds(opener,cname,url)
+    quotes=(parse_mobile_win_odds(html) if cname.lower().startswith("sw")
+        else historic.parse_win(BeautifulSoup(html,"html.parser")))
     odd=quotes.get(row["horseNo"])
     if not isinstance(odd,(float,int)) or not math.isfinite(odd) or odd<1:
         raise RuntimeError("SELECTED_HORSE_FINAL_ODDS_MISSING")
     if len(quotes)<max(3,row["fieldSize"]-2):
         raise RuntimeError("HISTORICAL_WIN_QUOTE_FIELD_INCOMPLETE")
-    return {"odds":float(odd),"jraCname":candidates[0],
+    return {"odds":float(odd),"jraCname":cname,
             "jraHistoricalWinUrl":source,"quoteCount":len(quotes),
-            "oddsMoment":"post-race historical FINAL odds, NOT T-minus-15"}
+            "oddsMoment":"JRA official final win odds, NOT T-minus-15"}
 
 def evaluate(predictions,problems,incomplete_history,quotes,failures):
     by_date=collections.defaultdict(list)
@@ -338,6 +371,12 @@ def evaluate(predictions,problems,incomplete_history,quotes,failures):
     }
 
 def self_test():
+    assert parse_mobile_win_odds('''<table><tr>
+        <td class="waku">1</td><td class="umaban">3</td>
+        <td class="bamei">horse</td><td class="oztan oddsJyuBaiMiman">6.7</td>
+        </tr><tr><td class="umaban">5</td>
+        <td class="oztan">23.4</td></tr></table>''')=={3:6.7,5:23.4}
+
     assert MIN_ODDS==10 and MAX_ODDS==30 and EV_FLOOR==1.0
     fake=[
       {"date":"2026-08-15","venue":"東京","raceNo":1,"raceId":"a","fieldSize":13,
