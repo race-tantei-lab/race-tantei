@@ -117,7 +117,7 @@ def guarded_final_rows(data,by_venue,day):
     for p in data["payouts"]:
         markets[p["raceId"]].add(p["betType"])
     valid=[]
-    invalid=collections.Counter()
+    invalid={}
     for row in data["finals"]:
         rid=row["k"].removeprefix("worker_live_final:")
         if rid not in selected:continue
@@ -146,10 +146,10 @@ def guarded_final_rows(data,by_venue,day):
                            or float(t.get("officialOdds",0))<1 for t in tickets)):
                     raise ValueError("SHADOW_TICKETS_INVALID")
         except (ValueError,TypeError,KeyError,AttributeError) as e:
-            invalid[str(e) or "INVALID_FINAL_SHADOW"]+=1
+            invalid[rid]=str(e) or "INVALID_FINAL_SHADOW"
             continue
         valid.append(row)
-    return valid,dict(invalid)
+    return valid,invalid
 
 def evaluate_day(data,day,original):
     if not data["selection"]:
@@ -159,7 +159,7 @@ def evaluate_day(data,day,original):
     if len(data["selection"])!=1:
         raise AssertionError("MORE_THAN_ONE_DAILY_SELECTION_ROW")
     by_venue=ranked_selected(data["selection"][0])
-    finals,bad=guarded_final_rows(data,by_venue,day)
+    finals,bad_by_race=guarded_final_rows(data,by_venue,day)
     output={}
     for k in (3,4,5):
         chosen=[r for rows in by_venue.values() for r in rows[:k]]
@@ -169,7 +169,10 @@ def evaluate_day(data,day,original):
         expected=len(chosen)
         actual=(results["total"].get("canonical") or {}).get("races",0)
         issues=dict(results["excluded"])
-        for reason,num in bad.items():issues[reason]=issues.get(reason,0)+num
+        for race in chosen:
+            if race["raceId"] in bad_by_race:
+                reason=bad_by_race[race["raceId"]]
+                issues[reason]=issues.get(reason,0)+1
         if actual!=expected:issues["MISSING_ON_TIME_COMPLETE_RACES"]=expected-actual
         output[k]={"expected":expected,"out":results,"issues":issues}
     return output,{}
@@ -177,7 +180,7 @@ def evaluate_day(data,day,original):
 def consolidate(day_reports):
     reports={}
     for k in (3,4,5):
-        totals=collections.defaultdict(lambda:{"races":0,"stakeYen":0,"returnYen":0})
+        totals={policy:{"races":0,"stakeYen":0,"returnYen":0} for policy in POLICIES}
         by_date={}
         excluded=collections.Counter()
         expected=0
