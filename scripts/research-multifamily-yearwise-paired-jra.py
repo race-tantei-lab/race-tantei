@@ -293,6 +293,7 @@ def run():
         "yearCoverage":yearcounts,"invalidVenueDays":exclusions,
         "payoutMonthCoverage":monthCoverage,
         "comparison":comparison,
+        "allCandidatesByYear":outputs,
         "requiredNext":"Freeze candidate and gather prospective before-T15 future JRA official market snapshots with same paired hit+ROI and missing-date accounting"}
     OUT.parent.mkdir(parents=True,exist_ok=True)
     OUT.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
