@@ -8,7 +8,8 @@ spec=importlib.util.spec_from_file_location("historical_jra_odds",p)
 m=importlib.util.module_from_spec(spec);sys.modules[spec.name]=m;spec.loader.exec_module(m)
 examples=[
  ("aug_desktop","https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde1007202602070120260815/56","pw151ou","1007202602070120260815"),
- ("sep_mobile","https://app.jra.jp/JRADB/accessS.html?CNAME=sw01sde0101202602050620260905/0C","sw151ou","0101202602050620260905"),
+ ("sep_mobile","https://app.jra.jp/JRADB/accessS.html?CNAME=sw01sde0101202602050620260905/0C","sw151ou","1001202602050620260905"),
+ ("oct_desktop","https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0108202604010120261003/DD","pw151ou","1008202604010120261003"),
 ]
 for title,url,prefix,marker in examples:
  try:
