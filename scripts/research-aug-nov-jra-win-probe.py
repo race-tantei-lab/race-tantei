@@ -34,6 +34,11 @@ for title,url,prefix,marker in examples:
     html,_=m.post_odds(op,values[0],url)
     win=m.parse_win(BeautifulSoup(html,"html.parser"))
     print("JRA_PROBE_WIN_ODDS",title,host,len(win),list(win.items())[:6],flush=True)
+    if not win:
+     soup=BeautifulSoup(html,"html.parser")
+     print("JRA_PROBE_MOBILE_HTML",title,host,"htmlBytes",len(html),
+           "tableClasses",[x.get("class") for x in soup.find_all("table")[:8]],
+           "text",soup.get_text(" ",strip=True)[:1700],flush=True)
     if win:break
    except Exception as e:
     print("JRA_PROBE_HOST_ERROR",title,host,type(e).__name__,str(e)[:300],flush=True)
