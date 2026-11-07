@@ -252,6 +252,30 @@ def selftest():
     b=next(z for z in x if z["ticketPair"]=="pair1" and z["racesPerVenueDay"]==3
         and z["betType1Yen"]==1000)
     assert b["metrics"]["hitRacePct"]==0 and b["metrics"]["roiPct"]==0
+    # Synthetic regression: high-ROI but sub-20% hit strategies MUST be
+    # disqualified; 2025 payouts MUST NOT influence the 2024 winner choice.
+    def synthetic(model,hit,roi,trim):
+        return {"model":model,"raceSelector":"top3","ticketPair":"synthetic",
+                "betType1Yen":1000,"betType2Yen":1000,"racesPerVenueDay":3,
+                "metrics":{"hitRacePct":hit,"roiPct":roi,
+                           "roiMinusLargestPaidRacePct":trim}}
+    past=[
+        synthetic("low_hit",19.99,900,850),
+        synthetic("robust",20.0,115,108),
+        synthetic("fragile",40.0,350,90)]
+    future=[
+        synthetic("low_hit",90.0,900,800),
+        synthetic("robust",25.0,65,50),
+        synthetic("fragile",50.0,500,490)]
+    assert roi_first_quality(past[0]["metrics"]) is None
+    assert roi_first_quality(past[1]["metrics"]) is not None
+    assert sorted(past[1:],key=lambda e:tuple(-v for v in roi_first_quality(e["metrics"])))[0]["model"]=="robust"
+    # Even when future results reverse profitability, past ranking is immutable.
+    assert future[1]["metrics"]["roiPct"]<future[2]["metrics"]["roiPct"]
+    assert roi_first_quality({"hitRacePct":20.0,"roiPct":101,
+                              "roiMinusLargestPaidRacePct":101}) is not None
+    assert roi_first_quality({"hitRacePct":19.999,"roiPct":10000,
+                              "roiMinusLargestPaidRacePct":10000}) is None
     print("MULTIFAMILY_YEARWISE_PAIRED_HIT_ROI_SELFTEST_OK",
           json.dumps({"eligiblePairCount":len(research.PAIRS)}),flush=True)
 
