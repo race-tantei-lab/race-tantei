@@ -33,10 +33,43 @@ def inspect(report):
     winner=eligible[0];k=key(winner);future=b[k]
     both=[x for x in eligible if gate(b[key(x)]["metrics"]) and
           x["metrics"]["roiPct"]>100 and b[key(x)]["metrics"]["roiPct"]>100]
+    # These are diagnostic counts over the ENTIRE 12,375-policy universe, not
+    # selection criteria. The 2025 outcomes were already inspected; no
+    # hindsight winner is promoted as if independently selected in 2024.
+    both_robust=[x for x in eligible if gate(b[key(x)]["metrics"]) and
+        x["metrics"]["roiMinusLargestPaidRacePct"]>100 and
+        b[key(x)]["metrics"]["roiMinusLargestPaidRacePct"]>100]
+    train_profitable=[x for x in eligible if x["metrics"]["roiPct"]>100]
+    year25_profitable=[x for x in eligible if gate(b[key(x)]["metrics"]) and
+        b[key(x)]["metrics"]["roiPct"]>100]
+    # For a fixed 2024-selected shortlist, record its 2025 performance
+    # without using 2025 returns to reorder the shortlist.
+    top40=eligible[:40]
+    top40_positive=[x for x in top40 if gate(b[key(x)]["metrics"]) and
+        b[key(x)]["metrics"]["roiPct"]>100]
+    top40_robust=[x for x in top40 if gate(b[key(x)]["metrics"]) and
+        b[key(x)]["metrics"]["roiMinusLargestPaidRacePct"]>100]
+    for x in a.values():
+        m=x["metrics"]
+        if m["hitRacePct"]<20 and gate(m):
+            raise AssertionError("HIT_GATE_BYPASS")
+        if m["roiMinusLargestPaidRacePct"]>m["roiPct"]+0.011:
+            raise ValueError("TRIMMED_ROI_EXCEEDS_RAW_ROI")
+    for x in b.values():
+        m=x["metrics"]
+        if m["roiMinusLargestPaidRacePct"]>m["roiPct"]+0.011:
+            raise ValueError("TRIMMED_ROI_EXCEEDS_RAW_ROI")
     result={"classification":"RETROSPECTIVE_ALREADY_INSPECTED_NOT_FRESH_OOS",
       "criterion":"hit >=20% each year; ROI/robust ROI first; 2024 discovery only",
       "candidateCount":len(a),"2024Hit20Count":len(eligible),
       "bothYearsHit20AndROIOver100CountDiagnosticOnly":len(both),
+      "bothYearsHit20AndTrimmedROIOver100CountDiagnosticOnly":len(both_robust),
+      "discovery2024ROIOver100AndHit20Count":len(train_profitable),
+      "previouslyInspected2025ROIOver100AndHit20Count":len(year25_profitable),
+      "frozen2024Top40Forward2025ROIOver100Count":len(top40_positive),
+      "frozen2024Top40Forward2025TrimmedROIOver100Count":len(top40_robust),
+      "2024FrozenBestHasRobustROIOver100":winner["metrics"]["roiMinusLargestPaidRacePct"]>100,
+      "2025FrozenBestHasRobustROIOver100":future["metrics"]["roiMinusLargestPaidRacePct"]>100,
       "2024FrozenBest":{"policy":{k:v for k,v in winner.items() if k!="metrics"},
         "discovery2024":winner["metrics"],"diagnostic2025":future["metrics"]},
       "year2025NeverUsedToSelect":True,
@@ -61,6 +94,9 @@ def selftest():
     assert x["2024Hit20Count"]==2500
     assert x["2024FrozenBest"]["policy"]["model"]=="m4998"
     assert x["bothYearsHit20AndROIOver100CountDiagnosticOnly"]==2499
+    assert x["bothYearsHit20AndTrimmedROIOver100CountDiagnosticOnly"]==0
+    assert x["frozen2024Top40Forward2025ROIOver100Count"]==40
+    assert x["2024FrozenBestHasRobustROIOver100"] is False
     bad=json.loads(json.dumps(r));bad["allCandidatesByYear"]["2025"].pop()
     try:inspect(bad);raise AssertionError("EXPECTED_MISSING_DETECTED")
     except ValueError as e:assert "MISSING" in str(e)
