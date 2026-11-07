@@ -45,6 +45,8 @@ jobs:
         run: python scripts/resolve-public-ui-version.py
       - name: Verify actual ROI audit classification without D1 access
         run: python3 scripts/audit-production-live-roi-readonly.py --self-test
+      - name: Verify immutable shadow ROI accounting without D1
+        run: python3 scripts/audit-live-shadow-portfolio-roi.py --self-test
       - name: Verify cumulative performance safety
         run: python scripts/verify-cumulative-performance.py
       - name: Verify daily performance history storage
