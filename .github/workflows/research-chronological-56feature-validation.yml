@@ -25,7 +25,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install research-only dependencies
-        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3'
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
       - name: Check research script syntax
         run: python -m py_compile scripts/research-chronological-56feature-validation.py
       - name: Strict date-grouped training, validation and untouched 2026 evaluation
