@@ -1,8 +1,7 @@
 name: Audit locked shadow vs live ROI (read-only)
 
+# Manual only: automated D1 workflows are intentionally locked down by quota guards.
 on:
-  schedule:
-    - cron: "15 11 * * *" # 20:15 JST, after normal JRA settlement
   workflow_dispatch:
 
 permissions:
