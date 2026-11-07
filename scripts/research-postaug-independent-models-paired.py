@@ -146,6 +146,36 @@ def gather_data():
     extra.fit(X,y)
     models["independent_extra_trees_120"]=extra
     print("FITTED_MODEL independent_extra_trees_120",flush=True)
+    # Persist the ACTUALLY FITTED independent model for reproducibility.
+    # Research artifact only: no Worker integration, no D1 or public changes.
+    import hashlib
+    import joblib
+    package=ROOT/"analysis-results/model-packages"
+    package.mkdir(parents=True,exist_ok=True)
+    filename=package/"postaug-extra-trees-120.joblib"
+    joblib.dump(extra,filename,compress=3)
+    reopened=joblib.load(filename)
+    if not np.allclose(reopened.predict_proba(X[:40]),extra.predict_proba(X[:40]),atol=0,rtol=0):
+        raise AssertionError("EXPORTED_MODEL_PREDICTION_PARITY_FAILED")
+    digest=hashlib.sha256(filename.read_bytes()).hexdigest()
+    manifest={"name":"postaug-extra-trees-120-research-v1",
+      "algorithm":"sklearn.ensemble.ExtraTreesClassifier",
+      "trainingDataEndDate":"2026-08-09","trainingUsesAugNovOutcomeLabels":False,
+      "trainingRunnerRows":int(len(y)),"trainingRaces":int(len(counts)),
+      "featureOrder":list(core.load_config()["runnerProbabilityModel"]["features"]),
+      "featureCount":len(core.load_config()["runnerProbabilityModel"]["features"]),
+      "trainingParameters":extra.get_params(),
+      "modelArtifactSha256":digest,"artifactBytes":filename.stat().st_size,
+      "frozenResearchTicketRule":{"model":"independent_extra_trees_120",
+        "raceRank":"top3","tickets":"wide12_quinella13",
+        "stakesYen":[200,1800],"racesPerVenueDay":3},
+      "selectionStatus":"RETROSPECTIVE_HINDSIGHT_NOT_APPROVED_FOR_LIVE",
+      "requiresProspectiveForwardAudit":True}
+    (package/"postaug-extra-trees-120-manifest.json").write_text(
+        json.dumps(manifest,ensure_ascii=False,indent=2)+"\\n",encoding="utf-8")
+    print("POSTAUG_EXTRATREES_SERIALIZED_PARITY_OK",json.dumps({
+        "sha256":digest,"bytes":filename.stat().st_size,
+        "trainingRows":len(y),"features":manifest["featureCount"]}),flush=True)
     del X,y,counts,dates,offsets
     state=hist.fresh_feature_state()
     for date,day in sorted(history.items()):
