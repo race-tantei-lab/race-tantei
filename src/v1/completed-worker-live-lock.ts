@@ -16,6 +16,7 @@ import {
 } from "./completed-ticket-runtime";
 import { JRA_OFFICIAL_ODDS_PARSER_VERSION, fetchFastJraOfficialOddsForRace, type OfficialOddsRow } from "./jra-official-odds-fetch";
 import { ensureCompletedFinalImmutability } from "./completed-final-invariants";
+import { shadowCompletedPortfolioResearch, type CompletedShadowPortfolio } from "./completed-ticket-shadow-research";
 import { COMPLETED_PREDICTION_POLICY } from "./completed-prediction-policy";
 import type { Env, RaceRecord, RunnerRecord } from "./types";
 
@@ -78,6 +79,8 @@ type PreviewSnapshot = {
   runnerRecencyFactors?: CompletedRunnerRecencyDetail[];
   tickets: CompletedTicket[];
   courseBets: CompletedCourseBet[];
+  shadowResearch?: CompletedShadowPortfolio[];
+  shadowResearchError?: string | null;
 };
 
 type PreviewEnvelope = {
@@ -450,6 +453,22 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     (betType, odds) => completedRecencyBetFactor(learning, betType, refreshed.race.venue, odds),
   );
   const courseBets = completedCourseBets(tickets);
+  // Shadow-only: the official public tickets above MUST NOT depend on this research.
+  // Reuse the same T-15 official odds snapshot; never fetch again or write other bets.
+  let shadowResearch: CompletedShadowPortfolio[] | undefined;
+  let shadowResearchError: string | null = null;
+  try {
+    shadowResearch = shadowCompletedPortfolioResearch(
+      refreshed.runners.map((runner) => Number(runner.horseNo)), weights, fetched.rows,
+    );
+    if (shadowResearch.some((row) => row.tickets.length !== 2 || row.tickets[0]?.betType === row.tickets[1]?.betType)) {
+      throw new Error("SHADOW_TWO_DISTINCT_TYPES_REQUIRED");
+    }
+  } catch (error) {
+    // Never compromise the canonical frozen production tickets or T-15 lock.
+    shadowResearchError = errorText(error);
+    shadowResearch = undefined;
+  }
   const snapshot: PreviewSnapshot = {
     version: PREVIEW_VERSION,
     raceId,
@@ -469,6 +488,8 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     runnerRecencyFactors: learning.runnerDetails,
     tickets,
     courseBets,
+    shadowResearch,
+    shadowResearchError,
   };
   if (!validSnapshot(snapshot, raceId)) throw new Error(`WORKER_GENERATED_PREVIEW_GATE_FAILED:${raceId}`);
   await savePreview(db, snapshot);
@@ -519,6 +540,9 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
     onlineLearning: snapshot.onlineLearning ?? null,
     runnerRecencyFactors: snapshot.runnerRecencyFactors ?? null,
     tickets: snapshot.tickets,
+    // Immutable research-only candidate comparison, not a public prediction.
+    shadowResearch: snapshot.shadowResearch ?? null,
+    shadowResearchError: snapshot.shadowResearchError ?? null,
   })));
   for (const bet of snapshot.courseBets) {
     statements.push(db.prepare(`
