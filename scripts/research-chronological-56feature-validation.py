@@ -85,7 +85,7 @@ def load_bundles(archive):
             if rid not in archive:
                 raise ValueError("race ID from runner archive missing in calendar: "+rid)
             race = archive[rid]
-            bundle = {"race":race,"runners":[],"results":[],"payouts":[]}
+            bundle = {"race":race,"runners":[],"results":[],"payouts":[],"archivedMarketOdds":{}}
             for x in raw:
                 if len(x) != 15:
                     raise ValueError("unexpected archived runner format")
@@ -98,6 +98,13 @@ def load_bundles(archive):
                           "horseWeight":weight,"weightChange":change,
                           "runnerStatus":status}
                 bundle["runners"].append(runner)
+                # Historical odds are withheld from all 56 model features;
+                # only used post-freeze for a NON-T15 retrospective benchmark.
+                try:
+                    historic_odd=float(_final_odds)
+                except (TypeError,ValueError):
+                    historic_odd=float("nan")
+                bundle["archivedMarketOdds"][int(horse_no)]=historic_odd
                 bundle["results"].append({"horseNo":int(horse_no),"finishPosition":finish,
                                           "timeText":tm,"final3f":final3f})
                 runners += 1
@@ -128,7 +135,7 @@ def chronological_features(core, by_date):
     assert not ({"winOdds","popularity","finishPosition","raceId",
                  "raceDate","labelWin","labelTop3"} & set(features))
     state = fresh_feature_state()
-    arrays, labels, race_sizes, race_winners, race_dates = [], [], [], [], []
+    arrays, labels, race_sizes, race_winners, race_dates, market_venues = [], [], [], [], [], []
     dropped = collections.Counter()
     total_races = 0
     first_date = None
@@ -161,6 +168,8 @@ def chronological_features(core, by_date):
             race_sizes.append(len(runners))
             race_winners.append(winner_idx[0])
             race_dates.append(date)
+            market_venues.append([b["archivedMarketOdds"].get(int(r["horseNo"]))
+                                  for r in runners])
         core.update_feature_state_for_date(state, day)
         state["throughDate"] = date
     X = np.asarray(arrays,dtype=np.float32)
@@ -174,7 +183,7 @@ def chronological_features(core, by_date):
     assert np.all(np.isfinite(X))
     # Archive date range starts midweek; the first actually raced date can be later.
     assert "2016-08-10" <= first_date < "2016-09-01" and prev_date == "2026-08-09", (first_date,prev_date)
-    return X,y,counts,dates,offsets,np.asarray(race_winners),dict(dropped),total_races
+    return X,y,counts,dates,offsets,np.asarray(race_winners),dict(dropped),total_races,market_venues
 
 def score(model, X, counts, offsets, winners, ix):
     if len(ix) < 250:
@@ -200,6 +209,36 @@ def score(model, X, counts, offsets, winners, ix):
         "uniformTopPickExpectedPct":round(float(np.mean(1.0/counts[ix]))*100,3),
     }
 
+def paired_archived_market_diagnostic(model, X, counts, offsets, winners, ix, market):
+    """Same-race model vs archived odds; historical odds timing NOT T-15."""
+    low = int(offsets[ix[0]])
+    high = int(offsets[ix[-1] + 1])
+    raw = model.predict_proba(X[low:high])[:,1]
+    n=0; model_hits=market_hits=0; model_loss=market_loss=0.0
+    for index in ix:
+        odds=market[index]
+        if len(odds)!=int(counts[index]) or not all(
+            x is not None and math.isfinite(x) and x>1 for x in odds
+        ): continue
+        a,b=int(offsets[index])-low,int(offsets[index+1])-low
+        pred=np.maximum(raw[a:b],1e-12)
+        pred/=pred.sum()
+        implied=np.asarray([1.0/x for x in odds],dtype=float)
+        implied/=implied.sum()
+        win=int(winners[index])
+        model_hits+=int(np.argmax(pred)==win)
+        market_hits+=int(np.argmax(implied)==win)
+        model_loss+=-math.log(max(1e-12,float(pred[win])))
+        market_loss+=-math.log(max(1e-12,float(implied[win])))
+        n+=1
+    return {"pairedRaceCount":n,"modelTopPickWinPct":round(model_hits*100/n,3),
+            "archivedMarketFavoriteWinPct":round(market_hits*100/n,3),
+            "modelWinnerLogLoss":round(model_loss/n,7),
+            "archivedMarketWinnerLogLoss":round(market_loss/n,7),
+            "oddsT15Verified":False,
+            "note":"archived odds timestamp unverified; no causal T15 market ROI conclusion"}
+
+
 def fit(X,y,offsets,train_ix,params):
     assert len(train_ix) >= 8000, len(train_ix)
     limit = int(offsets[train_ix[-1]+1])
@@ -213,7 +252,7 @@ def main():
     core=core_module()
     meta=load_public_archive()
     by_date=load_bundles(meta)
-    X,y,counts,dates,offsets,winners,dropped,total=chronological_features(core,by_date)
+    X,y,counts,dates,offsets,winners,dropped,total,market=chronological_features(core,by_date)
     print("CHRONO_DATA_READY",json.dumps({
         "totalRaces":total,"eligible":len(counts),"runnerRows":len(y),
         "dropped":dropped,"first":dates[0],"last":dates[-1],
@@ -268,6 +307,8 @@ def main():
     model = fit(X,y,offsets,train_ix,CANDIDATES[selected])
     report["selectedFromValidation"]=selected
     report["untouched2026Holdout"]=score(model,X,counts,offsets,winners,holdout_ix)
+    report["pairedArchivedMarketDiagnostic"]=paired_archived_market_diagnostic(
+        model,X,counts,offsets,winners,holdout_ix,market)
     report["holdoutRows"]=len(holdout_ix)
     report["elapsedSeconds"]=round(time.monotonic()-start,1)
     report["promotionEligible"]=False
@@ -282,6 +323,7 @@ def main():
     print("CHRONO_FINAL_RESEARCH_REPORT",json.dumps({
         "selected":selected,"validation":validation_sums,
         "holdout":report["untouched2026Holdout"],
+        "pairedArchivedMarketDiagnostic":report["pairedArchivedMarketDiagnostic"],
         "promotionEligible":False,"elapsedSeconds":report["elapsedSeconds"],
     },ensure_ascii=False),flush=True)
 
