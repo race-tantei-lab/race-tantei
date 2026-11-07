@@ -1,0 +1,57 @@
+name: Research pre-T15 shadow ROI gate (no production changes)
+
+on:
+  push:
+    branches: [research/forward-shadow-audit-20261107]
+  workflow_dispatch:
+    inputs:
+      through_date:
+        description: "Inclusive finished and settled JST race day (YYYY-MM-DD)"
+        type: string
+        required: true
+        default: "2026-11-08"
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify fully synthetic pre-T15 scenarios, JRA payouts, refunds, and fail-closed behavior
+        run: python3 scripts/research-shadow-forward-roi-gate-20261107.py --self-test
+      - name: Check no D1 writes or production model/site changes in research program
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("scripts/research-shadow-forward-roi-gate-20261107.py")
+          txt=p.read_text()
+          forbidden=("INSERT INTO","DELETE FROM","UPDATE rt_","DROP TABLE","CREATE TABLE","ALTER TABLE")
+          assert not any(item in txt for item in forbidden)
+          assert "SELECT state_key" in txt and "source_prediction_id=-2" in txt
+          print("SHADOW_RESEARCH_D1_SELECT_ONLY_TEST_OK")
+          PY
+      - name: Evaluate settled future locked alternatives on explicit dispatch or one-time research trigger only
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[run-shadow-audit]'))
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+          CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+          RACE_THROUGH_DATE: ${{ inputs.through_date }}
+        run: |
+          set -euo pipefail
+          through="${RACE_THROUGH_DATE:-2026-11-08}"
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            # A signed-in automation deliberately commits the one-time trigger.
+            # Reject early push attempts before the intended first settled day.
+            today="$(TZ=Asia/Tokyo date +%F)"
+            hour="$(TZ=Asia/Tokyo date +%H)"
+            if [[ "$today" < "2026-11-08" || ( "$today" == "2026-11-08" && "$hour" -lt 20 ) ]]; then
+              echo "Too early for 2026-11-08 settled forward audit." >&2
+              exit 1
+            fi
+          fi
+          python3 scripts/research-shadow-forward-roi-gate-20261107.py --through-date "$through"
