@@ -72,10 +72,6 @@ def settled_meta(by_date):
                 "finish":tuple(positions.get(r["horseNo"]) for r in active)})
     return meta
 
-def hit(typ,ranking,finish):
-    pos=tuple(finish[ranking[index]] for index in ranking[1]) if False else None
-    raise RuntimeError("UNREACHABLE")
-
 def ticket_hit(ticket,order,positions):
     typ,idx=ticket
     nums=tuple(positions[order[i]] for i in idx)
@@ -95,14 +91,14 @@ def race_ranking_score(p,kind):
     if kind=="top1_gap":return float(p[0]-p[1])
     raise ValueError(kind)
 
-def make_records(base,features,years_meta,counts,offsets,dates,odds,year):
+def make_records(base,features,labels,years_meta,counts,offsets,dates,odds,year):
     train=np.where(dates<year+"-01-01")[0]
     target=np.where((dates>=year+"-01-01")&(dates<str(int(year)+1)+"-01-01"))[0]
     if len(train)<8000 or len(target)<700:
         raise RuntimeError("INSUFFICIENT_DATE_SEPARATED_SAMPLE:"+year)
     if str(dates[train[-1]])>=year+"-01-01":
         raise AssertionError("TRAINING_TARGET_LEAKAGE")
-    model=base.fit(features,base.LABELS if False else _labels_ref,
+    model=base.fit(features,labels,
                    offsets,train,base.CANDIDATES["adopted_complexity_500x127"])
     start=int(offsets[target[0]])
     probs=model.predict_proba(features[start:int(offsets[target[-1]+1])])[:,1]
@@ -199,12 +195,10 @@ def main():
     if len(meta)!=len(counts) or any(meta[i]["date"]!=str(dates[i])
                                    or meta[i]["field"]!=counts[i] for i in range(len(meta))):
         raise AssertionError("RACE_ORDER_OR_COUNT_PROVENANCE_MISMATCH")
-    global _labels_ref
-    _labels_ref=y
     years={}
     specs=[(src,pair,rank) for src in SOURCES for pair in TICKETS for rank in RANKINGS]
     for year in YEAR_RANGE:
-        groups,missing,n=make_records(base,X,meta,counts,offsets,dates,odds,year)
+        groups,missing,n=make_records(base,X,y,meta,counts,offsets,dates,odds,year)
         score={(src,pair,rank,k):score_fixed(groups,src,pair,rank,k)
                for src,pair,rank in specs for k in KS}
         years[year]={"scores":score,"missing":missing,"targetRaceCount":n,
