@@ -66,4 +66,36 @@ jobs:
             "rosterVerified":valid,
             "preT15TicketsVerified":False,"profitableModelVerified":False},ensure_ascii=False))
           if not valid:raise RuntimeError("NOV08_ROSTER_NOT_READY")
+          # One additional indexed-range read, only 15 short state keys:
+          # confirm odds previews and the new ROI-first research were persisted
+          # from ACTUAL official pre-result input (not generated after races).
+          preview_sql=("SELECT state_key AS stateKey, "
+            "json_extract(state_value,'$.snapshots[0].oddsFetchedAt') AS oddsFetchedAt, "
+            "json_extract(state_value,'$.snapshots[0].oddsSource') AS oddsSource, "
+            "json_extract(state_value,'$.snapshots[0].roiFirstResearch.policy') AS roiPolicy, "
+            "json_extract(state_value,'$.snapshots[0].roiFirstResearch.modeledTwoTicketHitPct') AS modeledHitPct, "
+            "json_extract(state_value,'$.snapshots[0].roiFirstResearch.modeledExpectedRoiPct') AS modeledExpectedRoiPct "
+            "FROM rt_system_state WHERE state_key>=? AND state_key<? ORDER BY state_key LIMIT 18")
+          start="worker_live_preview:"+date+"-"
+          # End-exclusive marker that is lexicographically above the target day
+          end="worker_live_preview:2026-11-09-"
+          req2=urllib.request.Request(url,method="POST",
+             data=json.dumps({"sql":preview_sql,"params":[start,end]}).encode(),
+             headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"],"Content-Type":"application/json"})
+          with urllib.request.urlopen(req2,timeout=25) as f:
+            response=json.load(f)
+          if not response.get("success"):
+            raise RuntimeError("NOV08_PREVIEW_READ_FAILED:"+str(response.get("errors"))[:200])
+          previews=(response.get("result") or [{}])[0].get("results") or []
+          if len(previews)>=18:raise RuntimeError("NOV08_PREVIEW_DATE_READ_LIMIT")
+          shadow=[r for r in previews if r["roiPolicy"]=="roi_first_jra_official_model_ev_v1"]
+          print("NOV08_LIVE_PREVIEWS",json.dumps({"checkedAtJst":__import__("datetime").datetime.now(
+            __import__("datetime").timezone(__import__("datetime").timedelta(hours=9))).isoformat(),
+            "previews":len(previews),"roiFirstShadows":len(shadow),
+            "previewRows":[{"race":r["stateKey"].replace("worker_live_preview:",""),
+              "officialOddsSource":r["oddsSource"],"oddsFetchedAt":r["oddsFetchedAt"],
+              "roiFirstShadowFrozen":r["roiPolicy"]=="roi_first_jra_official_model_ev_v1"}
+              for r in previews],
+            "modeledProfitNotActualJraReturns":True},ensure_ascii=False))
+
           PY
