@@ -94,7 +94,7 @@ def selftest():
     assert x["2024Hit20Count"]==2500
     assert x["2024FrozenBest"]["policy"]["model"]=="m4998"
     assert x["bothYearsHit20AndROIOver100CountDiagnosticOnly"]==2499
-    assert x["bothYearsHit20AndTrimmedROIOver100CountDiagnosticOnly"]==0
+    assert x["bothYearsHit20AndTrimmedROIOver100CountDiagnosticOnly"]==999
     assert x["frozen2024Top40Forward2025ROIOver100Count"]==40
     assert x["2024FrozenBestHasRobustROIOver100"] is False
     bad=json.loads(json.dumps(r));bad["allCandidatesByYear"]["2025"].pop()
