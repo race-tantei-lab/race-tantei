@@ -17,7 +17,7 @@ COLLECTOR_PATH=ROOT/'scripts'/'collect-jra-official-odds.py'
 LEARNING_PATH=ROOT/'scripts'/'live-recency-learning.py'
 COURSE_STAKES={'ライト':[1000,1000],'スタンダード':[2500,2500],'プレミアム':[5000,5000]}
 BET_ORDER=('単勝','ワイド','馬連','馬単','3連複','3連単')
-ODDS_SCORE_POWER=0.4
+ODDS_SCORE_POWER=0.2
 
 
 def load(path,name):
@@ -71,10 +71,6 @@ def choose_two(core,learning,rid,runners,w,odds,bet_learning,venue):
             learned_factor=float(learning.bet_factor(bet_learning,bt,venue,odd))
             candidates.append({'betType':bt,'combination':combo,'horses':[horse_nos[i] for i in pos],'predictedProbability':p,'officialOdds':odd,'recencyFactor':learned_factor,'valueProduct':p*odd*learned_factor})
         if not candidates: raise RuntimeError(f'OFFICIAL_ODDS_MISSING_BET_TYPE:{rid}:{bt}')
-        # Match the frozen historical model: raw probability × official odds
-        # determines the top five; recency affects only the final reranking.
-        candidates.sort(key=lambda x:(-x['predictedProbability']*x['officialOdds'],-x['predictedProbability'],x['combination']))
-        candidates=candidates[:5]
         for x in candidates:
             x['score']=math.log(x['predictedProbability'])+ODDS_SCORE_POWER*math.log(x['officialOdds'])+math.log(x.get('recencyFactor',1.0))
         candidates.sort(key=lambda x:(-x['score'],-x['predictedProbability'],x['combination']))
