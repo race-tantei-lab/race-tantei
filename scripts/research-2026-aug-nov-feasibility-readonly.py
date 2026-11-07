@@ -41,7 +41,23 @@ def main():
     WHERE race_id>=? AND race_id<? AND bet_type='単勝'
       AND odds_source='jra_official' AND seconds_to_start>=900
     GROUP BY 1 ORDER BY 1""",[start+"-",end+"-"])
-  print("AUG_NOV_RETROSPECTIVE_FEASIBILITY",json.dumps({"races":races,"runners":runners,"results":results,"preT15WinSnapshots":snapshots,
+  links=query("""SELECT substr(race_date,1,7) month,count(*) races,
+    sum(CASE WHEN result_url IS NOT NULL AND length(result_url)>20 THEN 1 ELSE 0 END) resultLinks,
+    sum(CASE WHEN entry_url IS NOT NULL AND length(entry_url)>20 THEN 1 ELSE 0 END) entryLinks
+    FROM rt_races WHERE race_date>=? AND race_date<? GROUP BY 1 ORDER BY 1""",[start,end])
+  fields=query("""SELECT substr(r.race_date,1,7) month,
+    count(*) finished12PlusRaces,
+    sum(CASE WHEN r.result_url IS NOT NULL AND length(r.result_url)>20 THEN 1 ELSE 0 END) resultLinks12Plus
+    FROM rt_races r
+    JOIN (SELECT race_id,count(*) n FROM rt_runners
+      WHERE race_id>=? AND race_id<? AND runner_status='active' GROUP BY race_id) t
+    ON r.race_id=t.race_id
+    WHERE r.race_date>=? AND r.race_date<? AND r.status='finished' AND t.n>=12
+    GROUP BY 1 ORDER BY 1""",[start+"-",end+"-",start,end])
+  examples=query("""SELECT race_id raceId,entry_url entryUrl,result_url resultUrl
+    FROM rt_races WHERE race_date>=? AND race_date<? AND status='finished'
+      AND result_url IS NOT NULL ORDER BY race_date,race_id LIMIT 3""",[start,end])
+  print("AUG_NOV_RETROSPECTIVE_FEASIBILITY",json.dumps({"races":races,"runners":runners,"results":results,"preT15WinSnapshots":snapshots,"resultLinkCoverage":links,"field12Plus":fields,"sampleLinks":examples,
     "limitation":"end-of-day or final win odds unverified for T-15; unknown complete prior-runner continuity; no counterfactual ROI yet",
     "allReadOnly":True},ensure_ascii=False))
 if __name__=="__main__":main()
