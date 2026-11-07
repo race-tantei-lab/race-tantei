@@ -204,7 +204,7 @@ def train_and_predict(by_date,base,core):
 def get_official_final_win(row,historic):
     url=row["resultUrl"]
     raw_url=__import__("urllib.parse").parse.unquote(url)
-    match=re.search(r"pw01sde10(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})",raw_url,re.I)
+    match=re.search(r"pw01sde(?:10|01)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})",raw_url,re.I)
     if not match:
         raise ValueError("OFFICIAL_JRA_RESULT_URL_NOT_RECOGNIZED")
     venue,year,meeting,day,race_no,ymd=match.groups()
