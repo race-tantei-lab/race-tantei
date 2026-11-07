@@ -99,7 +99,7 @@ def market_archive(bundles,counts,offsets,meta):
     print("MARKET_ARCHIVE_VALID_COUNTS",json.dumps({
         "totalRaces":len(good),"validRaces":int(np.sum(good)),
         "byYear":dict(yearcov)},ensure_ascii=False),flush=True)
-    if sum(good)<20000:raise RuntimeError("NOT_ENOUGH_VALID_MARKET_ARCHIVE")
+    if sum(good)<1000:raise RuntimeError("NOT_ENOUGH_REAL_MARKET_ODDS_TO_USE_FOR_2024_2025")
     return M,q_by_id,odds_by_id,valid,good,overrounds
 
 def fit_market_ranker(X,y,counts,dates,offsets,valid,year):
