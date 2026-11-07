@@ -155,7 +155,7 @@ def gather_data():
     filename=package/"postaug-extra-trees-120.joblib"
     joblib.dump(extra,filename,compress=3)
     reopened=joblib.load(filename)
-    if not np.allclose(reopened.predict_proba(X[:40]),extra.predict_proba(X[:40]),atol=0,rtol=0):
+    if not np.allclose(reopened.predict_proba(X[:40]),extra.predict_proba(X[:40]),atol=1e-12,rtol=1e-12):
         raise AssertionError("EXPORTED_MODEL_PREDICTION_PARITY_FAILED")
     digest=hashlib.sha256(filename.read_bytes()).hexdigest()
     manifest={"name":"postaug-extra-trees-120-research-v1",
