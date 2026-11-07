@@ -61,6 +61,7 @@ def fetch_readonly(start=START,end_exclusive=END_EXCLUSIVE):
         ["final_daily_selection:"+start,"final_daily_selection:"+end_exclusive])
     bets=read_d1("""SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,
         b.combination,b.stake_yen AS stakeYen,b.return_yen AS returnYen,
+        b.assumed_odds AS assumedOdds,r.refunds AS refunds,
         b.settlement_status AS settlementStatus,b.locked_at AS lockedAt
         FROM rt_public_bets b JOIN rt_races r ON r.race_id=b.race_id
         WHERE r.race_date>=? AND r.race_date<? AND b.source_prediction_id=-2
@@ -70,6 +71,19 @@ def fetch_readonly(start=START,end_exclusive=END_EXCLUSIVE):
     if len(selections)>=MAX_SELECTION_ROWS or len(bets)>=MAX_BET_ROWS:
         raise RuntimeError("D1_READ_LIMIT_REACHED_REPORT_INVALID")
     return {"selectionStates":selections,"bets":bets}
+
+def ticket_is_real_hit(ticket):
+    """Return/repaid stake is ROI cash but NEVER an actual hit."""
+    value=int(ticket.get("returnYen") or 0)
+    if value<=0:return False
+    try:
+        refunds=set(int(n) for n in json.loads(ticket.get("refunds") or "[]"))
+        numbers=set(int(n) for n in str(ticket.get("combination") or "").split("-"))
+    except (ValueError,TypeError):
+        raise ValueError("BAD_REFUND_OR_COMBINATION_IN_SETTLED_BET") from None
+    if numbers & refunds:return False
+    return True
+
 
 def hit_coverage(rows):
     """Hit coverage on ORIGINAL two distinct locked tickets; never infer odds."""
@@ -238,8 +252,9 @@ def evaluate(source):
                     "rank":rank,"score":rows[rank-1][0],"valid":reason is None,
                     "failure":reason,"stake":stake if reason is None else 0,
                     "return":refund if reason is None else 0,
-                    "hitTickets":sum(int(x.get("returnYen") or 0)>0 for x in actual)
-                      if reason is None else 0})
+                    "hitTickets":sum(ticket_is_real_hit(x) for x in actual)
+                      if reason is None else 0,
+                    "ticketRows":actual if reason is None else []})
     summaries={}
     by_month={}
     for k in TOP_KS:
@@ -271,12 +286,139 @@ def evaluate(source):
         "dateThrough":max((x["date"] for x in compiled),default=None),
         "strategies":summaries,"byMonth":by_month,"invalidReasons":dict(rejected),
         "fairPairedCompleteDays":matched_complete_days(compiled),
+        "pairedStakeGrid":paired_stake_grid(compiled),
         "limitations":["Only the five previously selected races can be compared; never a model that selected different races",
             "Historical pre-race score capture timestamps are not independently verified here",
             "Missing or late bets are counted, not silently erased",
             "ROI denominator is placed valid bets only; incompleteness separately prohibits promotion",
             "Past performance can select a hypothesis only; future unseen race-day comparison is mandatory",
             "No official payout independently compared with JRA"],"promotionEligible":False}
+
+
+STAKES_GRID={
+    "equal_1000_1000":(1000,1000,"equal"),
+    "nonwide_1500_500":(1500,500,"nonwide"),
+    "nonwide_1800_200":(1800,200,"nonwide"),
+    "nonwide_1900_100":(1900,100,"nonwide"),
+    "wide_1500_500":(1500,500,"wide"),
+    "lower_odds_1500_500":(1500,500,"lower_odds"),
+    "lower_odds_1800_200":(1800,200,"lower_odds"),
+    "prefer_3to10_1500_500":(1500,500,"prefer_3to10"),
+}
+
+def allocate_stakes(policy, ticket_rows):
+    if len(ticket_rows)!=2:raise ValueError("NEED_EXACTLY_TWO_TICKETS")
+    heavy,small,kind=STAKES_GRID[policy]
+    rows=sorted(ticket_rows,key=lambda x:(str(x["betType"]),str(x["combination"])))
+    if kind=="equal":return [(rows[0],1000),(rows[1],1000)]
+    if kind=="nonwide":
+        selected=0 if rows[0]["betType"]!="ワイド" else 1
+    elif kind=="wide":
+        selected=0 if rows[0]["betType"]=="ワイド" else 1
+    else:
+        try:odds=[float(x["assumedOdds"]) for x in rows]
+        except (ValueError,TypeError,KeyError):raise ValueError("NO_PRE_LOCK_ODDS") from None
+        if any(not math.isfinite(x) or x<1 for x in odds):raise ValueError("INVALID_PRE_LOCK_ODDS")
+        if kind=="lower_odds":
+            selected=0 if (odds[0],str(rows[0]["betType"]))<=(odds[1],str(rows[1]["betType"])) else 1
+        elif kind=="prefer_3to10":
+            matches=[i for i,x in enumerate(odds) if 3<=x<10]
+            selected=matches[0] if len(matches)==1 else (0 if odds[0]<=odds[1] else 1)
+        else:raise ValueError("UNKNOWN_STAKE_KIND")
+    result=[(rows[0],small),(rows[1],small)]
+    result[selected]=(rows[selected],heavy)
+    if sum(x[1] for x in result)!=2000 or min(x[1] for x in result)<100:
+        raise AssertionError("INCORRECT_STAKE_ALLOCATION")
+    return result
+
+def candidate_summary(rows,policy):
+    cash=0;hits=0;hit_tickets=0;win_races=0;returns=[]
+    for row in rows:
+        real_bets=row.get("ticketRows") or []
+        if not row["valid"] or len(real_bets)!=2:raise ValueError("UNPAIRED_OR_INCOMPLETE_RACE")
+        amount=0
+        for bet,stake in allocate_stakes(policy,real_bets):
+            actual_stake=int(bet["stakeYen"])
+            original_return=int(bet["returnYen"])
+            if actual_stake!=1000 or original_return<0:
+                raise ValueError("INCONSISTENT_ORIGINAL_STAKE_RETURN")
+            if (original_return*stake)%actual_stake:
+                raise ValueError("NON_INTEGRAL_ACTUAL_PAYOFF")
+            amount+=original_return*stake//actual_stake
+        cash+=amount
+        hits+=int(row["hitTickets"]>0)
+        hit_tickets+=row["hitTickets"]
+        win_races+=int(amount>2000)
+        returns.append(amount)
+    n=len(rows);investment=2000*n
+    return {
+        "races":n,"hitRaces":hits,"hitRacePct":round(100*hits/n,2) if n else None,
+        "hitTicketPct":round(100*hit_tickets/(2*n),2) if n else None,
+        "stakeYen":investment,"returnYen":cash,"profitYen":cash-investment,
+        "roiPct":round(100*cash/investment,2) if investment else None,
+        "roiWithoutLargestRacePayoutPct":round(100*(cash-max(returns,default=0))/investment,2) if investment else None,
+        "profitableRacePct":round(100*win_races/n,2) if n else None,
+    }
+
+def paired_stake_grid(compiled):
+    """Same 5-complete venue-days for every K and stake split: 24 strict paired trials.
+
+    2026 data were inspected before this search. This is descriptive,
+    NEVER a future holdout, or a proof that any rule is profitable.
+    """
+    groups=collections.defaultdict(list)
+    for row in compiled:groups[(row["date"],row["venue"])].append(row)
+    complete={k:sorted(v,key=lambda x:x["rank"]) for k,v in groups.items()
+              if len(v)==5 and all(x["valid"] for x in v)}
+    if not complete:
+        return {"status":"NO_COMPLETE_DAYS","promotionEligible":False}
+    periods={
+       "full":lambda day:True,
+       "trainAugSep":lambda day:day<"2026-10-01",
+       "holdoutOctober":lambda day:"2026-10-01"<=day<"2026-11-01",
+       "November":lambda day:day>="2026-11-01",
+    }
+    output={}
+    for period,valid_date in periods.items():
+        by_period={key:rows for key,rows in complete.items() if valid_date(key[0])}
+        matrix={}
+        for k in TOP_KS:
+            subset=[r for group in by_period.values() for r in group[:k]]
+            matrix[str(k)]={policy:candidate_summary(subset,policy) for policy in STAKES_GRID}
+        output[period]={"venueDays":len(by_period),"raceDates":len({key[0] for key in by_period}),
+                        "sameOriginalFiveRaceCohort":True,"strategies":matrix}
+    full=output["full"]["strategies"]
+    baseline=full["5"]["equal_1000_1000"]
+    pareto=[]
+    for k,portfolio in full.items():
+        for policy,stats in portfolio.items():
+            if stats["hitRacePct"] is None:continue
+            is_dominated=any(
+                (other["hitRacePct"]>=stats["hitRacePct"] and other["roiPct"]>=stats["roiPct"]
+                  and (other["hitRacePct"]>stats["hitRacePct"] or other["roiPct"]>stats["roiPct"]))
+                for b in full.values() for other in b.values() if other["hitRacePct"] is not None)
+            if not is_dominated:
+                pareto.append({"racesPerVenue":int(k),"stakePolicy":policy,
+                              "hitRacePct":stats["hitRacePct"],"roiPct":stats["roiPct"],
+                              "stakeYen":stats["stakeYen"],"returnYen":stats["returnYen"]})
+    dominating=[x for x in pareto if x["hitRacePct"]>baseline["hitRacePct"] and x["roiPct"]>baseline["roiPct"]]
+    return {"status":"RETROSPECTIVE_2026_PAIRED_HIT_AND_ROI",
+        "source":"original immutable production bets, verified T-15 and 5 complete selected races",
+        "totalVariants":len(STAKES_GRID)*len(TOP_KS),
+        "testedStakePolicies":list(STAKES_GRID),
+        "coverageNote":"Do not hide missing/late bets outside complete venue-days",
+        "periods":output,
+        "paretoHistoricalCandidates":pareto,
+        "dominatesEqualFiveRaceHistory":dominating,
+        "promotionEligible":False,
+        "forwardROIValidated":False,
+        "limitations":[
+            "Same past original horse/ticket predictions only, not a new horse probability model",
+            "Original recorded returns still require independent official JRA payout verification",
+            "Past 2026 months were already examined; optimizing against them is hindsight",
+            "All races with absent or late original tickets are excluded only from equal matched complete venue-days",
+            "An observed Pareto frontier does not establish future profitability"]}
+
 
 def selftest():
     day="2026-10-17"
@@ -289,7 +431,8 @@ def selftest():
         for typ in ["単勝","ワイド"]:
             bets.append({"course":"ライト","raceId":rid,"betType":typ,
                 "lockedAt":day+"T01:00:00Z","settlementStatus":"settled",
-                "stakeYen":1000,"returnYen":payouts[i-1] if typ=="単勝" else 0})
+                "stakeYen":1000,"returnYen":payouts[i-1] if typ=="単勝" else 0,
+                "assumedOdds":3.0 if typ=="単勝" else 8.0,"refunds":"[]"})
     states=[{"stateKey":"final_daily_selection:"+day,"stateValue":json.dumps(
         {"sourceModel":"ten-year-completed-model","resultDataUsedForTargetDay":False,"selected":races})}]
     outcome=evaluate({"selectionStates":states,"bets":bets})
@@ -305,6 +448,15 @@ def selftest():
     assert complete["5"]["venueDayCoverage"]["allRacesHitVenueDays"]==0
     assert complete["5"]["venueDayCoverage"]["completeVenueDays"]==1
     assert complete["5"]["hitCoverage"]["hitRaces"]==2
+    grid=outcome["pairedStakeGrid"]
+    assert grid["totalVariants"]==24
+    assert grid["periods"]["full"]["strategies"]["3"]["equal_1000_1000"]["hitRacePct"]==66.67
+    assert grid["periods"]["full"]["strategies"]["3"]["nonwide_1900_100"]["returnYen"]==17100
+    assert grid["periods"]["full"]["strategies"]["5"]["equal_1000_1000"]["roiPct"]==90.0
+    assert grid["promotionEligible"] is False
+    refunded={"betType":"単勝","combination":"1","returnYen":1000,"refunds":"[1]"}
+    assert not ticket_is_real_hit(refunded)
+    assert ticket_is_real_hit({**refunded,"refunds":"[]"})
     assert all(int(k)>=3 for k in TOP_KS)
     bets[0]["lockedAt"]=day+"T04:30:00Z" # Misses T-15
     out=evaluate({"selectionStates":states,"bets":bets})
