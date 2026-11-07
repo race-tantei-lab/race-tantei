@@ -9,6 +9,11 @@ No synthetic, estimated or post-result winning odds are treated as official
 pre-T15 inputs. Missing final odds reject the entire 12-race venue-day.
 
 Core change:
+ - 2024 training cannot use market odds because archived 2023 is 0% complete.
+ - The out-of-time 2024 first-stage scorer therefore uses 56 pre-result fields
+   only; 2025 first-stage model adds 8 FINAL market fields trained on complete
+   2024 official final-odds races. The 2024 payout head uses only valid 2024
+   prices/settlements. This is a different-model handoff, report clearly.
  - race-grouped LambdaRank gets 8 new price-relative market fields together
    with original 56 pre-result horse attributes.
  - value head gets 11 explicit model-vs-market mispricing fields, learns
@@ -99,14 +104,47 @@ def market_archive(bundles,counts,offsets,meta):
     print("MARKET_ARCHIVE_VALID_COUNTS",json.dumps({
         "totalRaces":len(good),"validRaces":int(np.sum(good)),
         "byYear":dict(yearcov)},ensure_ascii=False),flush=True)
-    if sum(good)<20000:raise RuntimeError("NOT_ENOUGH_VALID_MARKET_ARCHIVE")
+    # JRA archival FINAL win odds have NO valid 2023 rows and only 60%
+    # complete 2024 races, as shown by a prior independent source audit.
+    # Fail only if the *actual* training/eval coverage is too low. Never
+    # silently synthesize market odds for the selected venue-days.
+    by_year = {year: int(vals["completeWinOdds"]) for year,vals in yearcov.items()}
+    if by_year.get("2024",0)<1500 or by_year.get("2025",0)<2500:
+        raise RuntimeError("MARKET_YEARWISE_VALID_ODDS_TOO_SPARSE:"+str(by_year))
     return M,q_by_id,odds_by_id,valid,good,overrounds
 
+class PreMarketRankerAdapter:
+    """Out-of-time 2024 ranking baseline; archival 2023 has zero valid odds.
+    Uses only the same 56 historical runner features, never fabricated odds.
+    """
+    def __init__(self,model):self.model=model
+    def predict(self,X,num_threads=2):
+        return self.model.predict(X[:,:56],num_threads=num_threads)
+
+
 def fit_market_ranker(X,y,counts,dates,offsets,valid,year):
-    past=np.flatnonzero((dates<f"{year}-01-01")&valid)
-    if len(past)<10000 or str(dates[past[-1]])>=f"{year}-01-01":
-        raise RuntimeError("MARKET_RANKER_TRAIN_LEAK_OR_MISSING")
-    # Retain complete race group boundaries while removing invalid odds.
+    # 2024 historical FINAL market prices are available but 2023 is 0%.
+    # Thus a year-2024 market-aware learner is IMPOSSIBLE without borrowing
+    # contemporaneous 2024 outcomes. Use pre-2024 standard ranker for 2024
+    # Stage2 training, then market-aware ranker fitted strictly in 2024 for
+    # the 2025 retrospective test. This keeps the target 2025 unseen.
+    if year==2024:
+        ix=np.flatnonzero((dates>="2019-01-01")&(dates<"2024-01-01"))
+        end=int(offsets[int(ix[-1])+1])
+        model=LGBMRanker(objective="lambdarank",n_estimators=220,
+            learning_rate=0.035,num_leaves=31,min_child_samples=65,
+            reg_lambda=10,colsample_bytree=0.84,
+            lambdarank_truncation_level=5,random_state=SEED,n_jobs=2,verbosity=-1)
+        model.fit(X[:end,:56],y[:end].astype(np.int32),group=counts[:int(ix[-1])+1].tolist())
+        return PreMarketRankerAdapter(model),{"trainingTargetYear":year,
+          "trainingThrough":str(dates[ix[-1]]),
+          "trainingCompleteRaces":int(ix[-1])+1,
+          "trainingRunnerRows":end,
+          "realMarketInputsTrained":False,
+          "reason":"historical 2023 final odds have 0% complete race coverage"}
+    past=np.flatnonzero((dates>="2024-01-01")&(dates<"2025-01-01")&valid)
+    if len(past)<1500 or str(dates[past[-1]])>="2025-01-01":
+        raise RuntimeError("MARKET_2024_TRAIN_COHORT_INSUFFICIENT")
     index=np.concatenate([np.arange(offsets[i],offsets[i+1]) for i in past])
     groups=counts[past].tolist()
     if len(index)!=sum(groups):raise AssertionError("MARKET_QID_GROUP_MISMATCH")
@@ -116,7 +154,9 @@ def fit_market_ranker(X,y,counts,dates,offsets,valid,year):
         lambdarank_truncation_level=5,random_state=SEED,n_jobs=2,verbosity=-1)
     model.fit(X[index],y[index].astype(np.int32),group=groups)
     return model,{"trainingTargetYear":year,"trainingThrough":str(dates[past[-1]]),
-      "trainingCompleteRaces":len(past),"trainingRunnerRows":len(index)}
+      "trainingCompleteRaces":len(past),"trainingRunnerRows":len(index),
+      "realMarketInputsTrained":True,
+      "archiveOddsAreFINALNotT15":True}
 
 def aug_market_groups(year, Xaug, Xbase, counts, dates, offsets, meta,
                       model, top3, payout, q, odds, valid):
