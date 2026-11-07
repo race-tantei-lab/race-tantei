@@ -1,0 +1,22 @@
+name: Verify shadow ROI plus hit rate and refund integrity
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/audit-live-shadow-portfolio-roi.py
+      - .github/workflows/verify-shadow-refund-paired-roi.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check audit syntax without D1 access
+        run: python3 -m py_compile scripts/audit-live-shadow-portfolio-roi.py
+      - name: Strict payout table completeness, refunds not counted as hits, exact same cohorts
+        run: python3 scripts/audit-live-shadow-portfolio-roi.py --self-test
