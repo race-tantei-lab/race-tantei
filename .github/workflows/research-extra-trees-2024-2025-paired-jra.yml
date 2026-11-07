@@ -1,0 +1,44 @@
+name: Research ExtraTrees historical 2024 and 2025 paired JRA hit/ROI (yearwise refit)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/research-extra-trees-2024-2025-paired-jra.py
+      - scripts/postaug-support-chronological-56feature-validation.py
+      - .github/workflows/research-extra-trees-2024-2025-paired-jra.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: yearwise-extratrees-historical-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  two-year-refit-and-settlement:
+    runs-on: ubuntu-latest
+    timeout-minutes: 27
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned chronological feature and independent model libraries
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Validate syntax
+        run: python3 -m py_compile scripts/research-extra-trees-2024-2025-paired-jra.py
+      - name: Refit 2024 and 2025 only on prior-year labels, settle frozen candidate against actual JRA payout table, both metrics
+        run: python3 -u scripts/research-extra-trees-2024-2025-paired-jra.py
+      - name: Preserve all yearwise and monthly paired hit-ROI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: historical-2024-2025-extratrees-refit-paired-jra-hit-roi
+          path: analysis-results/research-2024-2025-extratrees-yearwise-paired-jra-roi.json
+          if-no-files-found: warn
+          retention-days: 30
