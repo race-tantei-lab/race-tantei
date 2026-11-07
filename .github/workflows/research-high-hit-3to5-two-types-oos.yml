@@ -1,0 +1,38 @@
+name: Research high hit coverage with mandatory 3-5 races and two distinct types
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/research-high-hit-3to5-two-types-oos-20261107.py
+      - .github/workflows/research-high-hit-3to5-two-types-oos.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hit-coverage-chronological:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install research-only dependencies
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Verify 3/4/5 minimum and different ticket-type guard
+        run: |
+          python -m py_compile scripts/research-high-hit-3to5-two-types-oos-20261107.py
+          python -u scripts/research-high-hit-3to5-two-types-oos-20261107.py --self-test
+      - name: Evaluate 2024-selected 5-race high-hit policies on 2025 and 2026 chronology
+        run: python -u scripts/research-high-hit-3to5-two-types-oos-20261107.py
+      - name: Preserve non-promotable hit-only results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-high-hit-3to5-two-ticket-oos
+          path: analysis-results/research-three-to-five-two-type-hit-oos-20261107.json
+          if-no-files-found: warn
+          retention-days: 30
