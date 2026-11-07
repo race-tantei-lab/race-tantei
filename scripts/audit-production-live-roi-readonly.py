@@ -206,6 +206,99 @@ def summarize_live_records(states: list[dict], bets: list[dict], calendar: list[
             "calendarDatesMissingFrozenSelection": missing_calendar_dates,
             "calendar": calendar}
 
+
+def inspect_prediction_calibration(states: list[dict], bets: list[dict], final_rows: list[dict]) -> dict:
+    """Read-only: compare stored chosen-ticket probabilities with real payouts.
+
+    Never call these probabilities calibrated or reinterpret after-the-fact
+    payouts as wagering returns from unpurchased alternative tickets.
+    """
+    selected = decode_selected(states)
+    races = {str(x.get("raceId")): (date, x) for date, rr in selected.items() for x in rr}
+    tickets = collections.defaultdict(list)
+    for b in bets:
+        if str(b.get("course")) == "ライト":
+            tickets[str(b.get("raceId"))].append(b)
+    bucket = collections.defaultdict(lambda: {"n":0,"expectedHits":0.0,"actualPaidTickets":0,"predictedReturnYen":0.0,"actualReturnYen":0,"stakeYen":0})
+    total_snapshots = 0
+    matched_races = set()
+    notmatched = 0
+    for row in final_rows:
+        rid = str(row.get("stateKey") or "").removeprefix("worker_live_final:")
+        if rid not in races:
+            continue
+        total_snapshots += 1
+        try:
+            payload = json.loads(row.get("stateValue") or "{}")
+        except (TypeError, ValueError):
+            continue
+        date, selected_race = races[rid]
+        paid = tickets[rid]
+        if len(paid) != 2 or not all(str(x.get("settlementStatus")) == "settled" for x in paid):
+            continue
+        if not locked_on_time(paid, selected_race, date):
+            continue
+        predictions = payload.get("tickets") or []
+        matched_in_race = 0
+        for bet in paid:
+            matches = [p for p in predictions if str(p.get("betType")) == str(bet.get("betType")) and str(p.get("combination")) == str(bet.get("combination"))]
+            if len(matches) != 1:
+                notmatched += 1
+                continue
+            p = matches[0]
+            try:
+                probability = float(p.get("predictedProbability"))
+                odds = float(p.get("officialOdds"))
+            except (TypeError, ValueError):
+                continue
+            if not (0 < probability <= 1 and 1 <= odds < 100000):
+                continue
+            stake = int(bet.get("stakeYen") or 0)
+            ret = int(bet.get("returnYen") or 0)
+            if stake <= 0:
+                continue
+            matched_in_race += 1
+            for key in (("all","all"),("betType",str(bet.get("betType"))),("oddsBand","1-3" if odds<3 else "3-10" if odds<10 else "10-30" if odds<30 else "30-100" if odds<100 else "100+")):
+                x = bucket[key]
+                x["n"] += 1
+                x["expectedHits"] += probability
+                x["actualPaidTickets"] += int(ret > 0)
+                x["predictedReturnYen"] += probability * odds * stake
+                x["actualReturnYen"] += ret
+                x["stakeYen"] += stake
+        if matched_in_race == 2:
+            matched_races.add(rid)
+    def fmt(x):
+        return {**x,"expectedHits":round(x["expectedHits"],2),
+                "expectedROI_from_raw_probability_pct":round(x["predictedReturnYen"]/x["stakeYen"]*100,2) if x["stakeYen"] else None,
+                "actualROI_pct":round(x["actualReturnYen"]/x["stakeYen"]*100,2) if x["stakeYen"] else None}
+    return {"snapshotStateRows":len(final_rows),"selectedSnapshots":total_snapshots,
+            "strictMatchedRaces":len(matched_races),"unmatchedTicketCount":notmatched,
+            "comparisons":{kind:{name:fmt(v) for (k,name),v in sorted(bucket.items()) if k==kind}
+                for kind in ("all","betType","oddsBand")},
+            "warning":"Model-internal probabilities are uncalibrated; payout positive includes refunds; stored odds might differ from final settled odds"}
+
+def inspect_payout_consistency(payout_rows: list[dict]) -> dict:
+    mismatches = []
+    compared = 0
+    for row in payout_rows:
+        stake = int(row.get("stakeYen") or 0)
+        actual = int(row.get("returnYen") or 0)
+        hundred = int(row.get("payout100") or 0)
+        if stake <= 0:
+            continue
+        compared += 1
+        expected = stake * hundred // 100
+        if expected != actual:
+            mismatches.append({"raceId":row.get("raceId"),"course":row.get("course"),
+                "betType":row.get("betType"),"combination":row.get("combination"),
+                "stake":stake,"return":actual,"payout100":hundred,
+                "expectedFromOfficialTable":expected,
+                "refundHorses":row.get("refundHorses")})
+    return {"rowsCompared":compared,"matchCount":compared-len(mismatches),
+            "mismatchCount":len(mismatches),"firstMismatches":mismatches[:20],
+            "warning":"Payout table is stored D1 JRA data, not an independent JRA web verification; refunds/formatting may explain mismatches"}
+
 def main() -> None:
     if "--self-test" in sys.argv:
         self_test()
@@ -235,13 +328,35 @@ def main() -> None:
       WHERE race_date>=? AND race_date<?
       GROUP BY race_date ORDER BY race_date LIMIT 150
     """, [str(start), str(end_exclusive)])
+    final_rows = query("""
+      SELECT state_key AS stateKey, state_value AS stateValue
+      FROM rt_system_state
+      WHERE state_key>=? AND state_key<?
+      ORDER BY state_key LIMIT 500
+    """, ["worker_live_final:" + str(start), "worker_live_final:" + str(end_exclusive)])
+    payouts = query("""
+      SELECT b.race_id AS raceId,b.course,b.bet_type AS betType,b.combination,
+             b.stake_yen AS stakeYen,b.return_yen AS returnYen,
+             MAX(COALESCE(p.payout_yen,0)) AS payout100,
+             COALESCE(r.refund_horse_nos_json,'[]') AS refundHorses
+      FROM rt_public_bets b
+      JOIN rt_races r ON r.race_id=b.race_id
+      LEFT JOIN rt_payouts p
+        ON p.race_id=b.race_id AND p.bet_type=b.bet_type AND p.combination=b.combination
+      WHERE b.race_id>=? AND b.race_id<?
+        AND b.source_prediction_id=-2 AND b.settlement_status='settled'
+      GROUP BY b.id
+      ORDER BY b.race_id,b.course,b.id LIMIT 5000
+    """, [str(start) + "-", str(end_exclusive) + "-"])
     if not states:
         raise AssertionError("NO_PRODUCTION_SELECTION_ROWS: audit cannot assert actual results")
     if len(bets) >= LIMIT:
         raise AssertionError("ROW_LIMIT_REACHED: refuse incomplete ROI audit")
     report = audit(states, bets)
     report["period"] = {"from": str(start), "through": str(yesterday)}
-    report["queries"] = 3
+    report["queries"] = 5
+    print("LIVE_MODEL_PROBABILITY_VS_RESULTS", json.dumps(inspect_prediction_calibration(states,bets,final_rows), ensure_ascii=False, separators=(",",":")))
+    print("LIVE_PAYOUTS_VS_STORED_JRA", json.dumps(inspect_payout_consistency(payouts), ensure_ascii=False, separators=(",",":")))
     print("FULL_PERIOD_LIVE_ROI_DETAIL", json.dumps(summarize_live_records(states, bets, calendar), ensure_ascii=False, separators=(",",":")))
     print("ACTUAL_PRODUCTION_ROI_READONLY_AUDIT", json.dumps(report, ensure_ascii=False, separators=(",",":")))
     if report["missingCount"] or report["lateCount"] or report["unsettledCount"]:
