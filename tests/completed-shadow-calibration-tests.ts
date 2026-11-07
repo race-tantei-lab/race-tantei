@@ -32,7 +32,10 @@ assert.ok(Math.abs(check.blendedProbability-(0.3*check.rawModelProbability+0.7*c
 assert.equal(JSON.stringify(rows), copy, "shadow research must never mutate official JRA odds");
 assert.deepEqual(chooseCompletedTwoTickets(horseNos,weights,rows),canonical,
   "shadow policies must not alter canonical production two-ticket selection");
-assert.throws(()=>shadowCompletedPortfolioResearch(horseNos,[0.9,0.3,0.2,0.1],rows),/SHADOW_WEIGHTS_INVALID/);
+let invalidWeightsRejected = false;
+try { shadowCompletedPortfolioResearch(horseNos,[0.9,0.3,0.2,0.1],rows); }
+catch (error) { invalidWeightsRejected = String(error).includes("SHADOW_WEIGHTS_INVALID"); }
+assert.ok(invalidWeightsRejected, "invalid probability weights must be refused by shadow");
 const mismatched = rows.map(x=>({...x}));
 mismatched.push({betType:"ワイド",combination:"2-1",oddsMin:20,oddsMax:20});
 const other=shadowCompletedPortfolioResearch(horseNos,weights,mismatched);
