@@ -431,6 +431,7 @@ def selftest():
         for typ in ["単勝","ワイド"]:
             bets.append({"course":"ライト","raceId":rid,"betType":typ,
                 "lockedAt":day+"T01:00:00Z","settlementStatus":"settled",
+                "combination":"1" if typ=="単勝" else "1-2",
                 "stakeYen":1000,"returnYen":payouts[i-1] if typ=="単勝" else 0,
                 "assumedOdds":3.0 if typ=="単勝" else 8.0,"refunds":"[]"})
     states=[{"stateKey":"final_daily_selection:"+day,"stateValue":json.dumps(
