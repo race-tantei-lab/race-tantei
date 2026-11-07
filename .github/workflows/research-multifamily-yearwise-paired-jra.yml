@@ -1,0 +1,48 @@
+name: Research 2024-to-2025 multifamily chronological paired JRA hit and ROI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/research-multifamily-yearwise-paired-jra.py
+      - scripts/postaug-support-chronological-56feature-validation.py
+      - scripts/research-postaug-independent-models-paired.py
+      - scripts/research-extra-trees-2024-2025-paired-jra.py
+      - .github/workflows/research-multifamily-yearwise-paired-jra.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: research-multifamily-yearwise-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  multifamily-chronological-both-metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install reproducible research dependencies
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Validate syntax and paired hit-ROI on fixed synthetic market
+        run: |
+          python -m py_compile scripts/research-multifamily-yearwise-paired-jra.py
+          python -u scripts/research-multifamily-yearwise-paired-jra.py --self-test
+      - name: Fit independent families on years before target and audit 2024-discovered policies on 2025 real JRA payouts
+        run: python -u scripts/research-multifamily-yearwise-paired-jra.py
+      - name: Preserve retrospective paired hit+ROI for all candidates and historical coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-multifamily-yearwise-paired-real-jra-returns
+          path: analysis-results/research-2024-2025-multifamily-paired-jra-roi.json
+          if-no-files-found: warn
+          retention-days: 30
