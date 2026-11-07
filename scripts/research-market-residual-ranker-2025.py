@@ -91,6 +91,14 @@ def market_archive(bundles,counts,offsets,meta):
     assert M.shape==(int(offsets[-1]),8)
     assert len(good)==len(counts)==len(meta)
     assert sum(len(x) for x in [market])==int(offsets[-1])
+    yearcov=defaultdict(lambda:{"races":0,"completeWinOdds":0})
+    for i,m in enumerate(meta):
+        year=str(m["date"])[:4]
+        yearcov[year]["races"]+=1
+        yearcov[year]["completeWinOdds"]+=int(good[i])
+    print("MARKET_ARCHIVE_VALID_COUNTS",json.dumps({
+        "totalRaces":len(good),"validRaces":int(np.sum(good)),
+        "byYear":dict(yearcov)},ensure_ascii=False),flush=True)
     if sum(good)<20000:raise RuntimeError("NOT_ENOUGH_VALID_MARKET_ARCHIVE")
     return M,q_by_id,odds_by_id,valid,good,overrounds
 
