@@ -1,0 +1,36 @@
+name: Audit genuine ROI-first T15 shadow vs JRA actual payout (read-only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/audit-roi-first-t15-paired-real-jra.py
+      - .github/workflows/audit-roi-first-t15-paired-jra.yml
+  workflow_dispatch:
+    inputs:
+      race_date:
+        description: "Past, completed race date YYYY-MM-DD (not today)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      RACE_DATE: ${{ inputs.race_date }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the audit source and frozen shadow invariants without D1
+        run: |
+          python3 -m py_compile scripts/audit-roi-first-t15-paired-real-jra.py
+          python3 scripts/audit-roi-first-t15-paired-real-jra.py --self-test
+      - name: Compare same frozen races on genuine settled JRA payouts
+        if: github.event_name == 'workflow_dispatch'
+        run: python3 scripts/audit-roi-first-t15-paired-real-jra.py --date "$RACE_DATE"
