@@ -1,0 +1,69 @@
+name: Audit 2026-11-08 public health and exact JRA roster (read only)
+
+on:
+  pull_request:
+    branches: [main]
+    paths: [.github/workflows/audit-nov08-early-readiness.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - name: Check primary and backup public health with curl and capture nonsecret error details
+        shell: bash
+        run: |
+          set -euo pipefail
+          failed=0
+          for host in race-tantei-live-deadline race-tantei-live-deadline-backup; do
+            endpoint="https://${host}.race-tantei.workers.dev/health"
+            code=$(curl --max-time 20 --retry 1 --retry-delay 2 \
+              -sS -D /tmp/nov8_headers -o /tmp/nov8_health_body -w '%{http_code}' "$endpoint" || echo 000)
+            echo "HEALTH_RESULT $host HTTP $code"
+            echo "HEALTH_CONTENT_TYPE $(grep -i '^content-type:' /tmp/nov8_headers | head -1 | tr -d '\r' || true)"
+            echo "HEALTH_BODY_PREFIX $(head -c 350 /tmp/nov8_health_body | tr '\n' ' ' || true)"
+            if [ "$code" != "200" ]; then failed=1; fi
+          done
+          test "$failed" -eq 0
+      - name: Check only 2026-11-08 selection from D1 (single indexed LIMIT 1 read)
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request,urllib.error
+          date="2026-11-08"
+          url="https://api.cloudflare.com/client/v4/accounts/"+os.environ["CLOUDFLARE_ACCOUNT_ID"]+"/d1/database/"+os.environ["CLOUDFLARE_D1_DATABASE_ID"]+"/query"
+          sql="SELECT state_value AS stateValue,updated_at AS updatedAt FROM rt_system_state WHERE state_key=? LIMIT 1"
+          req=urllib.request.Request(url,method="POST",
+            data=json.dumps({"sql":sql,"params":["final_daily_selection:"+date]}).encode(),
+            headers={"Authorization":"Bearer "+os.environ["CLOUDFLARE_API_TOKEN"],"Content-Type":"application/json"})
+          try:
+            with urllib.request.urlopen(req,timeout=25) as f: resp=json.load(f)
+          except urllib.error.HTTPError as e:
+            print("D1_READ_HTTP_ERROR",e.code,e.read(350).decode("utf-8","replace"))
+            raise
+          if not resp.get("success"):raise RuntimeError("D1_QUERY_ERROR "+str(resp.get("errors"))[:200])
+          rows=(resp.get("result") or [{}])[0].get("results") or []
+          if not rows:
+            print("NOV08_ROSTER_MISSING",date)
+            raise RuntimeError("NO_CURRENT_JRA_SELECTED_RACES_IN_DB")
+          data=json.loads(rows[0]["stateValue"])
+          selected=data.get("selected") or []
+          counts={}
+          for r in selected: counts[r.get("venue")]=counts.get(r.get("venue"),0)+1
+          valid=(counts=={"東京":5,"京都":5,"福島":5}
+            and len(selected)==15
+            and data.get("resultDataUsedForTargetDay") is False
+            and data.get("sourceModel")=="ten-year-completed-model")
+          print("NOV08_ROSTER_RESULT",json.dumps({"date":date,"updatedAt":rows[0]["updatedAt"],"counts":counts,
+            "selected": [{"raceId":r.get("raceId"),"startTimeJst":r.get("startTimeJst")} for r in selected],
+            "rosterVerified":valid,
+            "preT15TicketsVerified":False,"profitableModelVerified":False},ensure_ascii=False))
+          if not valid:raise RuntimeError("NOV08_ROSTER_NOT_READY")
+          PY
