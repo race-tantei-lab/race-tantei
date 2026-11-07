@@ -9,6 +9,8 @@ import collections
 import json
 import os
 import urllib.request
+import subprocess
+import datetime as dt
 
 DATE="2026-11-08"
 EXPECTED={"東京","京都","福島"}
@@ -28,14 +30,22 @@ def d1(sql, params):
     return (body.get("result") or [{}])[0].get("results") or []
 
 def health(endpoint):
-    req=urllib.request.Request(endpoint,headers={"Accept":"application/json"})
-    with urllib.request.urlopen(req,timeout=25) as response:
-        data=json.load(response)
+    result=subprocess.run(["curl","--fail","--silent","--show-error","--location",
+        "--max-time","25","--header","Accept: application/json",endpoint],
+        capture_output=True,text=True,timeout=30)
+    if result.returncode!=0:
+        raise RuntimeError("PRODUCTION_WORKER_HEALTH_CURL_FAILED:"+endpoint+":"+result.stderr[:180])
+    data=json.loads(result.stdout)
     if data.get("status")!="up" or data.get("service")!="race-tantei-live-deadline":
         raise RuntimeError("PRODUCTION_WORKER_HEALTH_UNVERIFIED:"+endpoint)
     return {"url":endpoint,"service":data["service"],"status":data["status"],"version":data.get("version")}
 
 def main():
+    now=dt.datetime.now(dt.timezone(dt.timedelta(hours=9)))
+    if now.date().isoformat()==DATE and now.hour<8:
+        print("RACE_DAY_PREFLIGHT_NOT_YET_DUE",json.dumps({"jstNow":now.isoformat(),
+          "earliestSelectionHourJst":8,"noD1Read":True,"noFailureClaim":True}),flush=True)
+        return
     evidence={"jstDate":DATE,"readonly":True,"selection":None,"productionModelPromotion":False,
               "workerHealth":[],"ready":False}
     for url in ("https://race-tantei-live-deadline.race-tantei.workers.dev/health",
