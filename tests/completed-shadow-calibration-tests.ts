@@ -46,6 +46,17 @@ for (const p of after) {
       "existing shadow choices must remain unchanged and copied from exactly six immutable candidates");
   }
 }
+// Missing one JRA official market cannot be fabricated. Keep prior
+// research tickets unchanged and let the all-15-pair auditor reject the
+// incomplete six-type cohort; do not disable real finalization.
+const incompleteOdds=rows.filter(x=>x.betType!=="3連単");
+const beforeIncomplete=shadowCompletedPortfolioResearch(horseNos,weights,incompleteOdds);
+assert.equal(beforeIncomplete.length,2);
+assert.ok(beforeIncomplete.every(p=>p.tickets.length===2));
+assert.ok(beforeIncomplete.every(p=>p.candidatesByType.length===5));
+assert.ok(beforeIncomplete.every(p=>!p.candidatesByType.some(x=>x.betType==="3連単")));
+assert.deepEqual(chooseCompletedTwoTickets(horseNos,weights,rows),canonical,
+  "missing official shadow market must not change original public ticket selection");
 const single = after[0]!.tickets.find(x=>x.betType==="単勝");
 assert.ok(single);
 assert.ok(Math.abs(single!.blendedProbability-1/single!.officialOdds)<1e-12);
