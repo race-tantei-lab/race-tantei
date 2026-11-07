@@ -9,7 +9,7 @@ export const COMPLETED_COURSE_STAKES = {
 
 export type CompletedCourse = keyof typeof COMPLETED_COURSE_STAKES;
 
-export const COMPLETED_ODDS_SCORE_POWER = 0.2 as const;
+export const COMPLETED_ODDS_SCORE_POWER = 0.4 as const;
 
 export interface OfficialOddsRow {
   betType: CompletedBetType;
@@ -184,7 +184,14 @@ export function chooseCompletedTwoTickets(
       candidates.push(ticket);
     }
     if (!candidates.length) throw new Error(`OFFICIAL_ODDS_MISSING_BET_TYPE:${betType}`);
-    const scored = candidates.map((ticket) => ({
+    // The frozen historical policy first restricts each bet type to the
+    // five highest raw model-probability × official-odds candidates.
+    // Recency remains a rescoring modifier, not a hindsight candidate filter.
+    candidates.sort((a, b) =>
+      (b.predictedProbability * b.officialOdds - a.predictedProbability * a.officialOdds)
+      || (b.predictedProbability - a.predictedProbability)
+      || compareText(a.combination, b.combination));
+    const scored = candidates.slice(0, 5).map((ticket) => ({
       ...ticket,
       score: Math.log(ticket.predictedProbability)
         + COMPLETED_ODDS_SCORE_POWER * Math.log(ticket.officialOdds)
