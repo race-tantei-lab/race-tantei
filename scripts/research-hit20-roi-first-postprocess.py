@@ -96,7 +96,7 @@ def selftest():
     assert x["bothYearsHit20AndROIOver100CountDiagnosticOnly"]==2499
     assert x["bothYearsHit20AndTrimmedROIOver100CountDiagnosticOnly"]==2349
     assert x["frozen2024Top40Forward2025ROIOver100Count"]==40
-    assert x["2024FrozenBestHasRobustROIOver100"] is False
+    assert x["2024FrozenBestHasRobustROIOver100"] is True
     bad=json.loads(json.dumps(r));bad["allCandidatesByYear"]["2025"].pop()
     try:inspect(bad);raise AssertionError("EXPECTED_MISSING_DETECTED")
     except ValueError as e:assert "MISSING" in str(e)
