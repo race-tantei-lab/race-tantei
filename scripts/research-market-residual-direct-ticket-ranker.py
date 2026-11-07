@@ -15,6 +15,11 @@ of actual pre-T15 live reproducibility. No 2025 test results enter fitting.
 Horse models trained on dates BEFORE target year; payout models 2024 only.
 All candidate families use five races/venue/day, distinct two ticket types,
 fixed 1000+1000 yen. Same exact 2025 JRA payout date/venue cohort.
+2023 archive has zero genuine final market odds. Thus 2024 model falls
+back to strictly pre-2024 form-only ranking. The 2025 CatBoost market
+horse model trains ONLY on genuine 2024 complete-race market quotes.
+Every venue-day with missing quotes is excluded; no placeholder quote
+is ever used to train price-aware models or 2024 ticket-value learners.
 No production writes, no synthetic odds, no deployed-model promotion.
 """
 from __future__ import annotations
@@ -100,40 +105,65 @@ def market_ticket_features(row,ticket,cols,horse_family):
 base.ticket_features=market_ticket_features
 
 def train_market_win(X,market,win_y,dates,offsets,year):
-    ix=np.flatnonzero((dates>=f"{year-5}-01-01")&(dates<f"{year}-01-01"))
-    if len(ix)<5000:raise RuntimeError("MARKET_HORSE_TRAIN_TOO_SMALL")
-    lo=int(offsets[ix[0]]);hi=int(offsets[ix[-1]+1])
-    features=np.hstack([X[lo:hi],market[lo:hi]])
+    # 2023 archive has zero genuine complete final-odds races. It is
+    # mathematically impossible to fit a 2024 market model on pre-2024
+    # genuine market data. NEVER fit a CatBoost market model on fabricated
+    # placeholders or target-year outcomes.
+    if year==2024:
+        return None,{"lastTrainDate":"2023-12-28",
+            "marketAwareHorseModel":False,
+            "fallback":"2024 pre-year ranker_ordinal; 2023 official final odds absent"}
+    # 2025 model uses ONLY actual 2024 complete-race FINAL market quotes.
+    idx=np.flatnonzero((dates>="2024-01-01")&(dates<"2025-01-01"))
+    accepted=[int(i) for i in idx if np.all(market[int(offsets[i]):int(offsets[i+1]),3]==0)]
+    if len(accepted)<1500:
+        raise RuntimeError("ONLY_2024_ACTUAL_FINAL_MARKET_TRAINING_TOO_SMALL:"+str(len(accepted)))
+    rows=np.concatenate([np.arange(offsets[i],offsets[i+1]) for i in accepted])
     m=CatBoostClassifier(iterations=280,depth=6,learning_rate=0.06,
        loss_function="Logloss",l2_leaf_reg=16.0,thread_count=2,verbose=False,
        random_seed=20261108,allow_writing_files=False)
-    m.fit(features,win_y[lo:hi])
-    return m,{"lastTrainDate":str(dates[ix[-1]]),"trainedRunnerRows":hi-lo,
-      "trainingIncludesHistoricFinalMarketOdds_PROXY_NOT_T15":True}
+    m.fit(np.hstack([X[rows],market[rows]]),win_y[rows])
+    return m,{"lastTrainDate":str(dates[accepted[-1]]),"trainedRunnerRows":len(rows),
+      "trainRacesWithGenuineFinalMarketQuote":len(accepted),
+      "archiveOddsAreFINALNotT15":True}
 
 def include_market_family(year,groups,cat_market,X,market,dates,counts,offsets,meta,market_per_race):
     ix=np.flatnonzero((dates>=(f"{year}-05-04" if year==2024 else f"{year}-01-01"))
          &(dates<f"{year+1}-01-01"))
     if not len(ix):raise AssertionError("MARKET_TARGET_MISSING")
-    lo=int(offsets[ix[0]]);hi=int(offsets[ix[-1]+1])
-    cat_raw=np.asarray(cat_market.predict_proba(np.hstack([X[lo:hi],market[lo:hi]]))[:,1])
     market_pred={}
-    offset=0
-    for idx in ix:
-        idx=int(idx);n=int(counts[idx])
-        rid=meta[idx]["raceId"]
-        market_pred[rid]=base.normalize(cat_raw[offset:offset+n])
-        offset+=n
-    if offset!=len(cat_raw):raise AssertionError("MARKET_YEAR_OFFSET_MISMATCH")
-    selected=0
-    for rs in groups.values():
+    if cat_market is not None:
+        lo=int(offsets[ix[0]]);hi=int(offsets[ix[-1]+1])
+        cat_raw=np.asarray(cat_market.predict_proba(np.hstack([X[lo:hi],market[lo:hi]]))[:,1])
+        offset=0
+        for idx in ix:
+            idx=int(idx);n=int(counts[idx])
+            rid=meta[idx]["raceId"]
+            market_pred[rid]=base.normalize(cat_raw[offset:offset+n])
+            offset+=n
+        if offset!=len(cat_raw):raise AssertionError("MARKET_YEAR_OFFSET_MISMATCH")
+    selected=0;excluded=0
+    for day,rs in list(groups.items()):
+        # At least one missing FINAL quote rejects the ENTIRE 12-race venue
+        # day. No synthetic market odds may enter ticket model fitting/ROI.
+        if any(np.any(market_per_race[r["raceId"]][:,3]>0) for r in rs):
+            del groups[day];excluded+=1;continue
         for row in rs:
             rid=row["raceId"]
             row["market"]=market_per_race[rid]
-            target=market_pred[rid]
-            row["probabilities"]["market_relative_catboost_win"]=base.normalize(
-                0.78*target+0.22*row["probabilities"]["ranker_ordinal"])
+            if cat_market is not None:
+                p=market_pred[rid]
+                row["probabilities"]["market_relative_catboost_win"]=base.normalize(
+                    .78*p+.22*row["probabilities"]["ranker_ordinal"])
+            else:
+                row["probabilities"]["market_relative_catboost_win"]=np.asarray(
+                    row["probabilities"]["ranker_ordinal"],dtype=np.float64)
             selected+=1
+    if len(groups)<60:raise RuntimeError("Genuine_FINAL_market_venue_days_too_few:"+str(len(groups)))
+    print("MARKET_REAL_QUOTES_ONLY_YEAR_COVERAGE",
+          json.dumps({"year":year,"completeVenueDays":len(groups),
+            "rejectedVenueDaysMissingQuote":excluded,
+            "rankerMarketTrainingAvailable":cat_market is not None}),flush=True)
     return selected
 
 def ranker_group_counts(meta):
@@ -175,7 +205,11 @@ def run():
     market,market_per_row,coverage=market_context(archivedOdds,counts)
     assert len(market)==len(X)
     market_by_rid={meta[i]["raceId"]:market_per_row[i] for i in range(len(meta))}
-    if coverage["coveragePct"]<95:raise RuntimeError("HISTORICAL_FINAL_MARKET_COVERAGE_TOO_LOW")
+    # Archive before 2024 is almost entirely missing FINAL odds. Coverage
+    # must be checked on individual genuine 2024 train and 2025 test venue
+    # days, not against a fictional 95% all-ten-year market coverage gate.
+    assert coverage["coveragePct"]>0
+
     print("HISTORIC_FINAL_JRA_MARKET_PROXY_COVERAGE",json.dumps(coverage),flush=True)
     payouts,payoutMonths=audit.payout_book()
     groups={};excluded={};trainInfo={}
