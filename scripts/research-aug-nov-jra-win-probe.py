@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import importlib.util,sys,urllib.request,urllib.parse,urllib.error,http.cookiejar
+import importlib.util,sys,urllib.request,urllib.parse,urllib.error,http.cookiejar,re
 from pathlib import Path
 from bs4 import BeautifulSoup
 ROOT=Path(__file__).resolve().parents[1]
@@ -18,7 +18,13 @@ for title,url,prefix,marker in examples:
   raw,_=m.open_retry(op,req,attempts=2)
   page=raw.decode("cp932","replace")
   values=m.extract_odds_cnames(page,prefix,marker)
-  print("JRA_PROBE_PAGE",title,"size",len(page),"odds",values[:3],flush=True)
+  print("JRA_PROBE_PAGE",title,"size",len(page),"odds",values[:3],
+    "all_151_links",re.findall(r"(?:pw|sw)151ou[^\\\"'&<>\\s)]+",page,re.I)[:12],
+    "accessO",len(re.findall("accessO",page,re.I)),flush=True)
+  if not values:
+   for token in ("オッズ","accessO","CNAME=","151ou"):
+    at=page.find(token)
+    print("JRA_PROBE_HTML_TOKEN",title,token,at,repr(page[max(0,at-250):at+450]) if at>=0 else "",flush=True)
   if not values:continue
   from urllib.parse import urlencode
   for host in ["https://www.jra.go.jp/JRADB/accessO.html","https://app.jra.jp/JRADB/accessO.html"]:
