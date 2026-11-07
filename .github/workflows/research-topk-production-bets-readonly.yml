@@ -24,7 +24,10 @@ jobs:
       - name: Compare frozen 2026 model with archived-odds market benchmark (not live T15)
         run: python3 scripts/research-archived-market-benchmark-20261107.py
 
+  # D1 free quota protection: NEVER run this query on an automatic PR push.
+  # One explicit workflow_dispatch only, after confirming daily quota available.
   historical_bets_readonly:
+    if: github.event_name == 'workflow_dispatch'
     needs: selftest
     runs-on: ubuntu-latest
     timeout-minutes: 5
