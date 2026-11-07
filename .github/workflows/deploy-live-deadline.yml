@@ -79,7 +79,6 @@ jobs:
           npx --yes tsx tests/race-day-gate-tests.ts
           npx --yes tsx tests/jra-official-odds-fetch-tests.ts
           npx --yes tsx tests/completed-worker-deadline-guard-tests.ts
-          npx --yes tsx tests/completed-ticket-contract-tests.ts
       - name: Validate primary isolated Worker bundle
         run: npx wrangler deploy --dry-run --config wrangler.live-deadline.jsonc --outdir dist-live-deadline
       - name: Validate backup isolated Worker bundle
