@@ -109,10 +109,10 @@ export function shadowCompletedPortfolioResearch(
     // SELECT/INSERT. Remains at most 6 compact records per policy/snapshot.
     const candidatesByType = [...bestByType.values()].sort((a, b) =>
       BET_TYPE_ORDER.indexOf(a.betType) - BET_TYPE_ORDER.indexOf(b.betType));
-    if (candidatesByType.length !== BET_TYPE_ORDER.length ||
-        candidatesByType.some((ticket, i) => ticket.betType !== BET_TYPE_ORDER[i])) {
-      throw new Error("SHADOW_SIX_OFFICIAL_BET_TYPES_REQUIRED");
-    }
+    // Important operational isolation: when JRA has not published one
+    // official market, retain the ORIGINAL two shadow choices unchanged.
+    // The 15-pair audit will reject partial candidates, but the research
+    // extension itself must never introduce a new public finalization risk.
     return {policy, blendModelFraction: alpha, tickets: sorted.slice(0, 2), candidatesByType};
   });
 }
