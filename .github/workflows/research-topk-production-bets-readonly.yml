@@ -1,0 +1,22 @@
+name: Research 3-4-5 Race Counts Only (no production writes)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/research-topk-production-bets-readonly.py
+      - .github/workflows/research-topk-production-bets-readonly.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m py_compile scripts/research-topk-production-bets-readonly.py
+      - name: Validate 3/4/5 real-money denominators, deadlines and missing races
+        run: python3 scripts/research-topk-production-bets-readonly.py --self-test
