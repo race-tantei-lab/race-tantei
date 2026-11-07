@@ -240,7 +240,7 @@ def selftest():
     assert c["coveragePct"]==100
     assert list(payout_rank_target([0,1,3,6,12,30,90]))==[0,1,2,3,4,5,6]
     assert list(ranker_group_counts([(("2024-06-01","東京"),1,1,None,0)]*40))==[40]
-    assert b.combo_probability("ワイド",(0,1),np.array([0.5,0.3,0.2]))==1.0
+    assert math.isclose(b.combo_probability("ワイド",(0,1),np.array([0.5,0.3,0.2])),1.0,abs_tol=1e-12)
     print("MARKET_RESIDUAL_AND_TICKET_RANKER_SELFTEST_OK",flush=True)
 
 if __name__=="__main__":
