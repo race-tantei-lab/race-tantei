@@ -1,0 +1,23 @@
+name: Research JRA 2026 August historical win odds probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/research-aug-nov-jra-win-probe.py
+      - .github/workflows/research-aug-nov-jra-win-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install 'beautifulsoup4==4.13.4'
+      - run: python3 scripts/research-aug-nov-jra-win-probe.py
