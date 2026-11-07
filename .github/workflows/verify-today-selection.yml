@@ -95,6 +95,7 @@ jobs:
           good=(
               structured
               and states.get('pending',0)==0
+              and not historical_deadline_failures
               and not future_deadline_failures
               and not future_t15_unfinalized
               and all(selected_by_venue.get(v,0)==5 for v in active_venues)
