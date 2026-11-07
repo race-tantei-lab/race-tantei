@@ -9,7 +9,7 @@ import {
   completedCombinationProbability,
   type CompletedBetType,
   type OfficialOddsRow,
-} from "./completed-ticket-runtime";
+} from "./completed-ticket-runtime.js";
 
 export type CompletedShadowTicket = {
   betType: CompletedBetType;
