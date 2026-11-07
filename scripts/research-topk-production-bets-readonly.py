@@ -22,6 +22,7 @@ import os
 import random
 from pathlib import Path
 import urllib.request
+import urllib.error
 
 JST = dt.timezone(dt.timedelta(hours=9))
 TOP_KS = (3, 4, 5)
@@ -47,8 +48,14 @@ def read_d1(sql,params):
     url=f"https://api.cloudflare.com/client/v4/accounts/{account}/d1/database/{db}/query"
     request=urllib.request.Request(url,data=json.dumps({"sql":sql,"params":params}).encode(),
         method="POST",headers={"Authorization":f"Bearer {token}","Content-Type":"application/json"})
-    with urllib.request.urlopen(request,timeout=35) as response:
-        data=json.loads(response.read())
+    try:
+        with urllib.request.urlopen(request,timeout=35) as response:
+            data=json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        body=exc.read(1200).decode("utf-8","replace")
+        # Cloudflare quota errors and invalid SQL both return 400; expose
+        # sanitized response so they are not incorrectly conflated.
+        raise RuntimeError(f"READ_ONLY_D1_HTTP_{exc.code}: {body}") from None
     if not data.get("success"):
         raise RuntimeError("READ_ONLY_D1_ERROR: "+str(data.get("errors"))[:600])
     return (data.get("result") or [{}])[0].get("results") or []
