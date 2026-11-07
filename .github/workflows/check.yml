@@ -43,6 +43,8 @@ jobs:
         run: python scripts/verify-public-language.py
       - name: Verify public UI version resolver
         run: python scripts/resolve-public-ui-version.py
+      - name: Verify actual ROI audit classification without D1 access
+        run: python3 scripts/audit-production-live-roi-readonly.py --self-test
       - name: Verify cumulative performance safety
         run: python scripts/verify-cumulative-performance.py
       - name: Verify daily performance history storage
