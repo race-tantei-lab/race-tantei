@@ -27,6 +27,7 @@ import json,math
 from pathlib import Path
 import numpy as np
 from lightgbm import LGBMRanker
+from sklearn.ensemble import HistGradientBoostingClassifier
 
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"analysis-results/market-relative-ranking-2025-exploratory-close-odds.json"
@@ -213,7 +214,15 @@ def main():
     training={};bad={};groups={}
     for year in (2024,2025):
         model,info=fit_market_ranker(Xmarket,y,counts,dates,offsets,valid_groups,year)
-        top3=structural.fit_horse_models(X,y,t3,counts,offsets,dates,year)[0][1]
+        # Independent placing target: do not waste CPU re-fitting a second
+        # unrelated win-ranker just to retrieve its top-three head.
+        train_races=np.flatnonzero(dates<f"{year}-01-01")
+        bound=int(offsets[int(train_races[-1])+1])
+        top3=HistGradientBoostingClassifier(
+            max_iter=120,learning_rate=0.04,max_leaf_nodes=25,
+            min_samples_leaf=85,l2_regularization=8,
+            early_stopping=False,random_state=SEED)
+        top3.fit(X[:bound],t3[:bound])
         evals,rej,n=aug_market_groups(year,Xmarket,X,counts,dates,offsets,meta,
                           model,top3,paid,q,odds,valid)
         groups[year]=evals;training[str(year)]=info;bad[str(year)]=rej
@@ -245,8 +254,7 @@ def main():
         "noSixMarketBetOddsFromFinalSnapshots":True,
         "mayNotBeUsedToClaimLiveExpectedRoi":True,
         "runnerFeatures":56+8,
-        "ticketFeatures":len(next(iter(results.values()))["samplePredictions"][0]["tickets"])
-            if False else int(next(iter(results.values()))["features"]),
+        "ticketFeatures":int(next(iter(results.values()))["features"]),
         "trainedJraPayoutHurdleOnlyOn2024":True,
         "trainedHorseYearwiseWithoutTestResults":True,
         "testActualJraPayoutsOnly2025":True,
