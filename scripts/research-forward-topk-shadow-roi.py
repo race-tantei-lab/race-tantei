@@ -137,7 +137,14 @@ def guarded_final_rows(data,by_venue,day):
             if (not isinstance(shadows,list) or len(shadows)!=2 or
                 {x.get("policy") for x in shadows}!={"market_implied_only","market_blend_30pct_model"}):
                 raise ValueError("TWO_SHADOW_POLICIES_NOT_PRESENT")
+            if snap.get("sourceModel")!="ten-year-completed-model":
+                raise ValueError("FROZEN_COMPLETED_MODEL_IDENTITY_MISSING")
+            if not re.fullmatch(r"[0-9a-f]{64}",str(snap.get("modelSha256") or "")):
+                raise ValueError("FROZEN_MODEL_SHA256_MISSING")
             for policy in shadows:
+                expected=0.0 if policy.get("policy")=="market_implied_only" else 0.3
+                if policy.get("blendModelFraction")!=expected:
+                    raise ValueError("PREDECLARED_SHADOW_POLICY_WEIGHT_MISMATCH")
                 tickets=policy.get("tickets")
                 if (not isinstance(tickets,list) or len(tickets)!=2
                     or len({t.get("betType") for t in tickets})!=2
@@ -233,15 +240,17 @@ def selftest():
     valid={"selection":[sel],"finals":[],"bets":[],"payouts":[],"races":[]}
     for i,race in enumerate(rows):
         rid=race["raceId"]
-        shadow=[{"policy":"market_implied_only","tickets":[
+        shadow=[{"policy":"market_implied_only","blendModelFraction":0.0,"tickets":[
             {"betType":"単勝","combination":"3","officialOdds":3.5},
             {"betType":"ワイド","combination":"1-3","officialOdds":2.6}]},
-            {"policy":"market_blend_30pct_model","tickets":[
+            {"policy":"market_blend_30pct_model","blendModelFraction":0.3,"tickets":[
             {"betType":"単勝","combination":"1","officialOdds":1.9},
             {"betType":"ワイド","combination":"1-3","officialOdds":2.6}]}]
         snap={"lockedAt":"2026-11-08T01:00:00Z",
               "oddsFetchedAt":"2026-11-08T00:58:00Z",
               "previewGeneratedAt":"2026-11-08T00:59:00Z",
+              "sourceModel":"ten-year-completed-model",
+              "modelSha256":"b"*64,
               "oddsSource":"jra-fast-official",
               "oddsSnapshotSha256":"a"*64,"shadowResearch":shadow}
         valid["finals"].append({"k":"worker_live_final:"+rid,"v":json.dumps(snap)})
@@ -264,6 +273,16 @@ def selftest():
     assert success[5]["out"]["total"]["market_blend_30pct_model"]["races"]==5
     assert success[3]["out"]["total"]["market_implied_only"]["returnYen"]==6100
     assert not success[3]["issues"]
+    # Directly run every 3/4/5 aggregate through the production-blocking gate.
+    gate_path=ROOT/"scripts/research-certify-forward-400-roi.py"
+    gate_spec=importlib.util.spec_from_file_location("research_400_certifier",gate_path)
+    assert gate_spec and gate_spec.loader
+    gate=importlib.util.module_from_spec(gate_spec)
+    gate_spec.loader.exec_module(gate)
+    for k,report in consolidate({d:success}).items():
+        verdict=gate.evaluate(report)
+        assert verdict["researchPassAnyPolicy"] is False, (k,verdict)
+        assert verdict["productionPromotionAuthorized"] is False
     bad=json.loads(valid["finals"][0]["v"])
     bad["oddsFetchedAt"]="2026-11-08T01:46:00Z"
     valid["finals"][0]["v"]=json.dumps(bad)
