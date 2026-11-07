@@ -130,7 +130,7 @@ def build_matrices(complete,model,PAIRS,rule):
             p=r["probs"][model]
             horse_ranks=np.argsort(-p,kind="stable")
             nums=[r["horses"][int(k)] for k in horse_ranks]
-            if len(nums)<4: raise AssertionError("FEWER_THAN_FOUR_RUNNERS")
+            if len(nums)<3: raise AssertionError("FEWER_THAN_THREE_RUNNERS")
             p_desc=np.sort(p)[::-1]
             if rule=="top1": score=float(p_desc[0])
             elif rule=="top2": score=float(sum(p_desc[:2]))
