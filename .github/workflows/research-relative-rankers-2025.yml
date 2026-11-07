@@ -1,0 +1,46 @@
+name: Research model-core LightGBM vs XGBoost with 40 rival-relative runner features
+
+on:
+  pull_request:
+    branches:
+      - research/structural-ranker-twohead-20261108
+    paths:
+      - scripts/research-relative-rankers-2025.py
+      - .github/workflows/research-relative-rankers-2025.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relative-rankers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  train-and-audit-new-rankers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 27
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install independent model family libraries
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1' 'xgboost==2.1.4'
+      - name: Sanity test additional relative model feature computation
+        run: |
+          python -m py_compile scripts/research-relative-rankers-2025.py
+          python -u scripts/research-relative-rankers-2025.py --self-test
+      - name: Fit augmented two ranking models in past-only years and audit 2025 JRA actual payouts
+        run: python -u scripts/research-relative-rankers-2025.py
+      - name: Save all new-ranker paired hit and realized ROI results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: relative-lambdarank-xgboost-paired-real-jra-2025
+          path: analysis-results/relative-ranking-lgbm-xgb-2025-paired-jra.json
+          if-no-files-found: warn
+          retention-days: 30
