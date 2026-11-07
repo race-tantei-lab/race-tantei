@@ -221,7 +221,7 @@ def selftest():
     assert abs(probability("馬連",(0,1),r["probs"])-0.5*0.3/0.5-0.3*0.5/0.7)<1e-9
     assert features(r,a[0])
     p=probability("ワイド",(0,1),r["probs"])
-    assert 0<p<1
+    assert abs(p-1.0)<1e-9  # With 3 runners, every top-two pair is also a WIDE hit.
     assert summarize([{"stake":2000,"return":4600,"hit":1}])["roiPct"]==230
     print("SECOND_STAGE_PAYOUT_VALUE_SELFTEST_OK",flush=True)
 
