@@ -1,0 +1,54 @@
+name: Test six independent monetary market specialists 2025-2026
+on:
+  push:
+    branches:
+      - research/nov2026-market-specialist-money-v1
+    paths:
+      - scripts/research-nov2026-market-specialist-financial.py
+      - .github/workflows/nov2026-market-specialist-financial.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  money-specialists:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned financial model runtime
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Financial settlement and model smoke test
+        run: |
+          python -m py_compile scripts/research-nov2026-market-specialist-financial.py
+          python -u scripts/research-nov2026-market-specialist-financial.py --self-test
+      - name: Fetch pinned JRA finished payout mirror without production D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-archive
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          for year in 2024 2025; do
+            for m in $(seq -w 1 12); do
+              target="raceresults_$year$m.csv"
+              curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/$target" "$URL/$target"
+            done
+          done
+          for m in 01 02 03; do
+            target="raceresults_2026$m.csv"
+            curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/$target" "$URL/$target"
+          done
+          test "$(find external-jra-cash-archive -name '*.csv' | wc -l)" -eq 27
+      - name: Fit actual paid-money six models, search 2025H1 only, test 2025H2 and 2026
+        run: python -u scripts/research-nov2026-market-specialist-financial.py
+      - name: Archive paired actual cash and ROI outcomes, no deployment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nov2026-six-independent-financial-model-result
+          path: analysis-results/nov2026-independent-market-specialists-cash.json
+          if-no-files-found: warn
+          retention-days: 30
