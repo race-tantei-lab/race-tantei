@@ -1,0 +1,41 @@
+name: Model research 20pct-hit gate applied to real cohort (no D1)
+
+on:
+  push:
+    branches:
+      - research/nov2026-fix-hit-floor-cohort-v3
+    paths:
+      - scripts/research-nov2026-fresh-robust200.py
+      - .github/workflows/nov2026-hit-floor-cohort-unit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check-hit-cohort:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install exact ML dependencies
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'scikit-learn==1.6.1' 'numpy<3'
+      - name: Verify 5 races, 2 different bets, strict 20/200/200 outcome-gate
+        run: |
+          python -m py_compile scripts/research-nov2026-fresh-robust200.py
+          python -u scripts/research-nov2026-fresh-robust200.py --self-test
+      - name: Deny production and synthetic odds evidence
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          x=Path('scripts/research-nov2026-fresh-robust200.py').read_text()
+          assert 'if max(a["hitP"],b["hitP"])<.20:continue' not in x
+          assert 'result.get("hitRatePct",0)>=MIN_HIT_PCT' in x
+          assert 'roiExcludeLargestTicketKeepAllStakePct' in x
+          assert 'roiExcludeLargestRaceKeepAllStakePct' in x
+          assert 'productionPromotionAllowed":False' in x
+          assert 'D1_RESEARCH_ONLY_AFTER_22JST' in x
+          print("NOV2026_ACTUAL_COHORT_20PCT_GATE_NOT_TICKET_P_GATE_OK")
+          PY
