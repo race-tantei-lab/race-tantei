@@ -99,7 +99,8 @@ def main():
     helper=load("scripts/research-extra-trees-2024-2025-paired-jra.py","unrestricted_official")
     structural=load("scripts/research-structural-ranker-twohead-2025.py","unrestricted_struct")
     tickets=load("scripts/research-two-stage-payout-value-2024-2025.py","unrestricted_ticket")
-    archive=hist.load_bundles(hist.load_public_archive())
+    immutable_calendar=hist.load_public_archive()
+    archive=hist.load_bundles(immutable_calendar)
     X,y,counts,dates,offsets,_,_,_,_=hist.chronological_features(hist.core_module(),archive)
     t3=structural.top3_targets(archive)
     meta=helper.eligible_metadata(archive)
@@ -113,6 +114,18 @@ def main():
         horse,info=base.fit_horse(X,y,t3,counts,offsets,dates,year)
         groups,omitted,raw=structural.year_groups(year,X,counts,dates,offsets,meta,horse,payouts)
         if not groups:raise RuntimeError("NO_COMPLETE_OFFICIAL_JRA_COHORT:"+str(year))
+        # Surface, race distance and field size are declared before post time.
+        # Restore them from the immutable JRA calendar, never outcomes.
+        for day,races in groups.items():
+            for r in races:
+                calendar=immutable_calendar[r["raceId"]]
+                if (calendar["raceDate"]!=r["date"] or
+                    calendar["venue"]!=r["venue"] or
+                    int(calendar["raceNo"])!=int(r["raceNo"])):
+                    raise RuntimeError("NONPAIRED_PRE_RESULT_CALENDAR")
+                r["surface"]=calendar["surface"]
+                r["distanceM"]=calendar["distanceM"]
+                r["fieldSize"]=len(r["horses"])
         years[year]=groups
         training[year]={"horse":info,"eligibleVenueDays":len(groups),
                         "excluded":omitted,"rawRaces":raw}
@@ -198,6 +211,8 @@ def main():
         "stakesYen":list(engine.BET_BUDGETS),
         "stakeAllocation":list(engine.STAKES),
         "raceExpectedValueThreshold":list(engine.EV_THRESHOLDS),
+        "raceRiskBudgetModes":list(engine.RACE_BUDGET_MODES),
+        "preResultRaceFilters":list(engine.RACE_FILTERS),
         "ticketScoring":list(engine.RANK_MODES)},
       "minimumActualHitRatePct":20,
       "minimumActualRoiPct":200,
