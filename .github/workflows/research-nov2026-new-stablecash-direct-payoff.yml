@@ -33,7 +33,7 @@ jobs:
           s=Path('scripts/research-nov2026-stablecash-direct-payoff.py').read_text()
           for required in (
             'objective="tweedie"', 'objective="poisson"',
-            'tweedie_variance_power=1.25', 'np.quantile(positive,.95)',
+            'tweedie_variance_power=1.25', 'np.quantile(multipliers[win],.95)',
             'cash_scores', 'early', 'late', 'payout100',
             'min_races', 'm24+m25', 'robust_numeric_gate',
             '"trimLargestTicketRoiPct"', '"trimLargestRaceRoiPct"',
