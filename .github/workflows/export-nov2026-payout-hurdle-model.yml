@@ -37,5 +37,6 @@ jobs:
           git add src/v1/nov2026-payout-hurdle-model.json tests/fixtures/nov2026-model-parity.json
           if ! git diff --cached --quiet; then
             git commit -m "research: store reproducible exact 2026-tested frozen model asset"
-            git push
+            git pull --rebase origin feature/nov2026-payout-hurdle-model-port
+            git push origin HEAD:feature/nov2026-payout-hurdle-model-port
           fi
