@@ -74,7 +74,7 @@ function report(){
     notVerifiedAsT15:true,
     newBlindFutureData:false,
     actualCashPurchasesProven:false,
-    2026AlreadyInspectedPreviously:true,
+    "2026AlreadyInspectedPreviously":true,
     trainWindow:["2026-05-02","2026-06-28"],
     testWindow:["2026-07-04","2026-07-26"],
     model:"Bayesian shrinkage of observed JRA monetary return for each of 284 betting-condition groups; no horse winner accuracy objective",
