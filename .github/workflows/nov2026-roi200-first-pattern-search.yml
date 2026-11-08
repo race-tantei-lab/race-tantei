@@ -1,0 +1,54 @@
+name: Mine actual JRA ROI200 conditions first, then freeze prediction rules
+on:
+  push:
+    branches:
+      - research/nov2026-direct-roi200-pattern-mining
+    paths:
+      - scripts/research-nov2026-roi200-first-pattern-search.py
+      - .github/workflows/nov2026-roi200-first-pattern-search.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mine-real-financial-conditions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install source-pinned numeric environment
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Verify direct paid-money ROI search mathematics
+        run: |
+          python -m py_compile scripts/research-nov2026-roi200-first-pattern-search.py
+          python -u scripts/research-nov2026-roi200-first-pattern-search.py --self-test
+      - name: Download unchanged all six JRA paid markets public archive, never D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-archive
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          for year in 2024 2025; do
+            for m in $(seq -w 1 12); do
+              target="raceresults_$year$m.csv"
+              curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/$target" "$URL/$target"
+            done
+          done
+          for m in 01 02 03; do
+            target="raceresults_2026$m.csv"
+            curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/$target" "$URL/$target"
+          done
+          test "$(find external-jra-cash-archive -name '*.csv' | wc -l)" -eq 27
+      - name: Discover only actual paid ROI200 rules in 2024 then forecast 2025H1/H2/2026 with frozen conditions
+        run: python -u scripts/research-nov2026-roi200-first-pattern-search.py
+      - name: Record actual cash results without deployment or scheduled monitoring
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-paid-roi200-first-direct-rule-mining
+          path: analysis-results/nov2026-roi200-first-rule-discovery.json
+          if-no-files-found: warn
+          retention-days: 30
