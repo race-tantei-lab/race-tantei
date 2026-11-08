@@ -125,7 +125,7 @@ def main():
     marketM,q,odds,valid,validRace,totals=market.market_archive(archive,counts,offsets,meta)
     payout,coverage=read_actual_payouts(helper)
     # Train 2025 horse model strictly on <=2024 winners and placements.
-    horse2025,train2025=structural.fit_horse_models(X,y,t3,counts,offsets,dates,2025)
+    horse2025,train2025Horse=structural.fit_horse_models(X,y,t3,counts,offsets,dates,2025)
     full2025,excluded2025,count2025=structural.year_groups(
         2025,X,counts,dates,offsets,meta,horse2025,payout)
     train2025=research.valid_market_groups(structural,market,q,odds,valid,full2025,2025)
@@ -190,7 +190,7 @@ def main():
         "2026HorseModelTrainedThrough":train2026["horseTrainThrough"],
         "marketCalibrator2025Training":info,
         "ticketValueTrainingMonths":"2025-09..2025-12",
-        "train2025Horse":train2025,
+        "train2025Horse":train2025Horse,
         "stage2TrainingVenueDays":len(payoutTraining),
         "2026NoRefitOrModelChoice":True,
         "model":"market_residual_calibrated",
