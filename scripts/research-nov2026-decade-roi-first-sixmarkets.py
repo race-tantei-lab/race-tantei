@@ -26,22 +26,22 @@ import numpy as np
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES=ROOT/'external-jra-cash-decade'
-OUT=ROOT/'analysis-results/nov2026-decade-eight-runner-roi200-money.json'
+OUT=ROOT/'analysis-results/nov2026-decade-ten-runner-roi200-money.json'
 MARKETS=('単勝','ワイド','馬連','馬単','3連複','3連単')
-TOP_N=8
+TOP_N=10
 COLS=('単勝払戻','ワイド払戻','馬連払戻','馬単払戻','三連複払戻','三連単払戻')
 UNORDERED={1,2,4}
 TARGET_YEAR_END=2026
-CACHE=ROOT/'analysis-results/jra-decade-sixmarket-top8-cash-v2.npz'
-RACE_CACHE=ROOT/'analysis-results/jra-decade-sixmarket-top8-races-v2.json'
+CACHE=ROOT/'analysis-results/jra-decade-sixmarket-top10-cash-v3.npz'
+RACE_CACHE=ROOT/'analysis-results/jra-decade-sixmarket-top10-races-v3.json'
 SEED=20261108
-COMBO_PER_MARKET=[8,28,28,56,56,336]
+COMBO_PER_MARKET=[10,45,45,90,120,720]
 START_MARKET=np.cumsum([0]+COMBO_PER_MARKET).astype(int)
 N=sum(COMBO_PER_MARKET)
-assert N==512
+assert N==1030
 SINGLE_BINS={
- 'rankMin':8,'rankMax':8,'rankSum':10,'rankGap':8,
- 'rankFirst':8,'rankSecond':9,'favCount':4,'rankExact':512,
+ 'rankMin':10,'rankMax':10,'rankSum':13,'rankGap':10,
+ 'rankFirst':10,'rankSecond':11,'favCount':4,'rankExact':1000,
  'oddsGeom':8,'oddsSpread':5,'horseAge':5,'draw':5,
  'horseWeight':5,'favOdds':5,'favGap':4,
  'venue':10,'fieldSize':4,'raceBand':3,'quarter':4,
@@ -188,7 +188,7 @@ def full_features(races):
     constant={
       'rankMin':np.asarray([min(s) for s in slots],np.uint8),
       'rankMax':np.asarray([max(s) for s in slots],np.uint8),
-      'rankSum':np.asarray([min(sum(s)//2,9) for s in slots],np.uint8),
+      'rankSum':np.asarray([min(sum(s)//2,12) for s in slots],np.uint8),
       'rankGap':np.asarray([max(s)-min(s) for s in slots],np.uint8),
       'rankFirst':np.asarray([s[0] for s in slots],np.uint8),
       'rankSecond':np.asarray([s[1] if len(s)>1 else TOP_N for s in slots],np.uint8),
@@ -463,14 +463,14 @@ def optimize(races,paid,conditions,features):
 def main():
     if '--self-test' in sys.argv:
         slots,mark=fixed_template()
-        assert len(slots)==512 and len(mark)==512 and len(MARKET_PAIRS)==15
+        assert len(slots)==1030 and len(mark)==1030 and len(MARKET_PAIRS)==15
         assert len(PATTERNS)>60
         d=[{'month':'202401','day':'x','id':'a'}]
         f={k:np.zeros((1,N),dtype=(np.uint16 if k=='rankExact' else np.uint8))
                   for k in SINGLE_BINS}
         f['market']=np.broadcast_to(mark,(1,N))
         code,n=mixed_code(f,('rankMin','favOdds'))
-        assert code.shape==(1,N) and n==6*8*5
+        assert code.shape==(1,N) and n==6*10*5
         testpaid=np.zeros((1,N),dtype=np.int32)
         testpaid[0,0]=300
         cash=cash_audit([(0.,'r',0,1)],testpaid,1000)
