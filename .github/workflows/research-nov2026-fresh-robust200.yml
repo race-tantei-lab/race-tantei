@@ -42,16 +42,35 @@ jobs:
           assert 'largestPaidTicketYen' in p
           assert 'roiExcludeLargestTicketKeepAllStakePct' in p
           assert 'roiExcludeLargestRaceKeepAllStakePct' in p
-          assert 'if now.weekday() in (5,6) and now.hour<22' in p
+          assert 'if now.hour<22' in p
           for disallowed in ('UPDATE rt_public_bets','DELETE FROM rt_public_bets','INSERT INTO rt_public_bets',
                              'UPDATE rt_system_state','INSERT INTO rt_system_state'):
               assert disallowed not in p, disallowed
           print('NOV26_RESEARCH_PRODUCTION_MUTATION_FORBIDDEN_OK')
           PY
 
+  safe-research-hour:
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.hour.outputs.allowed }}
+    steps:
+      - id: hour
+        shell: bash
+        run: |
+          value=$(python - <<'PY'
+          import datetime as dt
+          now=dt.datetime.now(dt.timezone(dt.timedelta(hours=9)))
+          print('true' if now.hour>=22 else 'false')
+          PY
+          )
+          echo "allowed=$value" >> "$GITHUB_OUTPUT"
+          echo "FULL_HISTORICAL_RESEARCH_ALLOWED=$value"
+
   full-out-of-year-replay:
-    if: github.event_name == 'workflow_dispatch' && inputs.full_historical == true
-    needs: [new-model-check]
+    # A successful research-code push after 22 JST is sufficient; before
+    # 22 no credentials are exposed to a job and no D1 history is queried.
+    if: needs.safe-research-hour.outputs.allowed == 'true' && (github.event_name == 'push' || inputs.full_historical == true)
+    needs: [new-model-check, safe-research-hour]
     runs-on: ubuntu-latest
     timeout-minutes: 48
     env:
@@ -65,14 +84,14 @@ jobs:
           python-version: '3.12'
       - name: Install pinned research training dependencies
         run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'scikit-learn==1.6.1' 'numpy<3'
-      - name: Never spend D1 budget on the weekend before evening
+      - name: Enforce no JRA production quota consumption before 22:00 JST
         run: |
           python - <<'PY'
           import datetime as dt
           now=dt.datetime.now(dt.timezone(dt.timedelta(hours=9)))
-          if now.weekday() in (5,6) and now.hour<22:
-              raise SystemExit('D1_RESEARCH_BLOCKED_DURING_RACE_DAY')
-          print('NON_WEEKEND_OR_AFTER_JRA_RESEARCH_WINDOW',now.isoformat())
+          if now.hour<22:
+              raise SystemExit('D1_RESEARCH_BEFORE_22JST_FORBIDDEN')
+          print('POST_22JST_RESEARCH_WINDOW',now.isoformat())
           PY
       - name: Train fresh 2024-2025 model and settle independent-year 2026 payouts
         run: python -u scripts/research-nov2026-fresh-robust200.py
