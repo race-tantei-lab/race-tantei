@@ -26,7 +26,8 @@ type Ticket = {
   betType?:unknown; combination?:unknown; horses?:unknown; predictedProbability?:unknown;
   officialOdds?:unknown; valueProduct?:unknown; score?:unknown;
 };
-type FinalPayload = { tickets?: Ticket[]; lockedAt?:unknown; generationStartedAt?:unknown };
+type FinalPayload = { tickets?: Ticket[]; lockedAt?:unknown; generationStartedAt?:unknown;
+  ticketSelectionModel?:unknown; ticketSelectionModelFallback?:unknown };
 
 function jstDate(now=new Date()):string {
   return new Date(now.getTime()+9*3600_000).toISOString().slice(0,10);
@@ -93,6 +94,26 @@ function betHtml(bets:BetRow[]):string {
   return '<div class="section-title"><h2>確定買い目</h2><span class="status buy">固定済み</span></div>'
     +'<div class="course-tabs">'+COURSES.map((c,i)=>'<button class="course-tab '+(i===0?"active":"")+'" data-course-tab="'+i+'">'+c+' '+yen(BUDGETS[c])+'</button>').join("")+'</div>'+blocks;
 }
+/** Always distinguish the actual frozen ticket generator from pre-day race selection. */
+function ticketModelHtml(finalRaw:string|null):string {
+  if(!finalRaw)return "";
+  try {
+    const p=JSON.parse(finalRaw) as FinalPayload;
+    if(!Array.isArray(p.tickets)||p.tickets.length!==2)return "";
+    const model=String(p.ticketSelectionModel??"");
+    const latest=model==="nov2026-payout-hurdle-experimental-live-v1";
+    const label=latest
+      ?"2026年回収率重視モデル（LambdaRank＋的中・払戻学習）"
+      :"従来の10年LightGBMモデル";
+    const note=latest
+      ?"2025年末までで学習した2026年検証モデル。2026年11月の回収率は未実証です。"
+      :model==="ten-year-completed-model"
+        ?"新モデルの出力が条件を満たさないため、従来モデルで確定しました。"
+        :"新モデル導入前に確定した買い目です。";
+    return '<p class="race-model-identity" data-ticket-model="'+esc(model||"legacy")+'"><b>買い目生成モデル：</b>'+esc(label)
+      +'<span>　'+esc(note)+'</span></p>';
+  } catch {return "";}
+}
 function reasonHtml(finalRaw:string|null,runners:RunnerRow[]):string {
   if(!finalRaw)return "";
   try {
@@ -121,7 +142,7 @@ function runnerHtml(runners:RunnerRow[]):string {
     +'</tbody></table></div></section>';
 }
 function styles():string {
-  return '<style>.status.hit{background:#124b37;color:#bdf5dc;border:1px solid #287d5b}.status.miss{background:#4a2528;color:#ffc3c3;border:1px solid #784047}.status.target{background:#15483a;color:#baf4dd;border:1px solid #2d806c}.race-sequence-nav{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 12px}.race-sequence-nav a,.race-sequence-nav span{padding:9px 10px;border:1px solid var(--line);border-radius:11px;background:var(--panel2);font-size:12px;text-align:center}.race-final-note{padding:10px 12px;margin:-5px 0 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);font-size:12px;color:var(--muted)}.race-detail-tabs{display:flex;gap:7px;margin:12px 0}.race-detail-tabs button{border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--text);padding:8px 11px;font:inherit}.race-detail-tabs button.active{border-color:var(--green);background:var(--green2)}.reason-panel{padding:14px}.reason-card{padding:12px 0;border-bottom:1px solid var(--line)}.reason-card:last-child{border-bottom:0}.reason-head{display:grid;gap:4px}.reason-head span,.reason-card p{font-size:11px;color:var(--muted);line-height:1.6}.reason-metrics{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.reason-metrics span{padding:6px 8px;border:1px solid var(--line);border-radius:9px;font-size:10px}.reason-metrics b{color:var(--green)}@media(max-width:760px){.race-sequence-nav a,.race-sequence-nav span{font-size:10px}.runner-table table{min-width:720px}}</style>';
+  return '<style>.status.hit{background:#124b37;color:#bdf5dc;border:1px solid #287d5b}.status.miss{background:#4a2528;color:#ffc3c3;border:1px solid #784047}.status.target{background:#15483a;color:#baf4dd;border:1px solid #2d806c}.race-sequence-nav{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 12px}.race-sequence-nav a,.race-sequence-nav span{padding:9px 10px;border:1px solid var(--line);border-radius:11px;background:var(--panel2);font-size:12px;text-align:center}.race-final-note{padding:10px 12px;margin:-5px 0 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);font-size:12px;color:var(--muted)}.race-detail-tabs{display:flex;gap:7px;margin:12px 0}.race-detail-tabs button{border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--text);padding:8px 11px;font:inherit}.race-detail-tabs button.active{border-color:var(--green);background:var(--green2)}.race-model-identity{font-size:11px;line-height:1.6;margin:7px 0 12px;color:var(--muted)}.race-model-identity b{color:var(--text)}.race-model-identity span{display:block}.reason-panel{padding:14px}.reason-card{padding:12px 0;border-bottom:1px solid var(--line)}.reason-card:last-child{border-bottom:0}.reason-head{display:grid;gap:4px}.reason-head span,.reason-card p{font-size:11px;color:var(--muted);line-height:1.6}.reason-metrics{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.reason-metrics span{padding:6px 8px;border:1px solid var(--line);border-radius:9px;font-size:10px}.reason-metrics b{color:var(--green)}@media(max-width:760px){.race-sequence-nav a,.race-sequence-nav span{font-size:10px}.runner-table table{min-width:720px}}</style>';
 }
 function script():string {
   return '<script>(()=>{const buttons=[...document.querySelectorAll("[data-race-tab]")],panels=[...document.querySelectorAll("[data-race-panel]")];if(!buttons.length)return;function activate(name){buttons.forEach(b=>{const active=b.dataset.raceTab===name;b.classList.toggle("active",active);b.setAttribute("aria-selected",active?"true":"false")});panels.forEach(p=>p.hidden=p.getAttribute("data-race-panel")!==name)}buttons.forEach(b=>b.addEventListener("click",()=>activate(b.dataset.raceTab||"bets")));activate("bets")})();</script>';
@@ -154,7 +175,7 @@ export async function fastCurrentDayRaceDetailResponse(db:D1Database,raceId:stri
   const highReturn=highReturnResearchView(states.get(finalKey)??null,race.startTimeUtc);
   const hasReasons=Boolean(reasons);
   const tabNav='<nav class="race-detail-tabs" data-race-tabs><button type="button" class="active" data-race-tab="bets" aria-selected="true">予想買い目</button>'+(hasReasons?'<button type="button" data-race-tab="reason" aria-selected="false">買い目の理由</button>':'')+'<button type="button" data-race-tab="high-return" aria-selected="false">高配当研究</button>'+'<button type="button" data-race-tab="horses" aria-selected="false">出走馬</button></nav>';
-  const betsPanel='<section data-race-panel="bets">'+(betsBlock||'<div class="section-title"><h2>買い目</h2><span class="status '+view.code+'">'+view.label+'</span></div><div class="notice">'+esc(view.note)+'</div>')+'</section>';
+  const betsPanel='<section data-race-panel="bets">'+ticketModelHtml(states.get(finalKey)??null)+(betsBlock||'<div class="section-title"><h2>買い目</h2><span class="status '+view.code+'">'+view.label+'</span></div><div class="notice">'+esc(view.note)+'</div>')+'</section>';
   const body='<a class="back" href="/">← レース一覧へ</a>'+navHtml(raceId,race.venue,race.raceNo)
     +'<section class="hero today-hero"><div class="race-title"><span class="race-no">'+race.raceNo+'R</span><h1>'+esc(race.raceName||race.raceNo+"R")+'</h1><span class="status '+view.code+'">'+view.label+'</span></div><p>'+esc(meta)+'</p>'+(race.conditions?'<p>'+esc(race.conditions)+'</p>':'')+'</section>'
     +'<div class="race-final-note">'+esc(view.note)+'</div>'+tabNav+betsPanel+reasons+highReturn+runnerHtml(runners);
