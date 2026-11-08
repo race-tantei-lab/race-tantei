@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""2026 (Aug--Nov 7) independent chronological retest of 2025 winning candidate.
+"""2026 (Jan--Aug 9) independent chronological retest of 2025 winning candidate.
 
 Candidate locked from earlier exploratory 2025 investigation:
   market_residual_calibrated, race-first LambdaRank with a residual
@@ -10,13 +10,13 @@ NO 2026 outcomes are used for training or choice:
   genuine FINAL win prices in 2025 Jan-Aug to fit market residual.
   2025 Sep-Dec actual JRA payouts fit the payout head.
   2026 runner ability refit on <=2025 historical labels.
-  Model and payout head are frozen on 2026 Aug-Nov evaluation.
+  Model and payout head are frozen on 2026 Jan-Aug 9 evaluation.
   2026 genuine FINAL win prices (not T15) enter predictions, BEFORE
   target JRA payout is joined for settlement. This is an archive proxy.
 
 Do not call this a true prospective live test: target 2026 year data has
 been inspected in earlier studies and archival FINAL odds are post-T15.
-Only D1 2025 Jan-Dec + 2026 Aug-Nov 7 read-only bounded monthly lookups.
+Only D1 2025 Jan-Dec + 2026 Aug 9 read-only bounded monthly lookups.
 No production write or cash bet.
 """
 from __future__ import annotations
@@ -29,11 +29,11 @@ import numpy as np
 from sklearn.ensemble import HistGradientBoostingClassifier
 
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/"analysis-results/2026-forward-2025-frozen-market-residual-JRA.json"
+OUT=ROOT/"analysis-results/2026-janaug-frozen-2025-market-residual-JRA.json"
 FROZEN="market_residual_calibrated"
 ALL=("horse_model_only","pure_market","market_residual_calibrated","market_residual_blend")
-START_2026="2026-08-09"
-END_2026="2026-11-08"
+START_2026="2026-01-04"
+END_2026="2026-08-10"
 TYPES={"単勝","ワイド","馬連","馬単","3連複","3連単"}
 UNORDERED={"ワイド","馬連","3連複"}
 STAKE=2000
@@ -49,7 +49,7 @@ def load(path,name):
 
 def read_actual_payouts(helper):
     payouts=defaultdict(dict);coverage={}
-    for year,monthSet in ((2025,tuple(range(1,13))),(2026,(8,9,10,11))):
+    for year,monthSet in ((2025,tuple(range(1,13))),(2026,tuple(range(1,9)))):
         for month in monthSet:
             begin=f"{year}-{month:02d}-"
             ending=(dt.date(year,month,1)+dt.timedelta(days=35)).replace(day=1).strftime("%Y-%m-")
@@ -105,7 +105,7 @@ def selftest():
     a=np.array([.45,.30,.25])
     assert abs(a.sum()-1)<1e-9
     assert FROZEN in ALL and RACE_K==5
-    assert START_2026<END_2026 and END_2026<"2026-11-09"
+    assert START_2026<END_2026 and END_2026<"2026-08-11"
     print("FROZEN_MARKET_RESIDUAL_2026_RETEST_SELFTEST_OK",flush=True)
 
 def main():
@@ -141,9 +141,9 @@ def main():
        "trainVenueDays":len(payoutTraining),"variant":FROZEN,
        "payoutLabelLastDate":"2025-12-28","no2026OutcomesInFit":True}),flush=True)
     horse2026,train2026=structural.fit_horse_models(X,y,t3,counts,offsets,dates,2026)
-    # 2026 Aug-Nov 7 subset only, avoids high-cost D1 payout requests Jan-Jul.
+    # 2026 Aug 9 subset only, avoids high-cost D1 payout requests Jan-Jul.
     target=np.flatnonzero((dates>=START_2026)&(dates<END_2026))
-    if len(target)<300:raise RuntimeError("NO_2026_AUG_NOV_HISTORY")
+    if len(target)<300:raise RuntimeError("NO_2026_JAN_AUG9_ARCHIVE_HISTORY")
     lo=int(offsets[target[0]]);hi=int(offsets[target[-1]+1])
     scorer,placer=horse2026
     scores=scorer.predict(X[lo:hi],num_threads=2)
@@ -182,7 +182,7 @@ def main():
     output=structural.selected_portfolio(completed,scores,tickets)
     metrics=output["metrics"]
     yearlyMonths={k:v for k,v in output["byMonth"].items()}
-    result={"study":"2026_aug_nov_frozen_2025_selected_market_residual_calibrated",
+    result={"study":"2026_jan_aug9_frozen_2025_selected_market_residual_calibrated",
         "targetPeriod":[START_2026,END_2026],
         "2025HistoricalCandidateWasChosenAfter2025WasInspected":True,
         "2026DataPreviouslyInspectedInOtherStudies":True,
