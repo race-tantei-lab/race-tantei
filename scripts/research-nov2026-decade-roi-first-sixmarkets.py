@@ -26,7 +26,7 @@ import numpy as np
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES=ROOT/'external-jra-cash-decade'
-OUT=ROOT/'analysis-results/nov2026-decade-ten-runner-roi200-money.json'
+OUT=ROOT/'analysis-results/nov2026-decade-ten-runner-roi200-loose-stability.json'
 MARKETS=('単勝','ワイド','馬連','馬単','3連複','3連単')
 TOP_N=10
 COLS=('単勝払戻','ワイド払戻','馬連払戻','馬単払戻','三連複払戻','三連単払戻')
@@ -298,13 +298,13 @@ def mine(paid,features,races):
             audited['trainTrueRoi200Cells_support'+str(size_floor)]+=int(groups.sum())
             # Independent 2023 positive money stability, paid conditions
             # selected 2024 only. Never inspect 2025/26 outcomes here.
-            qualifies=groups&(valn>=15)&(val_hits>=2)&(val_robust>=1)
-            audited['train200And2023RobustBreakEvenCells_support'+str(size_floor)]+=int(qualifies.sum())
+            qualifies=groups&(valn>=10)&(val_robust>=0)
+            audited['train200And2023AnyObservedCashCells_support'+str(size_floor)]+=int(qualifies.sum())
             qualify_ids=np.flatnonzero(qualifies)
             for group in qualify_ids:
                 historical=min(float(robust[group]),20.)
                 held=min(float(val_robust[group]),20.)
-                score=historical*held*math.sqrt(
+                score=historical*(.3+held)*math.sqrt(
                    n[group]/(n[group]+200))*math.sqrt(
                    valn[group]/(valn[group]+50))
                 all_conditions.append({
@@ -507,7 +507,7 @@ def main():
     result['actualPayoutArchive2015To2026JanApr']=True
     result['winnerPredictionFittedAtAnyStage']=False
     result['trainingHistoricalSample2015To2022']=True
-    result['year2023CrossPeriodCashStabilityGate']=True
+    result['year2023CrossPeriodCashStabilityGate']=False
     result['policySelectionOnlyYear2024']=True
     result['untouchedOutOfYearCash2025And2026']=True
     result['allActualPayoutsThirdPartyNotOfficialReconciled']=True
