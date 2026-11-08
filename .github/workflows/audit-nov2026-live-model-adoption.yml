@@ -26,10 +26,15 @@ jobs:
                   json_extract(state_value,'$.lockedAt') AS lockedAt,
                   json_extract(state_value,'$.snapshots[0].ticketSelectionModel') AS previewModel,
                   json_extract(state_value,'$.snapshots[0].ticketSelectionModelFallback') AS previewFallback,
-                  updated_at AS updatedAt
+                  updated_at AS updatedAt,
+                  (SELECT r.start_time_utc FROM rt_races r
+                   WHERE r.race_id=substr(state_key,instr(state_key,':')+1) LIMIT 1) AS startTimeUtc,
+                  json_extract(state_value,'$.status') AS auditStatus,
+                  json_extract(state_value,'$.errors') AS auditErrors
             FROM rt_system_state
             WHERE (state_key >= 'worker_live_final:2026-11-08-' AND state_key < 'worker_live_final:2026-11-09-')
                OR (state_key >= 'worker_live_preview:2026-11-08-' AND state_key < 'worker_live_preview:2026-11-09-')
+               OR state_key='worker_live_lock:2026-11-08'
             ORDER BY state_key LIMIT 70"""
           body=json.dumps({"sql":sql,"params":[]}).encode()
           req=urllib.request.Request(
@@ -47,6 +52,9 @@ jobs:
             "examined":len(rows),"modelCounts":[{"kind":k[0],"model":k[1],"n":v} for k,v in sorted(summary.items())],
             "recent":[{"stateKey":r["k"],"kind":r["kind"],"model":r.get("finalModel") or r.get("previewModel"),
                  "fallback":r.get("previewFallback"),"lockedAt":r.get("lockedAt"),
+                 "startTimeUtc":r.get("startTimeUtc"),
+                 "auditStatus":r.get("auditStatus"),
+                 "auditErrors":str(r.get("auditErrors") or "")[:900],
                  "updatedAt":r["updatedAt"]} for r in rows[-20:]]
           },ensure_ascii=False))
           PY
