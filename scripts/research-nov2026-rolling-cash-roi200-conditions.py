@@ -25,7 +25,7 @@ TOP_COUNTS=(1,3,8,20,50)
 PAIRS=(-1,)+tuple(range(15))
 STAKES=(100,500,1000,1500,1900)
 RACES_PER_DAY=(5,)  # enforce production venue-day maximum, not tuned on validation
-SEED=20261108
+SEED=20261109
 
 def module(path,name):
     spec=importlib.util.spec_from_file_location(name,ROOT/path)
@@ -59,8 +59,20 @@ def rules_lookback(source,paid,feat,years,target,horizon,support):
         biggest=np.zeros(n,dtype=np.int32)
         np.maximum.at(biggest,key[positives],paid_train[positives])
         robust=(cash-biggest)/(100*np.maximum(counts,1))
+        # New hypothesis: reject payout cells concentrated in a single year.
+        # Yearly cash and ticket counts are computed only inside the lookback,
+        # never using target-year settlements. At least two separate historical
+        # years must each have positive net cash, with >=10 tickets per year.
+        profitable_years=np.zeros(n,dtype=np.uint8)
+        for yr in range(target-horizon,target):
+            ym=train & (years==yr)
+            yr_key=group[ym].ravel()
+            yr_paid=paid[ym].ravel()
+            yr_count=np.bincount(yr_key,minlength=n)
+            yr_cash=np.bincount(yr_key,weights=yr_paid,minlength=n)
+            profitable_years += ((yr_count>=10)&(yr_cash>100*yr_count)).astype(np.uint8)
         good=(counts>=support)&(positive_counts>=max(3,support//35))&(
-           robust>=2.)
+           robust>=2.)&(profitable_years>=2)
         for index in np.flatnonzero(good):
             # Pair true net cash return with support shrinkage.
             value=float(min(robust[index],20)*math.sqrt(
