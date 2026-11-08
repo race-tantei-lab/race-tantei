@@ -121,6 +121,16 @@ function ticketFeatures(kind:CompletedBetType,indices:readonly number[],p:readon
   ];
   return [...base,...extra].map(x=>Math.fround(x));
 }
+/** Numeric parity probe for independent JS/Python frozen model verification. */
+export function nov2026RawModelPredictions(model:PayoutHurdleAsset,runnerFeatures:readonly number[],ticketFeatures:readonly number[]):{
+  rankerRaw:number;top3Probability:number;ticketHitProbability:number;conditionalPayoutMultiple:number
+}{
+  if(runnerFeatures.length!==56||ticketFeatures.length!==40)throw Error("NOV2026_PARITY_SHAPE_MISMATCH");
+  return {rankerRaw:predictTreeForest(runnerFeatures,model.ranker),
+    top3Probability:sigmoid(histRaw(runnerFeatures,model.top3)),
+    ticketHitProbability:sigmoid(histRaw(ticketFeatures,model.hit)),
+    conditionalPayoutMultiple:Math.exp(histRaw(ticketFeatures,model.paid))};
+}
 export function inferNov2026PayoutHurdleResearch(
   model:PayoutHurdleAsset,
   horseNos:readonly number[],features56:readonly (readonly number[])[],
@@ -147,6 +157,10 @@ export function inferNov2026PayoutHurdleResearch(
     valid.set(key,low); // conservative genuine JRA quote only
   }
   const raw:Array<{kind:CompletedBetType;combo:string;indices:number[];pl:number;officialOdd:number}>=[];
+  // Historical training used all top-five tickets irrespective of quote
+  // completeness. Never change that model feature when official quotes lack
+  // a combination; exclude that combination from selection instead.
+  const totalCandidates=COMPLETED_BET_ORDER.reduce((n,kind)=>n+ticketPositions(kind,order).length,0);
   for(const kind of COMPLETED_BET_ORDER){
     for(const indices of ticketPositions(kind,order)){
       const nums=indices.map(i=>horseNos[i]!);
@@ -161,7 +175,7 @@ export function inferNov2026PayoutHurdleResearch(
   }
   const best=new Map<CompletedBetType,Candidate>();
   for(const row of raw){
-    const features=ticketFeatures(row.kind,row.indices,p,p3,order,placeOrder,raceNo,raw.length);
+    const features=ticketFeatures(row.kind,row.indices,p,p3,order,placeOrder,raceNo,totalCandidates);
     if(features.length!==40||features.some(x=>!Number.isFinite(x)))return null;
     const prior=model.priors[row.kind];
     if(!prior)return null;
