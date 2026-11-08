@@ -1,0 +1,61 @@
+name: Ten-year JRA real-money ROI200 condition discovery and holdouts
+on:
+  push:
+    branches:
+      - research/nov2026-tenyear-real-cash-roi-conditions
+    paths:
+      - scripts/research-nov2026-decade-roi-first-sixmarkets.py
+      - .github/workflows/nov2026-decade-roi-first-sixmarkets.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  discover-decade-paid-jra-profit-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Pinned financial research Python dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'lightgbm==4.6.0' 'scikit-learn==1.6.1'
+      - name: Verify ROI-first historical money calculation
+        run: |
+          python -m py_compile scripts/research-nov2026-decade-roi-first-sixmarkets.py
+          python -u scripts/research-nov2026-decade-roi-first-sixmarkets.py --self-test
+      - name: Load immutable decade cash-candidate archive when available
+        uses: actions/cache@v4
+        id: decade
+        with:
+          path: |
+            analysis-results/jra-decade-sixmarket-cash-features-v1.npz
+            analysis-results/jra-decade-sixmarket-races-v1.json
+          key: pinned-thirdparty-jra-2015-2026-six-market-actual-money-cache-v1
+      - name: Retrieve precisely pinned JRA 2015-2026 monthly finished payouts, no D1
+        if: steps.decade.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in $(seq 2015 2025); do
+              for m in $(seq -w 1 12); do printf '%s%s\n' "$year" "$m"; done
+            done
+            for m in 01 02 03 04; do printf '2026%s\n' "$m"; done
+          } > /tmp/immutable_payout_months
+          cat /tmp/immutable_payout_months | xargs -P 12 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 3 --max-time 45 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+          du -sh external-jra-cash-decade
+      - name: Mine decade 200pct actual payout cells, choose only stable profitable subset and freeze next-year prediction
+        run: python -u scripts/research-nov2026-decade-roi-first-sixmarkets.py
+      - name: Preserve real paid money results, do not deploy to production
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: decade-six-market-actual-money-roi200-subset-study
+          path: analysis-results/nov2026-decade-first-roi200-selective-money.json
+          if-no-files-found: warn
+          retention-days: 30
