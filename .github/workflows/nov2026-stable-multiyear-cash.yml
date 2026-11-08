@@ -1,0 +1,41 @@
+name: Research stable multi-year actual cash rules
+on:
+  push:
+    branches:
+      - research/nov2026-stable-multiyear-cash
+    paths:
+      - scripts/research-nov2026-stable-multiyear-cash.py
+      - .github/workflows/nov2026-stable-multiyear-cash.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  stable-cash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install numerical dependency
+        run: python -m pip install --disable-pip-version-check numpy==2.2.6
+      - name: Restore pinned paid-ticket archive
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            analysis-results/jra-decade-sixmarket-top10-cash-v3.npz
+            analysis-results/jra-decade-sixmarket-top10-races-v3.json
+          key: pinned-thirdparty-jra-2015-2026-ten-runner-six-market-cache-v1
+      - name: Require actual archive and run cash audit
+        run: |
+          test -s analysis-results/jra-decade-sixmarket-top10-cash-v3.npz
+          test -s analysis-results/jra-decade-sixmarket-top10-races-v3.json
+          python -u scripts/research-nov2026-stable-multiyear-cash.py
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stable-multiyear-real-cash
+          path: analysis-results/nov2026-stable-multiyear-cash.json
+          if-no-files-found: warn
+          retention-days: 14
