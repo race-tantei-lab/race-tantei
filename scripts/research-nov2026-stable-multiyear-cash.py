@@ -81,14 +81,20 @@ def main():
             count+=accept
         chosen[count!=2]=False
         stats=audit(chosen,paid,years==2023)
-        policies.append((stats['minusMaxRacePct'] or 0,k,chosen,stats))
+        # Require 100 settled races; do not select one-jackpot policies.
+        n_races=int(np.sum(np.any(chosen & (years==2023)[:,None],axis=1)))
+        stats['races']=n_races
+        stats['passes2023SupportGate']=n_races>=100
+        score=(stats['minusMaxRacePct'] or 0) if n_races>=100 else -1.
+        policies.append((score,k,chosen,stats))
     policies.sort(key=lambda x:x[0],reverse=True)
-    best=policies[0] if policies else None
+    best=policies[0] if policies and policies[0][0]>=0 else None
     report={'hypothesis':'multi-year profitable cells; >=5/8 years and both 2021,2022 positive',
        'source':'third-party pinned JRA results payout mirror; final win odds are not T15',
        'officialT15Verified':False,'2025And2026PreviouslyInspected':True,
        'trainingYears':'2015-2022','selectionYear':2023,
-       'qualifiedConditions':len(candidates),'productionDeployed':False}
+       'qualifiedConditions':len(candidates),'productionDeployed':False,
+       'selectionPolicySupportFloorRaces':100,'selectionPolicyCount':len(policies)}
     if best:
         _,k,chosen,selection=best
         report.update(selectedRuleCount=k,selection2023=selection,
