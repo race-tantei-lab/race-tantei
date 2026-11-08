@@ -21,6 +21,26 @@ def audit(picks,payout,year_mask):
     return dict(bets=n,stakeYen=stake,paidYen=cash,roiPct=round(cash/n,3),
       minusMaxRacePct=round((cash-int(race_cash.max()))/n,3),
       winningTickets=int(((payout>0)&chosen).sum()))
+def fixed_five_per_venue_day(chosen,races):
+    """New policy: five chronologically fixed race numbers per venue/day.
+    Eligible races depend ONLY on frozen ticket signals, never payouts.
+    Require both market tickets; discard incomplete venue-days.
+    """
+    from collections import defaultdict
+    groups=defaultdict(list)
+    for i,r in enumerate(races):
+        if int(chosen[i].sum())==2:
+            rid=str(r['id'])
+            # JRA 12-digit race ID: YYYY venue meeting day race number.
+            key=(rid[:4],rid[4:6],rid[6:10])
+            groups[key].append((int(rid[-2:]),i))
+    keep=np.zeros(len(races),dtype=bool)
+    for entries in groups.values():
+        entries.sort()
+        if len(entries)>=5:
+            for _,i in entries[:5]:keep[i]=True
+    return chosen & keep[:,None],keep
+
 def main():
     base=load('scripts/research-nov2026-decade-roi-first-sixmarkets.py','base_cash')
     rolling=load('scripts/research-nov2026-rolling-cash-roi200-conditions.py','rolling_cash')
@@ -93,13 +113,14 @@ def main():
             for m in (m1,m2):
                 a,b=int(base.START_MARKET[m]),int(base.START_MARKET[m+1])
                 chosen[eligible,a:b]=market_picks[eligible,a:b]
+            chosen,venue_day_keep=fixed_five_per_venue_day(chosen,races)
             stats=audit(chosen,paid,years==2023)
-            n_races=int(np.sum(eligible&(years==2023)))
+            n_races=int(np.sum(venue_day_keep&(years==2023)))
             stats['races']=n_races
             first=audit(chosen,paid,(years==2023)&first_half)
             second=audit(chosen,paid,(years==2023)&~first_half)
-            first_races=int(np.sum(eligible&(years==2023)&first_half))
-            second_races=int(np.sum(eligible&(years==2023)&~first_half))
+            first_races=int(np.sum(venue_day_keep&(years==2023)&first_half))
+            second_races=int(np.sum(venue_day_keep&(years==2023)&~first_half))
             stats['firstHalf2023']={**first,'races':first_races}
             stats['secondHalf2023']={**second,'races':second_races}
             stats['passes2023SupportGate']=n_races>=100 and first_races>=30 and second_races>=30
@@ -113,7 +134,7 @@ def main():
        'officialT15Verified':False,'2025And2026PreviouslyInspected':True,
        'trainingYears':'2015-2022','selectionYear':2023,
        'qualifiedConditions':len(candidates),'productionDeployed':False,
-       'selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionScore':'minimum of 2023 H1 and H2 ROI, each removing largest payout race','selectionPolicyCount':len(policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
+       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionScore':'minimum of 2023 H1 and H2 ROI, each removing largest payout race','selectionPolicyCount':len(policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
     if best:
         _,k,pair,chosen,selection=best
         report.update(selectedRuleCount=k,selectedMarketPair=[base.MARKETS[m] for m in pair],selection2023=selection,
