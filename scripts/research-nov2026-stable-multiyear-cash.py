@@ -155,8 +155,21 @@ def main():
             # single largest paying race. No evaluation-period tuning.
             stats['passes2023SupportGate']=(n_races>=100 and first_races>=30 and second_races>=30
                   and all(q['races']>=20 for q in quarter_stats))
+            # New hypothesis: select a policy by its weakest quarter after
+            # removing its largest paying RACE, then penalize dependence on
+            # the two largest race payouts across the entire selection year.
+            # A stable quarterly return alone can conceal two jackpots.
+            year_rows=np.flatnonzero(years==2023)
+            selected_cash=(paid[year_rows]*chosen[year_rows]).sum(axis=1,dtype=np.int64)
+            top_two=np.sort(selected_cash)[-2:]
+            ex_two=int(selected_cash.sum())-int(top_two.sum())
+            stats['minusTwoLargestRacesPct']=(round(ex_two/stats['bets'],3)
+                if stats['bets'] else None)
+            stats['passesConcentrationGate']=(stats['passes2023SupportGate']
+                and stats['minusTwoLargestRacesPct'] is not None
+                and stats['minusTwoLargestRacesPct']>=200)
             score=(min(q['minusMaxRacePct'] for q in quarter_stats)
-                   if stats['passes2023SupportGate'] else -1.)
+                   if stats['passesConcentrationGate'] else -1.)
             policies.append((score,k,(m1,m2),chosen,stats))
     policies.sort(key=lambda x:x[0],reverse=True)
     best=policies[0] if policies and policies[0][0]>=0 else None
@@ -165,7 +178,7 @@ def main():
        'officialT15Verified':False,'2025And2026PreviouslyInspected':True,
        'trainingYears':'2015-2022','selectionYear':2023,
        'qualifiedConditions':len(candidates),'productionDeployed':False,
-       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionQuarterFloorRaces':20,'selectionScore':'minimum of four 2023 calendar-quarter ROIs, each removing largest payout race','selectionPolicyCount':len(policies),'supportedPolicyCount':sum(p[4]['passes2023SupportGate'] for p in policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
+       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionQuarterFloorRaces':20,'selectionScore':'minimum of four 2023 quarter max-race-removed ROIs, requiring 2023 ROI >=200 after excluding TWO largest payout races','selectionPolicyCount':len(policies),'supportedPolicyCount':sum(p[4]['passes2023SupportGate'] for p in policies),'concentrationQualifiedPolicyCount':sum(p[4]['passesConcentrationGate'] for p in policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
     if best:
         _,k,pair,chosen,selection=best
         report['policyInvariantAudit']=audit_policy_invariants(chosen,races)
