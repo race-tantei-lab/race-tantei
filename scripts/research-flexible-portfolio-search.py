@@ -96,15 +96,30 @@ def criterion(c:dict[str,Any],mode:str)->float:
     if mode=="convex":return ev*ev/math.sqrt(max(.01,ph))
     raise ValueError("UNRECOGNIZED_TICKET_RANK_MODE")
 
+# Frozen candidate rankings are reused across thousands of stake/race-policy
+# trials, avoiding re-sorting all horse combinations on every grid point.
+# Hold the source list reference to detect stale/reused object IDs.
+_RANK_CACHE:dict[tuple[int,str],tuple[list,list]]={}
+
+def clear_rank_cache():
+    _RANK_CACHE.clear()
+
 def candidate_choices(tickets:list[dict[str,Any]],p:Policy):
-    # No payout field read in candidate selection; data has settlement labels
-    # only because this is a retrospective evaluator.
-    ranked=sorted((
-        (criterion(t,p.rank_mode),str(t["key"][0]),tuple(t["key"][1]),t)
-        for t in tickets if market_allowed(p.market_mask,str(t["key"][0]))
-    ),key=lambda x:(-x[0],x[1],x[2]))
+    # No payout field read in candidate selection; the only settlement label
+    # is deliberately accessed later AFTER tickets and stake are frozen.
+    cache_key=(id(tickets),p.rank_mode)
+    found=_RANK_CACHE.get(cache_key)
+    if found is not None and found[0] is tickets:
+        ranked=found[1]
+    else:
+        ranked=sorted((
+          (criterion(t,p.rank_mode),str(t["key"][0]),tuple(t["key"][1]),t)
+          for t in tickets
+        ),key=lambda x:(-x[0],x[1],x[2]))
+        _RANK_CACHE[cache_key]=(tickets,ranked)
     chosen=[];types=Counter()
     for val,kind,combo,ticket in ranked:
+        if not market_allowed(p.market_mask,kind):continue
         if types[kind]>=p.max_per_type:continue
         chosen.append((val,ticket));types[kind]+=1
         if len(chosen)==p.ticket_count:break
