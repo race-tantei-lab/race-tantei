@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install fixed numerical runtime
-        run: python -m pip install --disable-pip-version-check 'numpy<3'
+        run: python -m pip install --disable-pip-version-check 'numpy<3' 'lightgbm==4.6.0' 'scikit-learn==1.6.1'
       - name: Load immutable seven-horse actual-payoff features, not old predictions
         uses: actions/cache@v4
         id: source
@@ -28,6 +28,53 @@ jobs:
             analysis-results/roi200-public-2024-26-categories-v1.npz
             analysis-results/roi200-public-2024-26-categories-v1.json
           key: frozen-third-party-sixmarket-sevenhorse-source-v1
+      - name: Fetch pinned immutable public paid-races archive if cache has new branch scope
+        if: steps.source.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-archive
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          for year in 2024 2025; do
+            for m in $(seq -w 1 12); do
+              target="raceresults_$year$m.csv"
+              curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/$target" "$URL/$target"
+            done
+          done
+          for m in 01 02 03; do
+            target="raceresults_2026$m.csv"
+            curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/$target" "$URL/$target"
+          done
+          test "$(find external-jra-cash-archive -name '*.csv' | wc -l)" -eq 27
+      - name: Build original ticket-level actual money feature universe on cache miss
+        if: steps.source.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import importlib.util,sys,numpy as np,json
+          def load(path,name):
+              spec=importlib.util.spec_from_file_location(name,path)
+              obj=importlib.util.module_from_spec(spec)
+              sys.modules[name]=obj
+              spec.loader.exec_module(obj)
+              return obj
+          source=load('scripts/research-nov2026-sixmarket-real-paid-cash.py','cache_source_jra_paid')
+          miner=load('scripts/research-nov2026-roi200-first-pattern-search.py','cache_source_roi_miner')
+          source.TOP_HORSES=7
+          races,audit=source.read_pinned_csv()
+          X,y,ids,types,tickets,w=source.build_actual_payout_rows(races)
+          cat=miner.categoricals(races,X,ids,types,tickets)
+          folder=Path('analysis-results')
+          folder.mkdir(parents=True,exist_ok=True)
+          np.savez_compressed(folder/'roi200-public-2024-26-categories-v1.npz',
+               y=y,ids=ids,types=types,**{'cat_'+k:v for k,v in cat.items()})
+          (folder/'roi200-public-2024-26-categories-v1.json').write_text(
+              json.dumps({'races':[{'id':r['id'],'month':r['month'],'day':r['day']}
+                       for r in races],'audit':audit},ensure_ascii=False),encoding='utf8')
+          print('PREPARED_IMMUTABLE_SIX_MARKET_REAL_CASH',len(races),len(y))
+          PY
       - name: Ensure full real-payout candidates are available
         shell: bash
         run: |
