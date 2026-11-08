@@ -40,8 +40,62 @@ def historical_horse_features():
         hist.core_module(),days)
     rows=other.standalone_runner_index(days,counts,winners)
     if len(rows)!=len(counts):raise RuntimeError("CHRONOLOGY_ALIGNMENT")
-    ix={r["raceId"]:i for i,r in enumerate(rows)}
-    return X,won,offsets,rows,ix,dropped
+    return X,won,offsets,rows,odds,dropped
+
+VENUES={"札幌":"01","函館":"02","福島":"03","新潟":"04","東京":"05",
+        "中山":"06","中京":"07","京都":"08","阪神":"09","小倉":"10"}
+
+def join_pre_result_races_by_quoted_horse_vector(races,metadata,archived_quotes):
+    """Independent public sources have DIFFERENT race ID namespaces.
+
+    Join by calendar year, the venue, race number and an identity fingerprint
+    of horse-number/final win-quote pairs. Final quotes are only used to
+    establish race identity, not to derive paid outcomes/labels.
+    Fail closed if source identity cannot be proven.
+    """
+    index=defaultdict(list)
+    for i,m in enumerate(metadata):
+        venue=next((code for name,code in VENUES.items() if name in m["venue"]),None)
+        if not venue:continue
+        key=(m["date"][:4],venue,int(m["raceNo"]))
+        index[key].append(i)
+    resolved={};no_close=0;ambiguous=0;exact_stats=[]
+    used=set()
+    for race in races:
+        year=race["month"][:4]
+        key=(year,race["venue"],int(race["no"]))
+        candidates=[]
+        input_pairs={int(h[0]):float(h[1]) for h in race["horses"]}
+        for i in index.get(key,()):
+            prior_pairs=dict(zip(metadata[i]["horseNos"],archived_quotes[i]))
+            matches=0;overlap=0
+            for no,q in input_pairs.items():
+                try:q2=float(prior_pairs[no])
+                except (KeyError,TypeError,ValueError):continue
+                if math.isfinite(q2) and q2>0:
+                    overlap+=1
+                    matches+=int(abs(q2-q)<.051)
+            candidates.append((matches,overlap,i))
+        candidates.sort(reverse=True)
+        if not candidates or candidates[0][0]<4 or candidates[0][1]<6:
+            no_close+=1;continue
+        if len(candidates)>1 and candidates[0][0]==candidates[1][0]:
+            ambiguous+=1;continue
+        match,_,idx=candidates[0]
+        if idx in used:raise RuntimeError("DUPLICATE_RACE_IDENTITY_JOIN")
+        used.add(idx)
+        resolved[race["id"]]=idx
+        exact_stats.append(match)
+    print("REAL_PAYOUT_PRE_RESULT_RACE_IDENTITY_JOIN",json.dumps({
+       "sourceRaces":len(races),"exactSourceToArchiveMatches":len(resolved),
+       "noIdenticalQuoteEvidence":no_close,"ambiguous":ambiguous,
+       "averageExactRunnerQuotes":round(sum(exact_stats)/len(exact_stats),3) if exact_stats else 0,
+       "exampleSourceIds":[r["id"] for r in races[:3]],
+       "exampleArchiveIds":[r["raceId"] for r in metadata[-3:]]},
+       ensure_ascii=False),flush=True)
+    if len(resolved)<len(races)*.75:
+        raise RuntimeError("SOURCE_TO_ARCHIVE_RACE_IDENTITY_PROOF_INSUFFICIENT")
+    return resolved
 
 def fit_pre_result_horse(X,labels,metadata,offsets,through_year):
     yrs=np.asarray([int(m["date"][:4]) for m in metadata],dtype=np.int16)
@@ -264,7 +318,8 @@ def main():
     base=load("scripts/research-nov2026-sixmarket-real-paid-cash.py","pl_paid_jra_source")
     races,audit=base.read_pinned_csv()
     cash_X,paid_y,ids,mtypes,tickets,_=base.build_actual_payout_rows(races)
-    horse_X,horse_label,off,meta,lookup,missing=historical_horse_features()
+    horse_X,horse_label,off,meta,archived_quotes,missing=historical_horse_features()
+    lookup=join_pre_result_races_by_quoted_horse_vector(races,meta,archived_quotes)
     print("PL_DATA_JOIN",json.dumps({"sourceRaces":len(races),
       "candidateTickets":len(paid_y),"paidTickets":int((paid_y>0).sum()),
       "historicalHorseRaces":len(meta)},ensure_ascii=False),flush=True)
