@@ -226,7 +226,7 @@ def self_test():
     assert result["roiExcludeLargestRaceKeepAllStakePct"]==210
     # Never remove stake with a missed or refunded ticket; never subtract the
     # maximum twice. 200.00 is included, 199.99 fails, hit below 20 fails.
-    gate_ok={**result,"races":500}
+    gate_ok={**result,"races":500,"allEligibleVenueDaysCovered":True}
     assert passes_numeric_gate(gate_ok) is True
     assert not passes_numeric_gate(result), "at least 500 races required"
     for x in ("hitRatePct","roiPct","roiExcludeLargestTicketKeepAllStakePct",
@@ -236,7 +236,8 @@ def self_test():
     print("NOV2026_FRESH_ROBUST_200_MODEL_SELF_TEST_OK",flush=True)
 
 def passes_numeric_gate(result):
-    return (result.get("races",0)>=500
+    return (result.get("allEligibleVenueDaysCovered") is True
+      and result.get("races",0)>=500
       and result.get("hitRatePct",0)>=MIN_HIT_PCT
       and result.get("roiPct",0)>=MIN_ROI_PCT
       and result.get("roiExcludeLargestTicketKeepAllStakePct",0)>=MIN_TRIM_ROI_PCT
@@ -281,6 +282,10 @@ def main():
     score=estimate_payout(X26,metadata,model)
     bets,excluded=select_and_settle(periods[2026],score)
     metrics=summarize(bets)
+    metrics["eligibleVenueDays"]=len(periods[2026])
+    metrics["fullySelectedVenueDays"]=len(bets)//RACE_K
+    metrics["allEligibleVenueDaysCovered"]=(
+      len(bets)==RACE_K*len(periods[2026]) and not excluded)
     months=defaultdict(list)
     for item in bets:months[item["date"][:7]].append(item)
     monthly={}
