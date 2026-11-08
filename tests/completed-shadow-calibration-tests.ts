@@ -104,6 +104,29 @@ assert.equal(roiFirstOfficialShadow(horseNos,weights,rows,
 assert.equal(JSON.stringify(rows), copy);
 assert.deepEqual(chooseCompletedTwoTickets(horseNos,weights,rows),canonical,
   "ROI shadow must not affect canonical public purchases");
+// Exact modeled pair-hurdle regression: each market's highest EV ticket
+// is a rare longshot; their best possible union hit is below 20%.
+// A lower-EV, high-probability alternative must remain eligible so the
+// research optimizer can pair it with the strongest genuine market ticket.
+const frontierRows: OfficialOddsRow[]=[
+  {betType:"単勝",combination:"4",oddsMin:1000,oddsMax:1000},
+  {betType:"単勝",combination:"1",oddsMin:2,oddsMax:2},
+  {betType:"ワイド",combination:"3-4",oddsMin:1000,oddsMax:1000},
+  {betType:"馬連",combination:"3-4",oddsMin:1000,oddsMax:1000},
+  {betType:"馬単",combination:"4-3",oddsMin:1000,oddsMax:1000},
+  {betType:"3連複",combination:"2-3-4",oddsMin:1000,oddsMax:1000},
+  {betType:"3連単",combination:"4-3-2",oddsMin:100000,oddsMax:100000},
+];
+const recovered=roiFirstOfficialShadow([1,2,3,4],[0.65,0.2,0.1,0.05],
+  frontierRows,"2026-11-08T09:15:00+09:00","2026-11-08T09:30:00+09:00");
+assert.ok(recovered,"frontier search must not discard the high-hit alternative");
+assert.ok(recovered!.tickets.some(t=>t.betType==="単勝"&&t.combination==="1"),
+  "the lower-EV single of the favorite should satisfy exact union hit floor");
+assert.ok(recovered!.modeledTwoTicketHitPct>=20);
+assert.equal(new Set(recovered!.tickets.map(t=>t.betType)).size,2);
+assert.equal(recovered!.tickets.reduce((sum,t)=>sum+t.stakeYen,0),2000);
+assert.ok(recovered!.tickets.every(t=>frontierRows.some(r=>
+  r.betType===t.betType&&r.combination===t.combination&&r.oddsMin===t.conservativeOfficialOdds)));
 console.log("COMPLETED_SHADOW_CALIBRATION_OK",JSON.stringify({
   policies:after.map(x=>({policy:x.policy,tickets:x.tickets.map(t=>t.betType+":"+t.combination)})),
   canonicalBets:canonical.map(x=>x.betType+":"+x.combination),
