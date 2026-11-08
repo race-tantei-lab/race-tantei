@@ -1,0 +1,52 @@
+name: Audit November 2026 live model adoption (one indexed read)
+on:
+  push:
+    branches:
+      - audit/verify-nov2026-model-live-20261108
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Read indexed Nov 8 model identity in actual frozen previews/finals
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import urllib.request,json,os,collections
+          a="3c6d1826b573b2e68cb13ec37e9e8ade"
+          d="949b5e8b-d1a4-4c4e-80d1-d031afdc03de"
+          t=os.environ["CLOUDFLARE_API_TOKEN"]
+          sql="""SELECT state_key AS k,
+                  CASE WHEN state_key LIKE 'worker_live_final:%' THEN 'final' ELSE 'preview' END AS kind,
+                  json_extract(state_value,'$.ticketSelectionModel') AS finalModel,
+                  json_extract(state_value,'$.lockedAt') AS lockedAt,
+                  json_extract(state_value,'$.snapshots[0].ticketSelectionModel') AS previewModel,
+                  json_extract(state_value,'$.snapshots[0].ticketSelectionModelFallback') AS previewFallback,
+                  updated_at AS updatedAt
+            FROM rt_system_state
+            WHERE (state_key >= 'worker_live_final:2026-11-08-' AND state_key < 'worker_live_final:2026-11-09-')
+               OR (state_key >= 'worker_live_preview:2026-11-08-' AND state_key < 'worker_live_preview:2026-11-09-')
+            ORDER BY state_key LIMIT 70"""
+          body=json.dumps({"sql":sql,"params":[]}).encode()
+          req=urllib.request.Request(
+            f"https://api.cloudflare.com/client/v4/accounts/{a}/d1/database/{d}/query",
+            data=body,method="POST",
+            headers={"Authorization":"Bearer "+t,"Content-Type":"application/json"})
+          with urllib.request.urlopen(req,timeout=25) as response:
+            doc=json.load(response)
+          if doc.get("success") is not True:
+            raise RuntimeError("D1_TARGETED_MODEL_ID_READ_FAILED:"+str(doc.get("errors"))[:250])
+          rows=(doc.get("result") or [{}])[0].get("results") or []
+          summary=collections.Counter((r["kind"],r.get("finalModel") or r.get("previewModel") or "legacy-unmarked")
+                                      for r in rows)
+          print("NOV2026_ACTUAL_D1_MODEL_IDENTITIES",json.dumps({
+            "examined":len(rows),"modelCounts":[{"kind":k[0],"model":k[1],"n":v} for k,v in sorted(summary.items())],
+            "recent":[{"stateKey":r["k"],"kind":r["kind"],"model":r.get("finalModel") or r.get("previewModel"),
+                 "fallback":r.get("previewFallback"),"lockedAt":r.get("lockedAt"),
+                 "updatedAt":r["updatedAt"]} for r in rows[-20:]]
+          },ensure_ascii=False))
+          PY
