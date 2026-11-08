@@ -32,13 +32,13 @@ jobs:
         run: |
           python -m py_compile scripts/research-frozen-market-residual-2026.py
           python scripts/research-frozen-market-residual-2026.py --self-test
-      - name: Evaluate unchanged 2025 model hypothesis on real 2026 Aug-Nov JRA payout
+      - name: Evaluate unchanged 2025 model hypothesis on real 2026 Jan-Aug 9 JRA payout
         run: python -u scripts/research-frozen-market-residual-2026.py
       - name: Preserve proof or failure of independent year's hit and real payout ROI
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: frozen-2025-market-residual-retested-2026-real-JRA-payout
-          path: analysis-results/2026-forward-2025-frozen-market-residual-JRA.json
+          path: analysis-results/2026-janaug-frozen-2025-market-residual-JRA.json
           if-no-files-found: warn
           retention-days: 30
