@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Flexible, label-blind JRA portfolio policy search.
 
-Unconstrained research dimensions: 0..12 races per venue-day, 1..24 tickets
+Unconstrained research dimensions: 0..12 races per venue-day, 1..64+ tickets
 per race, one or multiple bet types/combinations, all nonempty subsets of
-the six markets, 100..50,000 yen race budget, multiple stake allocations,
+the six markets, 100..300,000 yen nominal race budget and dynamic scaling, multiple stake allocations,
 probability/conditional-payout ranking styles and pre-result abstention.
 Do not hardcode 5 races / 2 tickets / 1,900+100 / a single market combination.
 
@@ -28,11 +28,12 @@ from typing import Any
 MARKETS=("単勝","ワイド","馬連","馬単","3連複","3連単")
 RANK_MODES=("expected","safer","longshot","hit","logvalue","convex")
 RACE_COUNTS=(0,1,2,3,4,5,7,9,12)  # zero means all signals above threshold
-TICKET_COUNTS=(1,2,3,4,6,8,12,16,24)
-BET_BUDGETS=(100,300,500,1000,2000,5000,10000,20000,50000)
+TICKET_COUNTS=(1,2,3,4,6,8,12,16,24,32,48,64)
+BET_BUDGETS=(100,300,500,1000,2000,5000,10000,20000,50000,100000,300000)
 STAKES=("equal","score","score_squared","topheavy","probability")
-MARKET_CAPS=(1,2,4,32)
+MARKET_CAPS=(1,2,4,8,16,64)
 EV_THRESHOLDS=(0.0,0.8,1.0,1.2,1.5,2.0)
+RACE_BUDGET_MODES=("flat","proportional_ev","square_root_ev","stepwise_ev")
 SEED=20261108
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ class Policy:
     stake_mode:str
     races_per_venue_day:int
     min_expected_ev:float
+    race_budget_mode:str="flat"
 
 def market_allowed(mask:int,kind:str)->bool:
     return bool(mask & (1<<MARKETS.index(kind)))
@@ -60,9 +62,10 @@ def all_policies(limit:int=5000,seed:int=SEED)->list[Policy]:
         per=rng.choice(MARKET_CAPS)
         count=rng.choice(TICKET_COUNTS)
         b=rng.choice(BET_BUDGETS)
-        if count>min(24,per*mask.bit_count()) or b<100*count:return None
+        if count>min(64,per*mask.bit_count()) or b<100*count:return None
         return Policy(mode,mask,per,count,b,rng.choice(STAKES),
-                      rng.choice(RACE_COUNTS),rng.choice(EV_THRESHOLDS))
+                      rng.choice(RACE_COUNTS),rng.choice(EV_THRESHOLDS),
+                      rng.choice(RACE_BUDGET_MODES))
     # Anchors guarantee interpretation of all counts, bankrolls, stake methods,
     # all six markets and long-shot abstention regardless of random sampling.
     for count in TICKET_COUNTS:
@@ -154,8 +157,20 @@ def allocate_stakes(chosen:list[tuple[float,dict[str,Any]]],p:Policy)->list[int]
 def one_race(race:dict[str,Any],candidates:list[dict[str,Any]],p:Policy):
     picked=candidate_choices(candidates,p)
     if not picked:return None
-    st=allocate_stakes(picked,p)
-    expected=sum(c["riskAdjustedE"]*s for (_,c),s in zip(picked,st))/p.budget
+    # The race bankroll is also a search dimension. Scaling uses ONLY the
+    # fitted-model expected returns, never target JRA payouts or results.
+    market_ev=sum(float(c["riskAdjustedE"]) for _,c in picked)/len(picked)
+    factor=max(0.25,min(4.0,market_ev))
+    if p.race_budget_mode=="flat":factor=1.
+    elif p.race_budget_mode=="proportional_ev":pass
+    elif p.race_budget_mode=="square_root_ev":factor=math.sqrt(factor)
+    elif p.race_budget_mode=="stepwise_ev":factor=0.5 if market_ev<1 else (1 if market_ev<1.3 else 3)
+    else:raise ValueError("UNRECOGNIZED_RACE_BUDGET_MODE")
+    actual_budget=max(p.ticket_count*100,100*round(p.budget*factor/100))
+    from dataclasses import replace
+    sized=replace(p,budget=int(actual_budget))
+    st=allocate_stakes(picked,sized)
+    expected=sum(c["riskAdjustedE"]*s for (_,c),s in zip(picked,st))/actual_budget
     if expected<p.min_expected_ev:return None
     # PRE-RESULT DATA WALL: from this point all selection/ranking is frozen.
     ticket_results=[]
@@ -169,7 +184,7 @@ def one_race(race:dict[str,Any],candidates:list[dict[str,Any]],p:Policy):
     return {
       "raceId":str(race["raceId"]),"date":str(race["date"]),
       "venue":str(race["venue"]),"raceNo":int(race["raceNo"]),
-      "estimatedEV":float(expected),"stake":p.budget,
+      "estimatedEV":float(expected),"stake":actual_budget,
       "returned":sum(t["returnYen"] for t in ticket_results),
       "hit":int(any(t["returnYen"]>0 for t in ticket_results)),
       "tickets":ticket_results
@@ -296,6 +311,12 @@ def self_test():
     p2=Policy("longshot",3,1,1,100,"equal",2,0)
     records2,_=select(groups,scored,p2)
     assert len(records2)==2 and all(x["stake"]==100 for x in records2)
+    # Vary stake per selected race by model value ONLY. All real stake remains
+    # in ROI denominator, not just successful or larger-budget bets.
+    dynamic=Policy("expected",3,10,6,2000,"equal",2,0,"proportional_ev")
+    variable,_=select(groups,scored,dynamic)
+    assert len(variable)==2 and all(x["stake"]>2000 for x in variable)
+    assert all(sum(t["stakeYen"] for t in r["tickets"])==r["stake"] for r in variable)
     assert not robust_numeric_gate(summarize(records2,1))
     # Never drop the stake for the biggest win.
     huge=dict(z);huge.update({"races":500,"activeVenueDays":100,
