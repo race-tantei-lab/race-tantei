@@ -1,0 +1,47 @@
+name: Train and verify novel six-market payout heads (NO production/D1)
+
+on:
+  push:
+    branches:
+      - research/nov2026-six-market-calibrated-payout-v2
+    paths:
+      - scripts/research-nov2026-sixmarket-hurdle-v2.py
+      - .github/workflows/research-nov2026-sixmarket-hurdle-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+jobs:
+  six-market-ml-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned train-time model dependencies
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'scikit-learn==1.6.1' 'numpy<3' 'joblib==1.4.2'
+      - name: Assert no production D1 token in job environment
+        run: |
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          test -z "${CLOUDFLARE_D1_DATABASE_ID:-}"
+      - name: Train six independently modeled hurdle heads with fake labels for test only
+        run: |
+          python -m py_compile scripts/research-nov2026-sixmarket-hurdle-v2.py
+          python -u scripts/research-nov2026-sixmarket-hurdle-v2.py --self-test
+      - name: Check actual JRA data provenance and mandatory ROI rules
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path("scripts/research-nov2026-sixmarket-hurdle-v2.py").read_text()
+          b=Path("scripts/research-nov2026-fresh-robust200.py").read_text()
+          assert "base.main()" in s and "productionPromotionAllowed" in s
+          for needle in ("roiExcludeLargestTicketKeepAllStakePct",
+                         "roiExcludeLargestRaceKeepAllStakePct",
+                         "allEligibleVenueDaysCovered","MIN_TRIM_ROI_PCT=200.0"):
+              assert needle in b, needle
+          assert "if now.weekday() in (5,6) and now.hour<22" in b
+          assert "UPDATE rt_public_bets" not in s and "INSERT INTO rt_public_bets" not in s
+          print("NOV2026_SIXMARKET_RESEARCH_PROVENANCE_GATE_OK")
+          PY
