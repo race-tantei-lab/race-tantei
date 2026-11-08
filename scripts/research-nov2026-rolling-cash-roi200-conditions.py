@@ -139,6 +139,18 @@ def measure(picks,paid,stake):
       'robust200':bool(n>=100 and hit>=.2 and
         gross-biggest>=2*total_bets and gross-biggestrace>=2*total_bets)}
 
+def halfyear_floor(picks, paid, stake, races):
+    """Pre-registered robustness: require both chronological half-years to survive
+    their own largest winning race; not an extra bet selection after outcomes."""
+    partitions={0:[],1:[]}
+    for p in picks:
+        idx=int(p[2])//1030
+        month=int(races[idx]['month'][4:])
+        partitions[int(month>6)].append(p)
+    audits=[measure(partitions[i],paid,stake) for i in (0,1)]
+    if any(a['races']<50 for a in audits):return None,audits
+    return min(a['minusMaxRacePct'] for a in audits),audits
+
 def main():
     if '--self-test' in sys.argv:
         assert len(PAIRS)==16 and len(TOP_COUNTS)==5
@@ -195,8 +207,11 @@ def main():
         tested+=1
         if stats['races']<100 or stats['hitRacePct']<20:continue
         eligible+=1
-        ranking=(int(stats['robust200']),stats['minusMaxRacePct'],
-                 stats['roiPct'],stats['races'])
+        floor,halves=halfyear_floor(chosen,paid,stake,races)
+        if floor is None:continue
+        # Select the worst half-year, not the lucky full-year windfall.
+        ranking=(int(floor>=200),floor,stats['minusMaxRacePct'],
+                 stats['races'])
         if selected is None or ranking>selected[0]:
             selected=(ranking,policy,stats)
     if selected is None:
@@ -224,6 +239,7 @@ def main():
             'stakeFirstYen':stake,'stakeSecondYen':2000-stake,
             'racesPerVenueDayMax':limit,'twoQualifyingMarketsRequired':needtwo},
           '2024CashPolicySelection':m2024,
+          '2024HalfyearMaxRaceRemovedAudits':halfyear_floor(pick_portfolio(base,year_scored[(2024,h,s,k)],policy),paid,stake,races)[1],
           '2025TrueForward':audit.get('2025'),
           '2026JanAprTrueForward':audit.get('2026'),
           'historicalRuleCountByYear':{
