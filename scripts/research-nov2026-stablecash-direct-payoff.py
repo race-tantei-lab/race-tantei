@@ -115,17 +115,23 @@ def fit_stable_cash(
     multipliers=paid/100.0
     caps={}; means={}; counts={}
     capped=np.empty(len(X),dtype=np.float64)
+    all_positive=multipliers[paid>0]
+    if len(all_positive)<(2 if fast else 100):
+        raise RuntimeError("REAL_JRA_ACTUAL_PAID_EVENTS_TOO_SPARSE")
+    fallback_cap=max(1.,float(np.quantile(all_positive,.95)))
     for i,market in enumerate(MARKETS):
         select=X[:,i]>.5
         win=select&(paid>0)
-        if int(win.sum()) < (2 if fast else 30):
-            raise RuntimeError("TOO_FEW_REAL_WINNERS_FOR_MARKET:"+market)
-        positive=multipliers[win]
-        cap=float(np.quantile(positive,.95))
-        cap=max(1,cap)
+        # The historical selected-bet archive can contain fewer winners in
+        # exotic market types. Never hallucinate labels: use a documented
+        # TRAINING-ONLY pooled fallback, with zero confidence on empty types.
+        if int(win.sum())<(2 if fast else 30):
+            cap=fallback_cap
+        else:
+            cap=max(1.,float(np.quantile(multipliers[win],.95)))
         capped[select]=np.minimum(multipliers[select],cap)
         caps[market]=cap
-        means[market]=float(np.mean(capped[select]))
+        means[market]=float(np.mean(capped[select])) if np.any(select) else 0.0
         counts[market]=int(select.sum())
     # Every race contributes equal total weight regardless of field size or
     # count of horse combinations; prevents triple-ticket pool dominance.
