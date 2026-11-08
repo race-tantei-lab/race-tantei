@@ -91,14 +91,20 @@ def all_runner_money_dataset(X,winners,counts,offsets,odds,metadata):
         raw=odds[ridx]
         if len(raw)!=int(counts[ridx]):raise ValueError("SINGLE_WIN_MARKET_NOT_ALL_RUNNERS")
         try:
-            arr=np.asarray(raw,dtype=np.float64)
+            all_odds=np.asarray(raw,dtype=np.float64)
         except (ValueError,TypeError):
             continue
-        if not np.isfinite(arr).all() or np.any(arr<1.0) or np.any(arr>9999):
-            continue
-        n=len(arr)
+        wagerable=np.isfinite(all_odds)&(all_odds>=1.0)&(all_odds<=9999)
         w=int(winners[ridx])
-        if not (0<=w<n):raise ValueError("UNIQUE_WINNER_MISSING")
+        if not (0<=w<len(all_odds)):raise ValueError("UNIQUE_WINNER_MISSING")
+        # Missing quotes mean this runner could not be bet on in the
+        # historical snapshot. Exclude THAT runner, not all other horses.
+        # If the eventual winner has no actual quoted odds, no payout
+        # proxy can be constructed, so discard the entire race.
+        if not wagerable[w] or int(wagerable.sum())<3:continue
+        indices=np.flatnonzero(wagerable)
+        arr=all_odds[wagerable]
+        n=len(arr)
         inv=1/arr
         fav=float(np.min(arr))
         book=float(np.sum(inv))
@@ -112,16 +118,16 @@ def all_runner_money_dataset(X,winners,counts,offsets,odds,metadata):
             arr/(fav+1.),
         )).astype(np.float32)
         a,b=int(offsets[ridx]),int(offsets[ridx+1])
-        xx=np.hstack((X[a:b],odds_features))
+        xx=np.hstack((X[a:b][wagerable],odds_features))
         if xx.shape!=(n,64) or not np.isfinite(xx).all():
             raise ValueError("PRODUCED_CASH_FEATURES_INVALID")
         # FINAL odds are a payout proxy; not a verified T-15 actual paid row.
         money=np.zeros(n,dtype=np.float32)
-        money[w]=float(arr[w])    # yen returned per ¥100 stake /100
+        money[indices==w]=float(all_odds[w])    # yen returned per ¥100 stake /100
         features.append(xx)
         paid.append(money)
         race_indices.extend([len(kept)]*n)
-        runner_nos.extend(meta["horseNos"])
+        runner_nos.extend([meta["horseNos"][int(j)] for j in indices])
         priced.extend(arr.tolist())
         kept.append(meta)
     if not features:raise RuntimeError("NO_COMPLETE_ALL_RUNNER_WIN_MARKET")
@@ -178,10 +184,15 @@ def fit_new_money(F,y,race_idx,meta,first_year,last_year,fast=False):
     # a single outlying payout dominating the learned cash expected value.
     cap=float(np.quantile(winners,.95))
     label_cap=np.minimum(yy,cap)
-    dividing=(first_year+last_year+1)//2
-    early=(era<dividing)
+    # Split historical training races by chronological MEDIAN RACE DATE,
+    # not midpoint calendar year. This balances windows even when an older
+    # archive year has many missing final-odds quotes.
+    recorded_days=np.asarray([m["date"] for m in meta])
+    train_days=recorded_days[race_idx[rowmask]]
+    div_day=sorted(set(train_days))[len(set(train_days))//2]
+    early=train_days<div_day
     if early.sum()<(300 if fast else 4000) or (~early).sum()<(300 if fast else 4000):
-        raise ValueError("DISJOINT_MONEY_ERAS_TOO_SHORT")
+        raise ValueError(f"DISJOINT_MONEY_ERAS_TOO_SHORT:{int(early.sum())}:{int((~early).sum())}")
     raw=new_money_estimator("raw",len(xx))
     trim=new_money_estimator("capped",len(xx))
     older=new_money_estimator("era",int(early.sum()))
@@ -401,8 +412,10 @@ def main():
     print("NEW_ALL_RUNNER_WIN_CASH_UNIVERSE",json.dumps({
       "sourceRaces":source_races,
       "eligibleChronologicalRaces":len(counts),
-      "completeFinalOddsRaces":len(eligible),
-      "enumeratedAllRunnerWinTickets":len(y),
+      "racesWithWinnerQuoteAndAtLeastThreeQuotedHorses":len(eligible),
+      "bettableWinTicketCandidatesWithRealFinalQuotes":len(y),
+      "sourceRacesByYear":{str(year):sum(r["date"].startswith(str(year)) for r in eligible)
+                           for year in range(2016,2027)},
       "oldPreselectedTicketRowsUsed":0,
       "sourceOddsFinalNotT15":True,
       "payoutIsFinalOddsProxyNotConfirmedRtPayouts":True,
