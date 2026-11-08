@@ -1,0 +1,30 @@
+name: Audit actual JRA win paid cash vs final odds payout proxy (offline)
+on:
+  push:
+    branches:
+      - research/nov2026-all-runner-direct-cash-unbiased
+    paths:
+      - scripts/research-nov2026-check-final-odds-vs-actual-paid.py
+      - .github/workflows/nov2026-audit-actual-jra-win-payout-odds.yml
+permissions:
+  contents: read
+jobs:
+  audit-win-payout-proxy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compare selected observed JRA winning ticket payouts and recorded odds
+        run: |
+          python -m py_compile scripts/research-nov2026-check-final-odds-vs-actual-paid.py
+          python -u scripts/research-nov2026-check-final-odds-vs-actual-paid.py
+      - name: Archive observed JRA paid versus payout proxy discrepancies
+        uses: actions/upload-artifact@v4
+        with:
+          name: actual-JRA-single-win-payout-odds-audit-2026
+          path: analysis-results/nov2026-final-win-odds-vs-observed-jra-win-payout.json
+          if-no-files-found: error
+          retention-days: 30
