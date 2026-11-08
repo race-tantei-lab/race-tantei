@@ -168,8 +168,23 @@ def main():
             stats['passesConcentrationGate']=(stats['passes2023SupportGate']
                 and stats['minusTwoLargestRacesPct'] is not None
                 and stats['minusTwoLargestRacesPct']>=200)
+            # NEW independent hypothesis: both market legs must generate
+            # positive robust CASH returns on 2023, rather than a single
+            # jackpot-rich market subsidising the second market.
+            # Each leg is staked ¥100 per chosen race; no outcome is used
+            # to select its ticket. 2024+ remains untouched by selection.
+            leg_robust=[]
+            for market in (m1,m2):
+                a,b=int(base.START_MARKET[market]),int(base.START_MARKET[market+1])
+                leg_race=(paid[year_rows,a:b]*chosen[year_rows,a:b]).sum(axis=1,dtype=np.int64)
+                leg_cash=int(leg_race.sum())
+                leg_largest=int(leg_race.max()) if len(leg_race) else 0
+                leg_robust.append(round((leg_cash-leg_largest)/n_races,3) if n_races else 0.)
+            stats['marketLegMinusMaxRaceRoiPct']=leg_robust
+            stats['passesIndependentMarketLegs']=(stats['passesConcentrationGate']
+                and min(leg_robust)>=110.)
             score=(min(q['minusMaxRacePct'] for q in quarter_stats)
-                   if stats['passesConcentrationGate'] else -1.)
+                   if stats['passesIndependentMarketLegs'] else -1.)
             policies.append((score,k,(m1,m2),chosen,stats))
     policies.sort(key=lambda x:x[0],reverse=True)
     best=policies[0] if policies and policies[0][0]>=0 else None
@@ -178,7 +193,7 @@ def main():
        'officialT15Verified':False,'2025And2026PreviouslyInspected':True,
        'trainingYears':'2015-2022','selectionYear':2023,
        'qualifiedConditions':len(candidates),'productionDeployed':False,
-       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionQuarterFloorRaces':20,'selectionScore':'minimum of four 2023 quarter max-race-removed ROIs, requiring 2023 ROI >=200 after excluding TWO largest payout races','selectionPolicyCount':len(policies),'supportedPolicyCount':sum(p[4]['passes2023SupportGate'] for p in policies),'concentrationQualifiedPolicyCount':sum(p[4]['passesConcentrationGate'] for p in policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
+       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionQuarterFloorRaces':20,'selectionScore':'minimum of four 2023 quarter max-race-removed ROIs, requiring 2023 ROI >=200 after excluding TWO largest payout races','selectionPolicyCount':len(policies),'supportedPolicyCount':sum(p[4]['passes2023SupportGate'] for p in policies),'concentrationQualifiedPolicyCount':sum(p[4]['passesConcentrationGate'] for p in policies),'independentMarketLegQualifiedPolicyCount':sum(p[4]['passesIndependentMarketLegs'] for p in policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
     if best:
         _,k,pair,chosen,selection=best
         report['policyInvariantAudit']=audit_policy_invariants(chosen,races)
