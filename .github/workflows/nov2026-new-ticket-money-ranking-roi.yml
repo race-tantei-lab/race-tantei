@@ -1,0 +1,37 @@
+name: NEW direct CASH-return ranking model — 2025 select, 2026 ROI test
+on:
+  push:
+    branches:
+      - research/nov2026-cash-ranked-roi-all-runners
+    paths:
+      - scripts/research-nov2026-money-ranked-direct-roi.py
+      - .github/workflows/nov2026-new-ticket-money-ranking-roi.yml
+
+permissions:
+  contents: read
+
+jobs:
+  train-monetary-return-ranker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install real ticket cash-return learner
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Compile and fit direct paid-return labels in synthetic unit smoke
+        run: |
+          python -m py_compile scripts/research-nov2026-money-ranked-direct-roi.py
+          python -u scripts/research-nov2026-money-ranked-direct-roi.py --self-test
+      - name: Train three financially supervised cash rankers on 2024, search money outcomes 2025, evaluate 2026
+        run: python -u scripts/research-nov2026-money-ranked-direct-roi.py --policy-stride 8 --min-validation-races 150 --min-test-races 150
+      - name: Preserve original-stake ROI, biggest-ticket-removed ROI, 2026 comparisons
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nov2026-new-cash-return-ranker-all-runners-historical-ROI
+          path: analysis-results/nov2026-new-direct-cash-ranking-2026-roi-proxy.json
+          if-no-files-found: warn
+          retention-days: 30
