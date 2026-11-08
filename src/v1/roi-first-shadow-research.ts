@@ -120,17 +120,30 @@ export function roiFirstOfficialShadow(
   }
   const total=probabilities.reduce((sum,p)=>sum+p,0);
   if(!Number.isFinite(total)||Math.abs(total-1)>1e-7)return null;
+  // Evaluate all outcomes only once, rather than repeating the 4,896-
+  // outcome enumeration for each candidate pair on an 18-horse race.
+  // P(A union B) = P(A) + P(B) - P(A intersection B).
+  const hitProbability=chosen.map(()=>0);
+  const intersections=chosen.map(()=>new Float64Array(chosen.length));
+  for(let k=0;k<totalOutcomes.length;k++){
+    const finish=totalOutcomes[k]!,p=probabilities[k]!;
+    const winners:number[]=[];
+    for(let i=0;i<chosen.length;i++){
+      const t=chosen[i]!;
+      if(winning(t.betType,t.horses,finish)){
+        hitProbability[i]+=p;
+        winners.push(i);
+      }
+    }
+    for(let a=0;a<winners.length;a++)for(let b=a+1;b<winners.length;b++)
+      intersections[winners[a]!]![winners[b]!]!+=p;
+  }
   let output:RoiFirstPreT15Shadow|null=null;
   let bestEv=-Infinity;
   for(let i=0;i<chosen.length;i++)for(let j=i+1;j<chosen.length;j++){
     const a=chosen[i]!,b=chosen[j]!;
     if(a.betType===b.betType)continue;
-    let pairHit=0;
-    for(let k=0;k<totalOutcomes.length;k++){
-      const finish=totalOutcomes[k]!;
-      if(winning(a.betType,a.horses,finish)||winning(b.betType,b.horses,finish))
-        pairHit+=probabilities[k]!;
-    }
+    const pairHit=hitProbability[i]!+hitProbability[j]!-intersections[i]![j]!;
     // A floor on the event "at least one of two bets wins", NOT ticket hit.
     if(pairHit*100+1e-9<20)continue;
     // Linear expected-payout optimization under two different mandatory types
