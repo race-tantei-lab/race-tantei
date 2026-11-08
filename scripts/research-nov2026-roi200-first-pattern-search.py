@@ -219,7 +219,7 @@ def best_tickets_per_race(races,ids,types,score,period):
         out[rid]=opts
     return out
 
-def settle(races,top,y,cutoff,maxr,pair=None):
+def settle(races,top,cutoff,maxr,pair=None):
     groups=defaultdict(list)
     for rid,opts in top.items():
         good=[z for z in opts if z[0]>=cutoff]
@@ -315,6 +315,13 @@ def main():
               np.ones(400,dtype=bool),np.arange(400,dtype=np.int32))
         assert summary['totalDistinct2024QualifiedPatternCellsBeforeMinSupport']>0
         assert derived[30]['all'].max()>0
+        sample=[{'id':'r0','month':'202501','day':'202501-venue-day'}]
+        pref={0:[(3.0,0,0),(2.0,7,1),(0.0,28,2)]}
+        picks,days=settle(sample,pref,.25,1,None)
+        assert len(picks)==1 and days==1 and len(picks[0][3])==2
+        picksh,daysh=settle_with_historical_roi200_anchor(
+             sample,pref,.25,1,'wide_fav_two',None)
+        assert len(picksh)==1 and picksh[0][3][1][1]==7
         print('DIRECT_ROI200_FIRST_RULE_DISCOVERY_MONEY_SELFTEST_OK',flush=True)
         return
     started=time.monotonic()
