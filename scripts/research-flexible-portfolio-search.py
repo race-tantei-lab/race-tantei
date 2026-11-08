@@ -19,6 +19,7 @@ from collections import defaultdict, Counter
 from dataclasses import dataclass, replace
 import math
 import random
+import sys
 from typing import Any
 
 MARKETS=("単勝","ワイド","馬連","馬単","3連複","3連単")
