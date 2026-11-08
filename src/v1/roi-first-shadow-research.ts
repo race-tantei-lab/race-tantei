@@ -94,7 +94,7 @@ export function roiFirstOfficialShadow(
     if(!Number.isFinite(p)||p<=0||p>1)continue;
     const proposed:Candidate={betType:row.betType,combination:row.combination,
       modelProbability:p,conservativeOfficialOdds:low,expectedReturnPerYen:p*low,horses};
-    const frontier=best.get(row.betType)??{};
+    const frontier:Frontier=best.get(row.betType)??{};
     if(betterBy(proposed,frontier.ev,c=>c.expectedReturnPerYen))frontier.ev=proposed;
     if(betterBy(proposed,frontier.hit,c=>c.modelProbability))frontier.hit=proposed;
     if(betterBy(proposed,frontier.balanced,
