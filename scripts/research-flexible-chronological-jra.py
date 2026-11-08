@@ -80,7 +80,7 @@ def main():
     parser.add_argument("--self-test",action="store_true")
     parser.add_argument("--actual-jra-2025-2026",action="store_true")
     parser.add_argument("--policies",type=int,default=4000)
-    parser.add_argument("--minimum-races",type=int,default=300)
+    parser.add_argument("--minimum-races",type=int,default=100)
     args=parser.parse_args()
     engine=load("scripts/research-flexible-portfolio-search.py","unrestricted_portfolio")
     if args.self_test:
@@ -105,7 +105,7 @@ def main():
     meta=helper.eligible_metadata(archive)
     if len(meta)!=len(counts) or len(X)!=len(y) or len(y)!=len(t3):
         raise ValueError("ARCHIVE_56_FEATURE_ALIGNMENT_FAILED")
-    # Each month queried once, no synthetic odds and no D1 mutation.
+    # Each historical month queried once, no synthetic odds and no D1 mutation.
     payouts,source_coverage=payouts_mod.official_paid_payouts(helper)
     years={}
     training={}
@@ -133,6 +133,7 @@ def main():
         # The underlying candidate model was trained on 2024 JRA outcomes.
         print("START_2025_MODEL_FOR_POLICY_SEARCH",model_name,flush=True)
         scored25=train_and_score(base,v2,model_name,x24,p24,h24,x25,meta25)
+        engine.clear_rank_cache()
         ranking25=sample_top_policies(engine,years[2025],scored25,policies,args.minimum_races)
         if not ranking25:
             results[model_name]={"status":"NO_2025_POLICY_WITH_ENOUGH_RACES"}
@@ -145,6 +146,7 @@ def main():
         testH=np.concatenate((h24,h25))
         print("START_2026_FROZEN_POLICY_TEST",model_name,flush=True)
         scored26=train_and_score(base,v2,model_name,testX,testP,testH,x26,meta26)
+        engine.clear_rank_cache()
         scored=[]
         for policy,validation in finalists:
             selected,missing=engine.select(years[2026],scored26,policy)
