@@ -1,0 +1,54 @@
+name: New six-market true-payout MONEY learner - chronological ROI experiment
+on:
+  push:
+    branches:
+      - research/nov2026-six-market-public-paid-cash
+    paths:
+      - scripts/research-nov2026-sixmarket-real-paid-cash.py
+      - .github/workflows/nov2026-six-market-public-cash-roi.yml
+permissions:
+  contents: read
+jobs:
+  monetary-payout-six-markets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pin direct-return ML and smoke test six-market payout arithmetic
+        run: |
+          python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+          python -m py_compile scripts/research-nov2026-sixmarket-real-paid-cash.py
+          python -u scripts/research-nov2026-sixmarket-real-paid-cash.py --self-test
+      - name: Get 2024-2026 six-market paid-results CSV from immutable public source (NO D1)
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-archive
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL=https://raw.githubusercontent.com/Kenseimk/keiba-agent/${REF}/data
+          for year in 2024 2025; do
+            for m in $(seq -w 1 12); do
+              target="raceresults_${year}${m}.csv"
+              curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/${target}" "${URL}/${target}"
+            done
+          done
+          for m in 01 02 03; do
+            target="raceresults_2026${m}.csv"
+            curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/${target}" "${URL}/${target}"
+          done
+          test "$(find external-jra-cash-archive -name '*.csv' | wc -l)" -eq 27
+          ls -lh external-jra-cash-archive/raceresults_202601.csv
+      - name: Train cash-return heads from six-market 2024 paid results; 2025 select; 2026 test
+        env:
+          CASH_POLICY_STRIDE: "60"
+        run: python -u scripts/research-nov2026-sixmarket-real-paid-cash.py
+      - name: Store reproducible financial return results (never automatic production deploy)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nov2026-real-sixmarket-paid-cash-model-chronological-roi
+          path: analysis-results/nov2026-sixmarket-public-payout-cash-2025H1-H2-2026.json
+          if-no-files-found: warn
+          retention-days: 30
