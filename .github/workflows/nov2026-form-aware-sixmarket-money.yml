@@ -1,0 +1,54 @@
+name: Direct six-market real-payoff predictor using chronological 56-feature horse form
+on:
+  push:
+    branches:
+      - research/nov2026-form-aware-ticket-cash
+    paths:
+      - scripts/research-nov2026-form-aware-sixmarket-cash.py
+      - .github/workflows/nov2026-form-aware-sixmarket-money.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evaluate-direct-ticket-cash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned monetary machine learning dependencies
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Validate direct-money math
+        run: |
+          python -m py_compile scripts/research-nov2026-form-aware-sixmarket-cash.py
+          python -u scripts/research-nov2026-form-aware-sixmarket-cash.py --self-test
+      - name: Retrieve immutable public finished six-market payout mirror - no D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-archive
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          for year in 2024 2025; do
+            for m in $(seq -w 1 12); do
+              target="raceresults_$year$m.csv"
+              curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/$target" "$URL/$target"
+            done
+          done
+          for m in 01 02 03; do
+            target="raceresults_2026$m.csv"
+            curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/$target" "$URL/$target"
+          done
+          test "$(find external-jra-cash-archive -name '*.csv' | wc -l)" -eq 27
+      - name: Fit form-aware ticket cash model and compute actual-money 2025/2026 ROI
+        run: python -u scripts/research-nov2026-form-aware-sixmarket-cash.py
+      - name: Preserve actual financial report (never auto promote)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: form-aware-independent-ticket-six-market-cash
+          path: analysis-results/nov2026-form-aware-sixmarket-paid-money.json
+          if-no-files-found: warn
+          retention-days: 30
