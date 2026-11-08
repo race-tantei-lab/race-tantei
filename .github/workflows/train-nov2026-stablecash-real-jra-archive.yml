@@ -1,0 +1,40 @@
+name: Train NEW direct-JRA-cash model on REAL 2016-2026 payout archive (no D1)
+on:
+  push:
+    branches:
+      - research/nov2026-direct-cash-tweedie-robust-new-model
+    paths:
+      - scripts/research-nov2026-stablecash-archived-actual-roi.py
+      - scripts/research-nov2026-stablecash-direct-payoff.py
+      - .github/workflows/train-nov2026-stablecash-real-jra-archive.yml
+permissions:
+  contents: read
+jobs:
+  new-direct-cash-real-jra-archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Pin actual direct-cash ML libraries
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Check local archive only, no D1 credentials or current JRA network
+        run: |
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          test -z "${CLOUDFLARE_D1_DATABASE_ID:-}"
+          python -m py_compile scripts/research-nov2026-stablecash-archived-actual-roi.py
+          python -m py_compile scripts/research-nov2026-stablecash-direct-payoff.py
+      - name: Verify that actually paid JRA bet accounting retains the entire original stake
+        run: python -u scripts/research-nov2026-stablecash-archived-actual-roi.py --self-test
+      - name: Fit NEW actual JRA monetary return ML, select 2025, evaluate frozen 2026 ROI
+        run: python -u scripts/research-nov2026-stablecash-archived-actual-roi.py
+      - name: Upload actual JRA ROI and largest-payout-removed result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-stablecash-real-jra-archive-2026-exact-ROI
+          path: analysis-results/nov2026-stablecash-new-model-real-archive-return.json
+          retention-days: 30
+          if-no-files-found: warn
