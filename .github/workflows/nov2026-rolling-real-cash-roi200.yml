@@ -28,10 +28,10 @@ jobs:
             analysis-results/jra-decade-sixmarket-top10-races-v3.json
           key: pinned-thirdparty-jra-2015-2026-ten-runner-six-market-cache-v1
       - name: Rebuild pinned third-party six-market payout cache on cache miss
-        if: ${{ hashFiles('analysis-results/jra-decade-sixmarket-top10-cash-v3.npz', 'analysis-results/jra-decade-sixmarket-top10-races-v3.json') == '' }}
         env:
           PINNED_REF: f552ca8628646f39b05ffdbdc3ab8734939ffd66
         run: |
+          if test -s analysis-results/jra-decade-sixmarket-top10-cash-v3.npz && test -s analysis-results/jra-decade-sixmarket-top10-races-v3.json; then exit 0; fi
           python - <<'PY'
           from pathlib import Path
           from urllib.request import urlretrieve
