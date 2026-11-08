@@ -1,0 +1,42 @@
+name: Offline train new 2026 horse heads (no Cloudflare D1)
+
+on:
+  push:
+    branches:
+      - research/nov2026-robust200-fresh-model-v1
+    paths:
+      - scripts/train-nov2026-new-horse-heads-offline.py
+      - .github/workflows/offline-train-nov2026-new-horse-heads.yml
+
+permissions:
+  contents: read
+
+jobs:
+  offline-new-horse-heads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 46
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install frozen machine learning dependencies
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'scikit-learn==1.6.1' 'numpy<3' 'joblib==1.4.2'
+      - name: Confirm no production credentials are exported
+        run: |
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          test -z "${CLOUDFLARE_D1_DATABASE_ID:-}"
+      - name: Train new chronological win ranking and place models, test 2026
+        run: |
+          python -m py_compile scripts/train-nov2026-new-horse-heads-offline.py
+          python -u scripts/train-nov2026-new-horse-heads-offline.py
+      - name: Freeze genuine trained weights and separate non-ROI evaluation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nov2026-new-fitted-horse-model-no-d1
+          path: |
+            analysis-results/nov2026-new-horse-heads-chronological-2026.json
+            analysis-results/nov2026-new-horse-heads-pre2026.joblib
+          if-no-files-found: warn
+          retention-days: 30
