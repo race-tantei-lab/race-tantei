@@ -226,13 +226,13 @@ def self_test():
     assert result["roiExcludeLargestRaceKeepAllStakePct"]==210
     # Never remove stake with a missed or refunded ticket; never subtract the
     # maximum twice. 200.00 is included, 199.99 fails, hit below 20 fails.
-    assert passes_numeric_gate(result) is True
+    gate_ok={**result,"races":500}
+    assert passes_numeric_gate(gate_ok) is True
+    assert not passes_numeric_gate(result), "at least 500 races required"
     for x in ("hitRatePct","roiPct","roiExcludeLargestTicketKeepAllStakePct",
               "roiExcludeLargestRaceKeepAllStakePct"):
-        bad=dict(result);bad[x]=19.99 if x=="hitRatePct" else 199.99
+        bad=dict(gate_ok);bad[x]=19.99 if x=="hitRatePct" else 199.99
         assert not passes_numeric_gate(bad)
-    assert type_caps(np.array([[1,0,0,0,0,0]]*30,dtype=float),
-                     np.ones(30)*100,np.ones(30)) is not None if False else True
     print("NOV2026_FRESH_ROBUST_200_MODEL_SELF_TEST_OK",flush=True)
 
 def passes_numeric_gate(result):
