@@ -1,0 +1,47 @@
+name: Discover only individual historically ROI200-profitable JRA conditions
+on:
+  push:
+    branches:
+      - research/nov2026-subset-roi-selective-search
+    paths:
+      - scripts/research-nov2026-profitable-individual-rule-subsets.py
+      - .github/workflows/nov2026-individual-profitable-condition-subsets.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cash-roi-condition-shortlist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install numerical monetary audit dependency
+        run: python -m pip install --disable-pip-version-check 'numpy<3'
+      - uses: actions/cache@v4
+        id: payout
+        with:
+          path: |
+            analysis-results/roi200-public-2024-26-categories-v1.npz
+            analysis-results/roi200-public-2024-26-categories-v1.json
+          key: frozen-third-party-sixmarket-sevenhorse-source-v1
+      - name: Confirm immutable historical real payoff data is ready
+        run: |
+          test -s analysis-results/roi200-public-2024-26-categories-v1.npz
+          test -s analysis-results/roi200-public-2024-26-categories-v1.json
+      - name: Cash accounting unit test
+        run: |
+          python -m py_compile scripts/research-nov2026-profitable-individual-rule-subsets.py
+          python -u scripts/research-nov2026-profitable-individual-rule-subsets.py --self-test
+      - name: Mine individually profitable conditions then select only small shortlists by actual ROI
+        run: python -u scripts/research-nov2026-profitable-individual-rule-subsets.py
+      - name: Preserve financial validation only, never promote to production
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: individual-historical-roi200-profitable-shortlist-results
+          path: analysis-results/nov2026-individual-roi200-cash-rule-shortlist.json
+          if-no-files-found: warn
+          retention-days: 30
