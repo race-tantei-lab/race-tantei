@@ -1,0 +1,36 @@
+name: NEW ALL-RUNNER direct CASH ROI model — no prior ticket selection, no D1
+on:
+  push:
+    branches:
+      - research/nov2026-all-runner-direct-cash-unbiased
+    paths:
+      - scripts/research-nov2026-all-runner-direct-money.py
+      - .github/workflows/nov2026-train-all-runner-new-roi-model.yml
+permissions:
+  contents: read
+
+jobs:
+  train-new-money-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned real monetary-value learner
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Compile and unit-test new CASH objective and robust full-stake payout
+        run: |
+          python -m py_compile scripts/research-nov2026-all-runner-direct-money.py
+          python -u scripts/research-nov2026-all-runner-direct-money.py --self-test
+      - name: Fit with every runner; optimize money ROI in 2025; frozen ROI test in 2026
+        run: python -u scripts/research-nov2026-all-runner-direct-money.py
+      - name: Preserve prospective-leakage and real-money limitations with exact ROI outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 2026-new-all-runner-win-cash-model-actual-outcomes-final-odds-proxy
+          path: analysis-results/nov2026-all-runner-new-money-model-2025-selected-2026-proxy.json
+          if-no-files-found: warn
+          retention-days: 30
