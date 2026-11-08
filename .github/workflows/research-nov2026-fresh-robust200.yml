@@ -1,0 +1,86 @@
+name: Research 2026 newly trained robust-200 payout model (no production writes)
+
+on:
+  push:
+    branches:
+      - research/nov2026-robust200-fresh-model-v1
+    paths:
+      - scripts/research-nov2026-fresh-robust200.py
+      - .github/workflows/research-nov2026-fresh-robust200.yml
+  workflow_dispatch:
+    inputs:
+      full_historical:
+        description: "Read actual past JRA payouts only when no active race-day quotas are at risk"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  new-model-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned standalone ML dependencies
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'scikit-learn==1.6.1' 'numpy<3'
+      - name: Syntax and strict 20/200/200 actual-JRA trim-gate unit tests
+        run: |
+          python -m py_compile scripts/research-nov2026-fresh-robust200.py
+          python scripts/research-nov2026-fresh-robust200.py --self-test
+      - name: Explicitly check script cannot touch public bets or synthetic quote results
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/research-nov2026-fresh-robust200.py').read_text()
+          assert 'productionPromotionAllowed":False' in p
+          assert 'largestPaidTicketYen' in p
+          assert 'roiExcludeLargestTicketKeepAllStakePct' in p
+          assert 'roiExcludeLargestRaceKeepAllStakePct' in p
+          assert 'if now.weekday() in (5,6) and now.hour<22' in p
+          for disallowed in ('UPDATE rt_public_bets','DELETE FROM rt_public_bets','INSERT INTO rt_public_bets',
+                             'UPDATE rt_system_state','INSERT INTO rt_system_state'):
+              assert disallowed not in p, disallowed
+          print('NOV26_RESEARCH_PRODUCTION_MUTATION_FORBIDDEN_OK')
+          PY
+
+  full-out-of-year-replay:
+    if: github.event_name == 'workflow_dispatch' && inputs.full_historical == true
+    needs: [new-model-check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 48
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned research training dependencies
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'scikit-learn==1.6.1' 'numpy<3'
+      - name: Never spend D1 budget on the weekend before evening
+        run: |
+          python - <<'PY'
+          import datetime as dt
+          now=dt.datetime.now(dt.timezone(dt.timedelta(hours=9)))
+          if now.weekday() in (5,6) and now.hour<22:
+              raise SystemExit('D1_RESEARCH_BLOCKED_DURING_RACE_DAY')
+          print('NON_WEEKEND_OR_AFTER_JRA_RESEARCH_WINDOW',now.isoformat())
+          PY
+      - name: Train fresh 2024-2025 model and settle independent-year 2026 payouts
+        run: python -u scripts/research-nov2026-fresh-robust200.py
+      - name: Archive exact actual-JRA output and reject premature promotion
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nov2026-new-robust200-horse-payout-model
+          path: analysis-results/nov2026-robust200-fresh-model-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
