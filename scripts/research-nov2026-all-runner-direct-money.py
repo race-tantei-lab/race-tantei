@@ -19,6 +19,7 @@ No API calls, Cloudflare D1 access, production Worker/DB modifications.
 """
 from __future__ import annotations
 from collections import defaultdict
+import argparse
 from dataclasses import dataclass, asdict
 from pathlib import Path
 import importlib.util
@@ -330,13 +331,14 @@ def money_metrics(rows,min_races:int):
     }
 
 
-def select_policy_by_2025(races,models,odds,horseids,race_idx,paid,metadata):
+def select_policy_by_2025(races,models,odds,horseids,race_idx,paid,metadata,stride=1):
     pre=pre_result_candidates(models,odds,race_idx,horseids,metadata,2025)
     best=None
     examined=0
     eligible=0
     top_models=defaultdict(list)
-    for pol in policies():
+    for ix,pol in enumerate(policies()):
+        if ix%stride:continue
         examined+=1
         rows=settle_with_frozen_policy(
             pre[pol.mode],race_idx,horseids,odds,paid,metadata,pol)
@@ -399,6 +401,11 @@ def main():
     if any(os.getenv(z) for z in ("CLOUDFLARE_API_TOKEN",
                                   "CLOUDFLARE_D1_DATABASE_ID")):
         raise RuntimeError("NO_LIVE_D1_SECRETS_FOR_OFFLINE_MODEL")
+    cli=argparse.ArgumentParser()
+    cli.add_argument("--policy-stride",type=int,default=1)
+    args=cli.parse_args()
+    if not 1<=args.policy_stride<=20:
+        raise ValueError("RESEARCH_POLICY_COVERAGE_PARAMETER_INVALID")
     started=time.monotonic()
     hist=module("scripts/postaug-support-chronological-56feature-validation.py",
                 "all_runner_offline_historical")
@@ -423,7 +430,8 @@ def main():
     models25=fit_new_money(F,y,raceidx,eligible,2019,2024)
     predictions25=cash_prediction(models25,F)
     policy,m25,examined,elig_count,model_research=select_policy_by_2025(
-      eligible,predictions25,odds,horseids,raceidx,y,eligible)
+      eligible,predictions25,odds,horseids,raceidx,y,eligible,
+      stride=args.policy_stride)
     print("NEW_ALL_RUNNER_CASH_2025_FROZEN",json.dumps({
       "policy":asdict(policy),"money":{k:v for k,v in m25.items() if k!="months"},
       "sampled":examined,"eligible":elig_count},ensure_ascii=False),flush=True)
@@ -449,6 +457,8 @@ def main():
       "monetaryModelAlternatives":list(MODEL_MODES),
       "other2025MonetaryModels":model_research,
       "2025PoliciesScored":examined,
+      "2025PolicyStride":args.policy_stride,
+      "monetarySearchPolicySelection2025Only":True,
       "2025PoliciesWithAtLeast500Bets":elig_count,
       "2026PayoutModelRetrainThrough":"2025-12-31",
       "2026Result":{"actualWinPayoutsVerified":False,"roiMetrics":m26},
