@@ -26,7 +26,7 @@ jobs:
           python -m py_compile scripts/research-nov2026-money-ranked-direct-roi.py
           python -u scripts/research-nov2026-money-ranked-direct-roi.py --self-test
       - name: Train three financially supervised cash rankers on 2024, search money outcomes 2025, evaluate 2026
-        run: python -u scripts/research-nov2026-money-ranked-direct-roi.py --policy-stride 8
+        run: python -u scripts/research-nov2026-money-ranked-direct-roi.py --policy-stride 8 --min-validation-races 150 --min-test-races 150
       - name: Preserve original-stake ROI, biggest-ticket-removed ROI, 2026 comparisons
         if: always()
         uses: actions/upload-artifact@v4
