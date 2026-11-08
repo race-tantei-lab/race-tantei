@@ -163,7 +163,7 @@ def mine_roi200_rules(types,cat,y,train,all_year_indices):
             group_max_count=max(group_max_count,int(np.max(cnt[pass200&(cnt>=30)])))
         for limit in MIN_GROUP_TICKETS:
             valid=pass200&(cnt>=limit)
-            valid&=(winning>=2 if limit==30 else 3 if limit==60 else 4 if limit==120 else 6)
+            valid &= (winning >= (2 if limit==30 else 3 if limit==60 else 4 if limit==120 else 6))
             size=int(valid.sum())
             if not size:continue
             accepted[(limit,len(fields)-1)]+=size
@@ -277,6 +277,14 @@ def main():
         result=financial_audit(a,1)
         assert result['returnsYen']==5000 and result['stakesYen']==2000
         assert result['roiMinusLargestTicketPct']==100.
+        cats={k:np.zeros(400,dtype=np.uint16 if width>255 else np.uint8)
+              for k,width in {**BASE_FEATURES,**CONTEXT_FEATURES}.items()}
+        p=np.zeros(400,dtype=np.int8)
+        payments=np.full(400,500,dtype=np.int32)
+        derived,summary=mine_roi200_rules(p,cats,payments,
+              np.ones(400,dtype=bool),np.arange(400,dtype=np.int32))
+        assert summary['totalDistinct2024QualifiedPatternCellsBeforeMinSupport']>0
+        assert derived[30]['all'].max()>0
         print('DIRECT_ROI200_FIRST_RULE_DISCOVERY_MONEY_SELFTEST_OK',flush=True)
         return
     started=time.monotonic()
