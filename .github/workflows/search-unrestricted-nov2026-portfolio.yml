@@ -1,0 +1,40 @@
+name: Search unrestricted JRA portfolio policies (offline, no D1)
+on:
+  push:
+    branches:
+      - research/nov2026-open-search-any-races-tickets-stakes
+    paths:
+      - scripts/research-flexible-portfolio-search.py
+      - scripts/research-flexible-chronological-jra.py
+      - .github/workflows/search-unrestricted-nov2026-portfolio.yml
+permissions:
+  contents: read
+jobs:
+  unrestricted-policy-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test arbitrary venue-day race counts, ticket counts, stakes and trimmed ROI
+        run: |
+          python -m py_compile scripts/research-flexible-portfolio-search.py scripts/research-flexible-chronological-jra.py
+          python -u scripts/research-flexible-portfolio-search.py --self-test
+          python -u scripts/research-flexible-chronological-jra.py --self-test
+      - name: Assert time-ordered and original-denominator ROI gates
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('scripts/research-flexible-portfolio-search.py').read_text()
+          for condition in ('range(1,13)', 'TICKET_COUNTS=tuple(range(1,65))',
+            'BET_BUDGETS=(100,300,500,1000,2000,5000,10000,20000,50000,100000,300000)',
+            'top<=big<=got', 'got-big', 'got-top', 'hitRacePct', 'races_per_venue_day'):
+              assert condition in s,condition
+          assert 'INSERT INTO rt_public_bets' not in s
+          assert 'RACE_BUDGET_MODES' in s
+          assert 'RACE_FILTERS' in s
+          assert 'RACE_COUNTS=tuple(range(13))' in s
+          print("UNRESTRICTED_MODEL_NO_FIXED_5R_2BET_1000_YEN_AND_PAYOFF_GATE_OK")
+          PY
