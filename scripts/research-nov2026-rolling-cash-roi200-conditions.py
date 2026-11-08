@@ -67,7 +67,8 @@ def rules_lookback(source,paid,feat,years,target,horizon,support):
                     counts[index]/(counts[index]+90))*
                     positive_counts[index]/(positive_counts[index]+5))
             conditions.append((value,pattern,int(index),
-                     int(counts[index]),float(robust[index])))
+                     int(counts[index]),float(robust[index]),
+                     int(positive_counts[index])))
     conditions.sort(key=lambda r:(-r[0],-r[3]))
     return conditions
 
@@ -76,7 +77,7 @@ def scored_year(source,feat,conditions,years,target,top_k):
     if not len(row):return None
     all_scores=np.zeros((len(row),source.N),dtype=np.float32)
     fields={key:value[row] for key,value in feat.items()}
-    for q,pattern,code,_,_ in conditions[:top_k]:
+    for q,pattern,code,_,_,__ in conditions[:top_k]:
         g,_=source.mixed_code(fields,pattern)
         np.maximum(all_scores,np.where(g==code,q,0).astype(np.float32),
                    out=all_scores)
@@ -161,22 +162,27 @@ def main():
     year_rules={}
     year_scored={}
     for target in (2024,2025,2026):
-        for horizon,support in product(HORIZONS,SUPPORTS):
-            selected=rules_lookback(base,paid,feat,years,target,horizon,support)
-            year_rules[(target,horizon,support)]=selected
-            print('ROLLING_CASH_ROI200_CONDITION_SET',json.dumps({
-              'targetYear':target,'lookbackYears':horizon,
-              'minPaidTicketSamples':support,
-              'historicallyProfitableCellCount':len(selected),
-              'topRule':selected[0] if selected else None},
-               ensure_ascii=False),flush=True)
-            if not selected:continue
-            for k in TOP_COUNTS:
-                s=scored_year(base,feat,selected,years,target,k)
-                if s is None:continue
-                signal,row=s
-                year_scored[(target,horizon,support,k)]=race_choices(
-                    base,signal,row,races,target)
+        for horizon in HORIZONS:
+            # Mine all genuine cash ROI200 cells ONCE per historical window,
+            # then apply support filters without repeating 83 category scans.
+            baseline=rules_lookback(base,paid,feat,years,target,horizon,30)
+            for support in SUPPORTS:
+                selected=[q for q in baseline if q[3]>=support and
+                    q[5]>=max(3,support//35)]
+                year_rules[(target,horizon,support)]=selected
+                print('ROLLING_CASH_ROI200_CONDITION_SET',json.dumps({
+                  'targetYear':target,'lookbackYears':horizon,
+                  'minPaidTicketSamples':support,
+                  'historicallyProfitableCellCount':len(selected),
+                  'topRule':selected[0] if selected else None},
+                   ensure_ascii=False),flush=True)
+                if not selected:continue
+                for k in TOP_COUNTS:
+                    s=scored_year(base,feat,selected,years,target,k)
+                    if s is None:continue
+                    signal,row=s
+                    year_scored[(target,horizon,support,k)]=race_choices(
+                        base,signal,row,races,target)
     selected=None;tested=0;eligible=0
     for horizon,support,k,pair,stake,limit,needtwo in product(
           HORIZONS,SUPPORTS,TOP_COUNTS,PAIRS,STAKES,RACES_PER_DAY,
