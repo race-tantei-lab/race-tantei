@@ -27,13 +27,17 @@ from typing import Any
 
 MARKETS=("単勝","ワイド","馬連","馬単","3連複","3連単")
 RANK_MODES=("expected","safer","longshot","hit","logvalue","convex")
-RACE_COUNTS=(0,1,2,3,4,5,7,9,12)  # zero means all signals above threshold
-TICKET_COUNTS=(1,2,3,4,6,8,12,16,24,32,48,64)
+RACE_COUNTS=tuple(range(13))  # zero means all signals above threshold
+TICKET_COUNTS=tuple(range(1,65))
 BET_BUDGETS=(100,300,500,1000,2000,5000,10000,20000,50000,100000,300000)
 STAKES=("equal","score","score_squared","topheavy","probability")
 MARKET_CAPS=(1,2,4,8,16,64)
 EV_THRESHOLDS=(0.0,0.8,1.0,1.2,1.5,2.0)
 RACE_BUDGET_MODES=("flat","proportional_ev","square_root_ev","stepwise_ev")
+VENUES=("札幌","函館","福島","新潟","東京","中山","中京","京都","阪神","小倉")
+RACE_FILTERS=("all","field_le10","field_gt10","early_1_6","late_7_12",
+  "turf","dirt","sprint_lt1600","middle_1600_2000","stayer_gt2000")+tuple("venue:"+x for x in VENUES)
+ANCHOR_TICKET_COUNTS=(1,2,3,4,6,8,12,16,24,32,48,64)
 SEED=20261108
 
 @dataclass(frozen=True)
@@ -47,6 +51,7 @@ class Policy:
     races_per_venue_day:int
     min_expected_ev:float
     race_budget_mode:str="flat"
+    race_filter:str="all"
 
 def market_allowed(mask:int,kind:str)->bool:
     return bool(mask & (1<<MARKETS.index(kind)))
@@ -65,17 +70,18 @@ def all_policies(limit:int=5000,seed:int=SEED)->list[Policy]:
         if count>min(64,per*mask.bit_count()) or b<100*count:return None
         return Policy(mode,mask,per,count,b,rng.choice(STAKES),
                       rng.choice(RACE_COUNTS),rng.choice(EV_THRESHOLDS),
-                      rng.choice(RACE_BUDGET_MODES))
+                      rng.choice(RACE_BUDGET_MODES),rng.choice(RACE_FILTERS))
     # Anchors guarantee interpretation of all counts, bankrolls, stake methods,
     # all six markets and long-shot abstention regardless of random sampling.
-    for count in TICKET_COUNTS:
+    anchor_cap=max(1,limit//5)  # leave >=80% for broad random hypotheses
+    for count in ANCHOR_TICKET_COUNTS:
         for racecount in RACE_COUNTS:
             for stake in STAKES:
                 for budget in BET_BUDGETS:
                     if budget>=100*count:
                         configs.add(Policy("expected",63,32,count,budget,
                                            stake,racecount,0.0))
-                        if len(configs)>=limit:break
+                        if len(configs)>=anchor_cap:break
                 if len(configs)>=limit:break
             if len(configs)>=limit:break
         if len(configs)>=limit:break
@@ -154,7 +160,26 @@ def allocate_stakes(chosen:list[tuple[float,dict[str,Any]]],p:Policy)->list[int]
         raise AssertionError("BET_BUDGET_NOT_CONSERVED")
     return stakes
 
+def race_filter_passes(race:dict[str,Any],filt:str)->bool:
+    if filt=="all":return True
+    if filt.startswith("venue:"):return str(race.get("venue"))==filt.split(":",1)[1]
+    no=int(race["raceNo"])
+    n=len(race.get("horses",())) or int(race.get("fieldSize",0) or 0)
+    surface=str(race.get("surface") or "").lower()
+    distance=int(race.get("distanceM") or 0)
+    if filt=="early_1_6":return no<=6
+    if filt=="late_7_12":return no>=7
+    if filt=="field_le10":return 0<n<=10
+    if filt=="field_gt10":return n>10
+    if filt=="turf":return surface in ("芝","turf")
+    if filt=="dirt":return surface in ("ダート","dirt")
+    if filt=="sprint_lt1600":return 0<distance<1600
+    if filt=="middle_1600_2000":return 1600<=distance<=2000
+    if filt=="stayer_gt2000":return distance>2000
+    raise ValueError("UNKNOWN_PRE_RACE_REGIME_FILTER")
+
 def one_race(race:dict[str,Any],candidates:list[dict[str,Any]],p:Policy):
+    if not race_filter_passes(race,p.race_filter):return None
     picked=candidate_choices(candidates,p)
     if not picked:return None
     # The race bankroll is also a search dimension. Scaling uses ONLY the
@@ -311,6 +336,11 @@ def self_test():
     p2=Policy("longshot",3,1,1,100,"equal",2,0)
     records2,_=select(groups,scored,p2)
     assert len(records2)==2 and all(x["stake"]==100 for x in records2)
+    narrow=Policy("expected",3,10,2,500,"equal",0,0,"flat","late_7_12")
+    late,_=select(groups,scored,narrow)
+    assert len(late)==6 and all(row["raceNo"]>=7 for row in late)
+    assert not race_filter_passes(groups[day][0],"venue:京都")
+    assert race_filter_passes(groups[day][0],"venue:中山")
     # Vary stake per selected race by model value ONLY. All real stake remains
     # in ROI denominator, not just successful or larger-budget bets.
     dynamic=Policy("expected",3,10,6,2000,"equal",2,0,"proportional_ev")
