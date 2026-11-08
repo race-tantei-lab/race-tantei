@@ -30,6 +30,16 @@ const TYPES = new Set<CompletedBetType>(COMPLETED_BET_ORDER);
 const UNORDERED = new Set<CompletedBetType>(["ワイド", "馬連", "3連複"]);
 const JRA_T15_MS=15*60*1000;
 
+// Highest-EV ticket per market can fail the union hit floor even when a
+// lower-EV alternative permits a better legal two-market portfolio.
+type Frontier={ ev?:Candidate; hit?:Candidate; balanced?:Candidate };
+function betterBy(candidate:Candidate, existing:Candidate|undefined,
+  score:(c:Candidate)=>number):boolean {
+  if(!existing)return true;
+  const a=score(candidate),b=score(existing);
+  return a>b||(a===b&&candidate.combination<existing.combination);
+}
+
 function winning(kind:CompletedBetType, selected:readonly number[], top3:readonly number[]):boolean {
   if(kind==="単勝")return selected[0]===top3[0];
   if(kind==="馬単")return selected[0]===top3[0]&&selected[1]===top3[1];
@@ -66,7 +76,7 @@ export function roiFirstOfficialShadow(
       ||Math.abs(weights.reduce((a,b)=>a+b,0)-1)>1e-9
       ||oddsRows.length>12000)return null;
   const indexes=new Map(horseNos.map((x,i)=>[x,i]));
-  const best=new Map<CompletedBetType,Candidate>();
+  const best=new Map<CompletedBetType,Frontier>();
   const seen=new Set<string>();
   for(const row of oddsRows) {
     if(!TYPES.has(row.betType))continue;
@@ -84,14 +94,20 @@ export function roiFirstOfficialShadow(
     if(!Number.isFinite(p)||p<=0||p>1)continue;
     const proposed:Candidate={betType:row.betType,combination:row.combination,
       modelProbability:p,conservativeOfficialOdds:low,expectedReturnPerYen:p*low,horses};
-    const existing=best.get(row.betType);
-    if(!existing||proposed.expectedReturnPerYen>existing.expectedReturnPerYen
-      ||(proposed.expectedReturnPerYen===existing.expectedReturnPerYen
-        &&proposed.combination<existing.combination))best.set(row.betType,proposed);
+    const frontier=best.get(row.betType)??{};
+    if(betterBy(proposed,frontier.ev,c=>c.expectedReturnPerYen))frontier.ev=proposed;
+    if(betterBy(proposed,frontier.hit,c=>c.modelProbability))frontier.hit=proposed;
+    if(betterBy(proposed,frontier.balanced,
+       c=>c.expectedReturnPerYen*Math.sqrt(c.modelProbability)))frontier.balanced=proposed;
+    best.set(row.betType,frontier);
   }
   // Only true 6-market snapshots can qualify; never invent missing official odds.
   if(best.size!==COMPLETED_BET_ORDER.length)return null;
-  const chosen=COMPLETED_BET_ORDER.map(t=>best.get(t)!);
+  const chosen=COMPLETED_BET_ORDER.flatMap(t=>{
+    const f=best.get(t)!;
+    const three=[f.ev!,f.hit!,f.balanced!];
+    return three.filter((c,i)=>three.findIndex(x=>x.combination===c.combination)===i);
+  });
   const totalOutcomes:number[][]=[];
   const probabilities:number[]=[];
   for(let a=0;a<weights.length;a++)for(let b=0;b<weights.length;b++){
@@ -108,6 +124,7 @@ export function roiFirstOfficialShadow(
   let bestEv=-Infinity;
   for(let i=0;i<chosen.length;i++)for(let j=i+1;j<chosen.length;j++){
     const a=chosen[i]!,b=chosen[j]!;
+    if(a.betType===b.betType)continue;
     let pairHit=0;
     for(let k=0;k<totalOutcomes.length;k++){
       const finish=totalOutcomes[k]!;
