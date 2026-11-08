@@ -3,7 +3,7 @@ name: Train and verify novel six-market payout heads (NO production/D1)
 on:
   push:
     branches:
-      - research/nov2026-six-market-calibrated-payout-v2
+      - research/nov2026-sixmarket-v2-integration
     paths:
       - scripts/research-nov2026-sixmarket-hurdle-v2.py
       - .github/workflows/research-nov2026-sixmarket-hurdle-v2.yml
