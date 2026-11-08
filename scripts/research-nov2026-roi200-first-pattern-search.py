@@ -202,7 +202,7 @@ def mine_roi200_rules(types,cat,y,train,all_year_indices):
         '2025Or2026OutcomeLabelsSeenDuringMining':False}
     return scores,summary
 
-def best_tickets_per_race(races,ids,types,tickets,y,score,period):
+def best_tickets_per_race(races,ids,types,score,period):
     # Score is computed ONLY from financially qualifying 2024 condition cells.
     # No 2025/26 target payout is read until AFTER ticket/race choice.
     out={}
@@ -237,9 +237,39 @@ def settle(races,top,y,cutoff,maxr,pair=None):
         rows.extend(choices[:maxr])
     return rows,len(groups)
 
+HEDGES={
+    'win_favorite':(0,0),'win_second':(1,0),
+    'wide_fav_two':(7,1),'wide_fav_third':(8,1),
+    'wide_second_third':(13,1),'quinella_favorite':(28,2),
+    'exacta_favorite':(49,3),'trio_favorite':(91,4),
+}
+
+def settle_with_historical_roi200_anchor(
+        races,top,cutoff,maxr,hedge,main_market=None):
+    """Two different markets. First ticket MUST satisfy a historical ROI200
+    group. Second ticket is a fixed pre-result popular anchor, so its
+    inclusion is evaluated as PART OF THE PORTFOLIO actual money rule.
+    Anchor is NEVER chosen with settled results or hindsight.
+    """
+    offs,hedge_market=HEDGES[hedge]
+    groups=defaultdict(list)
+    for rid,opts in top.items():
+        choices=[p for p in opts if p[0]>=cutoff
+                 and p[2]!=hedge_market and
+                 (main_market is None or p[2]==main_market)]
+        if not choices:continue
+        first=choices[0]
+        other=(0.,rid*336+offs,hedge_market)
+        r=races[rid]
+        groups[r['day']].append((first[0],r['id'],r['month'],[first,other]))
+    rows=[]
+    for day,options in groups.items():
+        options.sort(key=lambda x:(-x[0],x[1]))
+        rows.extend(options[:maxr])
+    return rows,len(groups)
+
 def financial_audit(rows,days):
     n=len(rows);stake=n*2000
-    actual_paid=[sum(int(y_item)*10 for y_item in row[3]) for row in []]  # placeholder unused
     # Rows hold labels only once selected; actual amount is attached by caller.
     paid=[r[-1] for r in rows]
     gross=sum(paid)
@@ -288,14 +318,31 @@ def main():
         print('DIRECT_ROI200_FIRST_RULE_DISCOVERY_MONEY_SELFTEST_OK',flush=True)
         return
     started=time.monotonic()
-    source=load('scripts/research-nov2026-sixmarket-real-paid-cash.py',
+    cache_data=ROOT/'analysis-results/roi200-public-2024-26-categories-v1.npz'
+    cache_meta=ROOT/'analysis-results/roi200-public-2024-26-categories-v1.json'
+    if cache_data.exists() and cache_meta.exists():
+        source=json.loads(cache_meta.read_text(encoding='utf8'))
+        races=source['races'];audit=source['audit']
+        with np.load(cache_data,allow_pickle=False) as blob:
+            y=blob['y'];ids=blob['ids'];types=blob['types']
+            cat={k:blob['cat_'+k] for k in {**BASE_FEATURES,**CONTEXT_FEATURES}}
+        print('ROI_FIRST_FULL_PRE_RESULT_CACHE_HIT',len(y),flush=True)
+    else:
+        original=load('scripts/research-nov2026-sixmarket-real-paid-cash.py',
                 'direct_financial_pattern_source')
-    source.TOP_HORSES=7
-    races,audit=source.read_pinned_csv()
-    X,y,ids,types,tickets,w=source.build_actual_payout_rows(races)
+        original.TOP_HORSES=7
+        races,audit=original.read_pinned_csv()
+        X,y,ids,types,tickets,w=original.build_actual_payout_rows(races)
+        cat=categoricals(races,X,ids,types,tickets)
+        cache_data.parent.mkdir(parents=True,exist_ok=True)
+        np.savez_compressed(cache_data,y=y,ids=ids,types=types,
+              **{'cat_'+k:v for k,v in cat.items()})
+        cache_meta.write_text(json.dumps({'races':[
+           {'id':r['id'],'month':r['month'],'day':r['day']} for r in races],
+           'audit':audit},ensure_ascii=False),encoding='utf8')
+        print('ROI_FIRST_SOURCE_CACHE_PREPARED',len(y),flush=True)
     months=np.asarray([r['month'] for r in races])
     train=(months[ids]<'202501')
-    cat=categoricals(races,X,ids,types,tickets)
     print('DIRECT_CASH_PATTERN_INPUT',json.dumps({
         'allPaidRaces':len(races),'allIndependentTickets':len(y),
         '2024TrainingTickets':int(train.sum()),'featureNames':list(cat),
@@ -316,34 +363,73 @@ def main():
             for period in (('202501','202507'),('202507','202601'),
                            ('202601','202604')):
                 cached[(minimum,scope,period)]=best_tickets_per_race(
-                    races,ids,types,tickets,y,score,period)
-    for minimum,scope,threshold,maxr,pair in product(
-        MIN_GROUP_TICKETS,('broad','context','all'),
-        (0.1,.25,.5,1.,2.,3.,5.),(1,2,3,5),
-        (None,)+PAIR_TYPES):
-        period=('202501','202507')
-        key=(minimum,scope,period)
+                    races,ids,types,score,period)
+    best_any=None;more_than100=0;maxhit=0.
+    for minimum,scope,threshold,maxr in product(
+         MIN_GROUP_TICKETS,('broad','context','all'),
+         (.04,.08,.15,.3,.6,1.2,2.5),(1,2,3,5)):
+        key=(minimum,scope,('202501','202507'))
         if key not in cached:continue
-        rows,days=settle(races,cached[key],threshold,maxr,pair)
-        m=financial_audit(paid_after_fixed_choices(rows,y),days)
-        tested+=1
-        if m['races']<100 or m['hitRacePct']<20:continue
-        qualified+=1
-        rank=(int(m['passesRobust200And20Hit']),
-              m['roiMinusLargestRacePct'],m['roiPct'],m['races'])
-        if selected is None or rank>selected[0]:
-            selected=(rank,minimum,scope,threshold,maxr,pair,m)
+        for mode,option in [('two_roi200',p) for p in (None,)+PAIR_TYPES]+[
+              ('hedge_'+name,anchor)
+              for name in HEDGES for anchor in (None,0,1,2,3,4,5)]:
+            if mode=='two_roi200':
+                rows,days=settle(races,cached[key],threshold,maxr,option)
+            else:
+                if option==HEDGES[mode.removeprefix('hedge_')][1]:continue
+                rows,days=settle_with_historical_roi200_anchor(
+                     races,cached[key],threshold,maxr,
+                     mode.removeprefix('hedge_'),option)
+            m=financial_audit(paid_after_fixed_choices(rows,y),days)
+            tested+=1
+            if m['races']>=100:
+                more_than100+=1
+                maxhit=max(maxhit,m['hitRacePct'])
+                rank_any=(m['roiMinusLargestRacePct'],m['roiPct'],
+                          m['hitRacePct'],m['races'])
+                if best_any is None or rank_any>best_any[0]:
+                    best_any=(rank_any,minimum,scope,threshold,maxr,mode,option,m)
+            if m['races']<100 or m['hitRacePct']<20:continue
+            qualified+=1
+            rank=(int(m['passesRobust200And20Hit']),
+                  m['roiMinusLargestRacePct'],m['roiPct'],m['races'])
+            if selected is None or rank>selected[0]:
+                selected=(rank,minimum,scope,threshold,maxr,mode,option,m)
+    print('DIRECT_ROI200_2025H1_FINANCIAL_POLICY_SEARCH',json.dumps({
+        'tested':tested,'atLeast100Races':more_than100,
+        'with20PctHitAnd100Races':qualified,'maxHistoricalHit':maxhit,
+        'strongestRoiWithoutHitGate':best_any[-1] if best_any else None},
+        ensure_ascii=False),flush=True)
     if selected is None:
-        raise RuntimeError('DIRECT_ROI200_MINED_2024_RULES_NO_2025H1_POLICY_WITH_20HIT')
-    _,minimum,scope,threshold,maxr,pair,h1=selected
+        # Do not claim an accepted profitable prediction. Persist complete
+        # negative evidence so the next exploration is not blind repetition.
+        negative={'method':'2024 actual paid ROI200 condition-first mining',
+                  'conditionSearch':scan,'selected':None,
+                  'candidateRulesWith100Races':more_than100,
+                  'candidateRulesWith100RacesAnd20Hit':qualified,
+                  'highestRoiCandidateWithoutHitFloor':(
+                       best_any[-1] if best_any else None),
+                  'productionChanged':False,'adopt':False,
+                  'seconds':round(time.monotonic()-started,2)}
+        OUT.parent.mkdir(parents=True,exist_ok=True)
+        OUT.write_text(json.dumps(negative,ensure_ascii=False,indent=2)+'\n',
+                       encoding='utf8')
+        print('DIRECT_ROI200_NO_QUALIFIED_PORTFOLIO',str(OUT),flush=True)
+        return
+    _,minimum,scope,threshold,maxr,mode,option,h1=selected
     print('DIRECT_ROI200_2025H1_POLICY_CHOSEN',json.dumps({
         'minimum2024TrainingTickets':minimum,'scope':scope,
         'historicScoreThreshold':threshold,'maxVenueDayRaces':maxr,
-        'pair':pair,'testedPolicies':tested,'eligiblePolicies':qualified,
+        'mode':mode,'option':option,
+        'testedPolicies':tested,'eligiblePolicies':qualified,
         'actualCash':h1},ensure_ascii=False),flush=True)
     def future_money(period):
         key=(minimum,scope,period)
-        rows,days=settle(races,cached[key],threshold,maxr,pair)
+        if mode=='two_roi200':
+            rows,days=settle(races,cached[key],threshold,maxr,option)
+        else:
+            rows,days=settle_with_historical_roi200_anchor(
+              races,cached[key],threshold,maxr,mode.removeprefix('hedge_'),option)
         return financial_audit(paid_after_fixed_choices(rows,y),days)
     h2=future_money(('202507','202601'))
     yr26=future_money(('202601','202604'))
@@ -360,7 +446,7 @@ def main():
         'qualifiedCandidateCount2025H1':qualified,
         'frozenRule':{'minimum2024TrainingTickets':minimum,
             'scope':scope,'scoreThreshold':threshold,
-            'maxVenueDayRaces':maxr,'marketPair':pair},
+            'maxVenueDayRaces':maxr,'strategy':mode,'strategyOption':option},
         '2025H1':h1,'2025H2':h2,'2026JanMar':yr26,
         'passesRobust200In2025H1AndTwoHoldouts':accepted,
         '2026WasPreviouslyExaminedInResearch':True,
