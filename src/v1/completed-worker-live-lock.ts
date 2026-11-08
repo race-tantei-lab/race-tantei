@@ -18,7 +18,6 @@ import { JRA_OFFICIAL_ODDS_PARSER_VERSION, fetchFastJraOfficialOddsForRace, type
 import { ensureCompletedFinalImmutability } from "./completed-final-invariants";
 import { shadowCompletedPortfolioResearch, type CompletedShadowPortfolio } from "./completed-ticket-shadow-research";
 import { roiFirstOfficialShadow, type RoiFirstPreT15Shadow } from "./roi-first-shadow-research";
-import { chooseNov2026PayoutHurdleLiveTickets, NOV2026_TICKET_MODEL_VERSION } from "./nov2026-live-ticket-adapter";
 import { COMPLETED_PREDICTION_POLICY } from "./completed-prediction-policy";
 import type { Env, RaceRecord, RunnerRecord } from "./types";
 
@@ -81,9 +80,6 @@ type PreviewSnapshot = {
   runnerRecencyFactors?: CompletedRunnerRecencyDetail[];
   tickets: CompletedTicket[];
   courseBets: CompletedCourseBet[];
-  // Ticket predictor is distinct from the frozen pre-day race-selection model.
-  ticketSelectionModel?: string;
-  ticketSelectionModelFallback?: string | null;
   shadowResearch?: CompletedShadowPortfolio[];
   shadowResearchError?: string | null;
   roiFirstResearch?: RoiFirstPreT15Shadow | null;
@@ -282,6 +278,11 @@ function snapshotHasOfficialBodyWeight(snapshot: PreviewSnapshot): boolean {
 }
 
 function validSnapshot(snapshot: PreviewSnapshot, raceId: string): boolean {
+  // Previous experimental payout model failed the requested trimmed-ROI >=200
+  // production acceptance gate. Do not create *new* finalized tickets from its
+  // earlier uncommitted previews after rollback; immutable finalized bets stay intact.
+  if ((snapshot as PreviewSnapshot & { ticketSelectionModel?: string }).ticketSelectionModel ===
+      "nov2026-payout-hurdle-experimental-live-v1") return false;
   if (snapshot.version !== PREVIEW_VERSION || snapshot.raceId !== raceId) return false;
   if (snapshot.sourceModel !== COMPLETED_MODEL_VERSION || snapshot.modelSha256 !== COMPLETED_MODEL_SHA256) return false;
   if (snapshot.predictionPolicy !== COMPLETED_PREDICTION_POLICY) return false;
@@ -293,9 +294,6 @@ function validSnapshot(snapshot: PreviewSnapshot, raceId: string): boolean {
   if (!Array.isArray(snapshot.tickets) || snapshot.tickets.length !== 2 || new Set(snapshot.tickets.map((ticket) => ticket.betType)).size !== 2) return false;
   if (snapshot.tickets.some((ticket) => !ticket.combination || !Number.isFinite(ticket.officialOdds) || ticket.officialOdds <= 0 || !Number.isFinite(ticket.predictedProbability) || ticket.predictedProbability <= 0)) return false;
   if (!Array.isArray(snapshot.courseBets) || snapshot.courseBets.length !== 6) return false;
-  if (snapshot.ticketSelectionModel &&
-      snapshot.ticketSelectionModel !== COMPLETED_MODEL_VERSION &&
-      snapshot.ticketSelectionModel !== NOV2026_TICKET_MODEL_VERSION) return false;
   const ticketSignature = snapshot.tickets.map((ticket) => `${ticket.betType}\u0001${ticket.combination}`).sort().join("\u0002");
   const signatures: string[] = [];
   for (const course of COURSES) {
@@ -463,33 +461,6 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     (betType, odds) => completedRecencyBetFactor(learning, betType, refreshed.race.venue, odds),
   );
   const courseBets = completedCourseBets(tickets);
-  // Canonical model is always computed first as the last-good emergency
-  // fallback. New weights are used ONLY for fresh pre-T15 JRA six-market quotes.
-  // Existing frozen public bets are filtered before this function is called.
-  let selectedTickets = tickets;
-  let selectedCourseBets = courseBets;
-  let ticketSelectionModel: string = COMPLETED_MODEL_VERSION;
-  let ticketSelectionModelFallback: string | null = null;
-  try {
-    if (startMs - Date.now() > DEADLINE_MS + 2 * 60_000) {
-      const challenger = chooseNov2026PayoutHurdleLiveTickets(
-        refreshed.runners.map((runner) => Number(runner.horseNo)), vectors,
-        Number(refreshed.race.raceNo), fetched.rows, oddsFetchedAt,
-        String(refreshed.race.startTimeUtc),
-      );
-      if (challenger) {
-        selectedTickets = challenger.tickets;
-        selectedCourseBets = challenger.courseBets;
-        ticketSelectionModel = NOV2026_TICKET_MODEL_VERSION;
-      } else {
-        ticketSelectionModelFallback = "NOV2026_MODEL_MISSING_SIX_OFFICIAL_MARKETS_OR_20PCT_GATE";
-      }
-    } else {
-      ticketSelectionModelFallback = "NOV2026_MODEL_SKIPPED_TO_PRESERVE_T15";
-    }
-  } catch (error) {
-    ticketSelectionModelFallback = errorText(error);
-  }
   // Both optional research policies are CPU-heavy and counterfactual.
   // NEVER run either when we are inside the T-30 live ticket protection window.
   // This is evaluated AFTER JRA odds fetch, at the actual current time, so a
@@ -540,10 +511,8 @@ async function generatePreview(db: D1Database, model: CompletedModelRuntime, rac
     oddsSnapshotSha256: await sha256Hex(canonicalOddsRows(fetched.rows)),
     onlineLearning: learning.audit,
     runnerRecencyFactors: learning.runnerDetails,
-    tickets: selectedTickets,
-    courseBets: selectedCourseBets,
-    ticketSelectionModel,
-    ticketSelectionModelFallback,
+    tickets,
+    courseBets,
     shadowResearch,
     shadowResearchError,
     roiFirstResearch,
@@ -598,8 +567,6 @@ async function commitSnapshot(db: D1Database, raceId: string, snapshot: PreviewS
     onlineLearning: snapshot.onlineLearning ?? null,
     runnerRecencyFactors: snapshot.runnerRecencyFactors ?? null,
     tickets: snapshot.tickets,
-    ticketSelectionModel: snapshot.ticketSelectionModel ?? COMPLETED_MODEL_VERSION,
-    ticketSelectionModelFallback: snapshot.ticketSelectionModelFallback ?? null,
     // Immutable research-only candidate comparison, not a public prediction.
     shadowResearch: snapshot.shadowResearch ?? null,
     shadowResearchError: snapshot.shadowResearchError ?? null,
