@@ -24,7 +24,7 @@ SUPPORTS=(30,80,160)
 TOP_COUNTS=(1,3,8,20,50)
 PAIRS=(-1,)+tuple(range(15))
 STAKES=(100,500,1000,1500,1900)
-RACES_PER_DAY=(1,2,3,5)
+RACES_PER_DAY=(5,)  # enforce production venue-day maximum, not tuned on validation
 SEED=20261108
 
 def module(path,name):
@@ -114,7 +114,7 @@ def pick_portfolio(source,days,policy):
                 if best is None or winner[:4]>best[:4]:best=winner
             if best is None:continue
             day_choices.append((best[0],rid,best[4],best[5]))
-        day_choices.sort(key=lambda x:(-x[0],x[1]))
+        day_choices.sort(key=lambda x:x[1])  # chronological race number, no retrospective ROI sorting
         selected.extend(day_choices[:limit])
     return selected
 
