@@ -2,7 +2,7 @@ name: Walk-forward past-only real-money JRA ROI200 patterns
 on:
   push:
     branches:
-      - research/nov2026-decade-ten-runner-cash
+      - research/nov2026-stable-multiyear-cash
     paths:
       - scripts/research-nov2026-rolling-cash-roi200-conditions.py
       - .github/workflows/nov2026-rolling-real-cash-roi200.yml
