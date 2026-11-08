@@ -12,14 +12,22 @@ def load(path,name):
     spec=importlib.util.spec_from_file_location(name,ROOT/path)
     mod=importlib.util.module_from_spec(spec);sys.modules[name]=mod
     spec.loader.exec_module(mod);return mod
-def audit(picks,payout,year_mask):
+def audit(picks,payout,year_mask,stakes=(100,100),market_pair=None,starts=None):
     chosen=picks & year_mask[:,None]
     n=int(chosen.sum())
     if not n:return dict(bets=0,stakeYen=0,paidYen=0,roiPct=None,minusMaxRacePct=None)
-    race_cash=(payout*chosen).sum(axis=1,dtype=np.int64)
-    cash=int(race_cash.sum());stake=100*n
-    return dict(bets=n,stakeYen=stake,paidYen=cash,roiPct=round(cash/n,3),
-      minusMaxRacePct=round((cash-int(race_cash.max()))/n,3),
+    if market_pair is None:
+        race_cash=(payout*chosen).sum(axis=1,dtype=np.int64)
+        stake=100*n
+    else:
+        race_cash=np.zeros(len(chosen),dtype=np.int64)
+        for market,amount in zip(market_pair,stakes):
+            a,b=int(starts[market]),int(starts[market+1])
+            race_cash+=(payout[:,a:b]*chosen[:,a:b]).sum(axis=1,dtype=np.int64)*(amount//100)
+        stake=sum(stakes)*int(chosen.any(axis=1).sum())
+    cash=int(race_cash.sum())
+    return dict(bets=n,stakeYen=stake,paidYen=cash,roiPct=round(100*cash/stake,3),
+      minusMaxRacePct=round(100*(cash-int(race_cash.max()))/stake,3),
       winningTickets=int(((payout>0)&chosen).sum()))
 def fixed_five_per_venue_day(chosen,races):
     """New policy: five chronologically fixed race numbers per venue/day.
@@ -134,58 +142,65 @@ def main():
                 a,b=int(base.START_MARKET[m]),int(base.START_MARKET[m+1])
                 chosen[eligible,a:b]=market_picks[eligible,a:b]
             chosen,venue_day_keep=fixed_five_per_venue_day(chosen,races)
-            stats=audit(chosen,paid,years==2023)
-            n_races=int(np.sum(venue_day_keep&(years==2023)))
-            stats['races']=n_races
-            first=audit(chosen,paid,(years==2023)&first_half)
-            second=audit(chosen,paid,(years==2023)&~first_half)
-            first_races=int(np.sum(venue_day_keep&(years==2023)&first_half))
-            second_races=int(np.sum(venue_day_keep&(years==2023)&~first_half))
-            stats['firstHalf2023']={**first,'races':first_races}
-            stats['secondHalf2023']={**second,'races':second_races}
-            quarter_stats=[]
-            for q in range(4):
-                qmask=(years==2023)&(quarter==q)
-                qresult=audit(chosen,paid,qmask)
-                qresult['races']=int(np.sum(venue_day_keep&qmask))
-                quarter_stats.append(qresult)
-            stats['quarters2023']=quarter_stats
-            # New selection hypothesis: each quarter must have >=20 races;
-            # maximize the WORST quarter's cash ROI after removing its
-            # single largest paying race. No evaluation-period tuning.
-            stats['passes2023SupportGate']=(n_races>=100 and first_races>=30 and second_races>=30
-                  and all(q['races']>=20 for q in quarter_stats))
-            # New hypothesis: select a policy by its weakest quarter after
-            # removing its largest paying RACE, then penalize dependence on
-            # the two largest race payouts across the entire selection year.
-            # A stable quarterly return alone can conceal two jackpots.
-            year_rows=np.flatnonzero(years==2023)
-            selected_cash=(paid[year_rows]*chosen[year_rows]).sum(axis=1,dtype=np.int64)
-            top_two=np.sort(selected_cash)[-2:]
-            ex_two=int(selected_cash.sum())-int(top_two.sum())
-            stats['minusTwoLargestRacesPct']=(round(ex_two/stats['bets'],3)
-                if stats['bets'] else None)
-            stats['passesConcentrationGate']=(stats['passes2023SupportGate']
-                and stats['minusTwoLargestRacesPct'] is not None
-                and stats['minusTwoLargestRacesPct']>=200)
-            # NEW independent hypothesis: both market legs must generate
-            # positive robust CASH returns on 2023, rather than a single
-            # jackpot-rich market subsidising the second market.
-            # Each leg is staked ¥100 per chosen race; no outcome is used
-            # to select its ticket. 2024+ remains untouched by selection.
-            leg_robust=[]
-            for market in (m1,m2):
-                a,b=int(base.START_MARKET[market]),int(base.START_MARKET[market+1])
-                leg_race=(paid[year_rows,a:b]*chosen[year_rows,a:b]).sum(axis=1,dtype=np.int64)
-                leg_cash=int(leg_race.sum())
-                leg_largest=int(leg_race.max()) if len(leg_race) else 0
-                leg_robust.append(round((leg_cash-leg_largest)/n_races,3) if n_races else 0.)
-            stats['marketLegMinusMaxRaceRoiPct']=leg_robust
-            stats['passesIndependentMarketLegs']=(stats['passesConcentrationGate']
-                and min(leg_robust)>=110.)
-            score=(min(q['minusMaxRacePct'] for q in quarter_stats)
-                   if stats['passesIndependentMarketLegs'] else -1.)
-            policies.append((score,k,(m1,m2),chosen,stats))
+            # NEW: cash-based asymmetric allocation; fixed ¥2000/race, 100-yen units.
+            # Every allocation is selected ONLY on 2023, never on 2024+ results.
+            for first_stake in (100,400,700,1000,1300,1600,1900):
+                stakes=(first_stake,2000-first_stake)
+                stats=audit(chosen,paid,years==2023,stakes,(m1,m2),base.START_MARKET)
+                n_races=int(np.sum(venue_day_keep&(years==2023)))
+                stats['races']=n_races
+                first=audit(chosen,paid,(years==2023)&first_half,stakes,(m1,m2),base.START_MARKET)
+                second=audit(chosen,paid,(years==2023)&~first_half,stakes,(m1,m2),base.START_MARKET)
+                first_races=int(np.sum(venue_day_keep&(years==2023)&first_half))
+                second_races=int(np.sum(venue_day_keep&(years==2023)&~first_half))
+                stats['firstHalf2023']={**first,'races':first_races}
+                stats['secondHalf2023']={**second,'races':second_races}
+                quarter_stats=[]
+                for q in range(4):
+                    qmask=(years==2023)&(quarter==q)
+                    qresult=audit(chosen,paid,qmask,stakes,(m1,m2),base.START_MARKET)
+                    qresult['races']=int(np.sum(venue_day_keep&qmask))
+                    quarter_stats.append(qresult)
+                stats['quarters2023']=quarter_stats
+                # New selection hypothesis: each quarter must have >=20 races;
+                # maximize the WORST quarter's cash ROI after removing its
+                # single largest paying race. No evaluation-period tuning.
+                stats['passes2023SupportGate']=(n_races>=100 and first_races>=30 and second_races>=30
+                      and all(q['races']>=20 for q in quarter_stats))
+                # New hypothesis: select a policy by its weakest quarter after
+                # removing its largest paying RACE, then penalize dependence on
+                # the two largest race payouts across the entire selection year.
+                # A stable quarterly return alone can conceal two jackpots.
+                year_rows=np.flatnonzero(years==2023)
+                selected_cash=np.zeros(len(year_rows),dtype=np.int64)
+                for market,amount in zip((m1,m2),stakes):
+                    a,b=int(base.START_MARKET[market]),int(base.START_MARKET[market+1])
+                    selected_cash+=(paid[year_rows,a:b]*chosen[year_rows,a:b]).sum(axis=1,dtype=np.int64)*(amount//100)
+                top_two=np.sort(selected_cash)[-2:]
+                ex_two=int(selected_cash.sum())-int(top_two.sum())
+                stats['minusTwoLargestRacesPct']=(round(100*ex_two/stats['stakeYen'],3)
+                    if stats['bets'] else None)
+                stats['passesConcentrationGate']=(stats['passes2023SupportGate']
+                    and stats['minusTwoLargestRacesPct'] is not None
+                    and stats['minusTwoLargestRacesPct']>=200)
+                # NEW independent hypothesis: both market legs must generate
+                # positive robust CASH returns on 2023, rather than a single
+                # jackpot-rich market subsidising the second market.
+                # Each leg is staked ¥100 per chosen race; no outcome is used
+                # to select its ticket. 2024+ remains untouched by selection.
+                leg_robust=[]
+                for market in (m1,m2):
+                    a,b=int(base.START_MARKET[market]),int(base.START_MARKET[market+1])
+                    leg_race=(paid[year_rows,a:b]*chosen[year_rows,a:b]).sum(axis=1,dtype=np.int64)
+                    leg_cash=int(leg_race.sum())
+                    leg_largest=int(leg_race.max()) if len(leg_race) else 0
+                    leg_robust.append(round((leg_cash-leg_largest)/n_races,3) if n_races else 0.)
+                stats['marketLegMinusMaxRaceRoiPct']=leg_robust
+                stats['passesIndependentMarketLegs']=(stats['passesConcentrationGate']
+                    and min(leg_robust)>=110.)
+                score=(min(q['minusMaxRacePct'] for q in quarter_stats)
+                       if stats['passesIndependentMarketLegs'] else -1.)
+                policies.append((score,k,(m1,m2),chosen,stats,stakes))
     policies.sort(key=lambda x:x[0],reverse=True)
     best=policies[0] if policies and policies[0][0]>=0 else None
     report={'hypothesis':'per-year maximum race payout removed; >=5/8 years and both 2021,2022 robust positive',
@@ -193,12 +208,12 @@ def main():
        'officialT15Verified':False,'2025And2026PreviouslyInspected':True,
        'trainingYears':'2015-2022','selectionYear':2023,
        'qualifiedConditions':len(candidates),'productionDeployed':False,
-       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionQuarterFloorRaces':20,'selectionScore':'minimum of four 2023 quarter max-race-removed ROIs, requiring 2023 ROI >=200 after excluding TWO largest payout races','selectionPolicyCount':len(policies),'supportedPolicyCount':sum(p[4]['passes2023SupportGate'] for p in policies),'concentrationQualifiedPolicyCount':sum(p[4]['passesConcentrationGate'] for p in policies),'independentMarketLegQualifiedPolicyCount':sum(p[4]['passesIndependentMarketLegs'] for p in policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
+       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionQuarterFloorRaces':20,'selectionScore':'minimum of four 2023 quarter max-race-removed ROIs, requiring 2023 ROI >=200 after excluding TWO largest payout races','selectionPolicyCount':len(policies),'cashAllocationHypothesis':'seven fixed ¥2000 allocations, 2023 selection only','supportedPolicyCount':sum(p[4]['passes2023SupportGate'] for p in policies),'concentrationQualifiedPolicyCount':sum(p[4]['passesConcentrationGate'] for p in policies),'independentMarketLegQualifiedPolicyCount':sum(p[4]['passesIndependentMarketLegs'] for p in policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
     if best:
-        _,k,pair,chosen,selection=best
+        _,k,pair,chosen,selection,stakes=best
         report['policyInvariantAudit']=audit_policy_invariants(chosen,races)
-        report.update(selectedRuleCount=k,selectedMarketPair=[base.MARKETS[m] for m in pair],selection2023=selection,
-          holdoutDiagnostics={str(y):audit(chosen,paid,years==y) for y in (2024,2025,2026)},
+        report.update(selectedRuleCount=k,selectedMarketPair=[base.MARKETS[m] for m in pair],selectedStakeYen=list(stakes),selection2023=selection,
+          holdoutDiagnostics={str(y):audit(chosen,paid,years==y,stakes,pair,base.START_MARKET) for y in (2024,2025,2026)},
           chosenRules=[{'pattern':list(p),'code':g,'score':list(s)} for s,p,g in candidates[:k]],
           passes=False)
         # 2024+ are not pristine holdouts; T15 missing => cannot pass.
