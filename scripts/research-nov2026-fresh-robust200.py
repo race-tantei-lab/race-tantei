@@ -164,7 +164,13 @@ def select_and_settle(groups,scored):
             best=None
             for i,a in enumerate(opts):
                 for b in opts[i+1:]:
-                    if max(a["hitP"],b["hitP"])<.20:continue
+                    # Aggregate realized *race-level* hit >=20% is the user's
+                    # acceptance condition. Requiring each individual ticket
+                    # to have >=20% predicted hit probability incorrectly
+                    # rejects longshot payout value and prevents 5 races/day.
+                    # Keep all market pairs, test true hit on the exact full
+                    # 5-race portfolio in passes_numeric_gate().
+                    if a["key"][0]==b["key"][0]:continue
                     stakeA=1900 if a["riskAdjustedE"]>=b["riskAdjustedE"] else 100
                     stakeB=2000-stakeA
                     score=stakeA*a["riskAdjustedE"]+stakeB*b["riskAdjustedE"]
@@ -236,6 +242,24 @@ def self_test():
               "roiExcludeLargestRaceKeepAllStakePct"):
         bad=dict(gate_ok);bad[x]=19.99 if x=="hitRatePct" else 199.99
         assert not passes_numeric_gate(bad)
+    # The model must still pick FIVE complete races when each ticket has
+    # estimated hit probability <20%; the 20% rule is an OUTCOME portfolio
+    # gate, not a single ticket's estimated success probability.
+    complete_day=("2026-01-03","東京")
+    synthetic_group={complete_day:[
+      {"raceId":f"synthetic-{i}","date":"2026-01-03","venue":"東京"}
+      for i in range(5)
+    ]}
+    fake_scores={}
+    for race in synthetic_group[complete_day]:
+        fake_scores[(complete_day,race["raceId"])]=[
+          {"key":(typ,(1,) if typ=="単勝" else (1,2) if typ not in
+                    ("3連複","3連単") else (1,2,3)),
+           "hitP":0.04,"riskAdjustedE":1.0+j/10,"payout100":100 if j==0 else 0}
+          for j,typ in enumerate(TYPES)]
+    picked,problems=select_and_settle(synthetic_group,fake_scores)
+    assert len(picked)==RACE_K and not problems
+    assert all(len(r["tickets"])==2 and r["stake"]==PAID_STAKE for r in picked)
     print("NOV2026_FRESH_ROBUST_200_MODEL_SELF_TEST_OK",flush=True)
 
 def passes_numeric_gate(result):
