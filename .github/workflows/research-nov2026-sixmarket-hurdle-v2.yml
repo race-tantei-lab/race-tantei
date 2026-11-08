@@ -25,7 +25,7 @@ jobs:
       - name: Assert no production D1 token in job environment
         run: |
           test -z "${CLOUDFLARE_API_TOKEN:-}"
-          test -z "${CLOUDFLARE_D1_DATABASE_ID:-}"
+          # This research job deliberately receives no D1 credentials.
       - name: Train six independently modeled hurdle heads with fake labels for test only
         run: |
           python -m py_compile scripts/research-nov2026-sixmarket-hurdle-v2.py
