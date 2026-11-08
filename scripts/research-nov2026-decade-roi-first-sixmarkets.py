@@ -26,21 +26,22 @@ import numpy as np
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES=ROOT/'external-jra-cash-decade'
-OUT=ROOT/'analysis-results/nov2026-decade-first-roi200-selective-money.json'
+OUT=ROOT/'analysis-results/nov2026-decade-eight-runner-roi200-money.json'
 MARKETS=('単勝','ワイド','馬連','馬単','3連複','3連単')
+TOP_N=8
 COLS=('単勝払戻','ワイド払戻','馬連払戻','馬単払戻','三連複払戻','三連単払戻')
 UNORDERED={1,2,4}
 TARGET_YEAR_END=2026
-CACHE=ROOT/'analysis-results/jra-decade-sixmarket-cash-features-v1.npz'
-RACE_CACHE=ROOT/'analysis-results/jra-decade-sixmarket-races-v1.json'
+CACHE=ROOT/'analysis-results/jra-decade-sixmarket-top8-cash-v2.npz'
+RACE_CACHE=ROOT/'analysis-results/jra-decade-sixmarket-top8-races-v2.json'
 SEED=20261108
-COMBO_PER_MARKET=[6,15,15,30,20,120]
+COMBO_PER_MARKET=[8,28,28,56,56,336]
 START_MARKET=np.cumsum([0]+COMBO_PER_MARKET).astype(int)
 N=sum(COMBO_PER_MARKET)
-assert N==206
+assert N==512
 SINGLE_BINS={
- 'rankMin':6,'rankMax':6,'rankSum':7,'rankGap':6,
- 'rankFirst':6,'rankSecond':7,'favCount':4,'rankExact':216,
+ 'rankMin':8,'rankMax':8,'rankSum':10,'rankGap':8,
+ 'rankFirst':8,'rankSecond':9,'favCount':4,'rankExact':512,
  'oddsGeom':8,'oddsSpread':5,'horseAge':5,'draw':5,
  'horseWeight':5,'favOdds':5,'favGap':4,
  'venue':10,'fieldSize':4,'raceBand':3,'quarter':4,
@@ -89,7 +90,7 @@ PATTERNS=[(x,) for x in SMALL]+[
 MIN_GROUP_SIZES=(60,150,350)
 SELECTIONS=(1,3,8,20,50,100)
 MARKET_PAIR_CHOICES=(-1,)+tuple(range(15))
-MARKET_PAIRS=tuple(combinations(range(6),2))
+MARKET_PAIRS=tuple(combinations(range(TOP_N),2))
 STAKE_SPLITS=(100,400,1000,1600,1900)
 NUMBER_RACES=(1,2,3,5)
 MIN_YEARS=2
@@ -105,11 +106,11 @@ def mod(path,name):
 def fixed_template():
     slots=[];mids=[]
     for m in range(6):
-        if m==0:raw=[(i,) for i in range(6)]
-        elif m in (1,2):raw=list(combinations(range(6),2))
-        elif m==3:raw=list(permutations(range(6),2))
-        elif m==4:raw=list(combinations(range(6),3))
-        else:raw=list(permutations(range(6),3))
+        if m==0:raw=[(i,) for i in range(TOP_N)]
+        elif m in (1,2):raw=list(combinations(range(TOP_N),2))
+        elif m==3:raw=list(permutations(range(TOP_N),2))
+        elif m==4:raw=list(combinations(range(TOP_N),3))
+        else:raw=list(permutations(range(TOP_N),3))
         slots.extend(raw);mids.extend([m]*len(raw))
     if len(slots)!=N:raise RuntimeError('WRONG_ALL_SIX_MARKET_COMBINATION_TEMPLATE')
     return slots,np.asarray(mids,dtype=np.int8)
@@ -159,7 +160,7 @@ def read_all_races(parse):
         if r['venue']<1 or r['venue']>10 or r['raceNo']<1 or r['raceNo']>12:
             audit['outsideJraCentralRaceRange']+=1;continue
         h=r['horses']
-        if len(h)<6 or len({x[0] for x in h})!=len(h):
+        if len(h)<TOP_N or len({x[0] for x in h})!=len(h):
             audit['tooFewOrDuplicatedHorseNo']+=1;continue
         h.sort(key=lambda x:(x[1],x[0]))
         results.append(r)
@@ -187,20 +188,20 @@ def full_features(races):
     constant={
       'rankMin':np.asarray([min(s) for s in slots],np.uint8),
       'rankMax':np.asarray([max(s) for s in slots],np.uint8),
-      'rankSum':np.asarray([min(sum(s)//2,6) for s in slots],np.uint8),
+      'rankSum':np.asarray([min(sum(s)//2,9) for s in slots],np.uint8),
       'rankGap':np.asarray([max(s)-min(s) for s in slots],np.uint8),
       'rankFirst':np.asarray([s[0] for s in slots],np.uint8),
       'rankSecond':np.asarray([s[1] if len(s)>1 else 6 for s in slots],np.uint8),
       'favCount':np.asarray([sum(k<=1 for k in s) for s in slots],np.uint8),
-      'rankExact':np.asarray([s[0]*36+(s[1] if len(s)>1 else 0)*6+
-                         (s[2] if len(s)>2 else 0) for s in slots],np.uint8),
+      'rankExact':np.asarray([s[0]*TOP_N*TOP_N+(s[1] if len(s)>1 else 0)*TOP_N+
+                         (s[2] if len(s)>2 else 0) for s in slots],np.uint16),
     }
-    categories={k:np.empty((n,N),dtype=np.uint8)
+    categories={k:np.empty((n,N),dtype=(np.uint16 if k=='rankExact' else np.uint8))
                 for k in SINGLE_BINS}
     paid=np.zeros((n,N),dtype=np.int32)
     odds_edges=[2.,3.5,5.5,8,12,20,40]
     for i,r in enumerate(races):
-        horse=r['horses'][:6]
+        horse=r['horses'][:TOP_N]
         nums=np.asarray([x[0] for x in horse],dtype=np.int16)
         odds=np.asarray([x[1] for x in horse],dtype=np.float32)
         age=np.asarray([x[2] for x in horse],dtype=np.float32)
@@ -462,15 +463,15 @@ def optimize(races,paid,conditions,features):
 def main():
     if '--self-test' in sys.argv:
         slots,mark=fixed_template()
-        assert len(slots)==206 and len(mark)==206
+        assert len(slots)==512 and len(mark)==512
         assert len(PATTERNS)>60
         d=[{'month':'202401','day':'x','id':'a'}]
-        f={k:np.zeros((1,206),dtype=np.uint8)
+        f={k:np.zeros((1,N),dtype=(np.uint16 if k=='rankExact' else np.uint8))
                   for k in SINGLE_BINS}
-        f['market']=np.broadcast_to(mark,(1,206))
+        f['market']=np.broadcast_to(mark,(1,N))
         code,n=mixed_code(f,('rankMin','favOdds'))
-        assert code.shape==(1,206) and n==6*6*5
-        testpaid=np.zeros((1,206),dtype=np.int32)
+        assert code.shape==(1,N) and n==6*8*5
+        testpaid=np.zeros((1,N),dtype=np.int32)
         testpaid[0,0]=300
         cash=cash_audit([(0.,'r',0,1)],testpaid,1000)
         assert cash['roiPct']==150. and cash['stakeYen']==2000
@@ -491,7 +492,7 @@ def main():
         paid,data=full_features(races_all)
         races=[{'id':r['id'],'month':r['month'],'day':r['day']}
                for r in races_all]
-    if paid.shape!=(len(races),206):
+    if paid.shape!=(len(races),N):
         raise RuntimeError('DECADE_JRA_FINANCIAL_TICKET_ALIGNMENT')
     candidates,stats=mine(paid,data,races)
     print('DECADE_FINANCIAL_ROI200_CONDITIONS',json.dumps({
