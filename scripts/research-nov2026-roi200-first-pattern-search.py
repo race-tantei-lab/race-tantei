@@ -342,7 +342,7 @@ def main():
            'audit':audit},ensure_ascii=False),encoding='utf8')
         print('ROI_FIRST_SOURCE_CACHE_PREPARED',len(y),flush=True)
     months=np.asarray([r['month'] for r in races])
-    train=(months[ids]<'202501')
+    train=(months[ids]<'202507')
     print('DIRECT_CASH_PATTERN_INPUT',json.dumps({
         'allPaidRaces':len(races),'allIndependentTickets':len(y),
         '2024TrainingTickets':int(train.sum()),'featureNames':list(cat),
@@ -360,15 +360,14 @@ def main():
         for scope in ('broad','context','all'):
             score=scores[minimum][scope]
             if not (score>0).any():continue
-            for period in (('202501','202507'),('202507','202601'),
-                           ('202601','202604')):
+            for period in (('202507','202601'),('202601','202604')):
                 cached[(minimum,scope,period)]=best_tickets_per_race(
                     races,ids,types,score,period)
     best_any=None;more_than100=0;maxhit=0.
     for minimum,scope,threshold,maxr in product(
          MIN_GROUP_TICKETS,('broad','context','all'),
          (.04,.08,.15,.3,.6,1.2,2.5),(1,2,3,5)):
-        key=(minimum,scope,('202501','202507'))
+        key=(minimum,scope,('202507','202601'))
         if key not in cached:continue
         for mode,option in [('two_roi200',p) for p in (None,)+PAIR_TYPES]+[
               ('hedge_'+name,anchor)
@@ -403,7 +402,7 @@ def main():
     if selected is None:
         # Do not claim an accepted profitable prediction. Persist complete
         # negative evidence so the next exploration is not blind repetition.
-        negative={'method':'2024 actual paid ROI200 condition-first mining',
+        negative={'method':'2024+2025H1 actual paid ROI200 condition-first mining',
                   'conditionSearch':scan,'selected':None,
                   'candidateRulesWith100Races':more_than100,
                   'candidateRulesWith100RacesAnd20Hit':qualified,
@@ -417,7 +416,7 @@ def main():
         print('DIRECT_ROI200_NO_QUALIFIED_PORTFOLIO',str(OUT),flush=True)
         return
     _,minimum,scope,threshold,maxr,mode,option,h1=selected
-    print('DIRECT_ROI200_2025H1_POLICY_CHOSEN',json.dumps({
+    print('DIRECT_ROI200_2025H2_POLICY_CHOSEN',json.dumps({
         'minimum2024TrainingTickets':minimum,'scope':scope,
         'historicScoreThreshold':threshold,'maxVenueDayRaces':maxr,
         'mode':mode,'option':option,
@@ -431,24 +430,28 @@ def main():
             rows,days=settle_with_historical_roi200_anchor(
               races,cached[key],threshold,maxr,mode.removeprefix('hedge_'),option)
         return financial_audit(paid_after_fixed_choices(rows,y),days)
-    h2=future_money(('202507','202601'))
+    h2=h1  # 2025H2 policy-selection period, never a holdout
     yr26=future_money(('202601','202604'))
-    print('DIRECT_ROI200_2025H2_UNTOUCHED',json.dumps(h2,ensure_ascii=False),flush=True)
+    print('DIRECT_ROI200_2025H2_SELECTION_ONLY',json.dumps(h2,ensure_ascii=False),flush=True)
     print('DIRECT_ROI200_2026_FROZEN',json.dumps(yr26,ensure_ascii=False),flush=True)
     accepted=bool(h1['passesRobust200And20Hit'] and
          h2['passesRobust200And20Hit'] and yr26['passesRobust200And20Hit'])
-    report={'method':'FIRST mine conditions with ACTUAL 2024 paid ROI >=200 after removing largest ticket; only THEN generate rules-based predictions',
+    report={'method':'FIRST mine conditions with ACTUAL 2024+2025H1 paid ROI >=200 after removing largest ticket; only THEN generate rules-based predictions',
         'sixPaidMarkets':True,'candidateHorsesPerRace':7,
         'independentlyGeneratedTicketCandidates':len(y),
         'ticketPredictionAlwaysBasedOnHistoricalROI200Condition':True,
+        'conditionDiscoveryThrough':'2025-06',
+        'policySelectionPeriod':'2025-07 through 2025-12',
+        'singleOutOfTimeTest':'2026-01 through 2026-03',
         'source':audit,'conditionSearch':scan,
         'policyCandidateCount2025H1':tested,
         'qualifiedCandidateCount2025H1':qualified,
-        'frozenRule':{'minimum2024TrainingTickets':minimum,
+        'frozenRule':{'minConditionDiscoveryTickets':minimum,
+            'conditionDiscoveryBefore':'2025-07',
             'scope':scope,'scoreThreshold':threshold,
             'maxVenueDayRaces':maxr,'strategy':mode,'strategyOption':option},
-        '2025H1':h1,'2025H2':h2,'2026JanMar':yr26,
-        'passesRobust200In2025H1AndTwoHoldouts':accepted,
+        '2025H2Selection':h1,'2026JanMar':yr26,
+        'passesRobust200In2025H2SelectionAnd2026Test':accepted,
         '2026WasPreviouslyExaminedInResearch':True,
         'finalOddsNotJraT15CombinationOdds':True,
         'payoutSourceNotIndependentlyOfficialReconciled':True,
