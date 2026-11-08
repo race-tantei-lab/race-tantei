@@ -20,8 +20,9 @@ jobs:
           python-version: "3.12"
       - name: Test arbitrary venue-day race counts, ticket counts, stakes and trimmed ROI
         run: |
-          python -m py_compile scripts/research-flexible-portfolio-search.py
+          python -m py_compile scripts/research-flexible-portfolio-search.py scripts/research-flexible-chronological-jra.py
           python -u scripts/research-flexible-portfolio-search.py --self-test
+          python -u scripts/research-flexible-chronological-jra.py --self-test
       - name: Assert time-ordered and original-denominator ROI gates
         run: |
           python - <<'PY'
