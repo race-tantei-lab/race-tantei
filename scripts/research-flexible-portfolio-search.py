@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Flexible, label-blind JRA portfolio policy search.
 
-Unconstrained research dimensions: 0..12 races per venue-day, 1..64+ tickets
+Unconstrained research dimensions: 0..12 races per venue-day, 1..64 tickets
 per race, one or multiple bet types/combinations, all nonempty subsets of
 the six markets, 100..300,000 yen nominal race budget and dynamic scaling, multiple stake allocations,
 probability/conditional-payout ranking styles and pre-result abstention.
@@ -16,13 +16,9 @@ Archive runner T-15 provenance is unverified; not production-promotable.
 """
 from __future__ import annotations
 from collections import defaultdict, Counter
-from dataclasses import asdict, dataclass
-import hashlib
-import itertools
-import json
+from dataclasses import dataclass, replace
 import math
 import random
-import sys
 from typing import Any
 
 MARKETS=("単勝","ワイド","馬連","馬単","3連複","3連単")
@@ -82,9 +78,9 @@ def all_policies(limit:int=5000,seed:int=SEED)->list[Policy]:
                         configs.add(Policy("expected",63,32,count,budget,
                                            stake,racecount,0.0))
                         if len(configs)>=anchor_cap:break
-                if len(configs)>=limit:break
-            if len(configs)>=limit:break
-        if len(configs)>=limit:break
+                if len(configs)>=anchor_cap:break
+            if len(configs)>=anchor_cap:break
+        if len(configs)>=anchor_cap:break
     tries=0
     while len(configs)<limit and tries<limit*200:
         v=one()
@@ -192,7 +188,6 @@ def one_race(race:dict[str,Any],candidates:list[dict[str,Any]],p:Policy):
     elif p.race_budget_mode=="stepwise_ev":factor=0.5 if market_ev<1 else (1 if market_ev<1.3 else 3)
     else:raise ValueError("UNRECOGNIZED_RACE_BUDGET_MODE")
     actual_budget=max(p.ticket_count*100,100*round(p.budget*factor/100))
-    from dataclasses import replace
     sized=replace(p,budget=int(actual_budget))
     st=allocate_stakes(picked,sized)
     expected=sum(c["riskAdjustedE"]*s for (_,c),s in zip(picked,st))/actual_budget
