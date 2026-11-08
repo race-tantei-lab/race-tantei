@@ -43,7 +43,10 @@ def historical_horse_features():
     return X,won,offsets,rows,odds,dropped
 
 VENUES={"札幌":"01","函館":"02","福島":"03","新潟":"04","東京":"05",
-        "中山":"06","中京":"07","京都":"08","阪神":"09","小倉":"10"}
+        "中山":"06","中京":"07","京都":"08","阪神":"09","小倉":"10",
+        "sapporo":"01","hakodate":"02","fukushima":"03","niigata":"04",
+        "tokyo":"05","nakayama":"06","chukyo":"07","kyoto":"08",
+        "hanshin":"09","kokura":"10"}
 
 def join_pre_result_races_by_quoted_horse_vector(races,metadata,archived_quotes):
     """Independent public sources have DIFFERENT race ID namespaces.
