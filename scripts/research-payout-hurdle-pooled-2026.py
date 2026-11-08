@@ -30,6 +30,7 @@ import numpy as np
 
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT/"analysis-results/2024-2025-payout-hurdle-2026-JRA-real.json"
+MODEL_OUT=ROOT/"analysis-results/research-frozen-2026-pooled-lambdarank-hurdle.joblib"
 TYPES={"単勝","ワイド","馬連","馬単","3連複","3連単"}
 UNORDERED={"ワイド","馬連","3連複"}
 YEAR_MONTHS={2024:list(range(5,13)),2025:list(range(1,13)),2026:list(range(1,9))}
@@ -110,7 +111,12 @@ def main():
         excluded[str(year)]=bad
         print("TWO_YEAR_HORSE_MODEL_YEAR",json.dumps({
             "year":year,**yearProvenance[str(year)],"excluded":bad},ensure_ascii=False),flush=True)
-        del horse
+        if year==2026:
+            # Keep BOTH actually fitted first-stage models for reproducible
+            # offline inference of future pre-result runner feature vectors.
+            ranker2026,top3model2026=horse
+        else:
+            del horse
     # Each candidate market is trained with out-of-year horse scores only.
     x24,pay24,hit24,_=structural.build_rows(years[2024],tickets,"ranker_only")
     x25,pay25,hit25,_=structural.build_rows(years[2025],tickets,"ranker_only")
@@ -131,6 +137,33 @@ def main():
         p,positive,priors=structural.fit_hurdle(xx,pay,hit)
         scores=structural.score_rows(x26,meta26,(p,positive),priors)
         output=structural.selected_portfolio(years[2026],scores,tickets)
+        if name==PRIMARY:
+            import joblib
+            MODEL_OUT.parent.mkdir(parents=True,exist_ok=True)
+            joblib.dump({
+                "researchOnly":True,
+                "notProvenProfitablyForward":True,
+                "cannotRunInCloudflareWorkersWithoutPort":True,
+                "horsePredictionFittedThrough":"2025-12-28",
+                "ticketPayoutLabelsFittedThrough":"2025-12-28",
+                "horseFeatureCount":56,
+                "ticketFeatureCount":int(xx.shape[1]),
+                "probabilityNormalization":"within_race_LambdaRank_softmax_temp_1.4",
+                "horseRanker":ranker2026,
+                "horseTop3":top3model2026,
+                "ticketHits":p,
+                "ticketConditionalPaidMultiplier":positive,
+                "typeBaseRatePriors":priors,
+                "fixedRaceBudgetYen":2000,
+                "researchHistoricalFinalOddsUsed":False,
+                "t15InputProven":False,
+                "2026OutcomesUsedToTrain":False,
+            },MODEL_OUT,compress=3)
+            print("FROZEN_POOLED_2026_MODEL_WEIGHTS_SAVED",
+                json.dumps({"path":str(MODEL_OUT.relative_to(ROOT)),
+                 "bytes":MODEL_OUT.stat().st_size,
+                 "runnerFeatures":56,"ticketFeatures":int(xx.shape[1]),
+                 "notProductionPromotable":True}),flush=True)
         models[name]={
           "sameEligibleVenueDayPoolAsOtherModel":True,
           "selectedRaceIdsMayDifferBetweenModels":True,
