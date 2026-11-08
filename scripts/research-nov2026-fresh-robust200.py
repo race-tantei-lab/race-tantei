@@ -226,7 +226,10 @@ def self_test():
     assert result["roiExcludeLargestRaceKeepAllStakePct"]==210
     # Never remove stake with a missed or refunded ticket; never subtract the
     # maximum twice. 200.00 is included, 199.99 fails, hit below 20 fails.
-    gate_ok={**result,"races":500,"allEligibleVenueDaysCovered":True}
+    gate_ok={**result,"races":500,"venueDays":100,
+             "stakeYen":1_000_000,"returnYen":4_000_000,
+             "largestPaidTicketYen":1_900_000,"largestPaidRaceYen":1_900_000,
+             "allEligibleVenueDaysCovered":True}
     assert passes_numeric_gate(gate_ok) is True
     assert not passes_numeric_gate(result), "at least 500 races required"
     for x in ("hitRatePct","roiPct","roiExcludeLargestTicketKeepAllStakePct",
@@ -236,8 +239,23 @@ def self_test():
     print("NOV2026_FRESH_ROBUST_200_MODEL_SELF_TEST_OK",flush=True)
 
 def passes_numeric_gate(result):
+    races=int(result.get("races",0))
+    stake=int(result.get("stakeYen",0))
+    returned=int(result.get("returnYen",0))
+    max_ticket=int(result.get("largestPaidTicketYen",0))
+    max_race=int(result.get("largestPaidRaceYen",0))
+    if (races<500 or races!=RACE_K*int(result.get("venueDays",0))
+        or stake!=races*PAID_STAKE
+        or returned<0 or not 0<=max_ticket<=max_race<=returned):
+        return False
+    if abs(float(result.get("roiPct",0))-100*returned/stake)>0.0001:
+        return False
+    if abs(float(result.get("roiExcludeLargestTicketKeepAllStakePct",0))
+            -100*(returned-max_ticket)/stake)>0.0001:return False
+    if abs(float(result.get("roiExcludeLargestRaceKeepAllStakePct",0))
+            -100*(returned-max_race)/stake)>0.0001:return False
     return (result.get("allEligibleVenueDaysCovered") is True
-      and result.get("races",0)>=500
+      and races>=500
       and result.get("hitRatePct",0)>=MIN_HIT_PCT
       and result.get("roiPct",0)>=MIN_ROI_PCT
       and result.get("roiExcludeLargestTicketKeepAllStakePct",0)>=MIN_TRIM_ROI_PCT
