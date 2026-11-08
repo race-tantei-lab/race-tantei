@@ -1,3 +1,4 @@
+import { highReturnResearchView } from "./high-return-research-view.js";
 import { shell } from "./public-ui.js";
 
 const PATH_VERSION = "current-day-detail-direct-batch-v1-20260921";
@@ -150,12 +151,13 @@ export async function fastCurrentDayRaceDetailResponse(db:D1Database,raceId:stri
   const meta=[race.raceDate.replaceAll("-","/"),race.venue,race.raceNo+"R",race.startTimeJst?race.startTimeJst+"発走":null,race.surface,race.distanceM?race.distanceM+"m":null,race.trackCondition].filter(Boolean).join("　");
   const reasons=reasonHtml(states.get(finalKey)??null,runners);
   const betsBlock=betHtml(bets);
+  const highReturn=highReturnResearchView(states.get(finalKey)??null,race.startTimeUtc);
   const hasReasons=Boolean(reasons);
-  const tabNav='<nav class="race-detail-tabs" data-race-tabs><button type="button" class="active" data-race-tab="bets" aria-selected="true">予想買い目</button>'+(hasReasons?'<button type="button" data-race-tab="reason" aria-selected="false">買い目の理由</button>':'')+'<button type="button" data-race-tab="horses" aria-selected="false">出走馬</button></nav>';
+  const tabNav='<nav class="race-detail-tabs" data-race-tabs><button type="button" class="active" data-race-tab="bets" aria-selected="true">予想買い目</button>'+(hasReasons?'<button type="button" data-race-tab="reason" aria-selected="false">買い目の理由</button>':'')+'<button type="button" data-race-tab="high-return" aria-selected="false">高配当研究</button>'+'<button type="button" data-race-tab="horses" aria-selected="false">出走馬</button></nav>';
   const betsPanel='<section data-race-panel="bets">'+(betsBlock||'<div class="section-title"><h2>買い目</h2><span class="status '+view.code+'">'+view.label+'</span></div><div class="notice">'+esc(view.note)+'</div>')+'</section>';
   const body='<a class="back" href="/">← レース一覧へ</a>'+navHtml(raceId,race.venue,race.raceNo)
     +'<section class="hero today-hero"><div class="race-title"><span class="race-no">'+race.raceNo+'R</span><h1>'+esc(race.raceName||race.raceNo+"R")+'</h1><span class="status '+view.code+'">'+view.label+'</span></div><p>'+esc(meta)+'</p>'+(race.conditions?'<p>'+esc(race.conditions)+'</p>':'')+'</section>'
-    +'<div class="race-final-note">'+esc(view.note)+'</div>'+tabNav+betsPanel+reasons+runnerHtml(runners);
+    +'<div class="race-final-note">'+esc(view.note)+'</div>'+tabNav+betsPanel+reasons+highReturn+runnerHtml(runners);
   let html=shell(race.venue+race.raceNo+"R",body);
   html=html.replace("</head>",styles()+"</head>").replace("</body>",script()+"</body>");
   return new Response(html,{status:200,headers:{
