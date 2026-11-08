@@ -132,7 +132,8 @@ def main():
         scores=structural.score_rows(x26,meta26,(p,positive),priors)
         output=structural.selected_portfolio(years[2026],scores,tickets)
         models[name]={
-          "sameRacesAsOtherModel":True,
+          "sameEligibleVenueDayPoolAsOtherModel":True,
+          "selectedRaceIdsMayDifferBetweenModels":True,
           "trainedTicketRows":len(xx),"features":xx.shape[1],
           "monthlyActualJraPayout":output["byMonth"],
           "metrics":output["metrics"],"eligibleVenueDays":output["validVenueDays"],
