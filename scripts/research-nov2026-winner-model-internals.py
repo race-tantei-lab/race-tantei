@@ -233,8 +233,7 @@ def main():
     fit25.sort(key=lambda x:(x[0],x[1].name))
     _,winner,temperature,chosen,_=fit25[0]
     out={}
-    for c,t in [(CANDIDATES[0],1.0),(winner,temperature)]:
-        label="baseline" if c==CANDIDATES[0] and t==1.0 else "chosenBy2025"
+    for label,c,t in [("baseline",CANDIDATES[0],1.0),("chosenBy2025",winner,temperature)]:
         model,cols=model_fit(X,y,counts,dates,offsets,int(test[0]),c,feature_names)
         raw=vectors(model,X,offsets,int(test[0]),int(test[-1]),cols)
         q=evaluate(raw,counts,dates,offsets,winners,int(test[0]),int(test[-1]),t,market)
