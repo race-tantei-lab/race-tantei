@@ -107,7 +107,9 @@ def main():
     # New experiment: a policy must be supported in BOTH chronological
     # halves of 2023; choose by the weaker half's outlier-removed cash ROI.
     # This reduces selection of a single lucky six-month jackpot.
-    first_half=np.asarray([int(r['month'][4:6])<=6 for r in races],dtype=bool)
+    first_half=np.asarray([int(str(r['month'])[4:6])<=6 for r in races],dtype=bool)
+    # Predeclared calendar-quarter stability test; 2024+ remains evaluation only.
+    quarter=np.asarray([(int(str(r['month'])[4:6])-1)//3 for r in races],dtype=np.int8)
     policies=[]
     for k in (1,3,5,10):
         signals=np.zeros_like(paid,dtype=bool)
@@ -141,8 +143,19 @@ def main():
             second_races=int(np.sum(venue_day_keep&(years==2023)&~first_half))
             stats['firstHalf2023']={**first,'races':first_races}
             stats['secondHalf2023']={**second,'races':second_races}
-            stats['passes2023SupportGate']=n_races>=100 and first_races>=30 and second_races>=30
-            score=(min(first['minusMaxRacePct'],second['minusMaxRacePct'])
+            quarter_stats=[]
+            for q in range(4):
+                qmask=(years==2023)&(quarter==q)
+                qresult=audit(chosen,paid,qmask)
+                qresult['races']=int(np.sum(venue_day_keep&qmask))
+                quarter_stats.append(qresult)
+            stats['quarters2023']=quarter_stats
+            # New selection hypothesis: each quarter must have >=20 races;
+            # maximize the WORST quarter's cash ROI after removing its
+            # single largest paying race. No evaluation-period tuning.
+            stats['passes2023SupportGate']=(n_races>=100 and first_races>=30 and second_races>=30
+                  and all(q['races']>=20 for q in quarter_stats))
+            score=(min(q['minusMaxRacePct'] for q in quarter_stats)
                    if stats['passes2023SupportGate'] else -1.)
             policies.append((score,k,(m1,m2),chosen,stats))
     policies.sort(key=lambda x:x[0],reverse=True)
@@ -152,7 +165,7 @@ def main():
        'officialT15Verified':False,'2025And2026PreviouslyInspected':True,
        'trainingYears':'2015-2022','selectionYear':2023,
        'qualifiedConditions':len(candidates),'productionDeployed':False,
-       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionScore':'minimum of 2023 H1 and H2 ROI, each removing largest payout race','selectionPolicyCount':len(policies),'supportedPolicyCount':sum(p[4]['passes2023SupportGate'] for p in policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
+       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionQuarterFloorRaces':20,'selectionScore':'minimum of four 2023 calendar-quarter ROIs, each removing largest payout race','selectionPolicyCount':len(policies),'supportedPolicyCount':sum(p[4]['passes2023SupportGate'] for p in policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
     if best:
         _,k,pair,chosen,selection=best
         report['policyInvariantAudit']=audit_policy_invariants(chosen,races)
