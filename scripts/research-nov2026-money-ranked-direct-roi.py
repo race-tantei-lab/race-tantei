@@ -145,7 +145,7 @@ def money_policies(keys):
           min_modeled_cash=threshold,max_races_per_venue_day=nr,
           stake_mode=stake,race_budget=BASE_RACE_STAKE)
 
-def choose_2025(base,predictions,ridx,horsenos,odds,pay,meta,stride):
+def choose_2025(base,predictions,ridx,horsenos,odds,pay,meta,stride,min_val_races):
     pre=base.pre_result_candidates(predictions,odds,ridx,horsenos,meta,2025)
     best=None;tries=0;qualified=0;positive=0
     top_by_model=defaultdict(lambda:[0,0,-999.])
@@ -159,9 +159,9 @@ def choose_2025(base,predictions,ridx,horsenos,odds,pay,meta,stride):
         if slot!=0:continue
         tries+=1
         rows=base.settle_with_frozen_policy(pre[p.mode],ridx,horsenos,odds,pay,meta,p)
-        if len(rows)<500:continue
+        if len(rows)<min_val_races:continue
         qualified+=1
-        m=base.money_metrics(rows,500)
+        m=base.money_metrics(rows,min_val_races)
         if m["passesHistoricalNumerical200"]:positive+=1
         q=top_by_model[p.mode];q[0]+=1;q[1]+=int(m["passesHistoricalNumerical200"])
         q[2]=max(q[2],m["minusLargestRaceRoiPct"])
@@ -212,9 +212,13 @@ def main():
     cli=argparse.ArgumentParser()
     cli.add_argument("--self-test",action="store_true")
     cli.add_argument("--policy-stride",type=int,default=8)
+    cli.add_argument("--min-validation-races",type=int,default=150)
+    cli.add_argument("--min-test-races",type=int,default=150)
     args=cli.parse_args()
     if args.self_test:unit();return
     if not 1<=args.policy_stride<=64:raise ValueError("INVALID_PREDECLARED_POLICY_STEP")
+    if not (100<=args.min_validation_races<=600 and 100<=args.min_test_races<=600):
+        raise ValueError("INVALID_CASH_VALIDATION_SAMPLE_GATE")
     if os.getenv("CLOUDFLARE_API_TOKEN") or os.getenv("CLOUDFLARE_D1_DATABASE_ID"):
         raise RuntimeError("THIS_STUDY_MUST_NOT_ACCESS_LIVE_CLOUDFLARE")
     start=time.monotonic()
@@ -239,7 +243,7 @@ def main():
             F,pay,raceidx,meta,2024,objective)
     cash25=scored_modes(fit25,F,odds,2025,meta,raceidx)
     best,search=choose_2025(base,cash25,raceidx,horse,odds,pay,meta,
-                             args.policy_stride)
+                             args.policy_stride,args.min_validation_races)
     _,policy,out25=best
     print("DIRECT_CASH_RANKING_2025_CHOSEN",json.dumps({
       "rule":vars(policy),"2025RoiPct":out25["roiPct"],
@@ -254,7 +258,7 @@ def main():
     pre26=base.pre_result_candidates(cash26,odds,raceidx,horse,meta,2026)
     sel=base.settle_with_frozen_policy(pre26[policy.mode],raceidx,horse,odds,pay,
                                       meta,policy)
-    outcome=base.money_metrics(sel,300)
+    outcome=base.money_metrics(sel,args.min_test_races)
     print("DIRECT_CASH_RANKING_2026_FROZEN_CASH_RESULT",json.dumps({
       "policy":vars(policy),"2026":outcome,
       "validAdoption200":False},ensure_ascii=False),flush=True)
@@ -271,6 +275,8 @@ def main():
       "cashObjectivesTested":list(CASH_OBJECTIVES),
       "oddsBiasesTested":list(ODDS_TILTS),
       "cashPolicySearch2025":search,
+      "minimum2025ValidationRaces":args.min_validation_races,
+      "minimum2026EvaluationRaces":args.min_test_races,
       "chosen2025Policy":vars(policy),
       "2025MonetaryReturn":out25,
       "fitThrough2025Cash":training26,
