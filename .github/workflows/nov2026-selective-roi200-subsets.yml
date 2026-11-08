@@ -1,0 +1,50 @@
+name: Select only cash-profitable ROI200 pattern subsets
+on:
+  push:
+    branches:
+      - research/nov2026-subset-roi-selective-search
+    paths:
+      - scripts/research-nov2026-selective-roi200-subsets.py
+      - .github/workflows/nov2026-selective-roi200-subsets.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  selective-roi200:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install fixed numerical runtime
+        run: python -m pip install --disable-pip-version-check 'numpy<3'
+      - name: Load immutable seven-horse actual-payoff features, not old predictions
+        uses: actions/cache@v4
+        id: source
+        with:
+          path: |
+            analysis-results/roi200-public-2024-26-categories-v1.npz
+            analysis-results/roi200-public-2024-26-categories-v1.json
+          key: frozen-third-party-sixmarket-sevenhorse-source-v1
+      - name: Ensure full real-payout candidates are available
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s analysis-results/roi200-public-2024-26-categories-v1.npz
+          test -s analysis-results/roi200-public-2024-26-categories-v1.json
+      - name: Test paid-money portfolio invariants
+        run: |
+          python -m py_compile scripts/research-nov2026-selective-roi200-subsets.py
+          python -u scripts/research-nov2026-selective-roi200-subsets.py --self-test
+      - name: Discover 200% cash rule subsets and frozen prediction ROI
+        run: python -u scripts/research-nov2026-selective-roi200-subsets.py
+      - name: Preserve full financial audit without promotion to live
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selective-roi200-subset-conditions
+          path: analysis-results/nov2026-selective-roi200-condition-subsets.json
+          if-no-files-found: warn
+          retention-days: 30
