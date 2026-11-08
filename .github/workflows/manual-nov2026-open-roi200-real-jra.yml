@@ -1,0 +1,59 @@
+name: Manual historical JRA ROI-200 broad model search (after 22 JST only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      policies:
+        description: "Predeclared label-blind allocation/race/ticket policies per payout model"
+        required: true
+        default: "4000"
+        type: choice
+        options: ["1000","4000","8000","12000"]
+      full_actual_jra:
+        description: "Explicit JRA historical payout replay off race-day peak (read-only)"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  unrestricted-real-jra:
+    if: inputs.full_actual_jra == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Enforce no JRA race-day D1 research until 22 JST
+        run: |
+          python - <<'PY'
+          import datetime as dt
+          now=dt.datetime.now(dt.timezone(dt.timedelta(hours=9)))
+          if now.hour<22:
+              raise SystemExit("JRA_RESEARCH_D1_LOCKED_UNTIL_22_JST")
+          print("JRA_RESEARCH_POST_22_JST_SAFE_WINDOW",now.isoformat())
+          PY
+      - name: Pin actual ML trainer versions
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'scikit-learn==1.6.1' 'numpy<3' 'joblib==1.4.2'
+      - name: Unit test stake/ticket/race freedoms and keep-largest-outlier denominator
+        run: |
+          python scripts/research-flexible-portfolio-search.py --self-test
+          python scripts/research-flexible-chronological-jra.py --self-test
+      - name: Only read historical official JRA payouts, fit 2024, tune 2025, evaluate 2026
+        run: python -u scripts/research-flexible-chronological-jra.py --actual-jra-2025-2026 --policies "${{ inputs.policies }}" --minimum-races 100
+      - name: Retain frozen real-JRA policy/metric provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nov2026-unconstrained-search-2025-2026-actual-JRA
+          path: analysis-results/nov2026-open-policy-search-2025-selected-2026-jra.json
+          if-no-files-found: warn
+          retention-days: 30
