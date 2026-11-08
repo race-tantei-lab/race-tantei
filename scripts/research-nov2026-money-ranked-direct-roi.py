@@ -46,7 +46,7 @@ SEED=20261108
 
 def import_module(path,name):
     spec=importlib.util.spec_from_file_location(name,ROOT/path)
-    if not spec or spec.loader:raise RuntimeError("RESEARCH_DEPENDENCY_NOT_FOUND")
+    if not spec or not spec.loader:raise RuntimeError("RESEARCH_DEPENDENCY_NOT_FOUND")
     obj=importlib.util.module_from_spec(spec)
     sys.modules[name]=obj
     spec.loader.exec_module(obj)
