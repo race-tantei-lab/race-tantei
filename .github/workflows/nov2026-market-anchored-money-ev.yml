@@ -1,0 +1,35 @@
+name: ROI-only market-anchored CASH learner: 2025H1 -> H2 and 2026
+on:
+  push:
+    branches:
+      - research/nov2026-market-anchored-cash-ev
+    paths:
+      - scripts/research-nov2026-market-anchored-money-ev.py
+      - .github/workflows/nov2026-market-anchored-money-ev.yml
+permissions:
+  contents: read
+jobs:
+  monetary-roi-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install cash-expected-value learning dependencies
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Validate money-accounting and outlier-removal unit without D1
+        run: |
+          python -m py_compile scripts/research-nov2026-market-anchored-money-ev.py
+          python -u scripts/research-nov2026-market-anchored-money-ev.py --self-test
+      - name: Train NEW monetary value learner; select 2025H1; test H2/2026 exact stake-based ROI
+        run: python -u scripts/research-nov2026-market-anchored-money-ev.py --policy-stride 16
+      - name: Save both independent out-of-time cash-return results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nov2026-new-market-anchored-cash-roi
+          path: analysis-results/nov2026-market-anchored-money-EV-2025H1-selected-2025H2-2026.json
+          if-no-files-found: warn
+          retention-days: 30
