@@ -268,8 +268,8 @@ def main():
     # never invoke full historical data queries before the JRA race-day ends.
     import os,datetime as dt
     now=dt.datetime.now(dt.timezone(dt.timedelta(hours=9)))
-    if now.weekday() in (5,6) and now.hour<22:
-        raise RuntimeError("D1_RESEARCH_BLOCKED_DURING_RACE_DAY")
+    if now.hour<22:
+        raise RuntimeError("D1_RESEARCH_ONLY_AFTER_22JST_TO_PROTECT_ALL_JRA_RACE_DAYS")
     hist=module("scripts/postaug-support-chronological-56feature-validation.py","fresh_archive")
     helper=module("scripts/research-extra-trees-2024-2025-paired-jra.py","fresh_official")
     struct=module("scripts/research-structural-ranker-twohead-2025.py","fresh_struct")
