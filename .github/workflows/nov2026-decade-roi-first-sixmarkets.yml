@@ -56,6 +56,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: decade-ten-horse-six-market-actual-money-roi200-study
-          path: analysis-results/nov2026-decade-ten-runner-roi200-money.json
+          path: analysis-results/nov2026-decade-ten-runner-roi200-loose-stability.json
           if-no-files-found: warn
           retention-days: 30
