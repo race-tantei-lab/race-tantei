@@ -41,7 +41,7 @@ jobs:
                          "roiExcludeLargestRaceKeepAllStakePct",
                          "allEligibleVenueDaysCovered","MIN_TRIM_ROI_PCT=200.0"):
               assert needle in b, needle
-          assert "if now.weekday() in (5,6) and now.hour<22" in b
+          assert 'if now.hour<22:' in b and 'D1_RESEARCH_ONLY_AFTER_22JST' in b
           assert "UPDATE rt_public_bets" not in s and "INSERT INTO rt_public_bets" not in s
           print("NOV2026_SIXMARKET_RESEARCH_PROVENANCE_GATE_OK")
           PY
