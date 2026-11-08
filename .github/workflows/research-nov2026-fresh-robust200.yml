@@ -1,12 +1,6 @@
 name: Research 2026 newly trained robust-200 payout model (no production writes)
 
 on:
-  push:
-    branches:
-      - research/nov2026-robust200-fresh-model-v1
-    paths:
-      - scripts/research-nov2026-fresh-robust200.py
-      - .github/workflows/research-nov2026-fresh-robust200.yml
   workflow_dispatch:
     inputs:
       full_historical:
