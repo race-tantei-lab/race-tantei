@@ -66,6 +66,10 @@ def main():
     # This evaluates 15 predeclared market pairs x 4 rule budgets.
     # 2024+ payouts are never used to choose the pair or ticket budget.
     from itertools import combinations
+    # New experiment: a policy must be supported in BOTH chronological
+    # halves of 2023; choose by the weaker half's outlier-removed cash ROI.
+    # This reduces selection of a single lucky six-month jackpot.
+    first_half=np.asarray([int(r['month'][4:6])<=6 for r in races],dtype=bool)
     policies=[]
     for k in (1,3,5,10):
         signals=np.zeros_like(paid,dtype=bool)
@@ -92,8 +96,15 @@ def main():
             stats=audit(chosen,paid,years==2023)
             n_races=int(np.sum(eligible&(years==2023)))
             stats['races']=n_races
-            stats['passes2023SupportGate']=n_races>=100
-            score=(stats['minusMaxRacePct'] if n_races>=100 else -1.)
+            first=audit(chosen,paid,(years==2023)&first_half)
+            second=audit(chosen,paid,(years==2023)&~first_half)
+            first_races=int(np.sum(eligible&(years==2023)&first_half))
+            second_races=int(np.sum(eligible&(years==2023)&~first_half))
+            stats['firstHalf2023']={**first,'races':first_races}
+            stats['secondHalf2023']={**second,'races':second_races}
+            stats['passes2023SupportGate']=n_races>=100 and first_races>=30 and second_races>=30
+            score=(min(first['minusMaxRacePct'],second['minusMaxRacePct'])
+                   if stats['passes2023SupportGate'] else -1.)
             policies.append((score,k,(m1,m2),chosen,stats))
     policies.sort(key=lambda x:x[0],reverse=True)
     best=policies[0] if policies and policies[0][0]>=0 else None
@@ -102,7 +113,7 @@ def main():
        'officialT15Verified':False,'2025And2026PreviouslyInspected':True,
        'trainingYears':'2015-2022','selectionYear':2023,
        'qualifiedConditions':len(candidates),'productionDeployed':False,
-       'selectionPolicySupportFloorRaces':100,'selectionPolicyCount':len(policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
+       'selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionScore':'minimum of 2023 H1 and H2 ROI, each removing largest payout race','selectionPolicyCount':len(policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
     if best:
         _,k,pair,chosen,selection=best
         report.update(selectedRuleCount=k,selectedMarketPair=[base.MARKETS[m] for m in pair],selection2023=selection,
