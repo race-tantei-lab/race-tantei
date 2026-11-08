@@ -1,11 +1,7 @@
 name: Calibrate new win/rank/place mixture on 2025 then score 2026 (no D1)
 
 on:
-  push:
-    branches: [research/nov2026-robust200-fresh-model-v1]
-    paths:
-      - scripts/train-nov2026-horse-mixture-calibration.py
-      - .github/workflows/calibrate-nov2026-horse-mixture.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
