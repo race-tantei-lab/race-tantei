@@ -1,0 +1,44 @@
+name: Research frozen 2025 residual edge on independent 2026 actual JRA payout
+
+on:
+  pull_request:
+    branches: [research/market-residual-2024-walkforward-20261108]
+    paths:
+      - scripts/research-frozen-market-residual-2026.py
+      - .github/workflows/research-frozen-market-residual-2026.yml
+
+permissions:
+  contents: read
+concurrency:
+  group: frozen-residual-retest-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  confirm-or-reject-historical-2025-positive-roi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Pinned historical ML packages
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Check source and freeze old data-audit boundaries
+        run: |
+          python -m py_compile scripts/research-frozen-market-residual-2026.py
+          python scripts/research-frozen-market-residual-2026.py --self-test
+      - name: Evaluate unchanged 2025 model hypothesis on real 2026 Aug-Nov JRA payout
+        run: python -u scripts/research-frozen-market-residual-2026.py
+      - name: Preserve proof or failure of independent year's hit and real payout ROI
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frozen-2025-market-residual-retested-2026-real-JRA-payout
+          path: analysis-results/2026-forward-2025-frozen-market-residual-JRA.json
+          if-no-files-found: warn
+          retention-days: 30
