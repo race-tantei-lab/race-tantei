@@ -60,7 +60,7 @@ def read_source_horse_names():
     result=defaultdict(dict);columns=None
     paths=sorted((ROOT/"external-jra-cash-archive").glob("raceresults_202*.csv"))
     for file in paths:
-        with file.open(encoding="utf8-sig",newline="") as fh:
+        with file.open(encoding="utf-8-sig",newline="") as fh:
             reader=csv.DictReader(fh)
             if columns is None:columns=reader.fieldnames
             for r in reader:
