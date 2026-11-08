@@ -1,0 +1,38 @@
+name: REAL 2026 horse-model internals ablation (no D1, no odds claims)
+on:
+  push:
+    branches:
+      - research/nov2026-winner-model-internals-ablation
+    paths:
+      - scripts/research-nov2026-winner-model-internals.py
+      - .github/workflows/research-nov2026-winner-model-internals.yml
+permissions:
+  contents: read
+jobs:
+  real-chronological-ablation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact LightGBM version
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1' 'joblib==1.4.2'
+      - name: Explicitly prohibit D1 network and production secrets
+        run: |
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          test -z "${CLOUDFLARE_D1_DATABASE_ID:-}"
+          python -m py_compile scripts/research-nov2026-winner-model-internals.py
+      - name: Check model feature-ablation and time-split scoring invariants
+        run: python -u scripts/research-nov2026-winner-model-internals.py --self-test
+      - name: Fit six real horse models; 2025 choose; 2026 paired test
+        run: python -u scripts/research-nov2026-winner-model-internals.py
+      - name: Archive exact realized winner/outcome accuracy audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nov2026-real-horse-56feature-internals-2025-2026
+          path: analysis-results/nov2026-real-56feature-ablation-2025-select-2026-test.json
+          if-no-files-found: warn
+          retention-days: 30
