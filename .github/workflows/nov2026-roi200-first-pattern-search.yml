@@ -24,7 +24,15 @@ jobs:
         run: |
           python -m py_compile scripts/research-nov2026-roi200-first-pattern-search.py
           python -u scripts/research-nov2026-roi200-first-pattern-search.py --self-test
+      - uses: actions/cache@v4
+        id: prepared-payouts
+        with:
+          path: |
+            analysis-results/roi200-public-2024-26-categories-v1.npz
+            analysis-results/roi200-public-2024-26-categories-v1.json
+          key: frozen-third-party-sixmarket-sevenhorse-source-v1
       - name: Download unchanged all six JRA paid markets public archive, never D1
+        if: steps.prepared-payouts.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
