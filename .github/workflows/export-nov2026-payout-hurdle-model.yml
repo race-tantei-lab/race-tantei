@@ -1,0 +1,42 @@
+name: Export exact frozen 2026-tested model to Workers JSON
+on:
+  push:
+    branches: [feature/nov2026-payout-hurdle-model-port]
+    paths:
+      - scripts/export-nov2026-payout-hurdle-model.py
+      - .github/workflows/export-nov2026-payout-hurdle-model.yml
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: export-nov2026-payout-model
+  cancel-in-progress: false
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact historical training versions
+        run: python -m pip install 'lightgbm==4.6.0' 'scikit-learn==1.6.1' 'numpy<3' 'joblib==1.4.2'
+      - name: Retrieve pinned model training artifact without D1 access
+        run: gh run download 42429764993 -n pooled-2024-2025-payout-hurdle-frozen-2026-jra -D .
+      - name: Export and verify model SHA / structure
+        run: python scripts/export-nov2026-payout-hurdle-model.py
+      - name: Commit deterministic asset to research branch only
+        run: |
+          git config user.name "race-tantei-model-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/v1/nov2026-payout-hurdle-model.json tests/fixtures/nov2026-model-parity.json
+          if ! git diff --cached --quiet; then
+            git commit -m "research: store reproducible exact 2026-tested frozen model asset"
+            git pull --rebase origin feature/nov2026-payout-hurdle-model-port
+            git push origin HEAD:feature/nov2026-payout-hurdle-model-port
+          fi
