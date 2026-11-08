@@ -72,7 +72,7 @@ def main():
     assert last-first+1==len(testids)
     assert str(dates[first])>="2026-01-01" and str(dates[last])<="2026-08-09"
     end=int(offsets[first])
-    assert np.max(dates[:first])<"2026-01-01"
+    assert first>0 and str(dates[first-1])<"2026-01-01"
     model,info=robust.fit_horse(X,y,top3,counts,offsets,dates,2026)
     # New genuine fitted LightGBM ranking + independent win ExtraTrees.
     score=model[0].predict(X[end:int(offsets[last+1])])
