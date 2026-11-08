@@ -25,6 +25,7 @@ from pathlib import Path
 import argparse
 import importlib.util
 import json
+import hashlib
 import math
 import os
 import sys
@@ -149,7 +150,13 @@ def choose_2025(base,predictions,ridx,horsenos,odds,pay,meta,stride):
     best=None;tries=0;qualified=0;positive=0
     top_by_model=defaultdict(lambda:[0,0,-999.])
     for i,p in enumerate(money_policies(tuple(predictions))):
-        if i%stride!=0:continue
+        # Never use i % stride: product() orders max_races and stake last,
+        # so e.g. stride=8 would select ONLY one-race-per-day policies and
+        # wrongly reject the entire grid at 500+ race minimum.
+        slot=int.from_bytes(hashlib.blake2b(
+            repr(vars(p)).encode("utf-8"),digest_size=8
+        ).digest(),"little")%stride
+        if slot!=0:continue
         tries+=1
         rows=base.settle_with_frozen_policy(pre[p.mode],ridx,horsenos,odds,pay,meta,p)
         if len(rows)<500:continue
@@ -185,6 +192,12 @@ def unit():
     from types import SimpleNamespace
     policy=list(money_policies(("cash_amount|odds_exp=+0.0",)))
     assert policy and all(p.race_budget==1000 for p in policy)
+    subsample=[p for p in policy if int.from_bytes(hashlib.blake2b(
+        repr(vars(p)).encode("utf-8"),digest_size=8
+    ).digest(),"little")%8==0]
+    assert set(p.max_races_per_venue_day for p in subsample)==set(VENUE_DAY_RACES)
+    assert set(p.stake_mode for p in subsample)==set(STAKE_MODES)
+    assert set(p.bet_count for p in subsample)==set(K_TICKETS)
     rng=np.random.default_rng(SEED)
     X=rng.normal(size=(600,64)).astype(np.float32)
     y=np.zeros(600);y[::12]=rng.uniform(3,80,50)
