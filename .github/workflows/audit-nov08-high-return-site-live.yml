@@ -1,0 +1,28 @@
+name: One-shot live Nov 8 high-payout research tab verification
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/audit-nov08-high-return-site-live.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Confirm production HTML contains independent high-payout research UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://race-tantei-phase0.race-tantei.workers.dev/races/2026-11-08-tokyo-01'
+          http=$(curl -fsSL --retry 2 --retry-delay 1 --max-time 30 -w '%{http_code}' -o /tmp/nov8detail.html "$url?_proof=$(date +%s)")
+          echo "NOV08_DETAIL_HTTP=$http"
+          if [ "$http" != "200" ]; then exit 1; fi
+          grep -Fq '高配当研究' /tmp/nov8detail.html
+          grep -Fq '発走15分前以前のJRA公式オッズ' /tmp/nov8detail.html || grep -Fq '500%' /tmp/nov8detail.html
+          grep -Fq '研究用・購入推奨ではありません' /tmp/nov8detail.html
+          echo "NOV08_PRODUCTION_HIGH_RETURN_TAB_PRESENT_AND_LABELED"
