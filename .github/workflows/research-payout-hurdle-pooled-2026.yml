@@ -6,6 +6,7 @@ on:
     paths:
       - scripts/research-payout-hurdle-pooled-2026.py
       - .github/workflows/research-payout-hurdle-pooled-2026.yml
+      - scripts/infer-frozen-2026-pooled-hurdle-research.py
 permissions:
   contents: read
 concurrency:
@@ -31,13 +32,32 @@ jobs:
         run: |
           python -m py_compile scripts/research-payout-hurdle-pooled-2026.py
           python -u scripts/research-payout-hurdle-pooled-2026.py --self-test
+          python -m py_compile scripts/infer-frozen-2026-pooled-hurdle-research.py
+          python -u scripts/infer-frozen-2026-pooled-hurdle-research.py --self-test
       - name: Fit 2024+2025 ranked-horse ticket payout models and settle frozen 2026 actual JRA
         run: python -u scripts/research-payout-hurdle-pooled-2026.py
+      - name: Verify trained model weights are reloadable with exactly 56 horse and 34 ticket features
+        run: |
+          python - <<'PY'
+          import joblib
+          p="analysis-results/research-frozen-2026-pooled-lambdarank-hurdle.joblib"
+          m=joblib.load(p)
+          assert m["researchOnly"] is True and m["horseFeatureCount"]==56
+          assert m["notProvenProfitablyForward"] is True
+          assert m["2026OutcomesUsedToTrain"] is False
+          assert len(m["typeBaseRatePriors"])==6
+          assert m["horseRanker"].n_features_in_==56
+          assert m["ticketHits"].n_features_in_==m["ticketFeatureCount"]
+          assert m["ticketConditionalPaidMultiplier"].n_features_in_==m["ticketFeatureCount"]
+          print("FROZEN_POOLED_2026_MODEL_WEIGHTS_RELOAD_SUCCESS",m["ticketFeatureCount"])
+          PY
       - name: Preserve exact 2026 actual payouts and source venue-day exclusions
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pooled-2024-2025-payout-hurdle-frozen-2026-jra
-          path: analysis-results/2024-2025-payout-hurdle-2026-JRA-real.json
+          path: |
+            analysis-results/2024-2025-payout-hurdle-2026-JRA-real.json
+            analysis-results/research-frozen-2026-pooled-lambdarank-hurdle.joblib
           if-no-files-found: warn
           retention-days: 30
