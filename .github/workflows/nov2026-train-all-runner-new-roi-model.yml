@@ -25,7 +25,7 @@ jobs:
           python -m py_compile scripts/research-nov2026-all-runner-direct-money.py
           python -u scripts/research-nov2026-all-runner-direct-money.py --self-test
       - name: Fit with every runner; optimize money ROI in 2025; frozen ROI test in 2026
-        run: python -u scripts/research-nov2026-all-runner-direct-money.py
+        run: python -u scripts/research-nov2026-all-runner-direct-money.py --policy-stride 12
       - name: Preserve prospective-leakage and real-money limitations with exact ROI outputs
         if: always()
         uses: actions/upload-artifact@v4
