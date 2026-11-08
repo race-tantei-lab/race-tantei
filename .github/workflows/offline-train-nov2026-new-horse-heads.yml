@@ -1,12 +1,7 @@
 name: Offline train new 2026 horse heads (no Cloudflare D1)
 
 on:
-  push:
-    branches:
-      - research/nov2026-robust200-fresh-model-v1
-    paths:
-      - scripts/train-nov2026-new-horse-heads-offline.py
-      - .github/workflows/offline-train-nov2026-new-horse-heads.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
