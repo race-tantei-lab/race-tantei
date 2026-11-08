@@ -68,6 +68,25 @@ def main():
     assert [len(out[k]["trees"]) for k in ("top3","hit","paid")]==[120,110,115]
     TARGET.parent.mkdir(parents=True,exist_ok=True)
     TARGET.write_text(json.dumps(out,ensure_ascii=False,separators=(",",":"),allow_nan=False)+"\n",encoding="utf-8")
+    # Fixed decimal-free input fixture validates JS against exact Python
+    # tree decisions at the same 32-bit feature precision.
+    import numpy as np
+    rng=np.random.default_rng(20261108)
+    runner=rng.normal(0,1,(8,56)).astype(np.float32)
+    ticket=rng.normal(0,1,(8,40)).astype(np.float32)
+    fixture={
+      "rows":[{"runner":a.tolist(),"ticket":b.tolist()}
+              for a,b in zip(runner,ticket)],
+      "expected":{
+        "rankerRaw":m["horseRanker"].predict(runner).tolist(),
+        "top3Probability":m["horseTop3"].predict_proba(runner)[:,1].tolist(),
+        "ticketHitProbability":m["ticketHits"].predict_proba(ticket)[:,1].tolist(),
+        "conditionalPayoutMultiple":m["ticketConditionalPaidMultiplier"].predict(ticket).tolist()
+      }
+    }
+    fixturepath=ROOT/"tests/fixtures/nov2026-model-parity.json"
+    fixturepath.parent.mkdir(parents=True,exist_ok=True)
+    fixturepath.write_text(json.dumps(fixture,separators=(",",":"),allow_nan=False)+"\n",encoding="utf-8")
     print("NOV2026_EXACT_JOBLIB_WORKER_PORT_ASSET_OK",
           hashlib.sha256(TARGET.read_bytes()).hexdigest(),TARGET.stat().st_size)
 if __name__=="__main__":main()
