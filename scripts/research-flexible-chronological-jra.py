@@ -26,7 +26,6 @@ import os
 from pathlib import Path
 import sys
 
-import numpy as np
 
 ROOT=Path(__file__).resolve().parents[1]
 REPORT=ROOT/"analysis-results/nov2026-open-policy-search-2025-selected-2026-jra.json"
@@ -90,6 +89,7 @@ def main():
         return
     if not args.actual_jra_2025_2026:raise RuntimeError("MUST_EXPLICITLY_REQUEST_ACTUAL_JRA")
     guard_historical_payouts()
+    import numpy as np
     if not 100<=args.policies<=20000:raise ValueError("INVALID_NUMBER_OF_PREDECLARED_POLICIES")
     if not 50<=args.minimum_races<=1500:raise ValueError("INVALID_MINIMUM_RESEARCH_RACES")
     base=load("scripts/research-nov2026-fresh-robust200.py","unrestricted_base")
