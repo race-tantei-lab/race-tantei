@@ -154,13 +154,6 @@ def ticket_dataset(raw):
     return arr,labels,meta,saved,dict(missing)
 
 
-def build_groups(X:np.ndarray,labels:np.ndarray,meta:list,model,mode:str):
-    estimates=model.cash_scores(model,X) if False else None
-    del estimates
-    scores=model.cash_scores(model._fitted,X)[mode] if hasattr(model,"_fitted") else None
-    raise RuntimeError("UNUSED_BUILD_GROUPS_SHOULD_NOT_RUN")
-
-
 def money_prediction_groups(core,model,X,paid,meta,mode):
     scores=core.cash_scores(model,X)[mode]
     days=defaultdict(dict)
@@ -308,16 +301,17 @@ def main():
     test=one_year("2026-01-01","2026-08-10")
     if min(len(train["X"]),len(val["X"]),len(test["X"]))<300:
         raise RuntimeError("JRA_REAL_ARCHIVE_CHRONOLOGICAL_SPLIT_TOO_SMALL")
-    historical_wager_roi=round(100*sum(paid/10)/len(paid)/100,6)
-    # (paid is yen/100; all tickets were ¥1000 stake, so:
-    #   gross ROI = sum(paid) / (100 * N) * 100).
-    historical_wager_roi=round(float(np.sum(paid)/len(paid)),6)
+    # paid is actual JRA yen per 100-yen ticket; original wager ¥1,000
+    # each, so gross return percent is mean(paid), not post-selected ROI.
+    historical_wager_roi=round(float(np.mean(paid)),6)
     print("NEW_STABLECASH_REAL_JRA_PAID_TICKETS",json.dumps({
       "selectedOriginalRaces":len(races),"selectedOriginalTickets":len(meta),
       "trainingTickets":len(train["X"]),"2025ValidationTickets":len(val["X"]),
       "2026TestTickets":len(test["X"]),
       "earlierFullSampleRoiPctNotIndependent":historical_wager_roi,
       "archiveExclusions":missing},ensure_ascii=False),flush=True)
+    if len(races)!=14410 or len(meta)!=28820:
+        raise RuntimeError("ARCHIVED_FULL_SELECTION_POPULATION_CHANGED")
     if not 15000<=len(meta)<=40000:
         raise RuntimeError("INCOMPLETE_JRA_ARCHIVED_PAID_BETS")
     fitted=core.fit_stable_cash(train["X"],train["paid"],train["meta"])
