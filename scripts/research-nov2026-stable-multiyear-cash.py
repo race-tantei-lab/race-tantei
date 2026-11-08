@@ -118,7 +118,11 @@ def main():
     first_half=np.asarray([int(str(r['month'])[4:6])<=6 for r in races],dtype=bool)
     # Predeclared calendar-quarter stability test; 2024+ remains evaluation only.
     quarter=np.asarray([(int(str(r['month'])[4:6])-1)//3 for r in races],dtype=np.int8)
-    policies=[]
+    policy_count=0
+    support_count=0
+    concentration_count=0
+    independent_count=0
+    best=None
     for k in (1,3,5,10):
         signals=np.zeros_like(paid,dtype=bool)
         for _,pattern,group in candidates[:k]:
@@ -200,15 +204,18 @@ def main():
                     and min(leg_robust)>=110.)
                 score=(min(q['minusMaxRacePct'] for q in quarter_stats)
                        if stats['passesIndependentMarketLegs'] else -1.)
-                policies.append((score,k,(m1,m2),chosen,stats,stakes))
-    policies.sort(key=lambda x:x[0],reverse=True)
-    best=policies[0] if policies and policies[0][0]>=0 else None
+                policy_count+=1
+                support_count+=int(stats['passes2023SupportGate'])
+                concentration_count+=int(stats['passesConcentrationGate'])
+                independent_count+=int(stats['passesIndependentMarketLegs'])
+                if score>=0 and (best is None or score>best[0]):
+                    best=(score,k,(m1,m2),chosen.copy(),stats,stakes)
     report={'hypothesis':'per-year maximum race payout removed; >=5/8 years and both 2021,2022 robust positive',
        'source':'third-party pinned JRA results payout mirror; final win odds are not T15',
        'officialT15Verified':False,'2025And2026PreviouslyInspected':True,
        'trainingYears':'2015-2022','selectionYear':2023,
        'qualifiedConditions':len(candidates),'productionDeployed':False,
-       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionQuarterFloorRaces':20,'selectionScore':'minimum of four 2023 quarter max-race-removed ROIs, requiring 2023 ROI >=200 after excluding TWO largest payout races','selectionPolicyCount':len(policies),'cashAllocationHypothesis':'seven fixed ¥2000 allocations, 2023 selection only','supportedPolicyCount':sum(p[4]['passes2023SupportGate'] for p in policies),'concentrationQualifiedPolicyCount':sum(p[4]['passesConcentrationGate'] for p in policies),'independentMarketLegQualifiedPolicyCount':sum(p[4]['passesIndependentMarketLegs'] for p in policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
+       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionQuarterFloorRaces':20,'selectionScore':'minimum of four 2023 quarter max-race-removed ROIs, requiring 2023 ROI >=200 after excluding TWO largest payout races','selectionPolicyCount':policy_count,'cashAllocationHypothesis':'seven fixed ¥2000 allocations, 2023 selection only','supportedPolicyCount':support_count,'concentrationQualifiedPolicyCount':concentration_count,'independentMarketLegQualifiedPolicyCount':independent_count,'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
     if best:
         _,k,pair,chosen,selection,stakes=best
         report['policyInvariantAudit']=audit_policy_invariants(chosen,races)
