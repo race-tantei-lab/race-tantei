@@ -273,10 +273,8 @@ def mine(paid,features,races):
     trial={}
     audited=Counter()
     all_conditions=[]
-    group_codes={}
     for col in PATTERNS:
         code,size=mixed_code(features,col)
-        group_codes[col]=code
         codes_train=code[train].ravel()
         ytrain=paid[train].ravel()
         codes_val=code[val].ravel()
@@ -332,14 +330,14 @@ def mine(paid,features,races):
         -q['actualMonetaryRobustScore'],-q['2023ValidationTickets']))
     audited['uniqueROI200FormConditionCellsFrom2015To2023']=len(candidates)
     audited['allCellsSelectedOn2015to2023HistoryOnly']=True
-    return candidates,group_codes,dict(audited)
+    return candidates,dict(audited)
 
-def scores_from_subset(races,conditions,codes,length):
+def scores_from_subset(races,conditions,features,length):
     selected=conditions[:length]
     n=len(races)
     signal=np.zeros((n,N),dtype=np.float32)
     for cond in selected:
-        arr=codes[tuple(cond['columnSchema'])]
+        arr,_=mixed_code(features,tuple(cond['columnSchema']))
         np.maximum(signal,
           np.where(arr==cond['groupCode'],cond['actualMonetaryRobustScore'],
                    0.).astype(np.float32),out=signal)
@@ -382,9 +380,10 @@ def cash_audit(picks,payout,stake):
     if not picks:
         return {'races':0,'passes200':False}
     n=len(picks);investment=2000*n
-    a=np.fromiter((payout.flatten()[p[2]] for p in picks),
+    all_paid=payout.ravel()
+    a=np.fromiter((all_paid[p[2]] for p in picks),
           dtype=np.int64,count=n)
-    b=np.fromiter((payout.flatten()[p[3]] for p in picks),
+    b=np.fromiter((all_paid[p[3]] for p in picks),
           dtype=np.int64,count=n)
     p1=a*(stake//100);p2=b*((2000-stake)//100)
     total=p1+p2
@@ -403,14 +402,14 @@ def cash_audit(picks,payout,stake):
           gross-max_ticket>=investment*2 and
           gross-max_race>=investment*2)}
 
-def optimize(races,paid,conditions,codes):
+def optimize(races,paid,conditions,features):
     if not conditions:return {'status':'NO_2015to2023_PROFITABLE_ROI200_CELLS'}
     sel_start='202401';sel_end='202501'
     f2025=('202501','202601');f2026=('202601','202605')
     selected=None;tried=0;eligible=0
     cache={}
     for n in SELECTIONS:
-        sig=scores_from_subset(races,conditions,codes,n)
+        sig=scores_from_subset(races,conditions,features,n)
         d=wager_options(races,paid,sig,(sel_start,sel_end))
         cache[n]=sig
         for pair,stake,need_two,maxr in product(
@@ -471,6 +470,10 @@ def main():
         f['market']=np.broadcast_to(mark,(1,206))
         code,n=mixed_code(f,('rankMin','favOdds'))
         assert code.shape==(1,206) and n==6*6*5
+        testpaid=np.zeros((1,206),dtype=np.int32)
+        testpaid[0,0]=300
+        cash=cash_audit([(0.,'r',0,1)],testpaid,1000)
+        assert cash['roiPct']==150. and cash['stakeYen']==2000
         print('DECADE_REAL_CASH_ROI200_FIRST_MATH_OK',flush=True)
         return
     start=time.monotonic()
@@ -490,7 +493,7 @@ def main():
                for r in races_all]
     if paid.shape!=(len(races),206):
         raise RuntimeError('DECADE_JRA_FINANCIAL_TICKET_ALIGNMENT')
-    candidates,schemas,stats=mine(paid,data,races)
+    candidates,stats=mine(paid,data,races)
     print('DECADE_FINANCIAL_ROI200_CONDITIONS',json.dumps({
         'actualHistoricRaces':len(races),
         'independentActualPayoutCandidates':int(paid.size),
@@ -498,7 +501,7 @@ def main():
         'eligibleSelectedSingleRuleCells':len(candidates),
         'largestSupportedRules':candidates[:10]},
         ensure_ascii=False),flush=True)
-    result=optimize(races,paid,candidates,schemas)
+    result=optimize(races,paid,candidates,data)
     result['discoverFirstBeforePredictions']=True
     result['actualPayoutArchive2015To2026JanApr']=True
     result['winnerPredictionFittedAtAnyStage']=False
