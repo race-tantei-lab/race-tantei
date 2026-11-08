@@ -1,0 +1,47 @@
+name: ROI only — replay actual paid 2026 JRA factor outcomes, trimmed 200 gate
+on:
+  push:
+    branches:
+      - research/roi-real-2026-cached-284-market-factors
+    paths:
+      - scripts/research-roi-only-284-real-jra-cached-factors.mjs
+      - .github/workflows/roi-only-284-real-jra-cached-factors.yml
+
+permissions:
+  contents: read
+
+jobs:
+  actual-jra-return-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify no production credentials available
+        run: |
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          test -z "${CLOUDFLARE_D1_DATABASE_ID:-}"
+      - name: Test real max-single-paid-ticket upper-bound maths, with full original stake
+        run: node scripts/research-roi-only-284-real-jra-cached-factors.mjs --self-test
+      - name: Compare all 284 actual JRA 2026 factor cohorts and validation-frozen policies
+        run: node scripts/research-roi-only-284-real-jra-cached-factors.mjs
+      - name: Read verified outcome gates from saved JSON
+        run: |
+          node --input-type=module - <<'JS'
+          import fs from 'node:fs';
+          const x=JSON.parse(fs.readFileSync('analysis-results/nov2026-roi-only-284-jra-factors-live-hypotheses.json'));
+          if(x.all.cells!==284||x.all.julyCellsAtLeast200AndAtLeast10Tickets!==7)throw Error('EXPECTED_DATASET_MISMATCH');
+          if(x.all.julyCellsAtLeast200NotEliminatedByAvailableData!==0)throw Error('NEED_REAL_LEDGER_TRIM_VALIDATION');
+          if(x.productionPromotable)throw Error('FALSE_MODEL_PROMOTION');
+          console.log('ALL_JULY_ROI200_GROUPS_FAIL_TRIMMED200_PROVED');
+          JS
+      - name: Preserve actual paid JRA 2026 selection-and-max-payout-audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nov2026-284-cached-JRA-paid-factors-trim200-audit
+          path: analysis-results/nov2026-roi-only-284-jra-factors-live-hypotheses.json
+          if-no-files-found: warn
+          retention-days: 30
