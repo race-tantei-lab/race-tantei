@@ -10,3 +10,7 @@ declare const process: {
   exit(code?: number): never;
   env: Record<string, string | undefined>;
 };
+
+declare module "node:fs" {
+  export function readFileSync(path: string, options: string): string;
+}
