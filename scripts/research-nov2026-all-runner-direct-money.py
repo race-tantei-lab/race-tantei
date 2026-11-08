@@ -162,7 +162,7 @@ class NewCashHeads:
     training_ticket_candidates:int
 
 
-def fit_new_money(F,y,race_idx,meta,first_year,last_year):
+def fit_new_money(F,y,race_idx,meta,first_year,last_year,fast=False):
     # Exactly this calendar range is training; no target-year labels used.
     years=np.asarray([int(m["date"][:4]) for m in meta])
     races=(years>=first_year)&(years<=last_year)
@@ -170,17 +170,17 @@ def fit_new_money(F,y,race_idx,meta,first_year,last_year):
     xx=np.asarray(F[rowmask],dtype=np.float32)
     yy=np.asarray(y[rowmask],dtype=np.float64)
     era=years[race_idx[rowmask]]
-    if len(xx)<10000 or not np.isfinite(yy).all() or np.any(yy<0):
+    if len(xx)<(1000 if fast else 10000) or not np.isfinite(yy).all() or np.any(yy<0):
         raise ValueError("INSUFFICIENT_MONEY_TRAINING")
     winners=yy[yy>0]
-    if len(winners)<200:raise ValueError("INSUFFICIENT_MONETARY_PAYOFFS")
+    if len(winners)<(20 if fast else 200):raise ValueError("INSUFFICIENT_MONETARY_PAYOFFS")
     # Training labels only. 95th-percentile winner return protects against
     # a single outlying payout dominating the learned cash expected value.
     cap=float(np.quantile(winners,.95))
     label_cap=np.minimum(yy,cap)
     dividing=(first_year+last_year+1)//2
     early=(era<dividing)
-    if early.sum()<4000 or (~early).sum()<4000:
+    if early.sum()<(300 if fast else 4000) or (~early).sum()<(300 if fast else 4000):
         raise ValueError("DISJOINT_MONEY_ERAS_TOO_SHORT")
     raw=new_money_estimator("raw",len(xx))
     trim=new_money_estimator("capped",len(xx))
@@ -375,7 +375,7 @@ def self_test():
     ids=np.repeat(np.arange(100),12)
     meta=[{"date":f"202{(i//20)+0}-01-01","venue":"東京",
           "raceId":str(i)} for i in range(100)]
-    result=fit_new_money(X,y,ids,meta,2020,2024)
+    result=fit_new_money(X,y,ids,meta,2020,2024,fast=True)
     pred=cash_prediction(result,X[:9])
     assert len(pred)==len(MODEL_MODES)
     assert all(len(p)==9 and np.isfinite(p).all() and (p>0).all()
