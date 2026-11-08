@@ -1,0 +1,46 @@
+name: Maximize actual paid ROI by selecting only profitable conditions and monetary exposure
+on:
+  push:
+    branches:
+      - research/nov2026-subset-roi-selective-search
+    paths:
+      - scripts/research-nov2026-roi200-selective-risk-weight.py
+      - .github/workflows/nov2026-roi200-selective-stakes.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cash-roi-exposure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deterministic financial calculations
+        run: python -m pip install --disable-pip-version-check 'numpy<3'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            analysis-results/roi200-public-2024-26-categories-v1.npz
+            analysis-results/roi200-public-2024-26-categories-v1.json
+          key: frozen-third-party-sixmarket-sevenhorse-source-v1
+      - name: Require original independent real paid-ticket candidate cash
+        run: |
+          test -s analysis-results/roi200-public-2024-26-categories-v1.npz
+          test -s analysis-results/roi200-public-2024-26-categories-v1.json
+      - name: Check actual monetary stake sum and payoff
+        run: |
+          python -m py_compile scripts/research-nov2026-roi200-selective-risk-weight.py
+          python -u scripts/research-nov2026-roi200-selective-risk-weight.py --self-test
+      - name: Search money ROI across individual condition subsets and distinct market cash allocation
+        run: python -u scripts/research-nov2026-roi200-selective-risk-weight.py
+      - name: Save real paid result only, do not modify production
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selective-roi200-money-exposure-outcome
+          path: analysis-results/nov2026-roi200-cash-concentration-shortlist.json
+          if-no-files-found: warn
+          retention-days: 30
