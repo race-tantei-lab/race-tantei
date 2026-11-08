@@ -90,7 +90,7 @@ PATTERNS=[(x,) for x in SMALL]+[
 MIN_GROUP_SIZES=(60,150,350)
 SELECTIONS=(1,3,8,20,50,100)
 MARKET_PAIR_CHOICES=(-1,)+tuple(range(15))
-MARKET_PAIRS=tuple(combinations(range(TOP_N),2))
+MARKET_PAIRS=tuple(combinations(range(6),2))
 STAKE_SPLITS=(100,400,1000,1600,1900)
 NUMBER_RACES=(1,2,3,5)
 MIN_YEARS=2
@@ -191,7 +191,7 @@ def full_features(races):
       'rankSum':np.asarray([min(sum(s)//2,9) for s in slots],np.uint8),
       'rankGap':np.asarray([max(s)-min(s) for s in slots],np.uint8),
       'rankFirst':np.asarray([s[0] for s in slots],np.uint8),
-      'rankSecond':np.asarray([s[1] if len(s)>1 else 6 for s in slots],np.uint8),
+      'rankSecond':np.asarray([s[1] if len(s)>1 else TOP_N for s in slots],np.uint8),
       'favCount':np.asarray([sum(k<=1 for k in s) for s in slots],np.uint8),
       'rankExact':np.asarray([s[0]*TOP_N*TOP_N+(s[1] if len(s)>1 else 0)*TOP_N+
                          (s[2] if len(s)>2 else 0) for s in slots],np.uint16),
@@ -463,7 +463,7 @@ def optimize(races,paid,conditions,features):
 def main():
     if '--self-test' in sys.argv:
         slots,mark=fixed_template()
-        assert len(slots)==512 and len(mark)==512
+        assert len(slots)==512 and len(mark)==512 and len(MARKET_PAIRS)==15
         assert len(PATTERNS)>60
         d=[{'month':'202401','day':'x','id':'a'}]
         f={k:np.zeros((1,N),dtype=(np.uint16 if k=='rankExact' else np.uint8))
