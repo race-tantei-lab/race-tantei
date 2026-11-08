@@ -200,8 +200,28 @@ def main():
                     leg_largest=int(leg_race.max()) if len(leg_race) else 0
                     leg_robust.append(round((leg_cash-leg_largest)/n_races,3) if n_races else 0.)
                 stats['marketLegMinusMaxRaceRoiPct']=leg_robust
+                # NEW DISTINCT HYPOTHESIS: BOTH market legs must produce
+                # positive settled-cash returns in at least 3 of 4
+                # chronological 2023 quarters. Each leg is assessed
+                # independently at a fixed ¥100/race; remove its largest
+                # paying race in EACH quarter. This is not a new prediction
+                # score and never reads 2024+ results during selection.
+                leg_quarter_profitable=[]
+                for market in (m1,m2):
+                    a,b=int(base.START_MARKET[market]),int(base.START_MARKET[market+1])
+                    leg_by_race=(paid[year_rows,a:b]*chosen[year_rows,a:b]).sum(axis=1,dtype=np.int64)
+                    qprof=[]
+                    for q in range(4):
+                        mask=(quarter[year_rows]==q)&venue_day_keep[year_rows]
+                        v=leg_by_race[mask]
+                        count=int(mask.sum())
+                        cash=int(v.sum())-(int(v.max()) if len(v) else 0)
+                        qprof.append(bool(count>=20 and cash>=count*100))
+                    leg_quarter_profitable.append(qprof)
+                stats['legQuarterRobust100'] = leg_quarter_profitable
                 stats['passesIndependentMarketLegs']=(stats['passesConcentrationGate']
-                    and min(leg_robust)>=110.)
+                    and min(leg_robust)>=110.
+                    and all(sum(q)>=3 for q in leg_quarter_profitable))
                 score=(min(q['minusMaxRacePct'] for q in quarter_stats)
                        if stats['passesIndependentMarketLegs'] else -1.)
                 policy_count+=1
@@ -215,7 +235,7 @@ def main():
        'officialT15Verified':False,'2025And2026PreviouslyInspected':True,
        'trainingYears':'2015-2022','selectionYear':2023,
        'qualifiedConditions':len(candidates),'productionDeployed':False,
-       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionQuarterFloorRaces':20,'selectionScore':'minimum of four 2023 quarter max-race-removed ROIs, requiring 2023 ROI >=200 after excluding TWO largest payout races','selectionPolicyCount':policy_count,'cashAllocationHypothesis':'seven fixed ¥2000 allocations, 2023 selection only','supportedPolicyCount':support_count,'concentrationQualifiedPolicyCount':concentration_count,'independentMarketLegQualifiedPolicyCount':independent_count,'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
+       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionQuarterFloorRaces':20,'selectionScore':'minimum of four 2023 quarter max-race-removed ROIs, requiring 2023 ROI >=200 after excluding TWO largest payout races','selectionPolicyCount':policy_count,'cashAllocationHypothesis':'seven fixed ¥2000 allocations, 2023 selection only','supportedPolicyCount':support_count,'concentrationQualifiedPolicyCount':concentration_count,'independentMarketLegQualifiedPolicyCount':independent_count,'newHypothesis':'both market legs must each retain >=100% ROI after removing their largest paying race in at least three of four 2023 quarters; 2024+ never selects rules'}
     if best:
         _,k,pair,chosen,selection,stakes=best
         report['policyInvariantAudit']=audit_policy_invariants(chosen,races)
