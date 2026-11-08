@@ -2,7 +2,7 @@ name: Ten-year JRA real-money ROI200 condition discovery and holdouts
 on:
   push:
     branches:
-      - research/nov2026-decade-eight-runner-cash
+      - research/nov2026-decade-ten-runner-cash
     paths:
       - scripts/research-nov2026-decade-roi-first-sixmarkets.py
       - .github/workflows/nov2026-decade-roi-first-sixmarkets.yml
@@ -29,9 +29,9 @@ jobs:
         id: decade
         with:
           path: |
-            analysis-results/jra-decade-sixmarket-top8-cash-v2.npz
-            analysis-results/jra-decade-sixmarket-top8-races-v2.json
-          key: pinned-thirdparty-jra-2015-2026-eight-runner-six-market-cache-v1
+            analysis-results/jra-decade-sixmarket-top10-cash-v3.npz
+            analysis-results/jra-decade-sixmarket-top10-races-v3.json
+          key: pinned-thirdparty-jra-2015-2026-ten-runner-six-market-cache-v1
       - name: Retrieve precisely pinned JRA 2015-2026 monthly finished payouts, no D1
         if: steps.decade.outputs.cache-hit != 'true'
         shell: bash
@@ -55,7 +55,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: decade-eight-horse-six-market-actual-money-roi200-study
-          path: analysis-results/nov2026-decade-eight-runner-roi200-money.json
+          name: decade-ten-horse-six-market-actual-money-roi200-study
+          path: analysis-results/nov2026-decade-ten-runner-roi200-money.json
           if-no-files-found: warn
           retention-days: 30
