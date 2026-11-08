@@ -41,6 +41,24 @@ def fixed_five_per_venue_day(chosen,races):
             for _,i in entries[:5]:keep[i]=True
     return chosen & keep[:,None],keep
 
+def audit_policy_invariants(chosen,races):
+    """Reject accidental over-selection or same-market pair in any venue-day."""
+    from collections import Counter
+    assert chosen.shape[0]==len(races)
+    base=load('scripts/research-nov2026-decade-roi-first-sixmarkets.py','invariant_base')
+    counts=Counter()
+    ids=set()
+    for i in np.flatnonzero(chosen.any(axis=1)):
+        rid=str(races[int(i)]['id'])
+        assert rid not in ids, 'duplicate race id'
+        ids.add(rid)
+        assert chosen[i].sum()==2, 'not exactly two bets per race'
+        markets=[m for m in range(6) if chosen[i,int(base.START_MARKET[m]):int(base.START_MARKET[m+1])].any()]
+        assert len(markets)==2, 'same-market duplicate tickets'
+        counts[(rid[:4],rid[4:6],rid[6:10])]+=1
+    assert all(n==5 for n in counts.values()), 'venue-day not exactly five races'
+    return {'venueDays':len(counts),'races':len(ids),'twoDistinctMarkets':True,'fivePerVenueDay':True}
+
 def main():
     base=load('scripts/research-nov2026-decade-roi-first-sixmarkets.py','base_cash')
     rolling=load('scripts/research-nov2026-rolling-cash-roi200-conditions.py','rolling_cash')
@@ -134,9 +152,10 @@ def main():
        'officialT15Verified':False,'2025And2026PreviouslyInspected':True,
        'trainingYears':'2015-2022','selectionYear':2023,
        'qualifiedConditions':len(candidates),'productionDeployed':False,
-       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionScore':'minimum of 2023 H1 and H2 ROI, each removing largest payout race','selectionPolicyCount':len(policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
+       'newHypothesis2':'exactly five deterministic qualifying races per venue/day, with two different market tickets per race','selectionPolicySupportFloorRaces':100,'selectionHalfYearFloorRaces':30,'selectionScore':'minimum of 2023 H1 and H2 ROI, each removing largest payout race','selectionPolicyCount':len(policies),'supportedPolicyCount':sum(p[4]['passes2023SupportGate'] for p in policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
     if best:
         _,k,pair,chosen,selection=best
+        report['policyInvariantAudit']=audit_policy_invariants(chosen,races)
         report.update(selectedRuleCount=k,selectedMarketPair=[base.MARKETS[m] for m in pair],selection2023=selection,
           holdoutDiagnostics={str(y):audit(chosen,paid,years==y) for y in (2024,2025,2026)},
           chosenRules=[{'pattern':list(p),'code':g,'score':list(s)} for s,p,g in candidates[:k]],
