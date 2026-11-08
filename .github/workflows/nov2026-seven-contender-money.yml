@@ -1,0 +1,54 @@
+name: Seven-contender six-market direct financial return model
+on:
+  push:
+    branches:
+      - research/nov2026-expanded-eight-cash-v1
+    paths:
+      - scripts/research-nov2026-seven-contender-cash.py
+      - .github/workflows/nov2026-seven-contender-money.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  seven-contender-money:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned monetary machine learning packages
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Verify exact six-market money accounting
+        run: |
+          python -m py_compile scripts/research-nov2026-seven-contender-cash.py
+          python -u scripts/research-nov2026-seven-contender-cash.py --self-test
+      - name: Fetch pinned 2024-2026 third-party JRA paid result CSV - NO D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-archive
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          for year in 2024 2025; do
+            for m in $(seq -w 1 12); do
+              target="raceresults_$year$m.csv"
+              curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/$target" "$URL/$target"
+            done
+          done
+          for m in 01 02 03; do
+            target="raceresults_2026$m.csv"
+            curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/$target" "$URL/$target"
+          done
+          test "$(find external-jra-cash-archive -name '*.csv' | wc -l)" -eq 27
+      - name: Evaluate new monetary predictor over all six markets and seven contenders
+        run: python -u scripts/research-nov2026-seven-contender-cash.py
+      - name: Archive actual money results without any production deployment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seven-contender-sixmarket-actual-paid-roi
+          path: analysis-results/nov2026-expanded-seven-market-cash.json
+          if-no-files-found: warn
+          retention-days: 30
