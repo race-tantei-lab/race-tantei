@@ -1,0 +1,39 @@
+name: REAL horse-model vs final market information study (no D1)
+on:
+  push:
+    branches:
+      - research/nov2026-winner-model-internals-ablation
+    paths:
+      - scripts/research-nov2026-market-model-information.py
+      - .github/workflows/research-nov2026-market-model-information.yml
+permissions:
+  contents: read
+jobs:
+  test-2025-calibration-vs-2026-market:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install frozen real ML trainer
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1' 'joblib==1.4.2'
+      - name: Check complete absence of D1 credentials
+        run: |
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          test -z "${CLOUDFLARE_D1_DATABASE_ID:-}"
+      - name: Preflight research-only and no fake JRA T15 data
+        run: |
+          python -m py_compile scripts/research-nov2026-market-model-information.py
+          python scripts/research-nov2026-market-model-information.py --self-test
+      - name: Fit real horse model 2024 -> calibrate 2025 -> market-compare 2026
+        run: python -u scripts/research-nov2026-market-model-information.py
+      - name: Save exact paired model/market predictive comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nov2026-model-versus-JRA-final-market-diagnostic
+          path: analysis-results/nov2026-market-residual-blend-2025-selected-2026-eval.json
+          if-no-files-found: warn
+          retention-days: 30
