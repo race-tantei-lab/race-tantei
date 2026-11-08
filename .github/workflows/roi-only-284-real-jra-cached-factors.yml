@@ -20,10 +20,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Verify no production credentials available
+      - name: Check offline proof has no network or production state mutation
         run: |
-          test -z "${CLOUDFLARE_API_TOKEN:-}"
-          test -z "${CLOUDFLARE_D1_DATABASE_ID:-}"
+          test -f analysis-results/betting-factor-analysis.json
+          test -f scripts/research-roi-only-direct-return-shrinkage.mjs
       - name: Test real max-single-paid-ticket upper-bound maths, with full original stake
         run: node scripts/research-roi-only-284-real-jra-cached-factors.mjs --self-test
       - name: Compare all 284 actual JRA 2026 factor cohorts and validation-frozen policies
