@@ -24,6 +24,8 @@ jobs:
         run: |
           python -m py_compile scripts/research-nov2026-stablecash-archived-actual-roi.py
           python -m py_compile scripts/research-nov2026-stablecash-direct-payoff.py
+      - name: Actually fit four entirely new direct monetary-return model heads
+        run: python -u scripts/research-nov2026-stablecash-direct-payoff.py --self-test
       - name: Verify that actually paid JRA bet accounting retains the entire original stake
         run: python -u scripts/research-nov2026-stablecash-archived-actual-roi.py --self-test
       - name: Fit NEW actual JRA monetary return ML, select 2025, evaluate frozen 2026 ROI
