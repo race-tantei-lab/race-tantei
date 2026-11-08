@@ -28,11 +28,13 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           s=Path('scripts/research-flexible-portfolio-search.py').read_text()
-          for condition in ('range(1,13)', 'TICKET_COUNTS=(1,2,3,4,6,8,12,16,24,32,48,64)',
+          for condition in ('range(1,13)', 'TICKET_COUNTS=tuple(range(1,65))',
             'BET_BUDGETS=(100,300,500,1000,2000,5000,10000,20000,50000,100000,300000)',
             'top<=big<=got', 'got-big', 'got-top', 'hitRacePct', 'races_per_venue_day'):
               assert condition in s,condition
           assert 'INSERT INTO rt_public_bets' not in s
           assert 'RACE_BUDGET_MODES' in s
+          assert 'RACE_FILTERS' in s
+          assert 'RACE_COUNTS=tuple(range(13))' in s
           print("UNRESTRICTED_MODEL_NO_FIXED_5R_2BET_1000_YEN_AND_PAYOFF_GATE_OK")
           PY
