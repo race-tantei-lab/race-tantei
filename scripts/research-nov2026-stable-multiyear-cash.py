@@ -37,7 +37,17 @@ def main():
             money=paid[years==yr].ravel()
             count=np.bincount(key,minlength=groups)
             cash=np.bincount(key,weights=money,minlength=groups)
-            annual.append((count,cash))
+            # New robustness hypothesis: remove the largest RACE payout
+            # within each cell for EACH training year before ranking.
+            largest=np.zeros(groups,dtype=np.float64)
+            year_rows=np.flatnonzero(years==yr)
+            for j in year_rows:
+                positive=paid[j]>0
+                if not np.any(positive):continue
+                unique,reverse=np.unique(codes[j,positive],return_inverse=True)
+                race_totals=np.bincount(reverse,weights=paid[j,positive])
+                largest[unique]=np.maximum(largest[unique],race_totals)
+            annual.append((count,np.maximum(0,cash-largest)))
         support=np.stack([x[0] for x in annual])
         income=np.stack([x[1] for x in annual])
         roi=np.divide(income,support,out=np.zeros_like(income),where=support>0)
@@ -89,7 +99,7 @@ def main():
         policies.append((score,k,chosen,stats))
     policies.sort(key=lambda x:x[0],reverse=True)
     best=policies[0] if policies and policies[0][0]>=0 else None
-    report={'hypothesis':'multi-year profitable cells; >=5/8 years and both 2021,2022 positive',
+    report={'hypothesis':'per-year maximum race payout removed; >=5/8 years and both 2021,2022 robust positive',
        'source':'third-party pinned JRA results payout mirror; final win odds are not T15',
        'officialT15Verified':False,'2025And2026PreviouslyInspected':True,
        'trainingYears':'2015-2022','selectionYear':2023,
