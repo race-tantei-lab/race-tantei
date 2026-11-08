@@ -1,0 +1,54 @@
+name: New six-market hurdle model - actual-money ROI validation
+on:
+  push:
+    branches:
+      - research/nov2026-sixmarket-hurdle-money
+    paths:
+      - scripts/research-nov2026-independent-hurdle-cash.py
+      - .github/workflows/nov2026-independent-hurdle-cash.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  research-cash-hurdle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned direct-money learning dependencies
+        run: python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3' 'scikit-learn==1.6.1'
+      - name: Check model self-test and accounting
+        run: |
+          python -m py_compile scripts/research-nov2026-independent-hurdle-cash.py
+          python -u scripts/research-nov2026-independent-hurdle-cash.py --self-test
+      - name: Download pinned public JRA payout mirror without D1 usage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-archive
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          for year in 2024 2025; do
+            for m in $(seq -w 1 12); do
+              target="raceresults_$year$m.csv"
+              curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/$target" "$URL/$target"
+            done
+          done
+          for m in 01 02 03; do
+            target="raceresults_2026$m.csv"
+            curl -fsSL --retry 2 --max-time 35 -o "external-jra-cash-archive/$target" "$URL/$target"
+          done
+          test "$(find external-jra-cash-archive -name '*.csv' | wc -l)" -eq 27
+      - name: Fit new hurdle from independent candidates and test frozen ROI policy
+        run: python -u scripts/research-nov2026-independent-hurdle-cash.py
+      - name: Preserve actual monetary payout research (never auto deploy)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: independent-sixmarket-hurdle-financial-result
+          path: analysis-results/nov2026-independent-sixmarket-hurdle-money.json
+          if-no-files-found: warn
+          retention-days: 30
