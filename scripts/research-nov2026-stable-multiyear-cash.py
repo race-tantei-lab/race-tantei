@@ -60,43 +60,41 @@ def main():
             score=(float(np.median(v)),float(np.quantile(v,.25)),int(support[:,group].sum()))
             candidates.append((score,pattern,int(group)))
     candidates.sort(key=lambda x:x[0],reverse=True)
-    # Select rule-count using 2023 only, not 2024/25/26 outcomes.
+    # NEW HYPOTHESIS: learn which TWO market types to pair using only
+    # 2023 cash, rather than always picking the first two market types.
+    # Each market has at most one deterministic ticket per race.
+    # This evaluates 15 predeclared market pairs x 4 rule budgets.
+    # 2024+ payouts are never used to choose the pair or ticket budget.
+    from itertools import combinations
     policies=[]
     for k in (1,3,5,10):
         signals=np.zeros_like(paid,dtype=bool)
         for _,pattern,group in candidates[:k]:
             codes,_=base.mixed_code(feat,pattern)
             signals|=(codes==group)
-        # One ticket per market per race; choose two distinct markets.
-        # Eligibility is based on historical stability, never race payouts.
-        picks=np.zeros_like(signals)
+        market_picks=np.zeros_like(signals)
         for m in range(6):
             a,b=int(base.START_MARKET[m]),int(base.START_MARKET[m+1])
             idx=np.argmax(signals[:,a:b],axis=1)
             rows=np.arange(len(years))
             valid=signals[rows,a+idx]
-            picks[rows[valid],a+idx[valid]]=True
-        # Only races with two or more distinct market signals; deterministic
-        # first two markets. Equal stakes; 2 tickets per eligible race.
+            market_picks[rows[valid],a+idx[valid]]=True
         market_mask=np.zeros((len(years),6),dtype=bool)
         for m in range(6):
             a,b=int(base.START_MARKET[m]),int(base.START_MARKET[m+1])
-            market_mask[:,m]=picks[:,a:b].any(axis=1)
-        chosen=np.zeros_like(picks)
-        count=np.zeros(len(years),dtype=np.int8)
-        for m in range(6):
-            a,b=int(base.START_MARKET[m]),int(base.START_MARKET[m+1])
-            accept=market_mask[:,m]&(count<2)
-            chosen[accept,a:b]=picks[accept,a:b]
-            count+=accept
-        chosen[count!=2]=False
-        stats=audit(chosen,paid,years==2023)
-        # Require 100 settled races; do not select one-jackpot policies.
-        n_races=int(np.sum(np.any(chosen & (years==2023)[:,None],axis=1)))
-        stats['races']=n_races
-        stats['passes2023SupportGate']=n_races>=100
-        score=(stats['minusMaxRacePct'] or 0) if n_races>=100 else -1.
-        policies.append((score,k,chosen,stats))
+            market_mask[:,m]=market_picks[:,a:b].any(axis=1)
+        for m1,m2 in combinations(range(6),2):
+            eligible=market_mask[:,m1]&market_mask[:,m2]
+            chosen=np.zeros_like(signals)
+            for m in (m1,m2):
+                a,b=int(base.START_MARKET[m]),int(base.START_MARKET[m+1])
+                chosen[eligible,a:b]=market_picks[eligible,a:b]
+            stats=audit(chosen,paid,years==2023)
+            n_races=int(np.sum(eligible&(years==2023)))
+            stats['races']=n_races
+            stats['passes2023SupportGate']=n_races>=100
+            score=(stats['minusMaxRacePct'] if n_races>=100 else -1.)
+            policies.append((score,k,(m1,m2),chosen,stats))
     policies.sort(key=lambda x:x[0],reverse=True)
     best=policies[0] if policies and policies[0][0]>=0 else None
     report={'hypothesis':'per-year maximum race payout removed; >=5/8 years and both 2021,2022 robust positive',
@@ -104,10 +102,10 @@ def main():
        'officialT15Verified':False,'2025And2026PreviouslyInspected':True,
        'trainingYears':'2015-2022','selectionYear':2023,
        'qualifiedConditions':len(candidates),'productionDeployed':False,
-       'selectionPolicySupportFloorRaces':100,'selectionPolicyCount':len(policies)}
+       'selectionPolicySupportFloorRaces':100,'selectionPolicyCount':len(policies),'newHypothesis':'predeclared 15 market pairs selected on 2023 cash only'}
     if best:
-        _,k,chosen,selection=best
-        report.update(selectedRuleCount=k,selection2023=selection,
+        _,k,pair,chosen,selection=best
+        report.update(selectedRuleCount=k,selectedMarketPair=[base.MARKETS[m] for m in pair],selection2023=selection,
           holdoutDiagnostics={str(y):audit(chosen,paid,years==y) for y in (2024,2025,2026)},
           chosenRules=[{'pattern':list(p),'code':g,'score':list(s)} for s,p,g in candidates[:k]],
           passes=False)
