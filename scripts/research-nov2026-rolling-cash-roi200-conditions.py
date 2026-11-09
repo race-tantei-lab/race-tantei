@@ -159,6 +159,28 @@ def measure(picks,paid,stake):
       'hitRacePct':round(hit*100,4),
       'robust200':bool(n>=100 and gross-biggest>=2*total_bets and gross-biggestrace>=2*total_bets)}
 
+def market_concentration_audit(picks, paid, stake):
+    """New cash hypothesis: reject two-market portfolios whose profit is
+    effectively a single market's jackpot. Never select tickets using results.
+    Returns cash by market and concentration of positive net returns.
+    """
+    flat=paid.ravel()
+    by_market=defaultdict(lambda: [0,0,0])
+    for p in picks:
+        for idx,amount in ((p[2],stake),(p[3],2000-stake)):
+            market=int(idx)%paid.shape[1]
+            # market boundaries are supplied by the fixed 6-market template
+            market=int(np.searchsorted([10,55,100,190,310,1030],market,side='right'))
+            row=by_market[market]
+            row[0]+=amount
+            row[1]+=int(flat[idx])*(amount//100)
+            row[2]+=1
+    profits={str(k):v[1]-v[0] for k,v in by_market.items()}
+    positive=sum(max(0,v) for v in profits.values())
+    dominance=max((max(0,v) for v in profits.values()),default=0)/max(1,positive)
+    return {'marketNetProfitYen':profits,'largestPositiveProfitShare':round(dominance,5),
+            'marketStakeAndReturnYen':{str(k):v for k,v in by_market.items()}}
+
 def halfyear_floor(picks, paid, stake, races):
     """Pre-registered robustness: require both chronological half-years to survive
     their own largest winning race; not an extra bet selection after outcomes."""
@@ -230,7 +252,11 @@ def main():
         floor,halves=halfyear_floor(chosen,paid,stake,races)
         if floor is None:continue
         # Select the worst half-year, not the lucky full-year windfall.
-        ranking=(int(floor>=200),floor,stats['minusMaxRacePct'],
+        diversification=market_concentration_audit(chosen,paid,stake)
+        # Prefer independently profitable markets to one jackpot-carrying market.
+        # Cash ROI remains the sole target, not classification accuracy.
+        diversified=int(sum(v>0 for v in diversification['marketNetProfitYen'].values())>=2 and diversification['largestPositiveProfitShare']<=0.75)
+        ranking=(int(floor>=200),diversified,floor,stats['minusMaxRacePct'],
                  stats['races'])
         if selected is None or ranking>selected[0]:
             selected=(ranking,policy,stats)
@@ -259,9 +285,10 @@ def main():
             'stakeFirstYen':stake,'stakeSecondYen':2000-stake,
             'racesPerVenueDayMax':limit,'twoQualifyingMarketsRequired':needtwo},
           '2024CashPolicySelection':m2024,
+          '2024MarketCashConcentration':market_concentration_audit(pick_portfolio(base,year_scored[(2024,h,s,k)],policy),paid,stake),
           '2024HalfyearMaxRaceRemovedAudits':halfyear_floor(pick_portfolio(base,year_scored[(2024,h,s,k)],policy),paid,stake,races)[1],
-          '2025TrueForward':audit.get('2025'),
-          '2026JanAprTrueForward':audit.get('2026'),
+          '2025PreviouslyInspectedForwardChronologyOnly':audit.get('2025'),
+          '2026JanAprPreviouslyInspectedForwardChronologyOnly':audit.get('2026'),
           'historicalRuleCountByYear':{
               str(y):len(year_rules.get((y,h,s),[]))
               for y in (2024,2025,2026)},
