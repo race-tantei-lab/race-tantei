@@ -8,6 +8,7 @@ on:
       - scripts/research-nov2026-bayes-crossmarket-cash.py
       - scripts/research-nov2026-cash-covariance-generator.py
       - scripts/research-nov2026-temporal-interaction-cash.py
+      - scripts/research-nov2026-downside-pair-cash.py
       - .github/workflows/nov2026-rolling-real-cash-roi200.yml
   workflow_dispatch:
 permissions:
@@ -72,6 +73,8 @@ jobs:
         run: python -u scripts/research-nov2026-cash-covariance-generator.py
       - name: Temporal conditional monetary interaction ticket generator
         run: python -u scripts/research-nov2026-temporal-interaction-cash.py
+      - name: New cross-market downside-aware cash pair selection
+        run: python -u scripts/research-nov2026-downside-pair-cash.py
       - name: Mine annually refreshed ROI200 actual money patterns using only prior years, test 2025 and 2026
         run: python -u scripts/research-nov2026-rolling-cash-roi200-conditions.py
       - name: Keep money audit off production, no scheduled monitoring
@@ -84,5 +87,6 @@ jobs:
             analysis-results/nov2026-bayes-crossmarket-cash.json
             analysis-results/nov2026-cash-covariance-generator.json
             analysis-results/nov2026-temporal-interaction-cash.json
+            analysis-results/nov2026-downside-pair-cash.json
           if-no-files-found: warn
           retention-days: 30
