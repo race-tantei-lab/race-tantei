@@ -22,7 +22,6 @@ OUT=ROOT/'analysis-results/nov2026-three-year-rolling-roi200-paid-ticket-rules.j
 HORIZONS=(2,3,5)
 SUPPORTS=(30,80,160)
 TOP_COUNTS=(1,3,8,20,50)
-PAIRS=(-1,)+tuple(range(15))
 STAKES=(100,500,1000,1500,1900)
 RACES_PER_DAY=(5,)  # enforce production venue-day maximum, not tuned on validation
 SEED=20261109
@@ -72,8 +71,11 @@ def rules_lookback(source,paid,feat,years,target,horizon,support):
             yr_count=np.bincount(yr_key,minlength=n)
             yr_cash=np.bincount(yr_key,weights=yr_paid,minlength=n)
             profitable_years += ((yr_count>=10)&(yr_cash>100*yr_count)).astype(np.uint8)
+        # New hypothesis: avoid a cell whose cash profit comes from one calendar year.
+        # Require at least three separately profitable historical years when available.
+        required_profitable_years = min(3,horizon)
         good=(counts>=support)&(positive_counts>=max(3,support//35))&(
-           robust>=2.)&(profitable_years>=2)
+           robust>=2.)&(profitable_years>=required_profitable_years)
         for index in np.flatnonzero(good):
             # Pair true net cash return with support shrinkage.
             value=float(min(robust[index],20)*math.sqrt(
