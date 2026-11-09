@@ -64,6 +64,8 @@ def rules_lookback(source,paid,feat,years,target,horizon,support):
         # never using target-year settlements. At least two separate historical
         # years must each have positive net cash, with >=10 tickets per year.
         profitable_years=np.zeros(n,dtype=np.uint8)
+        yearly_positive_profit=np.zeros(n,dtype=np.float64)
+        maximum_year_profit=np.zeros(n,dtype=np.float64)
         for yr in range(target-horizon,target):
             ym=train & (years==yr)
             yr_key=group[ym].ravel()
@@ -71,11 +73,15 @@ def rules_lookback(source,paid,feat,years,target,horizon,support):
             yr_count=np.bincount(yr_key,minlength=n)
             yr_cash=np.bincount(yr_key,weights=yr_paid,minlength=n)
             profitable_years += ((yr_count>=10)&(yr_cash>100*yr_count)).astype(np.uint8)
+            net=np.maximum(yr_cash-100*yr_count,0)
+            yearly_positive_profit+=net
+            maximum_year_profit=np.maximum(maximum_year_profit,net)
         # New hypothesis: avoid a cell whose cash profit comes from one calendar year.
         # Require at least three separately profitable historical years when available.
         required_profitable_years = min(3,horizon)
         good=(counts>=support)&(positive_counts>=max(3,support//35))&(
-           robust>=2.)&(profitable_years>=required_profitable_years)
+           robust>=2.)&(profitable_years>=required_profitable_years)&(
+           maximum_year_profit<=0.65*np.maximum(yearly_positive_profit,1))
         for index in np.flatnonzero(good):
             # Pair true net cash return with support shrinkage.
             value=float(min(robust[index],20)*math.sqrt(
