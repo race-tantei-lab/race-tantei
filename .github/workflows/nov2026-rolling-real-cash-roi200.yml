@@ -6,6 +6,7 @@ on:
     paths:
       - scripts/research-nov2026-rolling-cash-roi200-conditions.py
       - scripts/research-nov2026-bayes-crossmarket-cash.py
+      - scripts/research-nov2026-cash-covariance-generator.py
       - .github/workflows/nov2026-rolling-real-cash-roi200.yml
   workflow_dispatch:
 permissions:
@@ -66,6 +67,8 @@ jobs:
           python -u scripts/research-nov2026-rolling-cash-roi200-conditions.py --self-test
       - name: New cross-market empirical Bayes cash ticket generator and settlement
         run: python -u scripts/research-nov2026-bayes-crossmarket-cash.py
+      - name: New cash covariance pair generator and actual settlement
+        run: python -u scripts/research-nov2026-cash-covariance-generator.py
       - name: Mine annually refreshed ROI200 actual money patterns using only prior years, test 2025 and 2026
         run: python -u scripts/research-nov2026-rolling-cash-roi200-conditions.py
       - name: Keep money audit off production, no scheduled monitoring
@@ -76,5 +79,6 @@ jobs:
           path: |
             analysis-results/nov2026-three-year-rolling-roi200-paid-ticket-rules.json
             analysis-results/nov2026-bayes-crossmarket-cash.json
+            analysis-results/nov2026-cash-covariance-generator.json
           if-no-files-found: warn
           retention-days: 30
