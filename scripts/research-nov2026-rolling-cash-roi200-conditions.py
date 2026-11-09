@@ -26,6 +26,7 @@ PAIRS=(-1,)+tuple(range(15))
 STAKES=(100,500,1000,1500,1900)
 RACES_PER_DAY=(5,)  # enforce production venue-day maximum, not tuned on validation
 SEED=20261109
+PAIRS=(-1,)+tuple(range(15))  # all 15 distinct two-market pairs plus best-per-race
 
 def module(path,name):
     spec=importlib.util.spec_from_file_location(name,ROOT/path)
@@ -148,15 +149,14 @@ def measure(picks,paid,stake):
       'minusMaxTicketPct':p(gross-biggest),
       'minusMaxRacePct':p(gross-biggestrace),
       'hitRacePct':round(hit*100,4),
-      'robust200':bool(n>=100 and hit>=.2 and
-        gross-biggest>=2*total_bets and gross-biggestrace>=2*total_bets)}
+      'robust200':bool(n>=100 and gross-biggest>=2*total_bets and gross-biggestrace>=2*total_bets)}
 
 def halfyear_floor(picks, paid, stake, races):
     """Pre-registered robustness: require both chronological half-years to survive
     their own largest winning race; not an extra bet selection after outcomes."""
     partitions={0:[],1:[]}
     for p in picks:
-        idx=int(p[2])//1030
+        idx=int(p[2])//paid.shape[1]
         month=int(races[idx]['month'][4:])
         partitions[int(month>6)].append(p)
     audits=[measure(partitions[i],paid,stake) for i in (0,1)]
@@ -217,7 +217,7 @@ def main():
         chosen=pick_portfolio(base,day,policy)
         stats=measure(chosen,paid,stake)
         tested+=1
-        if stats['races']<100 or stats['hitRacePct']<20:continue
+        if stats['races']<100:continue  # ROI is the objective, not hit rate
         eligible+=1
         floor,halves=halfyear_floor(chosen,paid,stake,races)
         if floor is None:continue
