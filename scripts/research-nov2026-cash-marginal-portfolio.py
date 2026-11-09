@@ -13,7 +13,14 @@ CUT=(0,10,55,100,190,310,1030)
 MARKETS=('win','wide','quinella','exacta','trio','trifecta')
 def main():
  with np.load(ROOT/'analysis-results/jra-decade-sixmarket-top10-cash-v3.npz') as z:
-  cash=z['payout'].astype(np.float64)
+  payouts=z['payout']
+  if payouts.ndim!=2 or payouts.shape[1]!=1030 or not np.issubdtype(payouts.dtype,np.integer):
+   raise RuntimeError('PAYOUT_CACHE_NOT_INT_YEN_PER_100YEN_TICKET')
+  if np.any(payouts<0) or not np.any(payouts>=100):
+   raise RuntimeError('PAYOUT_CACHE_INVALID_CASH_YEN_VALUES')
+  # Source parse_payments() decodes the settled CSV payment integers into
+  # yen per JRA 100-yen ticket. No final odds conversion or scaling applied.
+  cash=payouts.astype(np.float64)
   rank=z['rankMin'].astype(np.int16)
   gap=z['rankGap'].astype(np.int16)
   odds=z['oddsGeom'].astype(np.int16)
@@ -69,17 +76,52 @@ def main():
   groups=defaultdict(list)
   for day,venue,i,pair in selected:groups[(day,venue)].append((i,pair))
   chosen=[(i,p) for rows in groups.values() for i,p in sorted(rows,key=lambda v:-v[1][0])[:5]]
-  pays=[float(cash[i,k]) for i,p in chosen for k in p[3:5]]
-  total=sum(pays);maxpay=max(pays,default=0)
-  results[str(year)]={'trainYears':[int(years[train].min()),int(years[train].max())],
+  # A payout entry is the actual yen returned on a 100-yen ticket. Both
+  # legs are 100 yen, hence exactly 200 yen wagered on each chosen race.
+  # The fixed ticket template index 0 is the favourite WIN; index 10 is the
+  # top-two WIDE: useful no-model benchmark on identical selected race days.
+  paid_ticket_yen=[int(cash[i,k]) for i,p in chosen for k in p[3:5]]
+  paid_race_yen=[int(cash[i,p[3]]+cash[i,p[4]]) for i,p in chosen]
+  baseline_paid_race_yen=[int(cash[i,0]+cash[i,10]) for i,_ in chosen]
+  if not chosen or len(paid_ticket_yen)!=2*len(chosen):
+   raise RuntimeError('NO_SELECTED_CASH_TICKETS')
+  if any(p[1]==p[2] for _,p in chosen):
+   raise RuntimeError('NON_DISTINCT_BET_MARKETS')
+  cash_yen=int(sum(paid_ticket_yen))
+  stake_yen=200*len(chosen)
+  largest_ticket_yen=int(max(paid_ticket_yen,default=0))
+  largest_race_yen=int(max(paid_race_yen,default=0))
+  baseline_cash_yen=int(sum(baseline_paid_race_yen))
+  baseline_largest_race_yen=int(max(baseline_paid_race_yen,default=0))
+  def roi(paid):
+   return round(100*paid/stake_yen,4)
+  results[str(year)]={
+   'trainYears':[int(years[train].min()),int(years[train].max())],
    'evaluationYear':year,'candidateRaces':len(test),'selectedRaces':len(chosen),
+   'paidTickets':int(sum(1 for x in paid_ticket_yen if x>0)),
+   'paidRaces':int(sum(1 for x in paid_race_yen if x>0)),
    'marketTicketCounts':dict(Counter(MARKETS[m] for _,p in chosen for m in p[1:3])),
-   'stakeYen':200*len(chosen),'rawPayoutUnits':total,
-   'rawPayoutMinusMaxTicketUnits':total-maxpay,'payoutYen':None,
-   'cashRoiPct':None,'minusMaxTicketRoiPct':None,
-   'payoutUnitAuditRequired':True,'officialT15':False,'previouslyInspected':year>=2025}
+   'stakeYen':stake_yen,'payoutYen':cash_yen,
+   'profitYen':cash_yen-stake_yen,'cashRoiPct':roi(cash_yen),
+   'maxTicketPayoutYen':largest_ticket_yen,
+   'minusMaxTicketRoiPct':roi(cash_yen-largest_ticket_yen),
+   'maxRacePayoutYen':largest_race_yen,
+   'minusMaxRaceRoiPct':roi(cash_yen-largest_race_yen),
+   'cashBaseline':'favorite win + two-favorites wide, same race selection',
+   'baselinePayoutYen':baseline_cash_yen,
+   'baselineRoiPct':roi(baseline_cash_yen),
+   'baselineMinusMaxRaceRoiPct':roi(baseline_cash_yen-baseline_largest_race_yen),
+   'sourceCashUnit':'settled third-party CSV payout integer yen per 100-yen stake',
+   'sourceUnitInterpretationChecked':True,
+   'independentlyReconciledWithOfficialJRA':False,
+   'officialT15':False,
+   'previouslyInspected':year>=2025,
+   'passesCashRoi200':bool(len(chosen)>=100 and
+      cash_yen>=2*stake_yen and
+      cash_yen-largest_race_yen>=2*stake_yen)
+  }
   print('MARGINAL_PORTFOLIO',json.dumps(results[str(year)]),flush=True)
  out=ROOT/'analysis-results/nov2026-cash-marginal-portfolio.json'
  out.parent.mkdir(exist_ok=True)
- out.write_text(json.dumps({'algorithm':'shrunken conditional monetary interactions plus same-race marginal cash portfolio','adopted':False,'results':results},indent=2)+'\n')
+ out.write_text(json.dumps({'algorithm':'shrunken conditional monetary interactions plus same-race marginal cash portfolio','adopted':False,'payoutUnitAudit':'third-party CSV integer interpreted as yen per JRA 100-yen ticket; official JRA reconciliation and T-15 snapshots still missing','results':results},indent=2)+'\n')
 if __name__=='__main__':main()
