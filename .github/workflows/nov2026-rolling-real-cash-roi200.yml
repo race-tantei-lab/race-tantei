@@ -11,6 +11,7 @@ on:
       - scripts/research-nov2026-downside-pair-cash.py
       - scripts/research-nov2026-rank-exposure-cash.py
       - scripts/research-nov2026-cash-regret-maximin.py
+      - scripts/research-nov2026-relative-cash-contrast.py
       - .github/workflows/nov2026-rolling-real-cash-roi200.yml
   workflow_dispatch:
 permissions:
@@ -81,6 +82,8 @@ jobs:
         run: python -u scripts/research-nov2026-rank-exposure-cash.py
       - name: Year-balanced conditional cash regret maximin ticket generation
         run: python -u scripts/research-nov2026-cash-regret-maximin.py
+      - name: Within-race popularity-cohort monetary contrast ticket generator
+        run: python -u scripts/research-nov2026-relative-cash-contrast.py
       - name: Mine annually refreshed ROI200 actual money patterns using only prior years, test 2025 and 2026
         run: python -u scripts/research-nov2026-rolling-cash-roi200-conditions.py
       - name: Keep money audit off production, no scheduled monitoring
@@ -96,5 +99,6 @@ jobs:
             analysis-results/nov2026-downside-pair-cash.json
             analysis-results/nov2026-rank-exposure-cash.json
             analysis-results/nov2026-cash-regret-maximin.json
+            analysis-results/nov2026-relative-cash-contrast.json
           if-no-files-found: warn
           retention-days: 30
