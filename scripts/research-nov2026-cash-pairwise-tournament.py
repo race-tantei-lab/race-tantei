@@ -7,10 +7,10 @@ import numpy as np
 ROOT=Path(__file__).resolve().parents[1]
 CUT=[0,10,55,100,190,310,1030]
 FEATURES=('rankMin','rankMax','oddsGeom','rankGap','favOdds','fieldSize')
-def design(z,lo,hi):
+def design(z,lo,hi,rows):
     blocks=[]
     for k in FEATURES:
-        x=z[k][:,lo:hi].astype(int)
+        x=z[k][rows,lo:hi].astype(int)
         n=int(z[k].max())+1
         blocks.append(np.eye(n,dtype=np.float32)[x])
     return np.concatenate(blocks,axis=2)
@@ -44,9 +44,12 @@ def run():
         scores=[];indices=[]
         for market in range(6):
             lo,hi=CUT[market:market+2]
-            X=design(z,lo,hi)
-            beta=fit_tournament(X[train],paid[train,lo:hi],years[train],year)
-            s=np.einsum('rnd,d->rn',X[test],beta)
+            Xtrain=design(z,lo,hi,train)
+            beta=fit_tournament(Xtrain,paid[train,lo:hi],years[train],year)
+            del Xtrain
+            Xtest=design(z,lo,hi,test)
+            s=np.einsum('rnd,d->rn',Xtest,beta)
+            del Xtest
             # Add historical mean cash by market, never test payouts.
             s+=np.minimum(paid[train,lo:hi],np.quantile(paid[train,lo:hi],.997)).mean()
             j=np.argmax(s,axis=1)
