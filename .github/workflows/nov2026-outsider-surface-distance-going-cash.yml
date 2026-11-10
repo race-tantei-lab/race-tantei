@@ -1,0 +1,53 @@
+name: Cash first outsider surface-distance-going six-market extraction
+on:
+  push:
+    branches:
+      - research/nov2026-outsider-weight-age-contrast-cash
+    paths:
+      - scripts/research-nov2026-outsider-surface-distance-going-cash.py
+      - .github/workflows/nov2026-outsider-surface-distance-going-cash.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  outsider-allmarket-cash-mining:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned research dependencies
+        run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1
+      - name: Verify enumerator and exact cash grouping mathematics
+        run: |
+          python -m py_compile scripts/research-nov2026-outsider-surface-distance-going-cash.py
+          python -u scripts/research-nov2026-outsider-surface-distance-going-cash.py --self-test
+      - name: Acquire immutable 136 monthly settled payout and runner files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for y in $(seq 2015 2025); do
+              for m in $(seq -w 1 12); do printf '%s%s\n' "$y" "$m"; done
+            done
+            for m in 01 02 03 04; do printf '2026%s\n' "$m"; done
+          } > /tmp/months
+          cat /tmp/months | xargs -P 12 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 3 --max-time 45 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+      - name: Directly scan outsider-containing cash tickets in all six JRA markets
+        run: python -u scripts/research-nov2026-outsider-surface-distance-going-cash.py
+      - name: Retain every profitable historical cash condition
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: outsider-surface-distance-going-sixmarket-cash-cells
+          path: |
+            analysis-results/nov2026-outsider-surface-distance-going-roi200-direct.json
+            analysis-results/nov2026-outsider-surface-distance-going-cells.csv.gz
+          retention-days: 30
+          if-no-files-found: warn
