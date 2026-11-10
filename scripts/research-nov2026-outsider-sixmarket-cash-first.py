@@ -284,7 +284,7 @@ def main():
       report["allStrictHistoricalCells"].extend(examples)
       report["markets"][MARKETS[market]]={
         "historicalOutsiderTickets":trial_count,
-        "historicalRaces":race_count,"historicalGross200Cells":gross_market
+        "historicalRaces":race_count,"historicalGross200Cells":gross_market,
         "strictHistoricalCells":len(strict),
         "schemasWithStrictCells":len(active)}
       # Snapshot count of gross conditions per market is reconstructed from CSV
