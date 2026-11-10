@@ -230,6 +230,7 @@ def main():
    "historicalStakeYen","historicalPaidYen","historicalGrossRoiPct",
    "historicalMaxRacePaidYen","historicalMinusMaxRaceRoiPct","strictHistorical200")
   totals=Counter()
+  CSV.parent.mkdir(parents=True,exist_ok=True)
   with gzip.open(CSV,"wt",newline="",encoding="utf8") as fp:
     writer=csv.DictWriter(fp,fieldnames=cols);writer.writeheader()
     for market in range(6):
@@ -277,11 +278,11 @@ def main():
             "tickets":nn,"stakeYen":100*nn,"paidYen":pp,
             "grossRoiPct":roi(pp,nn),"maxRacePaidYen":mb,
             "minusMaxRaceRoiPct":netroi}
-          if year=="2023" and nn>=10 and netroi>=200:
+          if year=="2023" and nn>=10 and netroi is not None and netroi>=200:
             totals["repeat2023Robust200"]+=1
-          if year=="2024" and nn>=10 and netroi>=200:
+          if year=="2024" and nn>=10 and netroi is not None and netroi>=200:
             totals["repeat2024Robust200"]+=1
-          if not(nn>=10 and netroi>=200):
+          if not(nn>=10 and netroi is not None and netroi>=200):
             survive=False
         if survive:totals["allFuturePeriodsRobust200"]+=1
         examples.append(out)
