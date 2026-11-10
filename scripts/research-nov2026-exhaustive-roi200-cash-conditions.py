@@ -146,9 +146,11 @@ def roi(yen,tickets):
 
 def main():
     if "--self-test" in sys.argv:
-        toy=np.array([300,100,0,0,100,0],dtype=np.int32)
+        toy=np.zeros(3*1030,dtype=np.int32)
+        toy[0]=300;toy[1]=100;toy[2*1030]=100
         idx=np.flatnonzero(toy>0)
-        c=np.array([0,0,1,1,0,0],dtype=np.int32)
+        c=np.zeros(3*1030,dtype=np.int32)
+        c[1030:2060]=1
         out=max_race_by_group(c,idx,toy[idx],3,2,np.array([0]))
         # rows 0: 300+100, rows 1: 100+0
         assert out[0]==400.0 and out[1]==0.0
@@ -213,7 +215,7 @@ def main():
         for idx in historical:
             idx=int(idx)
             market,values=decode_condition(source,pat,idx)
-            robust=(idx in strict_mask.nonzero()[0]) if False else bool(strict_mask[idx])
+            robust=bool(strict_mask[idx])
             row={
               "schema":"+".join(pat),"cashMarket":market,
               "categoricalValues":json.dumps(values,ensure_ascii=False,separators=(",",":")),
