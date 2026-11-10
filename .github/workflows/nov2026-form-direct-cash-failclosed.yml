@@ -1,0 +1,64 @@
+name: Cash-first 478 horse-form condition combinations with settlement
+on:
+  push:
+    branches:
+      - research/nov2026-form-cash-direct-failclosed
+    paths:
+      - scripts/research-nov2026-form-direct-cash-failclosed.py
+      - .github/workflows/nov2026-form-direct-cash-failclosed.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cash-first-historical-horse-form-cells:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install needed pinned history and cash reader
+        run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1
+      - name: Restore immutable actual payout categories cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            analysis-results/roi200-public-2024-26-categories-v1.npz
+            analysis-results/roi200-public-2024-26-categories-v1.json
+          key: frozen-third-party-sixmarket-sevenhorse-source-v1
+      - name: Require complete and identical settlement source
+        run: |
+          test -s analysis-results/roi200-public-2024-26-categories-v1.npz
+          test -s analysis-results/roi200-public-2024-26-categories-v1.json
+      - name: Load exactly pinned third-party original settled cash records
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-archive
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in 2024 2025; do
+              for m in $(seq -w 1 12); do printf '%s%s\n' "$year" "$m"; done
+            done
+            for m in 01 02 03; do printf '2026%s\n' "$m"; done
+          } > /tmp/money_source_months
+          cat /tmp/money_source_months | xargs -P 10 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 2 --max-time 45 -o "external-jra-cash-archive/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-archive/raceresults_{}.csv"'
+          test "$(find external-jra-cash-archive -name 'raceresults_*.csv' | wc -l)" -eq 27
+      - name: Form direct-cash enumeration math and shape self-test
+        run: |
+          python -m py_compile scripts/research-nov2026-form-direct-cash-failclosed.py
+          python -u scripts/research-nov2026-form-direct-cash-failclosed.py --self-test
+      - name: Direct historical payout >200pct cash discovery and independent year checks
+        run: python -u scripts/research-nov2026-form-direct-cash-failclosed.py
+      - name: Preserve exact actual yen conditions and chronological validations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: form-cash-478-condition-cells
+          path: |
+            analysis-results/nov2026-form-direct-exhaustive-roi200.json
+            analysis-results/nov2026-form-direct-roi200-cells.csv.gz
+          if-no-files-found: warn
+          retention-days: 30
