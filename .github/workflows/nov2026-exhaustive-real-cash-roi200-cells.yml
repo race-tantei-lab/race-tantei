@@ -1,0 +1,72 @@
+name: Exhaustively mine bounded settled-cash ROI200 conjunctions without prediction models
+on:
+  push:
+    branches:
+      - research/nov2026-all-cash-condition-combinations
+    paths:
+      - scripts/research-nov2026-exhaustive-roi200-cash-conditions.py
+      - .github/workflows/nov2026-exhaustive-real-cash-roi200-cells.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  direct-exhaustive-profit-cell-extraction:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install archive reader and cash extraction dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy==2.2.6' 'lightgbm==4.6.0' 'scikit-learn==1.6.1'
+      - name: Assert cash group arithmetic and exhaustive schema count before using actual data
+        run: |
+          python -m py_compile scripts/research-nov2026-exhaustive-roi200-cash-conditions.py
+          python -u scripts/research-nov2026-exhaustive-roi200-cash-conditions.py --self-test
+      - name: Restore source cash payouts and fixed ticket categories from cache
+        uses: actions/cache@v4
+        id: stored
+        with:
+          path: |
+            analysis-results/jra-decade-sixmarket-top10-cash-v3.npz
+            analysis-results/jra-decade-sixmarket-top10-races-v3.json
+          key: pinned-thirdparty-jra-2015-2026-ten-runner-six-market-cache-v1
+      - name: Retrieve pinned 2015-2026 JRA cash payout archive only when cache is missing
+        if: steps.stored.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in $(seq 2015 2025); do
+              for m in $(seq -w 1 12); do printf '%s%s\n' "$year" "$m"; done
+            done
+            for m in 01 02 03 04; do printf '2026%s\n' "$m"; done
+          } > /tmp/pinned_money_months
+          cat /tmp/pinned_money_months | xargs -P 12 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 3 --max-time 45 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+          python - <<'PY'
+          import importlib.util,sys
+          p="scripts/research-nov2026-decade-roi-first-sixmarkets.py"
+          s=importlib.util.spec_from_file_location("archive_reader",p)
+          m=importlib.util.module_from_spec(s);sys.modules[s.name]=m;s.loader.exec_module(m)
+          parser=m.mod("scripts/research-nov2026-sixmarket-real-paid-cash.py","source_payout_decoder")
+          races=m.read_all_races(parser.parse_payments)
+          m.CACHE.parent.mkdir(parents=True,exist_ok=True)
+          m.full_features(races)
+          PY
+      - name: EXHAUSTIVE DIRECT ROI200 HISTORIC CASH EXTRACTION - NO MODEL FITTING
+        run: python -u scripts/research-nov2026-exhaustive-roi200-cash-conditions.py
+      - name: Preserve all identified 200pct historical payout rules and genuine out-of-year results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jra-all-patterns-direct-roi200-cash-extraction
+          path: |
+            analysis-results/nov2026-direct-exhaustive-cash-roi200.json
+            analysis-results/nov2026-all-historical-roi200-cash-cells.csv.gz
+          retention-days: 30
+          if-no-files-found: warn
