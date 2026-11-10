@@ -139,7 +139,19 @@ def main():
     names=hist.read_source_horse_names()
     X,won,off,meta,arch_names,drop=hist.historical_horse_features()
     joined,join_audit=joined_full_names(raw_races,meta,arch_names,names,hist)
-    race_cached,y_full,idx_full,type_full,cat_full=cache.history_and_categories(past)
+    # Research branches cannot always restore Actions caches created on other
+    # refs. Rebuild real settled rows deterministically from the pinned CSV
+    # rather than treating cache absence as a reason to skip cash research.
+    cached_data=ROOT/"analysis-results/roi200-public-2024-26-categories-v1.npz"
+    cached_meta=ROOT/"analysis-results/roi200-public-2024-26-categories-v1.json"
+    if cached_data.exists() and cached_meta.exists():
+        race_cached,y_full,idx_full,type_full,cat_full=cache.history_and_categories(past)
+        print("FORM_DIRECT_CASH_ROWS_FROM_PINNED_CACHE",flush=True)
+    else:
+        raw_X,y_full,idx_full,type_full,tickets,_=pub.build_actual_payout_rows(raw_races)
+        cat_full=past.categoricals(raw_races,raw_X,idx_full,type_full,tickets)
+        race_cached=[{"id":r["id"]} for r in raw_races]
+        print("FORM_DIRECT_CASH_REBUILT_FROM_PINNED_CSV",len(y_full),flush=True)
     if len(raw_races)!=len(race_cached) or [r["id"] for r in raw_races]!=[r["id"] for r in race_cached]:
         raise RuntimeError("PAYOUT_CACHE_RACE_ORDER_NOT_IDENTICAL_TO_RAW_PAYOUTS")
     # Never call form_categories on unmatched races: it would assign zero
