@@ -2,7 +2,7 @@ name: Cash first outsider surface-distance-going six-market extraction
 on:
   push:
     branches:
-      - research/nov2026-outsider-weight-age-contrast-cash
+      - research/nov2026-outsider-surface-distance-going-cash
     paths:
       - scripts/research-nov2026-outsider-surface-distance-going-cash.py
       - .github/workflows/nov2026-outsider-surface-distance-going-cash.yml
