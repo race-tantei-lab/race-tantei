@@ -230,11 +230,13 @@ def main():
     for market in range(6):
       tr,trial_count,race_count=cash_stat_array(by_period["2015-2022"],market,PATTERNS)
       strict=[]
+      gross_market=0
       for pat,d in tr.items():
         n,p,h,b=(d[x] for x in ("n","paid","hits","maxrace"))
         historical=np.flatnonzero((n>=20)&(h>=2)&(p>=200*n))
         good=(n>=100)&(h>=5)&(p-b>=200*n)
         totals["historicalGross200"]+=len(historical)
+        gross_market+=len(historical)
         for j in historical:
           row={
             "market":MARKETS[market],"schema":"+ ".join(pat),
@@ -252,8 +254,11 @@ def main():
       active=tuple(dict.fromkeys(pat for pat,_,_ in strict))
       later={}
       for year in PERIODS[1:]:
-        info,tickets,races_count=cash_stat_array(by_period[year],market,active)
-        later[year]=info
+        if active:
+          info,tickets,races_count=cash_stat_array(by_period[year],market,active)
+          later[year]=info
+        else:
+          later[year]={}
       examples=[]
       for pat,idx,row in strict:
         out={**row,"future":{}}
@@ -279,14 +284,13 @@ def main():
       report["allStrictHistoricalCells"].extend(examples)
       report["markets"][MARKETS[market]]={
         "historicalOutsiderTickets":trial_count,
-        "historicalRaces":race_count,"historicalGross200Cells":sum(
-           1 for _ in ()), # totals below is the actual per-market count
+        "historicalRaces":race_count,"historicalGross200Cells":gross_market
         "strictHistoricalCells":len(strict),
         "schemasWithStrictCells":len(active)}
       # Snapshot count of gross conditions per market is reconstructed from CSV
       print("OUTSIDER_CASH_MARKET_DONE",json.dumps({
         "market":MARKETS[market],"historicalTickets":trial_count,
-        "historicallyRobust200":len(strict),
+        "historicalGross200":gross_market,"historicallyRobust200":len(strict),
         "testedSchemasForFuture":len(active),
         "secondsElapsed":round(time.monotonic()-tic,1)
       },ensure_ascii=False),flush=True)
