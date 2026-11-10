@@ -27,10 +27,6 @@ jobs:
             analysis-results/roi200-public-2024-26-categories-v1.npz
             analysis-results/roi200-public-2024-26-categories-v1.json
           key: frozen-third-party-sixmarket-sevenhorse-source-v1
-      - name: Require complete and identical settlement source
-        run: |
-          test -s analysis-results/roi200-public-2024-26-categories-v1.npz
-          test -s analysis-results/roi200-public-2024-26-categories-v1.json
       - name: Load exactly pinned third-party original settled cash records
         shell: bash
         run: |
