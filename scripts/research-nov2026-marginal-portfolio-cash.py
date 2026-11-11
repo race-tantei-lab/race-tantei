@@ -4,7 +4,7 @@ Select rule bundles by marginal portfolio cash, not individual-rule ROI.
 """
 import csv,gzip,json,sys,math
 from pathlib import Path
-from collections import Counter
+from collections import Counter,defaultdict
 import numpy as np
 import importlib.util
 ROOT=Path(__file__).resolve().parents[1]
@@ -20,6 +20,52 @@ def stats(bets):
     return base.cash_metrics(bets)
 def program_days(races,lo,hi):
     return {(r["day"],r["venue"]) for r in races if lo<=int(r["month"][:4])<=hi}
+def fast_select(votes,data,year_min,year_max):
+    """NumPy-equivalent selection: SAME two distinct bet markets and top-5/day.
+
+    Exactly replicates walkforward.select but evaluates all candidate markets
+    in bulk, so historical marginal rule selection can finish in a job.
+    Does not inspect payout data when deciding a race or ticket.
+    """
+    races,cash,cat,widths,types,rid,year,quarter,joint=data
+    chosen_idx=np.flatnonzero((year>=year_min)&(year<=year_max))
+    if not len(chosen_idx):return []
+    price=votes.reshape(len(races),336)[chosen_idx]
+    ranges=((0,7),(7,28),(28,49),(49,91),(91,126),(126,336))
+    n=len(chosen_idx)
+    peak=np.empty((n,6),dtype=np.float32)
+    ticket=np.empty((n,6),dtype=np.int32)
+    for market,(start,stop) in enumerate(ranges):
+        subset=price[:,start:stop]
+        loc=np.argmax(subset,axis=1)
+        peak[:,market]=subset[np.arange(n),loc]
+        ticket[:,market]=start+loc
+    ranked=np.argsort(-peak,axis=1,kind="stable")
+    pick1=ranked[:,0];pick2=ranked[:,1]
+    active=np.flatnonzero(peak[np.arange(n),pick2]>0)
+    groups=defaultdict(list)
+    for j in active:
+        i=int(chosen_idx[j])
+        r=races[i]
+        a=int(pick1[j]);b=int(pick2[j])
+        t1=int(ticket[j,a]);t2=int(ticket[j,b])
+        first=i*336
+        groups[(r["day"],r["venue"])].append({
+          "raceId":r["id"],"day":r["day"],"venue":r["venue"],
+          "month":r["month"],"year":int(year[i]),
+          "quarter":int(quarter[i]),
+          "rankScore":float(peak[j,a])+float(peak[j,b]),
+          "market1":base.MARKETS[a],"market2":base.MARKETS[b],
+          "ticket1":t1,"ticket2":t2,
+          "paidYen":int(cash[first+t1])+int(cash[first+t2]),
+          "payout1Yen":int(cash[first+t1]),
+          "payout2Yen":int(cash[first+t2])})
+    out=[]
+    for group in groups.values():
+        group.sort(key=lambda r:(-r["rankScore"],r["raceId"]))
+        out.extend(group[:5])
+    return out
+
 def objective(bets,days):
     s=stats(bets)
     if not bets:return -1e8
@@ -42,6 +88,17 @@ def main():
         if int(tr.sum())!=r["n"] or int(cash[tr].sum(dtype=np.int64))!=r["paid"]:
             raise RuntimeError("SOURCE_RULE_MISMATCH:"+str(i))
         indices.append(np.flatnonzero(mask).astype(np.int32))
+    # Verify vectorized historical ticket selection exactly matches
+    # the independently implemented reference (including tie breaks).
+    test_votes=np.zeros(len(cash),dtype=np.float32)
+    for idx in indices:
+        test_votes[idx]+=1.
+    reference=wf.select(test_votes,data,year_min=2022,year_max=2022)
+    optimized=fast_select(test_votes,data,year_min=2022,year_max=2022)
+    if reference!=optimized:
+        raise RuntimeError("FAST_CASH_SELECTION_NOT_BITWISE_EQUAL_TO_REFERENCE")
+    print("MARGINAL_CASH_VECTORIZED_SELECTION_PARITY_OK",
+          len(optimized),flush=True)
     reports={};forward=[]
     for target in range(2023,2027):
         # Each target year uses ONLY prior-year settlements; no future-year payout access.
@@ -71,7 +128,7 @@ def main():
                     if (i,q) in selected:continue
                     idx=indices[i];idx=idx[qrow[idx]==q]
                     votes[idx]+=1
-                    picks=wf.select(votes,data,year_min=lo,year_max=target-1)
+                    picks=fast_select(votes,data,year_min=lo,year_max=target-1)
                     score=objective(picks,days)
                     votes[idx]-=1
                     if best is None or score>best[0]:
@@ -81,10 +138,10 @@ def main():
                 idx=indices[i];idx=idx[qrow[idx]==q]
                 votes[idx]+=1
                 selected.append((i,q))
-            training=wf.select(votes,data,year_min=lo,year_max=target-1)
+            training=fast_select(votes,data,year_min=lo,year_max=target-1)
             candidates.append((objective(training,days),win,votes,selected,stats(training)))
         _,win,votes,selected,training=max(candidates,key=lambda x:(x[0],-x[1]))
-        bought=wf.select(votes,data,year_min=target,year_max=target)
+        bought=fast_select(votes,data,year_min=target,year_max=target)
         for b in bought:forward.append({"selectionYear":target,**b})
         all_days=program_days(races,target,target)
         counts=Counter((b["day"],b["venue"]) for b in bought)
