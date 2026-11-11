@@ -14,7 +14,8 @@ base=wf.base
 OUT=ROOT/"analysis-results/nov2026-marginal-portfolio-cash.json"
 BETS=ROOT/"analysis-results/nov2026-marginal-portfolio-bets.csv.gz"
 WINDOWS=(3,5,99)
-MAX_STEPS=24
+MAX_STEPS=8
+MAX_CANDIDATES_PER_WINDOW=40  # Bound O(steps*candidates*races) cash evaluations.
 def stats(bets):
     return base.cash_metrics(bets)
 def program_days(races,lo,hi):
@@ -63,7 +64,7 @@ def main():
                     # Only a prefilter for compute budget; no ROI threshold.
                     ranked.append((len(h),i,q))
             ranked.sort(reverse=True)
-            ranked=ranked[:240]
+            ranked=ranked[:MAX_CANDIDATES_PER_WINDOW]
             for step in range(MAX_STEPS):
                 best=None
                 for support,i,q in ranked:
