@@ -1,0 +1,36 @@
+name: Research rolling regime shrinkage cash portfolio
+on:
+  push:
+    branches:
+      - research/nov2026-regime-shrinkage-portfolio-1112
+    paths:
+      - '.github/workflows/research-nov2026-regime-shrinkage-portfolio.yml'
+      - 'scripts/research-nov2026-regime-shrinkage-portfolio.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install numpy
+      - name: Self-test
+        run: python scripts/research-nov2026-regime-shrinkage-portfolio.py --self-test
+      - name: Require research input and run actual cash settlement
+        run: |
+          python scripts/research-nov2026-regime-shrinkage-portfolio.py
+          test -s analysis-results/nov2026-regime-shrinkage-portfolio.json
+          test -s analysis-results/nov2026-regime-shrinkage-portfolio-bets.csv.gz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nov2026-regime-shrinkage-portfolio
+          path: |
+            analysis-results/nov2026-regime-shrinkage-portfolio.json
+            analysis-results/nov2026-regime-shrinkage-portfolio-bets.csv.gz
+          if-no-files-found: warn
