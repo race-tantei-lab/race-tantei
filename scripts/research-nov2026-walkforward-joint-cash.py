@@ -88,7 +88,7 @@ def main():
     day_counts=Counter((b["day"],b["venue"]) for b in outputs)
     days={ (r["day"],r["venue"]) for r in races if int(r["month"][:4])>=2023 }
     summary={"researchOnly":True,"source":"third-party cash CSV, JRA independent reconciliation incomplete",
-      "officialT15Verified":False,"historicalFinalOddsNotT15":True,
+      "officialT15Verified":False,"historicalFinalOddsNotT15":True,"stakePerRaceYen":200,
       "candidateRules":len(rules),"searchSpace":{"windows":list(WINDOW),"poolSizes":list(POOL),
       "portfolioChoicesPerYear":len(WINDOW)*len(POOL)},
       "yearly":diagnostics,"forwardCombined":combined,
@@ -99,7 +99,7 @@ def main():
     OUT.parent.mkdir(parents=True,exist_ok=True)
     OUT.write_text(json.dumps(summary,ensure_ascii=False,indent=2)+"\n")
     with gzip.open(BETS,"wt",encoding="utf8",newline="") as f:
-        fields=("selectionYear","raceId","day","venue","month","year","quarter","market1","market2","ticket1","ticket2","paidYen","payout1Yen","payout2Yen")
+        fields=("selectionYear","raceId","day","venue","month","year","quarter","market1","market2","ticket1","ticket2","stakeYen","paidYen","payout1Yen","payout2Yen")
         w=csv.DictWriter(f,fieldnames=fields,extrasaction="ignore");w.writeheader();w.writerows(outputs)
     print("WALKFORWARD_FINAL",json.dumps({"combined":combined,"coverage":summary["coverage"],"artifact":str(OUT)},ensure_ascii=False),flush=True)
 def select(votes,data,year_min,year_max):
@@ -124,6 +124,7 @@ def select(votes,data,year_min,year_max):
           "market1":base.MARKETS[p1[1]],"market2":base.MARKETS[p2[1]],
           "ticket1":p1[2]-start,"ticket2":p2[2]-start,
           "paidYen":int(cash[p1[2]]+cash[p2[2]]),
+          "stakeYen":200,
           "payout1Yen":int(cash[p1[2]]),"payout2Yen":int(cash[p2[2]])})
     out=[]
     for values in groups.values():
