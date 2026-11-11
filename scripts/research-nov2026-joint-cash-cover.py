@@ -59,6 +59,61 @@ def select(cash,races,year,quarter,fields):
             scored.sort(reverse=True)
             best=scored[0]
             policies[key]=(best[2],best[3],best[0]/(200*len(source)),len(source))
+        # Coordinate-descent across regimes on a single cash ledger.
+        # No test-year outcomes are consulted. Every training race has one
+        # candidate pair and the objective removes the globally largest race.
+        # This differs from choosing the best pair independently per cell.
+        train_groups=defaultdict(list)
+        for i in train:
+            train_groups[keys[int(i)]].append(int(i))
+        pair_options={}
+        for key in policies:
+            ix=train_groups.get(key,[])
+            source=ix if len(ix)>=40 else train.tolist()
+            candidates=discover(source)
+            v=money[np.asarray(source,dtype=int)]
+            scores=[]
+            for a,b in candidates:
+                p=v[:,a]+v[:,b]
+                scores.append((int(p.sum())-int(p.max()),a,b))
+            scores.sort(reverse=True)
+            pair_options[key]=[(a,b) for _,a,b in scores[:12]]
+        # Precompute training venue-day ordering using only known race identifiers.
+        train_days=defaultdict(list)
+        for i in train:
+            i=int(i)
+            train_days[(str(races[i]["day"]),venue[i])].append(i)
+        chosen_train=[i for group in train_days.values()
+                      for i in sorted(group,key=lambda j:str(races[j]["id"]))[:5]]
+        chosen_groups=defaultdict(list)
+        for i in chosen_train:
+            if keys[i] in policies:chosen_groups[keys[i]].append(i)
+        current={key:(p[0],p[1]) for key,p in policies.items()}
+        def portfolio_cash(assign):
+            payouts=[]
+            for key,ix in chosen_groups.items():
+                a,b=assign[key]
+                payouts.extend((money[np.asarray(ix),a]+money[np.asarray(ix),b]).tolist())
+            if not payouts:return -1
+            return int(sum(payouts)-max(payouts))
+        best_cash=portfolio_cash(current)
+        for _ in range(3):
+            changed=False
+            for key in sorted(current):
+                old=current[key];winner=old;winner_cash=best_cash
+                for candidate in pair_options.get(key,[]):
+                    if candidate==old:continue
+                    current[key]=candidate
+                    score=portfolio_cash(current)
+                    if score>winner_cash:
+                        winner_cash=score;winner=candidate
+                current[key]=winner
+                if winner!=old:
+                    changed=True;best_cash=winner_cash
+            if not changed:break
+        for key,(a,b) in current.items():
+            _,_,_,support=policies[key]
+            policies[key]=(a,b,best_cash/(200*max(1,len(chosen_train))),support)
         days=defaultdict(list)
         for i in test:
             i=int(i);a,b,priority,support=policies[keys[i]]
