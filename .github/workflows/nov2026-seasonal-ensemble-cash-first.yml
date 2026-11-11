@@ -34,6 +34,10 @@ jobs:
             -n joint-draw-field-76-schema-real-cash-roi200-cells -D analysis-results/premined-joint
           test -s analysis-results/premined-form/nov2026-form-decade-all-robust-cells.csv.gz
           test -s analysis-results/premined-joint/nov2026-relative-draw-robust-cells.csv.gz
+          mkdir -p analysis-results/premined-pair
+          gh run download 42967478747 --repo "${GITHUB_REPOSITORY}" \
+            -n form-pair-venue-quarter-171-schema-real-cash-roi200-cells -D analysis-results/premined-pair
+          test -s analysis-results/premined-pair/nov2026-form-pair-venue-quarter-robust-cells.csv.gz
       - name: Verify money arithmetic and historical condition schema
         run: |
           python -m py_compile scripts/research-nov2026-seasonal-ensemble-cash-first.py
