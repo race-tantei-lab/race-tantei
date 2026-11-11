@@ -5,7 +5,7 @@ on:
       - research/nov2026-pair-complement-cash-1111
     paths:
       - scripts/research-nov2026-pair-complement-cash.py
-      - .github/workflows/research-nov2026-marginal-portfolio-cash.yml
+      - .github/workflows/research-nov2026-pair-complement-cash.yml
   workflow_dispatch:
 permissions:
   contents: read
