@@ -1,0 +1,36 @@
+name: Research crossmarket joint cash coverage 2026-11-12
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - research/nov2026-crossmarket-cash-coverage-1112
+    paths:
+      - scripts/research-nov2026-crossmarket-joint-coverage.py
+      - .github/workflows/research-nov2026-crossmarket-joint-coverage.yml
+jobs:
+  cash-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy
+      - name: Require complete historical research inputs
+        run: |
+          test -f analysis-results/premined-form/nov2026-form-decade-all-robust-cells.csv.gz
+          test -f analysis-results/premined-joint/nov2026-relative-draw-robust-cells.csv.gz
+          test -f analysis-results/premined-pair/nov2026-form-pair-venue-quarter-robust-cells.csv.gz
+      - name: Joint cash search
+        run: python scripts/research-nov2026-crossmarket-joint-coverage.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: crossmarket-joint-cash-coverage
+          path: |
+            analysis-results/nov2026-crossmarket-joint-coverage.json
+            analysis-results/nov2026-crossmarket-joint-bets.csv.gz
+          if-no-files-found: warn
