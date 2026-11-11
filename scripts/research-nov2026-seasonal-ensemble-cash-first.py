@@ -29,6 +29,7 @@ PER_RACE=ROOT/"analysis-results/nov2026-seasonal-ensemble-frozen-bets.csv.gz"
 INPUTS=(
  ROOT/"analysis-results/premined-form/nov2026-form-decade-all-robust-cells.csv.gz",
  ROOT/"analysis-results/premined-joint/nov2026-relative-draw-robust-cells.csv.gz",
+ ROOT/"analysis-results/premined-pair/nov2026-form-pair-venue-quarter-robust-cells.csv.gz",
 )
 TRAIN_YEARS=tuple(range(2017,2023))
 CHECK_YEARS=(2023,2024,2025,2026)
@@ -92,7 +93,7 @@ def load_premine():
                     "n":int(item["trainTickets"]),
                     "paid":int(item["trainPaidYen"]),
                     "minusMaxRoi":float(item["trainMinusMaxRaceRoiPct"])})
-    if not 100<=len(result)<=150:
+    if not 140<=len(result)<=210:
         raise RuntimeError("DISCOVERY_RULES_NOT_EXPECTED_100_150:"+str(len(result)))
     return result
 
