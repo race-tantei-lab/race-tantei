@@ -107,10 +107,11 @@ def main():
             lo=max(2017,target-win)
             days=len(program_days(races,lo,target-1))
             votes=np.zeros(len(cash),dtype=np.float32)
-            selected=[];baseline=-1e8
-            # Greedy joint cash selection: adding a rule may improve or hurt
-            # total cash, including ticket deduplication and two-market choice.
-            # Limit candidates using historical ticket support only, not forward results.
+            # A cash-funded race REQUIRES two separate markets. A greedy
+            # single-rule seed can NEVER produce any such race, so it
+            # immediately stops with an empty portfolio. Seed MULTIPLE
+            # different markets in all quarters, then remove conditions
+            # whose contribution harms the *joint* cash outcome.
             ranked=[]
             for i,idx in enumerate(indices):
                 hist=idx[(yrow[idx]>=lo)&(yrow[idx]<target)]
@@ -118,26 +119,39 @@ def main():
                 for q in range(1,5):
                     h=hist[qrow[hist]==q]
                     if len(h)<10:continue
-                    # Only a prefilter for compute budget; no ROI threshold.
                     ranked.append((len(h),i,q))
             ranked.sort(reverse=True)
-            ranked=ranked[:MAX_CANDIDATES_PER_WINDOW]
+            per_market_quarter=Counter()
+            diversified=[]
+            for n,i,q in ranked:
+                bucket=(q,rules[i]["market"])
+                if per_market_quarter[bucket]>=3:continue
+                diversified.append((n,i,q))
+                per_market_quarter[bucket]+=1
+                if len(diversified)>=MAX_CANDIDATES_PER_WINDOW:break
+            ranked=diversified
+            selected=[(i,q) for _,i,q in ranked]
+            for i,q in selected:
+                idx=indices[i]
+                votes[idx[qrow[idx]==q]]+=1
+            training=fast_select(votes,data,year_min=lo,year_max=target-1)
+            baseline=objective(training,days)
             for step in range(MAX_STEPS):
                 best=None
-                for support,i,q in ranked:
-                    if (i,q) in selected:continue
-                    idx=indices[i];idx=idx[qrow[idx]==q]
-                    votes[idx]+=1
-                    picks=fast_select(votes,data,year_min=lo,year_max=target-1)
-                    score=objective(picks,days)
-                    votes[idx]-=1
+                for i,q in selected:
+                    ix=indices[i]
+                    ix=ix[qrow[ix]==q]
+                    votes[ix]-=1
+                    trial=fast_select(votes,data,year_min=lo,year_max=target-1)
+                    score=objective(trial,days)
+                    votes[ix]+=1
                     if best is None or score>best[0]:
                         best=(score,i,q)
                 if best is None or best[0]<=baseline+1e-7:break
                 baseline,i,q=best
-                idx=indices[i];idx=idx[qrow[idx]==q]
-                votes[idx]+=1
-                selected.append((i,q))
+                ix=indices[i]
+                votes[ix[qrow[ix]==q]]-=1
+                selected.remove((i,q))
             training=fast_select(votes,data,year_min=lo,year_max=target-1)
             candidates.append((objective(training,days),win,votes,selected,stats(training)))
         _,win,votes,selected,training=max(candidates,key=lambda x:(x[0],-x[1]))
@@ -153,7 +167,9 @@ def main():
     summary={"researchOnly":True,"independentJraPayoutVerified":False,
       "officialT15Verified":False,"futureBlind2025And2026":False,
       "cashObjective":"marginal deduplicated portfolio minus-largest-race ROI times coverage",
-      "maxRules":MAX_STEPS,"windowChoices":WINDOWS,
+      "maxGreedyRemovals":MAX_STEPS,"seedPerQuarterMarket":3,
+      "jointTwoMarketSeedRequired":True,
+      "windowChoices":WINDOWS,
       "yearly":reports,"forwardCombined":stats(forward),"adoptable":False}
     OUT.parent.mkdir(parents=True,exist_ok=True)
     OUT.write_text(json.dumps(summary,ensure_ascii=False,indent=2)+"\n")
