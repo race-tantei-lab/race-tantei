@@ -1,0 +1,37 @@
+name: Research joint pair regime cash 1112
+on:
+  push:
+    branches:
+      - research/nov2026-joint-pair-coverage-1112
+    paths:
+      - 'scripts/research-nov2026-joint-pair-coverage-cash.py'
+      - '.github/workflows/research-nov2026-joint-pair-regime-cash.yml'
+  workflow_dispatch:
+jobs:
+  cash-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy
+      - name: Unit accounting test
+        run: python scripts/research-nov2026-joint-pair-coverage-cash.py --self-test
+      - name: Check raw historical sources (fail closed)
+        run: |
+          test -d data || test -d analysis-results || { echo "Historical cash input unavailable"; exit 1; }
+      - name: Full historical cash settlement
+        run: python scripts/research-nov2026-joint-pair-coverage-cash.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: joint-pair-coverage-cash-1112
+          path: |
+            analysis-results/nov2026-joint-pair-coverage-cash.json
+            analysis-results/nov2026-joint-pair-coverage-bets.csv.gz
+          if-no-files-found: warn
