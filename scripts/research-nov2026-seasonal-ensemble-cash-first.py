@@ -323,14 +323,26 @@ def main():
         # NEVER choose a policy using 2023-26 payouts or ROI.
         train=[b for b in bets if b["year"] in TRAIN_YEARS]
         train_cash=cash_metrics(train)
+        # Portfolio-selection coverage is measured on the TRAINING years
+        # alone. Neither settlement nor even eligible-race counts in
+        # 2023-26 may participate in selecting the portfolio variant.
+        train_program_days={
+            (r["day"],r["venue"]) for r in data[0]
+            if int(r["month"][:4]) in TRAIN_YEARS}
+        train_day_bets=Counter((b["day"],b["venue"]) for b in train)
+        train_days_with_five=sum(n>=5 for n in train_day_bets.values())
+        train_coverage_ratio=train_days_with_five/max(1,len(train_program_days))
         train_score=(train_cash["minusMaxRaceRoiPct"] or 0)*math.log1p(
-            len(train))/(1+coverage["daysUnder5Eligible"]/max(coverage["allProgramDays"],1))
+            len(train))*(0.5+0.5*train_coverage_ratio)
         results[policy[0]]={
           "seasonRules":{str(q):[{
              k:v for k,v in rule.items() if k not in ("index",)}
              for rule in frozen[q]] for q in range(1,5)},
           "seasonRuleCounts":{str(q):len(frozen[q]) for q in range(1,5)},
-          "trainingPolicy":train_cash,"trainingOnlyPolicyRankScore":round(train_score,4),
+          "trainingPolicy":train_cash,
+          "trainingFiveRaceProgramDays":train_days_with_five,
+          "trainingProgramDays":len(train_program_days),
+          "trainingOnlyPolicyRankScore":round(train_score,4),
           **stats}
         print("SEASONAL_POLICY_ACTUAL_CASH",json.dumps({
            "name":policy[0],
