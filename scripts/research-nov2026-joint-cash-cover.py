@@ -90,14 +90,24 @@ def select(cash,races,year,quarter,fields):
             if keys[i] in policies:chosen_groups[keys[i]].append(i)
         current={key:(p[0],p[1]) for key,p in policies.items()}
         def portfolio_cash(assign):
+            # All regimes share one cash ledger. Reject a candidate that merely
+            # shifts a windfall into one year at the expense of every other year.
+            # Every yearly component is calculated from pre-target training years.
             payouts=[]
+            by_year=defaultdict(list)
             for key,ix in chosen_groups.items():
                 a,b=assign[key]
-                payouts.extend((money[np.asarray(ix),a]+money[np.asarray(ix),b]).tolist())
-            if not payouts:return -1
-            return int(sum(payouts)-max(payouts))
+                for i in ix:
+                    p=int(money[i,a]+money[i,b])
+                    payouts.append(p)
+                    by_year[int(year[i])].append(p)
+            if not payouts:return (-1.0,-1.0,-1)
+            robust_total=(sum(payouts)-max(payouts))/(200*len(payouts))
+            # Annual minimum is a regularizer, not an individual-cell ROI rule.
+            annual=[(sum(v)-max(v))/(200*len(v)) for v in by_year.values() if v]
+            return (min(annual),robust_total,sum(payouts))
         best_cash=portfolio_cash(current)
-        for _ in range(3):
+        for _ in range(4):
             changed=False
             for key in sorted(current):
                 old=current[key];winner=old;winner_cash=best_cash
@@ -113,7 +123,7 @@ def select(cash,races,year,quarter,fields):
             if not changed:break
         for key,(a,b) in current.items():
             _,_,_,support=policies[key]
-            policies[key]=(a,b,best_cash/(200*max(1,len(chosen_train))),support)
+            policies[key]=(a,b,best_cash[1],support)
         days=defaultdict(list)
         for i in test:
             i=int(i);a,b,priority,support=policies[keys[i]]
