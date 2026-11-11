@@ -1,9 +1,11 @@
-name: Research paired complement joint cash
+name: Research paired distinct-market cash complement portfolio
 on:
   push:
-    branches: [research/nov2026-pair-complement-cash-1111]
+    branches:
+      - research/nov2026-pair-complement-cash-1111
     paths:
-      - 'scripts/research-nov2026-pair-complement-cash.py'
+      - scripts/research-nov2026-pair-complement-cash.py
+      - .github/workflows/research-nov2026-marginal-portfolio-cash.yml
   workflow_dispatch:
 permissions:
   contents: read
@@ -11,33 +13,63 @@ permissions:
 jobs:
   research:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - run: python -m pip install numpy pandas requests
-      - name: Restore fixed premine results without rerunning discovery
+          python-version: '3.12'
+      - name: Install pinned historical feature and cash dependencies
+        run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1
+      - name: Download already-extracted robust monetary cells from three completed research runs
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          mkdir -p analysis-results/premined-{form,joint,pair}
-          gh run download 42926949569 --dir /tmp/form --repo "${{ github.repository }}"
-          gh run download 42964965187 --dir /tmp/joint --repo "${{ github.repository }}"
-          gh run download 42967478747 --dir /tmp/pair --repo "${{ github.repository }}"
-          find /tmp/form -name 'nov2026-form-decade-all-robust-cells.csv.gz' -exec cp {} analysis-results/premined-form/ \;
-          find /tmp/joint -name 'nov2026-relative-draw-robust-cells.csv.gz' -exec cp {} analysis-results/premined-joint/ \;
-          find /tmp/pair -name 'nov2026-form-pair-venue-quarter-robust-cells.csv.gz' -exec cp {} analysis-results/premined-pair/ \;
+          set -euo pipefail
+          mkdir -p analysis-results/premined-form analysis-results/premined-joint analysis-results/premined-pair
+          gh run download 42926949569 --repo "${GITHUB_REPOSITORY}" \
+            -n decade-form-real-payout-roi200-cells -D analysis-results/premined-form
+          gh run download 42964965187 --repo "${GITHUB_REPOSITORY}" \
+            -n joint-draw-field-76-schema-real-cash-roi200-cells -D analysis-results/premined-joint
+          gh run download 42967478747 --repo "${GITHUB_REPOSITORY}" \
+            -n form-pair-venue-quarter-171-schema-real-cash-roi200-cells -D analysis-results/premined-pair
           test -s analysis-results/premined-form/nov2026-form-decade-all-robust-cells.csv.gz
           test -s analysis-results/premined-joint/nov2026-relative-draw-robust-cells.csv.gz
           test -s analysis-results/premined-pair/nov2026-form-pair-venue-quarter-robust-cells.csv.gz
-      - run: python scripts/research-nov2026-pair-complement-cash.py
-      - uses: actions/upload-artifact@v4
-        if: always()
+      - name: Restore immutable cached cash matrix if available
+        uses: actions/cache@v4
         with:
-          name: pair-complement-cash
+          path: |
+            analysis-results/jra-decade-sixmarket-top10-cash-v3.npz
+            analysis-results/jra-decade-sixmarket-top10-races-v3.json
+          key: pinned-thirdparty-jra-2015-2026-ten-runner-six-market-cache-v1
+      - name: Load exact 136 settled CSV months (no production database writes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in $(seq 2015 2025); do
+              for month in $(seq -w 1 12); do printf '%s%s\n' "$year" "$month"; done
+            done
+            for month in 01 02 03 04; do printf '2026%s\n' "$month"; done
+          } > /tmp/jra_cash_months
+          cat /tmp/jra_cash_months | xargs -P 12 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 3 --max-time 45 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+      - name: Directly optimize complementary paired distinct-market cash on past only and settle 2023-26
+        run: |
+          python -m py_compile scripts/research-nov2026-pair-complement-cash.py
+          python -u scripts/research-nov2026-pair-complement-cash.py
+      - name: Preserve annual precommitted tickets and exact paid-yen results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pair-complement-cash-research
           path: |
             analysis-results/nov2026-pair-complement-cash.json
             analysis-results/nov2026-pair-complement-bets.csv.gz
           if-no-files-found: warn
+          retention-days: 30
