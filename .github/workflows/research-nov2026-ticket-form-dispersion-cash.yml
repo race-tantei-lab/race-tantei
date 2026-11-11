@@ -1,0 +1,44 @@
+name: Research cash-first ticket form dispersion (research only)
+on:
+  push:
+    branches:
+      - research/nov2026-ticket-form-dispersion-cash-1111
+    paths:
+      - .github/workflows/research-nov2026-ticket-form-dispersion-cash.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  settled-cash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/nov2026-ticket-form-dispersion-cash-1111
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install historical research dependencies
+        run: python -m pip install --disable-pip-version-check numpy lightgbm
+      - name: Obtain pinned third-party settled payout CSV (not official T-15 odds)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet --filter=blob:none https://github.com/Kenseimk/keiba-agent.git /tmp/keiba-agent
+          git -C /tmp/keiba-agent checkout --quiet f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          mkdir -p external-jra-cash-decade
+          find /tmp/keiba-agent -type f -name 'raceresults_*.csv' -print0 | xargs -0 -r -I '{}' cp '{}' external-jra-cash-decade/
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -ge 100
+      - name: Execute new pre-race ticket-dispersion finite cash search
+        run: python -u scripts/research-nov2026-ticket-form-dispersion-cash.py
+      - name: Save cash audit and candidate cells even on script failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ticket-form-dispersion-cash-1111
+          path: |
+            analysis-results/nov2026-ticket-form-dispersion-cash.json
+            analysis-results/nov2026-ticket-form-dispersion-cells.csv.gz
+          if-no-files-found: warn
+          retention-days: 7
