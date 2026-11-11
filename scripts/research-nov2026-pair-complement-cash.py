@@ -21,7 +21,8 @@ BETS=ROOT/"analysis-results/nov2026-pair-complement-bets.csv.gz"
 WINDOWS=(3,5,99)
 # Predeclared finite space: 12 highest-support rules per season, all unordered pairs,
 # then up to 8 jointly beneficial pairs; not an individual ROI acceptance filter.
-TOP_SUPPORT=12
+TOP_SUPPORT=16
+MAX_PAIR_CANDIDATES=40
 MAX_PAIRS=8
 
 def metric(picks,program_days):
@@ -62,7 +63,15 @@ def main():
                     h=idx[(yrow[idx]>=lo)&(yrow[idx]<target)&(qrow[idx]==q)]
                     if len(h)>=10:ranked.append((len(h),i))
                 ranked.sort(key=lambda z:(-z[0],z[1]))
-                top=[i for _,i in ranked[:TOP_SUPPORT]]
+                # Diversity across bet markets is mandatory: the highest
+                # raw-support rules otherwise cluster in one market, and
+                # same-market pairs can never be purchased together.
+                top=[];market_support=Counter()
+                for support,i in ranked:
+                    market=rules[i]["market"]
+                    if market_support[market]>=4:continue
+                    top.append(i);market_support[market]+=1
+                    if len(top)>=TOP_SUPPORT:break
                 for a in range(len(top)):
                     for b in range(a+1,len(top)):
                         i,j=top[a],top[b]
@@ -78,6 +87,11 @@ def main():
                         bj=ib[np.isin(rid[ib],common)]
                         if not len(ai) or not len(bj):continue
                         pair_pool.append((q,i,j,ai,bj))
+            # Rank pair candidates using support only, never future payouts.
+            # This bounds the true-cash portfolio search while preserving
+            # multi-market and quarterly candidates.
+            pair_pool.sort(key=lambda x:(-min(len(x[3]),len(x[4])),x[0],x[1],x[2]))
+            pair_pool=pair_pool[:MAX_PAIR_CANDIDATES]
             votes=np.zeros(len(cash),dtype=np.float32)
             chosen=[];baseline=-1e12
             for step in range(MAX_PAIRS):
@@ -85,7 +99,7 @@ def main():
                 for k,(q,i,j,ai,bj) in enumerate(pair_pool):
                     if k in chosen:continue
                     votes[ai]+=1;votes[bj]+=1
-                    picks=wf.select(votes,data,year_min=lo,year_max=target-1)
+                    picks=m.fast_select(votes,data,year_min=lo,year_max=target-1)
                     score=metric(picks,days)
                     votes[ai]-=1;votes[bj]-=1
                     if best is None or score>best[0]:best=(score,k)
@@ -93,10 +107,10 @@ def main():
                 baseline,k=best;chosen.append(k)
                 _,_,_,ai,bj=pair_pool[k]
                 votes[ai]+=1;votes[bj]+=1
-            training=wf.select(votes,data,year_min=lo,year_max=target-1)
+            training=m.fast_select(votes,data,year_min=lo,year_max=target-1)
             options.append((metric(training,days),win,votes,chosen,pair_pool,base.cash_metrics(training)))
         _,win,votes,chosen,pair_pool,training=max(options,key=lambda z:(z[0],-z[1]))
-        forward=wf.select(votes,data,year_min=target,year_max=target)
+        forward=m.fast_select(votes,data,year_min=target,year_max=target)
         outputs.extend({"selectionYear":target,**b} for b in forward)
         count=Counter((b["day"],b["venue"]) for b in forward)
         report[str(target)]={"lookbackYears":win,
@@ -109,6 +123,8 @@ def main():
     result={"researchOnly":True,"method":"prior-year paired market complement cash",
       "independentJraPayoutVerified":False,"officialT15Verified":False,
       "futureBlind2025And2026":False,"adoptable":False,
+      "selectionUsesOnlyPriorYearSettlements":True,
+      "requiresTwoDifferentMarketsPerRace":True,
       "years":report,"combined":base.cash_metrics(outputs)}
     OUT.parent.mkdir(parents=True,exist_ok=True)
     OUT.write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n")
