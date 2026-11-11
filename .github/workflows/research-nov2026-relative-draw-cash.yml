@@ -1,33 +1,60 @@
-name: Research joint draw-field cash conditions
+name: Cash-first joint draw-field horse-form ROI200 cash extraction
 on:
+  push:
+    branches:
+      - research/nov2026-relative-draw-cash-1111
+    paths:
+      - scripts/research-nov2026-relative-draw-cash.py
+      - .github/workflows/research-nov2026-relative-draw-cash.yml
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  research:
+  decade-form-financial-condition-extraction:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - run: python -m pip install numpy pandas requests
-      - name: Fetch pinned settled racing records
+          python-version: '3.12'
+      - name: Pin actual payout and chronological runner feature dependencies
+        run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1
+      - name: Test all monetary conditions, exact 336 tickets and correct ROI yen units
         run: |
-          git clone --filter=blob:none https://github.com/Kenseimk/keiba-agent.git /tmp/keiba-agent
-          git -C /tmp/keiba-agent checkout f552ca8628646f39b05ffdbdc3ab8734939ffd66
-          mkdir -p external-jra-cash-decade
-          find /tmp/keiba-agent -type f -name 'raceresults_*.csv' -exec cp {} external-jra-cash-decade/ \;
-          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -ge 80
-      - name: Cash settle finite conditions
-        run: python scripts/research-nov2026-relative-draw-cash.py
-      - uses: actions/upload-artifact@v4
-        if: always()
+          python -m py_compile scripts/research-nov2026-relative-draw-cash.py
+          python -u scripts/research-nov2026-relative-draw-cash.py --self-test
+      - name: Restore original six-market paid cash matrix if available
+        uses: actions/cache@v4
         with:
-          name: relative-draw-form-cash-results
+          path: |
+            analysis-results/jra-decade-sixmarket-top10-cash-v3.npz
+            analysis-results/jra-decade-sixmarket-top10-races-v3.json
+          key: pinned-thirdparty-jra-2015-2026-ten-runner-six-market-cache-v1
+      - name: Download immutable 2015-2026 JRA payout mirror, no production reads or writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in $(seq 2015 2025); do
+              for month in $(seq -w 1 12); do printf '%s%s\n' "$year" "$month"; done
+            done
+            for month in 01 02 03 04; do printf '2026%s\n' "$month"; done
+          } > /tmp/pinned_months
+          cat /tmp/pinned_months | xargs -P 12 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 3 --max-time 45 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+      - name: Exhaustively extract 76 historical payout ROI200 conditions and test 2023-2026
+        run: python -u scripts/research-nov2026-relative-draw-cash.py
+      - name: Retain only actual yen cash results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: joint-draw-field-76-schema-real-cash-roi200-cells
           path: |
             analysis-results/nov2026-relative-draw-cash-roi200.json
             analysis-results/nov2026-relative-draw-robust-cells.csv.gz
+          retention-days: 30
           if-no-files-found: warn
-          retention-days: 7
