@@ -103,7 +103,9 @@ def money(group,spent,paid,ids,mask,needed,grpcount,race_count):
     return n,total,largest
 
 def roi(paid,n):
-    return round(100.0*float(paid)/float(n),4) if n>0 else None
+    # Stakes are fixed at 100 JPY per ticket. E.g. 200 yen returned on
+    # one 100 yen ticket is 200%, not 20,000%.
+    return round(float(paid)/float(n),4) if n>0 else None
 
 def main():
     if "--self-test" in sys.argv:
@@ -115,6 +117,8 @@ def main():
         p=np.array([300,200,400,100,100,0],np.int32)
         r=np.array([0,0,1,0,2,2],np.int32)
         assert max_race(g,p,r,np.array([0,1]),3,2).tolist()==[500,100]
+        assert roi(200,1)==200.0
+        assert roi(500,5)==100.0
         print("RELATIVE_DRAW_DIRECT_ROI200_SELFTEST_OK",flush=True)
         return
     tic=time.monotonic()
