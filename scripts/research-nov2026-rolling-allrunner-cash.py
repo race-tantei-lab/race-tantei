@@ -139,7 +139,7 @@ def main():
         print("ROLLING_FINANCIAL_COHORT_AUDIT",json.dumps({
             "target":target,"priorTrainLastYear":max(train_years),
             "cohortValidationYears":validation_years,
-            "conditions":audit["supportedCells"],"retained":len(rules)},flush=True)
+            "conditions":audit["supportedCells"],"retained":len(rules)},ensure_ascii=False),flush=True)
     ledger=[x for y in (2023,2024,2025,2026) for x in receipts[y]]
     total=a.metrics(ledger)
     selected=Counter((r["day"],r["venue"]) for r in ledger)
