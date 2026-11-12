@@ -196,7 +196,7 @@ def main():
        exactJraT15OddsVerified=False,
        thirdPartyPayoutsIndependentlyVerified=False,
        previouslyInspectedLaterOutcomes=True,
-       2026AugNovNotCovered=True,search=coverage)
+       augNov2026NotCovered=True,search=coverage)
     if winner:
        outcome["passed2022Gate"]=winner
        mod2=base.train(cash,attrs,types,year,keys,base.YEARS_FINAL)
