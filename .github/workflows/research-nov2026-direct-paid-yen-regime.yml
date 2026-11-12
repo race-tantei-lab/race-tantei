@@ -1,0 +1,61 @@
+name: Direct realized cash yen search with seasonal two-market policy
+on:
+  push:
+    branches:
+      - research/nov2026-direct-cash-tweedie-regime-policy
+    paths:
+      - scripts/research-nov2026-direct-paid-yen-regime-search.py
+      - .github/workflows/research-nov2026-direct-paid-yen-regime.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  direct-yen-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned cash regression dependencies
+        run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1
+      - name: Require cash arithmetic and ticket-index checks before loading race data
+        run: |
+          set -euo pipefail
+          python -m py_compile scripts/research-nov2026-direct-paid-yen-regime-search.py
+          python -u scripts/research-nov2026-direct-paid-yen-regime-search.py --self-test
+      - name: Restore six market 2015-2026 cash matrix cache if it exists
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            analysis-results/jra-decade-sixmarket-top10-cash-v3.npz
+            analysis-results/jra-decade-sixmarket-top10-races-v3.json
+          key: pinned-thirdparty-jra-2015-2026-ten-runner-six-market-cache-v1
+      - name: Restore all 136 historical immutable cash payout CSVs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in $(seq 2015 2025); do
+              for month in $(seq -w 1 12); do printf '%s%s\n' "$year" "$month"; done
+            done
+            for month in 01 02 03 04; do printf '2026%s\n' "$month"; done
+          } > /tmp/pinned_cash_months
+          cat /tmp/pinned_cash_months | xargs -P 12 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 3 --max-time 45 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+      - name: Search and settle historical money returns without any production mutations
+        run: python -u scripts/research-nov2026-direct-paid-yen-regime-search.py
+      - name: Keep actual bought ticket ledger for independent ROI recalculation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-cash-yen-regime-2022-blind-policies
+          path: |
+            analysis-results/nov2026-direct-paid-yen-regime-search.json
+            analysis-results/nov2026-direct-paid-yen-frozen-test-bets.csv
+          retention-days: 30
+          if-no-files-found: warn
