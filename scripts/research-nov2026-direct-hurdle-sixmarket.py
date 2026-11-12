@@ -45,7 +45,7 @@ def source():
     races,X,paid,years=original.source_data()
     if len(races)!=len(years) or paid.shape!=(len(races),336):
         raise RuntimeError("MISALIGNED_HISTORICAL_CASH_LABELS")
-    if np.any((years==2026)&np.array([r["month"] for r in races])>="202605")):
+    if np.any((years==2026) & (np.array([r["month"] for r in races]) >= "202605")):
         raise RuntimeError("2026_EARLY_MONTH_BOUNDARY_DRIFT")
     return races,X,paid,years
 
@@ -83,7 +83,8 @@ def fit_hurdle(X,paid,years,trainyears):
     # capped at per-market 95th percentile to de-emphasize one lucky jackpot.
     positives=sampled_indices[pos]
     raw_y=paid.ravel()[positives].astype(np.float64)
-    market=np.rint(X[positives,0:6]).astype(np.int8).argmax(axis=1)
+    # Column zero is the categorical market ID, not six one-hot columns.
+    market=np.rint(X[positives,0]).astype(np.int8)
     clipped=raw_y.copy()
     caps={}
     for i,typ in enumerate(MARKETS):
