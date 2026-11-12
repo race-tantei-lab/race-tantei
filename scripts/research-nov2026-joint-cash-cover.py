@@ -34,8 +34,27 @@ def select(cash,races,year,quarter,fields):
             for lo,hi in BOUNDS:
                 a=sorted(range(lo,hi),key=lambda j:(hits[j],robust[j]),reverse=True)[:3]
                 b=sorted(range(lo,hi),key=lambda j:(robust[j],hits[j]),reverse=True)[:4]
+                # Keep the frequent-hit base candidates and tail-resistant
+                # overlay candidates separately; their joint payoff is evaluated
+                # below, not by independent ROI thresholds.
                 choices.append(list(dict.fromkeys(a+b)))
-            return [(a,b) for k,aa in enumerate(choices) for bb in choices[k+1:] for a in aa for b in bb]
+            pairs=[(a,b) for k,aa in enumerate(choices) for bb in choices[k+1:] for a in aa for b in bb]
+            # Search for marginal complementarity: reward a second ticket for
+            # paying on races where the first ticket did not. All outcomes here
+            # belong exclusively to the training window.
+            ranked=[]
+            for a,b in pairs:
+                pa=v[:,a];pb=v[:,b];joint=pa+pb
+                robust=int(joint.sum())-int(joint.max())
+                diversified=int(np.count_nonzero((pa>0)|(pb>0)))
+                overlap=int(np.count_nonzero((pa>0)&(pb>0)))
+                ranked.append((robust,diversified,-overlap,a,b))
+            ranked.sort(reverse=True)
+            # Retain candidates from both the robust-cash and broad-hit fronts,
+            # instead of allowing rare jackpots to crowd out all base tickets.
+            cash_front=[(a,b) for _,_,_,a,b in ranked[:120]]
+            hit_front=[(a,b) for _,_,_,a,b in sorted(ranked,key=lambda x:(x[1],x[0],x[2]),reverse=True)[:120]]
+            return list(dict.fromkeys(cash_front+hit_front))
         groups=defaultdict(list)
         for i in train:groups[keys[int(i)]].append(int(i))
         global_pairs=discover(train)
