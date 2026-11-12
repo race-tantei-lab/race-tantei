@@ -62,7 +62,9 @@ def select(cash,races,year,quarter,fields):
         # with the largest single race payout removed from the combined ledger.
         # The common global fallback guarantees broad race coverage.
         policies={}
-        # Optimize the complete historically observable regime universe, not\n        # only regimes that happen to occur in the evaluation year.\n        for key in set(keys[int(i)] for i in np.concatenate((train,test))):
+        # Optimize the complete historically observable regime universe, not
+        # only regimes that happen to occur in the evaluation year.
+        for key in set(keys[int(i)] for i in np.concatenate((train,test))):
             ix=groups.get(key,[])
             parent=[int(i) for i in train if venue[int(i)]==key[0] and int(quarter[int(i)])==key[1]]
             source=ix if len(ix)>=60 else parent if len(parent)>=60 else train.tolist()
@@ -127,7 +129,10 @@ def select(cash,races,year,quarter,fields):
             robust_total=(sum(payouts)-max(payouts))/(200*len(payouts))
             # Annual minimum is a regularizer, not an individual-cell ROI rule.
             annual=[(sum(v)-max(v))/(200*len(v)) for v in by_year.values() if v]
-            # Direct combined yen ROI is primary; worst-year robustness is\n            # a secondary tie-break, never an implicit per-cell requirement.\n            # The stake is fixed at 200 yen per selected race.\n            return (robust_total,min(annual),sum(payouts))
+            # Direct combined yen ROI is primary; worst-year robustness is
+            # a secondary tie-break, never an implicit per-cell requirement.
+            # The stake is fixed at 200 yen per selected race.
+            return (robust_total,min(annual),sum(payouts))
         best_cash=portfolio_cash(current)
         for _ in range(4):
             changed=False
