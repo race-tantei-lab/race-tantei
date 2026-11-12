@@ -1,0 +1,55 @@
+name: Research new direct conditional-payout hurdle cash model (isolated)
+on:
+  push:
+    branches:
+      - research/nov2026-direct-hurdle-sixmarket-1113
+permissions:
+  contents: read
+jobs:
+  independent-cash-generator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1
+      - name: Test independent payout-conditional generator money arithmetic
+        run: |
+          python -m py_compile scripts/research-nov2026-direct-hurdle-sixmarket.py
+          python -u scripts/research-nov2026-direct-hurdle-sixmarket.py --self-test
+      - name: Restore existing pinned cash feature cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            analysis-results/jra-decade-sixmarket-top10-cash-v3.npz
+            analysis-results/jra-decade-sixmarket-top10-races-v3.json
+          key: pinned-thirdparty-jra-2015-2026-ten-runner-six-market-cache-v1
+      - name: Get already-published immutable 136-month historical JRA payout mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in $(seq 2015 2025); do
+              for month in $(seq -w 1 12); do printf '%s%s\n' "$year" "$month"; done
+            done
+            for month in 01 02 03 04; do printf '2026%s\n' "$month"; done
+          } > /tmp/cash_months
+          cat /tmp/cash_months | xargs -P 12 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 3 --max-time 45 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+      - name: Train P(payout) times conditional actual yen and evaluate chronological holdout
+        run: python -u scripts/research-nov2026-direct-hurdle-sixmarket.py
+      - name: Preserve actual financial betting ledger and fixed model summary
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: direct-hurdle-sixmarket-chronological-cash-ledger
+          path: |
+            analysis-results/nov2026-hurdle-direct-sixmarket-cash.json
+            analysis-results/nov2026-hurdle-direct-sixmarket-cash-bets.csv
+          if-no-files-found: warn
+          retention-days: 30
