@@ -1,0 +1,37 @@
+name: Research retrospective Aug-Nov real frozen bet cash comparison (isolated)
+on:
+  push:
+    branches:
+      - research/nov2026-aug-forward-cash-comparison-1113
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-pre-frozen-bets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==2.2.6
+      - name: Verify actual cash, fixed year training and T15 arithmetic
+        run: |
+          python -m py_compile scripts/research-nov2026-aug-forward-cash-comparison.py
+          python scripts/research-nov2026-aug-forward-cash-comparison.py --self-test
+      - name: Query production D1 read-only and test real forward settled tickets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+          CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+        run: python -u scripts/research-nov2026-aug-forward-cash-comparison.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: august-november-real-frozen-cash-comparison
+          path: |
+            analysis-results/nov2026-aug-nov-forward-direct-cash.json
+            analysis-results/nov2026-aug-nov-forward-direct-cash-ledger.json
+          if-no-files-found: warn
+          retention-days: 30
