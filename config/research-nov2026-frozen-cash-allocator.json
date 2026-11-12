@@ -1,0 +1,84 @@
+{
+  "id": "2026-11-12-canonical-actual-cash-frozen-allocator",
+  "status": "RESEARCH_CANDIDATE_NOT_ADOPTABLE",
+  "completedResearch": true,
+  "source": {
+    "archive": "src/v1/ten-year-history-data",
+    "originallySelectedRaces": 14410,
+    "originalCompleteArchiveRoiPct": 431.6505898681471,
+    "originalSourceUsesAllPeriodTrainedCandidateGenerator": true,
+    "originalPicksAreNotUnbiasedOof": true,
+    "officialHistoricalOddsNotProvenEquivalentToCurrentT15Lock": true,
+    "exactRacesEligibleFromExistingCandidateGeneratorOnly": true
+  },
+  "selection": {
+    "fitFinancialCohortsOnYearsStrictlyEarlierThanTarget": true,
+    "validationYears": [
+      2021,
+      2022
+    ],
+    "evaluationYears": "2023 through 2026-08-09",
+    "regime": [
+      "market",
+      "odds",
+      "raceNo"
+    ],
+    "capPerWinningHistorical1000YenTicket": 30000,
+    "shrinkagePriorTickets": 40,
+    "stakePower": 4,
+    "perRaceBudgetYen": 2000,
+    "minStakePerDistinctMarketYen": 100,
+    "ticketsPerRace": 2,
+    "distinctMarketsRequired": true,
+    "racesPerObservedVenueDay": 3,
+    "raceRanking": "both"
+  },
+  "actualMoney": {
+    "evaluationRaces": 3132,
+    "stakeYen": 6264000,
+    "payoutYen": 44902060,
+    "cashRoiPct": 716.827267,
+    "largestRacePayoutYen": 737580,
+    "roiAfterRemovingLargestPaidRaceKeepStakePct": 705.052363,
+    "hitRacePct": 54.469987,
+    "sameRacesEqualStakeBaselineRoiPct": 488.818646,
+    "equalStakeBaselineMinusMaxRacePct": 482.621328,
+    "years": {
+      "2023": {
+        "roiPct": 719.403356,
+        "minusMaxRaceRoiPct": 707.726852
+      },
+      "2024": {
+        "roiPct": 677.321181,
+        "minusMaxRaceRoiPct": 652.922454
+      },
+      "2025": {
+        "roiPct": 705.713542,
+        "minusMaxRaceRoiPct": 681.149884
+      },
+      "2026JanToAug9": {
+        "roiPct": 793.697222,
+        "minusMaxRaceRoiPct": 725.402778
+      }
+    }
+  },
+  "gates": {
+    "historicRoiAtLeast200": true,
+    "historicEachYearRoiAfterMaxRaceAtLeast200": true,
+    "historicHitRateAtLeast20": true,
+    "threeDifferentRacesPerVenueDay": true,
+    "twoDifferentMarketsPerRace": true,
+    "candidateTicketsIndependentlyOutOfSample": false,
+    "officialJraT15QuoteLockVerified": false,
+    "productionDeploymentAuthorized": false,
+    "acceptedAsModel": false
+  },
+  "provenance": {
+    "originalGitHubActionsRun": "https://github.com/race-tantei-lab/race-tantei/actions/runs/43232428580",
+    "independentReexecution": "https://github.com/race-tantei-lab/race-tantei/actions/runs/43233117016",
+    "actualMoneyReport": "analysis-results/nov2026-canonical-direct-money-allocator.json",
+    "perRaceCashLedger": "analysis-results/nov2026-canonical-direct-money-allocator-bets.jsonl.gz"
+  },
+  "productionChanged": false,
+  "acceptanceNote": "This proves a strict historical money threshold within an outcome-trained source candidate archive, not unbiased forward validity. Reject any deployment or finished-model claim pending independently regenerated T-15-locked candidate bets and financial settlement."
+}
