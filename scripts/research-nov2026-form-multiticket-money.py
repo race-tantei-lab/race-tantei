@@ -143,7 +143,7 @@ def search(races,src,idx,pred):
       quarterPairAssignmentsPerConfig=15**4,
       mathematicallyPossibleQuarterPairPolicies=possible*15**4,
       qualifyingValidationConfigs=passing,
-      2022Groups=len(groupset))
+      venueDays2022=len(groupset))
 def apply(races,cash,idx,pred,recipe):
     kind=recipe["kind"];ex=tuple(recipe["expo"])
     _,scores,payout=top_arrays(cash,cash,idx,pred,kind,ex)
