@@ -31,12 +31,67 @@ def module(name,path):
     m=importlib.util.module_from_spec(s);sys.modules[name]=m;s.loader.exec_module(m);return m
 
 def obtain():
+    # Do NOT restrict the 3-5R venue/day universe to races with exact horse
+    # identity joins: that accidentally makes every portfolio invalid.
+    # Carry all original settled races and mark missing historical form
+    # explicitly. All payouts remain labels, never generator inputs.
     m=module("form_cash_source","scripts/research-nov2026-seasonal-ensemble-cash-first.py")
-    races,paid,attrs,widths,market,unused,years,quarters,helper=m.obtain_rows()
-    if len(races)<16000 or paid.size!=len(races)*336 or len(attrs)<30:raise RuntimeError("INCOMPLETE_FORM_ARCHIVE")
+    joined,joined_paid,joined_attrs,widths,_,_,_,_,joint=m.obtain_rows()
+    if len(joined)<16000 or len(joined_attrs)<30:raise RuntimeError("INCOMPLETE_FORM_ARCHIVE")
+    source=module("original_full_cash_source","scripts/research-nov2026-decade-roi-first-sixmarkets.py")
+    parser=module("original_full_cash_parser","scripts/research-nov2026-sixmarket-real-paid-cash.py")
+    form=module("full_cash_rank7_indices","scripts/research-nov2026-chronological-form-money-conditions.py")
+    archive=source.read_all_races(parser.parse_payments)
+    ix=np.asarray([j for j,r in enumerate(archive) if r["month"]>="201701"],dtype=np.int32)
+    races=[archive[int(j)] for j in ix]
+    template=joint.rank7_market_indices(source,form)
+    if len(template)!=336 or len(races)<25000:raise RuntimeError("INCOMPLETE_FULL_PROGRAM_TICKETS")
+    with np.load(source.CACHE,allow_pickle=False) as z:
+        if z["payout"].shape[0]!=len(archive):raise RuntimeError("CASH_ORDER_MISMATCH")
+        full_paid=z["payout"][ix[:,None],template[None,:]].astype(np.int32)
+        full_attrs={}
+        n=len(races)
+        for field in joined_attrs:
+            if field in z.files:
+                full_attrs[field]=z[field][ix[:,None],template[None,:]].astype(np.uint8).reshape(-1)
+            elif field=="relativeDraw":
+                full_attrs[field]=(
+                    z["draw"][ix[:,None],template[None,:]].astype(np.uint16) *
+                    source.SINGLE_BINS["fieldSize"]+
+                    z["fieldSize"][ix[:,None],template[None,:]].astype(np.uint16)
+                ).astype(np.uint8).reshape(-1)
+            else:
+                full_attrs[field]=np.zeros(n*336,dtype=np.uint8)
+    pos={r["id"]:i for i,r in enumerate(races)}
+    target=[];original=[]
+    for i,r in enumerate(joined):
+        j=pos.get(r["id"])
+        if j is None:raise RuntimeError("JOINED_RACE_OUTSIDE_FULL_CASH_SOURCE")
+        target.append(j);original.append(i)
+    target=np.asarray(target,dtype=np.int32)
+    original=np.asarray(original,dtype=np.int32)
+    if not np.array_equal(full_paid[target],joined_paid.reshape(-1,336)[original]):
+        raise RuntimeError("JOINED_VS_UNJOINED_SETTLED_TICKET_PAYOUT_DIFFERENCE")
+    for field,values in joined_attrs.items():
+        src=values.reshape(len(joined),336)
+        dest=full_attrs[field].reshape(len(races),336)
+        dest[target]=src[original]
+    matched=np.zeros(len(races)*336,dtype=np.uint8)
+    matched.reshape(len(races),336)[target]=1
+    full_attrs["formIdentityMatched"]=matched
+    types=np.tile(np.array([0]*7+[1]*21+[2]*21+[3]*42+[4]*35+[5]*210,
+                          dtype=np.uint8),len(races))
+    years=np.asarray([int(r["month"][:4]) for r in races],dtype=np.int16)
     if np.any(np.asarray([r["month"] for r in races])[years==2026]>="202605"):
         raise RuntimeError("MONTH_BOUNDARY_INVALID")
-    return races,paid.reshape(-1,336),attrs,market,years,tuple(sorted(attrs))
+    print("FULL_PROGRAM_FORM_COVERAGE",json.dumps({
+        "allHistoricalRaces":len(races),"formMatchedRaces":len(joined),
+        "formMissingButRetainedRaces":len(races)-len(joined),
+        "noSelectionOnAvailableForms":True,
+        "moneyLabelsExactJoinReconciled":True,
+        "years":dict(collections.Counter(map(int,years)))
+    },ensure_ascii=False),flush=True)
+    return races,full_paid,full_attrs,types,years,tuple(sorted(full_attrs))
 
 def features(attrs,markets,keys,positions):
     x=np.empty((len(positions),len(keys)+1),dtype=np.float32)
@@ -235,7 +290,10 @@ def main():
           allrows+=bought
       aggregate=metrics([z["paidYen"] for z in allrows])
       passed=qualifies(aggregate) and all(
-        qualifies({**yr[str(y)],"races":max(300,yr[str(y)]["races"])})
+        (yr[str(y)]["races"]>=30 and
+         (yr[str(y)]["roiPct"] or 0)>=200 and
+         (yr[str(y)]["minusMaxRaceRoiPct"] or 0)>=200 and
+         (yr[str(y)]["hitRacePct"] or 0)>=20)
         for y in EVAL)
       result.update({"forwardCash":aggregate,"forwardYear":yr,
           "status":"NUMERIC_PASS_BUT_NOT_JRA_T15_VERIFIED" if passed
