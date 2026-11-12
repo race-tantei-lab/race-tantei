@@ -19,7 +19,7 @@ BETS=ROOT/"analysis-results/nov2026-form-formation-money-bets.csv"
 PAIRS=tuple(itertools.combinations(range(6),2))
 MKT=("単勝","ワイド","馬連","馬単","3連複","3連単")
 LIMITS=((0,7),(7,28),(28,49),(49,91),(91,126),(126,336))
-K=(1,2,3,5,8)
+K=(1,2,3,5,7)
 BUDGET=((1000,1000),(1500,500),(1900,100),(500,1500),(100,1900))
 EXP=((.5,0.),(1.,0.),(1.5,0.),(1.,.5),(.5,1.),(1.,1.))
 SLATE=(3,4,5)
@@ -58,11 +58,11 @@ def top_arrays(src,raw,idx,pred,kind,expo):
     sig=np.maximum(pred[:,:,kind],1e-8)**beta*(
         np.maximum(pred[:,:,2],1e-8)**gamma)
     n=len(idx)
-    top_idx=np.zeros((n,6,8),dtype=np.int16)
-    top_sig=np.zeros((n,6,8),dtype=np.float64)
-    top_paid=np.zeros((n,6,8),dtype=np.int32)
+    top_idx=np.zeros((n,6,7),dtype=np.int16)
+    top_sig=np.zeros((n,6,7),dtype=np.float64)
+    top_paid=np.zeros((n,6,7),dtype=np.int32)
     for market,(lo,hi) in enumerate(LIMITS):
-       x=np.argsort(-sig[:,lo:hi],axis=1,kind="stable")[:,:8]
+       x=np.argsort(-sig[:,lo:hi],axis=1,kind="stable")[:,:7]
        take=x+lo
        top_idx[:,market,:]=take
        top_sig[:,market,:]=np.take_along_axis(sig,take,axis=1)
