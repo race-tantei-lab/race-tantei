@@ -232,10 +232,10 @@ def main():
           "discovered":by_year[str(year)],"sameRacesEqualStake":baseline[str(year)]},
           ensure_ascii=False),flush=True)
     summary=finance(holdout)
+    all_selected_ids={x["raceId"] for x in holdout}
     base_all=[{"stakeYen":2000,"paidYen":int(sum(
           t["returnLightYen"] for t in r["tickets"]))}
-        for r in rows if r["raceId"] in {x["raceId"] for x in holdout}]
-    ]
+        for r in rows if r["raceId"] in all_selected_ids]
     baseline_same=finance(base_all)
     # Full existing model official-quote universe is exactly verified above;
     # compare same selected race subset and stake ledger without source mix.
