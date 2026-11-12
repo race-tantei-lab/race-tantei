@@ -202,8 +202,35 @@ def main():
             validation.append((objective,cfg,a,coverage))
     if len(validation)!=540:raise RuntimeError(
         f"EXPECTED_540_VALID_POLICIES:{len(validation)}")
-    validation.sort(key=lambda x:x[0],reverse=True)
-    winner=validation[0]
+    # Zero is a legitimate result of a discovery FAMILY, not a "bad model".
+    # Never elevate a best-of-grid policy to a model below the acceptance gate.
+    eligible=[row for row in validation if
+        row[2]["roiPct"] is not None and row[2]["roiPct"]>=200
+        and row[2]["minusMaxRaceRoiPct"] is not None
+        and row[2]["minusMaxRaceRoiPct"]>=200
+        and row[2]["hitRacePct"] is not None and row[2]["hitRacePct"]>=20
+        and row[3]["threePlusVenueDays"]>=120]
+    if not eligible:
+        OUT.parent.mkdir(parents=True,exist_ok=True)
+        OUT.write_text(json.dumps({
+            "searchFamily":"hurdle-ticket-paid-times-conditional-cash",
+            "researchOnly":True,
+            "status":"SEARCH_FAMILY_REJECTED_NOT_A_MODEL",
+            "adoptedModel":False,
+            "acceptedCandidate":None,
+            "searchedPolicies":len(validation),
+            "selectionYear":SELECT_YEAR,
+            "doNotReportBestRejectedAsModel":True,
+            "no2023OutOfSamplePeekingForFailed2022Models":True,
+            "productionUnchanged":True},ensure_ascii=False,indent=2)+"\\n",encoding="utf8")
+        print("ROI200_SEARCH_FAMILY_DISCARDED_NO_QUALIFYING_CANDIDATE",
+              json.dumps({"searchedPolicies":len(validation),
+                          "acceptedCandidateCount":0,
+                          "selectionYear":SELECT_YEAR},ensure_ascii=False),
+              flush=True)
+        return
+    eligible.sort(key=lambda x:x[0],reverse=True)
+    winner=eligible[0]
     gamma,beta,mode,slate,split=winner[1]
     print("DIRECT_HURDLE_CASH_YEAR2022_SELECTION",json.dumps({
         "chosen":{"gamma":gamma,"beta":beta,"mode":mode,
@@ -261,10 +288,13 @@ def main():
         fields=list(allrows[0]) if allrows else []
         if fields:
             writer=csv.DictWriter(f,fieldnames=fields);writer.writeheader();writer.writerows(allrows)
-    print("DIRECT_HURDLE_FINANCIAL_RESULT",json.dumps({
-        "retrospectiveQualification":passes,
-        "yearly":{y:v["money"] for y,v in byyear.items()},
-        "combined":combined,"selected":summary["selection"],
-        "finalCrossPeriodMoney":summary["combined"],
-        "elapsed":summary["seconds"]},ensure_ascii=False),flush=True)
+    if passes:
+        # This confirms historical numerical ROI only, never T15 verification.
+        print("ROI200_NUMERICAL_RESEARCH_RULE_FOUND_NEEDS_OFFICIAL_T15",
+              json.dumps({"combined":combined,"perYear":byyear,
+                          "numericalRuleOnly":True},ensure_ascii=False),flush=True)
+    else:
+        print("ROI200_SEARCH_FAMILY_REJECTED_AFTER_INDEPENDENT_YEARS",
+              json.dumps({"acceptedCandidateCount":0,
+                          "productionUnchanged":True},ensure_ascii=False),flush=True)
 if __name__=="__main__":main()
