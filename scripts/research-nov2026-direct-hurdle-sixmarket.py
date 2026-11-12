@@ -222,7 +222,7 @@ def main():
             "selectionYear":SELECT_YEAR,
             "doNotReportBestRejectedAsModel":True,
             "no2023OutOfSamplePeekingForFailed2022Models":True,
-            "productionUnchanged":True},ensure_ascii=False,indent=2)+"\\n",encoding="utf8")
+            "productionUnchanged":True},ensure_ascii=False,indent=2)+"\n",encoding="utf8")
         print("ROI200_SEARCH_FAMILY_DISCARDED_NO_QUALIFYING_CANDIDATE",
               json.dumps({"searchedPolicies":len(validation),
                           "acceptedCandidateCount":0,
