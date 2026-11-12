@@ -18,7 +18,14 @@ def select(cash,races,year,quarter,fields):
     n=len(races);money=cash.reshape(n,336)
     venue=[str(r["venue"]) for r in races]
     band=np.where(fields<=9,0,np.where(fields<=13,1,2))
-    keys=[(venue[i],int(quarter[i]),int(band[i])) for i in range(n)]
+    # Race-number regimes are known before betting and allow early/middle/late
+    # program switches, rather than forcing one pair on every race at a venue.
+    # Never use finish position or payout to define the regime.
+    race_no=np.array([int(r["raceNo"]) for r in races],dtype=int)
+    if np.any((race_no<1)|(race_no>12)):
+        raise RuntimeError("INVALID_PRE_RACE_PROGRAM_NUMBER")
+    program=np.where(race_no<=4,0,np.where(race_no<=8,1,2))
+    keys=[(venue[i],int(quarter[i]),int(band[i]),int(program[i])) for i in range(n)]
     result=[];coverage={}
     for target in (2023,2024,2025,2026):
         train=np.flatnonzero((year>=2017)&(year<target)&(year>=target-6))
@@ -215,7 +222,7 @@ def main():
     yearly={str(y):stats([b for b in bets if b["year"]==y]) for y in (2023,2024,2025,2026)}
     quarters={str(y):{str(q):stats([b for b in bets if b["year"]==y and b["quarter"]==q]) for q in range(1,5)} for y in (2023,2024,2025,2026)}
     report=dict(researchOnly=True,adoptable=False,officialT15Verified=False,officialJraPayoutReconciled=False,
-        historicalCashSource="third_party_unreconciled",knownPriorExposure2025And2026=True,
+        historicalCashSource="third_party_unreconciled",knownPriorExposure2025And2026=True,regimeDimensions=["venue","quarter","fieldSizeBand","preRaceProgramNumberBand"],
         candidateRaces=len(races),candidateTickets=len(cash),year=yearly,quarters=quarters,
         combined=stats(bets),coverage=coverage)
     OUT.parent.mkdir(parents=True,exist_ok=True);OUT.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n")
