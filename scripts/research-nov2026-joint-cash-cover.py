@@ -121,9 +121,23 @@ def select(cash,races,year,quarter,fields):
                 if winner!=old:
                     changed=True;best_cash=winner_cash
             if not changed:break
+        # Race selection priority must vary by pre-known regime. Previously
+        # every key inherited the same portfolio score, reducing the 5R cap
+        # to an arbitrary race-ID sort. Estimate a robust regime-specific
+        # cash yield exclusively from training years; never use test payouts.
         for key,(a,b) in current.items():
             _,_,_,support=policies[key]
-            policies[key]=(a,b,best_cash[1],support)
+            ix=train_groups.get(key,[])
+            if ix:
+                payouts=money[np.asarray(ix,dtype=int),a]+money[np.asarray(ix,dtype=int),b]
+                robust=(int(payouts.sum())-int(payouts.max()))/(200*len(ix))
+                # Shrink sparse cells toward the global training portfolio,
+                # preserving coverage while avoiding small-cell jackpots.
+                strength=len(ix)/(len(ix)+100)
+                priority=strength*robust+(1-strength)*best_cash[1]
+            else:
+                priority=best_cash[1]
+            policies[key]=(a,b,float(priority),support)
         days=defaultdict(list)
         for i in test:
             i=int(i);a,b,priority,support=policies[keys[i]]
