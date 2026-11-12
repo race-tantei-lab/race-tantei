@@ -83,8 +83,11 @@ def select(cash,races,year,quarter,fields):
         for i in train:
             i=int(i)
             train_days[(str(races[i]["day"]),venue[i])].append(i)
+        # Training slate uses pre-outcome regime priorities, not race IDs.
+        def train_priority(i):
+            return policies[keys[i]][2] if keys[i] in policies else float("-inf")
         chosen_train=[i for group in train_days.values()
-                      for i in sorted(group,key=lambda j:str(races[j]["id"]))[:5]]
+                      for i in sorted(group,key=lambda j:(-train_priority(j),str(races[j]["id"])))[:5]]
         chosen_groups=defaultdict(list)
         for i in chosen_train:
             if keys[i] in policies:chosen_groups[keys[i]].append(i)
