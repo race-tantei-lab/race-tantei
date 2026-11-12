@@ -1,0 +1,66 @@
+name: Test Friday JRA numbered-entry release gate (isolated CI)
+on:
+  push:
+    branches:
+      - test/jra-friday-publish-entry-gate-1113
+permissions:
+  contents: read
+jobs:
+  test-schedules-and-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - run: python -m pip install --disable-pip-version-check pyyaml==6.0.2
+      - name: Verify both production workflow YAML, bash and publication windows
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import ast, datetime as dt, subprocess, yaml, tempfile
+          paths=[
+            ".github/workflows/sync-upcoming-entries-direct.yml",
+            ".github/workflows/verify-upcoming-production-program.yml",
+          ]
+          for path in paths:
+            data=yaml.load(Path(path).read_text(),Loader=yaml.BaseLoader)
+            assert isinstance(data.get("jobs"),dict)
+            for job in data["jobs"].values():
+              for step in job.get("steps",[]):
+                run=step.get("run")
+                if not run:continue
+                script="#!/bin/bash\n"+run+"\n"
+                with tempfile.NamedTemporaryFile(mode="w+",suffix=".sh") as f:
+                  f.write(script);f.flush()
+                  proc=subprocess.run(["bash","-n",f.name],capture_output=True,text=True)
+                  assert proc.returncode==0,(path,step.get("name"),proc.stderr)
+                # The parser of the gate executes Python code from heredocs.
+                if "python3 - <<'PY'" in run:
+                  for segment in run.split("python3 - <<'PY'")[1:]:
+                    code=segment.split("\nPY",1)[0]
+                    ast.parse(code)
+          sync=yaml.load(Path(paths[0]).read_text(),Loader=yaml.BaseLoader)
+          verify=yaml.load(Path(paths[1]).read_text(),Loader=yaml.BaseLoader)
+          assert "20 2 * * 5" in sync["on"]["schedule"][2]["cron"]
+          assert "35 3 * * 5" in verify["on"]["schedule"][1]["cron"]
+          check=sync["jobs"]["gate"]["steps"][0]["run"]
+          assert "numberedCardsDue" in check and "return d<=now.date()" in check
+          vscript=[s["run"] for s in verify["jobs"]["verify"]["steps"] if s.get("id")=="target_gate"][0]
+          assert "CARD_VALIDATION_DEFERRED_UNTIL_JRA_NUMBERED_ENTRY_RELEASE" in vscript
+          def numbers_due(day,now):
+            d=dt.date.fromisoformat(day)
+            return d<=now.date() or (d==now.date()+dt.timedelta(days=1) and now.hour>=10)
+          JST=dt.timezone(dt.timedelta(hours=9))
+          tests=[
+             ("2026-11-12T21:50:00", "2026-11-14",False),
+             ("2026-11-13T07:20:00", "2026-11-14",False),
+             ("2026-11-13T11:20:00", "2026-11-14",True),
+             ("2026-11-14T07:20:00", "2026-11-14",True),
+             ("2026-11-14T07:20:00", "2026-11-15",False),
+             ("2026-11-14T21:50:00", "2026-11-15",True),
+          ]
+          for now,date,want in tests:
+            got=numbers_due(date,dt.datetime.fromisoformat(now).replace(tzinfo=JST))
+            assert got==want,(now,date,got,want)
+          print("JRA_FRIDAY_RELEASE_GATE_YAML_SHELL_AND_TIME_WINDOW_OK")
+          PY
