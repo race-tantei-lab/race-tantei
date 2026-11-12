@@ -139,8 +139,8 @@ def estimate(r,t,regime,trained,prior):
 
 def buy(rows,days,year,regime,trained,prior,power,slate,rank):
     lines=[];groups=collections.defaultdict(list)
-    for i,r in enumerate(rows):
-        if r["year"]!=year:continue
+    for i in ROW_INDEX_BY_YEAR[year]:
+        r=rows[i]
         a,b=(estimate(r,t,regime,trained,prior) for t in r["tickets"])
         score=[a,b]
         # More cash to the ticket expected to repay more in real yen.
@@ -176,6 +176,9 @@ def main():
         print("CANONICAL_DIRECT_CASH_FINANCIAL_SELFTEST_OK",flush=True);return
     tic=time.monotonic()
     rows,days=load_archive()
+    global ROW_INDEX_BY_YEAR
+    ROW_INDEX_BY_YEAR={y:[i for i,r in enumerate(rows) if r["year"]==y]
+        for y in (*VALID_YEARS,*TEST_YEARS)}
     total=len(REGIMES)*len(PRIORS)*len(CAPS)*len(POWER)*len(SLATES)*len(RANKINGS)
     print("CASH_MONEY_RECIPE_SPACE",total,flush=True)
     # A nested, chronological selection test. Hyperparameters chosen ONLY
