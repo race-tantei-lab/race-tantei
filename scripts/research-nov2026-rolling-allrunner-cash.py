@@ -159,7 +159,7 @@ def main():
     report=dict(researchOnly=True,adoptable=False,cashGate=passed,
        officialJraT15Verified=False,independentOfficialPayoutVerified=False,
        noFutureYearSettlementForTraining=True,only2026JanAprAvailable=True,
-       2025And2026AlreadyResearchedBeforeThisRun=True,
+       years2025And2026AlreadyResearchedBeforeThisRun=True,
        modelDefinitionRequiresCashRoi200=True,
        selectedPre2023Recipe=dict(k=frozen[0],blend=frozen[1],
           allowedOverlayMarkets=list(frozen[2]),racesPerDay=frozen[3],
