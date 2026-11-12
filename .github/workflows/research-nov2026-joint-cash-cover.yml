@@ -1,8 +1,8 @@
-name: Research joint cash coverage (isolated)
+name: Research program-stage cash regime (isolated)
 on:
   push:
     branches:
-      - research/nov2026-joint-cash-cover-search-1112
+      - research/nov2026-cash-pair-regime-coverage-1112
   workflow_dispatch:
 jobs:
   joint-cash:
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: joint-cash-cover-research
+          name: program-stage-cash-regime-research
           path: |
             analysis-results/nov2026-joint-cash-cover.json
             analysis-results/nov2026-joint-cash-cover-bets.csv.gz
