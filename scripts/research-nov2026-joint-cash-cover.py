@@ -71,7 +71,7 @@ def select(cash,races,year,quarter,fields):
         policies={}
         # Optimize the complete historically observable regime universe, not
         # only regimes that happen to occur in the evaluation year.
-        for key in set(keys[int(i)] for i in np.concatenate((train,test))):
+        for key in set(keys[int(i)] for i in train):
             ix=groups.get(key,[])
             parent=[int(i) for i in train if venue[int(i)]==key[0] and int(quarter[int(i)])==key[1]]
             source=ix if len(ix)>=60 else parent if len(parent)>=60 else train.tolist()
@@ -172,6 +172,40 @@ def select(cash,races,year,quarter,fields):
                 if winner!=old:
                     changed=True;best_cash=winner_cash
             if not changed:break
+        # Alternate race slate and ticket assignment on the SAME training-only
+        # cash objective. This removes the old fixed-slate limitation.
+        for _slate_round in range(3):
+            train_priority_now={}
+            for key,(a,b) in current.items():
+                ix=train_groups.get(key,[])
+                if ix:
+                    p=money[np.asarray(ix,dtype=int),a]+money[np.asarray(ix,dtype=int),b]
+                    train_priority_now[key]=(int(p.sum())-int(p.max()))/(200*len(ix))
+                else:
+                    train_priority_now[key]=best_cash[0]
+            revised=[i for group in train_days.values() for i in
+                     sorted(group,key=lambda j:(-train_priority_now.get(keys[j],0.0),str(races[j]["id"])))[:5]]
+            if set(revised)==set(chosen_train):
+                break
+            chosen_train=revised
+            chosen_groups=defaultdict(list)
+            for i in chosen_train:
+                if keys[i] in current:chosen_groups[keys[i]].append(i)
+            best_cash=portfolio_cash(current)
+            for _ in range(2):
+                changed=False
+                for key in sorted(current):
+                    old=current[key];winner=old;winner_cash=best_cash
+                    for candidate in pair_options.get(key,[]):
+                        if candidate==old:continue
+                        current[key]=candidate
+                        score=portfolio_cash(current)
+                        if score>winner_cash:
+                            winner_cash=score;winner=candidate
+                    current[key]=winner
+                    if winner!=old:
+                        changed=True;best_cash=winner_cash
+                if not changed:break
         # Race selection priority must vary by pre-known regime. Previously
         # every key inherited the same portfolio score, reducing the 5R cap
         # to an arbitrary race-ID sort. Estimate a robust regime-specific
@@ -189,9 +223,19 @@ def select(cash,races,year,quarter,fields):
             else:
                 priority=best_cash[0]
             policies[key]=(a,b,float(priority),support)
+        # Unseen regimes fall back to a training-only global pair. Never
+        # create a policy using test-year regime occurrence information.
+        fallback_a,fallback_b=global_pairs[0]
+        fallback_priority=best_cash[0]
         days=defaultdict(list)
+        unseen_regimes=0
         for i in test:
-            i=int(i);a,b,priority,support=policies[keys[i]]
+            i=int(i)
+            if keys[i] in policies:
+                a,b,priority,support=policies[keys[i]]
+            else:
+                a,b,priority,support=fallback_a,fallback_b,fallback_priority,0
+                unseen_regimes+=1
             x=dict(raceId=str(races[i]["id"]),day=str(races[i]["day"]),venue=venue[i],
                 year=target,quarter=int(quarter[i]),marketA=next(k for k,(lo,hi) in enumerate(BOUNDS) if lo<=a<hi),
                 marketB=next(k for k,(lo,hi) in enumerate(BOUNDS) if lo<=b<hi),
@@ -204,11 +248,12 @@ def select(cash,races,year,quarter,fields):
             chosen=rows[:5];counts[len(chosen)]+=1;result.extend(chosen)
         coverage[str(target)]=dict(observedVenueDays=len(days),selected3to5=sum(v for k,v in counts.items() if 3<=k<=5),
             selected5=counts[5],lessThan3=sum(v for k,v in counts.items() if k<3),
-            unobservedOfficialVenueDays="NOT_VERIFIED",trainingRaces=len(train),testRaces=len(test))
+            unobservedOfficialVenueDays="NOT_VERIFIED",unseenRegimeRaces=unseen_regimes,trainingRaces=len(train),testRaces=len(test))
     return result,coverage
 def main():
     if "--self-test" in sys.argv:
         assert stats([dict(stakeYen=200,paidYen=500),dict(stakeYen=200,paidYen=100)])["minusMaxRaceRoiPct"]==25
+        assert "for key in set(keys[int(i)] for i in train):" in Path(__file__).read_text()
         print("JOINT_CASH_COVER_SELF_TEST_OK");return
     src=ROOT/"scripts/research-nov2026-seasonal-ensemble-cash-first.py"
     spec=importlib.util.spec_from_file_location("cashsrc",src)
