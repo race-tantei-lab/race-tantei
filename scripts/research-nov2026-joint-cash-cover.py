@@ -77,9 +77,26 @@ def select(cash,races,year,quarter,fields):
                 # Conservative robust cash return: retain the removed race's stake.
                 robust=int(p.sum())-int(p.max())
                 scored.append((robust, int(np.count_nonzero(p)),a,b))
-            scored.sort(reverse=True)
-            best=scored[0]
-            policies[key]=(best[2],best[3],best[0]/(200*len(source)),len(source))
+            # Multi-season payout complementarity: penalize pairs whose entire
+            # cash return comes from one historical year. This ranks combined
+            # base+overlay tickets, never imposes a threshold on individual cells.
+            # Year-specific payouts are only from the source training window.
+            source_year=year[np.asarray(source,dtype=int)]
+            stable=[]
+            for robust,hits,a,b in scored:
+                joint=v[:,a]+v[:,b]
+                per_year=[]
+                for yy in np.unique(source_year):
+                    vals=joint[source_year==yy]
+                    if len(vals):
+                        per_year.append((int(vals.sum())-int(vals.max()))/(200*len(vals)))
+                worst=min(per_year) if per_year else 0
+                # Cash ROI remains primary; seasonal floor is a bounded
+                # tie-break so rare single-year jackpots cannot dominate.
+                stable.append((robust/(200*len(source))+0.15*min(worst,3.0),robust,hits,a,b))
+            stable.sort(reverse=True)
+            best=stable[0]
+            policies[key]=(best[3],best[4],best[1]/(200*len(source)),len(source))
         # Coordinate-descent across regimes on a single cash ledger.
         # No test-year outcomes are consulted. Every training race has one
         # candidate pair and the objective removes the globally largest race.
