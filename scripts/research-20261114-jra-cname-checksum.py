@@ -2,7 +2,7 @@
 import urllib.request, concurrent.futures,json,re
 from bs4 import BeautifulSoup
 def test(no):
-  suffix=(0x63+0xB5*no)%256
+  suffix=((0x63+0xB5*no) if no<=9 else (0xF9+0xB5*(no-10)))%256
   urls=[]
   for prefix in ("pw01sde01","pw01sde10"):
     code=f"{prefix}0620260405{no:02d}20260919/{suffix:02X}"
