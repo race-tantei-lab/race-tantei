@@ -20,3 +20,22 @@ for u in urls:
   print("SEP19_ODDS_PROVIDER_PROBE",json.dumps({"url":u,"status":status,"bytes":len(raw),"title":soup.title.get_text(" ",strip=True)[:150] if soup.title else "",
    "tables":trs[:12],"text":soup.get_text(" ",strip=True)[:550]},ensure_ascii=False),flush=True)
  except Exception as e:print("SEP19_ODDS_PROVIDER_PROBE",json.dumps({"url":u,"error":str(e)[:240]}),flush=True)
+
+print("JRA_RESULT_ODDS_LINK_DETAILS")
+for u in ["https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde1006202604050720260919%2FC2",
+ "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0106202604050120260919/18",
+ "https://race.netkeiba.com/odds/index.html?race_id=202606040507",
+ "https://race.sp.netkeiba.com/odds/index.html?race_id=202606040507"]:
+ try:
+  req=urllib.request.Request(u,headers={"User-Agent":"Mozilla/5.0 (X11; Linux x86_64) Chrome/120.0 Safari/537.36","Accept-Language":"ja-JP,ja;q=0.9"})
+  with urllib.request.urlopen(req,timeout=13) as f:raw=f.read()
+  decoded=raw.decode("cp932","replace") if "jra.jp" in u else raw.decode("utf-8","replace")
+  soup=BeautifulSoup(decoded,"html.parser")
+  oddslinks=[(a.get("href") or "",a.get_text(" ",strip=True)[:80]) for a in soup.find_all("a")
+           if any(x in (a.get("href") or "").lower() for x in ("ou","odd","accesso"))]
+  cmatches=re.findall(r".{0,120}(?:151ou|ODDS|単勝オッズ|オッズ).{0,170}",decoded,re.I)
+  trs=[[c.get_text(" ",strip=True) for c in tr.find_all(["td","th"])] for tr in soup.find_all("tr")]
+  print("SEP19_DETAIL",json.dumps({"url":u,"bytes":len(raw),"oddsLinks":oddslinks[:30],
+    "cnameMatches":cmatches[:10],"table":trs[:8],
+    "body":soup.get_text(" ",strip=True)[:350]},ensure_ascii=False),flush=True)
+ except Exception as ex:print("SEP19_DETAIL",json.dumps({"url":u,"error":str(ex)[:200]}),flush=True)
