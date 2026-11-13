@@ -1,0 +1,286 @@
+#!/usr/bin/env python3
+"""Frozen full-period ROI200 six-portfolio replay on D1 2026 Aug+ settlements.
+
+READ ONLY. Research cutoff 2015-01..2026-04. Candidate identities
+are frozen from the prior full-history mining; NO post-Aug result can select
+a strategy or change the venue/quarter policy. All six market payouts are
+reconciled against persisted rt_payouts for each completed race.
+
+IMPORTANT: D1 rt_runners.win_odds has no proven identical timestamp to the
+third-party historical final-odds archive. Forward ROI is therefore a
+D1-stored-odds hypothetical replay, NOT an exact reproduction of final-odds
+choices or proof of an actionable T-15 model. If eligible D1 coverage is
+incomplete, report it and never describe results as all-races ROI.
+"""
+from __future__ import annotations
+import collections, datetime as dt, importlib.util, json, math, re, sys
+from pathlib import Path
+import numpy as np
+
+ROOT=Path(__file__).resolve().parents[1]
+SOURCE_RESULT=ROOT/"analysis-results/nov2026-full-cash-free-stake-roi200-only.json"
+OUT=ROOT/"analysis-results/nov2026-six-roi200-candidates-postaug-audit.json"
+START="2026-08-01"
+END="2026-11-14"
+MONTHS=("2026-08","2026-09","2026-10","2026-11")
+TYPES=("単勝","ワイド","馬連","馬単","3連複","3連単")
+UNORDERED={"ワイド","馬連","3連複"}
+VENUES={"札幌":1,"函館":2,"福島":3,"新潟":4,"東京":5,
+        "中山":6,"中京":7,"京都":8,"阪神":9,"小倉":10}
+def imp(path,name):
+    spec=importlib.util.spec_from_file_location(name,ROOT/path)
+    if not spec or not spec.loader:raise RuntimeError("NO_IMPORT:"+str(path))
+    m=importlib.util.module_from_spec(spec);sys.modules[spec.name]=m
+    spec.loader.exec_module(m);return m
+def norm_nums(text):
+    return tuple(int(x) for x in re.findall(r"\d+",str(text)))
+def venue_code(value):
+    s=str(value or "").strip()
+    if s in VENUES:return VENUES[s]
+    if s.isdigit() and 1<=int(s)<=10:return int(s)
+    raise RuntimeError("UNRECOGNIZED_JRA_VENUE:"+s)
+def d1_races():
+    live=imp("scripts/postaug-support-aug-nov-frozen-policy-recheck.py","postaug_query_helper")
+    live.START=START
+    live.END=END
+    live.MONTHS=MONTHS
+    by_date,month_counts=live.d1_bundles()
+    payments=collections.defaultdict(lambda:[{} for _ in TYPES])
+    bad=collections.Counter()
+    for month in MONTHS:
+        nxt=(dt.date.fromisoformat(month+"-01")+dt.timedelta(days=35)).replace(day=1).isoformat()[:7]
+        sql=("SELECT race_id raceId,bet_type betType,combination,payout_yen payoutYen "
+             "FROM rt_payouts WHERE race_id>=? AND race_id<? "
+             "AND bet_type IN ('単勝','ワイド','馬連','馬単','3連複','3連単') "
+             "ORDER BY race_id,bet_type,combination")
+        rows=live.paged(sql,[month+"-",nxt+"-"])
+        for row in rows:
+            typ=str(row["betType"]);k=TYPES.index(typ)
+            combo=norm_nums(row["combination"])
+            if typ in UNORDERED:combo=tuple(sorted(combo))
+            expected=1 if typ=="単勝" else 3 if typ in ("3連複","3連単") else 2
+            if len(combo)!=expected:raise RuntimeError("BAD_PAYOUT_COMBINATION")
+            yen=int(row["payoutYen"] or 0)
+            if yen<=0 or yen%10:raise RuntimeError("BAD_D1_SETTLED_PAYOUT")
+            r=payments[str(row["raceId"])][k]
+            if combo in r and r[combo]!=yen:
+                raise RuntimeError("CONFLICTING_D1_PAYOUT")
+            r[combo]=yen
+        print("POSTAUG_D1_ALL_MARKET_PAYMENT_MONTH",json.dumps({
+            "month":month,"payoutLines":len(rows)}),flush=True)
+    expected=collections.Counter()
+    valid=collections.Counter()
+    rows=[]
+    all_finished=0
+    for day,bundles in sorted(by_date.items()):
+        for bundle in bundles:
+            r=bundle["race"]
+            if r.get("status")!="finished":
+                bad["not_finished"]+=1;continue
+            all_finished+=1
+            venue=venue_code(r.get("venue"))
+            group=(str(day),venue)
+            expected[group]+=1
+            rid=str(r["raceId"])
+            # The original historical cash universe required >=10 distinct
+            # quoted horses per race, all six market payout types and 1..12.
+            horse=[]
+            for h in bundle["runners"]:
+                if h.get("runnerStatus") not in (None,"","active"):continue
+                try:
+                    number=int(h["horseNo"])
+                    odd=float(h["winOdds"])
+                    age_m=re.search(r"\d+",str(h.get("sexAge") or ""))
+                    age=int(age_m.group()) if age_m else 0
+                    weight=float(h.get("assignedWeight") or 0)
+                except (ValueError,TypeError,KeyError):
+                    continue
+                if not (1<=number<=18 and 1<=odd<=9999 and
+                        math.isfinite(odd) and 0<=age<=18 and 0<=weight<=80):continue
+                horse.append((number,odd,age,weight))
+            horse.sort(key=lambda h:(h[1],h[0]))
+            if len(horse)<10 or len({h[0] for h in horse})!=len(horse):
+                bad["fewer_than_10_quoted_runners"]+=1;continue
+            pays=payments.get(rid)
+            if not pays or any(not x for x in pays):
+                bad["missing_one_of_six_payout_types"]+=1;continue
+            no=int(r["raceNo"])
+            if not (1<=no<=12):
+                bad["race_number_outside_1_12"]+=1;continue
+            rows.append({"id":rid,"day":str(day),"month":str(day)[:4]+str(day)[5:7],
+                "venue":venue,"raceNo":no,"horses":horse,"payout":pays})
+            valid[group]+=1
+    if not rows:raise RuntimeError("NO_LIVE_D1_SIX_MARKET_PAYOUT_AND_QUOTE_ROWS")
+    # Never silently treat incomplete race-day data as full 12-race coverage.
+    complete={g for g,n in expected.items() if n>=3 and n==valid[g]}
+    incomplete={str(g):{"finished":n,"valid":valid[g]} for g,n in expected.items()
+                if g not in complete}
+    covered=[r for r in rows if (r["day"],r["venue"]) in complete]
+    if not covered:raise RuntimeError("NO_COMPLETE_D1_VENUE_DAYS")
+    print("POSTAUG_D1_PROGRAM_COVERAGE",json.dumps({
+        "dateWindow":[START,END],"finishedRows":all_finished,
+        "qualifiedRows":len(rows),"completeVenueDays":len(complete),
+        "partialVenueDays":len(incomplete),
+        "excludedCauses":dict(bad),
+        "monthCounts":month_counts},ensure_ascii=False),flush=True)
+    return covered,{"startInclusive":START,"endExclusive":END,
+        "latestRaceDate":max(r["day"] for r in rows),
+        "finishRacesAvailable":all_finished,
+        "allSixMarketAndOddsRaces":len(rows),
+        "fullyRepresentedVenueDays":len(complete),
+        "excludedPartialVenueDays":len(incomplete),
+        "excludedPartialVenueDayDetails":dict(list(incomplete.items())[:15]),
+        "excludedRacesByCause":dict(bad),
+        "d1MonthCounts":month_counts,
+        "replayIncludesAllFinishedD1Races":bool(not incomplete and all_finished==len(rows))}
+def fixed_forward_signals(base,hist,live_rows):
+    # Build history feature matrix on all pre-Aug archive ONLY.
+    core,historical,years,paid,cat,ticket,sig,market,ranks=hist.whole_archive_loo_scores(base)
+    sparse=base.load("scripts/research-nov2026-frozen-sparse-cash-model.py","fwd_sparse_money")
+    N=paid.shape[1]
+    old_cache,old_race_cache=core.CACHE,core.RACE_CACHE
+    try:
+        core.CACHE=ROOT/"analysis-results/forward-six-market-odds-features.npz"
+        core.RACE_CACHE=ROOT/"analysis-results/forward-six-market-odds-races.json"
+        core.full_features(live_rows)
+        with np.load(core.CACHE,allow_pickle=False) as z:
+            forward_paid=z["payout"].astype(np.int32)
+            forward_cat={k:z[k].astype(np.uint8) for k in sparse.FIELDS}
+    finally:
+        core.CACHE,core.RACE_CACHE=old_cache,old_race_cache
+    if len(live_rows)!=forward_paid.shape[0]:
+        raise RuntimeError("FORWARD_PAYOUT_CASH_MATRIX_MISALIGNED")
+    template=np.arange(N,dtype=np.int32)[None,:]
+    best=np.zeros((len(live_rows),N),dtype=np.float32)
+    for i,schema in enumerate(sparse.SCHEMAS):
+        codes,size=sparse.sample_group_code(cat,template,schema)
+        flat=codes.ravel()
+        count=np.bincount(flat,minlength=size).astype(np.float64)
+        sum_pay=np.bincount(flat,weights=paid.ravel(),minlength=size)
+        hits=np.bincount(flat,weights=(paid.ravel()>0),minlength=size)
+        maximum=np.zeros(size,dtype=np.float64)
+        wins=np.flatnonzero(paid.ravel()>0)
+        np.maximum.at(maximum,flat[wins],paid.ravel()[wins])
+        robust=(sum_pay-maximum)/np.maximum(count,1)
+        good=(count>=13)&(hits>=2)&(robust>=200)
+        rate=np.where(good,np.minimum(np.maximum(robust,0),15000)*
+             np.power(np.minimum(count,200)/200,.25)*
+             np.minimum(hits,15)/15,0).astype(np.float32)
+        future_code,_=sparse.sample_group_code(forward_cat,template,schema)
+        np.maximum(best,rate[future_code],out=best)
+    _,markets=core.fixed_template()
+    chosen=np.empty((len(live_rows),6),dtype=np.int16)
+    strengths=np.empty((len(live_rows),6),dtype=np.float32)
+    fallback=[]
+    for m in range(6):
+        indices=np.flatnonzero(markets==m)
+        j=np.argmax(best[:,indices],axis=1)
+        chosen[:,m]=indices[j]
+        strengths[:,m]=best[np.arange(len(live_rows)),chosen[:,m]]
+        sum_pay=paid[:,indices].astype(np.int64)
+        totals=sum_pay.sum(axis=0)-sum_pay.max(axis=0)
+        f=int(indices[np.argmax(totals)])
+        fallback.append(f)
+        chosen[:,m]=np.where(strengths[:,m]>0,chosen[:,m],f)
+    print("POSTAUG_FROZEN_FULL_PERIOD_CASH_SIGNALS",json.dumps({
+        "historicalRaces":len(historical),"forwardRaces":len(live_rows),
+        "historicalMonthCutoff":"2026-04","historyOnlySignalLearning":True,
+        "historicalLeaveOneOutTicketAlgorithm":True,
+        "forwardGroupScoreFromPastOnly":True,
+        "fallbackTicketIDs":fallback}),flush=True)
+    return forward_paid,chosen,strengths
+def ticket_replay(base,study,records,paid,chosen,signal,report):
+    daygroups=base.choose_day_groups(records,np.arange(len(records),dtype=np.int32))
+    policy=dict(study.proposals(base))
+    out=[]
+    for number,model in enumerate(report["bestCash200Patterns"],start=1):
+        config=model["venueQuarterDecisions"]
+        selected=[]
+        for day in daygroups:
+            # Every venue-day belongs to exactly one venue/quarter.
+            ids=np.asarray(day,dtype=np.int32)
+            ref=records[int(ids[0])]
+            venue=int(ref["venue"]);q=(int(ref["month"][4:])-1)//3
+            sk=f"{venue}_Q{q+1}"
+            if sk not in config:
+                raise RuntimeError("MISSING_FROZEN_VENUE_QUARTER_CONFIG:"+sk)
+            c=config[sk]
+            pair,slate,ranking=policy[c["policy"]]
+            _,bets=base.decisions(records,ids,paid,chosen,signal,[list(range(len(ids)))],
+                                  pair,slate,1000,ranking,True)
+            for r in bets:
+                ix=next((int(i) for i in ids if str(records[int(i)]["id"])==str(r["raceId"])),None)
+                if ix is None:raise RuntimeError("RACE_ALIGNMENT_MISMATCH")
+                a=int(c["stake1Yen"]);b=int(c["stake2Yen"])
+                if a<100 or b<0 or a%100 or b%100:
+                    raise RuntimeError("INVALID_FROZEN_CASH_STAKE")
+                one=int(paid[ix,int(r["ticket1Template"])])
+                two=int(paid[ix,int(r["ticket2Template"])]) if b else 0
+                rowpaid=one*(a//100)+two*(b//100)
+                selected.append((str(r["raceId"]),rowpaid,a+b,venue,ref["day"]))
+        bought=[v[0] for v in selected]
+        if len(set(bought))!=len(bought):
+            raise RuntimeError("REPLAY_DUPLICATED_BET_RACE")
+        cost=sum(v[2] for v in selected);cash=sum(v[1] for v in selected)
+        hits=sum(v[1]>0 for v in selected);maxpay=max((v[1] for v in selected),default=0)
+        n=len(selected)
+        m={"races":n,"venueDays":len(daygroups),
+           "stakeYen":cost,"paidYen":cash,"profitYen":cash-cost,
+           "hitRaces":hits,"hitRacePct":round(hits*100/n,4) if n else None,
+           "cashRoiPct":round(cash*100/cost,4) if cost else None,
+           "minusLargestRaceCashRoiPct":round((cash-maxpay)*100/cost,4) if cost else None,
+           "maxRacePayoutYen":maxpay}
+        out.append({"candidateNo":number,
+           "historyCandidateMethod":model["method"],
+           "historicalCash":model["fullPeriodCash"],
+           "augustOnward":m})
+        print("SIX_ROI200_HIT_AND_POSTAUG",json.dumps({
+            "candidateNo":number,
+            "fullPeriodHitPct":model["fullPeriodCash"]["hitRacePct"],
+            "forwardHitPct":m["hitRacePct"],"forwardRoiPct":m["cashRoiPct"],
+            "forwardBets":n,"forwardStake":cost,"forwardPaid":cash},ensure_ascii=False),flush=True)
+    return out
+def main():
+    if "--self-test" in sys.argv:
+        assert venue_code("東京")==5 and venue_code("1")==1
+        assert norm_nums("1-12-3")==(1,12,3)
+        print("POSTAUG_SIX_CANDIDATE_REPLAY_SELFTEST_OK")
+        return
+    report=json.loads(SOURCE_RESULT.read_text(encoding="utf8"))
+    patterns=report.get("bestCash200Patterns") or []
+    if len(patterns)!=6:
+        raise RuntimeError("HISTORICAL_SIX_CANDIDATES_MISSING:"+str(len(patterns)))
+    for p in patterns:
+        x=p["fullPeriodCash"]
+        if x["cashRoiPct"]<200 or x["minusLargestRaceCashRoiPct"]<200:
+            raise RuntimeError("BELOW200_ENTERED_CANDIDATE_LIST")
+        if x.get("hitRaces") is None:
+            raise RuntimeError("HISTORICAL_SAME_BETS_HIT_COUNTS_MISSING")
+    records,coverage=d1_races()
+    study=imp("scripts/research-nov2026-full-history-free-stake-roi200.py","historical_six_fixed_policies")
+    full=study.helper()
+    base=full.load()
+    paid,chosen,signal=fixed_forward_signals(base,full,records)
+    analyzed=ticket_replay(base,study,records,paid,chosen,signal,report)
+    result={"status":"D1_STORED_ODDS_RETROSPECTIVE_REPLAY_NOT_OFFICIAL_T15",
+       "historicalCandidateCount":len(patterns),
+       "dateRange":coverage,
+       "hitDefinition":"one or more paid tickets in the selected race",
+       "historicalBasis":"third party 2015-2026 Apr final win odds and settlements",
+       "postAugustBasis":"persisted D1 win_odds + 6 market official settlement table rt_payouts",
+       "oddsTimestampMatchedToTrainingArchive":False,
+       "provenOfficialT15BettingSimulation":False,
+       "noFutureResultsUsedForProspectiveRuleSelection":True,
+       "notUntouchedForwardHoldout":True,
+       "allSixCandidates":analyzed,
+       "noProductionOrD1Writes":True}
+    OUT.parent.mkdir(parents=True,exist_ok=True)
+    OUT.write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf8")
+    print("SIX_ROI200_FULL_REPLAY_SUMMARY",json.dumps({
+        "candidates":len(analyzed),"completeVenueDays":coverage["fullyRepresentedVenueDays"],
+        "excludedDays":coverage["excludedPartialVenueDays"],
+        "rows":[{"i":x["candidateNo"],
+          "historicalHit":x["historicalCash"]["hitRacePct"],
+          "augRoi":x["augustOnward"]["cashRoiPct"],
+          "augHit":x["augustOnward"]["hitRacePct"]} for x in analyzed]},ensure_ascii=False),flush=True)
+if __name__=="__main__":main()
