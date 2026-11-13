@@ -24,7 +24,15 @@ def run(races,cash,year,quarter,fields,market_state):
     # fieldSize is a pre-race categorical bin, not the raw horse count.
     if np.any((band<0)|(band>20)):raise RuntimeError('INVALID_FIELD_BIN')
     if np.any((market_state<0)|(market_state>30)):raise RuntimeError('INVALID_MARKET_STATE')
-    # Pre-race course metadata: fail closed to UNKNOWN when not present in the source.\n    # Never infer track or going from results or settlement amounts.\n    def pre_race_course(r):\n        surface=str(r.get("surface",r.get("trackType","UNKNOWN"))).strip().lower()\n        distance=r.get("distance",r.get("distanceM"))\n        try: distance_band=int(distance)//400 if distance is not None else -1\n        except (ValueError,TypeError): distance_band=-1\n        going=str(r.get("going",r.get("trackCondition","UNKNOWN"))).strip().lower()\n        return (surface,distance_band,going)\n    course=[pre_race_course(r) for r in races]\n    # Only pre-race features; no winners, finish positions or test payouts in routing.
+    # Pre-race metadata only. Missing values remain UNKNOWN.
+    def pre_race_course(r):
+        surface=str(r.get("surface",r.get("trackType","UNKNOWN"))).strip().lower()
+        distance=r.get("distance",r.get("distanceM"))
+        try: distance_band=int(distance)//400 if distance is not None else -1
+        except (ValueError,TypeError): distance_band=-1
+        going=str(r.get("going",r.get("trackCondition","UNKNOWN"))).strip().lower()
+        return (surface,distance_band,going)
+    course=[pre_race_course(r) for r in races]
     keys=[(venue[i],int(quarter[i]),int(band[i]),int((program[i]-1)//4),int(market_state[i]),*course[i]) for i in range(n)]
     all_bets=[];coverage={};missing=0
     periods=[(y,q) for y in range(2023,2027) for q in range(1,5)]
