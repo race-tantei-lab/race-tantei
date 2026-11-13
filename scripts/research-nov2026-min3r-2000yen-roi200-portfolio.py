@@ -169,9 +169,9 @@ def decisions(races,ix,cash,opts,score,groups,market_choice,slate,stake_first,ra
         r=races[int(ix[j])];aidx=int(a[j]);bidx=int(b[j])
         rows.append({"year":int(r["month"][:4]),"date":r["day"],
             "venue":r["venue"],"raceId":r["id"],"raceNo":r["raceNo"],
-            "ticket1Market":MARKETS[int(market[aidx])],
+            "ticket1Market":MARKETS[int(np.searchsorted((10,55,100,190,310,1030),aidx,side="right"))],
             "ticket1Template":aidx,
-            "ticket2Market":MARKETS[int(market[bidx])] if s2 else "",
+            "ticket2Market":MARKETS[int(np.searchsorted((10,55,100,190,310,1030),bidx,side="right"))] if s2 else "",
             "ticket2Template":bidx if s2 else "",
             "stake1Yen":s1,"stake2Yen":s2,
             "paidYen":int(returned[z])})
