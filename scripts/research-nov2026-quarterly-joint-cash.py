@@ -38,7 +38,9 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
     # The coarse key ensures training support; specific conditions are activated
     # only when sufficient historical observations exist before the test quarter.
     base_keys=[(venue[i],int(quarter[i]),int(band[i]),int(market_state[i])) for i in range(n)]
-    detailed_keys=[base_keys[i]+(int(odds_gap_state[i]),course[i][0],course[i][1],course[i][2]) for i in range(n)]
+    # Program position is known before the race; include it only at the detailed tier.
+    program_bands=np.minimum((program-1)//4,2)
+    detailed_keys=[base_keys[i]+(int(program_bands[i]),int(odds_gap_state[i]),course[i][0],course[i][1],course[i][2]) for i in range(n)]
     keys=base_keys
     all_bets=[];coverage={};missing=0
     periods=[(y,q) for y in range(2023,2027) for q in range(1,5)]
@@ -160,6 +162,7 @@ def main():
     if "--self-test" in sys.argv:
         assert summarize([dict(stakeYen=200,paidYen=500),dict(stakeYen=200,paidYen=100)])["minusMaxRaceRoiPct"]==25
         assert len(MARKETS)==6 and sum(hi-lo for lo,hi in MARKETS)==336
+        assert list(np.minimum((np.array([1,4,5,8,9,12])-1)//4,2))==[0,0,1,1,2,2]
         assert list(np.minimum(np.array([0,1,2,7])//2,3))==[0,0,1,3]
         print("QUARTERLY_JOINT_CASH_SELF_TEST_OK");return
     src=ROOT/"scripts/research-nov2026-seasonal-ensemble-cash-first.py"
