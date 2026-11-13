@@ -20,6 +20,7 @@ R=Path(__file__).resolve().parents[1]
 OUT=R/"analysis-results/nov2026-frozen-sparse-cash-model.json"
 LED=R/"analysis-results/nov2026-frozen-sparse-cash-bets.csv"
 MODEL=R/"analysis-results/nov2026-frozen-sparse-cash-policy.json"
+PARAMS=R/"analysis-results/nov2026-frozen-sparse-cash-frozen-scores.npz"
 TRAIN=tuple(range(2017,2022))
 VALID=2022
 EVAL=(2023,2024,2025,2026)
@@ -40,9 +41,9 @@ SCHEMAS=(
 # only leave-max REAL money return >200/100 yen is eligible as a rule.
 MIN_TRAINS=(6,12,24,48)
 MIN_HITS=(2,3)
-MIN_POST_MAX=(200,250,350,500)
+MIN_POST_MAX=(200,350)
 PICK_PER_DAY=(1,2,4,12)
-CONFIDENCE=(0.,.25,.5)
+CONFIDENCE=(.25,)
 SEEDS=(101,211,431)
 def dep():
     p=R/"scripts/research-nov2026-decade-roi-first-sixmarkets.py"
@@ -181,7 +182,7 @@ def tickets_for(races,idx,cash,pre,chosen,perday,seed,slots,market):
 def main():
     if "--self-test" in sys.argv:
         assert len(SCHEMAS)==25
-        assert money([1000,2000,0])["minusLargestPaidRaceRoiPct"]==1000/3
+        assert abs(money([1000,2000,0])["minusLargestPaidRaceRoiPct"]-1000/3)<0.001
         assert not qualified(money([1000,0]))
         assert qualified(money([1000]*6))
         print("FROZEN_SPARSE_MODEL_UNIT_CASH_TEST_OK");return
@@ -222,8 +223,25 @@ def main():
       p["validation2022"]["bets"])) if validations else None
     recipe=pick or fallback
     if recipe is None:raise RuntimeError("NO_TRAINED_POLICY")
+    # Actual trained model parameters, not just the experiment algorithm:
+    # serialized frozen score vector by ticket+context cell, generated
+    # using 2017-2021 ONLY. The policy JSON specifies feature encoding.
+    params={}
+    for j,r in enumerate(buckets):
+        n=r["count"]
+        ok=(n>=recipe["minTrainTickets"])&(
+            r["hit"]>=recipe["minTrainCashHits"])&(
+            r["robust"]>=recipe["minTrainingMinusMaxRoiPct"])
+        params["schema"+str(j)]=np.where(ok,
+            np.minimum(r["robust"],15000)*
+            np.power(np.minimum(n,200)/200,recipe["shrinkExponent"])*
+            np.minimum(r["hit"],15)/15,0).astype(np.float32)
+    np.savez_compressed(PARAMS,**params)
     with MODEL.open("w",encoding="utf8") as f:
-        json.dump({**recipe,"purpose":"actual-money direct sparse betting",
+        json.dump({**recipe,"frozenWeightsFile":str(PARAMS.relative_to(R)),
+          "features":list(FIELDS),"schemas":[list(z) for z in SCHEMAS],
+          "templateOrder":"source.fixed_template top-ten ranks 1030",
+          "purpose":"actual-money direct sparse betting",
           "source":"third-party payout with final WIN odds",
           "acceptance":"ONLY with independent 200pct cash ROI, minus-max, official T15",
           "qualification2022":bool(pick),
@@ -250,6 +268,7 @@ def main():
     report={"status":"RETROSPECTIVE_ONLY_200_NOT_T15_PROVEN" if successful
          else "REJECTED_NOT_ADOPTABLE_MODEL",
        "researchPolicyArtifact":str(MODEL.relative_to(R)),
+       "frozenModelWeights":str(PARAMS.relative_to(R)),
        "actualTicketsLedger":str(LED.relative_to(R)),
        "sourceRaces":len(races),"marketTicketTemplates":core.N,
        "trainingYears":TRAIN,"2022ParametersTested":len(validations),
