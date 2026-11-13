@@ -14,7 +14,7 @@ def get_odds(row,historic,live):
     url=row["resultUrl"]
     if not url:return {"error":"NO_OFFICIAL_JRA_RESULT_URL"}
     decoded=urllib.parse.unquote(url)
-    match=re.search(r"(?:pw|sw)01sde(?:10|01)(\\d{2})(\\d{4})(\\d{2})(\\d{2})(\\d{2})(\\d{8})",decoded,re.I)
+    match=re.search(r"(?:pw|sw)01sde(?:10|01)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})",decoded,re.I)
     if not match:return {"error":"UNRECOGNIZED_JRA_RESULT_CNAME","url":url[:120]}
     venue,year,meeting,day,rno,ymd=match.groups()
     if ymd!=row["raceDate"].replace("-","") or int(rno)!=int(row["raceNo"]):
