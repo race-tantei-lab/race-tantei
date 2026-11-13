@@ -49,11 +49,13 @@ def money(cells):
     race_count=sum(int(z["races"]) for z in cells)
     days=sum(int(z["venueDays"]) for z in cells)
     maximum=max(int(z["maxRacePayoutYen"]) for z in cells)
+    hit_count=sum(int(z["hitRaces"]) for z in cells)
     if days<=0 or spend<100*race_count or race_count<3*days:
         raise RuntimeError("INVALID_REAL_CASH_COVERAGE")
     return {"races":race_count,"venueDays":days,
        "stakeYen":spend,"paidYen":paid,"profitYen":paid-spend,
        "maxRacePayoutYen":maximum,
+       "hitRaces":hit_count,"hitRacePct":round(100*hit_count/race_count,4),
        "cashRoiPct":round(100*paid/spend,4),
        "minusLargestRaceCashRoiPct":round(100*(paid-maximum)/spend,4)}
 def qualifies(v):
@@ -174,7 +176,8 @@ def main():
            z={"policy":k,"stake1Yen":a,"stake2Yen":b,
                "races":len(pays),"venueDays":len(cells_byday[cell]),
                "stakeYen":int(len(pays)*(a+b)),"paidYen":int(pays.sum()),
-               "maxRacePayoutYen":int(pays.max())}
+               "maxRacePayoutYen":int(pays.max()),
+               "hitRaces":int(np.count_nonzero(pays))}
            options[cell].append(z)
       if (len(patterns)-list(patterns).index(k))%50==0:
         print("FREE_STAKE_MONEY_PATTERNS_SCANNED",json.dumps({
@@ -258,6 +261,7 @@ def main():
       check["stakeYen"]=sum(x["costYen"] for x in buys)
       check["paidYen"]=sum(x["paidYen"] for x in buys)
       check["maxRacePayoutYen"]=max(x["paidYen"] for x in buys)
+      check["hitRaces"]=sum(x["paidYen"]>0 for x in buys)
       for field,value in check.items():
         if value!=best["fullPeriodCash"][field]:raise RuntimeError("LEDGER_CASH_AUDIT_MISMATCH_"+field)
       counts=collections.Counter((r["date"],int(r["venue"])) for r in buys)
