@@ -200,6 +200,44 @@ def main():
        (r["forward"]["2023"]["minusMaxRaceRoiPct"] or 0)>=200]
     top2023.sort(key=lambda r:(-r["forward"]["2023"]["tickets"],
       -r["forward"]["2023"]["minusMaxRaceRoiPct"]))
+    # True cash aggregate, never replacing the hard training 200%
+    # candidate criterion. 2024+ is a temporal audit, not a rule source.
+    forward_strict=[]
+    forward_audit=[]
+    for r in top2023:
+        series=[r["forward"][str(y)] for y in LATER]
+        amount=sum(z["paidYen"] for z in series)
+        spent=sum(z["stakeYen"] for z in series)
+        biggest=max(z["largestPaidRaceYen"] for z in series)
+        robust=round(100*(amount-biggest)/spent,4) if spent else None
+        later=series[1:]
+        hspent=sum(z["stakeYen"] for z in later)
+        hpaid=sum(z["paidYen"] for z in later)
+        hbiggest=max(z["largestPaidRaceYen"] for z in later)
+        hrobust=round(100*(hpaid-hbiggest)/hspent,4) if hspent else None
+        info={"market":r["market"],"rank":r["positionRank1based"],
+          "schema":r["schema"],"conditions":r["conditions"],
+          "trainTickets":r["train"]["tickets"],
+          "trainMinusMaxRoi":r["train"]["minusMaxRaceRoiPct"],
+          "2023":r["forward"]["2023"],
+          "2024":r["forward"]["2024"],
+          "2025":r["forward"]["2025"],
+          "2026":r["forward"]["2026"],
+          "forwardTotalStakeYen":spent,"forwardTotalPaidYen":amount,
+          "forwardTotalMinusMaxRoiPct":robust,
+          "untouched2024To2026MinusMaxRoiPct":hrobust}
+        forward_audit.append(info)
+        if robust is not None and robust>=200:
+            forward_strict.append(info)
+    print("ROI200_2023_CANDIDATE_EXAMPLES",json.dumps(
+      forward_audit[:8],ensure_ascii=False),flush=True)
+    print("ROI200_REPEATED_TOTAL_ACTUAL_YEN",json.dumps({
+      "2023RepeatedCandidateCount":len(top2023),
+      "2023To2026Robust200Candidates":len(forward_strict),
+      "2024To2026Robust200Candidates":sum(
+         (v["untouched2024To2026MinusMaxRoiPct"] or 0)>=200
+         for v in forward_audit),
+      "examples":forward_strict[:5]},ensure_ascii=False),flush=True)
     # For all historical candidates store a CSV artifact.
     ROWS.parent.mkdir(exist_ok=True,parents=True)
     with gzip.open(ROWS,"wt",encoding="utf-8",newline="") as f:
@@ -241,6 +279,8 @@ def main():
         "candidatesWithSupport20AndThreeHits":len(supported),
         "countRepeated200In2023":len(top2023),
         "countRepeated200In2023And2024":confirm["train200And2023And2024Independent200"],
+        "repeated2023CandidateCrossYearMoneyAudits":forward_audit[:35],
+        "2023To2026ConfirmedRobust200Count":len(forward_strict),
         "mostSupportedStrictlyRO200Candidates":supported[:35],
         "topRepeated2023Only200Candidates":top2023[:35],
         "allCandidateCsv":str(ROWS.relative_to(R)),
