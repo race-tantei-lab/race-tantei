@@ -111,7 +111,17 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
             # Cash return after removing largest race, and worst annual cash ROI.
             robust=(int(p.sum())-int(p.max()))/stake
             annual=[(int(p[years==yy].sum())-int(p[years==yy].max()))/((sa+sb)*int(np.sum(years==yy))) for yy in np.unique(years)]
-            return robust+0.1*min(annual)
+            # Temporal cash stability: discourage a single lucrative quarter from
+            # dominating the policy chosen for the next, unseen quarter.
+            quarters_seen=year[ix]*4+quarter[ix]
+            quarterly=[]
+            for period_seen in np.unique(quarters_seen):
+                qpaid=p[quarters_seen==period_seen]
+                if len(qpaid)>=5:
+                    quarterly.append((int(qpaid.sum())-int(qpaid.max()))/((sa+sb)*len(qpaid)))
+            # Trim sparse quarters; all figures use only past settled cash.
+            qfloor=float(np.percentile(quarterly,25)) if quarterly else min(annual)
+            return robust+0.1*min(annual)+0.15*qfloor
         # Global pool is a fallback only, never an independently adopted model.
         global_rank=sorted(options,key=lambda x:score_option(train,x),reverse=True)[:16]
         policies={}
@@ -143,7 +153,13 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
             if not stakes:return (-1e9,-1e9)
             robust=(sum(payouts)-max(payouts))/sum(stakes)
             annual=min((sum(p for p,s in rows)-max(p for p,s in rows))/sum(s for p,s in rows) for rows in by_year.values())
-            return (robust+0.1*annual,robust)
+            by_quarter=defaultdict(list)
+            for i,p,st in zip(indices,payouts,stakes):
+                by_quarter[(int(year[i]),int(quarter[i]))].append((p,st))
+            quarter_robust=[(sum(p for p,st in rows)-max(p for p,st in rows))/sum(st for p,st in rows)
+                            for rows in by_quarter.values() if len(rows)>=5]
+            qfloor=float(np.percentile(quarter_robust,25)) if quarter_robust else annual
+            return (robust+0.1*annual+0.15*qfloor,robust)
         for _ in range(3):
             for key in sorted(current):
                 best=current[key];bestscore=objective(current,chosen)
