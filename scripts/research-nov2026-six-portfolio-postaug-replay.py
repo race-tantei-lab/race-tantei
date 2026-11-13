@@ -44,7 +44,7 @@ def official_final_odds(bundle, historic, live):
     race=bundle["race"]
     url=str(race.get("resultUrl") or "")
     raw_url=live.urllib.parse.unquote(url)
-    identity=re.search(r"(?:pw|sw)01sde(?:10|01)(\\d{2})(\\d{4})(\\d{2})(\\d{2})(\\d{2})(\\d{8})",raw_url,re.I)
+    identity=re.search(r"(?:pw|sw)01sde(?:10|01)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})",raw_url,re.I)
     if not identity:raise RuntimeError("OFFICIAL_JRA_RESULT_ID_MISSING")
     venue,year,meeting,meeting_day,race_no,ymd=identity.groups()
     day=str(race["raceDate"])
@@ -138,7 +138,7 @@ def d1_races():
             try:
                 number=int(h["horseNo"])
                 odd=float(quotes.get(number,0))
-                age_m=re.search(r"\\d+",str(h.get("sexAge") or ""))
+                age_m=re.search(r"\d+",str(h.get("sexAge") or ""))
                 age=int(age_m.group()) if age_m else 0
                 weight=float(h.get("assignedWeight") or 0)
             except (ValueError,TypeError,KeyError):
