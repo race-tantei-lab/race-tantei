@@ -58,7 +58,18 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
             robust=v[:,lo:hi].sum(axis=0)-v[:,lo:hi].max(axis=0)
             a=np.argsort(-hits,kind="stable")[:3]+lo
             b=np.argsort(-robust,kind="stable")[:4]+lo
-            candidates.append(list(dict.fromkeys(map(int,list(a)+list(b)))))
+            # Joint cash complement: identify tickets that add robust cash to
+            # another market's high-hit anchor, not merely strong solo tickets.
+            # All inputs are from completed pre-target-quarter races.
+            complements=[]
+            for other_lo,other_hi in MARKETS:
+                if other_lo==lo:continue
+                other_hits=np.count_nonzero(v[:,other_lo:other_hi],axis=0)
+                anchor=int(other_lo+np.argmax(other_hits))
+                combined=v[:,lo:hi]+v[:,anchor,None]
+                joint_robust=combined.sum(axis=0)-combined.max(axis=0)
+                complements.append(np.argsort(-joint_robust,kind="stable")[:2]+lo)
+            candidates.append(list(dict.fromkeys(map(int,list(a)+list(b)+[x for z in complements for x in z]))))
         options=[]
         for market_a in range(6):
             for market_b in range(market_a+1,6):
