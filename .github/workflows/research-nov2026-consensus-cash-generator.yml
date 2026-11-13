@@ -1,24 +1,25 @@
-name: Research consensus cash-head hedge and seasonal market portfolio (isolated)
+name: Research ensemble disagreement direct-cash market portfolio (isolated)
 on:
   push:
-    branches: [research/nov2026-consensus-hedged-cash-generator-1113]
+    branches:
+      - research/nov2026-consensus-hedged-cash-generator-1113
 permissions:
   contents: read
 jobs:
-  cash-consensus-generator:
+  learn-cash-and-search-ensemble:
     runs-on: ubuntu-latest
-    timeout-minutes: 65
+    timeout-minutes: 85
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1
-      - name: Compile and test 200pct cash no-cheating gates
+      - name: Verify 2-market multi-ticket 200pct strict cash accounting
         run: |
           python -m py_compile scripts/research-nov2026-consensus-cash-generator.py
           python scripts/research-nov2026-consensus-cash-generator.py --self-test
-      - name: Restore historical form feature cache
+      - name: Restore chronological runner form and payout cache
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -26,9 +27,9 @@ jobs:
             .cache
             analysis-results
           key: historical-payout-mirror-v1
-          restore-keys:
-            - historical-payout-
-      - name: Fetch immutable 2015 to Apr2026 settled payouts
+          restore-keys: |
+            historical-payout-
+      - name: Load pinned 136 monthly six-market payout records
         shell: bash
         run: |
           set -euo pipefail
@@ -40,15 +41,15 @@ jobs:
               for month in $(seq -w 1 12); do printf '%s%s\n' "$year" "$month"; done
             done
             for month in 01 02 03 04; do printf '2026%s\n' "$month"; done
-          } > /tmp/consensus_months
-          cat /tmp/consensus_months | xargs -P 12 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 3 --max-time 45 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          } > /tmp/multiticket_months
+          cat /tmp/multiticket_months | xargs -P 8 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 8 --retry-delay 2 --retry-all-errors --max-time 60 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
           test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
-      - name: Train only previous-year cash heads, search 2022 portfolio, hold out 2023 onward
+      - name: Learn monetary tickets and exhaust 2-market box/formation portfolios
         run: python -u scripts/research-nov2026-consensus-cash-generator.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: novel-consensus-cash-portfolio-200pct-gate
+          name: new-independent-consensus-cash-only-roi200-gate
           path: |
             analysis-results/nov2026-consensus-hedged-cash.json
             analysis-results/nov2026-consensus-hedged-cash-ledger.csv
