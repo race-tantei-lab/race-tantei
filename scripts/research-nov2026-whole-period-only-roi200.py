@@ -139,6 +139,115 @@ def whole_archive_loo_scores(base):
     return core,races,years,paid,cat,chosen,signal,market,rank
 def rank_cell(v,remove_max,money_per_hit):
     return v["paidYen"]-remove_max*v["maxRacePayoutYen"]-2*v["stakeYen"]+money_per_hit*(v["hitRaces"]-.20*v["races"])
+
+def solve_global_cash_and_hits(universe,allcells,hit_floor,seconds=120):
+    """Exact whole-period multi-choice mixed-integer CASH ROI problem.
+
+    Each venue-quarter must pick exactly one of its 780 researched race
+    policies. Max payout of ANY selected race is a single global auxiliary
+    variable, so the post-largest cash ROI>=200 constraint is exact.
+    """
+    from scipy.optimize import milp, Bounds, LinearConstraint
+    from scipy.sparse import coo_matrix
+    keys=sorted(universe)
+    candidates=[]
+    for cell in allcells:
+        x=[]
+        for k in keys:
+            z=universe[k]["cells"][cell]
+            paid=z["paidYen"];stake=z["stakeYen"];large=z["maxRacePayoutYen"]
+            hits=z["hitRaces"];races=z["races"]
+            x.append((k,paid,stake,large,hits,races))
+        # Combine top local actual-cash and high hit-frequency frontiers.
+        keep=set()
+        lam=(0,2000,5000,12000,20000,30000,50000,80000,120000,200000,400000,800000)
+        for price in lam:
+          for trim in (0,1,2):
+            ordered=sorted(range(len(x)),key=lambda j:
+              (x[j][1]-2*x[j][2]-trim*x[j][3]+price*(x[j][4]-.2*x[j][5]),x[j][0]),
+              reverse=True)
+            keep.update(ordered[:8])
+        for measure in (lambda z:z[4],lambda z:z[4]/max(z[5],1),
+                        lambda z:z[1]-z[3]-2*z[2],
+                        lambda z:z[1]-2*z[2]):
+            keep.update(sorted(range(len(x)),key=lambda j:measure(x[j]),reverse=True)[:16])
+        kept=[x[i] for i in sorted(keep)]
+        candidates.append(kept)
+    lengths=[len(c) for c in candidates]
+    N=sum(lengths)
+    ncell=len(allcells)
+    c=np.zeros(N+1,dtype=float)
+    lb=np.zeros(N+1,dtype=float)
+    ub=np.ones(N+1,dtype=float)
+    integ=np.ones(N+1,dtype=int)
+    ub[-1]=1e6
+    integ[-1]=0
+    rr=[];cc=[];vv=[]
+    scale=100000.
+    max_global=0
+    offset=0
+    for i,opts in enumerate(candidates):
+      for j,(key,paid,stake,largest,hits,races) in enumerate(opts):
+        col=offset+j
+        # Equality: one policy per venue-quarter.
+        rr.append(i);cc.append(col);vv.append(1.)
+        # Exact full-period CASH after subtracting one global maximum.
+        rr.append(ncell);cc.append(col);vv.append((paid-2*stake)/scale)
+        # Global 20% of purchased RACES must have >=1 paid ticket.
+        rr.append(ncell+1);cc.append(col);vv.append(hits-hit_floor*races)
+        # Set global maximum >= max prize of each selected local policy.
+        rr.append(ncell+2+i);cc.append(col);vv.append(largest/scale)
+        # Maximize surplus above 200%, rather than win-probability score.
+        c[col]=-(paid-2*stake)/scale
+        max_global=max(max_global,largest)
+      offset+=len(opts)
+    rr.extend([ncell]+[ncell+2+i for i in range(ncell)])
+    cc.extend([N]*(ncell+1))
+    vv.extend([-1.]* (ncell+1))
+    c[-1]=1.
+    ub[-1]=max_global/scale+1
+    A=coo_matrix((vv,(rr,cc)),shape=(2*ncell+2,N+1)).tocsr()
+    lower=np.full(2*ncell+2,-np.inf)
+    upper=np.full(2*ncell+2,np.inf)
+    lower[:ncell]=1.;upper[:ncell]=1.
+    lower[ncell]=0
+    lower[ncell+1]=0
+    upper[ncell+2:]=0
+    print("WHOLE_ARCHIVE_GLOBAL_CASH_MILP_START",json.dumps({
+        "hitRateFloor":hit_floor,"venueQuarterCells":ncell,
+        "binaryPolicyChoices":N,"fullPeriodOnly":True,
+        "cashMustExceedDoubleCostEvenAfterSingleLargestRace":True,
+        "prunedOnlyByFullPeriodMoneyAndHitScore":True}),flush=True)
+    result=milp(c,integrality=integ,bounds=Bounds(lb,ub),
+         constraints=LinearConstraint(A,lower,upper),
+         options={"time_limit":seconds,"mip_rel_gap":.005})
+    info={"status":int(result.status),"success":bool(result.success),
+          "message":str(result.message),"binaryChoices":N,
+          "hitRateFloor":hit_floor}
+    if result.x is None:
+        print("WHOLE_ARCHIVE_GLOBAL_CASH_MILP_RESULT",json.dumps(info),flush=True)
+        return None,info
+    indices=result.x[:N]
+    offset=0
+    choice={}
+    for i,cell in enumerate(allcells):
+        local=indices[offset:offset+len(candidates[i])]
+        selected=int(np.argmax(local))
+        if local[selected]<.999:
+            info["fractionalResultDiscarded"]=True
+            print("WHOLE_ARCHIVE_GLOBAL_CASH_MILP_RESULT",json.dumps(info),flush=True)
+            return None,info
+        choice[cell]=candidates[i][selected][0]
+        offset+=len(candidates[i])
+    m=total([universe[key]["cells"][cell] for cell,key in choice.items()])
+    if not roi200(m) or m["hitRacePct"]+1e-7<100*hit_floor:
+        info["solutionFailsExactYenAudit"]=True
+        print("WHOLE_ARCHIVE_GLOBAL_CASH_MILP_RESULT",json.dumps({**info,"cash":m}),flush=True)
+        return None,info
+    print("WHOLE_ARCHIVE_GLOBAL_CASH_MILP_RESULT",
+          json.dumps({**info,"cash":m},ensure_ascii=False),flush=True)
+    return choice,info
+
 def main():
     base=load()
     if "--self-test" in sys.argv:
@@ -238,6 +347,15 @@ def main():
                    max(1,universe[k]["cells"][c]["stakeYen"])*1e6,k))
         add("whole_period_blended_venue_season",cells,
             {"venueWeight":weight,"cashBonusPerHit":price})
+    solver_summaries=[]
+    for floor in (.20,0.):
+      choices,details=solve_global_cash_and_hits(universe,allcells,floor,seconds=130)
+      solver_summaries.append(details)
+      if choices is not None:
+        add("whole_period_global_cash_and_hits_milp",choices,
+          {"minCashRoi200EvenAfterMax":True,"minHitRatePercent":100*floor,
+           "exactBiggestRaceRemovedInGlobalConstraint":True,
+           "solverStatus":details["status"]})
     accepted.sort(key=lambda c:(c["hitRateAtLeast20"],
           c["fullPeriodCash"]["minusLargestRaceCashRoiPct"],
           c["fullPeriodCash"]["hitRacePct"]),reverse=True)
@@ -256,6 +374,7 @@ def main():
         "allVenueDaysIncluded":len(full_day_ids),
         "policiesScanned":len(universe),
         "compositeStrategiesScanned":examined,
+        "globalCashPortfolioOptimizations":solver_summaries,
         "roi200CandidateCount":len(accepted),
         "roi200AndHit20Count":sum(x["hitRateAtLeast20"] for x in accepted),
         "roi200CandidatesTop25":top,
