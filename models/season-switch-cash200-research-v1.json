@@ -1,0 +1,68 @@
+{
+  "modelId": "season-switch-cash200-research-v1",
+  "marketRules": [
+    {
+      "id": "Q1-TRIFECTA-FAV22TO30-RANK564",
+      "title": "Jan-Mar trifecta ranks 5-6-4, fav 2.2-3.0",
+      "market": "3連単",
+      "marketIndex": 5,
+      "ranks1based": [
+        5,
+        6,
+        4
+      ],
+      "months": [
+        1,
+        2,
+        3
+      ],
+      "favoriteMinOddsInclusive": 2.2,
+      "favoriteMaxOddsExclusive": 3.0,
+      "stakeYen": 100
+    },
+    {
+      "id": "Q2-HANSHIN-TRIFECTA-SPREAD-RANK461",
+      "title": "Apr-Jun Hanshin trifecta ranks 4-6-1, odds logspread >=1.6",
+      "market": "3連単",
+      "marketIndex": 5,
+      "ranks1based": [
+        4,
+        6,
+        1
+      ],
+      "months": [
+        4,
+        5,
+        6
+      ],
+      "venueId": 9,
+      "ticketLogOddsSpreadAtLeast": 1.6,
+      "stakeYen": 100
+    },
+    {
+      "id": "Q3-EXACTA-FAV16TO22-RANK89",
+      "title": "Jul-Sep exacta ranks 8-9, fav 1.6-2.2",
+      "market": "馬単",
+      "marketIndex": 3,
+      "ranks1based": [
+        8,
+        9
+      ],
+      "months": [
+        7,
+        8,
+        9
+      ],
+      "favoriteMinOddsInclusive": 1.6,
+      "favoriteMaxOddsExclusive": 2.2,
+      "stakeYen": 100
+    }
+  ],
+  "actualInferenceFunction": "scripts/research-nov2026-season-switch-cash200-model.py:choose",
+  "researchOnly": true,
+  "2024To2026UsedInHistoricalRuleSelection": true,
+  "freshUntouchedForwardCashAuditAvailable": false,
+  "officialJraT15PricesNotRecorded": true,
+  "productionAllowed": false,
+  "historicalCashReport": "analysis-results/season-switch-cash200-research-v1-yearly.json"
+}
