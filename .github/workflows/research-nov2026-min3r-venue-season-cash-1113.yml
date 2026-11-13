@@ -18,7 +18,7 @@ jobs:
       - name: Verify 2-market multi-ticket 200pct strict cash accounting
         run: |
           python -m py_compile scripts/research-nov2026-min3r-venue-season-cash.py
-          python scripts/research-nov2026-min3r-rolling-regime-cash.py --self-test
+          python scripts/research-nov2026-min3r-venue-season-cash.py --self-test
       - name: Restore chronological runner form and payout cache
         uses: actions/cache/restore@v4
         with:
@@ -45,7 +45,7 @@ jobs:
           cat /tmp/multiticket_months | xargs -P 8 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 8 --retry-delay 2 --retry-all-errors --max-time 60 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
           test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
       - name: Discover venue-by-season cash experts and validate chronological forward years
-        run: python -u scripts/research-nov2026-min3r-rolling-regime-cash.py
+        run: python -u scripts/research-nov2026-min3r-venue-season-cash.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
