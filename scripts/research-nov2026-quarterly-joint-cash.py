@@ -64,11 +64,18 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
             complements=[]
             for other_lo,other_hi in MARKETS:
                 if other_lo==lo:continue
-                other_hits=np.count_nonzero(v[:,other_lo:other_hi],axis=0)
-                anchor=int(other_lo+np.argmax(other_hits))
-                combined=v[:,lo:hi]+v[:,anchor,None]
-                joint_robust=combined.sum(axis=0)-combined.max(axis=0)
-                complements.append(np.argsort(-joint_robust,kind="stable")[:2]+lo)
+                other_cash=v[:,other_lo:other_hi]
+                other_hits=np.count_nonzero(other_cash,axis=0)
+                other_robust=other_cash.sum(axis=0)-other_cash.max(axis=0)
+                # Two economically distinct anchors: frequent small payouts and
+                # large but largest-race-excluded cash. Evaluate their joint
+                # race-level cash, rather than filtering each leg independently.
+                anchors={int(other_lo+np.argmax(other_hits)),
+                         int(other_lo+np.argmax(other_robust))}
+                for anchor in sorted(anchors):
+                    combined=v[:,lo:hi]+v[:,anchor,None]
+                    joint_robust=combined.sum(axis=0)-combined.max(axis=0)
+                    complements.append(np.argsort(-joint_robust,kind="stable")[:2]+lo)
             candidates.append(list(dict.fromkeys(map(int,list(a)+list(b)+[x for z in complements for x in z]))))
         options=[]
         for market_a in range(6):
