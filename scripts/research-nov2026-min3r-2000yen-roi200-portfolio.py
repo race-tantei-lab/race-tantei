@@ -193,71 +193,170 @@ def main():
     search=[]
     tried=0
     best_diagnostic=None
+    quarter_options={q:[] for q in range(4)}
     for pair in SETTINGS["pairs"]:
       for slate in SETTINGS["slates"]:
         for stake in SETTINGS["split"]:
           if pair=="one_market" and stake!=1000:continue
           for rank in SETTINGS["selection"]:
-            z,_=decisions(races,ix,cash,opts,signal,groups,pair,slate,stake,rank)
+            z,receipts=decisions(races,ix,cash,opts,signal,
+                                groups,pair,slate,stake,rank,True)
             tried+=1
-            setup={"marketPair":"-".join(map(str,pair)) if isinstance(pair,tuple) else pair,
-                   "slate":slate,"firstStake":stake,"ranking":rank,
-                   "cash2022":z}
-            # ZERO non-qualifying portfolio configurations become candidates.
-            if matches_goal(z):
-                search.append(setup)
+            spec={"marketPair":"-".join(map(str,pair)) if isinstance(pair,tuple) else pair,
+                  "slate":slate,"firstStake":stake,"ranking":rank}
+            setup={**spec,"cash2022":z}
+            # Never allow a below-200 portfolio into an actual candidate.
+            if matches_goal(z):search.append(setup)
             if best_diagnostic is None or (
-                z["minusLargestRaceCashRoiPct"]>best_diagnostic["cash2022"]["minusLargestRaceCashRoiPct"]):
-                best_diagnostic=setup
-    search.sort(key=lambda c:(-c["cash2022"]["minusLargestRaceCashRoiPct"],-c["cash2022"]["races"]))
-    best=search[0] if search else None
-    report={"status":"ONLY_ROI200_PORTFOLIO_CANDIDATES_DISCOVERED" if best else "NO_200PCT_PORTFOLIO_FOUND",
-         "mode":"discover only robust >=200% ACTUAL CASH portfolios, >=3 JRA races per venue-day, JPY 2000 per race",
-         "allHistoricalHorseBetTemplates":1030,
-         "actualPayoutTicketEvents":int(cash.size),
-         "historicalCashRuleSourceTrain":[2017,2018,2019,2020,2021],
-         "policyDiscoveryOnly2022":True,
-         "2023To2026LabelsSeenInPolicySelection":False,
-         "minimumRacesForEveryVenueDay":3,"yenPerRace":2000,
-         "2022VenueDays":len(groups),
-         "policiesChecked":tried,
-         "modelCandidateCount":len(search),
-         "candidateDefinitions":search[:12],
-         "best2022DiagnosticsNotACandidateIfBelow200":best_diagnostic,
-         "t15OfficialOddsNotVerified":True,
-         "settlementThirdPartyNotOfficialReconciled":True,
-         "productionChanged":False}
-    if best:
-      combo=best["marketPair"]
-      pair=tuple(map(int,combo.split("-"))) if "-" in combo else combo
-      ledger=[];years_eval={}
-      for yr in EVAL:
-          rows=np.flatnonzero(years==yr)
-          days=choose_day_groups(races,rows)
-          summary,receipts=decisions(races,rows,cash,opts,signal,days,
-             pair,best["slate"],best["firstStake"],best["ranking"],True)
-          years_eval[str(yr)]=summary;ledger.extend(receipts)
-          print("MIN3R_HIGHRETURN_FORWARD_YEN",json.dumps(
-             {"year":yr,"report":summary},ensure_ascii=False),flush=True)
-      all_cash=metrics([r["paidYen"] for r in ledger],
-             sum(years_eval[str(y)]["venueDays"] for y in EVAL))
-      report.update({"candidateForwardYears":years_eval,"candidateForwardCombined":all_cash,
-             "candidateOver200InEveryForwardYear":all(
-              matches_goal(v) for v in years_eval.values()),
-             "candidateOver200InCombinedForward":matches_goal(all_cash),
-             "chosenPolicy":best})
-      BETS.parent.mkdir(parents=True,exist_ok=True)
-      with gzip.open(BETS,"wt",encoding="utf8",newline="") as fh:
-          w=csv.DictWriter(fh,fieldnames=list(ledger[0]))
-          w.writeheader();w.writerows(ledger)
+              z["minusLargestRaceCashRoiPct"]>best_diagnostic["cash2022"]["minusLargestRaceCashRoiPct"]):
+                 best_diagnostic=setup
+            for q in range(4):
+                v=[r for r in receipts if (int(r["date"][4:6])-1)//3==q]
+                days=len({(r["date"],r["venue"]) for r in v})
+                qt=metrics([r["paidYen"] for r in v],days)
+                if not v or qt["races"]<3*days:
+                    raise RuntimeError("QUARTER_3R_VENUE_DAY_GAP")
+                quarter_options[q].append({"q":q,"policy":spec,"cash":qt})
+    # Historical positive-cash rule candidates are already frozen from
+    # 2017-21. But selecting ONE 2022 market/race regime for the whole
+    # year is unnecessarily rigid. Build a quarter-switched portfolio of
+    # market-pair+stake/race selection rules. Every component still buys
+    # >=3 actual races per venue-day at JPY2000 per race.
+    # The 2022 returns below are discovery labels ONLY, never a forward test.
+    shortlist={}
+    for q,records in quarter_options.items():
+        top_robust=sorted(records,
+             key=lambda x:(-x["cash"]["minusLargestRaceCashRoiPct"],
+                           -x["cash"]["cashRoiPct"]))[:18]
+        top_gross=sorted(records,
+             key=lambda x:(-x["cash"]["cashRoiPct"],
+                           -x["cash"]["minusLargestRaceCashRoiPct"]))[:18]
+        top_cash=sorted(records,
+             key=lambda x:(-x["cash"]["paidYen"],x["cash"]["maxRacePayoutYen"]))[:18]
+        used=set();shortlist[q]=[]
+        for z in top_robust+top_gross+top_cash:
+            k=(z["policy"]["marketPair"],z["policy"]["slate"],
+                z["policy"]["firstStake"],z["policy"]["ranking"])
+            if k not in used:
+                used.add(k);shortlist[q].append(z)
+    switch_search_count=0
+    switch_candidates=0
+    best_switch=None
+    for components in itertools.product(*(shortlist[q] for q in range(4))):
+        switch_search_count+=1
+        cells=[z["cash"] for z in components]
+        stake=sum(z["stakeYen"] for z in cells)
+        payout=sum(z["paidYen"] for z in cells)
+        largest=max(z["maxRacePayoutYen"] for z in cells)
+        days=sum(z["venueDays"] for z in cells)
+        bet_races=sum(z["races"] for z in cells)
+        if bet_races<3*days or stake!=PER_RACE_SPEND*bet_races:
+            raise RuntimeError("SEASONAL_PORTFOLIO_VIOLATES_MINIMUM_3R_OR_BUDGET")
+        gross=100*payout/stake
+        trimmed=100*(payout-largest)/stake
+        # Only the complete 2022-money-200% portfolio is a candidate.
+        if gross>=200 and trimmed>=200:
+            switch_candidates+=1
+            if best_switch is None or trimmed>best_switch["money2022"]["minusLargestRaceCashRoiPct"]:
+                best_switch={"quarterRules":{
+                    str(q):components[q]["policy"] for q in range(4)},
+                  "money2022":{"races":bet_races,"venueDays":days,
+                    "stakeYen":stake,"paidYen":payout,
+                    "cashRoiPct":round(gross,4),
+                    "minusLargestRaceCashRoiPct":round(trimmed,4),
+                    "maxRacePayoutYen":largest}}
+    search.sort(key=lambda c:(-c["cash2022"]["minusLargestRaceCashRoiPct"],
+                                -c["cash2022"]["races"]))
+    # Prefer the quarter-switched 200% rule, if found.
+    regular=search[0] if search else None
+    chosen=best_switch or ({"quarterRules":{str(q):{
+              k:regular[k] for k in ("marketPair","slate","firstStake","ranking")
+              } for q in range(4)},
+          "money2022":regular["cash2022"]} if regular else None)
+    report={"status":"ACTUAL_CASH200_MIN3R_DISCOVERED" if chosen else "NO_CASH200_MIN3R_YET",
+        "mode":"cash-mined patterns ONLY, at least 3 JRA races per venue-day, JPY2000 per race, max-race removed actual cash ROI200",
+        "allHistoricalHorseBetTemplates":1030,
+        "actualPayoutTicketEvents":int(cash.size),
+        "priorCashTrainYears":TRAIN,
+        "regimeSelectionYear":DISCOVERY,
+        "laterYearsUnseenForPolicySelection":list(EVAL),
+        "minimumRacesEveryVenueDay":MIN_RACES_PER_VENUE_DAY,
+        "yenSpentPerRace":PER_RACE_SPEND,
+        "full2022VenueDays":len(groups),
+        "flatPoliciesChecked":tried,
+        "flatPortfolioQualified200":len(search),
+        "regimeCombinationCountChecked":switch_search_count,
+        "regimePortfolioQualified200":switch_candidates,
+        "bestFlatDiagnosticsNotACandidateUnless200":best_diagnostic,
+        "independentlyOfficialT15Verified":False,
+        "thirdPartyPayoutReconciledWithJRA":False,
+        "2025And2026AlreadyExaminedElsewhere":True,
+        "productionModified":False}
+    if chosen:
+        year_reports={};all_cash_rows=[]
+        for yr in (2017,2018,2019,2020,2021,2022,*EVAL):
+            ids=np.flatnonzero(years==yr)
+            days=choose_day_groups(races,ids)
+            rows_by_q={}
+            for q in range(4):
+                spec=chosen["quarterRules"][str(q)]
+                pair_spec=spec["marketPair"]
+                pair=tuple(map(int,pair_spec.split("-"))) if "-" in pair_spec else pair_spec
+                z,recs=decisions(races,ids,cash,opts,signal,days,
+                 pair,spec["slate"],spec["firstStake"],spec["ranking"],True)
+                rows_by_q[q]=[r for r in recs if
+                             (int(r["date"][4:6])-1)//3==q]
+            combined=[r for v in rows_by_q.values() for r in v]
+            # Verify exactly the configured 3-5 races are purchased
+            # per venue-day and each race has exactly JPY2000 stake.
+            byday=collections.Counter((r["date"],r["venue"]) for r in combined)
+            if len(byday)!=len(days) or min(byday.values(),default=0)<3 or any(
+                r["stake1Yen"]+r["stake2Yen"]!=2000 for r in combined):
+                raise RuntimeError("EXACT_3R_EACH_DAY_REAL_MONEY_VIOLATION")
+            m=metrics([r["paidYen"] for r in combined],len(days))
+            year_reports[str(yr)]=m
+            all_cash_rows.extend(combined)
+            print("CASH_3R_REGIME_YEARLY_ACTUAL_YEN",json.dumps({"year":yr,"cash":m},ensure_ascii=False),flush=True)
+        verified2022=year_reports["2022"]
+        if verified2022["stakeYen"]!=chosen["money2022"]["stakeYen"] or (
+            verified2022["paidYen"]!=chosen["money2022"]["paidYen"]):
+            raise RuntimeError("REGIME_PRESELECTION_AND_LEDGER_PAYOUT_DIFFER")
+        post=[r for r in all_cash_rows if r["year"]>=2023]
+        all_years=metrics([r["paidYen"] for r in all_cash_rows],
+             sum(z["venueDays"] for z in year_reports.values()))
+        later=metrics([r["paidYen"] for r in post],
+             sum(year_reports[str(y)]["venueDays"] for y in EVAL))
+        report.update({"chosenQuarterSwitchCash200Candidate":chosen,
+            "yearlyRealCash":year_reports,
+            "all2017To2026Money":all_years,
+            "forward2023To2026Money":later,
+            "fullHistoricalMoney200":matches_goal(all_years),
+            "forward2023To2026Money200":matches_goal(later),
+            "eachForwardYearMoney200":all(
+                matches_goal(year_reports[str(y)]) for y in EVAL)})
+        # Candidate policy must be a candidate on full chronological
+        # 2017-2026 AND forward slice before being labeled verified.
+        report["status"]="FULL_HISTORICAL_AND_FORWARD_CASH200_CANDIDATE_FOUND" if (
+            report["fullHistoricalMoney200"] and
+            report["forward2023To2026Money200"]) else "HISTORICAL_DISCOVERY_ONLY_NEEDS_INDEPENDENT_CASH200"
+        BETS.parent.mkdir(parents=True,exist_ok=True)
+        with gzip.open(BETS,"wt",encoding="utf8",newline="") as fh:
+            w=csv.DictWriter(fh,fieldnames=list(all_cash_rows[0]))
+            w.writeheader();w.writerows(all_cash_rows)
     report["seconds"]=round(time.monotonic()-t,2)
     OUT.parent.mkdir(parents=True,exist_ok=True)
     OUT.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n")
     print("MIN3R_2000YEN_ROI200_DISCOVERY_FINAL",json.dumps({
-       "status":report["status"],"2022VenueDays":len(groups),
-       "total2022StakeOfMinimum3R":len(groups)*3*2000,
-       "policiesChecked":tried,"roi200FullCoverageCandidates":len(search),
-       "strongest2022NoncandidateRoi":best_diagnostic["cash2022"],
-       "forward":report.get("candidateForwardCombined"),
-       "productionChanged":False,"elapsedSeconds":report["seconds"]},ensure_ascii=False),flush=True)
+       "status":report["status"],
+       "2022VenueDays":len(groups),
+       "total2022MinimumStakeYen":len(groups)*3*PER_RACE_SPEND,
+       "flatPoliciesChecked":tried,
+       "quarterSwitchedPolicyPortfoliosChecked":switch_search_count,
+       "qualifyingQuarterSwitch":switch_candidates,
+       "bestFlatBelow200Diagnostics":best_diagnostic["cash2022"],
+       "chosen2022":chosen["money2022"] if chosen else None,
+       "combined2017To2026":report.get("all2017To2026Money"),
+       "combined2023To2026":report.get("forward2023To2026Money"),
+       "productionChanged":False,
+       "seconds":report["seconds"]},ensure_ascii=False),flush=True)
 if __name__=="__main__":main()
