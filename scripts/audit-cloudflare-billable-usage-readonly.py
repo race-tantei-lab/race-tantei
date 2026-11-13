@@ -70,7 +70,7 @@ qworker="""query($accountTag:string!,$from:Time!,$to:Time!){
  viewer{accounts(filter:{accountTag:$accountTag}){
  workersInvocationsAdaptive(limit:10000,
    filter:{datetime_geq:$from,datetime_leq:$to}){
-      sum{requests errors}
+      sum{requests errors cpuTimeUs}
    }
  }}
 }"""
@@ -83,5 +83,7 @@ else:
     result["workersTotals"]={"rows":len(vals),
          "requests":sum(int(o.get("requests") or 0) for o in vals),
          "errors":sum(int(o.get("errors") or 0) for o in vals),
+         "cpuTimeUs":sum(int(o.get("cpuTimeUs") or 0) for o in vals),
+         "cpuTimeMs":sum(int(o.get("cpuTimeUs") or 0) for o in vals)/1000,
          "mayBeTruncated":len(vals)>=10000}
 print("CLOUDFLARE_BILLABLE_USAGE_AUDIT",json.dumps(result,ensure_ascii=False,sort_keys=True),flush=True)
