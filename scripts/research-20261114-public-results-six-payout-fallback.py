@@ -7,7 +7,7 @@ present; conflicts fail closed. This is a third-party confirmation, not
 equivalent to an authenticated JRA payout ledger.
 """
 from __future__ import annotations
-import collections, json, re, urllib.request, time
+import collections, json, re, urllib.request, time, sys
 from bs4 import BeautifulSoup
 TYPES=("単勝","ワイド","馬連","馬単","3連複","3連単")
 UNORDERED={"ワイド","馬連","3連複"}
@@ -123,4 +123,17 @@ def self_test():
     assert x["馬連"][(2,8)]==510
     assert integrate([{} for _ in TYPES],x,"test")[0][(2,)]==210
     print("PUBLIC_SIX_PAYOUT_FALLBACK_SELFTEST_OK",flush=True)
-if __name__=="__main__":self_test()
+if __name__=="__main__":
+    self_test()
+    if "--live-probe" in sys.argv:
+        for day,venue,no in (("2026-08-08","中京",3),
+                             ("2026-08-08","新潟",3),
+                             ("2026-09-19","中山",7)):
+            d,source=fetch_public({"raceDate":day,"venue":venue,"raceNo":no})
+            print("PUBLIC_SIX_MARKET_REAL_RESULT_PROBE",json.dumps({
+                "date":day,"venue":venue,"raceNo":no,
+                "marketCount":sum(bool(z) for z in d.values()),
+                "markets":{k:len(v) for k,v in d.items()},
+                "amounts":{k:list(v.values())[:1] for k,v in d.items()},
+                "sourceUrl":source["url"]},ensure_ascii=False),flush=True)
+            assert all(d.values())
