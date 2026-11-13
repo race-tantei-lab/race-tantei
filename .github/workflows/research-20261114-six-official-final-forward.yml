@@ -2,14 +2,14 @@ name: Research six cash200 portfolios 2026 Aug-Nov OFFICIAL historical final win
 on:
   push:
     branches:
-      - research/20261114-six-roi200-official-final-odds-forward
+      - research/20261114-fill-aug-nov-six-payout-gaps
 permissions:
   contents: read
   actions: read
 jobs:
   final-win-odds-forward:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
