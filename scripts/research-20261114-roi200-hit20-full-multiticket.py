@@ -290,7 +290,7 @@ def main():
     if "--self-test" in sys.argv:
         assert HEDGE_INDEX==(0,1,2,10,11,19)
         assert 100 in [100*u for u in STAKE1_UNITS]
-        assert len(OBJECTIVES)>=12
+        assert len(OBJECTIVES)==len(MAX_PENALTIES) and HIT_SHADOW_PRICES==(0,)
         assert qualifies({"races":10,"hitRaces":2,
                           "paidYen":5000,"stakeYen":1000,
                           "maxRacePayoutYen":500})
@@ -300,7 +300,11 @@ def main():
         assert not qualifies({"races":10,"hitRaces":2,
                           "paidYen":2500,"stakeYen":1000,
                           "maxRacePayoutYen":600})
-        print("WHOLE_HISTORY_CASH200_HIT20_SELFTEST_OK",flush=True)
+        sample=[{"costYen":100,"paidYen":400},{"costYen":100,"paidYen":100},{"costYen":100,"paidYen":0}]
+        audit=metric(sample,1)
+        assert audit["hitRaces"]==2 and audit["profitableRaces"]==1
+        assert audit["profitYen"]==200 and audit["hitRacePct"]>audit["profitableRacePct"]
+        print("NET_PROFIT_FIRST_CASH200_HIT20_SELFTEST_OK",flush=True)
         return
     start=time.monotonic()
     previous=imported();whole=previous.helper();base=whole.load()
