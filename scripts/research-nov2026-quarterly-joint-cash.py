@@ -140,9 +140,27 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
             ix=groups.get(key,[])
             if not ix:return -1
             return score_option(np.asarray(ix,dtype=int),assignment)
+        # Learn venue-season program-band marginal cash priority exclusively
+        # from completed training races; never rank test races by their payout.
+        band_history=defaultdict(list)
+        for i in train:
+            band_history[(venue[i],int(quarter[i]),int(program_bands[i]))].append(int(i))
+        def race_priority(i,assign):
+            i=int(i)
+            option=assign.get(keys[i],fallback)
+            a,b,sa,sb=option
+            hist=band_history.get((venue[i],int(quarter[i]),int(program_bands[i])),[])
+            if len(hist)<20:
+                hist=np.flatnonzero((venue==venue[i])&(program_bands==program_bands[i])&
+                                   (year*4+quarter<period)&(year*4+quarter>=period-24))
+            if len(hist)<20:return priority(keys[i],option)
+            h=np.asarray(hist,dtype=int)
+            paid=(money[h,a]*sa+money[h,b]*sb)//100
+            robust=(int(paid.sum())-int(paid.max()))/((sa+sb)*len(h))
+            base=priority(keys[i],option)
+            return (len(h)*robust+40*base)/(len(h)+40)
         def slate(assign):
-            priorities={k:priority(k,v) for k,v in assign.items()}
-            return [i for indices in train_days.values() for i in sorted(indices,key=lambda j:(-priorities.get(keys[j],-1),int(program[j])))[:5]]
+            return [i for indices in train_days.values() for i in sorted(indices,key=lambda j:(-race_priority(j,assign),int(program[j])))[:5]]
         chosen=slate(current)
         def objective(assign,indices):
             payouts=[];stakes=[];by_year=defaultdict(list)
@@ -176,12 +194,11 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
             new=slate(current)
             if new==chosen:break
             chosen=new
-        priorities={k:priority(k,v) for k,v in current.items()}
         test_days=defaultdict(list)
         for i in test:test_days[(day[i],venue[i])].append(int(i))
         counts=defaultdict(int)
         for _,indices in test_days.items():
-            selected=sorted(indices,key=lambda j:(-priorities.get(keys[j],-1),int(program[j])))[:5]
+            selected=sorted(indices,key=lambda j:(-race_priority(j,current),int(program[j])))[:5]
             counts[len(selected)]+=1
             for i in selected:
                 a,b,sa,sb=current.get(keys[i],fallback)
