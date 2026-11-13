@@ -1,0 +1,52 @@
+name: Research quarterly joint cash regime (isolated)
+on:
+  push:
+    branches:
+      - research/nov2026-quarterly-cash-regime-joint-1113
+  workflow_dispatch:
+jobs:
+  joint-cash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1
+      - run: python -u scripts/research-nov2026-quarterly-joint-cash.py --self-test
+      - name: Restore historical data cache (no live site or D1 access)
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data
+            .cache
+            analysis-results
+          key: historical-payout-mirror-v1
+          restore-keys: |
+            historical-payout-
+      - name: Fetch all 136 pinned 2015-2026 third-party settled JRA payout CSVs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in $(seq 2015 2025); do
+              for month in $(seq -w 1 12); do printf '%s%s\n' "$year" "$month"; done
+            done
+            for month in 01 02 03 04; do printf '2026%s\n' "$month"; done
+          } > /tmp/cash_months
+          cat /tmp/cash_months | xargs -P 12 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 3 --max-time 45 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+      - name: Walk-forward cash settlement
+        run: python -u scripts/research-nov2026-quarterly-joint-cash.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quarterly-joint-cash-regime-research
+          path: |
+            analysis-results/nov2026-quarterly-joint-cash.json
+            analysis-results/nov2026-quarterly-joint-cash-bets.csv.gz
+          if-no-files-found: warn
