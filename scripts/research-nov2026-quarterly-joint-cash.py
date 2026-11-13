@@ -14,7 +14,7 @@ def summarize(rows):
     return dict(races=len(rows),stakeYen=stake,paidYen=paid,hitRaces=sum(x["paidYen"]>0 for x in rows),
                 roiPct=round(100*paid/stake,4) if stake else None,
                 minusMaxRaceRoiPct=round(100*(paid-top)/stake,4) if stake else None)
-def run(races,cash,year,quarter,fields,market_state):
+def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
     n=len(races);money=cash.reshape(n,336)
     venue=np.array([str(r["venue"]) for r in races])
     day=np.array([str(r["day"]) for r in races])
@@ -24,6 +24,7 @@ def run(races,cash,year,quarter,fields,market_state):
     # fieldSize is a pre-race categorical bin, not the raw horse count.
     if np.any((band<0)|(band>20)):raise RuntimeError('INVALID_FIELD_BIN')
     if np.any((market_state<0)|(market_state>30)):raise RuntimeError('INVALID_MARKET_STATE')
+    if np.any((odds_gap_state<0)|(odds_gap_state>10)):raise RuntimeError("INVALID_ODDS_GAP_STATE")
     # Pre-race metadata only. Missing values remain UNKNOWN.
     def pre_race_course(r):
         surface=str(r.get("surface",r.get("trackType","UNKNOWN"))).strip().lower()
@@ -33,7 +34,7 @@ def run(races,cash,year,quarter,fields,market_state):
         going=str(r.get("going",r.get("trackCondition","UNKNOWN"))).strip().lower()
         return (surface,distance_band,going)
     course=[pre_race_course(r) for r in races]
-    keys=[(venue[i],int(quarter[i]),int(band[i]),int((program[i]-1)//4),int(market_state[i]),*course[i]) for i in range(n)]
+    keys=[(venue[i],int(quarter[i]),int(band[i]),int((program[i]-1)//4),int(market_state[i]),int(odds_gap_state[i]),*course[i]) for i in range(n)]
     all_bets=[];coverage={};missing=0
     periods=[(y,q) for y in range(2023,2027) for q in range(1,5)]
     for target,q in periods:
@@ -147,12 +148,15 @@ def main():
     # Favourite-odds category is observable before the race; do not use payout to route.
     fav=cat['favOdds'].reshape(len(races),336)[:,0].astype(int)
     market_state=np.minimum(fav//2,3)
-    bets,coverage,course_coverage=run(races,cash,year,quarter,fields,market_state)
+    # Favourite-to-second-favourite odds ratio is independently observable before post time.
+    # It adds a genuinely populated market-competition regime even when course metadata is absent.
+    odds_gap=cat["favGap"].reshape(len(races),336)[:,0].astype(int)
+    bets,coverage,course_coverage=run(races,cash,year,quarter,fields,market_state,odds_gap)
     if any(b["marketA"]==b["marketB"] for b in bets):raise RuntimeError("DUPLICATE_MARKET")
     if len({b["raceId"] for b in bets})!=len(bets):raise RuntimeError("DUPLICATE_RACE")
     report=dict(researchOnly=True,adoptable=False,officialT15Verified=False,officialJraPayoutReconciled=False,
         source="third_party_unreconciled",priorExposure2025And2026=True,
-        regimeDimensions=["venue","quarter","fieldSizeCategory","programNumberBand","preRaceFavouriteOddsBand","preRaceSurfaceIfAvailable","preRaceDistance400mBandIfAvailable","preRaceGoingIfAvailable"],courseMetadataCoverage=course_coverage,
+        regimeDimensions=["venue","quarter","fieldSizeCategory","programNumberBand","preRaceFavouriteOddsBand","preRaceFavouriteGapBand","preRaceSurfaceIfAvailable","preRaceDistance400mBandIfAvailable","preRaceGoingIfAvailable"],courseMetadataCoverage=course_coverage,marketCompetitionCoverage=dict(total=len(odds_gap),known=int(np.sum((odds_gap>=0)&(odds_gap<4))),bins={str(k):int(np.sum(odds_gap==k)) for k in range(4)}),
         missingOfficialVenueDays="NOT_VERIFIED",candidateRaces=len(races),
         combined=summarize(bets),years={str(y):summarize([b for b in bets if b["year"]==y]) for y in range(2023,2027)},
         quarters={f"{y}Q{q}":summarize([b for b in bets if b["year"]==y and b["quarter"]==q]) for y in range(2023,2027) for q in range(1,5)},
