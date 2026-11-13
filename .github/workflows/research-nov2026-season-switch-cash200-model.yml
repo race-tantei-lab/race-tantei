@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install --disable-pip-version-check numpy==2.2.6
+      - run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1
       - name: Test pre-result model chooses real horse-number wagers
         run: |
           python -m py_compile scripts/research-nov2026-season-switch-cash200-model.py
