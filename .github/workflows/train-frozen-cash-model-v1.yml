@@ -39,6 +39,10 @@ jobs:
           } > /tmp/cash_model_months
           cat /tmp/cash_model_months | xargs -P 12 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 3 --max-time 45 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
           test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+      - name: Verify reproducible local historical payout sources
+        run: |
+          test -s scripts/research-nov2026-decade-roi-first-sixmarkets.py
+          test -s scripts/research-nov2026-sixmarket-real-paid-cash.py
       - name: Train and freeze model regardless of numeric profitability
         run: python -u scripts/train-frozen-cash-model-v1.py --train
       - name: Verify frozen model produces concrete horse-number wagers
