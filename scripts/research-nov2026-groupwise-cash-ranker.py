@@ -214,7 +214,7 @@ def main():
     assert len(PAIRS)==15 and 15**4==50625
     assert not valid({"races":1000,"roiPct":250,"minusLargestRaceRoiPct":199.99,"hitRacePct":20})
     assert valid({"races":1000,"roiPct":200,"minusLargestRaceRoiPct":200,"hitRacePct":20})
-    assert len(TEMPLATES)*len(RANK_TEMPS)*len(PROB_POWERS)*len(BOOST)*len(SLATES)*len(SPLITS)*len(PAIRS)==13500
+    assert len(TEMPLATES)*len(RANK_TEMPS)*len(PROB_POWERS)*len(BOOST)*len(SLATES)*len(SPLITS)*len(PAIRS)==40500
     print("RACE_GROUPED_CASH_RANKER_ACCEPTANCE_SELFTEST_OK");return
   tic=time.monotonic();base=dependency()
   races,cash,attrs,types,years,keys=base.obtain()
