@@ -67,53 +67,61 @@ def panels(attrs,markets,n):
               ("quarter","oddsGeom"),("favOdds","rankGap")):
     encode(x+"_"+y,x,y)
   return feats
+PANEL_AGGREGATE_CACHE={}
 def build_panel(cash,years,panels,train_years,prior,trim):
-  all_idx=np.flatnonzero(np.isin(years,train_years))
-  if len(all_idx)<8500:raise RuntimeError("TRAINING_PROGRAM_TOO_SMALL")
-  n=cash.shape[1];flat=(all_idx[:,None]*n+np.arange(n)[None,:]).ravel()
-  paid=cash.ravel()[flat].astype(np.float64)
-  hits=(paid>0).astype(np.float64)
-  group=np.repeat(np.arange(6),[7,21,21,42,35,210])
-  # Cash base rate of the full all-combination market, NOT a future
-  # outcome feature, with a family-wide 2% shrinkage toward 70 yen/100.
-  priors=[]
-  for m,(lo,hi) in enumerate(B):
-    p=cash[np.ix_(all_idx,np.arange(lo,hi))].astype(np.float64)
-    rate=float(p.mean());chance=float(np.mean(p>0))
-    priors.append((.98*rate+.02*70.,chance))
-  base=np.asarray(priors,dtype=np.float64)[group]
-  estimates={};raw={};support={}
-  for name,codes in panels.items():
-    tt=codes[flat]
-    nb=int(codes.max())+1
-    count=np.bincount(tt,minlength=nb).astype(np.float64)
-    total=np.bincount(tt,weights=paid,minlength=nb)
-    wins=np.bincount(tt,weights=hits,minlength=nb)
-    maximum=np.zeros(nb,dtype=np.float64)
-    np.maximum.at(maximum,tt,paid)
-    numerator=total-trim*maximum
-    parent=np.full(nb,np.mean(base[:,0]),dtype=np.float64)
-    parenthit=np.full(nb,np.mean(base[:,1]),dtype=np.float64)
-    if name!="template":
-      # Every category contains a market ID as the outermost digit.
-      # Recover that explicit market id safely by taking the first
-      # observed candidate of each code rather than dividing by arbitrary
-      # feature widths.
-      unique=np.full(nb,-1,dtype=np.int16)
-      for m,(lo,hi) in enumerate(B):
-        idxm=flat[np.isin(flat%n,np.arange(lo,hi))]
-        unique[codes[idxm]]=m
-      ok=unique>=0
-      parent[ok]=[priors[k][0] for k in unique[ok]]
-      parenthit[ok]=[priors[k][1] for k in unique[ok]]
-    else:
-      parent=np.asarray(base[:,0],dtype=np.float64)
-      parenthit=np.asarray(base[:,1],dtype=np.float64)
-    expected=(numerator+prior*parent)/(count+prior)
-    chance=(wins+prior*parenthit)/(count+prior)
-    estimates[name]=(expected, chance)
-    support[name]=int(np.count_nonzero(count))
-  return estimates,support
+  # The labels and group memberships are independent of the model's
+  # hyperparameters. Aggregate them ONCE per strictly-past training window;
+  # later grid choices reuse counts, cash and max-paid stats without looking
+  # at any 2022 payout until AFTER all predicted tickets are ranked.
+  key=tuple(train_years)
+  if key not in PANEL_AGGREGATE_CACHE:
+    all_idx=np.flatnonzero(np.isin(years,train_years))
+    if len(all_idx)<8500:raise RuntimeError("TRAINING_PROGRAM_TOO_SMALL")
+    n=cash.shape[1];flat=(all_idx[:,None]*n+np.arange(n)[None,:]).ravel()
+    paid=cash.ravel()[flat].astype(np.float64)
+    hit=(paid>0).astype(np.float64)
+    unitmarket=np.repeat(np.arange(6),[7,21,21,42,35,210])
+    market_per_flat=np.tile(unitmarket,len(all_idx))
+    priors=[]
+    for m,(lo,hi) in enumerate(B):
+      p=cash[np.ix_(all_idx,np.arange(lo,hi))].astype(np.float64)
+      rate=float(p.mean());chance=float(np.mean(p>0))
+      priors.append((.98*rate+.02*70.,chance))
+    base=np.asarray(priors,dtype=np.float64)[unitmarket]
+    summary={};support={}
+    for name,codes in panels.items():
+      tt=codes[flat]
+      nb=int(codes.max())+1
+      count=np.bincount(tt,minlength=nb).astype(np.float64)
+      total=np.bincount(tt,weights=paid,minlength=nb)
+      wins=np.bincount(tt,weights=hit,minlength=nb)
+      mx=np.zeros(nb,dtype=np.float64)
+      np.maximum.at(mx,tt,paid)
+      parent=np.full(nb,np.mean(base[:,0]),dtype=np.float64)
+      parenthit=np.full(nb,np.mean(base[:,1]),dtype=np.float64)
+      if name!="template":
+        # All panel IDs include the market ID as the first categorical
+        # element. Group-level market is deterministic and cannot use labels.
+        mid=np.rint(np.bincount(tt,weights=market_per_flat,minlength=nb)/
+            np.maximum(count,1)).astype(np.int32)
+        observed=count>0
+        pbase=np.asarray(priors)
+        parent[observed]=pbase[mid[observed],0]
+        parenthit[observed]=pbase[mid[observed],1]
+      else:
+        parent=np.asarray(base[:,0],dtype=np.float64)
+        parenthit=np.asarray(base[:,1],dtype=np.float64)
+      summary[name]=(count,total,wins,mx,parent,parenthit)
+      support[name]=int(np.count_nonzero(count))
+    PANEL_AGGREGATE_CACHE[key]=(summary,support)
+  summary,support=PANEL_AGGREGATE_CACHE[key]
+  result={}
+  for name,(count,total,wins,mx,parent,parenthit) in summary.items():
+    cash_expected=(total-trim*mx+prior*parent)/(count+prior)
+    anypaid=(wins+prior*parenthit)/(count+prior)
+    result[name]=(cash_expected,anypaid)
+  return result,support
+
 def project(estimates,panels,positions,regime,templateweight):
   # Relatively hierarchical: template, all single contexts and 2-way
   # interactions. Every posterior is money paid per 100-yen ticket.
