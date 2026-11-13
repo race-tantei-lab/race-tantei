@@ -398,8 +398,8 @@ def main():
     OUT.parent.mkdir(parents=True,exist_ok=True)
     OUT.write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf8")
     print("FULL_HIT20_CASH200_FORWARD_SUMMARY",json.dumps({
-        "candidates":len(analyzed),"completeVenueDays":coverage["fullyRepresentedVenueDays"],
-        "excludedDays":coverage["excludedPartialVenueDays"],
+        "candidates":len(analyzed),"completeVenueDays":coverage["fullVenueDaysWithMinimumThreeEligibleRaces"],
+        "excludedDays":coverage["venueDaysWithInsufficientEligibleRaces"],
         "rows":[{"i":x["historicalCandidateNo"],
           "historicalHit":x["historicalQualifiedMoneyAndHit"]["hitRacePct"],
           "augRoi":x["augustOnward"]["cashRoiPct"],
