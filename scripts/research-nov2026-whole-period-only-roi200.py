@@ -30,7 +30,7 @@ R=Path(__file__).resolve().parents[1]
 OUT=R/"analysis-results/nov2026-whole-period-only-roi200-search.json"
 LED=R/"analysis-results/nov2026-whole-period-roi200-selected-bets.csv.gz"
 SOURCE=R/"scripts/research-nov2026-min3r-three-year-cash-selection.py"
-YEARS=tuple(range(2017,2027))
+YEARS=tuple(range(2015,2027))
 APPROACHES=("flat","quarter","venue_quarter")
 TRIMS=(0, 1, 2)
 HIT_PRICES=(0, 3000, 9000, 20000, 50000, 100000, 200000, 500000)
@@ -82,7 +82,18 @@ def roi200(m):
     return m is not None and m["cashRoiPct"]>=200 and m["minusLargestRaceCashRoiPct"]>=200
 def whole_archive_loo_scores(base):
     sparse=base.load("scripts/research-nov2026-frozen-sparse-cash-model.py","whole_sparse_source")
-    core,races,years,paid,cat=sparse.archive()
+    core=sparse.dep()
+    parser=sparse.dep_parse()
+    races=core.read_all_races(parser.parse_payments)
+    if not core.CACHE.exists() or not core.RACE_CACHE.exists():
+        core.CACHE.parent.mkdir(parents=True,exist_ok=True)
+        core.full_features(races)
+    years=np.asarray([int(r["month"][:4]) for r in races],dtype=np.int16)
+    with np.load(core.CACHE,allow_pickle=False) as z:
+        if z["payout"].shape!=(len(races),1030):
+            raise RuntimeError("ALL_2015_2026_REAL_PAYOFF_CACHE_MISALIGNED")
+        paid=z["payout"].astype(np.int32)
+        cat={field:z[field].astype(np.uint8) for field in sparse.FIELDS}
     if paid.shape[1]!=1030 or len(races)<26000:
         raise RuntimeError("FULL_TOP10_ARCHIVE_MISSING")
     if set(int(x) for x in np.unique(years))!=set(YEARS):
@@ -368,7 +379,7 @@ def main():
     top=accepted[:25]
     report={"status":"FULL_PERIOD_ROI200_PATTERNS_FOUND" if accepted else
             "FULL_PERIOD_SEARCH_NO_ROI200_PATTERNS_YET",
-        "period":"2017-01 through 2026-04 (available historical payoff archive)",
+        "period":"2015-01 through 2026-04 (every available historical payoff month in pinned 136-month source)",
         "allHistoricalYearsUsedSimultaneously":list(YEARS),
         "splitOrHoldoutUsedForCandidateFiltering":False,
         "searchMethod":"full historical archive ROI-first static and regime combination mining",
