@@ -148,15 +148,18 @@ def main():
     # Favourite-odds category is observable before the race; do not use payout to route.
     fav=cat['favOdds'].reshape(len(races),336)[:,0].astype(int)
     market_state=np.minimum(fav//2,3)
-    # Favourite-to-second-favourite odds ratio is independently observable before post time.
-    # It adds a genuinely populated market-competition regime even when course metadata is absent.
-    odds_gap=cat["favGap"].reshape(len(races),336)[:,0].astype(int)
+    # Pre-race odds-category spread is observable from the existing seven-horse tickets.
+    # It avoids requesting a non-existent favGap column; not official T-15 odds.
+    odds_bins=cat["oddsGeom"].reshape(len(races),336)[:,:7].astype(int)
+    # Observed pre-race odds-category dispersion across seven single-horse tickets.
+    # This is a categorical spread, NOT a favourite/runner-up odds ratio.
+    odds_gap=np.minimum(np.maximum(np.max(odds_bins,axis=1)-np.min(odds_bins,axis=1),0),3)
     bets,coverage,course_coverage=run(races,cash,year,quarter,fields,market_state,odds_gap)
     if any(b["marketA"]==b["marketB"] for b in bets):raise RuntimeError("DUPLICATE_MARKET")
     if len({b["raceId"] for b in bets})!=len(bets):raise RuntimeError("DUPLICATE_RACE")
     report=dict(researchOnly=True,adoptable=False,officialT15Verified=False,officialJraPayoutReconciled=False,
         source="third_party_unreconciled",priorExposure2025And2026=True,
-        regimeDimensions=["venue","quarter","fieldSizeCategory","programNumberBand","preRaceFavouriteOddsBand","preRaceFavouriteGapBand","preRaceSurfaceIfAvailable","preRaceDistance400mBandIfAvailable","preRaceGoingIfAvailable"],courseMetadataCoverage=course_coverage,marketCompetitionCoverage=dict(total=len(odds_gap),known=int(np.sum((odds_gap>=0)&(odds_gap<4))),bins={str(k):int(np.sum(odds_gap==k)) for k in range(4)}),
+        regimeDimensions=["venue","quarter","fieldSizeCategory","programNumberBand","preRaceFavouriteOddsBand","preRaceTopSevenOddsCategorySpread","preRaceSurfaceIfAvailable","preRaceDistance400mBandIfAvailable","preRaceGoingIfAvailable"],courseMetadataCoverage=course_coverage,marketCompetitionCoverage=dict(total=len(odds_gap),known=int(np.sum((odds_gap>=0)&(odds_gap<4))),bins={str(k):int(np.sum(odds_gap==k)) for k in range(4)}),
         missingOfficialVenueDays="NOT_VERIFIED",candidateRaces=len(races),
         combined=summarize(bets),years={str(y):summarize([b for b in bets if b["year"]==y]) for y in range(2023,2027)},
         quarters={f"{y}Q{q}":summarize([b for b in bets if b["year"]==y and b["quarter"]==q]) for y in range(2023,2027) for q in range(1,5)},
