@@ -29,6 +29,10 @@ jobs:
           python -m py_compile scripts/research-nov2026-worker-freeze-t15-coverage.py
           python scripts/research-nov2026-worker-freeze-t15-coverage.py --self-test
           python -u scripts/research-nov2026-worker-freeze-t15-coverage.py
+      - name: Verify original frozen-worker ticket candidate field coverage
+        run: |
+          python scripts/research-nov2026-worker-record-shape.py --self-test
+          python -u scripts/research-nov2026-worker-record-shape.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -36,4 +40,5 @@ jobs:
           path: |
             analysis-results/nov2026-real-t15-money-coverage.json
             analysis-results/nov2026-worker-frozen-t15-coverage.json
+            analysis-results/nov2026-worker-record-available-fields.json
           retention-days: 14
