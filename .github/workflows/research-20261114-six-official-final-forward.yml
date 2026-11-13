@@ -1,0 +1,58 @@
+name: Research six cash200 portfolios 2026 Aug-Nov OFFICIAL historical final win odds read-only
+on:
+  push:
+    branches:
+      - research/20261114-six-roi200-official-final-odds-forward
+permissions:
+  contents: read
+  actions: read
+jobs:
+  final-win-odds-forward:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1 beautifulsoup4==4.13.4
+      - name: Retrieve the EXACT six previously computed candidates and full-history hit rates
+        uses: actions/download-artifact@v4
+        with:
+          name: six-historical-hit-and-2026-aug-nov-forward-cash-audit
+          run-id: 43517268392
+          github-token: ${{ github.token }}
+          path: analysis-results
+      - name: Verify six candidates exist and compile cash accounting
+        run: |
+          test -s analysis-results/nov2026-full-cash-free-stake-roi200-only.json
+          python -m py_compile scripts/research-nov2026-six-portfolio-postaug-replay.py
+          python scripts/research-nov2026-six-portfolio-postaug-replay.py --self-test
+      - name: Load pinned 136 historical months for frozen training-only cash scores
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in $(seq 2015 2025); do
+              for month in $(seq -w 1 12); do printf '%s%s\n' "$year" "$month"; done
+            done
+            for month in 01 02 03 04; do printf '2026%s\n' "$month"; done
+          } > /tmp/cash_months
+          cat /tmp/cash_months | xargs -P 8 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 8 --retry-delay 2 --retry-all-errors --max-time 60 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+      - name: Read-only official JRA FINAL odds and D1 payout forward replay for six FROZEN portfolios
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+          CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+        run: python -u scripts/research-nov2026-six-portfolio-postaug-replay.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: six-roi200-2026-aug-nov-official-final-odds-audit
+          path: analysis-results/nov2026-six-roi200-candidates-postaug-audit.json
+          if-no-files-found: warn
+          retention-days: 30
