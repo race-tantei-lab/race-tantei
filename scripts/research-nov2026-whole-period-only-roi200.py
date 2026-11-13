@@ -216,7 +216,7 @@ def main():
     for approach in ("whole_period_quarter","whole_period_venue_quarter"):
       for trim in TRIMS:
        for price in HIT_PRICES:
-        if approach.endswith("_quarter"):
+        if approach=="whole_period_quarter":
           qwin={q:max(universe,key=lambda k:(rank_cell(universe[k]["quarters"][q],trim,price),k))
                 for q in quarter_keys}
           cells={c:qwin[c[1]] for c in allcells}
