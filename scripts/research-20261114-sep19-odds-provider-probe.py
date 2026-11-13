@@ -39,3 +39,20 @@ for u in ["https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde1006202604050720260
     "cnameMatches":cmatches[:10],"table":trs[:8],
     "body":soup.get_text(" ",strip=True)[:350]},ensure_ascii=False),flush=True)
  except Exception as ex:print("SEP19_DETAIL",json.dumps({"url":u,"error":str(ex)[:200]}),flush=True)
+
+for u in ["https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde1006202604050720260919%2F00",
+ "https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde1006202604050720260919",
+ "https://sp.jra.jp/JRADB/accessS.html?CNAME=sw01sde1006202604050820260919%2F00",
+ "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0106202604050820260919/00",
+ "https://www.jra.go.jp/JRADB/accessS.html?CNAME=pw01sde0106202604050420260919/7B"]:
+ try:
+  req=urllib.request.Request(u,headers={"User-Agent":"Mozilla/5.0","Accept-Language":"ja-JP"})
+  with urllib.request.urlopen(req,timeout=12) as r:raw=r.read()
+  txt=raw.decode("cp932","replace")
+  soup=BeautifulSoup(txt,"html.parser")
+  cmatches=re.findall(r"(?:pw|sw)151ou(?:10|S3)\\d{20}Z/[0-9A-Fa-f]{2}",txt,re.I)
+  bod=soup.get_text(" ",strip=True)
+  print("JRA_SUFFIX_PROBE",json.dumps({"u":u,"bytes":len(raw),"oddsCnames":cmatches[:5],
+   "hasRace7":("第7レース" in bod or "7R" in bod),"hasSep19":"2026年9月19日" in bod,
+   "title":soup.title.get_text(" ",strip=True) if soup.title else "", "snippet":bod[-240:]},ensure_ascii=False),flush=True)
+ except Exception as e:print("JRA_SUFFIX_PROBE",json.dumps({"u":u,"error":str(e)[:160]},ensure_ascii=False),flush=True)
