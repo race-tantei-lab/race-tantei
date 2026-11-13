@@ -72,6 +72,64 @@ def official_final_odds(bundle, historic, live):
     if len(set(quote).intersection(active))<max(10,len(active)-2):
        raise RuntimeError("JRA_FINAL_ODDS_FIELD_INCOMPLETE")
     return {int(k):float(v) for k,v in quote.items() if int(k) in active}
+def reconstruct_official_pc_result_urls(bundles):
+    """Reconstruct same-race JRA URL from verified, finished neighbor CNAMEs.
+
+    CNAME byte relation was independently verified against JRA official
+    result pages on Sep19 Nakayama races 1-12 and Sep22 Nakayama 9-12.
+    Do not generalize without a same-date / same-venue / same-meeting
+    authentic finished-results CNAME anchor.
+    """
+    from collections import defaultdict, Counter
+    def offset(no):
+        if no<=9:return ((no-1)*0xB5)&255
+        return (8*0xB5-0x0B+(no-10)*0xB5)&255
+    regex=re.compile(
+      r"pw01sde01([0-9]{2})([0-9]{4})([0-9]{2})([0-9]{2})"
+      r"([0-9]{2})([0-9]{8})/([0-9A-Fa-f]{2})",re.I)
+    keys={}
+    anchors=defaultdict(list)
+    for b in bundles:
+        race=b["race"]
+        day=str(race["raceDate"])
+        code=venue_code(race["venue"])
+        meet=int(race["meetingNo"]);meet_day=int(race["meetingDay"])
+        key=(day,code,meet,meet_day)
+        keys[str(race["raceId"])]=(key,int(race["raceNo"]))
+        if race.get("status")!="finished":continue
+        raw=urllib.parse.unquote(str(race.get("resultUrl") or ""))
+        m=regex.search(raw)
+        if not m:continue
+        v,year,mm,dd,no,ymd,suffix=m.groups()
+        if (int(v)!=code or int(year)!=int(day[:4])
+           or int(mm)!=meet or int(dd)!=meet_day
+           or int(no)!=int(race["raceNo"]) or ymd!=day.replace("-","")):
+            continue
+        anchors[key].append((int(no),(int(suffix,16)-offset(int(no)))%256))
+    bases={}
+    rejected=0
+    for key,rows in anchors.items():
+        votes=Counter(base for _,base in rows)
+        best,n=votes.most_common(1)[0]
+        if n < max(1,(len(rows)+1)//2):
+           rejected+=1
+           continue
+        bases[key]=best
+    recovered={}
+    for rid,(key,rno) in keys.items():
+        if key not in bases:continue
+        day,v,m,d=key
+        cs=(bases[key]+offset(rno))&255
+        cname=(f"pw01sde01{v:02d}{day[:4]}{m:02d}{d:02d}"
+               f"{rno:02d}{day.replace('-','')}/{cs:02X}")
+        recovered[rid]="https://www.jra.go.jp/JRADB/accessS.html?CNAME="+cname
+    print("JRA_FINAL_OFFICIAL_CNAME_RECOVERY_MAP",json.dumps({
+        "allRaceRows":len(bundles),"validSameDateVenueGroups":len(bases),
+        "recoveredCandidateUrls":len(recovered),
+        "ambiguousGroupsRejected":rejected,
+        "usesOnlyFinishedJraSameDateAnchor":True},ensure_ascii=False),flush=True)
+    return recovered
+
 def d1_races():
     """Reconcile every 2026 Aug-Nov race with actual six-market settlement.
 
@@ -163,15 +221,27 @@ def d1_races():
       "racesEligibleForOfficialOddsFetch":len(candidates),
       "completedVenueDays":len(expected)},ensure_ascii=False),flush=True)
     odds={};failures=collections.Counter();failed_rids=collections.defaultdict(list)
+    substitute=reconstruct_official_pc_result_urls(all_bundles)
+    repaired=[]
     def fetch(bundle):
         rid=str(bundle["race"]["raceId"])
-        try:return rid,official_final_odds(bundle,hist,live),None
-        except Exception as ex:return rid,None,str(ex)[:150]
+        try:return rid,official_final_odds(bundle,hist,live),None,False
+        except Exception as original_error:
+            if rid in substitute:
+                alt={"race":{**bundle["race"],"resultUrl":substitute[rid]},
+                     "runners":bundle["runners"]}
+                try:return rid,official_final_odds(alt,hist,live),None,True
+                except Exception as ex:
+                    return rid,None,(str(original_error)[:90]+
+                         " -> recovered:"+str(ex)[:70]),False
+            return rid,None,str(original_error)[:150],False
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
         futures=[pool.submit(fetch,b) for b in candidates]
         for n,future in enumerate(concurrent.futures.as_completed(futures),start=1):
-            rid,quoted,error=future.result()
-            if quoted:odds[rid]=quoted
+            rid,quoted,error,was_recovered=future.result()
+            if quoted:
+                odds[rid]=quoted
+                if was_recovered:repaired.append(rid)
             else:
                 typ=error or "NO_JRA_OFFICIAL_WIN_QUOTES"
                 failures[typ]+=1
@@ -228,6 +298,7 @@ def d1_races():
        "completeSixMarketPayoutRaces":len(all_bundles)-len(not_confirmed),
        "genuineShortFieldRaces":len(short_field),
        "officialFullFieldQuotedRaces":len(odds),
+       "officialFullFieldRowsRecoveredFromVerifiedCname":len(repaired),
        "historicallyComparableEligibleRaces":len(rows),
        "coveredVenueDays":len(qualified),
        "insufficientVenueDays":len(missingdays),
@@ -244,6 +315,7 @@ def d1_races():
       "publicSettlementErrorExamples":dict(list(errors.items())[:15]),
       "ineligibleUnder10Runners":len(short_field),
       "officialJraFinalOddsRaces":len(odds),
+      "officialJraResultUrlsReconstructedFromValidAnchors":len(repaired),
       "historicallyComparableRaces":len(rows),
       "fullVenueDaysWithMinimumThreeEligibleRaces":len(qualified),
       "venueDaysWithInsufficientEligibleRaces":len(missingdays),
