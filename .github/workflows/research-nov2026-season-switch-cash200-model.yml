@@ -1,0 +1,62 @@
+name: Freeze discovered season-switch 200pct cash rules and verify real paid yen
+on:
+  push:
+    branches:
+      - research/nov2026-three-season-cash200-model-1113
+    paths:
+      - scripts/research-nov2026-season-switch-cash200-model.py
+      - .github/workflows/research-nov2026-season-switch-cash200-model.yml
+permissions:
+  contents: write
+jobs:
+  verify-historical-roi200-research-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==2.2.6
+      - name: Test pre-result model chooses real horse-number wagers
+        run: |
+          python -m py_compile scripts/research-nov2026-season-switch-cash200-model.py
+          python scripts/research-nov2026-season-switch-cash200-model.py --self-test
+      - name: Get fixed 2015-2026 third-party actual payouts (no Cloudflare)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in $(seq 2015 2025); do
+              for month in $(seq -w 1 12); do printf '%s%s\n' "$year" "$month"; done
+            done
+            for month in 01 02 03 04; do printf '2026%s\n' "$month"; done
+          } >/tmp/roicash_months
+          cat /tmp/roicash_months | xargs -P 12 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 3 --max-time 50 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+      - name: Real historical money accounting including all losing races and 2023
+        run: python -u scripts/research-nov2026-season-switch-cash200-model.py --audit
+      - name: Commit frozen rule-model, all settled bet records, and annual cash report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add models/season-switch-cash200-research-v1.json analysis-results/season-switch-cash200-research-v1-yearly.json analysis-results/season-switch-cash200-research-v1-ledger.csv
+          if ! git diff --cached --quiet; then
+            git commit -m 'research: freeze discovered positive-cash three-season regime with full JPY ledger [skip ci]'
+            git push origin HEAD:research/nov2026-three-season-cash200-model-1113
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: historical-roi200-season-switch-cash-model
+          path: |
+            models/season-switch-cash200-research-v1.json
+            analysis-results/season-switch-cash200-research-v1-yearly.json
+            analysis-results/season-switch-cash200-research-v1-ledger.csv
+          if-no-files-found: warn
+          retention-days: 30
