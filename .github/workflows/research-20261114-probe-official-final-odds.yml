@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install --disable-pip-version-check beautifulsoup4==4.13.4
+      - run: python -m pip install --disable-pip-version-check beautifulsoup4==4.13.4 numpy==2.2.6
       - name: Identify D1 missing final odds and fetch official JRA samples
         run: python -u scripts/research-20261114-probe-official-final-odds.py
       - uses: actions/upload-artifact@v4
