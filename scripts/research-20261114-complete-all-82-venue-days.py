@@ -66,6 +66,17 @@ def build():
         no=int(r["raceNo"])
         raceid=str(r["raceId"])
         url=correct_official_result_url(no)
+        active=[h for h in by_race[raceid] if h.get("runnerStatus") in (None,"","active")]
+        # Exactly as the original 2015-26 archive: fewer than 10 runners
+        # are not bettable under this pre-existing top-ten strategy.
+        if len({int(h["horseNo"]) for h in active})<10:
+            checks.append({"raceId":raceid,"raceNo":no,
+                "officialResultUrl":url,"originalD1Status":r["status"],
+                "actualActiveRunners":len(active),"historicalRuleEligible":False,
+                "reason":"GENUINE_FIELD_UNDER_TEN_HORSES"})
+            print("SEPTEMBER_19_NAKAYAMA_JRA_RACE_INELIGIBLE",
+                  json.dumps(checks[-1],ensure_ascii=False),flush=True)
+            continue
         bundle={"race":{**r,"resultUrl":url},"runners":by_race[raceid]}
         quotes=forward.official_final_odds(bundle,official,live)
         public,provenance=pub.fetch_public(r)
