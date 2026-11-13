@@ -1,8 +1,8 @@
-name: Research six cash200 portfolios 2026 Aug-Nov OFFICIAL historical final win odds read-only
+name: Research Aug-Nov all eligible JRA official final odds recovered from verified exact race results
 on:
   push:
     branches:
-      - research/20261114-fill-aug-nov-six-payout-gaps
+      - research/20261114-recover-all-official-final-odds
 permissions:
   contents: read
   actions: read
@@ -52,7 +52,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: six-roi200-2026-aug-nov-official-final-odds-audit
+          name: six-roi200-all-eligible-final-odds-recovered-complete
           path: analysis-results/nov2026-six-roi200-candidates-postaug-audit.json
           if-no-files-found: warn
           retention-days: 30
