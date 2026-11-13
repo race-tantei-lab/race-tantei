@@ -76,7 +76,19 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
                     combined=v[:,lo:hi]+v[:,anchor,None]
                     joint_robust=combined.sum(axis=0)-combined.max(axis=0)
                     complements.append(np.argsort(-joint_robust,kind="stable")[:2]+lo)
-            candidates.append(list(dict.fromkeys(map(int,list(a)+list(b)+[x for z in complements for x in z]))))
+            # New regime-aware cash discovery: quarter-specific payout leaders
+            # are admitted before joint pairing, even when absent from global
+            # leaders. The test quarter's payouts never enter this discovery.
+            seasonal=[]
+            for past_q in (1,2,3,4):
+                qi=train[quarter[train]==past_q]
+                if len(qi)<60:continue
+                seasonal_cash=money[qi,lo:hi]
+                seasonal_robust=seasonal_cash.sum(axis=0)-seasonal_cash.max(axis=0)
+                seasonal.append(int(lo+np.argmax(seasonal_robust)))
+                seasonal_hits=np.count_nonzero(seasonal_cash,axis=0)
+                seasonal.append(int(lo+np.argmax(seasonal_hits)))
+            candidates.append(list(dict.fromkeys(map(int,list(a)+list(b)+seasonal+[x for z in complements for x in z])))[:24])
         options=[]
         for market_a in range(6):
             for market_b in range(market_a+1,6):
