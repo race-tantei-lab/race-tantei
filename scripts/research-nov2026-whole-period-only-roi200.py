@@ -140,7 +140,7 @@ def whole_archive_loo_scores(base):
 def rank_cell(v,remove_max,money_per_hit):
     return v["paidYen"]-remove_max*v["maxRacePayoutYen"]-2*v["stakeYen"]+money_per_hit*(v["hitRaces"]-.20*v["races"])
 
-def solve_global_cash_and_hits(universe,allcells,hit_floor,seconds=120):
+def solve_global_cash_and_hits(universe,allcells,hit_floor,seconds=120,full_unpruned=False):
     """Exact whole-period multi-choice mixed-integer CASH ROI problem.
 
     Each venue-quarter must pick exactly one of its 780 researched race
@@ -171,7 +171,7 @@ def solve_global_cash_and_hits(universe,allcells,hit_floor,seconds=120):
                         lambda z:z[1]-z[3]-2*z[2],
                         lambda z:z[1]-2*z[2]):
             keep.update(sorted(range(len(x)),key=lambda j:measure(x[j]),reverse=True)[:16])
-        kept=[x[i] for i in sorted(keep)]
+        kept=x if full_unpruned else [x[i] for i in sorted(keep)]
         candidates.append(kept)
     lengths=[len(c) for c in candidates]
     N=sum(lengths)
@@ -217,13 +217,13 @@ def solve_global_cash_and_hits(universe,allcells,hit_floor,seconds=120):
         "hitRateFloor":hit_floor,"venueQuarterCells":ncell,
         "binaryPolicyChoices":N,"fullPeriodOnly":True,
         "cashMustExceedDoubleCostEvenAfterSingleLargestRace":True,
-        "prunedOnlyByFullPeriodMoneyAndHitScore":True}),flush=True)
+        "unprunedAll780PolicyChoicesPerCell":bool(full_unpruned)}),flush=True)
     result=milp(c,integrality=integ,bounds=Bounds(lb,ub),
          constraints=LinearConstraint(A,lower,upper),
          options={"time_limit":seconds,"mip_rel_gap":.005})
     info={"status":int(result.status),"success":bool(result.success),
           "message":str(result.message),"binaryChoices":N,
-          "hitRateFloor":hit_floor}
+          "hitRateFloor":hit_floor,"fullUnpruned":full_unpruned}
     if result.x is None:
         print("WHOLE_ARCHIVE_GLOBAL_CASH_MILP_RESULT",json.dumps(info),flush=True)
         return None,info
@@ -348,12 +348,16 @@ def main():
         add("whole_period_blended_venue_season",cells,
             {"venueWeight":weight,"cashBonusPerHit":price})
     solver_summaries=[]
+    # Optimize across all 780 policy alternatives in EACH venue-quarter.
+    # Do not shortlist on any time period prior to combinatorial search.
     for floor in (.20,0.):
-      choices,details=solve_global_cash_and_hits(universe,allcells,floor,seconds=130)
+      choices,details=solve_global_cash_and_hits(
+             universe,allcells,floor,seconds=200,full_unpruned=True)
       solver_summaries.append(details)
       if choices is not None:
-        add("whole_period_global_cash_and_hits_milp",choices,
+        add("whole_period_all780_each_venue_quarter_milp",choices,
           {"minCashRoi200EvenAfterMax":True,"minHitRatePercent":100*floor,
+           "all780TicketPoliciesAllowedEachCell":True,
            "exactBiggestRaceRemovedInGlobalConstraint":True,
            "solverStatus":details["status"]})
     accepted.sort(key=lambda c:(c["hitRateAtLeast20"],
