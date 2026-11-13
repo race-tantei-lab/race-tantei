@@ -24,8 +24,8 @@ def run(races,cash,year,quarter,fields,market_state):
     # fieldSize is a pre-race categorical bin, not the raw horse count.
     if np.any((band<0)|(band>20)):raise RuntimeError('INVALID_FIELD_BIN')
     if np.any((market_state<0)|(market_state>30)):raise RuntimeError('INVALID_MARKET_STATE')
-    # Only pre-race features; no winners, finish positions or test payouts in routing.
-    keys=[(venue[i],int(quarter[i]),int(band[i]),int((program[i]-1)//4),int(market_state[i])) for i in range(n)]
+    # Pre-race course metadata: fail closed to UNKNOWN when not present in the source.\n    # Never infer track or going from results or settlement amounts.\n    def pre_race_course(r):\n        surface=str(r.get("surface",r.get("trackType","UNKNOWN"))).strip().lower()\n        distance=r.get("distance",r.get("distanceM"))\n        try: distance_band=int(distance)//400 if distance is not None else -1\n        except (ValueError,TypeError): distance_band=-1\n        going=str(r.get("going",r.get("trackCondition","UNKNOWN"))).strip().lower()\n        return (surface,distance_band,going)\n    course=[pre_race_course(r) for r in races]\n    # Only pre-race features; no winners, finish positions or test payouts in routing.
+    keys=[(venue[i],int(quarter[i]),int(band[i]),int((program[i]-1)//4),int(market_state[i]),*course[i]) for i in range(n)]
     all_bets=[];coverage={};missing=0
     periods=[(y,q) for y in range(2023,2027) for q in range(1,5)]
     for target,q in periods:
@@ -123,7 +123,7 @@ def run(races,cash,year,quarter,fields,market_state):
         coverage[f"{target}Q{q}"]=dict(trainRaces=len(train),testRaces=len(test),
             venueDays=len(test_days),selected5=counts[5],selected3to5=sum(v for k,v in counts.items() if 3<=k<=5),
             below3=sum(v for k,v in counts.items() if k<3))
-    return all_bets,coverage
+    return all_bets,coverage,dict(surfaceKnown=sum(c[0] not in ("unknown","") for c in course),distanceKnown=sum(c[1]>=0 for c in course),goingKnown=sum(c[2] not in ("unknown","") for c in course),total=len(course))
 def main():
     if "--self-test" in sys.argv:
         assert summarize([dict(stakeYen=200,paidYen=500),dict(stakeYen=200,paidYen=100)])["minusMaxRaceRoiPct"]==25
@@ -139,12 +139,12 @@ def main():
     # Favourite-odds category is observable before the race; do not use payout to route.
     fav=cat['favOdds'].reshape(len(races),336)[:,0].astype(int)
     market_state=np.minimum(fav//2,3)
-    bets,coverage=run(races,cash,year,quarter,fields,market_state)
+    bets,coverage,course_coverage=run(races,cash,year,quarter,fields,market_state)
     if any(b["marketA"]==b["marketB"] for b in bets):raise RuntimeError("DUPLICATE_MARKET")
     if len({b["raceId"] for b in bets})!=len(bets):raise RuntimeError("DUPLICATE_RACE")
     report=dict(researchOnly=True,adoptable=False,officialT15Verified=False,officialJraPayoutReconciled=False,
         source="third_party_unreconciled",priorExposure2025And2026=True,
-        regimeDimensions=["venue","quarter","fieldSizeCategory","programNumberBand","preRaceFavouriteOddsBand"],
+        regimeDimensions=["venue","quarter","fieldSizeCategory","programNumberBand","preRaceFavouriteOddsBand","preRaceSurfaceIfAvailable","preRaceDistance400mBandIfAvailable","preRaceGoingIfAvailable"],courseMetadataCoverage=course_coverage,
         missingOfficialVenueDays="NOT_VERIFIED",candidateRaces=len(races),
         combined=summarize(bets),years={str(y):summarize([b for b in bets if b["year"]==y]) for y in range(2023,2027)},
         quarters={f"{y}Q{q}":summarize([b for b in bets if b["year"]==y and b["quarter"]==q]) for y in range(2023,2027) for q in range(1,5)},
