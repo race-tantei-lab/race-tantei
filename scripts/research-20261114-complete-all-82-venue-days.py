@@ -58,7 +58,7 @@ def build():
         key=tuple(int(x) for x in re.findall(r"[0-9]+",str(row["combination"])))
         if TYPES[m] in pub.UNORDERED:key=tuple(sorted(key))
         money=int(row["payoutYen"])
-        if key in d1p[row["raceId"]] and d1p[row["raceId"]][m][key]!=money:
+        if key in d1p[row["raceId"]][m] and d1p[row["raceId"]][m][key]!=money:
             raise RuntimeError("CONFLICT_D1_SEPTEMBER_19_PAY")
         d1p[row["raceId"]][m][key]=money
     rows=[];checks=[]
