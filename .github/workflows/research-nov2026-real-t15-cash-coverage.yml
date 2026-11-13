@@ -24,9 +24,16 @@ jobs:
           python scripts/research-nov2026-real-t15-cash-coverage.py --self-test
       - name: Verify saved JRA official before-T15 odds vs real settlement
         run: python -u scripts/research-nov2026-real-t15-cash-coverage.py
+      - name: Verify Worker frozen official odds metadata
+        run: |
+          python -m py_compile scripts/research-nov2026-worker-freeze-t15-coverage.py
+          python scripts/research-nov2026-worker-freeze-t15-coverage.py --self-test
+          python -u scripts/research-nov2026-worker-freeze-t15-coverage.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: true-jra-t15-data-availability
-          path: analysis-results/nov2026-real-t15-money-coverage.json
+          path: |
+            analysis-results/nov2026-real-t15-money-coverage.json
+            analysis-results/nov2026-worker-frozen-t15-coverage.json
           retention-days: 14
