@@ -171,25 +171,52 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
             robust=(int(paid.sum())-int(paid.max()))/((sa+sb)*len(h))
             base=priority(keys[i],option)
             return (len(h)*robust+40*base)/(len(h)+40)
+        # Cache immutable, training-only priority by regime/option. During
+        # coordinate descent only the changed regime needs a new priority.
+        # This removes repeated historical payout reductions inside every sort.
+        priority_cache={}
+        def cached_priority(i,assign):
+            i=int(i);key=keys[i];option=assign.get(key,fallback)
+            ck=(key,option,int(program_bands[i]),int(quarter[i]))
+            if ck not in priority_cache:
+                priority_cache[ck]=race_priority(i,assign)
+            return priority_cache[ck]
+        train_day_lists=list(train_days.values())
         def slate(assign):
-            return [i for indices in train_days.values() for i in sorted(indices,key=lambda j:(-race_priority(j,assign),int(program[j])))[:5]]
+            return [i for indices in train_day_lists for i in
+                    sorted(indices,key=lambda j:(-cached_priority(j,assign),int(program[j])))[:5]]
         chosen=slate(current)
         def objective(assign,indices):
-            payouts=[];stakes=[];by_year=defaultdict(list)
-            for i in indices:
-                a,b,sa,sb=assign.get(keys[i],fallback)
-                p=int((money[i,a]*sa+money[i,b]*sb)//100)
-                payouts.append(p);stakes.append(sa+sb);by_year[int(year[i])].append((p,sa+sb))
-            if not stakes:return (-1e9,-1e9)
-            robust=(sum(payouts)-max(payouts))/sum(stakes)
-            annual=min((sum(p for p,s in rows)-max(p for p,s in rows))/sum(s for p,s in rows) for rows in by_year.values())
-            by_quarter=defaultdict(list)
-            for i,p,st in zip(indices,payouts,stakes):
-                by_quarter[(int(year[i]),int(quarter[i]))].append((p,st))
-            quarter_robust=[(sum(p for p,st in rows)-max(p for p,st in rows))/sum(st for p,st in rows)
-                            for rows in by_quarter.values() if len(rows)>=5]
-            qfloor=float(np.percentile(quarter_robust,25)) if quarter_robust else annual
-            return (robust+0.1*annual+0.15*qfloor,robust)
+            if not indices:return (-1e9,-1e9)
+            ix=np.asarray(indices,dtype=int)
+            # Group by assigned ticket, using vectorized cash lookup instead
+            # of Python per-race dictionary construction on every trial.
+            payouts=np.empty(len(ix),dtype=np.int64)
+            stakes=np.empty(len(ix),dtype=np.int64)
+            by_option=defaultdict(list)
+            for pos,i in enumerate(ix):
+                by_option[assign.get(keys[int(i)],fallback)].append(pos)
+            for (a,b,sa,sb),positions in by_option.items():
+                pos=np.asarray(positions,dtype=int)
+                payouts[pos]=(money[ix[pos],a]*sa+money[ix[pos],b]*sb)//100
+                stakes[pos]=sa+sb
+            total_stake=int(stakes.sum())
+            robust=(int(payouts.sum())-int(payouts.max()))/total_stake
+            annual=[]
+            for yy in np.unique(year[ix]):
+                mask=year[ix]==yy
+                p=payouts[mask]
+                annual.append((int(p.sum())-int(p.max()))/int(stakes[mask].sum()))
+            floor=min(annual)
+            quarter_robust=[]
+            periods_ix=year[ix]*4+quarter[ix]
+            for pq in np.unique(periods_ix):
+                mask=periods_ix==pq
+                if int(mask.sum())>=5:
+                    p=payouts[mask]
+                    quarter_robust.append((int(p.sum())-int(p.max()))/int(stakes[mask].sum()))
+            qfloor=float(np.percentile(quarter_robust,25)) if quarter_robust else floor
+            return (robust+0.1*floor+0.15*qfloor,robust)
         for _ in range(3):
             for key in sorted(current):
                 best=current[key];bestscore=objective(current,slate(current))
