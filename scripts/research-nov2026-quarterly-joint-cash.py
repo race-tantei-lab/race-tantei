@@ -34,7 +34,12 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
         going=str(r.get("going",r.get("trackCondition","UNKNOWN"))).strip().lower()
         return (surface,distance_band,going)
     course=[pre_race_course(r) for r in races]
-    keys=[(venue[i],int(quarter[i]),int(band[i]),int((program[i]-1)//4),int(market_state[i]),int(odds_gap_state[i]),*course[i]) for i in range(n)]
+    # Hierarchical, pre-race regime routing: avoid nearly unique nine-way keys.
+    # The coarse key ensures training support; specific conditions are activated
+    # only when sufficient historical observations exist before the test quarter.
+    base_keys=[(venue[i],int(quarter[i]),int(band[i]),int(market_state[i])) for i in range(n)]
+    detailed_keys=[base_keys[i]+(int(odds_gap_state[i]),course[i][0],course[i][1],course[i][2]) for i in range(n)]
+    keys=base_keys
     all_bets=[];coverage={};missing=0
     periods=[(y,q) for y in range(2023,2027) for q in range(1,5)]
     for target,q in periods:
@@ -61,6 +66,21 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
                             options.append((a,b,sa,sb))
         # Prior-period regime-specific cash ledger with shrinkage for sparse states.
         groups=defaultdict(list)
+        # A detailed state must have >=60 historical races; otherwise back off
+        # to the venue/season/field/market regime, and finally venue-level.
+        detailed_counts=defaultdict(int)
+        base_counts=defaultdict(int)
+        for i in train:
+            detailed_counts[detailed_keys[int(i)]]+=1
+            base_counts[base_keys[int(i)]]+=1
+        def regime(i):
+            i=int(i)
+            if detailed_counts[detailed_keys[i]]>=60:
+                return ("detail",)+detailed_keys[i]
+            if base_counts[base_keys[i]]>=60:
+                return ("base",)+base_keys[i]
+            return ("venue",venue[i])
+        keys=[regime(i) for i in range(n)]
         for i in train:groups[keys[int(i)]].append(int(i))
         def score_option(ix,option):
             a,b,sa,sb=option
@@ -77,7 +97,7 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
         policies={}
         for key,ix in groups.items():
             ix=np.asarray(ix,dtype=int)
-            source=ix if len(ix)>=60 else train[venue[train]==key[0]]
+            source=ix if len(ix)>=60 else train[venue[train]==key[1]]
             if len(source)<60:source=train
             ranked=sorted(options,key=lambda x:score_option(source,x),reverse=True)
             policies[key]=ranked[:8]
@@ -130,6 +150,9 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
                     ticketA=a,ticketB=b,stakeA=sa,stakeB=sb,stakeYen=sa+sb,
                     paidYen=int((money[i,a]*sa+money[i,b]*sb)//100)))
         coverage[f"{target}Q{q}"]=dict(trainRaces=len(train),testRaces=len(test),
+            detailedRegimeTestRaces=sum(keys[int(i)][0]=="detail" for i in test),
+            baseRegimeTestRaces=sum(keys[int(i)][0]=="base" for i in test),
+            venueFallbackTestRaces=sum(keys[int(i)][0]=="venue" for i in test),
             venueDays=len(test_days),selected5=counts[5],selected3to5=sum(v for k,v in counts.items() if 3<=k<=5),
             below3=sum(v for k,v in counts.items() if k<3))
     return all_bets,coverage,dict(surfaceKnown=sum(c[0] not in ("unknown","") for c in course),distanceKnown=sum(c[1]>=0 for c in course),goingKnown=sum(c[2] not in ("unknown","") for c in course),total=len(course))
