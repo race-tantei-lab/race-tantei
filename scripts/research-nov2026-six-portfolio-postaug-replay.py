@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Frozen full-period ROI200 six-portfolio replay on D1 2026 Aug+ settlements.
+"""Frozen cash200 six-portfolio replay on OFFICIAL JRA FINAL WIN odds and D1 settlements.
 
 READ ONLY. Research cutoff 2015-01..2026-04. Candidate identities
 are frozen from the prior full-history mining; NO post-Aug result can select
@@ -13,7 +13,7 @@ choices or proof of an actionable T-15 model. If eligible D1 coverage is
 incomplete, report it and never describe results as all-races ROI.
 """
 from __future__ import annotations
-import collections, concurrent.futures, datetime as dt, importlib.util, json, math, re, sys
+import collections, concurrent.futures, datetime as dt, importlib.util, json, math, re, sys, urllib.parse
 from pathlib import Path
 import numpy as np
 
@@ -43,7 +43,7 @@ def official_final_odds(bundle, historic, live):
     """JRA official *final* full-field win odds; no T-15 inference."""
     race=bundle["race"]
     url=str(race.get("resultUrl") or "")
-    raw_url=live.urllib.parse.unquote(url)
+    raw_url=urllib.parse.unquote(url)
     identity=re.search(r"(?:pw|sw)01sde(?:10|01)(\d{2})(\d{4})(\d{2})(\d{2})(\d{2})(\d{8})",raw_url,re.I)
     if not identity:raise RuntimeError("OFFICIAL_JRA_RESULT_ID_MISSING")
     venue,year,meeting,meeting_day,race_no,ymd=identity.groups()
@@ -51,8 +51,8 @@ def official_final_odds(bundle, historic, live):
     if ymd!=day.replace("-","") or int(race_no)!=int(race["raceNo"]):
         raise RuntimeError("OFFICIAL_RESULT_RACE_IDENTITY_MISMATCH")
     if re.search(r"CNAME=sw01",url,re.I):
-        parsed=live.urllib.parse.urlsplit(url)
-        url=live.urllib.parse.urlunsplit(parsed._replace(netloc="sp.jra.jp"))
+        parsed=urllib.parse.urlsplit(url)
+        url=urllib.parse.urlunsplit(parsed._replace(netloc="sp.jra.jp"))
     jar=historic.http.cookiejar.CookieJar()
     opener=historic.urllib.request.build_opener(historic.urllib.request.HTTPCookieProcessor(jar))
     req=historic.urllib.request.Request(url,headers={
