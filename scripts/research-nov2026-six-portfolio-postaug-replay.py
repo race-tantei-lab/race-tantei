@@ -108,7 +108,7 @@ def d1_races():
         print("POSTAUG_D1_PAYOUTS_MONTH",json.dumps({"month":month,"rows":len(lines)}),flush=True)
     incomplete=[b for b in all_bundles if
         b["race"].get("status")!="finished" or
-        any(not x for x in payments[str(b["race"]["raceId"])]])]
+        any(not x for x in payments[str(b["race"]["raceId"])])]
     print("AUG_NOV_PAYOUT_SUPPLEMENT_START",json.dumps({
        "allRaceRowsInPastDateRange":len(all_bundles),
        "D1UnfinishedOrSixMarketMissing":len(incomplete),
