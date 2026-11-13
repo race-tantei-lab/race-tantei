@@ -13,7 +13,7 @@ choices or proof of an actionable T-15 model. If eligible D1 coverage is
 incomplete, report it and never describe results as all-races ROI.
 """
 from __future__ import annotations
-import collections, datetime as dt, importlib.util, json, math, re, sys
+import collections, concurrent.futures, datetime as dt, importlib.util, json, math, re, sys
 from pathlib import Path
 import numpy as np
 
@@ -39,14 +39,48 @@ def venue_code(value):
     if s in VENUES:return VENUES[s]
     if s.isdigit() and 1<=int(s)<=10:return int(s)
     raise RuntimeError("UNRECOGNIZED_JRA_VENUE:"+s)
+def official_final_odds(bundle, historic, live):
+    """JRA official *final* full-field win odds; no T-15 inference."""
+    race=bundle["race"]
+    url=str(race.get("resultUrl") or "")
+    raw_url=live.urllib.parse.unquote(url)
+    identity=re.search(r"(?:pw|sw)01sde(?:10|01)(\\d{2})(\\d{4})(\\d{2})(\\d{2})(\\d{2})(\\d{8})",raw_url,re.I)
+    if not identity:raise RuntimeError("OFFICIAL_JRA_RESULT_ID_MISSING")
+    venue,year,meeting,meeting_day,race_no,ymd=identity.groups()
+    day=str(race["raceDate"])
+    if ymd!=day.replace("-","") or int(race_no)!=int(race["raceNo"]):
+        raise RuntimeError("OFFICIAL_RESULT_RACE_IDENTITY_MISMATCH")
+    if re.search(r"CNAME=sw01",url,re.I):
+        parsed=live.urllib.parse.urlsplit(url)
+        url=live.urllib.parse.urlunsplit(parsed._replace(netloc="sp.jra.jp"))
+    jar=historic.http.cookiejar.CookieJar()
+    opener=historic.urllib.request.build_opener(historic.urllib.request.HTTPCookieProcessor(jar))
+    req=historic.urllib.request.Request(url,headers={
+        "User-Agent":historic.USER_AGENT,"Accept-Language":"ja-JP,ja;q=0.9"})
+    raw,_=historic.open_retry(opener,req,attempts=3,timeout=25)
+    page=raw.decode("cp932","replace")
+    core_id=venue+year+meeting+meeting_day+race_no+ymd
+    names=sorted(set(re.findall(r"(?:pw|sw)151ou(?:10|S3)"
+        +re.escape(core_id)+r"Z/[0-9A-Fa-f]{2}",page,re.I)))
+    if len(names)!=1:raise RuntimeError("OFFICIAL_ODDS_LINK_NOT_UNIQUE:"+str(len(names)))
+    cname=names[0]
+    html,source=historic.post_odds(opener,cname,url)
+    quote=(live.parse_mobile_win_odds(html) if cname.lower().startswith("sw")
+           else historic.parse_win(live.BeautifulSoup(html,"html.parser")))
+    active={int(x["horseNo"]) for x in bundle["runners"]
+            if x.get("runnerStatus") in (None,"","active")}
+    if len(set(quote).intersection(active))<max(10,len(active)-2):
+       raise RuntimeError("JRA_FINAL_ODDS_FIELD_INCOMPLETE")
+    return {int(k):float(v) for k,v in quote.items() if int(k) in active}
 def d1_races():
     live=imp("scripts/postaug-support-aug-nov-frozen-policy-recheck.py","postaug_query_helper")
-    live.START=START
-    live.END=END
-    live.MONTHS=MONTHS
+    hist=imp("scripts/research-enrich-official-history-odds.py","jra_official_final_reader")
+    live.START=START;live.END=END;live.MONTHS=MONTHS
     by_date,month_counts=live.d1_bundles()
+    bundles=[bundle for day,bs in sorted(by_date.items()) for bundle in bs
+             if bundle["race"].get("status")=="finished"]
+    if len(bundles)<500:raise RuntimeError("POSTAUG_D1_PROGRAM_TOO_SMALL")
     payments=collections.defaultdict(lambda:[{} for _ in TYPES])
-    bad=collections.Counter()
     for month in MONTHS:
         nxt=(dt.date.fromisoformat(month+"-01")+dt.timedelta(days=35)).replace(day=1).isoformat()[:7]
         sql=("SELECT race_id raceId,bet_type betType,combination,payout_yen payoutYen "
@@ -68,71 +102,90 @@ def d1_races():
             r[combo]=yen
         print("POSTAUG_D1_ALL_MARKET_PAYMENT_MONTH",json.dumps({
             "month":month,"payoutLines":len(rows)}),flush=True)
+    odds={};failures=collections.Counter()
+    def fetch(bundle):
+        rid=str(bundle["race"]["raceId"])
+        try:
+            return rid,official_final_odds(bundle,hist,live),None
+        except Exception as ex:
+            return rid,None,str(ex)[:120]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        futures=[pool.submit(fetch,b) for b in bundles]
+        for n,future in enumerate(concurrent.futures.as_completed(futures),start=1):
+            rid,quoted,error=future.result()
+            if quoted:odds[rid]=quoted
+            else:failures[error or "NO_JRA_OFFICIAL_WIN_QUOTES"]+=1
+            if n%75==0 or n==len(futures):
+                print("POSTAUG_JRA_FULL_FIELD_FINAL_ODDS_PROGRESS",json.dumps({
+                    "completed":n,"total":len(futures),
+                    "officialFullFieldFetched":len(odds),
+                    "failed":n-len(odds)}),flush=True)
     expected=collections.Counter()
     valid=collections.Counter()
-    rows=[]
-    all_finished=0
-    for day,bundles in sorted(by_date.items()):
-        for bundle in bundles:
-            r=bundle["race"]
-            if r.get("status")!="finished":
-                bad["not_finished"]+=1;continue
-            all_finished+=1
-            venue=venue_code(r.get("venue"))
-            group=(str(day),venue)
-            expected[group]+=1
-            rid=str(r["raceId"])
-            # The original historical cash universe required >=10 distinct
-            # quoted horses per race, all six market payout types and 1..12.
-            horse=[]
-            for h in bundle["runners"]:
-                if h.get("runnerStatus") not in (None,"","active"):continue
-                try:
-                    number=int(h["horseNo"])
-                    odd=float(h["winOdds"])
-                    age_m=re.search(r"\d+",str(h.get("sexAge") or ""))
-                    age=int(age_m.group()) if age_m else 0
-                    weight=float(h.get("assignedWeight") or 0)
-                except (ValueError,TypeError,KeyError):
-                    continue
-                if not (1<=number<=18 and 1<=odd<=9999 and
-                        math.isfinite(odd) and 0<=age<=18 and 0<=weight<=80):continue
-                horse.append((number,odd,age,weight))
-            horse.sort(key=lambda h:(h[1],h[0]))
-            if len(horse)<10 or len({h[0] for h in horse})!=len(horse):
-                bad["fewer_than_10_quoted_runners"]+=1;continue
-            pays=payments.get(rid)
-            if not pays or any(not x for x in pays):
-                bad["missing_one_of_six_payout_types"]+=1;continue
-            no=int(r["raceNo"])
-            if not (1<=no<=12):
-                bad["race_number_outside_1_12"]+=1;continue
-            rows.append({"id":rid,"day":str(day),"month":str(day)[:4]+str(day)[5:7],
-                "venue":venue,"raceNo":no,"horses":horse,"payout":pays})
-            valid[group]+=1
-    if not rows:raise RuntimeError("NO_LIVE_D1_SIX_MARKET_PAYOUT_AND_QUOTE_ROWS")
-    # Never silently treat incomplete race-day data as full 12-race coverage.
-    complete={g for g,n in expected.items() if n>=3 and n==valid[g]}
-    incomplete={str(g):{"finished":n,"valid":valid[g]} for g,n in expected.items()
-                if g not in complete}
+    rows=[];bad=collections.Counter()
+    for bundle in bundles:
+        r=bundle["race"]
+        venue=venue_code(r.get("venue"))
+        group=(str(r["raceDate"]),venue)
+        expected[group]+=1
+        rid=str(r["raceId"])
+        quotes=odds.get(rid)
+        if not quotes:
+            bad["missing_official_full_field_final_odds"]+=1;continue
+        horse=[]
+        for h in bundle["runners"]:
+            if h.get("runnerStatus") not in (None,"","active"):continue
+            try:
+                number=int(h["horseNo"])
+                odd=float(quotes.get(number,0))
+                age_m=re.search(r"\\d+",str(h.get("sexAge") or ""))
+                age=int(age_m.group()) if age_m else 0
+                weight=float(h.get("assignedWeight") or 0)
+            except (ValueError,TypeError,KeyError):
+                continue
+            if not (1<=number<=18 and 1<=odd<=9999 and math.isfinite(odd)
+                    and 0<=age<=18 and 0<=weight<=80):continue
+            horse.append((number,odd,age,weight))
+        horse.sort(key=lambda h:(h[1],h[0]))
+        if len(horse)<10 or len({h[0] for h in horse})!=len(horse):
+            bad["less_than_ten_valid_official_quoted_runners"]+=1;continue
+        pays=payments.get(rid)
+        if not pays or any(not x for x in pays):
+            bad["missing_six_actual_jra_payout_types"]+=1;continue
+        number=int(r["raceNo"])
+        if not 1<=number<=12:
+            bad["invalid_race_number"]+=1;continue
+        rows.append({"id":rid,"day":str(r["raceDate"]),
+            "month":str(r["raceDate"])[:4]+str(r["raceDate"])[5:7],
+            "venue":venue,"raceNo":number,"horses":horse,"payout":pays})
+        valid[group]+=1
+    # The 2015-2026 archived source also excludes <10-runner races;
+    # same eligibility rule here, not an artificial demand for 12 races.
+    complete={g for g,n in valid.items() if n>=3}
+    insufficient={str(g):{"finished":expected[g],"eligible":valid[g]}
+                 for g in expected if g not in complete}
     covered=[r for r in rows if (r["day"],r["venue"]) in complete]
-    if not covered:raise RuntimeError("NO_COMPLETE_D1_VENUE_DAYS")
-    print("POSTAUG_D1_PROGRAM_COVERAGE",json.dumps({
-        "dateWindow":[START,END],"finishedRows":all_finished,
-        "qualifiedRows":len(rows),"completeVenueDays":len(complete),
-        "partialVenueDays":len(incomplete),
-        "excludedCauses":dict(bad),
-        "monthCounts":month_counts},ensure_ascii=False),flush=True)
+    if not covered:raise RuntimeError("NO_THREE_RACE_VENUE_DAYS_AFTER_OFFICIAL_ODDS_FETCH")
+    print("POSTAUG_JRA_FINAL_CASH_PROGRAM_COVERAGE",json.dumps({
+        "dateWindow":[START,END],"finishedD1Races":len(bundles),
+        "officialFullFieldQuotedRaces":len(odds),
+        "historicalEligibilityAndSixPaysRaces":len(rows),
+        "coveredVenueDays":len(complete),"insufficientVenueDays":len(insufficient),
+        "failedOfficialOdds":dict(failures.most_common(8)),
+        "exclusions":dict(bad)},ensure_ascii=False),flush=True)
     return covered,{"startInclusive":START,"endExclusive":END,
-        "latestRaceDate":max(r["day"] for r in rows),
-        "finishRacesAvailable":all_finished,
-        "allSixMarketAndOddsRaces":len(rows),
-        "fullyRepresentedVenueDays":len(complete),
-        "excludedPartialVenueDays":len(incomplete),
-        "excludedPartialVenueDayDetails":dict(list(incomplete.items())[:15]),
-        "excludedRacesByCause":dict(bad),
-        "d1MonthCounts":month_counts,
-        "replayIncludesAllFinishedD1Races":bool(not incomplete and all_finished==len(rows))}
+      "latestRaceDate":max(r["day"] for r in rows),
+      "finishRacesAvailable":len(bundles),
+      "officialJraFinalOddsRaces":len(odds),
+      "allSixMarketAndOddsRaces":len(rows),
+      "fullyRepresentedVenueDays":len(complete),
+      "excludedPartialVenueDays":len(insufficient),
+      "excludedPartialVenueDayDetails":dict(list(insufficient.items())[:15]),
+      "excludedRacesByCause":dict(bad),
+      "officialQuoteFetchFailures":dict(failures.most_common(8)),
+      "d1MonthCounts":month_counts,
+      "replayIncludesAllFinishedD1Races":bool(not bad and not insufficient)}
+
 def fixed_forward_signals(base,hist,live_rows):
     # Build history feature matrix on all pre-Aug archive ONLY.
     core,historical,years,paid,cat,ticket,sig,market,ranks=hist.whole_archive_loo_scores(base)
@@ -262,13 +315,13 @@ def main():
     base=full.load()
     paid,chosen,signal=fixed_forward_signals(base,full,records)
     analyzed=ticket_replay(base,study,records,paid,chosen,signal,report)
-    result={"status":"D1_STORED_ODDS_RETROSPECTIVE_REPLAY_NOT_OFFICIAL_T15",
+    result={"status":"OFFICIAL_FINAL_ODDS_RETROSPECTIVE_REPLAY_NOT_OFFICIAL_T15",
        "historicalCandidateCount":len(patterns),
        "dateRange":coverage,
        "hitDefinition":"one or more paid tickets in the selected race",
        "historicalBasis":"third party 2015-2026 Apr final win odds and settlements",
-       "postAugustBasis":"persisted D1 win_odds + 6 market official settlement table rt_payouts",
-       "oddsTimestampMatchedToTrainingArchive":False,
+       "postAugustBasis":"JRA official historical FINAL win odds + D1 stored six-market actual payouts",
+       "oddsTimestampMatchedToTrainingArchive":True,
        "provenOfficialT15BettingSimulation":False,
        "noFutureResultsUsedForProspectiveRuleSelection":True,
        "notUntouchedForwardHoldout":True,
