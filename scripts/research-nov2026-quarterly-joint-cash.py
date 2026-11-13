@@ -14,15 +14,18 @@ def summarize(rows):
     return dict(races=len(rows),stakeYen=stake,paidYen=paid,hitRaces=sum(x["paidYen"]>0 for x in rows),
                 roiPct=round(100*paid/stake,4) if stake else None,
                 minusMaxRaceRoiPct=round(100*(paid-top)/stake,4) if stake else None)
-def run(races,cash,year,quarter,fields):
+def run(races,cash,year,quarter,fields,market_state):
     n=len(races);money=cash.reshape(n,336)
     venue=np.array([str(r["venue"]) for r in races])
     day=np.array([str(r["day"]) for r in races])
     program=np.array([int(r["raceNo"]) for r in races])
     if np.any((program<1)|(program>12)):raise RuntimeError("INVALID_PROGRAM")
-    band=np.where(fields<=9,0,np.where(fields<=13,1,2))
+    band=np.asarray(fields,dtype=int)
+    # fieldSize is a pre-race categorical bin, not the raw horse count.
+    if np.any((band<0)|(band>20)):raise RuntimeError('INVALID_FIELD_BIN')
+    if np.any((market_state<0)|(market_state>30)):raise RuntimeError('INVALID_MARKET_STATE')
     # Only pre-race features; no winners, finish positions or test payouts in routing.
-    keys=[(venue[i],int(quarter[i]),int(band[i]),int((program[i]-1)//4)) for i in range(n)]
+    keys=[(venue[i],int(quarter[i]),int(band[i]),int((program[i]-1)//4),int(market_state[i])) for i in range(n)]
     all_bets=[];coverage={};missing=0
     periods=[(y,q) for y in range(2023,2027) for q in range(1,5)]
     for target,q in periods:
@@ -125,19 +128,23 @@ def main():
     if "--self-test" in sys.argv:
         assert summarize([dict(stakeYen=200,paidYen=500),dict(stakeYen=200,paidYen=100)])["minusMaxRaceRoiPct"]==25
         assert len(MARKETS)==6 and sum(hi-lo for lo,hi in MARKETS)==336
+        assert list(np.minimum(np.array([0,1,2,7])//2,3))==[0,0,1,3]
         print("QUARTERLY_JOINT_CASH_SELF_TEST_OK");return
     src=ROOT/"scripts/research-nov2026-seasonal-ensemble-cash-first.py"
     spec=importlib.util.spec_from_file_location("cashsrc",src)
     mod=importlib.util.module_from_spec(spec);sys.modules[spec.name]=mod;spec.loader.exec_module(mod)
     races,cash,cat,widths,types,rid,year,quarter,joint=mod.obtain_rows()
     if len(cash)!=336*len(races) or np.any(cash<0):raise RuntimeError("INVALID_CASH")
-    fields=cat["fieldSize"].reshape(len(races),336)[:,0].astype(int)
-    bets,coverage=run(races,cash,year,quarter,fields)
+    fields=cat['fieldSize'].reshape(len(races),336)[:,0].astype(int)
+    # Favourite-odds category is observable before the race; do not use payout to route.
+    fav=cat['favOdds'].reshape(len(races),336)[:,0].astype(int)
+    market_state=np.minimum(fav//2,3)
+    bets,coverage=run(races,cash,year,quarter,fields,market_state)
     if any(b["marketA"]==b["marketB"] for b in bets):raise RuntimeError("DUPLICATE_MARKET")
     if len({b["raceId"] for b in bets})!=len(bets):raise RuntimeError("DUPLICATE_RACE")
     report=dict(researchOnly=True,adoptable=False,officialT15Verified=False,officialJraPayoutReconciled=False,
         source="third_party_unreconciled",priorExposure2025And2026=True,
-        regimeDimensions=["venue","quarter","fieldSizeBand","programNumberBand"],
+        regimeDimensions=["venue","quarter","fieldSizeCategory","programNumberBand","preRaceFavouriteOddsBand"],
         missingOfficialVenueDays="NOT_VERIFIED",candidateRaces=len(races),
         combined=summarize(bets),years={str(y):summarize([b for b in bets if b["year"]==y]) for y in range(2023,2027)},
         quarters={f"{y}Q{q}":summarize([b for b in bets if b["year"]==y and b["quarter"]==q]) for y in range(2023,2027) for q in range(1,5)},
