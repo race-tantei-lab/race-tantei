@@ -238,6 +238,59 @@ def main():
          (v["untouched2024To2026MinusMaxRoiPct"] or 0)>=200
          for v in forward_audit),
       "examples":forward_strict[:5]},ensure_ascii=False),flush=True)
+    # IMPORTANT: The broad test below is run for EVERY 2017-2022
+    # historical ROI200 condition. No low-ROI condition is ever emitted.
+    # Never use later cash to change the rule feature or its threshold.
+    cross_period=[]
+    forward2024=[]
+    all_period=[]
+    for r in candidates:
+        series=[r["forward"][str(y)] for y in LATER]
+        c23=sum(z["stakeYen"] for z in series)
+        p23=sum(z["paidYen"] for z in series)
+        m23=max(z["largestPaidRaceYen"] for z in series)
+        hit23=sum(z["paidTickets"] for z in series)
+        v23=round(100*(p23-m23)/c23,4) if c23 else None
+        rest=series[1:]
+        c24=sum(z["stakeYen"] for z in rest)
+        p24=sum(z["paidYen"] for z in rest)
+        m24=max(z["largestPaidRaceYen"] for z in rest)
+        h24=sum(z["paidTickets"] for z in rest)
+        v24=round(100*(p24-m24)/c24,4) if c24 else None
+        tr=r["train"]
+        spend=tr["stakeYen"]+c23
+        payouts=tr["paidYen"]+p23
+        top=max(tr["largestPaidRaceYen"],m23)
+        allrobust=round(100*(payouts-top)/spend,4) if spend else None
+        item={"market":r["market"],"rank":r["positionRank1based"],
+            "schema":r["schema"],"conditions":r["conditions"],
+            "train":tr,"2023":r["forward"]["2023"],
+            "2024":r["forward"]["2024"],
+            "2025":r["forward"]["2025"],
+            "2026":r["forward"]["2026"],
+            "year2023To2026CashRoiMinusMax":v23,
+            "year2024To2026CashRoiMinusMax":v24,
+            "all2017To2026StakeYen":spend,
+            "all2017To2026PaidYen":payouts,
+            "all2017To2026MinusMaxRoiPct":allrobust,
+            "forwardCashHits":hit23}
+        if c23>=3000 and hit23>=2 and (v23 or 0)>=200:
+            cross_period.append(item)
+        if c24>=3000 and h24>=2 and (v24 or 0)>=200:
+            forward2024.append(item)
+        if (allrobust or 0)>=200:
+            all_period.append(item)
+    forward2024.sort(key=lambda v:(-v["year2024To2026CashRoiMinusMax"],
+                                  -v["all2017To2026StakeYen"]))
+    cross_period.sort(key=lambda v:(-v["year2023To2026CashRoiMinusMax"],
+                                  -v["all2017To2026StakeYen"]))
+    print("ROI200_DIRECT_CASH_ALL_CANDIDATES_FORWARD",json.dumps({
+       "trainMinusMax200CandidateCount":len(candidates),
+       "2023To2026MinusMax200WithPaidHits":len(cross_period),
+       "2024To2026MinusMax200WithPaidHits":len(forward2024),
+       "2017To2026CombinedMinusMax200Count":len(all_period),
+       "topForward2024":forward2024[:6],
+       "topForward2023":cross_period[:4]},ensure_ascii=False),flush=True)
     # For all historical candidates store a CSV artifact.
     ROWS.parent.mkdir(exist_ok=True,parents=True)
     with gzip.open(ROWS,"wt",encoding="utf-8",newline="") as f:
@@ -281,6 +334,11 @@ def main():
         "countRepeated200In2023And2024":confirm["train200And2023And2024Independent200"],
         "repeated2023CandidateCrossYearMoneyAudits":forward_audit[:35],
         "2023To2026ConfirmedRobust200Count":len(forward_strict),
+        "allCandidateForward2023To2026Robust200":len(cross_period),
+        "allCandidateForward2024To2026Robust200":len(forward2024),
+        "allCandidateFullPeriodRobust200":len(all_period),
+        "top2024To2026IndependentRobust200":forward2024[:30],
+        "top2023To2026IndependentRobust200":cross_period[:30],
         "mostSupportedStrictlyRO200Candidates":supported[:35],
         "topRepeated2023Only200Candidates":top2023[:35],
         "allCandidateCsv":str(ROWS.relative_to(R)),
