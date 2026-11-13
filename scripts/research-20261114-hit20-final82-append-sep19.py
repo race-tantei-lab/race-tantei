@@ -145,7 +145,7 @@ def main():
            "fromPreviouslyValidated81VenueDays":first,
            "newlyRecoveredNakayamaSep19":day,
            "all82VenueDaysAug1ToNov13":summary})
-        print("HIT20_ROI200_CASH_82_VENUE_DAYS",json.dumps({"candidateNo":orig["candidateNo"],
+        print("HIT20_ROI200_CASH_82_VENUE_DAYS",json.dumps({"candidateNo":orig["historicalCandidateNo"],
            **summary},ensure_ascii=False),flush=True)
     report={"status":"ALL_82_REAL_VENUE_DAYS_2026_AUG_NOV_HIT20_CASH200_FROZEN_REPLAY_DONE",
       "fullyVerifiedVenueDays":82,"originalD1BadResultUrlsReplacedOnlyInMemory":True,
