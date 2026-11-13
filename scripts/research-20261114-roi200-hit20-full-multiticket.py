@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start-from-scratch whole-archive 200% ROI + 20% hit MULTITICKET research.
+"""NET-PROFIT-FIRST whole-archive cash ROI200 & hit20 MULTITICKET research.
 
 Every 2015-01..2026-04 archived race is part of the SAME combinatorial cash
 objective: NO year split, preselection by a short period, or OOS score gate.
@@ -22,8 +22,8 @@ from pathlib import Path
 import numpy as np
 
 R=Path(__file__).resolve().parents[1]
-OUT=R/"analysis-results/20261114-full-period-roi200-hit20-multiticket.json"
-LED=R/"analysis-results/20261114-full-period-roi200-hit20-multiticket-ledger.csv.gz"
+OUT=R/"analysis-results/20261114-net-profit-first-roi200-hit20.json"
+LED=R/"analysis-results/20261114-net-profit-first-roi200-hit20-ledger.csv.gz"
 PARENTPATH=R/"scripts/research-nov2026-full-history-free-stake-roi200.py"
 CASH_HIT_TARGET=20.
 CASH_ROI_TARGET=200.
@@ -48,10 +48,10 @@ HEDGES={
   "none":(0,0,0,0,0,0),
 }
 HEDGE_INDEX=(0,1,2,10,11,19)
-HIT_SHADOW_PRICES=(0,1000,5000,15000,50000,150000,500000)
+HIT_SHADOW_PRICES=(0,)  # hit >=20% is a HARD CONSTRAINT, never a scored objective
 MAX_PENALTIES=(0,1,2)
 OBJECTIVES=tuple((penalty,price) for penalty in MAX_PENALTIES for price in HIT_SHADOW_PRICES)
-KEEP_PER_OBJECTIVE=12
+KEEP_PER_OBJECTIVE=36
 def imported():
     spec=importlib.util.spec_from_file_location("cash200_previous_module",PARENTPATH)
     m=importlib.util.module_from_spec(spec)
@@ -62,12 +62,14 @@ def metric(rows,venue_day_count):
     paid=sum(z["paidYen"] for z in rows)
     largest=max(z["paidYen"] for z in rows)
     hit=sum(z["paidYen"]>0 for z in rows)
+    profitable=sum(z["paidYen"]>z["costYen"] for z in rows)
     nr=len(rows)
     if nr<venue_day_count*3 or spend<nr*100:
       raise RuntimeError("INVALID_THREE_RACES_OR_MINIMUM_BUYABLE_BET")
     return {"races":nr,"venueDays":venue_day_count,"stakeYen":spend,
         "paidYen":paid,"profitYen":paid-spend,
         "maxRacePayoutYen":largest,"hitRaces":hit,
+        "profitableRaces":profitable,"profitableRacePct":round(100*profitable/nr,4),
         "cashRoiPct":round(100*paid/spend,4),
         "minusLargestRaceCashRoiPct":round(100*(paid-largest)/spend,4),
         "hitRacePct":round(100*hit/nr,4)}
@@ -125,16 +127,17 @@ def choose_mix_options(base,races,paid,chosen,signal):
                 sum_pay=returns.sum(axis=0,dtype=np.int64)
                 max_r=returns.max(axis=0)
                 hit=np.count_nonzero(returns,axis=0)
+                profitable=np.count_nonzero(returns>((s1+s2+hcost)*100)[None,:],axis=0)
                 nrows=len(ids)
                 cost=(s1+s2+hcost)*nrows*100
                 # Scan ALL offered amounts; below-threshold portfolios are
                 # never candidates or "failed candidate" records.
                 scan_count+=len(stake_opts)
-                profit_surplus=sum_pay-2*cost
-                hit_surplus=hit-0.2*nrows
+                # Rank by actual NET CASH profit; hit count never earns synthetic profit.
+                net_profit=sum_pay-cost
                 for oi,(penalty,bonus) in enumerate(OBJECTIVES):
-                    scores=profit_surplus-penalty*max_r+bonus*hit_surplus
-                    best_ids=np.argsort(-scores,kind="stable")[:2]
+                    scores=net_profit-penalty*max_r
+                    best_ids=np.argsort(-scores,kind="stable")[:3]
                     heap=buckets[cell][oi]
                     for k in best_ids:
                         k=int(k)
@@ -142,7 +145,8 @@ def choose_mix_options(base,races,paid,chosen,signal):
                         z={"policy":name,"hedge":hedge,"s1":int(s1[k]),
                            "s2":int(s2[k]),"paidYen":int(sum_pay[k]),
                            "stakeYen":int(cost[k]),"maxRacePayoutYen":int(max_r[k]),
-                           "hitRaces":int(hit[k]),"races":nrows,
+                           "hitRaces":int(hit[k]),
+                           "profitableRaces":int(profitable[k]),"races":nrows,
                            "venueDays":len(cell_days[cell])}
                         item=(float(scores[k]),serial,z)
                         if len(heap)<KEEP_PER_OBJECTIVE:
@@ -179,10 +183,12 @@ def overall(chosen):
     mx=max(x["maxRacePayoutYen"] for x in xs)
     races=sum(x["races"] for x in xs)
     hits=sum(x["hitRaces"] for x in xs)
+    profitable=sum(x["profitableRaces"] for x in xs)
     venue_days=sum(x["venueDays"] for x in xs)
     if races<3*venue_days:raise RuntimeError("VENUE_DAY_MINIMUM_NOT_MET")
     return {"stakeYen":stake,"paidYen":paid,"profitYen":paid-stake,
       "maxRacePayoutYen":mx,"races":races,"hitRaces":hits,
+      "profitableRaces":profitable,"profitableRacePct":round(100*profitable/races,4),
       "venueDays":venue_days,"cashRoiPct":round(100*paid/stake,4),
       "minusLargestRaceCashRoiPct":round(100*(paid-mx)/stake,4),
       "hitRacePct":round(100*hits/races,4)}
@@ -205,13 +211,14 @@ def milp_solver(options,cells,seconds,weight=0.):
       for j,z in enumerate(options[cell]):
         k=starts[cell]+j
         premium=(z["paidYen"]-2*z["stakeYen"])/scale
+        net=(z["paidYen"]-z["stakeYen"])/scale
         big=z["maxRacePayoutYen"]/scale
         hit=z["hitRaces"]-.2*z["races"]
         rr.extend((i,ncell,ncell+1,ncell+2+i))
         cc.extend((k,k,k,k))
         vv.extend((1.,premium,hit,big))
         # Optimize on actual yen, with optional preference for higher hit.
-        weights[k]=-(premium+weight*hit)
+        weights[k]=-(net)  # maximize ACTUAL yen profit, subject to both cash-ROI and hit floors
     rr.extend([ncell]+[ncell+2+i for i in range(ncell)])
     cc.extend([X]*(ncell+1));vv.extend([-1.]*(ncell+1))
     weights[-1]=1.
@@ -268,7 +275,7 @@ def ledger_for_candidate(base,patterns,races,payout,opts,signal,cells,chosen,day
                 "hedgeStakeYen":sum(hedge)*100,
                 "costYen":(a+b+sum(hedge))*100,
                 "paidYen":cash,
-                "hit":int(cash>0),"rule":z["policy"]})
+                "hit":int(cash>0),"profitableHit":int(cash>(a+b+sum(hedge))*100),"rule":z["policy"]})
     if len(set(z["raceId"] for z in ledger))!=len(ledger):
         raise RuntimeError("DUPLICATE_RACE_ID_BET")
     byday=collections.Counter((z["date"],int(z["venue"])) for z in ledger)
@@ -276,6 +283,8 @@ def ledger_for_candidate(base,patterns,races,payout,opts,signal,cells,chosen,day
         raise RuntimeError("FAILED_THREE_RACES_PER_VENUE_DATE")
     m=metric(ledger,len(byday))
     if not qualifies(m):raise RuntimeError("EXACT_CASH_LEDGER_DOES_NOT_QUALIFY")
+    if m["profitableRaces"]!=sum(z["profitableHit"] for z in ledger):
+        raise RuntimeError("PROFITABLE_RACE_AUDIT_FAILED")
     return m,ledger
 def main():
     if "--self-test" in sys.argv:
@@ -317,13 +326,13 @@ def main():
     # Global full-period paired objective candidate discovery.
     for price in HIT_SHADOW_PRICES:
       for penalty in MAX_PENALTIES:
-        select={c:max(options[c],key=lambda z:z["paidYen"]-2*z["stakeYen"]-
+        select={c:max(options[c],key=lambda z:z["paidYen"]-z["stakeYen"]-
                  penalty*z["maxRacePayoutYen"]+
-                 price*(z["hitRaces"]-.2*z["races"])) for c in cells}
+                 0*(z["hitRaces"]-.2*z["races"])) for c in cells}
         add("whole_archive_multi_ticket_greedy",select,
             {"maxRacePenalty":penalty,"perHitCashShadowYen":price})
     solver=[]
-    for weight in (0.,1.):
+    for weight in (0.,):  # no synthetic reward for making hit rate larger
         select,detail=milp_solver(options,cells,seconds=170,weight=weight)
         solver.append(detail)
         if select is not None:
@@ -332,15 +341,15 @@ def main():
                 "fullArchiveAllYearScore":True,
                 "hitShadowPreference":weight})
     accepted.sort(key=lambda z:(
-           z["fullPeriodMoneyAndHits"]["minusLargestRaceCashRoiPct"],
-           z["fullPeriodMoneyAndHits"]["hitRacePct"]),reverse=True)
+           z["fullPeriodMoneyAndHits"]["profitYen"],
+           z["fullPeriodMoneyAndHits"]["minusLargestRaceCashRoiPct"]),reverse=True)
     report={"status":"FULL_ARCHIVE_ROI200_HIT20_MULTI_TICKET_FOUND" if accepted else
             "FULL_ARCHIVE_NO_ROI200_HIT20_MULTI_TICKET_FOUND_YET",
         "dateRange":"2015-01 through 2026-04",
         "yearsAllTogether":list(range(2015,2027)),
         "allYearSingleOptimization":True,"anyChronologicalSplit":False,
         "minimumRacesPerVenueDay":3,
-        "noFixedBetAmount":True,"ticketsPerRace":"one or two cash-market exotic templates plus selectable extra win/wide hedges",
+        "noFixedBetAmount":True,"priority":"MAXIMIZE ACTUAL NET PROFIT, no hit-rate bonus; hit20 is floor only","ticketsPerRace":"one or two cash-market exotic templates plus selectable extra win/wide hedges",
         "portfolioHitRateMinPct":20,"portfolioCashRoiMinPct":200,
         "largestRaceExcludedCashRoiMinPct":200,
         "ticketCashAccounting":"100 yen-unit payouts multiplied by actual ticket stake; same race-set for hit and ROI",
@@ -351,7 +360,7 @@ def main():
         "venueDays":len(days),"venueQuarterCells":len(cells),
         "basePolicies":len(patterns),"hedgeStructures":len(HEDGES),
         "moneyVariationsScanned":scans,"optimizerChoices":sum(map(len,options.values())),
-        "searchMixesChecked":checks,
+        "searchMixesChecked":checks, "hitRateBonusInOptimization":0,
         "solver":solver,
         "strictlyQualifiedCandidateCount":len(accepted),
         "qualifiedCandidates":accepted[:15],
