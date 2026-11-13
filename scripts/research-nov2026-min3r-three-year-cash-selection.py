@@ -61,6 +61,29 @@ def matches_goal(obj):
     return obj["venueDays"]>0 and obj["races"]>=3*obj["venueDays"] and (
         obj["cashRoiPct"] or 0)>=200 and (
         obj["minusLargestRaceCashRoiPct"] or 0)>=200
+def frozen_cash_rules_three_years(source,years,payout,cat):
+    ids=np.flatnonzero(np.isin(years,TRAIN))
+    if len(ids)<8000:
+        raise RuntimeError("INSUFFICIENT_CHRONOLOGICAL_MONEY_TRAIN_2017_2019")
+    template=np.arange(payout.shape[1],dtype=np.int32)[None,:]
+    y=payout[ids].ravel().astype(np.float64)
+    win=np.flatnonzero(y>0)
+    buckets=[]
+    for schema in source.SCHEMAS:
+        g,n=source.sample_group_code({f:cat[f][ids] for f in source.FIELDS},
+                                     template,schema)
+        flat=g.ravel()
+        count=np.bincount(flat,minlength=n)
+        paid=np.bincount(flat,weights=y,minlength=n)
+        hits=np.bincount(flat,weights=(y>0),minlength=n)
+        largest=np.zeros(n,dtype=np.float64)
+        np.maximum.at(largest,flat[win],y[win])
+        robust=(paid-largest)/np.maximum(1,count)
+        buckets.append({"schema":list(schema),"size":n,"count":count,
+                        "cash":paid,"hit":hits,"largest":largest,
+                        "robust":robust})
+    return buckets
+
 def feature_races():
     source=load("scripts/research-nov2026-frozen-sparse-cash-model.py","sparse_condition_functions")
     core,races,years,cash,cat=source.archive()
@@ -69,7 +92,7 @@ def feature_races():
     if cash.shape!=(len(races),1030) or len(races)<26000:
         raise RuntimeError("NOT_ALL_JRA_TOP10_RACES_CASH_AVAILABLE")
     # Training only 2017-21. Cash-based pattern extraction, not win probs.
-    buckets=source.frozen_cash_rules(years,cash,cat)
+    buckets=frozen_cash_rules_three_years(source,years,cash,cat)
     # Candidate signal accepted ONLY if past actual yen ROI minus maximum
     # ticket paid >= 200%. Historical support n>=12, paid events>=2.
     score,rule_used=source.score_rules(
