@@ -73,13 +73,19 @@ def official_final_odds(bundle, historic, live):
        raise RuntimeError("JRA_FINAL_ODDS_FIELD_INCOMPLETE")
     return {int(k):float(v) for k,v in quote.items() if int(k) in active}
 def d1_races():
+    """Reconcile every 2026 Aug-Nov race with actual six-market settlement.
+
+    Unlike the earlier 78-day run, missing D1 payout rows are supplied from
+    an independent public finished-race archive after exact event checks.
+    D1 status gaps use that same published final result. NO D1 WRITES.
+    """
     live=imp("scripts/postaug-support-aug-nov-frozen-policy-recheck.py","postaug_query_helper")
     hist=imp("scripts/research-enrich-official-history-odds.py","jra_official_final_reader")
+    pub=imp("scripts/research-20261114-public-results-six-payout-fallback.py","public_six_cash_supplement")
     live.START=START;live.END=END;live.MONTHS=MONTHS
     by_date,month_counts=live.d1_bundles()
-    bundles=[bundle for day,bs in sorted(by_date.items()) for bundle in bs
-             if bundle["race"].get("status")=="finished"]
-    if len(bundles)<500:raise RuntimeError("POSTAUG_D1_PROGRAM_TOO_SMALL")
+    all_bundles=[bundle for day,bs in sorted(by_date.items()) for bundle in bs]
+    if len(all_bundles)<900:raise RuntimeError("POSTAUG_D1_PROGRAM_TOO_SMALL")
     payments=collections.defaultdict(lambda:[{} for _ in TYPES])
     for month in MONTHS:
         nxt=(dt.date.fromisoformat(month+"-01")+dt.timedelta(days=35)).replace(day=1).isoformat()[:7]
@@ -87,58 +93,107 @@ def d1_races():
              "FROM rt_payouts WHERE race_id>=? AND race_id<? "
              "AND bet_type IN ('単勝','ワイド','馬連','馬単','3連複','3連単') "
              "ORDER BY race_id,bet_type,combination")
-        rows=live.paged(sql,[month+"-",nxt+"-"])
-        for row in rows:
-            typ=str(row["betType"]);k=TYPES.index(typ)
+        lines=live.paged(sql,[month+"-",nxt+"-"])
+        for row in lines:
+            typ=str(row["betType"]);m=TYPES.index(typ)
             combo=norm_nums(row["combination"])
             if typ in UNORDERED:combo=tuple(sorted(combo))
             expected=1 if typ=="単勝" else 3 if typ in ("3連複","3連単") else 2
-            if len(combo)!=expected:raise RuntimeError("BAD_PAYOUT_COMBINATION")
+            if len(combo)!=expected:raise RuntimeError("BAD_D1_PAYOUT_COMBINATION")
             yen=int(row["payoutYen"] or 0)
-            if yen<=0 or yen%10:raise RuntimeError("BAD_D1_SETTLED_PAYOUT")
-            r=payments[str(row["raceId"])][k]
-            if combo in r and r[combo]!=yen:
-                raise RuntimeError("CONFLICTING_D1_PAYOUT")
+            if yen<=0 or yen%10:raise RuntimeError("INVALID_D1_SETTLED_PAYOUT")
+            r=payments[str(row["raceId"])][m]
+            if combo in r and r[combo]!=yen:raise RuntimeError("CONFLICTING_D1_PAYOUT")
             r[combo]=yen
-        print("POSTAUG_D1_ALL_MARKET_PAYMENT_MONTH",json.dumps({
-            "month":month,"payoutLines":len(rows)}),flush=True)
-    odds={};failures=collections.Counter()
+        print("POSTAUG_D1_PAYOUTS_MONTH",json.dumps({"month":month,"rows":len(lines)}),flush=True)
+    incomplete=[b for b in all_bundles if
+        b["race"].get("status")!="finished" or
+        any(not x for x in payments[str(b["race"]["raceId"])]])]
+    print("AUG_NOV_PAYOUT_SUPPLEMENT_START",json.dumps({
+       "allRaceRowsInPastDateRange":len(all_bundles),
+       "D1UnfinishedOrSixMarketMissing":len(incomplete),
+       "allPayoutsAreRetrospectiveActualResults":True,
+       "D1WriteOperations":0}),flush=True)
+    fetched={};errors={};source_counts=collections.Counter()
+    def retrieve(b):
+        rid=str(b["race"]["raceId"])
+        try:
+            d,provenance=pub.fetch_public(b["race"])
+            return rid,d,provenance,None
+        except Exception as ex:return rid,None,None,str(ex)[:220]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        for rid,d,provenance,error in pool.map(retrieve,incomplete):
+            if error:errors[rid]=error
+            else:
+                fetched[rid]=d;source_counts["publicFinishedSixMarketPages"]+=1
+    if errors:
+        print("AUG_NOV_PAYOUT_SUPPLEMENT_ERRORS",json.dumps({
+          "failed":len(errors),"examples":dict(list(errors.items())[:15])},ensure_ascii=False),flush=True)
+    if fetched:
+        for rid,d in fetched.items():
+            # Strict overlap reconciliation, never override a conflicting
+            # actual JRA row to make the retrospective ROI look better.
+            payments[rid]=pub.integrate(payments[rid],d,rid)
+    candidates=[];not_confirmed=[];short_field=[];count_finished=0
+    expected=collections.Counter()
+    for bundle in all_bundles:
+        race=bundle["race"];rid=str(race["raceId"])
+        if race.get("status")=="finished":
+            count_finished+=1
+        if race.get("status")!="finished" and rid not in fetched:
+            not_confirmed.append(rid);continue
+        if any(not x for x in payments[rid]):
+            not_confirmed.append(rid);continue
+        venue=venue_code(race.get("venue"))
+        expected[(str(race["raceDate"]),venue)]+=1
+        active=[x for x in bundle["runners"]
+               if x.get("runnerStatus") in (None,"","active")]
+        # The 2015..2026-Apr research dataset never selected a race with
+        # fewer than ten horses; genuinely short fields are ineligible,
+        # not a failure to download quote data.
+        if len({int(h["horseNo"]) for h in active})<10:
+            short_field.append(rid);continue
+        candidates.append(bundle)
+    print("POSTAUG_JRA_ALL_VENUE_DATES_AFTER_CASH_REPAIR",json.dumps({
+      "allRows":len(all_bundles),"D1FinishedRows":count_finished,
+      "completeRetrospectiveSixMarketCash":len(all_bundles)-len(not_confirmed),
+      "publicSupplementedRacePayouts":len(fetched),
+      "stillLackFinishedSettlements":len(not_confirmed),
+      "genuineLessThan10RunnerRaces":len(short_field),
+      "racesEligibleForOfficialOddsFetch":len(candidates),
+      "completedVenueDays":len(expected)},ensure_ascii=False),flush=True)
+    odds={};failures=collections.Counter();failed_rids=collections.defaultdict(list)
     def fetch(bundle):
         rid=str(bundle["race"]["raceId"])
-        try:
-            return rid,official_final_odds(bundle,hist,live),None
-        except Exception as ex:
-            return rid,None,str(ex)[:120]
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        futures=[pool.submit(fetch,b) for b in bundles]
+        try:return rid,official_final_odds(bundle,hist,live),None
+        except Exception as ex:return rid,None,str(ex)[:150]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+        futures=[pool.submit(fetch,b) for b in candidates]
         for n,future in enumerate(concurrent.futures.as_completed(futures),start=1):
             rid,quoted,error=future.result()
             if quoted:odds[rid]=quoted
-            else:failures[error or "NO_JRA_OFFICIAL_WIN_QUOTES"]+=1
-            if n%75==0 or n==len(futures):
-                print("POSTAUG_JRA_FULL_FIELD_FINAL_ODDS_PROGRESS",json.dumps({
+            else:
+                typ=error or "NO_JRA_OFFICIAL_WIN_QUOTES"
+                failures[typ]+=1
+                if len(failed_rids[typ])<25:failed_rids[typ].append(rid)
+            if n%100==0 or n==len(futures):
+                print("POSTAUG_JRA_FINAL_ODDS_BACKFILL_PROGRESS",json.dumps({
                     "completed":n,"total":len(futures),
                     "officialFullFieldFetched":len(odds),
                     "failed":n-len(odds)}),flush=True)
-    expected=collections.Counter()
-    valid=collections.Counter()
-    rows=[];bad=collections.Counter()
-    for bundle in bundles:
-        r=bundle["race"]
-        venue=venue_code(r.get("venue"))
-        group=(str(r["raceDate"]),venue)
-        expected[group]+=1
-        rid=str(r["raceId"])
-        quotes=odds.get(rid)
+    rows=[];valid=collections.Counter();bad=collections.Counter()
+    for bundle in candidates:
+        race=bundle["race"]
+        rid=str(race["raceId"]);quotes=odds.get(rid)
         if not quotes:
-            bad["missing_official_full_field_final_odds"]+=1;continue
+            bad["missing_valid_official_final_odds"]+=1;continue
         horse=[]
         for h in bundle["runners"]:
             if h.get("runnerStatus") not in (None,"","active"):continue
             try:
                 number=int(h["horseNo"])
                 odd=float(quotes.get(number,0))
-                age_m=re.search(r"\d+",str(h.get("sexAge") or ""))
+                age_m=re.search(r"\\d+",str(h.get("sexAge") or ""))
                 age=int(age_m.group()) if age_m else 0
                 weight=float(h.get("assignedWeight") or 0)
             except (ValueError,TypeError,KeyError):
@@ -148,43 +203,57 @@ def d1_races():
             horse.append((number,odd,age,weight))
         horse.sort(key=lambda h:(h[1],h[0]))
         if len(horse)<10 or len({h[0] for h in horse})!=len(horse):
-            bad["less_than_ten_valid_official_quoted_runners"]+=1;continue
-        pays=payments.get(rid)
-        if not pays or any(not x for x in pays):
-            bad["missing_six_actual_jra_payout_types"]+=1;continue
-        number=int(r["raceNo"])
-        if not 1<=number<=12:
-            bad["invalid_race_number"]+=1;continue
-        rows.append({"id":rid,"day":str(r["raceDate"]),
-            "month":str(r["raceDate"])[:4]+str(r["raceDate"])[5:7],
-            "venue":venue,"raceNo":number,"horses":horse,"payout":pays})
-        valid[group]+=1
-    # The 2015-2026 archived source also excludes <10-runner races;
-    # same eligibility rule here, not an artificial demand for 12 races.
-    complete={g for g,n in valid.items() if n>=3}
-    insufficient={str(g):{"finished":expected[g],"eligible":valid[g]}
-                 for g in expected if g not in complete}
-    covered=[r for r in rows if (r["day"],r["venue"]) in complete]
-    if not covered:raise RuntimeError("NO_THREE_RACE_VENUE_DAYS_AFTER_OFFICIAL_ODDS_FETCH")
+            bad["missing_top_ten_after_quote_validation"]+=1;continue
+        venue=venue_code(race.get("venue"))
+        number=int(race["raceNo"])
+        if not (1<=number<=12):raise RuntimeError("INVALID_RACE_NUMBER")
+        day=str(race["raceDate"])
+        rows.append({"id":rid,"day":day,
+            "month":day[:4]+day[5:7],
+            "venue":venue,"raceNo":number,
+            "horses":horse,"payout":payments[rid]})
+        valid[(day,venue)]+=1
+    # As with historical archive, the universe is races with >=10 quoted
+    # runners and all six outcomes. A venue-day needs >=3 such races.
+    all_days=set(expected)
+    qualified={g for g,n in valid.items() if n>=3}
+    missingdays={str(g):{"completeCashAndAtLeast10Horses":expected[g],
+                         "eligibleAfterOfficialOdds":valid[g]}
+                 for g in expected if g not in qualified}
+    if not qualified:raise RuntimeError("NO_2026_JRA_VENUE_DATE_HAS_THREE_ELIGIBLE_RACES")
+    covered=[r for r in rows if (r["day"],r["venue"]) in qualified]
     print("POSTAUG_JRA_FINAL_CASH_PROGRAM_COVERAGE",json.dumps({
-        "dateWindow":[START,END],"finishedD1Races":len(bundles),
-        "officialFullFieldQuotedRaces":len(odds),
-        "historicalEligibilityAndSixPaysRaces":len(rows),
-        "coveredVenueDays":len(complete),"insufficientVenueDays":len(insufficient),
-        "failedOfficialOdds":dict(failures.most_common(8)),
-        "exclusions":dict(bad)},ensure_ascii=False),flush=True)
+       "dateWindow":[START,END],"D1Races":len(all_bundles),
+       "D1Finished":count_finished,"publicSupplementedPayoutRaceCount":len(fetched),
+       "completeSixMarketPayoutRaces":len(all_bundles)-len(not_confirmed),
+       "genuineShortFieldRaces":len(short_field),
+       "officialFullFieldQuotedRaces":len(odds),
+       "historicallyComparableEligibleRaces":len(rows),
+       "coveredVenueDays":len(qualified),
+       "insufficientVenueDays":len(missingdays),
+       "failedOfficialOdds":dict(failures.most_common(8)),
+       "badAfterQuote":dict(bad),"remainingCashOrResultGaps":len(not_confirmed)
+    },ensure_ascii=False),flush=True)
     return covered,{"startInclusive":START,"endExclusive":END,
       "latestRaceDate":max(r["day"] for r in rows),
-      "finishRacesAvailable":len(bundles),
+      "allExistingRaceRows":len(all_bundles),
+      "d1FinishedRaces":count_finished,
+      "D1PreviouslyMissingCashOrFinish":len(incomplete),
+      "additionalPublicSixMarketSettlementRaces":len(fetched),
+      "stillMissingActualResultOrCash":len(not_confirmed),
+      "publicSettlementErrorExamples":dict(list(errors.items())[:15]),
+      "ineligibleUnder10Runners":len(short_field),
       "officialJraFinalOddsRaces":len(odds),
-      "allSixMarketAndOddsRaces":len(rows),
-      "fullyRepresentedVenueDays":len(complete),
-      "excludedPartialVenueDays":len(insufficient),
-      "excludedPartialVenueDayDetails":dict(list(insufficient.items())[:15]),
-      "excludedRacesByCause":dict(bad),
+      "historicallyComparableRaces":len(rows),
+      "fullVenueDaysWithMinimumThreeEligibleRaces":len(qualified),
+      "venueDaysWithInsufficientEligibleRaces":len(missingdays),
+      "venueDayGapDetails":missingdays,
+      "excludedByQuoteIssues":dict(bad),
       "officialQuoteFetchFailures":dict(failures.most_common(8)),
-      "d1MonthCounts":month_counts,
-      "replayIncludesAllFinishedD1Races":bool(not bad and not insufficient)}
+      "quoteFailureRaceExamples":dict(failed_rids),
+      "publicPayoutRacesCrossReconciled":True,
+      "replayIncludesAllFinishedD1Races":not bool(not_confirmed or bad),
+      "D1DataModified":False}
 
 def fixed_forward_signals(base,hist,live_rows):
     # Build history feature matrix on all pre-Aug archive ONLY.
