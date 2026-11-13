@@ -69,7 +69,7 @@ def official_final_odds(bundle, historic, live):
            else historic.parse_win(live.BeautifulSoup(html,"html.parser")))
     active={int(x["horseNo"]) for x in bundle["runners"]
             if x.get("runnerStatus") in (None,"","active")}
-    if len(set(quote).intersection(active))<max(10,len(active)-2):
+    if len(set(quote).intersection(active))<10:
        raise RuntimeError("JRA_FINAL_ODDS_FIELD_INCOMPLETE")
     return {int(k):float(v) for k,v in quote.items() if int(k) in active}
 def reconstruct_official_pc_result_urls(bundles):
