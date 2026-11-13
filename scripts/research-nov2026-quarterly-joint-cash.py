@@ -162,12 +162,17 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
             return (robust+0.1*annual+0.15*qfloor,robust)
         for _ in range(3):
             for key in sorted(current):
-                best=current[key];bestscore=objective(current,chosen)
+                best=current[key];bestscore=objective(current,slate(current))
+                # Re-select the complete historical 5R slate for every trial.
+                # Scoring a changed rule against a stale slate biases the search:
+                # it ignores the races displaced by the candidate rule.
                 for option in policies[key]:
                     current[key]=option
-                    val=objective(current,chosen)
+                    trial_slate=slate(current)
+                    val=objective(current,trial_slate)
                     if val>bestscore:bestscore=val;best=option
                 current[key]=best
+                chosen=slate(current)
             new=slate(current)
             if new==chosen:break
             chosen=new
