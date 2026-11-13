@@ -127,7 +127,7 @@ def main():
       assert all(b==0 for a,b in stakes(True))
       s=[{"paidYen":1500,"stakeYen":100,"races":1,"venueDays":0,"maxRacePayoutYen":1500}]
       # Whole archive check is applied to at least 3 purchased races/day.
-      s=[{"paidYen":6000,"stakeYen":300,"races":3,"venueDays":1,"maxRacePayoutYen":2000}]
+      s=[{"paidYen":6000,"stakeYen":300,"races":3,"venueDays":1,"maxRacePayoutYen":2000,"hitRaces":3}]
       assert qualifies(money(s))
       print("FREE_STAKE_ROI200_ONLY_SELFTEST_OK")
       return
