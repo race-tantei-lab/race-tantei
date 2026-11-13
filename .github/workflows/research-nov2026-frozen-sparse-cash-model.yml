@@ -53,6 +53,7 @@ jobs:
           path: |
             analysis-results/nov2026-frozen-sparse-cash-model.json
             analysis-results/nov2026-frozen-sparse-cash-policy.json
+            analysis-results/nov2026-frozen-sparse-cash-frozen-scores.npz
             analysis-results/nov2026-frozen-sparse-cash-bets.csv
           if-no-files-found: warn
           retention-days: 30
