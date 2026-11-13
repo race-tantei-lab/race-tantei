@@ -1,0 +1,56 @@
+name: Research rolling-year strict three JRA races JPY2000 cash ROI200 adaptive portfolios
+on:
+  push:
+    branches:
+      - research/nov2026-min3r-rolling-regime-cash-1113
+permissions:
+  contents: read
+jobs:
+  learn-actual-cash-posterior-and-select-portfolio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1
+      - name: Verify 2-market multi-ticket 200pct strict cash accounting
+        run: |
+          python -m py_compile scripts/research-nov2026-min3r-rolling-regime-cash.py
+          python scripts/research-nov2026-min3r-rolling-regime-cash.py --self-test
+      - name: Restore chronological runner form and payout cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data
+            .cache
+            analysis-results
+          key: historical-payout-mirror-v1
+          restore-keys: |
+            historical-payout-
+      - name: Load pinned 136 monthly six-market payout records
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in $(seq 2015 2025); do
+              for month in $(seq -w 1 12); do printf '%s%s\n' "$year" "$month"; done
+            done
+            for month in 01 02 03 04; do printf '2026%s\n' "$month"; done
+          } > /tmp/multiticket_months
+          cat /tmp/multiticket_months | xargs -P 8 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 8 --retry-delay 2 --retry-all-errors --max-time 60 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+      - name: Evaluate prespecified chronological cash-only annual switch regimes
+        run: python -u scripts/research-nov2026-min3r-rolling-regime-cash.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: minimum-three-races-rolling-forward-cash200
+          path: |
+            analysis-results/nov2026-min3r-rolling-regime-cash-1113.json
+          if-no-files-found: warn
+          retention-days: 30
