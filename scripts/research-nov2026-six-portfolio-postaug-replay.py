@@ -472,7 +472,7 @@ def main():
     OUT.parent.mkdir(parents=True,exist_ok=True)
     OUT.write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf8")
     print("SIX_ROI200_FULL_REPLAY_SUMMARY",json.dumps({
-        "candidates":len(analyzed),"completeVenueDays":coverage["fullyRepresentedVenueDays"],
+        "candidates":len(analyzed),"completeVenueDays":coverage["fullVenueDaysWithMinimumThreeEligibleRaces"],
         "excludedDays":coverage["excludedPartialVenueDays"],
         "rows":[{"i":x["candidateNo"],
           "historicalHit":x["historicalCash"]["hitRacePct"],
