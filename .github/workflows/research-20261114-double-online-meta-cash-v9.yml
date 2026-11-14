@@ -1,0 +1,59 @@
+name: Research adaptive prediction methodology itself DOUBLE online cash 2017-26 v9
+on:
+  push:
+    branches:
+      - research/20261114-nested-online-cash-meta-v9
+    paths:
+      - scripts/research-20261114-double-online-meta-cash-v9.py
+      - .github/workflows/research-20261114-double-online-meta-cash-v9.yml
+permissions:
+  contents: read
+jobs:
+  generate-cash-ticket-models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install research prerequisites
+        run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1
+      - name: Validate independent cash200 qualification math
+        run: |
+          python -m py_compile scripts/research-20261114-double-online-meta-cash-v9.py
+          python scripts/research-20261114-double-online-meta-cash-v9.py --self-test
+      - name: Restore archive cache if available
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data
+            .cache
+            analysis-results
+          key: historical-payout-mirror-v1
+          restore-keys: historical-payout-
+      - name: Pin and fetch 136 months of six-market actual retrospective cash results
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in $(seq 2015 2025); do
+              for month in $(seq -w 1 12); do printf '%s%s\n' "$year" "$month"; done
+            done
+            for month in 01 02 03 04; do printf '2026%s\n' "$month"; done
+          } > /tmp/cash_model_months
+          cat /tmp/cash_model_months | xargs -P 8 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 8 --retry-delay 2 --retry-all-errors --max-time 60 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+      - name: Generate and independently audit time-causal cash methods; never promote under200
+        run: python -u scripts/research-20261114-double-online-meta-cash-v9.py
+      - name: Upload research-only method generation audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: double-online-cash-meta-v9-2017-2026
+          path: analysis-results/20261114-double-online-cash-meta-v9.json
+          if-no-files-found: warn
+          retention-days: 30
