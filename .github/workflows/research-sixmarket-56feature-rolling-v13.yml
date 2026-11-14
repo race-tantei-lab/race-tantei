@@ -59,6 +59,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: 56feature-500tree-sixmarket-two-ticket-rolling-cash-v13
-          path: /tmp/sixmarket56/sixmarket-rolling-retrained-v13-result.json
+          path: |
+            /tmp/sixmarket56/sixmarket-rolling-retrained-v13-result.json
+            /tmp/sixmarket56/sixmarket-56-trained-cash-ledger-v13.npz
           if-no-files-found: warn
           retention-days: 30
