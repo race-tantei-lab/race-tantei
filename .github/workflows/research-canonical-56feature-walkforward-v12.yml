@@ -1,71 +1,51 @@
-name: Canonical 56-feature LightGBM rolling data preflight (research only)
+name: Verify restored 56-feature archive and recorded cash alignment (research only)
 on:
   push:
     branches: [research/20261114-canonical-56feature-walkforward-v12]
-    paths:
-      - .github/workflows/research-canonical-56feature-walkforward-v12.yml
-      - scripts/research-canonical-56feature-walkforward-v12.py
-  workflow_dispatch:
+    paths: [.github/workflows/research-canonical-56feature-walkforward-v12.yml]
 permissions:
   contents: read
   actions: read
 jobs:
-  research:
+  align:
     runs-on: ubuntu-latest
-    timeout-minutes: 65
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - name: Install pinned canonical model runtime
-        run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0" "numpy==2.2.6" "pandas==2.2.3" "scikit-learn==1.6.1"
-      - name: Inspect existence of frozen historical inputs
-        shell: bash
+          python-version: '3.12'
+      - name: Install light source check dependencies
+        run: python -m pip install --disable-pip-version-check pandas==2.2.3
+      - name: Fetch recovered causal features and official-recorded cash
         run: |
           set -euo pipefail
-          for k in FEATURE:9087261097 DEMAND:9074033903 HISTORY:9056288221 ODDS:9086766461; do
-            label="${k%%:*}"
-            id="${k#*:}"
-            if gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}" --jq '{name,expired,size_in_bytes}' > "/tmp/${label}.json"; then
-              echo "CANONICAL_ASSET_${label} $(cat "/tmp/${label}.json")"
-            else
-              echo "::error::CANONICAL_INPUT_MISSING:${label}:artifact_${id}"
-              exit 14
-            fi
-          done
-      - name: Download frozen historical official/JRA-derived research inputs
+          mkdir -p /tmp/aligned
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14116836351/zip" >/tmp/features.zip
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14115494728/zip" >/tmp/payouts.zip
+          unzip -q /tmp/features.zip -d /tmp/aligned
+          unzip -q /tmp/payouts.zip -d /tmp/aligned
+      - name: Check original demand overlap with recorded JRA WIN cash without modeling
         run: |
-          set -euo pipefail
-          mkdir -p /tmp/canonical/{features,demand,history,odds}
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/9087261097/zip" >/tmp/runner.zip
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/9074033903/zip" >/tmp/demand.zip
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/9056288221/zip" >/tmp/history.zip
-          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/9086766461/zip" >/tmp/odds.zip
-          unzip -q /tmp/runner.zip runner-ml-features.csv -d /tmp/canonical/features
-          unzip -q /tmp/demand.zip demand.jsonl -d /tmp/canonical/demand
-          unzip -q /tmp/history.zip ten-year-history-corpus.jsonl -d /tmp/canonical/history
-          unzip -q /tmp/odds.zip 'corrected-odds/*.jsonl' -d /tmp/canonical/odds
-          echo "CANONICAL_INPUTS_READY"
-      - name: Test chronological 56-feature LightGBM research code
-        run: |
-          python -m py_compile scripts/research-canonical-56feature-walkforward-v12.py
-          python scripts/research-canonical-56feature-walkforward-v12.py --self-test
-      - name: Compare baseline vs freshly trained rolling 56-feature models
-        run: |
-          python -u scripts/research-canonical-56feature-walkforward-v12.py \
-            --features /tmp/canonical/features/runner-ml-features.csv \
-            --demand /tmp/canonical/demand/demand.jsonl \
-            --history /tmp/canonical/history/ten-year-history-corpus.jsonl \
-            --odds-dir /tmp/canonical/odds/corrected-odds \
-            --output /tmp/canonical/research-56feature-rolling-v12.json
-      - name: Upload all research evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: canonical-56feature-walkforward-research-v12
-          path: /tmp/canonical/research-56feature-rolling-v12.json
-          if-no-files-found: warn
-          retention-days: 30
+          python - <<'PY'
+          import collections,json
+          from pathlib import Path
+          import pandas as pd
+          root=Path('/tmp/aligned')
+          d=pd.read_csv(root/'reconstructed-runner-56.csv.gz',
+            compression='gzip',usecols=['raceId','raceDate','originalDemandSelected'],
+            dtype={'raceId':str,'raceDate':str},low_memory=False)
+          d=d[d['originalDemandSelected']==1]
+          payouts={str(json.loads(line)['raceId']) for line in
+             (root/'win-payouts-2024-2026.jsonl').read_text().splitlines() if line.strip()}
+          byyear=collections.defaultdict(set)
+          for race,year in zip(d['raceId'],d['raceDate'].str[:4]):
+              if race in payouts:byyear[year].add(race)
+          result={y:len(byyear[y]) for y in sorted(byyear)}
+          print('RESTORED_CANONICAL_56_WIN_PAYOUT_RACE_JOIN',json.dumps(result),flush=True)
+          if result.get('2025',0)<1000 or result.get('2026',0)<400:
+              raise RuntimeError('INSUFFICIENT_ALIGNED_REAL_YEN_RACES')
+          print('CANONICAL_RECONSTRUCTED_56_CASH_SOURCE_ALIGNMENT_VERIFIED',flush=True)
+          PY
