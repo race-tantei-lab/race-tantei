@@ -77,10 +77,21 @@ def choose(history, target_day, target_venue, candidates, min_bets, min_days):
     scored = []
     for candidate in sorted(candidates):
         strategy, window, lag = candidate if len(candidate) == 3 else (*candidate, 0)
-        eligible = [r for r in history
-                    if r["strategy"] == strategy and r["windowDays"] == window
-                    and int(r.get("lagDays", 0)) == lag
-                    and lag < (target_day - r["day"]).days <= lag + window]
+        if isinstance(history, dict):
+            # Each expert's rows are chronologically indexed. Reading only
+            # the applicable horizon avoids an archive-wide scan per venue-day.
+            eligible = []
+            for r in reversed(history.get((strategy, window, lag), ())):
+                age = (target_day - r["day"]).days
+                if age > lag + window:
+                    break
+                if lag < age:
+                    eligible.append(r)
+        else:
+            eligible = [r for r in history
+                        if r["strategy"] == strategy and r["windowDays"] == window
+                        and int(r.get("lagDays", 0)) == lag
+                        and lag < (target_day - r["day"]).days <= lag + window]
         if len(eligible) < min_bets or len({r["day"] for r in eligible}) < min_days:
             continue
         # Venue-specific evidence is useful, but insufficient samples
@@ -102,9 +113,11 @@ def choose(history, target_day, target_venue, candidates, min_bets, min_days):
 def evaluate(rows, min_bets=MIN_HISTORY_BETS, min_days=MIN_DAYS,
              min_venue_races=MIN_VENUE_RACES, eval_start=None, eval_through=None):
     groups = collections.defaultdict(list)
-    history = []
+    history = collections.defaultdict(list)
+    by_day = collections.defaultdict(list)
     for row in rows:
         groups[(row["day"], row["venue"])].append(row)
+        by_day[row["day"]].append(row)
     selected, skipped, decisions = [], [], []
     ordered_groups = sorted(groups.items())
     for index, ((day, venue), group) in enumerate(ordered_groups):
@@ -132,7 +145,8 @@ def evaluate(rows, min_bets=MIN_HISTORY_BETS, min_days=MIN_DAYS,
                               "races": len(bets), **stats(bets)})
         # Results from every venue on this date become visible tomorrow only.
         if index + 1 == len(ordered_groups) or ordered_groups[index + 1][0][0] != day:
-            history.extend(r for r in rows if r["day"] == day)
+            for r in by_day[day]:
+                history[(r["strategy"], r["windowDays"], int(r.get("lagDays", 0)))].append(r)
     report = {"researchOnly": True, "productionModified": False,
               "evaluationStart": str(eval_start) if eval_start else None,
               "evaluationThrough": str(eval_through) if eval_through else None,
