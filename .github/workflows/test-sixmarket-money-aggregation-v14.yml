@@ -1,0 +1,51 @@
+name: Regression-test dynamic money method aggregations without full model refits
+on:
+  push:
+    branches: [research/20261114-learned-cash-methodology-v14]
+    paths: [.github/workflows/test-sixmarket-money-aggregation-v14.yml]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install numeric money and model module dependencies
+        run: python -m pip install --disable-pip-version-check "numpy==2.2.6" "pandas==2.2.3" "lightgbm==4.6.0" "scikit-learn==1.6.1"
+      - name: Test 56-feature six-market model cash and adaptive market-family learning
+        run: |
+          python - <<'PY'
+          import importlib.util,sys
+          import numpy as np,pandas as pd
+          def load(path,name):
+              s=importlib.util.spec_from_file_location(name,path)
+              m=importlib.util.module_from_spec(s)
+              sys.modules[name]=m;s.loader.exec_module(m)
+              return m
+          v13=load('scripts/research-sixmarket-56feature-rolling-v13.py','numeric_v13_test')
+          v14=load('scripts/research-learned-forecast-methodology-cash-v14.py','numeric_v14_test')
+          a=v13.Method(3,0,0,'単勝','ワイド',1000,1000,3,'high')
+          b=v13.Method(6,0,0,'馬連','馬単',1000,1000,3,'high')
+          months=[pd.Period('2025-01',freq='M'),pd.Period('2025-02',freq='M')]
+          l=v13.MoneyLedger([a,b],months)
+          l.ledger[0,0,0,:]=np.array([100000,10000,15,50,10,1000])
+          l.ledger[1,0,0,:]=np.array([10000,10000,5,50,10,1000])
+          l.ledger[0,1,0,:]=np.array([100000,10000,15,50,10,1000])
+          l.ledger[1,1,0,:]=np.array([10000,10000,5,50,10,1000])
+          l.pref()
+          policy=v14.LearnedMethod(3,'venue','robust_profit',20,0.5,100)
+          group,nfamilies=v14.family_index(l.methods)
+          scores=v14.score_methods(l,1,0,policy,group,nfamilies)
+          assert len(scores)==2 and scores[0]>scores[1],scores
+          picks,usage=v14.online_prediction_method(l,policy,group,nfamilies,{})
+          assert picks[0,0]==-1 and picks[1,0]==0,picks
+          report=v13.summarise(picks,l,'2025-01','2025-03',1)
+          assert report['venueDays']==10 and report['qualified'],report
+          assert len(v14.generate())==576
+          assert len(v13.methods())==10080
+          print('COMPLETE_ADAPTIVE_METHOD_CASH_REPORTING_SYNTHETIC_REGRESSION_OK',flush=True)
+          PY
