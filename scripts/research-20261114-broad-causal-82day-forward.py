@@ -50,7 +50,7 @@ def main():
          forward_cash=np.asarray(data["payout"],dtype=np.int32)
          forward_features={k:np.asarray(data[k],dtype=np.uint8) for k in broad.FEATURES}
     finally:
-      core.CACHE,saved_cache=saved_cache,core.CACHE
+      core.CACHE=saved_cache
       core.RACE_CACHE=saved_racecache
     if len(fwd)!=forward_cash.shape[0] or forward_cash.shape[1]!=1030:
        raise RuntimeError("FORWARD_PAYOUT_ALIGNMENT_FAILED")
