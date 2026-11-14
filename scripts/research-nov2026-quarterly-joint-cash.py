@@ -134,15 +134,46 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
             # Trim sparse quarters; all figures use only past settled cash.
             qfloor=float(np.percentile(quarterly,25)) if quarterly else min(annual)
             return robust+0.1*min(annual)+0.15*qfloor
+        # Screen the full joint-pair universe using exact vectorized cash settlements.
+        # The expensive year/quarter stability objective is then evaluated on a
+        # diversified shortlist, not on tens of thousands of Python loops per regime.
+        # No test-period cash is accessed. This is candidate screening, not a model.
+        option_array=np.asarray(options,dtype=np.int64)
+        def rank_options(source,limit):
+            source=np.asarray(source,dtype=np.int64)
+            if not len(source):return []
+            robust_scores=np.empty(len(options),dtype=np.float64)
+            annual_floor=np.empty(len(options),dtype=np.float64)
+            source_year=year[source]
+            year_masks=[source_year==yy for yy in np.unique(source_year)]
+            for start in range(0,len(options),128):
+                stop=min(start+128,len(options))
+                batch=option_array[start:stop]
+                a,b,sa,sb=(batch[:,k] for k in range(4))
+                paid=(money[source[:,None],a[None,:]]*sa[None,:]+
+                      money[source[:,None],b[None,:]]*sb[None,:])//100
+                stakes=(sa+sb).astype(np.float64)
+                robust_scores[start:stop]=(paid.sum(axis=0)-paid.max(axis=0))/(len(source)*stakes)
+                floors=[]
+                for mask in year_masks:
+                    annual_paid=paid[mask]
+                    floors.append((annual_paid.sum(axis=0)-annual_paid.max(axis=0))/(mask.sum()*stakes))
+                annual_floor[start:stop]=np.min(np.stack(floors),axis=0)
+            # Preserve both high-robust and year-balanced complementary tickets.
+            # Stable tie ordering makes runs reproducible.
+            width=max(128,limit*16)
+            ids=set(np.argsort(-robust_scores,kind='stable')[:width].tolist())
+            ids.update(np.argsort(-annual_floor,kind='stable')[:width].tolist())
+            ids.update(np.argsort(-(robust_scores+0.1*annual_floor),kind='stable')[:width].tolist())
+            return sorted((options[k] for k in ids),key=lambda x:score_option(source,x),reverse=True)[:limit]
         # Global pool is a fallback only, never an independently adopted model.
-        global_rank=sorted(options,key=lambda x:score_option(train,x),reverse=True)[:16]
+        global_rank=rank_options(train,16)
         policies={}
         for key,ix in groups.items():
             ix=np.asarray(ix,dtype=int)
             source=ix if len(ix)>=60 else train[venue[train]==key[1]]
             if len(source)<60:source=train
-            ranked=sorted(options,key=lambda x:score_option(source,x),reverse=True)
-            policies[key]=ranked[:8]
+            policies[key]=rank_options(source,8)
         # Jointly optimize assignments on a complete historical 5R-per-venue-day slate.
         train_days=defaultdict(list)
         for i in train:train_days[(day[i],venue[i])].append(int(i))
