@@ -33,7 +33,7 @@ def main():
     approved_historical=bool(candidate_list)
     module,races,payout,cat,tpl,market=core.load_historical()
     _,_,states,months=core.predict_past_months(races,payout,cat,tpl,market)
-    if "2026-08" in months or any(str(k)>="2026-08" for k in months):
+    if "202608" in months or any(str(k)>="202608" for k in months):
         raise RuntimeError("POST_AUGUST_OUTCOME_ENTERED_MODEL")
     # JRA odds and settlements are retrieved solely to calculate the
     # OTHER period's decisions & realized cash. NOT training or tuning.
