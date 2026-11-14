@@ -324,7 +324,7 @@ def summarise(selected,ledger,start,end,min_days):
                 raise RuntimeError("VENUE_DAY_THREE_RACE_GATE_BROKEN")
             paid+=int(row[0]);stake+=int(row[1]);hit+=int(row[2])
             races+=int(row[3]);days+=int(row[4]);maxp=max(maxp,int(row[5]))
-            yy=month[:4];ys=by_year[yy]
+            yy=str(month)[:4];ys=by_year[yy]
             for j in range(5):ys[j]+=int(row[j])
             ys[5]=max(ys[5],int(row[5]))
     out={
@@ -450,6 +450,7 @@ def evaluate(ledger,diagnostics):
 def selftest():
     from types import SimpleNamespace
     assert len(methods())==7*2*4*15*3*2*2
+    assert str(pd.Period("2025-01",freq="M"))[:4]=="2025"
     assert Method(3,0,3,"単勝","ワイド",1000,1000,3,"high") in set(methods())
     assert len(meta_variants())==3*2*3*2
     dummy=SimpleNamespace()
@@ -510,6 +511,16 @@ def main():
             "excludedVenueDaysDueToIncompleteCash":len(miss),
             "noFutureOutcomeInPrediction":True},ensure_ascii=False),flush=True)
     led.pref()
+    # Durable numerical cash ledger BEFORE methodology evaluation, so
+    # a downstream aggregate/reporting error never destroys 280 trained
+    # monthly models and forces re-learning every historical split.
+    checkpoint=Path(a.output).with_name("sixmarket-56-trained-cash-ledger-v13.npz")
+    checkpoint.parent.mkdir(parents=True,exist_ok=True)
+    np.savez_compressed(checkpoint, ledger=led.ledger,
+        months=np.asarray([str(m) for m in led.months],dtype="U7"))
+    print("SIXMARKET_56_MONTHLY_CASH_LEDGER_SAVED",json.dumps({
+        "path":str(checkpoint),"trainedFits":led.prediction_fits,
+        "cashStrategies":len(led.methods)}),flush=True)
     result=evaluate(led,{"covered":covered,"excluded":excluded})
     result["freshModelFits"]=led.prediction_fits
     result["historyInputRows"]=len(frame)
