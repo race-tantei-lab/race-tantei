@@ -314,7 +314,7 @@ def summarise(selected,ledger,start,end,min_days):
     paid=stake=hit=races=days=maxp=0
     by_year=collections.defaultdict(lambda:[0]*6)
     for t,month in enumerate(ledger.months):
-        if not (start<=month<end):continue
+        if not (start<=str(month)<end):continue
         for v in range(NV):
             k=int(selected[t,v])
             if k<0:continue
@@ -457,7 +457,7 @@ def selftest():
     combos,confidence=candidate_tickets([.5,.3,.15,.05],[1,4,7,9],c)
     assert len(combos)==4 and len(combos[0])==6
     assert combos[0][0]=="1"
-    assert len(set(combos[0]))==6
+    assert combos[0][1]=="1-4" and combos[0][2]=="1-4"
     assert confidence.shape==(4,6)
     # Money must be counted at RACE level, dropping the largest paid
     # RACE while keeping its original 2000-yen stake.
@@ -498,7 +498,7 @@ def main():
             if model is None:raise RuntimeError(f"INSUFFICIENT_HISTORICAL_TRAINING:{month}:{h}:{e}")
             dayidx,cash,probs,miss=target_month_predictions(
                 frame,x,rix,model,pl,calendar,settled)
-            led.append(str(month),h,e,dayidx,cash,probs,miss)
+            led.append(month,h,e,dayidx,cash,probs,miss)
             del model
             led.prediction_fits+=1
         covered[str(month)]=len(dayidx)
