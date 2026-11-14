@@ -146,7 +146,7 @@ def month_scores(streams,features,market,tpl_id,template):
     for j,mode in enumerate(MODES):
       if mode.startswith("stable_"):
         matrix[:,j]=one[1][mode.removeprefix("stable_")]
-      elif mode.startswith("recency_"):
+      elif mode.startswith("recency_") and mode!="recency_template":
         matrix[:,j]=two[1][mode.removeprefix("recency_")]
       elif mode.startswith("ensemble_"):
         v=mode.removeprefix("ensemble_")
