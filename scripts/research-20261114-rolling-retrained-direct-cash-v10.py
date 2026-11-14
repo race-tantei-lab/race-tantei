@@ -144,6 +144,9 @@ class RefitCash:
                                dtype=np.int32) for m in self.months}
         self.codebooks={}
         self.prefix={}
+        self.bins={k:int(v) for k,v in bins.items()}
+        self.active_month=None
+        self.active_month_codes={}
         self.group={}
         for month,ix in self.idx.items():
             days=collections.defaultdict(list)
@@ -174,10 +177,8 @@ class RefitCash:
         return (self.market[None,:]*self.codebooks[schema]+code).ravel()
 
     def _load_train_stats(self):
-        self.bins={f:int(np.max(v))+1 for f,v in self.features.items()}
-        # The exact field cardinalities observed in this immutable archive
-        # are fitted once without looking at any cash payout.
-        # The future data only determines array sizes, not learned weights.
+        # Feature cardinalities come from the fixed historical schema, not
+        # any future race feature or future settlement observations.
         for schema in SCHEMAS:
             ncat=1
             for field in schema:
@@ -212,12 +213,18 @@ class RefitCash:
         center=np.full((n,p),.75,dtype=np.float32)
         linear=np.zeros_like(center)
         upper=np.full_like(center,-1e6)
+        if self.active_month != month:
+            # Training windows differ, but all predictions for a target
+            # month share EXACTLY the same pre-result categorical features.
+            self.active_month_codes={
+                schema:self.codes(ix,schema).reshape(n,p) for schema in SCHEMAS}
+            self.active_month=month
         for schema in SCHEMAS:
             a,b,c=self.prefix[schema]
             count=a[stop]-a[start]
             payout=b[stop]-b[start]
             hit=c[stop]-c[start]
-            code=self.codes(ix,schema).reshape(n,p)
+            code=self.active_month_codes[schema]
             nobs=count[code]
             ratio=np.clip(payout[code]/(np.maximum(nobs,1)*100.),0.,100.)
             # Expected cash in yen relative to the 100-yen investment.
