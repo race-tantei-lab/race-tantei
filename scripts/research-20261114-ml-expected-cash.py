@@ -135,7 +135,9 @@ def historical_crossfit():
  years=np.asarray([int(r["month"][:4]) for r in races],np.int16)
  if years.min()!=2015 or years.max()!=2026:raise RuntimeError("YEARLY_ML_CASH_ARCHIVE_INCOMPLETE")
  rr,tt,importance=sample_ticket_cash(payout,years)
- X=feat_rows({**feat,**{k:np.zeros_like(payout,dtype=np.uint8) for k in FEATURES if k not in feat and k!="market"}},market,rr,tt)
+ with np.load(core.CACHE,allow_pickle=False) as z:
+    feat.update({k:np.asarray(z[k],np.uint8) for k in FEATURES if k not in feat and k!="market"})
+ X=feat_rows(feat,market,rr,tt)
  yy=payout[rr,tt].astype(np.float64)
  yyears=years[rr]
  output_idx=np.empty((n,len(MODE_NAMES),6),np.int16)
