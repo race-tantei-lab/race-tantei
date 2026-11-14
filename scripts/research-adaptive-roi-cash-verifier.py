@@ -68,7 +68,10 @@ def validate_candidate(row, *, settled):
         if k not in row:
             raise ValueError(f"MISSING:{k}")
     day = dt.date.fromisoformat(row["raceDate"])
-    if dt.date.fromisoformat(row["modelTrainedThrough"]) >= day:
+    lag = int(row.get("lagDays", 0))
+    if lag not in (0, 30, 90, 180, 365, 730):
+        raise ValueError("INVALID_LAG_WINDOW")
+    if dt.date.fromisoformat(row["modelTrainedThrough"]) >= day - dt.timedelta(days=lag):
         raise ValueError("POST_RACE_MODEL_TRAINING")
     if int(row["windowDays"]) not in CORE.WINDOWS:
         raise ValueError("INVALID_ROLLING_WINDOW")
@@ -139,7 +142,7 @@ def reconcile(historical_bets, official_payouts):
     for row in historical_bets:
         stake = validate_candidate(row, settled=True)
         rid = str(row["raceId"])
-        key = (rid, row["strategy"], int(row["windowDays"]))
+        key = (rid, row["strategy"], int(row["windowDays"]), int(row.get("lagDays", 0)))
         if key in seen:
             raise ValueError("DUPLICATE_CANDIDATE")
         seen.add(key)
@@ -164,6 +167,7 @@ def reconcile(historical_bets, official_payouts):
         reconciled.append({
             "raceDate": row["raceDate"], "raceId": rid, "venue": row["venue"],
             "strategy": row["strategy"], "windowDays": int(row["windowDays"]),
+            "lagDays": int(row.get("lagDays", 0)),
             "startTimeJst": row["startTimeJst"], "lockedAt": row["lockedAt"],
             "stakeYen": stake, "returnYen": settled_return,
             "hitRace": bool(winning_returns),
@@ -180,7 +184,8 @@ def live_select(historical, live_candidates, min_bets, min_days):
     distinct = set()
     for row in live_candidates:
         validate_candidate(row, settled=False)
-        key = (row["raceId"], row["strategy"], int(row["windowDays"]))
+        key = (row["raceId"], row["strategy"], int(row["windowDays"]),
+               int(row.get("lagDays", 0)))
         if key in distinct:
             raise ValueError("DUPLICATE_LIVE_CANDIDATE")
         distinct.add(key)
@@ -195,7 +200,8 @@ def live_select(historical, live_candidates, min_bets, min_days):
         races = {r["raceId"] for r in group}
         by_strategy = collections.defaultdict(list)
         for row in group:
-            by_strategy[(row["strategy"], int(row["windowDays"]))].append(row)
+            by_strategy[(row["strategy"], int(row["windowDays"]),
+                         int(row.get("lagDays", 0)))].append(row)
         complete = {key for key, rr in by_strategy.items()
                     if {r["raceId"] for r in rr} == races and len(rr) == len(races)}
         picked = CORE.choose(history, day, venue, complete, min_bets, min_days)
@@ -205,6 +211,7 @@ def live_select(historical, live_candidates, min_bets, min_days):
             continue
         outputs.append({"date": date, "venue": venue, "status": "RESEARCH_SELECTION_ONLY",
                         "strategy": picked[0], "windowDays": picked[1],
+                        "lagDays": picked[2],
                         "races": len(races), "bets": by_strategy[picked]})
     return outputs
 
