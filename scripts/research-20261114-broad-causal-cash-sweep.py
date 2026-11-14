@@ -200,6 +200,19 @@ def monthly_frozen_predictions(races,pay,features,market,slots):
           "modelTypes":len(MODES),"all1030Tickets":True,
           "usedCurrentMonthPayoutForForecast":False}),flush=True)
     return best,scores,streams,first_year
+_group_memory={}
+def get_venue_day_groups(races):
+  key=id(races)
+  if key not in _group_memory:
+    codes={};v=np.empty(len(races),np.int32)
+    for i,r in enumerate(races):
+      k=(r["day"],int(r["venue"]))
+      if k not in codes:codes[k]=len(codes)
+      v[i]=codes[k]
+    counts=np.bincount(v)
+    if counts.min()<3:raise RuntimeError("INELIGIBLE_VENUE_DAY_LESS_THAN_THREE_RACES")
+    _group_memory[key]=(v,len(codes))
+  return _group_memory[key]
 def policy_arrays(races,paid,chosen,forecast,market_keys,plan,slate,ranking,select_mode,ledger=False):
     # chosen has shape [N,6], score [N,6], returns one best ticket per market.
     n=len(races)
@@ -244,20 +257,19 @@ def policy_arrays(races,paid,chosen,forecast,market_keys,plan,slate,ranking,sele
     elif ranking=="top_margin":
        signal=s1-1.
     else:raise RuntimeError("UNKNOWN_SELECTION_RANKING")
-    groups=collections.defaultdict(list)
-    for i,r in enumerate(races):groups[(r["day"],int(r["venue"]))].append(i)
-    if any(len(x)<3 for x in groups.values()):
-       raise RuntimeError("GIVEN_VENUE_DAY_HAS_LESS_THAN_THREE_ELIGIBLE_RACES")
-    selected=[]
-    for idx in groups.values():
-      ii=np.asarray(idx,dtype=np.int32)
-      order=ii[np.lexsort((ii,-signal[ii]))]
-      take=order[:min(slate,len(order))]
-      if select_mode=="top_score_plus_positive":
-        take=np.concatenate((order[:3],order[3:slate][signal[order[3:slate]]>0]))
-      selected.extend(int(k) for k in take)
-    ix=np.asarray(selected,np.int32)
-    if len(ix)<3*len(groups):raise RuntimeError("THREE_RACE_MIN_NOT_ENFORCED")
+    groupid,groups=get_venue_day_groups(races)
+    # Venue-day grouped sort is entirely vectorized: thousands of strategies,
+    # no 3000-day Python loop for each combination.
+    ordered=np.lexsort((np.arange(n,dtype=np.int32),-signal,groupid))
+    sorted_groups=groupid[ordered]
+    beginnings=np.r_[True,sorted_groups[1:]!=sorted_groups[:-1]]
+    beginindex=np.maximum.accumulate(np.where(beginnings,np.arange(n),0))
+    place=np.arange(n)-beginindex
+    take=place<slate
+    if select_mode=="top_score_plus_positive":
+      take=take & ((place<3)|(signal[ordered]>0))
+    ix=ordered[take]
+    if len(ix)<3*groups:raise RuntimeError("THREE_RACE_MIN_NOT_ENFORCED")
     cost=100*(u1[ix]+u2[ix])
     ret=paid[ix,t1[ix]]*u1[ix]+paid[ix,t2[ix]]*u2[ix]
     money=int(ret.sum(dtype=np.int64))
@@ -266,7 +278,7 @@ def policy_arrays(races,paid,chosen,forecast,market_keys,plan,slate,ranking,sele
     hits=int(np.count_nonzero(ret))
     nr=len(ix)
     positives=int(np.count_nonzero(ret>cost))
-    result={"purchaseRaces":nr,"venueDays":len(groups),
+    result={"purchaseRaces":nr,"venueDays":groups,
        "stakeYen":spend,"paidYen":money,
        "profitYen":money-spend,
        "cashRoiPct":round(100*money/spend,4),
