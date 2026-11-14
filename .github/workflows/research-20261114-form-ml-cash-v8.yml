@@ -1,0 +1,60 @@
+name: Research 2022-24 horse FORM ML actual CASH 3-year validation v8
+on:
+  push:
+    branches:
+      - research/20261114-form-ml-3year-forward-v8
+    paths:
+      - scripts/research-20261114-form-ml-cash-v8.py
+      - .github/workflows/research-20261114-form-ml-cash-v8.yml
+permissions:
+  contents: read
+jobs:
+  independent-six-market-cash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --disable-pip-version-check numpy==2.2.6 lightgbm==4.6.0 scikit-learn==1.6.1
+      - name: Compile and verify strict 200% cash-only gate
+        run: |
+          python -m py_compile scripts/research-20261114-form-ml-cash-v8.py
+          python -u scripts/research-20261114-form-ml-cash-v8.py --self-test
+      - name: Restore pre-race form feature caches, if present
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data
+            .cache
+            analysis-results
+          key: historical-payout-mirror-v1
+          restore-keys: |
+            historical-payout-
+      - name: Retrieve immutable 136-month 2015-Apr2026 JRA payout mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p external-jra-cash-decade
+          REF=f552ca8628646f39b05ffdbdc3ab8734939ffd66
+          URL="https://raw.githubusercontent.com/Kenseimk/keiba-agent/$REF/data"
+          {
+            for year in $(seq 2015 2025); do
+              for month in $(seq -w 1 12); do printf '%s%s\n' "$year" "$month"; done
+            done
+            for month in 01 02 03 04; do printf '2026%s\n' "$month"; done
+          } > /tmp/form_months
+          cat /tmp/form_months | xargs -P 8 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 8 --retry-delay 2 --retry-all-errors --max-time 60 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
+          test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
+      - name: Learn monetary horse-form signals and maximize validated seasonal portfolio
+        run: python -u scripts/research-20261114-form-ml-cash-v8.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: horse-form-3year-2022-24-money-model-v8
+          path: |
+            analysis-results/20261114-form-ml-cash-3year-v8.json
+            analysis-results/20261114-form-ml-cash-3year-v8-forward-ledger.csv
+          if-no-files-found: warn
+          retention-days: 30
