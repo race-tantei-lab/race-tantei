@@ -84,7 +84,7 @@ def source_v13():
     return mod
 
 
-def all_cash_prediction_methods(v13,features,payouts):
+def all_cash_prediction_methods(v13,features,payouts,checkpoint):
     import json
     import itertools
     import gc
@@ -122,6 +122,13 @@ def all_cash_prediction_methods(v13,features,payouts):
         del idx
         gc.collect()
     ledger.pref()
+    checkpoint.parent.mkdir(parents=True,exist_ok=True)
+    np.savez_compressed(checkpoint,ledger=ledger.ledger,
+        months=np.asarray([str(m) for m in ledger.months],dtype="U7"))
+    print("LEARNED_MONEY_RETRAINED_CASH_LEDGER_SAVED",json.dumps({
+        "checkpoint":str(checkpoint),"months":len(ledger.months),
+        "cashMethods":len(ledger.methods),
+        "freshModelFits":ledger.prediction_fits}),flush=True)
     return ledger,len(frame),len(settlements)
 
 
@@ -273,7 +280,8 @@ def main():
         parser.error("need features/payouts/output")
     start=time.monotonic()
     v13=source_v13()
-    ledger,nr,npay=all_cash_prediction_methods(v13,a.features,a.payouts)
+    ledger,nr,npay=all_cash_prediction_methods(v13,a.features,a.payouts,
+        Path(a.output).with_name("learned-methodology-cash-ledger-v14.npz"))
     report=discover(ledger,v13)
     report["historicalInputRunnerRows"]=nr
     report["completeRecordedPayoutRaceIds"]=npay

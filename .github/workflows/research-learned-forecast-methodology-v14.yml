@@ -59,6 +59,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: learned-money-model-of-prediction-methods-v14
-          path: /tmp/sixmarket56/learned-prediction-methodology-v14-result.json
+          path: |
+            /tmp/sixmarket56/learned-prediction-methodology-v14-result.json
+            /tmp/sixmarket56/learned-methodology-cash-ledger-v14.npz
           if-no-files-found: warn
           retention-days: 30
