@@ -1,0 +1,29 @@
+name: Audit original 431.65pct frozen model cash in-sample vs walk-forward
+on:
+  push:
+    branches: [research/20261114-canonical-56feature-walkforward-v12]
+    paths:
+      - scripts/audit-original-56-frozen-cash-v12.py
+      - .github/workflows/audit-original-56-frozen-cash-v12.yml
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reconcile every one of 14,410 original ticket decisions against preserved paid yen
+        run: |
+          python -m py_compile scripts/audit-original-56-frozen-cash-v12.py
+          python scripts/audit-original-56-frozen-cash-v12.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-43165-frozen-cash-in-sample-audit-v12
+          path: analysis-results/20261114-original-frozen-model-cash-reconciliation.json
+          if-no-files-found: warn
+          retention-days: 14
