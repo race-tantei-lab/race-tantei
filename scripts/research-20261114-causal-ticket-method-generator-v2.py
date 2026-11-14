@@ -8,7 +8,7 @@ two-market, two-ticket cash actions per race. Historical CASH payoff of each
 action is learned from previous months only, by dynamically learned horizon,
 venue/context pooling, prize robustness, shrinkage and original forecast blend.
 
-2015-2018 warmup -> 2019-2024 method generation/search. Only methods
+2015-2018 warmup -> 2019-2024 method generation/search. Causal cash calibration may end 0/6/12/24 months before each forecast; original base ticket experts remain prior-month trained. Only methods
 reaching 200% money ROI, 200% after deleting largest paid race, >=20%
 cash-hit races and >=3 actual staked races per venue-day enter holdout. Hyper-
 parameters are frozen before 2025-2026 independent month-by-month replay.
@@ -36,13 +36,14 @@ PAIRS_LEFT=np.array([a for a,b in PAIRS],dtype=np.int8)
 PAIRS_RIGHT=np.array([b for a,b in PAIRS],dtype=np.int8)
 N_EXPERTS=15
 TICKETS=N_EXPERTS*len(PAIRS)
-COST=200
+COST=2000
 HORIZONS=(3,6,12,24,36,60,96)
 SCOPES=("global","venue","venue_field")
-CAPS=(1000,5000,20000)
-SHRINKS=(50,250,1000)
+CAPS=(10000,50000,200000)
+SHRINKS=(50,500)
 BLENDS=(0.0,0.25,0.5,0.75)
 SLATES=(3,5)
+LAGS=(0,6,12,24)
 VALID_FROM="201901"
 VALID_THROUGH="202412"
 HOLD_FROM="202501"
@@ -56,6 +57,7 @@ class Method:
     shrink: int
     blend: float
     slate: int
+    lag_months: int
 
     def serialize(self):
         return dataclasses.asdict(self)
@@ -72,9 +74,9 @@ def imported(path,name):
 
 
 def generate_methods():
-    return [Method(h,s,c,k,b,slate)
-            for h,s,c,k,b,slate in itertools.product(
-                HORIZONS, SCOPES, CAPS, SHRINKS, BLENDS, SLATES)]
+    return [Method(h,s,c,k,b,slate,lag)
+            for h,s,c,k,b,slate,lag in itertools.product(
+                HORIZONS, SCOPES, CAPS, SHRINKS, BLENDS, SLATES, LAGS)]
 
 
 def exact_money(paid,hit,stake,count,largest,venue_days):
@@ -121,7 +123,8 @@ def templates_from_frozen_predictions(payout,picked,forecast):
     if np.any(paired<0):raise RuntimeError("NEGATIVE_CASH_PAYOUT")
     # The 225 action generator is a genuine NEW ticket composer: each expert
     # dynamically selects two DIFFERENT JRA markets in every selected race.
-    return paired.astype(np.int32),np.clip(paired_forecast,0.,20.).astype(np.float32)
+    # ¥1,000 per leg, ¥2,000 per race. Source payout is ¥ per ¥100.
+    return (paired.astype(np.int32)*10),np.clip(paired_forecast,0.,20.).astype(np.float32)
 
 
 class Index:
@@ -181,10 +184,11 @@ class Index:
         indices=self.indices[month]
         group=self.groups[method.scope][indices]
         totals,counts,wins=self.build_history(method.cap,method.scope)
-        prior=max(0,t-method.horizon)
-        n=counts[t]-counts[prior]
-        cash=totals[t]-totals[prior]
-        hits=wins[t]-wins[prior]
+        through=max(0,t-method.lag_months)
+        prior=max(0,through-method.horizon)
+        n=counts[through]-counts[prior]
+        cash=totals[through]-totals[prior]
+        hits=wins[through]-wins[prior]
         rate=cash/(np.maximum(1,n)[:,None]*COST)
         # Cash objective, no win-probability objective. Hit observations
         # only reduce unstable jackpot-based rate estimates.
@@ -273,7 +277,7 @@ def search(index,methods):
 
 
 def selftest():
-    assert len(PAIRS)==15 and len(generate_methods())==len(HORIZONS)*len(SCOPES)*len(CAPS)*len(SHRINKS)*len(BLENDS)*len(SLATES)
+    assert len(PAIRS)==15 and len(generate_methods())==len(HORIZONS)*len(SCOPES)*len(CAPS)*len(SHRINKS)*len(BLENDS)*len(SLATES)*len(LAGS)
     assert len(generate_methods())>=1500
     fake=np.zeros((4,1030),np.int32)
     idx=np.zeros((4,N_EXPERTS,6),np.int16)
@@ -281,12 +285,12 @@ def selftest():
     fake[2,0]=5200
     amounts,forecasts=templates_from_frozen_predictions(fake,idx,score)
     assert amounts.shape==(4,TICKETS)
-    assert amounts[2].sum()==10400*TICKETS
-    assert exact_money(400,1,200,1,400,1)["qualified"] is False
-    assert exact_money(1200,3,600,3,100,1)["qualified"] is False
-    assert exact_money(1600,3,600,3,100,1)["qualified"] is True
+    assert amounts[2].sum()==104000*TICKETS
+    assert exact_money(4000,1,2000,1,4000,1)["qualified"] is False
+    assert exact_money(12000,3,6000,3,1000,1)["qualified"] is False
+    assert exact_money(16000,3,6000,3,1000,1)["qualified"] is True
     assert "models" in {"models":[]}
-    print("CAUSAL_METHOD_GENERATOR_1512_PLUS_CASH_GATE_SELFTEST_OK",flush=True)
+    print("CAUSAL_METHOD_GENERATOR_4032_MULTI_LAG_CASH_GATE_SELFTEST_OK",flush=True)
 
 
 def main():
