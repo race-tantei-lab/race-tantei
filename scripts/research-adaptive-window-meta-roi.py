@@ -12,7 +12,6 @@ import argparse
 import collections
 import datetime as dt
 import json
-import math
 from pathlib import Path
 
 JST = dt.timezone(dt.timedelta(hours=9))
@@ -130,9 +129,15 @@ def evaluate(rows, min_bets=MIN_HISTORY_BETS, min_days=MIN_DAYS,
               "skippedVenueDays": skipped,
               "years": {str(year): stats([r for r in selected if r["day"].year == year])
                         for year in sorted({r["day"].year for r in selected})}}
-    report["meetsRoi200"] = (report["overall"]["roiPct"] is not None
-                              and report["overall"]["roiPct"] >= 200
-                              and report["overall"]["roiWithoutLargestPct"] >= 200)
+    # An incomplete or under-covered test must never be called a validated model.
+    # Hit rate is counted on paid tickets, not on horse-finishing predictions.
+    overall = report["overall"]
+    report["meetsRoi200"] = (overall["roiPct"] is not None
+                              and overall["roiPct"] >= 200
+                              and overall["roiWithoutLargestPct"] >= 200
+                              and overall["hitPct"] >= 20
+                              and bool(decisions)
+                              and not skipped)
     return report
 
 
