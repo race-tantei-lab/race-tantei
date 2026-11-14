@@ -43,7 +43,7 @@ jobs:
           } > /tmp/cash_months
           cat /tmp/cash_months | xargs -P 8 -I {} bash -c 'set -euo pipefail; curl -fsSL --retry 8 --retry-delay 2 --retry-all-errors --max-time 60 -o "external-jra-cash-decade/raceresults_{}.csv" "'"$URL"'/raceresults_{}.csv"; test -s "external-jra-cash-decade/raceresults_{}.csv"'
           test "$(find external-jra-cash-decade -name 'raceresults_*.csv' | wc -l)" -eq 136
-      - name: Read only JRA full-field official final win odds and six-market cash: 2026 Aug-Nov
+      - name: 'Read-only JRA full-field official final odds and six-market cash for Aug-Nov'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
