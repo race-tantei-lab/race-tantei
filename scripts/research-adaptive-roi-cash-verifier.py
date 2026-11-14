@@ -150,15 +150,25 @@ def reconcile(historical_bets, official_payouts):
                 or official["venue"] != row["venue"]):
             raise ValueError("PAYOUT_RACE_IDENTITY_MISMATCH")
         settled_return = 0
+        winning_returns = []
+        refunded_bets = 0
         for bet in row["bets"]:
             ticket = (bet["betType"], combination(bet["betType"], bet["combination"]))
-            per100 = table.get(ticket, 100 if ticket in refunds else 0)
-            settled_return += bet["stakeYen"] // 100 * per100
+            is_refund = ticket in refunds
+            per100 = 100 if is_refund else table.get(ticket, 0)
+            ticket_return = bet["stakeYen"] // 100 * per100
+            settled_return += ticket_return
+            refunded_bets += int(is_refund)
+            if not is_refund and per100 > 0:
+                winning_returns.append(ticket_return)
         reconciled.append({
             "raceDate": row["raceDate"], "raceId": rid, "venue": row["venue"],
             "strategy": row["strategy"], "windowDays": int(row["windowDays"]),
             "startTimeJst": row["startTimeJst"], "lockedAt": row["lockedAt"],
             "stakeYen": stake, "returnYen": settled_return,
+            "hitRace": bool(winning_returns),
+            "maxWinningTicketReturn": max(winning_returns, default=0),
+            "refundedBets": refunded_bets,
         })
     return reconciled
 
@@ -207,6 +217,8 @@ def main():
     ap.add_argument("--live-candidates")
     ap.add_argument("--min-history-bets", type=int, default=100)
     ap.add_argument("--min-history-days", type=int, default=20)
+    ap.add_argument("--evaluation-start", help="First untouched out-of-sample date")
+    ap.add_argument("--evaluation-through", help="Last untouched out-of-sample date")
     args = ap.parse_args()
     historical = reconcile(read_jsonl(args.historical_candidates),
                            read_jsonl(args.official_payouts))
@@ -216,7 +228,9 @@ def main():
     result = CORE.evaluate(
         [{**r, "day": dt.date.fromisoformat(r["raceDate"]), "stake": r["stakeYen"],
           "paid": r["returnYen"]} for r in historical],
-        args.min_history_bets, args.min_history_days)
+        args.min_history_bets, args.min_history_days,
+        eval_start=dt.date.fromisoformat(args.evaluation_start) if args.evaluation_start else None,
+        eval_through=dt.date.fromisoformat(args.evaluation_through) if args.evaluation_through else None)
     result["method"] = "prospective_candidate_decisions_plus_actual_JRA_payout_table"
     result["payoutsRecomputedFromTickets"] = True
     result["prospectiveIndependentHoldoutVerified"] = False
