@@ -5,7 +5,7 @@ Previous cash machine learning always took the single maximal *predicted*
 return action among 765 distinct ticket pairs/singles. That biases a
 high-variance heavy-tail predictor toward wildly overestimated longshots.
 Here, generate NEW actual bets by choosing alternative within-race ranks
-0/1/3/7/15/31/63/127/255/511/764 for each of 672 causal forecast methods,
+0/1/3/7/15/31/63/127/255/511/764 for 96 distinct causal forecast methods,
 and rank venue-day races by cash-score strength or expected uncertainty.
 
 Every variant is replayed through 2017-2024 after 2015-2016 causal
@@ -53,11 +53,22 @@ class Variant:
                 "dayRank":self.day_rank}
 
 
+def rank_bases(v5,v3):
+    # Orthogonal method family: focus on materially different horizons,
+    # exposure regimes and feature-pooling structures.
+    return [m for m in v5.make_base_methods(v3)
+            if m.horizon in (6,24,96) and m.scope in ("global","venue")
+            and m.cap in (10000,200000) and m.shrink==50
+            and m.blend in (0.,.75) and m.lag_months in (0,12)]
+
+
 def generate_methods(v5,v3):
-    # 672 historical cash-money base experts * 11 within-race
-    # action placements * 3 races-per-day rankings = 22176 variants.
+    # 96 historical cash experts * 11 within-race positions *
+    # 3 different venue-day ranking schemes = 3168 generated actions.
+    bases=rank_bases(v5,v3)
+    if len(bases)!=96:raise RuntimeError("RANK_SPECTRUM_BASE_FAMILY_SIZE")
     return [Variant(model,k,dr) for model,k,dr in itertools.product(
-        v5.make_base_methods(v3),ACTION_RANK,DAY_RANK)]
+        bases,ACTION_RANK,DAY_RANK)]
 
 
 def history_score(index,method,month):
@@ -155,7 +166,7 @@ def search(index,v5,v3):
         "status":"MODEL_ROI200_QUALIFIED_RETROSPECTIVE" if verified else
                  "NO_ROI200_CASH_METHOD_FOUND",
         "methodGenerationArchitecture":"rank spectrum of diverse cash-return predictions, not win classifiers",
-        "baseMethods":len(v5.make_base_methods(v3)),
+        "baseMethods":len(rank_bases(v5,v3)),
         "spectrumRanks":list(ACTION_RANK),"dayPriorityMethods":list(DAY_RANK),
         "generatedCashMethods":len(variants),
         "qualifiedDevelopmentCount":len(qualified),
