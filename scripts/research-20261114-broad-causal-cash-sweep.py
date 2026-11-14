@@ -213,7 +213,7 @@ def get_venue_day_groups(races):
     if counts.min()<3:raise RuntimeError("INELIGIBLE_VENUE_DAY_LESS_THAN_THREE_RACES")
     _group_memory[key]=(v,len(codes))
   return _group_memory[key]
-def policy_arrays(races,paid,chosen,forecast,market_keys,plan,slate,ranking,select_mode,ledger=False):
+def policy_arrays(races,paid,chosen,forecast,market_keys,plan,slate,ranking,select_mode,ledger=False,cellbreakdown=False):
     # chosen has shape [N,6], score [N,6], returns one best ticket per market.
     n=len(races)
     allowed=np.asarray(market_keys,dtype=np.int32)
@@ -287,6 +287,30 @@ def policy_arrays(races,paid,chosen,forecast,market_keys,plan,slate,ranking,sele
        "hitRacePct":round(100*hits/nr,4),
        "profitableRaces":positives,
        "profitableRacePct":round(100*positives/nr,4)}
+    if cellbreakdown:
+        # A cell is a venue x quarter-of-year; every individual venue-day
+        # still receives >=3 selected races under the frozen pre-result rule.
+        if not hasattr(policy_arrays,"_cells") or policy_arrays._cells[0]!=id(races):
+           cells=np.asarray([(int(z["venue"]), (int(z["month"][4:])-1)//3)
+                             for z in races],np.int32)
+           k=cells[:,0]*4+cells[:,1]
+           keys=np.unique(k)
+           policy_arrays._cells=(id(races),k,keys)
+        _,key_arr,keys=policy_arrays._cells
+        group=key_arr[ix]
+        bins=int(max(keys))+1
+        cnt=np.bincount(group,minlength=bins)
+        stake_by=np.bincount(group,weights=cost,minlength=bins)
+        pay_by=np.bincount(group,weights=ret,minlength=bins)
+        hits_by=np.bincount(group,weights=(ret>0),minlength=bins)
+        max_by=np.zeros(bins,np.int64)
+        np.maximum.at(max_by,group,ret)
+        stats={int(k):{"races":int(cnt[k]),"stakeYen":int(stake_by[k]),
+              "paidYen":int(pay_by[k]),"hitRaces":int(hits_by[k]),
+              "maxRacePayoutYen":int(max_by[k])} for k in keys}
+        if sum(x["stakeYen"] for x in stats.values())!=spend or sum(x["paidYen"] for x in stats.values())!=money:
+            raise RuntimeError("VENUE_QUARTER_CASH_ACCOUNTING_DISAGREES")
+        return result,stats
     if not ledger:return result,None
     records=[]
     for j,k in enumerate(ix):
