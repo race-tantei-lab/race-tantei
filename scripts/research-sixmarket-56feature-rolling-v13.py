@@ -324,7 +324,7 @@ def summarise(selected,ledger,start,end,min_days):
                 raise RuntimeError("VENUE_DAY_THREE_RACE_GATE_BROKEN")
             paid+=int(row[0]);stake+=int(row[1]);hit+=int(row[2])
             races+=int(row[3]);days+=int(row[4]);maxp=max(maxp,int(row[5]))
-            yy=month[:4];ys=by_year[yy]
+            yy=str(month)[:4];ys=by_year[yy]
             for j in range(5):ys[j]+=int(row[j])
             ys[5]=max(ys[5],int(row[5]))
     out={
