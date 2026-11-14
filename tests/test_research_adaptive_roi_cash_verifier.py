@@ -97,6 +97,32 @@ class VerifyCash(unittest.TestCase):
         output = m.reconcile([bet(d, 1, "A")], [p])
         self.assertEqual(output[0]["returnYen"], 600)
 
+    def test_refund_is_not_hit_and_cannot_fake_roi200(self):
+        d = "2025-01-01"
+        p = payout(d, 1)
+        p["payouts"] = []
+        p["refunds"] = [
+            {"betType": "単勝", "combination": "1"},
+            {"betType": "ワイド", "combination": "1-2"},
+        ]
+        row = m.reconcile([bet(d, 1, "A")], [p])[0]
+        self.assertEqual(row["returnYen"], 200)
+        self.assertFalse(row["hitRace"])
+        self.assertEqual(row["maxWinningTicketReturn"], 0)
+        normalized = [{**row, "day": dt.date.fromisoformat(d),
+                       "stake": row["stakeYen"], "paid": row["returnYen"]}]
+        stats = m.CORE.stats(normalized)
+        self.assertEqual(stats["hitPct"], 0)
+
+    def test_lagged_cutoff_requires_old_prediction_model(self):
+        d = "2025-12-31"
+        row = bet(d, 1, "A")
+        row["lagDays"] = 365
+        with self.assertRaisesRegex(ValueError, "POST_RACE_MODEL_TRAINING"):
+            m.validate_candidate(row, settled=False)
+        row["modelTrainedThrough"] = "2024-12-30"
+        self.assertEqual(m.validate_candidate(row, settled=False), 200)
+
     def test_incomplete_strategy_unselectable(self):
         d = "2025-01-01"
         rows = [bet(d, i, "A") for i in range(3)] + [bet(d, 0, "B")]
