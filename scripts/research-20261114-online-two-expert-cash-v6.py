@@ -288,7 +288,7 @@ def replay(monthly,races,meta,start,stop,v5,record_decisions=False):
 
 def generate_meta_methods():
     # This is a comprehensive Cartesian enumeration of this NEW family:
-    # 6 * 3 * 5 * 2 * 2 * 3 * 4 * 3 = 6480 online strategies.
+    # 6 * 3 * 5 * 2 * 2 * 3 * 4 * 3 = 12960 online strategies.
     # Evaluate each only with actually selected ticket-level cash.
     return portfolio_methods()
 
@@ -336,7 +336,7 @@ def research(monthly,ledger,v5):
 
 
 def selftest():
-    assert len(generate_meta_methods())==6480
+    assert len(generate_meta_methods())==12960
     dummy=portfolio_metrics(600,1600,3,3,1,100)
     assert dummy["qualified"] is True
     assert not portfolio_metrics(600,1600,3,3,1,500)["qualified"]
