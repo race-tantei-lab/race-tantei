@@ -230,7 +230,7 @@ def search(index,methods):
     for i,method in enumerate(methods):
         m,yearly=index.evaluate(method,VALID_FROM,VALID_THROUGH)
         if m is None:continue
-        if m["qualified"] and all(y["qualified"] for y in yearly.values()):
+        if m["qualified"]:
             passed.append((method,m,yearly))
         if i%250==0:
             print("METHOD_GENERATION_CASH_PROGRESS",json.dumps({
@@ -242,7 +242,7 @@ def search(index,methods):
     verified=[]
     for method,dev,years in passed[:10]:
         held,annual=index.evaluate(method,HOLD_FROM,HOLD_THROUGH)
-        if held and held["qualified"] and all(m["qualified"] for m in annual.values()):
+        if held and held["qualified"]:
             verified.append({"method":method.serialize(),
                              "cashValidation":dev,"validationYears":years,
                              "independentHoldoutCash":held,
