@@ -192,6 +192,9 @@ def make_exact_ledger(base,races,paid,picked,score,policy):
       ids=np.asarray([i for i,r in enumerate(races) if
           int(r["venue"])*4+(int(r["month"][4:])-1)//3==k],np.int32)
       rr=[races[int(i)] for i in ids]
+      # Avoid CPython object-id reuse in the shared day-group cache across
+      # 31 distinct venue-quarter race slices.
+      base._group_memory.clear()
       mm,ledger=base.policy_arrays(rr,paid[ids],
            picked[ids,iv],score[ids,iv],base.MASKS[p["marketSubset"]],
            p["stakePlan"],p["raceSlate"],
