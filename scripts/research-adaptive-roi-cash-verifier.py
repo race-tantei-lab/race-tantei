@@ -178,8 +178,12 @@ def reconcile(historical_bets, official_payouts):
 
 
 def live_select(historical, live_candidates, min_bets, min_days):
-    history = [{**r, "day": dt.date.fromisoformat(r["raceDate"]),
-                "stake": r["stakeYen"], "paid": r["returnYen"]} for r in historical]
+    history = collections.defaultdict(list)
+    for r in sorted(historical, key=lambda row: (row["raceDate"], row["raceId"])):
+        normalized = {**r, "day": dt.date.fromisoformat(r["raceDate"]),
+                      "stake": r["stakeYen"], "paid": r["returnYen"]}
+        expert = (r["strategy"], int(r["windowDays"]), int(r.get("lagDays", 0)))
+        history[expert].append(normalized)
     by_group = collections.defaultdict(list)
     distinct = set()
     for row in live_candidates:
@@ -193,10 +197,6 @@ def live_select(historical, live_candidates, min_bets, min_days):
     outputs = []
     for (date, venue), group in sorted(by_group.items()):
         day = dt.date.fromisoformat(date)
-        if any(r["day"] >= day for r in history):
-            # Training history can include future days relative to *other* targets,
-            # but cannot contribute to this target; CORE.choose filters it.
-            pass
         races = {r["raceId"] for r in group}
         by_strategy = collections.defaultdict(list)
         for row in group:
