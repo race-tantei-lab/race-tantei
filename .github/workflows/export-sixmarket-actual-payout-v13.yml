@@ -1,0 +1,40 @@
+name: Export all six JRA cash market payouts from D1 (read-only)
+on:
+  push:
+    branches: [research/20261114-sixmarket-56rolling-v13]
+    paths:
+      - scripts/export-2024-26-sixmarket-cash-d1-v13.py
+      - .github/workflows/export-sixmarket-actual-payout-v13.yml
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify canonical combination semantics
+        run: |
+          python -m py_compile scripts/export-2024-26-sixmarket-cash-d1-v13.py
+          python scripts/export-2024-26-sixmarket-cash-d1-v13.py --self-test
+      - name: Read-only export six payout types and assert 8k fully covered races
+        run: |
+          python -u scripts/export-2024-26-sixmarket-cash-d1-v13.py \
+            --out /tmp/sixmarket-2024-2026-cash.jsonl.gz \
+            --meta /tmp/sixmarket-2024-2026-cash-meta.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sixmarket-actual-cash-payout-2024-26-v13
+          path: |
+            /tmp/sixmarket-2024-2026-cash.jsonl.gz
+            /tmp/sixmarket-2024-2026-cash-meta.json
+          if-no-files-found: warn
+          retention-days: 30
