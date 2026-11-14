@@ -306,17 +306,34 @@ def hits_ok(m):
 def full_ok(m):
  return (hits_ok(m) and m["paidYen"]>=2*m["stakeYen"]
    and m["paidYen"]-m["largestPaidRaceYen"]>=2*m["stakeYen"])
+def strict_model_only(m):
+    """A returned MODEL must satisfy EVERY actual-money condition.
+
+    A low-ROI or low-hit calculation can be an internal pruning value;
+    it must never receive a policy/model/candidate record or be serialized.
+    """
+    if not m:return False
+    spend=int(m["stakeYen"]);paid=int(m["paidYen"])
+    maxpay=int(m["largestPaidRaceYen"])
+    nr=int(m["purchaseRaces"]);days=int(m["venueDays"])
+    return (spend>0 and nr>=3*days and
+            paid>=2*spend and
+            paid-maxpay>=2*spend and
+            int(m["hitRaces"])*5>=nr)
+
 def score_all(races,paid,picks,forecast,verbose=True):
+    """Explore the universe but INSTANTLY DISCARD non-200% calculations.
+
+    No fallback, no "best failed policy", no model names below the ROI gate.
+    Only cash200 + robust200 + hit20 + 3 venues are returned.
+    """
     start=time.monotonic()
-    results=[]
-    best_profit=None
-    best_hit=None
-    diagnostics=[]
+    discovered=[]
     num=0
+    roi200_math_checks=0
     for v,method in enumerate(MODES):
       for maskname,market_ids in MASKS.items():
         for select in SELECT_MODES:
-          # top_score / top_margin are distinct from daily truncation.
           ranking="top_margin" if select=="top_margin" else "top_score"
           how="top_score_plus_positive" if select=="top_score_plus_positive" else "top_score"
           for slate in SLATES:
@@ -326,35 +343,41 @@ def score_all(races,paid,picks,forecast,verbose=True):
                             market_ids,plan,slate,ranking,how)
               if mm is None:continue
               num+=1
-              info={"forecast":method,"marketSubset":maskname,"raceSlate":slate,
-                "stakePlan":plan,"selection":select}
-              row={"policy":info,"money":mm}
-              if best_profit is None or mm["profitYen"]>best_profit["money"]["profitYen"]:
-                best_profit=row
-              if hits_ok(mm) and (best_hit is None or mm["minusLargestRaceCashRoiPct"]>best_hit["money"]["minusLargestRaceCashRoiPct"]):
-                best_hit=row
-              if full_ok(mm):
-                results.append(row)
+              # ROI >= 200 is checked BEFORE a candidate/model/policy
+              # record is constructed. Every rejection is thrown away.
+              spend=int(mm["stakeYen"]);paid_yen=int(mm["paidYen"])
+              if paid_yen<2*spend:continue
+              roi200_math_checks+=1
+              if paid_yen-int(mm["largestPaidRaceYen"])<2*spend:continue
+              if int(mm["hitRaces"])*5<int(mm["purchaseRaces"]):continue
+              if int(mm["purchaseRaces"])<3*int(mm["venueDays"]):continue
+              if not strict_model_only(mm):
+                  raise RuntimeError("INVALID_MODEL_ESCAPED_ROI200_GATE")
+              discovered.append({"policy":{
+                 "forecast":method,"marketSubset":maskname,"raceSlate":slate,
+                 "stakePlan":plan,"selection":select},"money":mm})
           if verbose and num%3000<20:
-             print("BROAD_CAUSAL_POLICY_SWEEP_PROGRESS",json.dumps({
-               "evaluated":num,"matchingAllCashAndHitGates":len(results),
-               "forecast":method,"bestRealizedProfitYen":best_profit["money"]["profitYen"],
-               "bestHitQualifiedTrimROI":best_hit["money"]["minusLargestRaceCashRoiPct"] if best_hit else None}),flush=True)
-    results.sort(key=lambda x:(x["money"]["profitYen"],x["money"]["minusLargestRaceCashRoiPct"]),reverse=True)
+             print("ROI200_ONLY_EXPLORATION_PROGRESS",json.dumps({
+               "calculations":num,
+               "modelsMeetingAllCashAndHitLimits":len(discovered)}),flush=True)
+    discovered.sort(key=lambda x:(x["money"]["profitYen"],
+                                  x["money"]["minusLargestRaceCashRoiPct"]),reverse=True)
+    if not all(strict_model_only(x["money"]) for x in discovered):
+        raise RuntimeError("BELOW_200_MODEL_SERIALIZATION_BLOCKED")
     summary={"methods":len(MODES),"marketMasks":len(MASKS),
        "raceSelectionVariants":len(SELECT_MODES),"daySlates":len(SLATES),
-       "stakePlans":len(STAKEPLANS),"cashVariantsMeasured":num,
-       "fullPeriodCash200Hit20Qualified":len(results),
-       "bestProfitDiagnostic":best_profit,
-       "bestWith20PercentHits":best_hit,
-       "qualified":results[:30],
+       "stakePlans":len(STAKEPLANS),"cashCalculations":num,
+       "fullPeriodCash200Hit20Qualified":len(discovered),
+       "models":discovered[:30],
+       "status":"ONLY_ROI200_MODELS" if discovered else "NO_MODEL_CREATED",
        "seconds":round(time.monotonic()-start,2)}
-    print("BROAD_CAUSAL_ROI200_HIT20_SWEEP_FINISHED",json.dumps({
-       "evaluated":num,"fullyQualified":len(results),
-       "bestProfit":best_profit,
-       "bestHitQualified":best_hit,
+    print("ROI200_ONLY_DISCOVERY_FINISHED",json.dumps({
+       "calculations":num,"createdModelCount":len(discovered),
+       "serializedModelCount":len(summary["models"]),
+       "status":summary["status"],
        "seconds":summary["seconds"]},ensure_ascii=False),flush=True)
     return summary
+
 def config_replay(races,pay,chosen,roi,policy):
     iv=MODES.index(policy["forecast"])
     return policy_arrays(races,pay,chosen[:,iv],roi[:,iv],
@@ -367,48 +390,58 @@ def run():
     t=time.monotonic()
     core,races,paid,features,market,slots=historic_cash()
     best,roi,states,months=monthly_frozen_predictions(races,paid,features,market,slots)
-    results=score_all(races,paid,best,roi)
-    qualify=results["qualified"]
-    candidates=qualify[:10] if qualify else []
-    # Forward audits freeze best cash-first policy even when no valid candidate.
-    frozen=candidates[0] if candidates else results["bestProfitDiagnostic"]
-    m,ledger=config_replay(races,paid,best,roi,frozen["policy"])
-    if m!=frozen["money"]:raise RuntimeError("BROADSCOPE_BET_LEDGER_MISMATCH")
-    LED.parent.mkdir(parents=True,exist_ok=True)
-    with gzip.open(LED,"wt",newline="",encoding="utf8") as f:
-      writer=csv.DictWriter(f,fieldnames=list(ledger[0]))
-      writer.writeheader();writer.writerows(sorted(ledger,key=lambda x:x["raceId"]))
-    report={"status":"FULL_HISTORY_PROFIT200_HIT20_FOUND" if qualify else
-            "NONE_FOUND_WITHIN_DEFINED_CAUSAL_SEARCH_SPACE",
+    result=score_all(races,paid,best,roi)
+    models=result["models"]
+    venue_days=get_venue_day_groups(races)[1]
+    # NO below-200 fallback model. No historical ticket ledger generated
+    # unless it can independently pass all four purchase/cash rules.
+    frozen=models[0] if models else None
+    ledger_path=None
+    if frozen:
+        m,ledger=config_replay(races,paid,best,roi,frozen["policy"])
+        if m!=frozen["money"] or not strict_model_only(m):
+            raise RuntimeError("STRICT_CASH200_MODEL_LEDGER_FAILED")
+        LED.parent.mkdir(parents=True,exist_ok=True)
+        with gzip.open(LED,"wt",newline="",encoding="utf8") as f:
+          writer=csv.DictWriter(f,fieldnames=list(ledger[0]))
+          writer.writeheader()
+          writer.writerows(sorted(ledger,key=lambda x:x["raceId"]))
+        ledger_path=str(LED.relative_to(ROOT))
+    report={"status":"ONLY_CASH200_HIT20_MODELS_FOUND" if frozen else
+            "NO_MODEL_CREATED",
+      "candidateContract":{
+         "roiPctMin":200,"largestRaceRemovedRoiPctMin":200,
+         "hitRatePctMin":20,"minDistinctRacesPerVenueDay":3,
+         "objective":"maximize actual paidYen minus stakeYen",
+         "noModelUnderRoi200":True,"noFailedModelFallback":True},
       "all136MonthPredictionsBeforeSameMonthOutcome":True,
-      "cashROI200AndLargestRaceRemoved200AndHits20AndThreePerVenueDay":True,
-      "moneyPrimaryNotHitBonus":True,
       "sixActualJraSettledMarketTypes":list(MARKETS),
       "fullRankedTicketUniversePerRace":1030,
-      "fullHistoryRaces":len(races),
-      "fullHistoryVenueDays":m["venueDays"],
+      "fullHistoryRaces":len(races),"fullHistoryVenueDays":venue_days,
       "datePeriod":"2015-Jan through 2026-Apr",
       "dataLimit":"Historical final win odds only, not verified pre-start-15 official odds; payouts from pinned third-party archive",
-      "outcomesNotUsedToPredictSameMonth":True,
-      "marketBySeasonByVenueResearch":True,
       "scopeIsNotMathematicallyAllPossibleStrategies":True,
-      "realMoneySearch":results,
-      "forwardFrozenPolicy":frozen,
-      "selectedExactLedger":str(LED.relative_to(ROOT)),
+      "search":result,
+      "forwardFrozenModel":frozen,
+      "selectedExactLedger":ledger_path,
       "productionModified":False,
       "seconds":round(time.monotonic()-t,2)}
+    if any(not strict_model_only(x["money"]) for x in report["search"]["models"]):
+        raise RuntimeError("OUTPUT_CONTAINS_BELOW200_MODEL")
+    if frozen is not None and not strict_model_only(frozen["money"]):
+        raise RuntimeError("FROZEN_MODEL_BELOW200")
     OUT.parent.mkdir(parents=True,exist_ok=True)
     OUT.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n")
-    print("FULL_BROAD_136MONTH_CAUSAL_CASH_FINAL",json.dumps({
-     "status":report["status"],
-     "nStrategies":results["cashVariantsMeasured"],
-     "full136Months":len(months),"allSixMarkets":True,"all1030TemplateTickets":True,
-     "qualifying":results["fullPeriodCash200Hit20Qualified"],
-     "bestProfit":results["bestProfitDiagnostic"],
-     "bestHitQualified":results["bestWith20PercentHits"],
-     "frozen":frozen,
-     "seconds":report["seconds"],"productionModified":False},ensure_ascii=False),flush=True)
+    print("ROI200_ONLY_FULL_ARCHIVE_FINAL",json.dumps({
+      "status":report["status"],
+      "full136Months":len(months),
+      "calculations":result["cashCalculations"],
+      "modelsFound":result["fullPeriodCash200Hit20Qualified"],
+      "qualifiedModel":frozen,
+      "no200FailureFallback":True,
+      "productionModified":False},ensure_ascii=False),flush=True)
     return report
+
 def selftest():
     dummy={"purchaseRaces":10,"venueDays":3,"stakeYen":1000,
       "paidYen":4000,"largestPaidRaceYen":500,"hitRaces":2}
@@ -434,7 +467,15 @@ def selftest():
                  "one100",3,"top_margin","top_score",False)
     assert ledger["purchaseRaces"]==3 and ledger["venueDays"]==1
     assert ledger["hitRaces"]==3 and ledger["cashRoiPct"]==300.
-    print("BROAD_CAUSAL_CASH_FULL_SCOPE_SELFTEST_OK",flush=True)
+    # The essential contractual invariant: 199.99% is NEVER a model.
+    baseline={"purchaseRaces":10,"venueDays":3,"stakeYen":1000,
+              "paidYen":2000,"largestPaidRaceYen":0,"hitRaces":2}
+    assert strict_model_only(baseline)
+    assert not strict_model_only(dict(baseline,paidYen=1999))
+    assert not strict_model_only(dict(baseline,largestPaidRaceYen=1))
+    assert not strict_model_only(dict(baseline,hitRaces=1))
+    assert not strict_model_only(dict(baseline,purchaseRaces=8))
+    print("ROI200_ONLY_CANDIDATE_CONTRACT_SELFTEST_OK",flush=True)
 if __name__=="__main__":
     if "--self-test" in sys.argv:selftest()
     else:run()
