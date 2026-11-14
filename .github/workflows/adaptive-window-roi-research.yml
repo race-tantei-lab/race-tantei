@@ -4,8 +4,10 @@ on:
     paths:
       - "scripts/research-adaptive-window-meta-roi.py"
       - "scripts/research-adaptive-roi-cash-verifier.py"
+      - "scripts/research-adaptive-method-discovery.py"
       - "tests/test_research_adaptive_window_meta_roi.py"
       - "tests/test_research_adaptive_roi_cash_verifier.py"
+      - "tests/test_research_adaptive_method_discovery.py"
       - ".github/workflows/adaptive-window-roi-research.yml"
   workflow_dispatch:
 permissions:
@@ -20,8 +22,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile research modules
-        run: python -m py_compile scripts/research-adaptive-window-meta-roi.py scripts/research-adaptive-roi-cash-verifier.py tests/test_research_adaptive_window_meta_roi.py tests/test_research_adaptive_roi_cash_verifier.py
+        run: python -m py_compile scripts/research-adaptive-window-meta-roi.py scripts/research-adaptive-roi-cash-verifier.py scripts/research-adaptive-method-discovery.py tests/test_research_adaptive_window_meta_roi.py tests/test_research_adaptive_roi_cash_verifier.py tests/test_research_adaptive_method_discovery.py
       - name: Verify no forward leakage, strict cash ROI, T15, and refunds
         run: |
           python -m unittest discover -s tests -p 'test_research_adaptive_window_meta_roi.py' -v
           python -m unittest discover -s tests -p 'test_research_adaptive_roi_cash_verifier.py' -v
+          python -m unittest discover -s tests -p 'test_research_adaptive_method_discovery.py' -v
