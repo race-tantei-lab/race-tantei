@@ -1,0 +1,53 @@
+name: Independently recount all 10692 NEW six-market cash research policies v15
+on:
+  push:
+    branches: [research/20261114-learned-cash-methodology-v14]
+    paths: [.github/workflows/audit-completed-v13-v14-cash-ledgers-v15.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install numerical-only independent cash auditor
+        run: python -m pip install --disable-pip-version-check "numpy==2.2.6" "pandas==2.2.3" "lightgbm==4.6.0" "scikit-learn==1.6.1"
+      - name: Verify finite model count and chronological months
+        run: |
+          python -m py_compile scripts/audit-completed-v13-v14-cash-ledgers-v15.py
+          python scripts/audit-completed-v13-v14-cash-ledgers-v15.py --self-test
+      - name: Download completed v13 and v14 280-fit training cash ledgers
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/completed-model-audit/v13 /tmp/completed-model-audit/v14
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14120500214/zip" >/tmp/complete-v13.zip
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14119694547/zip" >/tmp/complete-v14.zip
+          unzip -q /tmp/complete-v13.zip -d /tmp/completed-model-audit/v13
+          unzip -q /tmp/complete-v14.zip -d /tmp/completed-model-audit/v14
+          test -s /tmp/completed-model-audit/v13/sixmarket-56-trained-cash-ledger-v13.npz
+          test -s /tmp/completed-model-audit/v13/sixmarket-rolling-retrained-v13-result.json
+          test -s /tmp/completed-model-audit/v14/learned-methodology-cash-ledger-v14.npz
+          test -s /tmp/completed-model-audit/v14/learned-prediction-methodology-v14-result.json
+          echo BOTH_INDEPENDENT_280_REFIT_CASH_LEDGER_ARTIFACTS_READY
+      - name: Independently re-evaluate every actual cash action and model-of-methodology
+        run: |
+          python -u scripts/audit-completed-v13-v14-cash-ledgers-v15.py \
+            --v13 /tmp/completed-model-audit/v13/sixmarket-56-trained-cash-ledger-v13.npz \
+            --v14 /tmp/completed-model-audit/v14/learned-methodology-cash-ledger-v14.npz \
+            --v13-result /tmp/completed-model-audit/v13/sixmarket-rolling-retrained-v13-result.json \
+            --v14-result /tmp/completed-model-audit/v14/learned-prediction-methodology-v14-result.json \
+            --out /tmp/completed-model-audit/full-v13-v14-independent-count-v15.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independently-recomputed-all-10692-sixmarket-money-methods
+          path: /tmp/completed-model-audit/full-v13-v14-independent-count-v15.json
+          if-no-files-found: warn
+          retention-days: 30

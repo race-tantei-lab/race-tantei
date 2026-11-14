@@ -1,0 +1,28 @@
+name: Stop superseded research runs after fixes
+on:
+  push:
+    branches: [research/20261114-learned-cash-methodology-v14]
+    paths: [.github/workflows/cancel-superseded-research-runs-v14.yml]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  cancel-superseded:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Cancel only obsolete research jobs with known fixed replacements
+        shell: bash
+        run: |
+          set -euo pipefail
+          for id in 43608005154 43606135988; do
+            status="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${id}" --jq .status)"
+            if [[ "$status" == "queued" || "$status" == "in_progress" ]]; then
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/cancel"
+              echo "OBSOLETE_RESEARCH_RUN_CANCELLED ${id} ${status}"
+            else
+              echo "OBSOLETE_RESEARCH_ALREADY_FINISHED ${id} ${status}"
+            fi
+          done
