@@ -100,11 +100,10 @@ def best_by_market(cat,paid,market,models,indices=None):
       score[:,1]=np.minimum(35.,hi)
       score[:,2]=.75*score[:,0]+.25*score[:,1]
       score[:,3]=.75*score[:,0]+.25*.72
-      bonus=np.asarray([1./(1+abs(x)) for x in range(len(market))],np.float32)
       score[:,4]=score[:,2] # boost to first popularity horses in ALL market types
       for m in range(6):
         cells=tmpl_groups[m]
-        score[:,4,cells]*=(1.+.1*(1.-(np.asarray(cells)%10)/10.))[None,:]
+        score[:,4,cells]*=(1.+.15*(1.-cat["rankMin"][indices[rr]][:,cells]/9.))
       score[:,5]=score[:,3]
       score[:,5,market!=0]=np.minimum(score[:,5,market!=0],1.)
       score[:,5,market==1]*=1.02
@@ -150,7 +149,7 @@ def historical_crossfit():
    models=prediction_models(X[train],yy[train],importance[train],first-1)
    idx=np.flatnonzero((years>=first)&(years<=min(first+1,2026)))
    if len(idx):
-     pred,score=best_by_market({**feat,**{k:np.zeros_like(payout,dtype=np.uint8) for k in FEATURES if k not in feat and k!="market"}},payout,market,models,idx)
+     pred,score=best_by_market(feat,payout,market,models,idx)
      output_idx[idx]=pred;output_val[idx]=score
    trained_last=models
  return broad,core,races,payout,feat,market,output_idx,output_val,trained_last,years
@@ -196,18 +195,16 @@ def main():
    core.full_features(fwd)
    with np.load(core.CACHE,allow_pickle=False) as d:
       cash=np.asarray(d["payout"],np.int32)
-      context={k:np.asarray(d[k],np.uint8) for k in broad.FEATURES}
+      context={k:np.asarray(d[k],np.uint8) for k in FEATURES if k!="market"}
  finally:
    core.CACHE,core.RACE_CACHE=old_cache,old_rcache
  # Fit final model on ALL 2015..2026-Apr records, then evaluate August-Nov.
  # Unlike cross-fit historical 2026, Aug+ genuinely can use Apr as past.
  # Retrain on only past history even if new data were downloaded.
  rr,tt,weights=sample_ticket_cash(payout,years)
- F={**feat,**{k:np.zeros_like(payout,dtype=np.uint8) for k in FEATURES if k not in feat and k!="market"}}
- X=feat_rows(F,market,rr,tt)
+ X=feat_rows(feat,market,rr,tt)
  model=prediction_models(X,payout[rr,tt].astype(np.float64),weights,2026)
- CF={**context,**{k:np.zeros_like(cash,dtype=np.uint8) for k in FEATURES if k not in context and k!="market"}}
- win,score=best_by_market(CF,cash,market,model)
+ win,score=best_by_market(context,cash,market,model)
  audited,ledger=broad.config_replay(fwd,cash,win,score,chosen["policy"])
  res={"status":"CASH_EXPECTED_RETURN_MODEL_FULL_FORWARD_AUDIT",
    "historicallyQualified":summary["fullPeriodCash200Hit20Qualified"],
