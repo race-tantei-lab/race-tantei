@@ -47,5 +47,10 @@ jobs:
           assert report['venueDays']==10 and report['qualified'],report
           assert len(v14.generate())==576
           assert len(v13.methods())==10080
+          direct=v13.evaluate(l,{'covered':{'2025-01':10,'2025-02':10},
+                                    'excluded':{'2025-01':0,'2025-02':0}})
+          assert direct['developmentQualifiedCount']==0,direct
+          adaptive=v14.discover(l,v13)
+          assert adaptive['developmentQualified']==0,adaptive
           print('COMPLETE_ADAPTIVE_METHOD_CASH_REPORTING_SYNTHETIC_REGRESSION_OK',flush=True)
           PY
