@@ -240,7 +240,7 @@ def search(index,methods):
     passed.sort(key=lambda a:(a[1]["profitYen"],
                               a[1]["minusLargestRaceCashRoiPct"]),reverse=True)
     verified=[]
-    for method,dev,years in passed[:10]:
+    for method,dev,years in passed:
         held,annual=index.evaluate(method,HOLD_FROM,HOLD_THROUGH)
         if held and held["qualified"]:
             verified.append({"method":method.serialize(),
