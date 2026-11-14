@@ -1,0 +1,64 @@
+name: Research NEW online learned prediction-method model with rolling 56 features and cash returns v14
+on:
+  push:
+    branches: [research/20261114-learned-cash-methodology-v14]
+    paths:
+      - scripts/research-learned-forecast-methodology-cash-v14.py
+      - .github/workflows/research-learned-forecast-methodology-v14.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    env:
+      GH_TOKEN: ${{ github.token }}
+      OMP_NUM_THREADS: "3"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install original-compatible 56-feature LightGBM research runtime
+        run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0" "numpy==2.2.6" "pandas==2.2.3" "scikit-learn==1.6.1"
+      - name: Verify six independent bet types, Plackett-Luce and cash math
+        run: |
+          python -m py_compile scripts/research-learned-forecast-methodology-cash-v14.py
+          python scripts/research-learned-forecast-methodology-cash-v14.py --self-test
+      - name: Fetch identical pre-race reconstructed runner features and six-market cash labels
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/sixmarket56
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14116836351/zip" >/tmp/runner-features.zip
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14117189758/zip" >/tmp/actual-payouts.zip
+          unzip -q /tmp/runner-features.zip -d /tmp/sixmarket56
+          unzip -q /tmp/actual-payouts.zip -d /tmp/sixmarket56
+          test -s /tmp/sixmarket56/reconstructed-runner-56.csv.gz
+          test -s /tmp/sixmarket56/sixmarket-2024-2026-cash.jsonl.gz
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("/tmp/sixmarket56")
+          meta=json.loads((root/"reconstructed-runner-56-meta.json").read_text())
+          cash=json.loads((root/"sixmarket-2024-2026-cash-meta.json").read_text())
+          assert meta["reconstructedRaceCount"]==34566
+          assert meta["fullOriginalCanonicalFeatureCorpusReproduced"] is False
+          assert cash["distinctRacesWithAllSixMarkets"]==8570
+          assert cash["preT15MarketOddsVerified"] is False
+          print("RECONSTRUCTED_56_AND_REAL_SIXMARKET_CASH_INPUTS_READY",flush=True)
+          PY
+      - name: Learn and dynamically update 56-feature six-market prediction methods from previous cash
+        run: |
+          python -u scripts/research-learned-forecast-methodology-cash-v14.py \
+            --features /tmp/sixmarket56/reconstructed-runner-56.csv.gz \
+            --payouts /tmp/sixmarket56/sixmarket-2024-2026-cash.jsonl.gz \
+            --output /tmp/sixmarket56/learned-prediction-methodology-v14-result.json
+      - name: Save full read-only numerical model admission audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: learned-money-model-of-prediction-methods-v14
+          path: /tmp/sixmarket56/learned-prediction-methodology-v14-result.json
+          if-no-files-found: warn
+          retention-days: 30
