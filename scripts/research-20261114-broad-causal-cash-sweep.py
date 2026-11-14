@@ -271,7 +271,7 @@ def policy_arrays(races,paid,chosen,forecast,market_keys,plan,slate,ranking,sele
     ix=ordered[take]
     if len(ix)<3*groups:raise RuntimeError("THREE_RACE_MIN_NOT_ENFORCED")
     cost=100*(u1[ix]+u2[ix])
-    ret=paid[ix,t1[ix]]*u1[ix]+paid[ix,t2[ix]]*u2[ix]
+    ret=paid[ix,t1[ix]].astype(np.int64)*u1[ix].astype(np.int64)+paid[ix,t2[ix]].astype(np.int64)*u2[ix].astype(np.int64)
     money=int(ret.sum(dtype=np.int64))
     spend=int(cost.sum(dtype=np.int64))
     maxr=int(ret.max())
