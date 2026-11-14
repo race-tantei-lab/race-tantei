@@ -1,0 +1,38 @@
+name: Audit true pre-T15 six-market odds coverage (read-only)
+on:
+  push:
+    branches: [research/20261114-sixmarket-56rolling-v13]
+    paths: [.github/workflows/research-sixmarket-t15-coverage-v13.yml]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - name: Count only odds that genuinely existed 15 minutes before start
+        run: |
+          python - <<'PY'
+          import json,os,urllib.request
+          u=f"https://api.cloudflare.com/client/v4/accounts/{os.environ['CLOUDFLARE_ACCOUNT_ID']}/d1/database/{os.environ['CLOUDFLARE_D1_DATABASE_ID']}/query"
+          def q(sql):
+              assert sql.lstrip().upper().startswith('SELECT ')
+              r=urllib.request.Request(u,method='POST',data=json.dumps({'sql':sql,'params':[]}).encode(),
+                headers={'Content-Type':'application/json','Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN']})
+              with urllib.request.urlopen(r,timeout=65) as fh:z=json.load(fh)
+              if not z.get('success'):raise RuntimeError(z.get('errors'))
+              return (z['result'] or [{}])[0].get('results',[])
+          commands={
+            'snapshots_summary':"SELECT COUNT(*) n,COUNT(DISTINCT race_id) races,MIN(captured_at_utc) first,MAX(captured_at_utc) last,MIN(seconds_to_start) minSeconds,MAX(seconds_to_start) maxSeconds FROM rt_official_odds_snapshots",
+            'year_market_t15':"SELECT SUBSTR(race_id,1,4) year, bet_type, COUNT(*) snapshots,COUNT(DISTINCT race_id) races, SUM(CASE WHEN seconds_to_start>=900 THEN 1 ELSE 0 END) t15Entries, COUNT(DISTINCT CASE WHEN seconds_to_start>=900 THEN race_id ELSE NULL END) t15Races, MIN(seconds_to_start) minSeconds,MAX(seconds_to_start) maxSeconds FROM rt_official_odds_snapshots GROUP BY SUBSTR(race_id,1,4),bet_type ORDER BY year,bet_type",
+            'odds_market_latest':"SELECT SUBSTR(race_id,1,4) year,bet_type,COUNT(*) n,COUNT(DISTINCT race_id) races,MIN(seconds_to_start) minSeconds,MAX(seconds_to_start) maxSeconds FROM rt_official_odds_latest GROUP BY SUBSTR(race_id,1,4),bet_type ORDER BY year,bet_type",
+            'sample':"SELECT race_id,bet_type,combination,odds_min,odds_max,captured_at_utc,seconds_to_start,odds_source FROM rt_official_odds_snapshots ORDER BY captured_at_utc DESC LIMIT 8"
+          }
+          for k,sql in commands.items():
+              print('T15_ODDS_COVERAGE',json.dumps({'key':k,'rows':q(sql)},ensure_ascii=False),flush=True)
+          PY
