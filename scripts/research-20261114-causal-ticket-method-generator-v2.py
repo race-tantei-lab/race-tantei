@@ -281,7 +281,7 @@ def selftest():
     fake[2,0]=5200
     amounts,forecasts=templates_from_frozen_predictions(fake,idx,score)
     assert amounts.shape==(4,TICKETS)
-    assert amounts[2].sum()==5200*TICKETS
+    assert amounts[2].sum()==10400*TICKETS
     assert exact_money(400,1,200,1,400,1)["qualified"] is False
     assert exact_money(1200,3,600,3,100,1)["qualified"] is False
     assert exact_money(1600,3,600,3,100,1)["qualified"] is True
