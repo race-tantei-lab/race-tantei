@@ -221,7 +221,7 @@ def dataset(base,races,payout,feat,market,months,memory=None,meta=None,
             memory.update(mi,mfeat,payout[idx])
             continue
         pred,score=memory.predict(mi,mfeat,market)
-        venues=np.asarray([int(races[int(k)]["venue"]) for k in idx],np.int32)
+        venues=np.asarray([int(races[int(k)]["venue"])-1 for k in idx],np.int32)
         if venues.max()>=10 or venues.min()<0:
             raise RuntimeError("UNKNOWN_JRA_VENUE_IN_META")
         assigned=meta.assign(mi,venues)
@@ -337,7 +337,7 @@ def simulate():
             mm.update(j,fcat,future_payout[ix])
             continue
         experts,score=mm.predict(j,fcat,market)
-        venues=np.asarray([int(future[int(k)]["venue"]) for k in ix],np.int32)
+        venues=np.asarray([int(future[int(k)]["venue"])-1 for k in ix],np.int32)
         assigned=meta.assign(j,venues)
         for ci in range(len(meta_specs())):
             picked_expert=assigned[ci,venues]
