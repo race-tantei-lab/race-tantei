@@ -47,12 +47,16 @@ def load_rows(path):
             stake, paid = int(row["stakeYen"]), int(row["returnYen"])
             if stake <= 0 or paid < 0 or stake % 100 or paid % 10:
                 raise ValueError("invalid stake or payout")
-            key = (row["raceId"], row["strategy"], int(row["windowDays"]))
+            lag = int(row.get("lagDays", 0))
+            if lag not in (0, 30, 90, 180, 365, 730):
+                raise ValueError("INVALID_LAG_WINDOW")
+            key = (row["raceId"], row["strategy"], int(row["windowDays"]), lag)
             if key in seen:
                 raise ValueError(f"duplicate decision {key}")
             seen.add(key)
             rows.append({**row, "day": day, "stake": stake, "paid": paid,
-                         "windowDays": int(row["windowDays"])})
+                         "windowDays": int(row["windowDays"]),
+                         "lagDays": lag})
     rows.sort(key=lambda x: (x["day"], x["venue"], x["raceId"]))
     return rows
 
@@ -72,11 +76,11 @@ def stats(rows):
 def choose(history, target_day, target_venue, candidates, min_bets, min_days):
     scored = []
     for candidate in sorted(candidates):
-        strategy, window = candidate
+        strategy, window, lag = candidate if len(candidate) == 3 else (*candidate, 0)
         eligible = [r for r in history
                     if r["strategy"] == strategy and r["windowDays"] == window
-                    and r["day"] < target_day
-                    and (target_day - r["day"]).days <= window]
+                    and int(r.get("lagDays", 0)) == lag
+                    and lag < (target_day - r["day"]).days <= lag + window]
         if len(eligible) < min_bets or len({r["day"] for r in eligible}) < min_days:
             continue
         # Venue-specific evidence is useful, but insufficient samples
@@ -107,7 +111,7 @@ def evaluate(rows, min_bets=MIN_HISTORY_BETS, min_days=MIN_DAYS,
         evaluation_day = (eval_start is None or day >= eval_start) and (eval_through is None or day <= eval_through)
         by_candidate = collections.defaultdict(list)
         for row in group:
-            by_candidate[(row["strategy"], row["windowDays"])].append(row)
+            by_candidate[(row["strategy"], row["windowDays"], int(row.get("lagDays", 0)))].append(row)
         race_ids = {r["raceId"] for r in group}
         # Require complete identical race coverage to prevent survivor bias.
         candidates = {key for key, rr in by_candidate.items()
@@ -124,6 +128,7 @@ def evaluate(rows, min_bets=MIN_HISTORY_BETS, min_days=MIN_DAYS,
             selected.extend(bets)
             decisions.append({"date": day.isoformat(), "venue": venue,
                               "strategy": choice[0], "windowDays": choice[1],
+                              "lagDays": choice[2],
                               "races": len(bets), **stats(bets)})
         # Results from every venue on this date become visible tomorrow only.
         if index + 1 == len(ordered_groups) or ordered_groups[index + 1][0][0] != day:
