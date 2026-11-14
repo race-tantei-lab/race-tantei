@@ -93,7 +93,7 @@ def load_historical():
         cat={k:np.asarray(npz[k][:,selected],dtype=np.uint8) for k in CARD}
     return core,races,payout,cat,selected,market
 def calculate_month_scores(states,cat,template,market,variants):
-    m=len(cat["venue"]);t=len(template)
+    m=len(cat["venue"]);t=template.shape[1]  # template is [1, ticketCount]
     if any(x.shape!=(m,t) for x in cat.values()):
         raise RuntimeError("CASH_CONTEXT_SHAPE_MISMATCH")
     key0=states[0].code(cat,template)
