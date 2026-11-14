@@ -249,6 +249,7 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
             qfloor=float(np.percentile(quarter_robust,25)) if quarter_robust else floor
             return (robust+0.1*floor+0.15*qfloor,robust)
         for _ in range(3):
+            previous_assignments=current.copy()
             for key in sorted(current):
                 best=current[key];bestscore=objective(current,slate(current))
                 # Re-select the complete historical 5R slate for every trial.
@@ -262,7 +263,10 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
                 current[key]=best
                 chosen=slate(current)
             new=slate(current)
-            if new==chosen:break
+            # Convergence requires stable assignments AND a stable slate. The
+            # prior comparison always succeeded because chosen was refreshed
+            # inside the key loop, silently preventing further passes.
+            if new==chosen and current==previous_assignments:break
             chosen=new
         test_days=defaultdict(list)
         for i in test:test_days[(day[i],venue[i])].append(int(i))
