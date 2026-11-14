@@ -418,6 +418,22 @@ def selftest():
     assert not full_ok(dict(dummy,purchaseRaces=8))
     assert len(SCHEMAS)>=24 and len(MASKS)>=16 and len(SLATES)==4
     assert len(STAKEPLANS)>=10 and len(MODES)>=15
+    # Exercise all 15 forecast families (including recency_template) before
+    # downloading / materializing the 136-month data in CI.
+    mock={k:np.zeros((1,6),dtype=np.uint8) for k in FEATURES}
+    mocktpl=np.arange(6,dtype=np.int32)[None,:]
+    mocks=[[Stream(6,sc,decay) for sc in SCHEMAS] for decay in (1.,.95)]
+    forecast=month_scores(mocks,mock,np.arange(6,dtype=np.int8),
+                          [(0,)]*6,mocktpl)
+    assert forecast.shape==(1,len(MODES),6) and np.isfinite(forecast).all()
+    test_races=[{"id":str(j),"day":"2026-11-14","venue":1,"raceNo":j+1} for j in range(3)]
+    test_paid=np.asarray([[300,0,0,0,0,0]]*3,dtype=np.int32)
+    picked=np.tile(np.arange(6,dtype=np.int16),(3,1))
+    roi=np.tile(np.asarray([2.,1.,.8,.7,.6,.5],dtype=np.float32),(3,1))
+    ledger,_=policy_arrays(test_races,test_paid,picked,roi,tuple(range(6)),
+                 "one100",3,"top_margin","top_score",False)
+    assert ledger["purchaseRaces"]==3 and ledger["venueDays"]==1
+    assert ledger["hitRaces"]==3 and ledger["cashRoiPct"]==300.
     print("BROAD_CAUSAL_CASH_FULL_SCOPE_SELFTEST_OK",flush=True)
 if __name__=="__main__":
     if "--self-test" in sys.argv:selftest()
