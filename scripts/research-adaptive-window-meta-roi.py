@@ -102,7 +102,8 @@ def evaluate(rows, min_bets=MIN_HISTORY_BETS, min_days=MIN_DAYS,
     for row in rows:
         groups[(row["day"], row["venue"])].append(row)
     selected, skipped, decisions = [], [], []
-    for (day, venue), group in sorted(groups.items()):
+    ordered_groups = sorted(groups.items())
+    for index, ((day, venue), group) in enumerate(ordered_groups):
         by_candidate = collections.defaultdict(list)
         for row in group:
             by_candidate[(row["strategy"], row["windowDays"])].append(row)
@@ -121,13 +122,8 @@ def evaluate(rows, min_bets=MIN_HISTORY_BETS, min_days=MIN_DAYS,
             decisions.append({"date": day.isoformat(), "venue": venue,
                               "strategy": choice[0], "windowDays": choice[1],
                               "races": len(bets), **stats(bets)})
-        # Add results only after all choices for this calendar day are made.
-        if not any(other_day == day for other_day, _ in groups if other_day != day):
-            pass
-        # All venue groups of a day must remain unavailable until next day.
-        next_group_day = next((d for d, v in sorted(groups)
-                              if (d, v) > (day, venue)), None)
-        if next_group_day != day:
+        # Results from every venue on this date become visible tomorrow only.
+        if index + 1 == len(ordered_groups) or ordered_groups[index + 1][0][0] != day:
             history.extend(r for r in rows if r["day"] == day)
     report = {"researchOnly": True, "productionModified": False,
               "overall": stats(selected), "decisions": decisions,
