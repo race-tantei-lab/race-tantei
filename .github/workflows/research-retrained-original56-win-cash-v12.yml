@@ -1,0 +1,61 @@
+name: Research actual yen cash of rolling trained original-56 LightGBM (read-only)
+on:
+  push:
+    branches: [research/20261114-canonical-56feature-walkforward-v12]
+    paths:
+      - scripts/research-retrained-original56-win-cash-v12.py
+      - .github/workflows/research-retrained-original56-win-cash-v12.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  chronological-56:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install 56-feature canonical-compatible training dependencies
+        run: python -m pip install --disable-pip-version-check "lightgbm==4.6.0" "numpy==2.2.6" "pandas==2.2.3" "scikit-learn==1.6.1"
+      - name: Verify cash ROI200 and max-single-return exclusion
+        run: |
+          python -m py_compile scripts/research-retrained-original56-win-cash-v12.py
+          python scripts/research-retrained-original56-win-cash-v12.py --self-test
+      - name: Fetch newly reconstructed time-causal 56-feature and real JRA cash sources
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/research56
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14116836351/zip" > /tmp/reconstructed56.zip
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14115494728/zip" > /tmp/cashwin.zip
+          unzip -q /tmp/reconstructed56.zip -d /tmp/research56
+          unzip -q /tmp/cashwin.zip -d /tmp/research56
+          test -s /tmp/research56/reconstructed-runner-56.csv.gz
+          test -s /tmp/research56/win-payouts-2024-2026.jsonl
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path('/tmp/research56/reconstructed-runner-56-meta.json').read_text())
+          o=json.loads(Path('/tmp/research56/win-payouts-2024-2026-meta.json').read_text())
+          assert p['reconstructedRaceCount']==34566 and p['selectedLegacyRaceCount']==14410
+          assert p['fullOriginalCanonicalFeatureCorpusReproduced'] is False
+          assert o['completeTenYearPayoutHistoryAvailable'] is False
+          print('FROZEN_RECONSTRUCTED_56_AND_ACTUAL_WIN_YEN_INPUTS_VERIFIED',flush=True)
+          PY
+      - name: Actually refit 56-feature win-forecast models on 3/6/12/24/36/60/96-month histories
+        run: |
+          python -u scripts/research-retrained-original56-win-cash-v12.py \
+            --features /tmp/research56/reconstructed-runner-56.csv.gz \
+            --payouts /tmp/research56/win-payouts-2024-2026.jsonl \
+            --output /tmp/research56/retrained-56-win-cash-v12-result.json
+      - name: Persist 2025 development versus untouched 2026 cash audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chronological-56feature-retrained-actual-win-yen-v12
+          path: /tmp/research56/retrained-56-win-cash-v12-result.json
+          if-no-files-found: warn
+          retention-days: 14
