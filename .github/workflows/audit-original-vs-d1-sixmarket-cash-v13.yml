@@ -1,0 +1,43 @@
+name: Audit original 431pct archived two-ticket cash vs recorded JRA six-market payouts
+on:
+  push:
+    branches: [research/20261114-sixmarket-56rolling-v13]
+    paths:
+      - scripts/audit-original-frozen-vs-d1-sixmarket-cash-v13.py
+      - .github/workflows/audit-original-vs-d1-sixmarket-cash-v13.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Self-test payout amount and ordered/unordered bet semantics
+        run: |
+          python -m py_compile scripts/audit-original-frozen-vs-d1-sixmarket-cash-v13.py
+          python scripts/audit-original-frozen-vs-d1-sixmarket-cash-v13.py --self-test
+      - name: Restore independently stored six-market D1 payout records
+        run: |
+          mkdir -p /tmp/verifyoriginal
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14117189758/zip" > /tmp/sixmarketpayout.zip
+          unzip -q /tmp/sixmarketpayout.zip -d /tmp/verifyoriginal
+          test -s /tmp/verifyoriginal/sixmarket-2024-2026-cash.jsonl.gz
+      - name: Reconcile every frozen 2025–Aug2026 ticket individually with stored actual JRA cash
+        run: |
+          python -u scripts/audit-original-frozen-vs-d1-sixmarket-cash-v13.py \
+             --payouts /tmp/verifyoriginal/sixmarket-2024-2026-cash.jsonl.gz \
+             --output /tmp/verifyoriginal/original-vs-d1-sixmarket-cash-v13.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-archived-431pct-versus-d1-sixmarket-cash-v13
+          path: /tmp/verifyoriginal/original-vs-d1-sixmarket-cash-v13.json
+          if-no-files-found: warn
+          retention-days: 30
