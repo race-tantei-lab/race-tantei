@@ -388,11 +388,11 @@ def selftest():
       FEATURES={"venue":10,"quarter":4,"favOdds":5,"oddsGeom":8}
     # A future-month massive payout must not modify a prediction made
     # for an earlier month, and different trailing windows must differ.
-    st=RollingCashMemory(B(),2,["202601","202602","202603"])
-    f={k:np.zeros((1,2),np.uint8) for k in B.FEATURES}
-    market=np.asarray([0,1],np.int8)
+    st=RollingCashMemory(B(),6,["202601","202602","202603"])
+    f={k:np.zeros((1,6),np.uint8) for k in B.FEATURES}
+    market=np.arange(6,dtype=np.int8)
     pre=st.predict(0,f,market)
-    st.update(0,f,np.asarray([[1000,0]],np.int32))
+    st.update(0,f,np.asarray([[1000,0,0,0,0,0]],np.int32))
     aft=st.predict(1,f,market)
     assert pre[0].shape==(1,len(method_specs()),6)
     assert np.isfinite(pre[1]).all() and np.isfinite(aft[1]).all()
@@ -402,7 +402,7 @@ def selftest():
     assert c.shape==(len(meta_specs()),10)
     chosen=np.zeros((1,len(method_specs()),6),np.int16)
     sc=np.ones_like(chosen,dtype=np.float32)
-    meta.update(0,np.asarray([[250,0]],np.int32),chosen,sc,np.asarray([0]))
+    meta.update(0,np.asarray([[250,0,0,0,0,0]],np.int32),chosen,sc,np.asarray([0]))
     assert meta.pay[0,0].sum()>0 and meta.pay[1].sum()==0
     print("ADAPTIVE_MULTI_HORIZON_METHOD_LEARNER_SELFTEST_OK",flush=True)
 if __name__=="__main__":
