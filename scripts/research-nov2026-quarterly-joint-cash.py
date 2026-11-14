@@ -194,8 +194,7 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
             a,b,sa,sb=option
             hist=band_history.get((venue[i],int(quarter[i]),int(program_bands[i])),[])
             if len(hist)<20:
-                hist=np.flatnonzero((venue==venue[i])&(program_bands==program_bands[i])&
-                                   (year*4+quarter<period)&(year*4+quarter>=period-24))
+                hist=train[(venue[train]==venue[i])&(program_bands[train]==program_bands[i])]
             if len(hist)<20:return priority(keys[i],option)
             h=np.asarray(hist,dtype=int)
             paid=(money[h,a]*sa+money[h,b]*sb)//100
@@ -272,7 +271,7 @@ def run(races,cash,year,quarter,fields,market_state,odds_gap_state):
         for i in test:test_days[(day[i],venue[i])].append(int(i))
         counts=defaultdict(int)
         for _,indices in test_days.items():
-            selected=sorted(indices,key=lambda j:(-race_priority(j,current),int(program[j])))[:5]
+            selected=sorted(indices,key=lambda j:(-cached_priority(j,current),int(program[j])))[:5]
             counts[len(selected)]+=1
             for i in selected:
                 a,b,sa,sb=current.get(keys[i],fallback)
