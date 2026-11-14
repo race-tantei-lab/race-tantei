@@ -214,7 +214,7 @@ def search(ledger,core):
 def selftest():
     assert len(make_selectors())==5*7*3*2*2
     assert MIN_DEV_DAYS>MIN_HOLD_DAYS
-    a=np.array([1.,4.,1.])
+    a=np.array([1.,4.,2.])
     b=np.array([30,5,50])
     allowed=np.where(b>=20,a,-1e9)
     assert int(np.argmax(allowed))==2
