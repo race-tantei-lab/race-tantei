@@ -105,7 +105,7 @@ class Method:
 def methods():
     return [Method(h,e,r,MARKETS[a],MARKETS[b],sa,sb,slate,order)
             for h,e,r,(a,b),(sa,sb),slate,order in itertools.product(
-                HORIZONS,EMBARGOES,RANKS,PAIR_MARKETS,SPLITS,SLATES,PRIORITIES)]
+                HORIZONS,EMBARGOES,range(len(RANKS)),PAIR_MARKETS,SPLITS,SLATES,PRIORITIES)]
 
 
 def read_cash(path):
@@ -450,6 +450,7 @@ def evaluate(ledger,diagnostics):
 def selftest():
     from types import SimpleNamespace
     assert len(methods())==7*2*4*15*3*2*2
+    assert Method(3,0,3,"単勝","ワイド",1000,1000,3,"high") in set(methods())
     assert len(meta_variants())==3*2*3*2
     dummy=SimpleNamespace()
     from unittest.mock import Mock
