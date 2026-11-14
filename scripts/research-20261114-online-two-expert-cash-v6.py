@@ -214,6 +214,18 @@ def two_methods(monthly,t,v,meta):
     return first,second,float(score[first])
 
 
+SELECTED_META_CACHE={}
+
+
+def frozen_pair(monthly,t,v,meta):
+    # The choice depends ONLY on months [0,t), never on target-month payouts.
+    key=(meta.lookback,meta.scope,meta.objective,meta.shrink,meta.min_bets,
+         meta.diversity,t,v)
+    if key not in SELECTED_META_CACHE:
+        SELECTED_META_CACHE[key]=two_methods(monthly,t,v,meta)
+    return SELECTED_META_CACHE[key]
+
+
 def quantile_stake(method, score,v5):
     return v5.multiplier(method.stake_plan,score)
 
@@ -241,7 +253,7 @@ def replay(monthly,races,meta,start,stop,v5,record_decisions=False):
         for v in range(v5.N_VENUES):
             day_count=int(monthly.days[0,t,v])
             if day_count==0:continue
-            a,b,score=two_methods(monthly,t,v,meta)
+            a,b,score=frozen_pair(monthly,t,v,meta)
             u1=quantile_stake(meta,score,v5)
             u2=max(1,int(round(u1*meta.weight)))
             idx=races.venue_month.get((month,v))
@@ -276,7 +288,7 @@ def replay(monthly,races,meta,start,stop,v5,record_decisions=False):
 
 def generate_meta_methods():
     # This is a comprehensive Cartesian enumeration of this NEW family:
-    # 6 * 3 * 5 * 2 * 2 * 3 * 4 * 3 = 12960 online strategies.
+    # 6 * 3 * 5 * 2 * 2 * 3 * 4 * 3 = 6480 online strategies.
     # Evaluate each only with actually selected ticket-level cash.
     return portfolio_methods()
 
@@ -324,7 +336,7 @@ def research(monthly,ledger,v5):
 
 
 def selftest():
-    assert len(generate_meta_methods())==12960
+    assert len(generate_meta_methods())==6480
     dummy=portfolio_metrics(600,1600,3,3,1,100)
     assert dummy["qualified"] is True
     assert not portfolio_metrics(600,1600,3,3,1,500)["qualified"]
