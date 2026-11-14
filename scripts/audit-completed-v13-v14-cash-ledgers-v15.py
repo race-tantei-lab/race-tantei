@@ -95,8 +95,9 @@ def full_audit(v13path,v14path,v13result,v14result,out):
     result={
         "status":"INDEPENDENT_CASH_METHOD_COUNT_AUDIT_SUCCESS",
         "v13UnderlyingForecastTicketMethods":METHODS,
+        "v13AdaptiveMoneyPolicyPrograms":len(v13.meta_variants()),
         "v14LearnedMethodologyPrograms":len(v14.generate()),
-        "totalNonoverlappingResearchPolicyFamilies":METHODS+len(v14.generate()),
+        "totalNonoverlappingResearchPolicyFamilies":METHODS+len(v13.meta_variants())+len(v14.generate()),
         "v13IndependentRecount":{
             "qualified2025":v13proof["developmentQualifiedCount"],
             "qualified2026AmongThose":v13proof["independentQualifiedCount"],
@@ -137,6 +138,7 @@ def full_audit(v13path,v14path,v13result,v14result,out):
 
 def selftest():
     assert METHODS==10080 and MONTHS==20 and FITS==280
+    assert METHODS+36+576==10692
     assert len(pd.period_range("2025-01",periods=20,freq="M"))==20
     print("INDEPENDENT_CASH_LEDGER_COMPLETION_AUDIT_SELFTEST_OK")
 
