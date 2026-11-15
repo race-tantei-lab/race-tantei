@@ -1,0 +1,46 @@
+name: Verify three standalone prediction screens and existing race site
+on:
+  push:
+    branches: [feature/20261115-three-full-model-pages]
+    paths:
+      - src/three-model-full-pages.ts
+      - src/three-model-compare-page.ts
+      - src/public-site-entry-performance-history-fix-20260915.ts
+      - tsconfig.three-model.json
+      - tests/three-model-full-pages-tests.ts
+      - .github/workflows/verify-three-standalone-model-pages.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install exact source dependencies
+        run: npm ci
+      - name: Typecheck new model sites and build all unit tests
+        run: |
+          npm run typecheck
+          npx tsc -p tsconfig.three-model.json
+          npx tsc -p tsconfig.test.json
+      - name: Assert full current-style home and 2 derived race pages
+        run: |
+          node dist-test/tests/three-model-full-pages-tests.js
+          node dist-test/tests/three-model-compare-tests.js
+      - name: Existing site tests
+        run: npm run test:unit
+      - name: Build Cloudflare Worker bundle WITHOUT production deploy
+        run: |
+          python -m pip install --disable-pip-version-check "lightgbm==4.6.0" "numpy<3"
+          python scripts/build-worker-completed-model-assets.py
+          npx wrangler deploy --dry-run --outdir dist-three-full-models
+          test -n "$(find dist-three-full-models -type f -name '*.js' -print -quit)"
+          echo THREE_STANDALONE_MODEL_WORKER_DRYRUN_SUCCESS
