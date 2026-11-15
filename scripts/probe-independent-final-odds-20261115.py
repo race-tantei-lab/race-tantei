@@ -27,4 +27,10 @@ for row in races[:5]:
     break
   except Exception as e:
     print("RETRO_FINAL_ODDS_FAILED",row["raceId"],type(e).__name__,str(e)[:350],flush=True)
+    if "RESULT_ID_PARSE_MISS" in str(e):
+      import re,urllib.request
+      raw,_=scope["open_retry"](urllib.request.build_opener(),urllib.request.Request(row["resultUrl"],headers={"User-Agent":"Mozilla/5.0"}))
+      html=raw.decode("cp932","replace")
+      print("HISTORICAL_RESULT_ODDS_ACTIONS",re.findall(r".{0,55}accessO\\.html.{0,125}",html)[:5],flush=True)
+      print("HISTORICAL_RESULT_ODDS_CNAME",re.findall(r"pw15.{0,85}",html)[:5],flush=True)
 else: raise RuntimeError("ALL_FIVE_JRA_HISTORICAL_FINAL_ODDS_FETCH_FAILED")
