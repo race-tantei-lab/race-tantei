@@ -34,7 +34,7 @@ export function independentlyRankRaces(
  for(const r of races){
    if(r.raceDate!==date||!r.raceId||!r.startTimeUtc)continue;
    const preds=PROXIES.map(proxy=>{
-     const p=scoreCash(r,proxy,fit);
+     const p=scoreCash(r,{raceId:r.raceId,betType:proxy.betType,combination:'',stakeYen:100,assumedOdds:proxy.assumedOdds,lockedAt:null,settlementStatus:'pending',returnYen:null},fit);
      // No race-day result, current-model selection or settled current-month ticket.
      return mode==="cash6" ? .55*p.cash+.45*p.hit*Math.max(1,fit.cashPrior/Math.max(.1,fit.hitPrior))
        :p.cash;
@@ -89,7 +89,7 @@ export function chooseIndependentTickets(
    const priceBand=odds<2?0:odds<3?1:odds<5?2:odds<8?3:odds<12?4:odds<20?5:odds<35?6:odds<60?7:odds<100?8:odds<200?9:odds<400?10:11;
    const key=q.betType+":"+priceBand;
    let forecast=contextForecastCache.get(key);
-   if(!forecast){forecast=scoreCash(race,{betType:q.betType,assumedOdds:odds},fit);contextForecastCache.set(key,forecast);}
+   if(!forecast){forecast=scoreCash(race,{raceId:race.raceId,betType:q.betType,combination:q.combination,stakeYen:100,assumedOdds:odds,lockedAt:null,settlementStatus:'pending',returnYen:null},fit);contextForecastCache.set(key,forecast);}
    const cashRatio=Math.max(.15,Math.min(4,forecast.cash/Math.max(.1,fit.cashPrior)));
    const hitRatio=Math.max(.15,Math.min(4,forecast.hit/Math.max(.02,fit.hitPrior)));
    const factor=mode==="cash6"?.70*cashRatio+.30*hitRatio:cashRatio;
