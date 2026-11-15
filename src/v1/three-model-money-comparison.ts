@@ -4,6 +4,7 @@
  * Every cash forecast sees only preceding months' payout observations.
  */
 import archive from "./three-model-archived-cash-priors.json" with {type:"json"};
+import {restored716Tickets,RESTORED_RESEARCH_SLA,RESTORED_RESEARCH_TRAINING_TICKETS} from "./restored-716-money-policy.js";
 export type MethodId="current"|"cash6"|"cash96";
 export type Race={raceId:string;raceDate:string;venue:string;raceNo:number;
   raceName:string|null;surface:string|null;distanceM:number|null;
@@ -115,11 +116,12 @@ export function scoreCash(r:Race,bet:Bet,fit:Fit):{cash:number;hit:number}{
   if(fit.objective==="hit_cash")cash=.66*cash+.34*(hit*Math.min(25,fit.cashPrior/Math.max(.1,fit.hitPrior)));
   return {cash:Math.max(.01,cash),hit:Math.min(.99,Math.max(.01,hit))};
 }
-function validCurrent(xs:Bet[]):Bet[]|null{
+function validCurrent(xs:Bet[],preserveSourceOrder=false):Bet[]|null{
   if(xs.length!==2||new Set(xs.map(x=>x.betType)).size!==2||
     xs.some(x=>!TYPES.has(x.betType)||!Number.isFinite(Number(x.assumedOdds))||
       Number(x.assumedOdds)<=0||!Number.isInteger(Number(x.stakeYen))||
       Number(x.stakeYen)<100||Number(x.stakeYen)%100!==0))return null;
+  if(preserveSourceOrder)return [...xs];
   return [...xs].sort((a,b)=>a.betType.localeCompare(b.betType,"ja")||
     a.combination.localeCompare(b.combination,"ja"));
 }
@@ -149,47 +151,42 @@ export function compareThree(date:string,selectedIds:string[],races:Race[],
     if(!selected.has(bet.raceId))continue;
     const arr=byBet.get(bet.raceId)||[];arr.push(bet);byBet.set(bet.raceId,arr);
   }
-  const cash6=fitPreviousCash(date.slice(0,7),6,"hit_cash",older);
-  const cash96=fitPreviousCash(date.slice(0,7),96,"cash80",older);
+  // The prior six-month method is retired: the second public model is now
+  // the precisely frozen 716% research cash allocator, not a relabel.
   const definitions=[
-    {id:"current" as const,title:"現行モデル",description:"サイトで確定した実際の買い目・購入金額",hypothetical:false},
-    {id:"cash6" as const,title:"直近6か月モデル",description:"5レース、予測収益が高い券種に1,800円、もう一方に200円",hypothetical:true},
-    {id:"cash96" as const,title:"過去96か月モデル",description:"会場の上位3レース、予測収益が高い券種に1,800円",hypothetical:true}
+    {id:"current" as const,title:"現行モデル",description:"従来どおりの実際に固定した買い目・購入金額",hypothetical:false},
+    {id:"cash6" as const,title:"716.83%研究モデル",description:"2023〜2026/8の過去検証値。元の方式で5候補から3R選び100円単位配分",hypothetical:true}
   ];
   return definitions.map(def=>{
     let selectedRaces=0,awaitingRaces=0;
     const venues=[...byVenue].map(([venue,rows])=>{
       const candidates=rows.map(r=>{
-        const original=validCurrent(byBet.get(r.raceId)||[]);
+        const original=validCurrent(byBet.get(r.raceId)||[],def.id==="cash6");
         const onTime=original!==null&&original.every(b=>preT15(b.lockedAt,r.startTimeUtc,r.raceDate,r.startTimeJst));
         if(!original)return {race:r,original:null,ready:false,tickets:[] as Ticket[],expected:0};
         if(def.id==="current")return {race:r,original,ready:onTime,tickets:originals(original),expected:0};
         if(!onTime)return {race:r,original,ready:false,tickets:[] as Ticket[],expected:0};
-        const fit=def.id==="cash6"?cash6:cash96;
-        const a=scoreCash(r,original[0]!,fit),b=scoreCash(r,original[1]!,fit);
-        const tickets=speculative(original,a.cash,b.cash);
-        const expected=(tickets[0]!.stakeYen*a.cash+tickets[1]!.stakeYen*b.cash)/1000;
-        return {race:r,original,ready:true,tickets,expected};
+        const result=restored716Tickets(r,original);
+        return {race:r,original,ready:true,tickets:result.tickets,expected:result.priority};
       });
-      // 96-month selection is not valid until all five base tickets exist.
+      // Original 716% formula chooses 3/5 by descending (cash A + cash B).
+      // With incomplete original tickets, no hindsight-based partial slate.
       const complete=rows.length===5&&candidates.every(c=>c.ready);
-      const rank96=new Set(def.id==="cash96"&&complete
-        ? [...candidates].sort((a,b)=>b.expected-a.expected||a.race.raceNo-b.race.raceNo)
-            .slice(0,3).map(x=>x.race.raceId):[]);
+      const ranks=new Set(def.id==="cash6"&&complete?
+        [...candidates].sort((a,b)=>b.expected-a.expected||
+          (a.race.raceId<b.race.raceId?-1:a.race.raceId>b.race.raceId?1:0))
+          .slice(0,RESTORED_RESEARCH_SLA).map(x=>x.race.raceId):[]);
       const selections:ModelPick[]=candidates.map(c=>{
         let status:ModelPick["status"]="awaiting",detail="本番買い目の確定待ち",tickets:Ticket[]=[];
         if(def.id==="current"&&c.original){
           status="actual";tickets=c.tickets;detail=c.ready?"本番確定買い目":"本番の保存済み買い目（T−15固定は未確認）";
-        }else if(def.id==="cash6"&&c.ready){
-          status="simulation";tickets=c.tickets;detail="新モデルによる参考配分。実購入はしていません";
-        }else if(def.id==="cash96"&&complete){
-          if(rank96.has(c.race.raceId)){
-            status="simulation";tickets=c.tickets;detail="5レース中、予測払戻上位3レース";
-          }else{status="skipped";detail="予測払戻上位3レースに入らず見送り";}
-        }else if(def.id==="cash96"){
-          detail="会場の5レースの確定買い目が揃うまで3レースの選択は判定待ち";
-        }else if(c.original&&!c.ready){
-          detail="発走15分前までの買い目固定を確認できないため参考予測は未表示";
+        }else if(def.id==="cash6"&&complete){
+          if(ranks.has(c.race.raceId)){
+            status="simulation";tickets=c.tickets;
+            detail="元の716.83%研究方式による仮想配分・実購入ではありません";
+          }else{status="skipped";detail="元の研究方式で会場5候補中の上位3レース外";}
+        }else if(def.id==="cash6"){
+          detail="会場5レースの発走15分前固定馬券がすべて揃うまで判定待ち";
         }
         if(status==="actual"||status==="simulation")selectedRaces++;
         if(status==="awaiting")awaitingRaces++;
@@ -198,6 +195,6 @@ export function compareThree(date:string,selectedIds:string[],races:Race[],
       return {venue,races:selections};
     });
     return {...def,selectedRaces,awaitingRaces,
-      trainingTickets:def.id==="cash6"?cash6.seen:def.id==="cash96"?cash96.seen:0,venues};
+      trainingTickets:def.id==="cash6"?RESTORED_RESEARCH_TRAINING_TICKETS:0,venues};
   });
 }
