@@ -83,7 +83,7 @@ for(const text of ["テストホース","買い目の理由","ライト","スタ
   assert.ok(hd.includes(text),"missing race detail feature "+text);
 }
 assert.ok(!hd.includes("/models/96m/races/"));
-assert.ok(hd.includes("/races/"+ids[0]));
+assert.ok(hd.includes("/races/"+detailId));
 assert.ok(queries.every(x=>x.startsWith("FIRST SELECT ")||x.startsWith("ALL SELECT ")),
   "all queries must be SELECT-only");
 console.log("RESTORED_716827_FULL_PAGES_AND_DETAILS_READ_ONLY_TEST_OK",queries.length);
