@@ -412,7 +412,9 @@ async function addOriginalModelSwitch(response: Response,raceId?: string): Promi
   if (response.status !== 200 || !response.headers.get("content-type")?.includes("text/html")) return response;
   let html=await response.text();
   if (/<main\b/i.test(html) && !html.includes('class="prediction-model-tabs"')) {
-    html=html.replace(/(<main\b[^>]*>)/i,'$1'+modelNavigation("current",undefined,raceId));
+    const switcher=modelNavigation("current",undefined,raceId);
+    if (html.includes("</header>")) html=html.replace("</header>","</header>"+switcher);
+    else html=html.replace(/(<main\b[^>]*>)/i,'$1'+switcher);
     html=html.replace("</head>",MODEL_SWITCH_CSS+"</head>");
   }
   const headers=new Headers(response.headers);
