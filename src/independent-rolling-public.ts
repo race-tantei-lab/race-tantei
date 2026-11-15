@@ -1,4 +1,4 @@
-import {selectionKey,finalKey} from "./independent-rolling-worker.js";
+function selectionKey(mode:IndependentMode,date:string):string{return "independent_selection:"+mode+":"+date;}
 import {canFreezeIndependent,INDEPENDENT_SOURCE_VERSION,settleIndependent,type IndependentMode,type IndependentFinal,type IndependentSelection} from "./v1/independent-rolling-core.js";
 import {modelNavigation,MODEL_SWITCH_CSS} from "./three-model-full-pages.js";
 
