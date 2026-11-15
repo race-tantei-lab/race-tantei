@@ -10,7 +10,7 @@ import {shell} from "./v1/public-ui.js";
 import {HOME_INTERACTION_SCRIPT} from "./three-model-navigation-client.js";
 import {compareThree,type Panel,type ModelPick,type Race,type Bet,type PastBet,type MethodId}
   from "./v1/three-model-money-comparison.js";
-import {addDays,normalizeDate,oldSettled} from "./three-model-compare-page.js";
+import {addDays,normalizeDate} from "./three-model-compare-page.js";
 import type {Env} from "./v1/types.js";
 
 type ModelMode="cash6"|"cash96";
@@ -32,7 +32,7 @@ function esc(x:unknown):string{
 function yen(x:number):string{return Math.round(x).toLocaleString("ja-JP")+"円";}
 const models:{id:MethodId;title:string;path:string}[]=[
  {id:"current",title:"現行モデル",path:"/"},
- {id:"cash6",title:"直近6か月モデル",path:"/models/6m"},
+ {id:"cash6",title:"716.83%研究モデル",path:"/models/6m"},
 ];
 export function modelNavigation(id:MethodId,date?:string,raceId?:string):string{
  return '<nav class="prediction-model-tabs" aria-label="予想モデルを切り替える">'+
@@ -74,9 +74,9 @@ const STYLE='<style>'+
  '.model-flag{padding:12px;border:1px solid #7a6040;background:#2a2416;border-radius:12px;font-size:12px;line-height:1.8;color:#f0ddad;margin:15px 0}'+
  '@media(max-width:760px){.model-day-total{grid-template-columns:1fr 1fr}.model-day-total .panel{padding:10px}.model-day-total strong{font-size:18px}.race-rail .model-race-card{flex:0 0 234px}}'+
  '</style>';
-const CAUTION='新モデルは現行モデルが選んだ馬券の購入金額・対象レースを変更する研究用の参考予想です。'+
- '独立した馬の予想モデルではなく、実際に購入した馬券でもありません。'+
- '2026年8月以降の検証では回収率200%を達成していません。';
+const CAUTION='716.83%は2023年〜2026年8月9日の過去検証結果であり、将来の回収率ではありません。'+
+ '現行モデルの過去候補は全期間の結果を学習していたため先読みリスクが残ります。'+
+ '独立した馬券生成モデルではなく、実際に購入した馬券でもありません。';
 const BUDGETS=[
  {name:"ライト",sum:2000},
  {name:"スタンダード",sum:5000},
@@ -218,8 +218,7 @@ async function load(db:D1Database,date:string,mode:ModelMode):Promise<Context>{
    selectedIds=payload.selected.map(x=>String(x.raceId||"")).filter(Boolean);
    if(selectedIds.length!==new Set(selectedIds).size)throw Error("DUPLICATE_FINAL_SELECTION");
  }
- const older=state?.value?await oldSettled(db,date.slice(0,7)):[] as PastBet[];
- const all=compareThree(date,selectedIds,races,bets,older);
+ const all=compareThree(date,selectedIds,races,bets,[]);
  const panel=all.find(x=>x.id===mode);
  if(!panel)throw Error("RESEARCH_MODEL_PANEL_MISSING");
  const calendar=await loadCalendar(db,addDays(new Date(Date.now()+9*3600_000).toISOString().slice(0,10),7));
@@ -227,7 +226,7 @@ async function load(db:D1Database,date:string,mode:ModelMode):Promise<Context>{
 }
 function modeIntro(mode:ModelMode):{name:string,lead:string}{
  return mode==="cash6"
-  ?{name:"直近6か月モデル",lead:"直近6か月の払戻・的中傾向を月初に学習。現行モデルの各会場5レース・2券種のうち、期待払戻が高い方に1,800円、他方に200円を配分"}
+  ?{name:"716.83%研究モデル",lead:"元の研究方式を復元。2026年は2025年末以前の払戻だけから券種・オッズ帯・レース番号別に学習し、現行5レース中の上位3レースを選び2券種合計2,000円を100円単位で配分"}
   :{name:"過去96か月モデル",lead:"過去96か月の払戻傾向を月初に学習。現行モデルの各会場5レースから予測収益上位3レースだけを選び、2券種を1,800円・200円で配分"};
 }
 function home(mode:ModelMode,ctx:Context,venueParam:string|null):Response{
@@ -253,7 +252,7 @@ function home(mode:ModelMode,ctx:Context,venueParam:string|null):Response{
  navigation(mode,calendar,date,venue,byVenue)+
  '<div class="section-title"><h2>モデルについて</h2></div>'+
  '<section class="panel"><p>券種と馬番の組み合わせは現行モデルと共通です。'+
- '新モデルは買うレースと2券種への金額配分だけを予測します。'+
+ '元の716.83%研究方式に従って5レースから3レースを選び、2券種の金額を100円単位で配分します。'+
  '1レース2,000円を基準とし、スタンダード・プレミアムの配分は同じ比率で換算した参考額です。'+
  '上の回収率は精算できたレースだけの仮想購入額によるもので、本番の総合成績とは区別しています。</p></section></div>';
  return renderDocument(intro.name,body,HOME_INTERACTION_SCRIPT);
@@ -330,10 +329,10 @@ async function detail(mode:ModelMode,ctx:Context,raceId:string,db:D1Database):Pr
  '<section class="panel"><div class="section-title"><h2>予想買い目</h2></div>'+
  '<p class="muted">'+esc(status.detail)+'</p>'+tickets.html+'</section>'+
  '<section class="panel"><div class="section-title"><h2>買い目の理由</h2></div>'+
- '<p>月初時点で参照可能だった過去'+(mode==="cash6"?"6":"96")+
- 'か月の払戻結果から、券種・オッズ帯・競馬場・距離・芝ダート・季節の関係を学習して予測しています。'+
- (mode==="cash96"?"同じ競馬場の5候補から予測払戻上位3レースを選びます。":"5候補のレースはすべて購入対象です。")+
- '馬の組み合わせ自体は現行モデルで確定したものです。学習の履歴オッズは発走15分前のJRA公式オッズとして完全に検証されていません。</p></section>'+
+ '<p>元の研究方式（券種・オッズ帯・レース番号、払戻上限3万円、平滑化40件、配分指数4）を使用。'+
+ '現行モデルが選んだ5レースの候補から3レースを選び、2券種の金額を100円単位で決定します。'+
+ '2026年の学習対象は2025年末以前のみ。馬券の組み合わせ自体は現行モデルで確定したものです。'+
+ '過去716.83%は事前予想の再現性を保証しません。</p></section>'+
  runnerList(result.results||[]);
  const script='(function(){var btn=[].slice.call(document.querySelectorAll("[data-course-tab]"));'+
  'var panels=[].slice.call(document.querySelectorAll("[data-course-view]"));'+
