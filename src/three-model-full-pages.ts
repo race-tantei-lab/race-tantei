@@ -1,5 +1,5 @@
 /**
- * Fully separate current-like site screens for the 6m and 96m research methods.
+ * Separate current-like research site for the six-month cash-allocation method.
  *
  * Shares the production original site's shell, styling, year -> month -> day
  * -> venue -> race navigation, race-detail course tabs and runner list.
@@ -33,7 +33,6 @@ function yen(x:number):string{return Math.round(x).toLocaleString("ja-JP")+"円"
 const models:{id:MethodId;title:string;path:string}[]=[
  {id:"current",title:"現行モデル",path:"/"},
  {id:"cash6",title:"直近6か月モデル",path:"/models/6m"},
- {id:"cash96",title:"過去96か月モデル",path:"/models/96m"}
 ];
 export function modelNavigation(id:MethodId,date?:string,raceId?:string):string{
  return '<nav class="prediction-model-tabs" aria-label="予想モデルを切り替える">'+

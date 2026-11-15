@@ -4,7 +4,7 @@
  */
 export const HOME_INTERACTION_SCRIPT = String.raw`(function(){
  var serial=0;
- function isHome(url){return /^\/models\/(6m|96m)\/?$/.test(url.pathname);}
+ function isHome(url){return /^\/models\/(6m)\/?$/.test(url.pathname);}
  function showVenue(a,url){
    var venue=a.getAttribute("data-model-venue"),root=document.getElementById("model-page-root");
    if(!venue||!root)return false;

@@ -42,17 +42,20 @@ const DB={
 const env={DB} as unknown as Parameters<typeof serveFullModel>[1];
 const nav=modelNavigation("cash6",raceDate,ids[0]);
 assert.ok(nav.includes('aria-current="page"'));
-assert.ok(nav.includes("/models/96m/races/"+ids[0]));
+assert.ok(!nav.includes("/models/96m/"));
+assert.equal((nav.match(/data-prediction-model=/g)||[]).length,2);
 assert.ok(nav.includes("/races/"+ids[0]));
 assert.ok(MODEL_SWITCH_CSS.includes(".prediction-model-tabs"));
 const six=await serveFullModel(new Request("https://race-tantei.test/models/6m?date="+raceDate),env,"cash6");
 assert.equal(six.status,200);
 assert.equal(six.headers.get("x-race-model-full-page"),"standalone-v3");
 const h6=await six.text();
-for(const text of ["直近6か月モデル","過去96か月モデル","現行モデル","年","月","日付","競馬場","レース1","レース12","1,800円","200円","参考予想"]){
+for(const text of ["直近6か月モデル","現行モデル","年","月","日付","競馬場","レース1","レース12","1,800円","200円","参考予想"]){
   assert.ok(h6.includes(text),"missing "+text);
 }
 assert.ok(h6.includes('data-prediction-model="cash6" aria-current="page"'));
+assert.ok(!h6.includes("過去96か月モデル"));
+assert.ok(!h6.includes("/models/96m"));
 for(const label of ["1. 年","2. 月","3. 日付","4. 会場","5. レース"]){
   assert.ok(h6.includes(label),"missing original navigator step "+label);
 }
@@ -68,18 +71,12 @@ assert.ok(h6.indexOf('5. レース')<h6.indexOf('data-model-race='),"race cards 
 
 assert.equal((h6.match(/data-model-race=/g)||[]).length,12);
 assert.ok(h6.includes("/models/6m/races/"+ids[0]));
-const ninety=await serveFullModel(new Request("https://race-tantei.test/models/96m?date="+raceDate),env,"cash96");
-const h96=await ninety.text();
-assert.ok(h96.includes('data-prediction-model="cash96" aria-current="page"'));
-assert.ok(h96.includes("3R"));
-assert.equal((h96.match(/data-model-race=/g)||[]).length,12);
-assert.equal((h96.match(/参考予想<\/span>/g)||[]).length,3);
 const detail=await serveFullModel(new Request("https://race-tantei.test/models/6m/races/"+ids[0]),env,"cash6",ids[0]);
 const hd=await detail.text();
 for(const text of ["テストホース","買い目の理由","ライト","スタンダード","プレミアム","4,500円","9,000円","予想買い目"]){
   assert.ok(hd.includes(text),"missing race detail feature "+text);
 }
-assert.ok(hd.includes("/models/96m/races/"+ids[0]));
+assert.ok(!hd.includes("/models/96m/races/"));
 assert.ok(hd.includes("/races/"+ids[0]));
 assert.ok(queries.every(x=>x.startsWith("FIRST SELECT ")||x.startsWith("ALL SELECT ")),
   "all queries must be SELECT-only");

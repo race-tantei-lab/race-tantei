@@ -1,4 +1,4 @@
-name: Verify restored read-only cash research sites live
+name: Verify two-model public navigation and retired 96m URLs
 on:
   push:
     branches: [main]
@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 16
     steps:
-      - name: Check original unchanged and research sites no longer expose unvalidated independent picks
+      - name: Check original and six-month pages, absent 96-month public interface
         shell: bash
         run: |
           set -euo pipefail
@@ -22,19 +22,24 @@ jobs:
             success=1
             curl -fsS --retry 2 --retry-delay 2 "$base/" -o /tmp/original.html || success=0
             grep -Fq 'id="races"' /tmp/original.html || success=0
-            for mode in 6m 96m; do
-              curl -fsS --retry 2 --retry-delay 2 -D "/tmp/${mode}.headers" "$base/models/${mode}?date=2026-11-08" -o "/tmp/${mode}.html" || success=0
-              grep -Fiq 'x-race-model-full-page: standalone-v3' "/tmp/${mode}.headers" || success=0
-              grep -Fq 'data-model-filter="true"' "/tmp/${mode}.html" || success=0
-              grep -Fq '参考予想' "/tmp/${mode}.html" || success=0
-              ! grep -Fiq 'x-race-independent-model: cash' "/tmp/${mode}.headers" || success=0
-              test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/${mode}/api/public/day?date=2026-11-08")" = "404" || success=0
-            done
+            curl -fsS --retry 2 --retry-delay 2 -D /tmp/6m.headers "$base/models/6m?date=2026-11-08" -o /tmp/6m.html || success=0
+            grep -Fiq 'x-race-model-full-page: standalone-v3' /tmp/6m.headers || success=0
+            grep -Fq 'data-model-filter="true"' /tmp/6m.html || success=0
+            grep -Fq '参考予想' /tmp/6m.html || success=0
+            grep -Fq '直近6か月モデル' /tmp/6m.html || success=0
+            ! grep -Fq '過去96か月モデル' /tmp/6m.html || success=0
+            ! grep -Fq '/models/96m' /tmp/6m.html || success=0
+            grep -Fq '直近6か月モデル' /tmp/original.html || success=0
+            ! grep -Fq '過去96か月モデル' /tmp/original.html || success=0
+            test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/96m")" = "404" || success=0
+            test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/96m/races/2026-11-08-tokyo-01")" = "404" || success=0
+            test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/6m/api/public/day?date=2026-11-08")" = "404" || success=0
+            test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/compare")" = "302" || success=0
             if test "$success" = "1"; then
-              echo RESTORED_RESEARCH_PAGES_AND_ORIGINAL_SITE_LIVE_OK
+              echo TWO_MODELS_VISIBLE_NO_96M_SITE_LIVE_OK
               exit 0
             fi
             sleep 15
           done
-          echo RESTORED_RESEARCH_PAGES_LIVE_FAILED >&2
+          echo TWO_MODELS_SITE_LIVE_FAILED >&2
           exit 1

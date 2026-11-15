@@ -1,4 +1,4 @@
-name: Deploy independent 6-month and 96-month prediction Workers
+name: Deploy retained six-month Worker with disabled schedule
 on:
   push:
     branches: [main]
@@ -7,7 +7,6 @@ on:
       - "src/v1/independent-rolling-core.ts"
       - "src/v1/completed-worker-live-lock.ts"
       - "wrangler.independent-6m.jsonc"
-      - "wrangler.independent-96m.jsonc"
       - "tsconfig.independent.json"
       - ".github/workflows/deploy-independent-models.yml"
   workflow_dispatch:
@@ -28,34 +27,25 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci --prefer-offline --no-audit --no-fund
-      - name: Verify both independently generated cash models
+      - name: Compile and test the retained prediction worker
         run: |
           npx tsc -p tsconfig.independent.json
           npx tsx tests/independent-rolling-tests.ts
-      - name: Validate independent 6m and 96m bundles
+      - name: Validate six-month Worker bundle
         run: |
           npx wrangler deploy --dry-run --config wrangler.independent-6m.jsonc --outdir dist-independent-6m
-          npx wrangler deploy --dry-run --config wrangler.independent-96m.jsonc --outdir dist-independent-96m
       - name: Deploy independent 6m cron Worker
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 3c6d1826b573b2e68cb13ec37e9e8ade
           command: deploy --config wrangler.independent-6m.jsonc
-      - name: Deploy independent 96m cron Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: 3c6d1826b573b2e68cb13ec37e9e8ade
-          command: deploy --config wrangler.independent-96m.jsonc
-      - name: Verify both Worker endpoints exist
+      - name: Verify six-month Worker endpoint exists
         shell: bash
         run: |
           set -euo pipefail
-          for mode in 6m 96m; do
-            url="https://race-tantei-independent-${mode}.race-tantei.workers.dev"
-            code=$(curl -sS --retry 5 --retry-delay 2 -o /tmp/independent-worker-${mode}.txt -w '%{http_code}' "$url")
-            echo "INDEPENDENT_WORKER_${mode} HTTP=${code}"
-            test "$code" = 404
-          done
-          echo INDEPENDENT_6M_96M_WORKERS_DEPLOYED
+          url="https://race-tantei-independent-6m.race-tantei.workers.dev"
+          code=$(curl -sS --retry 5 --retry-delay 2 -o /tmp/independent-worker-6m.txt -w '%{http_code}' "$url")
+          echo "SIX_MONTH_WORKER HTTP=${code}"
+          test "$code" = 404
+          echo SIX_MONTH_WORKER_DEPLOYED_SCHEDULE_DISABLED
