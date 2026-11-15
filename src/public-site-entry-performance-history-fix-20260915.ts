@@ -1,6 +1,5 @@
 import base from "./public-site-entry-quota-recovery-20260912.js";
 import { routeAdhoc } from "./adhoc/controller.js";
-import { threeModelPage } from "./three-model-compare-page.js";
 import { serveFullModel, modelNavigation, MODEL_SWITCH_CSS } from "./three-model-full-pages.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
 import { cumulativePerformanceResponse, refreshCumulativePerformanceIfDue } from "./v1/cumulative-performance.js";
@@ -419,24 +418,27 @@ async function addOriginalModelSwitch(response: Response,raceId?: string): Promi
   }
   const headers=new Headers(response.headers);
   headers.delete("content-length");
-  headers.set("x-race-model-switch","current-and-two-standalone-pages-v2");
+  headers.set("x-race-model-switch","current-and-six-month-v3");
   return new Response(html,{status:response.status,statusText:response.statusText,headers});
 }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    // Every model now has its OWN complete predictions / venue-day / race page.
-    // The previous three-column page stays accessible only at /models/compare.
-    const fullModelPath=url.pathname.match(/^\/models\/(6m|96m)(?:\/races\/(20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}))?\/?$/i);
+    // Public model navigation is two-mode only: canonical + six-month research.
+    // Retired 96m endpoints cannot serve predictions or legacy comparisons.
+    if (url.pathname.match(/^\/models\/96m(?:\/|$)/i)) return new Response("NOT_FOUND",{status:404});
+    const fullModelPath=url.pathname.match(/^\/models\/(6m)(?:\/races\/(20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}))?\/?$/i);
     if (request.method === "GET" && fullModelPath) {
-      return serveFullModel(request, env,fullModelPath[1]==="6m"?"cash6":"cash96",fullModelPath[2]);
+      return serveFullModel(request, env,"cash6",fullModelPath[2]);
     }
     if (request.method === "GET" && (url.pathname === "/models" || url.pathname === "/models/")) {
       const redirect="/models/6m"+(url.searchParams.has("date")?"?date="+encodeURIComponent(url.searchParams.get("date")||""):"");
       return new Response(null,{status:302,headers:{"location":redirect,"cache-control":"no-store"}});
     }
-    if (request.method === "GET" && url.pathname === "/models/compare") return threeModelPage(request, env);
+    if (request.method === "GET" && url.pathname === "/models/compare") {
+      return new Response(null,{status:302,headers:{"location":"/models/6m","cache-control":"no-store"}});
+    }
     const adhoc = await routeAdhoc(request, env);
     if (adhoc) return adhoc;
     if (request.method === "GET" && url.pathname === "/api/public/cumulative-performance") {
