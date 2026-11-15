@@ -63,7 +63,7 @@ await mapPool(ids,6,async id=>{
   const parsed=parseResultPage(page.html,page.url);
   const payouts=parsed.payouts.length?parsed.payouts:parseDesktopPayouts(page.html);
   if(!payouts.length)throw Error("OFFICIAL_RESULTS_NO_PAYOUTS");
-  records.push({raceId:id,race:{raceId:id,raceDate:id.slice(0,10),resultUrl:url},payouts});
+  records.push({raceId:id,race:{...parsed.race,raceId:id,raceDate:id.slice(0,10),resultUrl:url},payouts});
  }catch(e){resultFailures.push({raceId:id,error:String(e)});}
 });
 records.sort((a,b)=>a.raceId.localeCompare(b.raceId));
