@@ -152,7 +152,7 @@ function canonicalOddsRows(rows: OfficialOddsRow[]): string {
 
 let cachedWorkerModel: { identity: string; runtime: CompletedModelRuntime } | null = null;
 
-async function loadWorkerModel(db: D1Database): Promise<CompletedModelRuntime> {
+export async function loadWorkerModel(db: D1Database): Promise<CompletedModelRuntime> {
   const metaResult = await db.prepare("SELECT key,value FROM rt_ml_model_meta").all<ModelMetaRow>();
   const meta = new Map((metaResult.results ?? []).map((row) => [row.key, row.value]));
   if (meta.get("ready") !== "1") throw new Error("WORKER_MODEL_NOT_READY");
