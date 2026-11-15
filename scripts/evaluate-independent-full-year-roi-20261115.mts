@@ -14,6 +14,9 @@ const OUT=join(ROOT,"artifacts");
 const YEAR=String(process.env.AUDIT_YEAR||"2017");
 const LIMITED=Number(process.env.AUDIT_LIMIT||"0");
 const modes=["cash6","cash96"] as const;
+const historyMod=await import("../src/v1/ten-year-history-data/index.js");
+const historyRows=JSON.parse(gunzipSync(Buffer.from(historyMod.default,"base64")).toString("utf8")).races as any[][];
+const ARCHIVE=new Map<string,any[]>(historyRows.map(r=>[r[0],r]));
 const selection=JSON.parse(await readFile(join(OUT,"independent-full-period-selections.json"),"utf8"));
 const result=JSON.parse(await readFile(join(OUT,"independent-year-result-"+YEAR+".json"),"utf8"));
 const oddsPath=join(OUT,"independent-year-final-odds-"+YEAR+".jsonl.gz");
@@ -78,9 +81,6 @@ for(const mode of modes){
    const fakeRace={raceId:sel.raceId,raceDate:sel.date,venue:sel.venue,raceNo:sel.raceNo,raceName:null,surface:null,distanceM:null,startTimeUtc:null,startTimeJst:null};
    // Correct market priors: use actual archived surface, distance, race name
    // rather than winner-dependent result fields.
-   const context=selection.modeResults.find((x:any)=>x.date===sel.date&&x.mode===mode);
-   const archiveText=await import("../src/v1/ten-year-history-data/index.js");
-   // The compressed history is initialized once and memoized by the module cache.
    const archive=ARCHIVE.get(sel.raceId);
    if(!archive)throw Error("ARCHIVED_RACE_CONTEXT_NOT_FOUND");
    fakeRace.raceName=archive[4];fakeRace.surface=archive[6];fakeRace.distanceM=archive[7];
