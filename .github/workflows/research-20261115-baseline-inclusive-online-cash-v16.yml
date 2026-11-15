@@ -1,0 +1,36 @@
+name: Search NEW online ticket-cash models with original 431pct model included v16
+on:
+  push:
+    branches: [research/20261115-baseline-inclusive-rolling-money-v16]
+    paths:
+      - .github/workflows/research-20261115-baseline-inclusive-online-cash-v16.yml
+      - scripts/research-20261115-baseline-inclusive-rolling-money-v16.py
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deterministic numerical monetary-model runtime
+        run: python -m pip install --disable-pip-version-check "numpy==2.2.6"
+      - name: Test cash gates, multiple training periods, and baseline-preserving search
+        run: |
+          python -m py_compile scripts/research-20261115-baseline-inclusive-rolling-money-v16.py
+          python -u scripts/research-20261115-baseline-inclusive-rolling-money-v16.py --self-test
+      - name: Learn 3–96-month real-yen conditional predictors and discover new 2017–26 methods
+        run: |
+          python -u scripts/research-20261115-baseline-inclusive-rolling-money-v16.py \
+            --output analysis-results/20261115-baseline-inclusive-online-money-model-v16.json
+      - name: Save full qualifying new methods and exact baseline comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-included-2017-2026-new-money-forecast-search-v16
+          path: analysis-results/20261115-baseline-inclusive-online-money-model-v16.json
+          if-no-files-found: warn
+          retention-days: 30
