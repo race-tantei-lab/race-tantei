@@ -1,0 +1,69 @@
+name: Research independent cash6/cash96 full-year final-odds actual ROI 2017-2026
+on:
+  push:
+    branches: [research/20261115-rolling-final-odds-replay]
+    paths:
+      - ".github/workflows/research-independent-year-matrix-roi-20261115.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  year:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        year: [2017,2018,2019,2020,2021,2022,2023,2024,2025,2026]
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    env:
+      AUDIT_YEAR: ${{ matrix.year }}
+      AUDIT_LIMIT: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --no-audit --no-fund
+      - run: pip install numpy lightgbm beautifulsoup4
+      - name: Rank all historical races using deployed independent cash6 / cash96 functions
+        run: npx tsx scripts/plan-independent-full-period-20261115.mts
+      - name: Reconstruct chronological original horse model features for target year
+        run: python scripts/replay-full-period-runner-weights-20261115.py
+      - name: Collect JRA official results and payout amounts for all independently selected races
+        run: npx tsx scripts/collect-independent-year-results-20261115.mts
+      - name: Collect JRA official six-market FINAL odds for all independently selected races
+        run: python scripts/collect-independent-year-final-odds-20261115.py
+      - name: Calculate actual independent model returns using original source functions
+        run: npx tsx scripts/evaluate-independent-full-year-roi-20261115.mts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-year-full-roi-${{ matrix.year }}
+          path: |
+            artifacts/independent-year-roi-${{ matrix.year }}.json
+            artifacts/independent-year-result-${{ matrix.year }}.json
+            artifacts/independent-year-final-odds-${{ matrix.year }}-meta.json
+          retention-days: 30
+          if-no-files-found: warn
+  aggregate:
+    if: always()
+    needs: [year]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: independent-year-full-roi-*
+          path: artifacts/combined
+          merge-multiple: true
+      - run: node scripts/aggregate-independent-2017-2026-roi.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-2017-2026-all-years-roi-and-coverage
+          path: artifacts/independent-2017-2026-full-roi.json
+          retention-days: 30
