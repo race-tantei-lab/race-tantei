@@ -27,6 +27,16 @@ export function fitIndependent(date:string,mode:IndependentMode,history:PastBet[
  return fitPreviousCash(date.slice(0,7),cfg.horizon,cfg.objective,history);
 }
 type CashFit=ReturnType<typeof fitIndependent>;
+
+/** Only compare market and horse combination, NEVER yen allocation or odds. */
+export type TicketIdentity=Pick<CompletedTicket,"betType"|"combination">;
+export function identicalTwoTicketPicks(a:readonly TicketIdentity[],b:readonly TicketIdentity[]):boolean{
+ if(a.length!==2||b.length!==2)return false;
+ const keys=(t:readonly TicketIdentity[])=>t.map(x=>x.betType+"|"+x.combination).sort();
+ const left=keys(a),right=keys(b);
+ return left[0]===right[0]&&left[1]===right[1];
+}
+
 export function independentlyRankRaces(
  date:string,mode:IndependentMode,races:IndependentRace[],fit:CashFit
 ):IndependentSelection["selected"]{
@@ -71,12 +81,13 @@ function comboPositions(type:CompletedBetType,combo:string,horseNos:readonly num
 }
 export function chooseIndependentTickets(
  race:Race,mode:IndependentMode,fit:CashFit,
- horseNos:readonly number[],weights:readonly number[],quotes:readonly OfficialOddsRow[]
+ horseNos:readonly number[],weights:readonly number[],quotes:readonly OfficialOddsRow[],
+ blockedPairs:readonly (readonly TicketIdentity[])[]=[]
 ):CompletedTicket[]{
  if(horseNos.length!==weights.length||horseNos.length<3||new Set(horseNos).size!==horseNos.length)throw Error("BAD_INDEPENDENT_RUNNERS");
  const total=weights.reduce((a,b)=>a+b,0);
  if(!Number.isFinite(total)||Math.abs(total-1)>1e-7||weights.some(w=>!Number.isFinite(w)||w<=0))throw Error("BAD_INDEPENDENT_HORSE_PROBABILITIES");
- const byType=new Map<CompletedBetType,CompletedTicket>();
+ const byType=new Map<CompletedBetType,CompletedTicket[]>();
  const contextForecastCache=new Map<string,ReturnType<typeof scoreCash>>();
  for(const q of quotes){
    if(!COMPLETED_BET_ORDER.includes(q.betType))continue;
@@ -99,15 +110,36 @@ export function chooseIndependentTickets(
      betType:q.betType,combination:q.combination,horses:pos.map(i=>horseNos[i]),
      predictedProbability:p,officialOdds:odds,valueProduct:expected,score:expected
    };
-   const old=byType.get(q.betType);
-   if(!old||ticket.score>old.score||
-      (ticket.score===old.score&&ticket.combination<old.combination))byType.set(q.betType,ticket);
+   // Keep multiple market alternatives so a clone of the incumbent's
+   // two specific horse combinations is never "fixed" merely by stake changes.
+   const ranked=byType.get(q.betType)||[];
+   if(!ranked.some(x=>x.combination===ticket.combination)){
+     ranked.push(ticket);
+     ranked.sort((a,b)=>b.score-a.score||a.combination.localeCompare(b.combination));
+     if(ranked.length>4)ranked.length=4;
+     byType.set(q.betType,ranked);
+   }
  }
  if(byType.size<2)throw Error("INDEPENDENT_OFFICIAL_MARKETS_INCOMPLETE");
- const best=[...byType.values()].sort((a,b)=>b.score-a.score||
-   COMPLETED_BET_ORDER.indexOf(a.betType)-COMPLETED_BET_ORDER.indexOf(b.betType)||
-   a.combination.localeCompare(b.combination));
- return best.slice(0,2);
+ const candidates=[...byType.values()].flat();
+ let best:CompletedTicket[]|null=null;
+ let bestTotal=-Infinity;
+ for(let i=0;i<candidates.length;i++){
+   for(let j=i+1;j<candidates.length;j++){
+     const a=candidates[i],b=candidates[j];
+     if(a.betType===b.betType)continue;
+     const pair=[a,b].sort((x,y)=>y.score-x.score||
+       COMPLETED_BET_ORDER.indexOf(x.betType)-COMPLETED_BET_ORDER.indexOf(y.betType)||
+       x.combination.localeCompare(y.combination));
+     if(blockedPairs.some(other=>identicalTwoTicketPicks(pair,other)))continue;
+     const total=a.score+b.score;
+     if(total>bestTotal+1e-12){
+       best=pair;bestTotal=total;
+     }
+   }
+ }
+ if(!best)throw Error("INDEPENDENT_NO_DISTINCT_TWO_MARKET_PAIR");
+ return best;
 }
 export function independentCourseBets(tickets:readonly CompletedTicket[]):CompletedCourseBet[]{
  if(tickets.length!==2||tickets[0].betType===tickets[1].betType)throw Error("INDEPENDENT_NEEDS_TWO_TYPES");
