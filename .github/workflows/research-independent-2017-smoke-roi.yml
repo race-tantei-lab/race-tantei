@@ -4,6 +4,7 @@ on:
     branches: [research/20261115-rolling-final-odds-replay]
     paths:
       - ".github/workflows/research-independent-2017-smoke-roi.yml"
+      - "scripts/collect-independent-year-final-odds-20261115.py"
 permissions:
   contents: read
 jobs:
