@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "include": [
     "src/three-model-compare-page.ts",
+    "src/three-model-full-pages.ts",
     "src/v1/three-model-money-comparison.ts",
     "worker-types.d.ts",
     "node-shims.d.ts"
