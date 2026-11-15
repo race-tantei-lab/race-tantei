@@ -29,8 +29,9 @@ SPEC.loader.exec_module(core)
 FEATURES=core.load_config()["runnerProbabilityModel"]["features"]
 assert len(FEATURES)==56
 MODEL=lgb.Booster(model_file=str(ROOT/"models/ten-year-completed-model.txt"))
-SELECTION=ROOT/"artifacts/independent-full-period-selections.json"
-OUT=ROOT/"artifacts/independent-full-period-horse-weights.jsonl.gz"
+LATE=os.environ.get("AUDIT_LATE","0")=="1"
+SELECTION=ROOT/("artifacts/independent-late-2026-selections.json" if LATE else "artifacts/independent-full-period-selections.json")
+OUT=ROOT/("artifacts/independent-late-2026-horse-weights.jsonl.gz" if LATE else "artifacts/independent-full-period-horse-weights.jsonl.gz")
 YEAR=os.environ.get("AUDIT_YEAR","all")
 if YEAR!="all" and not(YEAR.isdigit() and 2016<=int(YEAR)<=2026):raise RuntimeError("BAD_YEAR")
 overrides={}
@@ -54,6 +55,23 @@ for path in sorted((ROOT/"data/ten-year-runners").glob("????-??.json.gz")):
     with gzip.open(path,"rt",encoding="utf8") as fh:
         for raceId,entries in json.load(fh):
             runners[raceId]=entries
+if LATE:
+    late_data=json.load(gzip.open(ROOT/"artifacts/independent-late-2026-d1.json.gz","rt",encoding="utf8"))
+    for b in late_data["races"]:
+        r=b["race"];rid=r["raceId"]
+        if rid in metadata:raise RuntimeError("DUPLICATE_LATE_RACE_ID:"+rid)
+        record=[rid,r["raceDate"],r["venue"],int(r["raceNo"]),r.get("raceName"),r.get("startTimeJst"),r.get("surface"),r.get("distanceM"),None]
+        archive.append(record);metadata[rid]=record
+        results_by_hno={int(x["horseNo"]):x for x in b["results"]}
+        compact=[]
+        for h in b["runners"]:
+            result=results_by_hno.get(int(h["horseNo"]),{})
+            compact.append([h["horseNo"],h.get("frameNo"),h.get("horseName"),h.get("sexAge"),h.get("assignedWeight"),
+               h.get("jockey"),h.get("trainer"),h.get("horseWeight"),h.get("weightChange"),h.get("popularity"),
+               h.get("winOdds"),result.get("finishPosition"),result.get("timeText"),result.get("final3f"),h.get("runnerStatus")])
+        runners[rid]=compact
+        overrides[rid]=r
+    print("INDEPENDENT_OFFICIAL_LATE_2026_PROVENANCE",json.dumps({"races":len(late_data["races"])}),flush=True)
 if len(runners)!=len(metadata):
     raise RuntimeError(f"ARCHIVE_RUNNERS_MISMATCH:{len(runners)}:{len(metadata)}")
 def empty_state():
