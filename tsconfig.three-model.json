@@ -2,7 +2,7 @@
   "extends": "./tsconfig.json",
   "include": [
     "src/three-model-compare-page.ts",
-    "src/public-site-entry-performance-history-fix-20260915.ts",
+    "src/v1/three-model-money-comparison.ts",
     "worker-types.d.ts",
     "node-shims.d.ts"
   ]
