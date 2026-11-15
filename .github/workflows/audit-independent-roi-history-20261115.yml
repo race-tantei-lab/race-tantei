@@ -1,10 +1,5 @@
 name: Audit actual independent models historical cash ROI (read-only)
 on:
-  push:
-    branches: [main]
-    paths:
-      - "scripts/audit-independent-roi-history-20261115.py"
-      - ".github/workflows/audit-independent-roi-history-20261115.yml"
   workflow_dispatch:
 permissions:
   contents: read
