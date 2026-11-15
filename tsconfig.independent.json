@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/public-site-entry-performance-history-fix-20260915.ts",
+    "src/independent-rolling-worker.ts",
+    "src/independent-rolling-public.ts",
+    "src/v1/independent-rolling-core.ts",
+    "worker-types.d.ts",
+    "node-shims.d.ts"
+  ]
+}
