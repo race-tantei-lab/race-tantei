@@ -82,35 +82,77 @@ export async function independentDayApi(db:D1Database,mode:IndependentMode,date:
  return Response.json({...raw,ok:true,date,races,betStateAvailable:true},
  {headers:{"cache-control":"no-store, max-age=0","x-race-independent-model":mode}});
 }
-export async function independentPerformance(db:D1Database,mode:IndependentMode,date:string):Promise<Response>{
- const snap=await daySnapshot(db,mode,date);
- const summary=summaryForDay(date,snap);
- const prefix="independent_selection:"+mode+":";
- const rows=await db.prepare("SELECT state_key AS key FROM rt_system_state WHERE state_key>=? AND state_key<? ORDER BY state_key DESC LIMIT 30")
-   .bind(prefix,prefix+"~").all<{key:string}>();
- const days:typeof summary[]=[];
- for(const row of rows.results||[]){
-  const d=row.key.slice(prefix.length);
-  if(!validDate(d))continue;
-  days.push(d===date?summary:summaryForDay(d,await daySnapshot(db,mode,d)));
+/** One bounded snapshot of immutable model finals, shared by all past dates.
+ * Avoid the old O(days) × 4 D1 queries on every homepage request.
+ * Individual race details still use the exact-date index. */
+async function ledgerSnapshots(db:D1Database,mode:IndependentMode):Promise<Map<string,DaySnapshot>>{
+ const selectionPrefix="independent_selection:"+mode+":";
+ const finalPrefix="independent_final:"+mode+":";
+ const selections=await db.prepare(
+   "SELECT state_key AS key,state_value AS value FROM rt_system_state WHERE state_key>=? AND state_key<? ORDER BY state_key DESC LIMIT 370"
+ ).bind(selectionPrefix,selectionPrefix+"~").all<{key:string;value:string}>();
+ const byDate=new Map<string,DaySnapshot>();
+ const dates:string[]=[];
+ for(const x of selections.results||[]){
+   const date=x.key.slice(selectionPrefix.length);
+   if(!validDate(date))continue;
+   try{
+     const sel=JSON.parse(x.value) as IndependentSelection;
+     if(sel.mode!==mode||sel.date!==date||sel.sourceModel!==INDEPENDENT_SOURCE_VERSION)continue;
+     byDate.set(date,{selection:sel,finals:new Map(),races:[],paid:new Map()});
+     dates.push(date);
+   }catch{}
  }
- if(!days.some(x=>x.date===date))days.unshift(summary);
- return Response.json({ok:true,today:today(),summary,history:days,version:"independent-daily-performance-v1"},
-  {headers:{"cache-control":"no-store, max-age=0"}});
+ if(!dates.length)return byDate;
+ const earliest=dates.sort()[0];
+ const finals=await db.prepare(
+   "SELECT state_value AS value FROM rt_system_state WHERE state_key>=? AND state_key<? ORDER BY state_key DESC LIMIT 15000"
+ ).bind(finalPrefix+earliest+"-",finalPrefix+"~").all<{value:string}>();
+ const ids:string[]=[];
+ for(const x of finals.results||[]){
+   try{
+     const f=JSON.parse(x.value) as IndependentFinal;
+     if(f.mode!==mode||f.sourceModel!==INDEPENDENT_SOURCE_VERSION||
+        !canFreezeIndependent(f.startTimeUtc,f.oddsFetchedAt,f.lockedAt)||
+        f.courseBets?.length!==6||f.tickets?.length!==2)continue;
+     const d=byDate.get(f.date);
+     if(!d||d.finals.has(f.raceId))continue;
+     d.finals.set(f.raceId,f);ids.push(f.raceId);
+   }catch{}
+ }
+ // Query only frozen race IDs and their payouts; never scan every result race.
+ for(let i=0;i<ids.length;i+=300){
+   const chunk=JSON.stringify(ids.slice(i,i+300));
+   const [races,payouts]=await Promise.all([
+     db.prepare("SELECT race_id AS raceId,race_date AS raceDate,venue,race_no AS raceNo,status,start_time_utc AS startTimeUtc FROM rt_races WHERE race_id IN (SELECT value FROM json_each(?))").bind(chunk).all<RaceStatus>(),
+     db.prepare("SELECT race_id AS raceId,bet_type AS betType,combination,payout_yen AS payoutYen FROM rt_payouts WHERE race_id IN (SELECT value FROM json_each(?))").bind(chunk).all<Paid>()
+   ]);
+   for(const r of races.results||[])byDate.get(r.raceDate)?.races.push(r);
+   for(const p of payouts.results||[]){
+     const d=byDate.get(p.raceId.slice(0,10));
+     if(d){const a=d.paid.get(p.raceId)||[];a.push(p);d.paid.set(p.raceId,a);}
+   }
+ }
+ return byDate;
+}
+export async function independentPerformance(db:D1Database,mode:IndependentMode,date:string):Promise<Response>{
+ const all=await ledgerSnapshots(db,mode);
+ const snap=all.get(date)||await daySnapshot(db,mode,date);
+ const summary=summaryForDay(date,snap);
+ const history=[...all].sort((a,b)=>b[0].localeCompare(a[0]))
+   .slice(0,30).map(([d,v])=>d===date?summary:summaryForDay(d,v));
+ if(!history.some(x=>x.date===date))history.unshift(summary);
+ return Response.json({ok:true,today:today(),summary,history,version:"independent-daily-performance-v1"},
+   {headers:{"cache-control":"no-store, max-age=0"}});
 }
 type Aggregate={races:number;stake:number;paid:number};
 function addAggregate(a:Aggregate,stake:number,paid:number):void{a.races++;a.stake+=stake;a.paid+=paid;}
 function aggregateRow(a:Aggregate):string{return a.stake?(100*a.paid/a.stake).toFixed(1)+"%":"—";}
 async function aggregateIndependent(db:D1Database,mode:IndependentMode){
- const prefix="independent_selection:"+mode+":";
- const keys=await db.prepare("SELECT state_key AS key FROM rt_system_state WHERE state_key>=? AND state_key<? ORDER BY state_key DESC LIMIT 60")
-  .bind(prefix,prefix+"~").all<{key:string}>();
+ const ledger=await ledgerSnapshots(db,mode);
  const total:Aggregate={races:0,stake:0,paid:0};
  const months=new Map<string,Aggregate>(),venues=new Map<string,Aggregate>();
- for(const row of keys.results||[]){
-  const date=row.key.slice(prefix.length);
-  if(!validDate(date))continue;
-  const snap=await daySnapshot(db,mode,date);
+ for(const [date,snap] of ledger){
   for(const [id] of snap.finals){
    const p=paidFor(snap,id);
    if(!p)continue;
@@ -118,10 +160,8 @@ async function aggregateIndependent(db:D1Database,mode:IndependentMode){
    const m=months.get(date.slice(0,7))||{races:0,stake:0,paid:0};
    addAggregate(m,p.stake,p.paid);months.set(date.slice(0,7),m);
    const venue=snap.races.find(r=>r.raceId===id)?.venue||"";
-   if(venue){
-    const v=venues.get(venue)||{races:0,stake:0,paid:0};
-    addAggregate(v,p.stake,p.paid);venues.set(venue,v);
-   }
+   if(venue){const v=venues.get(venue)||{races:0,stake:0,paid:0};
+    addAggregate(v,p.stake,p.paid);venues.set(venue,v);}
   }
  }
  return {total,months,venues};
