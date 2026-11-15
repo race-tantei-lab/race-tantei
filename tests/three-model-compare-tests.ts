@@ -54,7 +54,9 @@ const latePanels=compareThree(date,ids,races,late,[]);
 assert.deepEqual(latePanels.map(x=>x.selectedRaces),[5,0]);
 assert.equal(preT15("2026-11-15T05:00:00Z","2026-11-15T06:00:00Z",date,"15:00"),true);
 assert.equal(preT15("2026-11-15T05:50:00Z","2026-11-15T06:00:00Z",date,"15:00"),false);
-assert.throws(()=>restored716Estimate({...races[0]!,raceDate:"2027-01-02"},original[0]!),
-  /YEAR_SPECIFIC_CASH_PRIOR_NOT_TRAINED/);
+let futureYearBlocked=false;
+try{restored716Estimate({...races[0]!,raceDate:"2027-01-02"},original[0]!);}
+catch(error){futureYearBlocked=String(error).includes("YEAR_SPECIFIC_CASH_PRIOR_NOT_TRAINED");}
+assert.ok(futureYearBlocked,"do not silently reuse frozen 2026 priors in 2027");
 assert.equal(JSON.stringify(original),originalBefore,"no mutation of canonical original tickets");
 console.log("RESTORED_716827_CASH_3_OF_5_T15_FINANCIAL_SAFETY_TEST_OK");
