@@ -93,8 +93,9 @@ export async function preStartBlockedTicketPairs(
  const asPair=(v:unknown):TicketIdentity[]|null=>{
    if(!Array.isArray(v)||v.length!==2)return null;
    const b=v.map(x=>({betType:String(x?.betType||""),combination:String(x?.combination||"")}));
-   if(b.some(x=>!x.betType||!x.combination)||b[0].betType===b[1].betType)return null;
-   return b;
+   if(b.some(x=>!["単勝","ワイド","馬連","馬単","3連複","3連単"].includes(x.betType)||!x.combination)||
+      b[0].betType===b[1].betType)return null;
+   return b as TicketIdentity[];
  };
  const blocked:TicketIdentity[][]=[];
  const canonicalRows=canonical.results||[];
