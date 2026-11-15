@@ -1,0 +1,40 @@
+name: Three-model Worker bundle and size budget smoke (no deployment)
+on:
+  push:
+    branches: [feature/20261115-three-model-compare-safe]
+    paths:
+      - .github/workflows/verify-three-model-bundle.yml
+      - src/v1/three-model-money-comparison.ts
+      - src/v1/three-model-archived-cash-priors.json
+      - src/three-model-compare-page.ts
+      - src/public-site-entry-performance-history-fix-20260915.ts
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install same dependencies as live production
+        run: |
+          npm ci
+          python -m pip install --disable-pip-version-check 'lightgbm==4.6.0' 'numpy<3'
+      - name: Assemble official original source model assets before bundling
+        run: python scripts/build-worker-completed-model-assets.py
+      - name: Verify complete Worker compiles, with new 3-model page, WITHOUT deployment
+        run: |
+          npx wrangler deploy --dry-run --outdir dist-three-model-check
+          test -n "$(find dist-three-model-check -type f -name '*.js' -print -quit)"
+          echo THREE_MODEL_WORKER_DRY_RUN_BUNDLE_SUCCESS
+      - name: Verify unchanged original price model through direct unit tests
+        run: |
+          npx tsc -p tsconfig.test.json
+          node dist-test/tests/three-model-compare-tests.js
