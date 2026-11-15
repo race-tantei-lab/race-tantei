@@ -1,0 +1,39 @@
+name: Research 2017 independent full-payout 8-race integration smoke
+on:
+  push:
+    branches: [research/20261115-rolling-final-odds-replay]
+    paths:
+      - ".github/workflows/research-independent-2017-smoke-roi.yml"
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AUDIT_YEAR: '2017'
+      AUDIT_LIMIT: '8'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --no-audit --no-fund
+      - run: pip install numpy lightgbm beautifulsoup4
+      - run: npx tsx scripts/plan-independent-full-period-20261115.mts
+      - run: python scripts/replay-full-period-runner-weights-20261115.py
+      - run: npx tsx scripts/collect-independent-year-results-20261115.mts
+      - run: python scripts/collect-independent-year-final-odds-20261115.py
+      - run: npx tsx scripts/evaluate-independent-full-year-roi-20261115.mts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-2017-8-race-cash6-cash96-smoke
+          path: |
+            artifacts/independent-year-roi-2017.json
+            artifacts/independent-year-result-2017.json
+            artifacts/independent-year-final-odds-2017-meta.json
+          retention-days: 10
