@@ -12,6 +12,7 @@ for path in [root/'data/ten-year-runners/2017-01.json.gz',root/'data/ten-year-ru
    if isinstance(y,list):return {'type':'array','size':len(y),'first':preview(y[0],d+1)} if d<4 and y else {'type':'array','size':len(y)}
    return str(y)[:90]
   print('MONTH',path.name,json.dumps(preview(x),ensure_ascii=False)[:4500],flush=True)
+  print('MONTH_FIRST_RECORD',path.name,json.dumps(x[0],ensure_ascii=False)[:3200],flush=True)
  except Exception as e:print('MONTH_FAIL',path.name,type(e).__name__,str(e)[:300],flush=True)
 parts=sorted((root/'src/v1/ten-year-history-data').glob('bin-*.ts'))
 a=''.join(json.loads(p.read_text().strip()[len('export default '):-1]) for p in parts)
