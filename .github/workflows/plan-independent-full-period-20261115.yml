@@ -1,0 +1,26 @@
+name: Research 2016-2026 independent 6m 96m full-date selection
+on:
+  push:
+    branches: [research/20261115-rolling-final-odds-replay]
+    paths:
+      - scripts/plan-independent-full-period-20261115.mts
+      - .github/workflows/plan-independent-full-period-20261115.yml
+permissions:
+  contents: read
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - run: npx tsx scripts/plan-independent-full-period-20261115.mts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-2016-2026-race-selection
+          path: artifacts/independent-full-period-selections.json
+          retention-days: 30
