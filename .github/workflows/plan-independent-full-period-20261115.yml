@@ -4,6 +4,7 @@ on:
     branches: [research/20261115-rolling-final-odds-replay]
     paths:
       - scripts/plan-independent-full-period-20261115.mts
+      - scripts/replay-full-period-runner-weights-20261115.py
       - .github/workflows/plan-independent-full-period-20261115.yml
 permissions:
   contents: read
@@ -18,9 +19,16 @@ jobs:
           node-version: '22'
       - run: npm ci --prefer-offline --no-audit --no-fund
       - run: npx tsx scripts/plan-independent-full-period-20261115.mts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install --disable-pip-version-check lightgbm numpy
+      - run: python3 scripts/replay-full-period-runner-weights-20261115.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: independent-2016-2026-race-selection
-          path: artifacts/independent-full-period-selections.json
+          path: |
+            artifacts/independent-full-period-selections.json
+            artifacts/independent-full-period-horse-weights.jsonl.gz
           retention-days: 30
