@@ -476,6 +476,11 @@ def report(ledger,baselines,months,policies,meta_list):
     best_cash=None
     best_roi=None
     for k,policy in enumerate(policies):
+        # Buying all original five races for 1,000 + 1,000 is the
+        # IDENTICAL original model, even if a newly fitted predictor
+        # assigns different scores. Never misreport such clones as new.
+        if policy.racesPerVenueDay==5 and policy.stakeMode=="equal":
+            continue
         score=report_from_ledger(ledger[k],months)
         if score is None or not score["qualified"]:
             continue
@@ -491,6 +496,10 @@ def report(ledger,baselines,months,policies,meta_list):
     meta_qualified=0
     for m in meta_list:
         dynamic=build_online_picks(ledger,baselines,months,m)
+        # If an adaptive program simply picks the existing baseline
+        # on every month/venue, it is NOT an independently new method.
+        if np.array_equal(dynamic,baselines):
+            continue
         score=report_from_ledger(dynamic,months)
         if score is None or not score["qualified"]:
             continue
