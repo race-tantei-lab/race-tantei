@@ -1,0 +1,16 @@
+name: Probe full 2017-2026 replay archive schema
+on:
+  push:
+    branches: [research/20261115-rolling-final-odds-replay]
+    paths:
+      - scripts/probe-independent-archive-2017-2026.py
+      - .github/workflows/probe-independent-archive-2017-2026.yml
+permissions:
+  contents: read
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/probe-independent-archive-2017-2026.py
