@@ -17,7 +17,7 @@ print("INDEPENDENT_RETRO_PROBE",json.dumps({"date":day,"featureMeta":meta,"model
 if not races:raise RuntimeError("NO_RACES_IN_DATE")
 src=(ROOT/"scripts/export-selected-historical-official-odds.py").read_text()
 source=src.split("selection = json.loads(SELECTION.read_text")[0]
-scope={"__name__":"retrospective_odds_functions"}
+scope={"__name__":"retrospective_odds_functions","__file__":str(ROOT/"scripts/export-selected-historical-official-odds.py")}
 exec(compile(source,"existing-historical-odds.py","exec"),scope)
 for row in races[:5]:
   if not row["resultUrl"]:continue
