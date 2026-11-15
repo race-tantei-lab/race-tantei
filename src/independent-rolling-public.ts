@@ -215,11 +215,10 @@ export function identicalDetailUi(html:string,mode:IndependentMode,id:string,day
    }
  }
  // Never leak the original model's additional research or ticket selection details.
- const high=out.indexOf('data-race-panel="high-return"');
- if(high>=0){
-   const open=out.lastIndexOf("<section",high),end=out.indexOf("</section>",high);
-   if(open>=0&&end>high)out=out.slice(0,open)+'<section data-race-panel="high-return" hidden></section>'+out.slice(end+10);
- }
+ // Hide only the original model's high-return panel. Do not cut nested HTML,
+ // because the original panel may contain its own sub-sections and scripts.
+ out=out.replace(/(<section\b[^>]*data-race-panel="high-return"[^>]*)(>)/,
+   '$1 style="display:none!important" hidden$2');
  out=out.replace(/<button[^>]+data-race-tab="high-return"[^>]*>[\s\S]*?<\/button>/g,"");
  out=out.replace(/<p class="race-model-identity"[\s\S]*?<\/p>/g,"");
  // Model-specific status in the original hero.
