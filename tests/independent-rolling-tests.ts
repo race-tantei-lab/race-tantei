@@ -2,6 +2,7 @@ import {strict as assert} from "node:assert";
 import {fitIndependent,independentlyRankRaces,chooseIndependentTickets,canFreezeIndependent,independentCourseBets,settleIndependent,INDEPENDENT_SOURCE_VERSION,identicalTwoTicketPicks} from "../src/v1/independent-rolling-core.js";
 import {identicalHomeUi,identicalDetailUi,snapshotStatus,summaryForDay} from "../src/independent-rolling-public.js";
 import {NORMAL_HOME_SNAPSHOT} from "../src/normal-home-snapshot.js";
+import {preStartBlockedTicketPairs} from "../src/independent-rolling-worker.js";
 
 const date="2026-11-21";
 const venues=["東京","京都","福島"];
@@ -95,4 +96,52 @@ for(const mode of ["cash6","cash96"] as const){
  const settled=settleIndependent(final,[{betType:chosen[0].betType,combination:chosen[0].combination,payoutYen:200}],true);
  assert.ok(settled&&settled.stake===2000&&settled.paid===3600);
 }
+
+const blockedOriginal=[
+ {betType:"単勝",combination:"1",lockedAt:"2026-11-21T05:05:00Z"},
+ {betType:"馬連",combination:"1-2",lockedAt:"2026-11-21T05:05:00Z"}
+];
+const validOther={
+ mode:"cash96",date,raceId:races[0].raceId,lockedAt:"2026-11-21T05:00:00Z",
+ oddsFetchedAt:"2026-11-21T05:00:00Z",
+ tickets:[{betType:"ワイド",combination:"1-2"},{betType:"馬単",combination:"1-2"}]
+};
+const mockDb={
+ prepare(sql:string){
+  return {bind(...parameters:string[]){
+   return {async all(){
+    if(sql.includes("FROM rt_public_bets"))return {results:blockedOriginal};
+    assert.ok(parameters[0].startsWith("worker_live_final:"));
+    return {results:[
+      {key:"independent_final:cash96:"+races[0].raceId,value:JSON.stringify(validOther)},
+      {key:"worker_live_preview:"+races[0].raceId,
+       value:JSON.stringify({snapshots:[
+        {generatedAt:"2026-11-21T04:59:00Z",oddsFetchedAt:"2026-11-21T04:59:00Z",
+         tickets:[{betType:"ワイド",combination:"1-4"},{betType:"3連複",combination:"1-2-3"}]}
+       ]})}
+    ]};
+   }};
+  }};
+ }
+} as unknown as D1Database;
+const beforePost=await preStartBlockedTicketPairs(
+ mockDb,"cash6",races[0].raceId,races[0].startTimeUtc,new Date("2026-11-21T05:10:00Z")
+);
+assert.equal(beforePost.length,3,"guard checks incumbent final, live preview, alternate model");
+assert.ok(beforePost.some(pair=>identicalTwoTicketPicks(pair,blockedOriginal)));
+assert.ok(beforePost.some(pair=>identicalTwoTicketPicks(pair,validOther.tickets)));
+const independentlyAllowed=chooseIndependentTickets(races[0],"cash6",f6,hNos,weights,markets,beforePost);
+assert.ok(beforePost.every(pair=>!identicalTwoTicketPicks(pair,independentlyAllowed)));
+const lateMock={
+ prepare(sql:string){return {bind(){return {async all(){
+  return sql.includes("FROM rt_public_bets")
+   ?{results:blockedOriginal.map(x=>({...x,lockedAt:"2026-11-21T05:16:00Z"}))}
+   :{results:[]};
+ }}}}}
+} as unknown as D1Database;
+const rejectsPostT15=await preStartBlockedTicketPairs(
+ lateMock,"cash6",races[0].raceId,races[0].startTimeUtc,new Date("2026-11-21T05:16:30Z")
+);
+assert.equal(rejectsPostT15.length,0,"no post-deadline data can affect prediction");
+
 console.log("INDEPENDENT_MODEL_PRESTART_SELECTION_TWO_TICKETS_ANTI_CLONE_EXACT_ORIGINAL_UI_OK");
