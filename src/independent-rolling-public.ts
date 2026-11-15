@@ -98,6 +98,44 @@ export async function independentPerformance(db:D1Database,mode:IndependentMode,
  return Response.json({ok:true,today:today(),summary,history:days,version:"independent-daily-performance-v1"},
   {headers:{"cache-control":"no-store, max-age=0"}});
 }
+type Aggregate={races:number;stake:number;paid:number};
+function addAggregate(a:Aggregate,stake:number,paid:number):void{a.races++;a.stake+=stake;a.paid+=paid;}
+function aggregateRow(a:Aggregate):string{return a.stake?(100*a.paid/a.stake).toFixed(1)+"%":"—";}
+async function aggregateIndependent(db:D1Database,mode:IndependentMode){
+ const prefix="independent_selection:"+mode+":";
+ const keys=await db.prepare("SELECT state_key AS key FROM rt_system_state WHERE state_key>=? AND state_key<? ORDER BY state_key DESC LIMIT 60")
+  .bind(prefix,prefix+"~").all<{key:string}>();
+ const total:Aggregate={races:0,stake:0,paid:0};
+ const months=new Map<string,Aggregate>(),venues=new Map<string,Aggregate>();
+ for(const row of keys.results||[]){
+  const date=row.key.slice(prefix.length);
+  if(!validDate(date))continue;
+  const snap=await daySnapshot(db,mode,date);
+  for(const [id] of snap.finals){
+   const p=paidFor(snap,id);
+   if(!p)continue;
+   addAggregate(total,p.stake,p.paid);
+   const m=months.get(date.slice(0,7))||{races:0,stake:0,paid:0};
+   addAggregate(m,p.stake,p.paid);months.set(date.slice(0,7),m);
+   const venue=snap.races.find(r=>r.raceId===id)?.venue||"";
+   if(venue){
+    const v=venues.get(venue)||{races:0,stake:0,paid:0};
+    addAggregate(v,p.stake,p.paid);venues.set(venue,v);
+   }
+  }
+ }
+ return {total,months,venues};
+}
+type AggregateSummary=Awaited<ReturnType<typeof aggregateIndependent>>;
+function aggregateMarkup(a:AggregateSummary){
+ const monthly=[...a.months].sort((x,y)=>y[0].localeCompare(x[0])).map(([month,row])=>
+  '<div class="monthly-row"><b>'+esc(month.replace("-","/"))+'</b><span>'+row.races+'R</span><strong class="'+(row.paid>=row.stake?"plus":"minus")+'">'+aggregateRow(row)+'</strong></div>').join("");
+ const metrics='<section class="metrics shared-roi"><details class="card metric"><summary><b>全体</b><strong>'+aggregateRow(a.total)+'</strong><small>'+a.total.races.toLocaleString("ja-JP")+'R　購入 '+yen(a.total.stake)+'　払戻 '+yen(a.total.paid)+'</small></summary><div class="monthly">'+monthly+'</div></details></section>';
+ const venueCards=[...a.venues].sort((x,y)=>x[0].localeCompare(y[0],"ja")).map(([name,v])=>
+  '<article class="venue-roi-card"><div class="venue-roi-head"><b>'+esc(name)+'</b><span>'+v.races+'R</span></div><strong class="venue-roi-value '+(v.paid>=v.stake?"venue-roi-plus":"venue-roi-minus")+'">'+aggregateRow(v)+'</strong></article>').join("");
+ const venues='<div class="section-title venue-roi-title"><h2>会場別回収率</h2><span class="muted">'+a.total.races+'R</span></div><div class="venue-roi-rail shared-venue-roi">'+venueCards+'</div>';
+ return {metrics,venues};
+}
 function footerCss(html:string):string{
  // The ORIGINAL UI stylesheet is preserved byte-for-byte; only the original
  // canonical three-model switcher stylesheet is added.
@@ -116,7 +154,7 @@ function replaceBlock(html:string,startMark:string,endMark:string,replacement:st
  if(b<0)return html;
  return html.slice(0,a)+replacement+html.slice(b);
 }
-export function identicalHomeUi(html:string,mode:IndependentMode):string{
+export function identicalHomeUi(html:string,mode:IndependentMode,aggregation?:AggregateSummary):string{
  const base="/models/"+(mode==="cash6"?"6m":"96m");
  let out=sameModelNavigation(html,mode);
  out=footerCss(out);
@@ -126,10 +164,9 @@ export function identicalHomeUi(html:string,mode:IndependentMode):string{
  out=out.replaceAll("'/api/public/daily-performance?date='","'"+base+"/api/public/daily-performance?date='");
  out=out.replaceAll('a.href="/races/"','a.href="'+base+'/races/"');
  // Never display legacy historical ROI as if it were this newly independent model.
- const metrics='<section class="metrics shared-roi"><details class="card metric"><summary><b>全体</b><strong>—</strong><small>確定済みの予想から集計</small></summary><div class="monthly"></div></details></section>';
- out=replaceBlock(out,'<section class="metrics shared-roi">','<div class="section-title venue-roi-title">',metrics);
- const venues='<div class="section-title venue-roi-title"><h2>会場別回収率</h2><span class="muted">確定済みデータ</span></div><div class="venue-roi-rail shared-venue-roi"></div>';
- out=replaceBlock(out,'<div class="section-title venue-roi-title">','<section class="daily-performance-wrap"',venues);
+ const displayed=aggregateMarkup(aggregation||{total:{races:0,stake:0,paid:0},months:new Map(),venues:new Map()});
+ out=replaceBlock(out,'<section class="metrics shared-roi">','<div class="section-title venue-roi-title">',displayed.metrics);
+ out=replaceBlock(out,'<div class="section-title venue-roi-title">','<section class="daily-performance-wrap"',displayed.venues);
  // Dynamic model performance is rendered by the identical original UI script.
  return out;
 }
@@ -195,8 +232,9 @@ export async function independentDetailResponse(db:D1Database,mode:IndependentMo
  const headers=new Headers(original.headers);headers.delete("content-length");headers.set("x-race-independent-model",mode);
  return new Response(html,{status:original.status,headers});
 }
-export async function independentHomeResponse(mode:IndependentMode,original:Response):Promise<Response>{
- const html=identicalHomeUi(await original.text(),mode);
+export async function independentHomeResponse(db:D1Database,mode:IndependentMode,original:Response):Promise<Response>{
+ const a=await aggregateIndependent(db,mode);
+ const html=identicalHomeUi(await original.text(),mode,a);
  const headers=new Headers(original.headers);headers.delete("content-length");headers.set("x-race-independent-model",mode);
  return new Response(html,{status:original.status,headers});
 }
