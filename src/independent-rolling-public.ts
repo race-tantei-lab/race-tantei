@@ -170,12 +170,13 @@ export function identicalHomeUi(html:string,mode:IndependentMode,aggregation?:Ag
  // Dynamic model performance is rendered by the identical original UI script.
  return out;
 }
-function courseBlock(final:IndependentFinal|null,view:ReturnType<typeof snapshotStatus>):string{
+function courseBlock(final:IndependentFinal|null,view:ReturnType<typeof snapshotStatus>,day:DaySnapshot):string{
  if(!final)return '<div class="section-title"><h2>買い目</h2><span class="status '+esc(view.code)+'">'+esc(view.label)+'</span></div>';
  const blocks=COURSES.map((course,i)=>{
   const rows=final.courseBets.filter(b=>b.course===course);
+  const settled=paidFor(day,final.raceId,course);
   return '<div class="course-view" data-course="'+i+'" style="'+(i===0?"":"display:none")+'"><div class="bet-table"><table><thead><tr><th>券種</th><th>組合せ</th><th>オッズ</th><th>購入</th><th>払戻</th></tr></thead><tbody>'+
-   rows.map(b=>'<tr><td>'+esc(b.betType)+'</td><td><b>'+esc(b.combination)+'</b></td><td>'+b.assumedOdds.toFixed(1)+'倍</td><td>'+yen(b.stakeYen)+'</td><td>—</td></tr>').join("")+
+   rows.map(b=>'<tr><td>'+esc(b.betType)+'</td><td><b>'+esc(b.combination)+'</b></td><td>'+b.assumedOdds.toFixed(1)+'倍</td><td>'+yen(b.stakeYen)+'</td><td>'+(settled?yen(((day.paid.get(final.raceId)||[]).find(p=>p.betType===b.betType&&p.combination===b.combination)?.payoutYen||0)*b.stakeYen/100):'—')+'</td></tr>').join("")+
    '</tbody></table></div></div>';
  }).join("");
  return '<div class="section-title"><h2>確定買い目</h2><span class="status buy">固定済み</span></div>'+
@@ -198,10 +199,11 @@ export function identicalDetailUi(html:string,mode:IndependentMode,id:string,day
  if(out.includes(mark)){
   const a=out.indexOf(mark);
   const b=out.indexOf("</section>",a);
-  if(b>a)out=out.slice(0,a)+mark+courseBlock(final,view)+"</section>"+out.slice(b+10);
+  if(b>a)out=out.slice(0,a)+mark+courseBlock(final,view,day)+"</section>"+out.slice(b+10);
  }else{
   // No bet panel means the canonical response was not a valid race detail.
-  throw Error("CANONICAL_DETAIL_BET_PANEL_NOT_FOUND");
+  const fallback='<section data-race-panel="bets">'+courseBlock(final,view,day)+'</section>';
+  out=out.replace("</header>","</header>"+fallback);
  }
  const reasonStart=out.indexOf('<section id="race-panel-reason"');
  if(reasonStart>=0){
