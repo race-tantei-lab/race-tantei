@@ -35,7 +35,7 @@ assert.equal(partial[2]!.selectedRaces,0);
 assert.ok(partial[2]!.venues[0]!.races.every(x=>x.status==="awaiting"),
   "96-month method must not choose only the known 4 races");
 const late=original.map(x=>({...x}));
-late[0]!.lockedAt="2026-11-15T05:00:00Z";
+late[0]!.lockedAt="2026-11-15T05:50:00Z";
 const withLate=compareThree(date,ids,races,late,[]);
 assert.equal(withLate[0]!.selectedRaces,5,"existing original picks remain untouched");
 assert.equal(withLate[1]!.selectedRaces,4,"late bets are not called new T15 forecasts");
