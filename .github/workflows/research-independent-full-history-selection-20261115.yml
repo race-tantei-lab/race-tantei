@@ -1,0 +1,27 @@
+name: Research 2017-2026 independent cash6 cash96 selection
+on:
+  push:
+    branches: [research/20261115-rolling-final-odds-replay]
+    paths:
+      - "scripts/select-independent-full-history-20261115.mts"
+      - ".github/workflows/research-independent-full-history-selection-20261115.yml"
+permissions:
+  contents: read
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - run: npx tsx scripts/select-independent-full-history-20261115.mts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-2017-2026-cash6-cash96-race-selection
+          path: artifacts/independent-2017-2026-selection.json.gz
+          if-no-files-found: warn
+          retention-days: 30
