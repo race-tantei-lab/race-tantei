@@ -1,0 +1,40 @@
+name: Verify independent model race details live
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/verify-independent-detail-live.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe three same-race detail screens and both model-specific summaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          race='2026-11-15-kyoto-01'
+          curl -fsS "$base/races/$race" -o /tmp/current.html
+          for mode in 6m 96m; do
+            code=$(curl -sS -o "/tmp/${mode}-race.html" -w '%{http_code}' "$base/models/${mode}/races/$race")
+            echo "MODEL_${mode}_DETAIL_HTTP=$code"
+            test "$code" = 200
+            grep -Fq 'class="prediction-model-tabs"' "/tmp/${mode}-race.html"
+            grep -Fq 'data-race-panel="bets"' "/tmp/${mode}-race.html"
+            grep -Fq '/models/${mode}/races/' "/tmp/${mode}-race.html" || grep -Fq "/models/${mode}/races/" "/tmp/${mode}-race.html"
+            code=$(curl -sS -o "/tmp/${mode}-daily.json" -w '%{http_code}' "$base/models/${mode}/api/public/daily-performance?date=2026-11-15")
+            test "$code" = 200
+            python3 - "${mode}" <<'PY'
+          import json,sys
+          mode=sys.argv[1]
+          x=json.load(open('/tmp/'+mode+'-daily.json'))
+          assert x.get('ok') is True
+          assert x['summary']['date']=='2026-11-15'
+          assert len(x['summary']['courses'])==3
+          assert x['summary']['settledRaces']==0
+          print('INDEPENDENT_DETAIL_AND_SUMMARY',mode,'OK')
+          PY
+          done

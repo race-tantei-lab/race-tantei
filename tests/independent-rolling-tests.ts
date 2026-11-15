@@ -20,7 +20,9 @@ assert.equal(six.length,15,"6mo chooses its own 5 races per venue from all 12");
 assert.equal(ninety.length,9,"96mo chooses its own 3 races per venue from all 12");
 assert.ok(six.every(x=>races.some(r=>r.raceId===x.raceId)));
 assert.ok(ninety.every(x=>races.some(r=>r.raceId===x.raceId)));
-assert.throws(()=>independentlyRankRaces(date,"cash96",races.slice(1),f96),/NOT_12/);
+let missingProgramRejected=false;
+try{independentlyRankRaces(date,"cash96",races.slice(1),f96);}catch(e){missingProgramRejected=String(e).includes("NOT_12");}
+assert.ok(missingProgramRejected);
 const hNos=[1,2,3,4];
 const weights=[.5,.3,.15,.05];
 const markets=[
@@ -35,7 +37,7 @@ const markets=[
 for(const mode of ["cash6","cash96"] as const){
  const chosen=chooseIndependentTickets(races[0],mode,mode==="cash6"?f6:f96,hNos,weights,markets);
  assert.equal(chosen.length,2);
- assert.notEqual(chosen[0].betType,chosen[1].betType);
+ assert.ok(chosen[0].betType!==chosen[1].betType);
  const orders=independentCourseBets(chosen);
  assert.equal(orders.length,6);
  for(const [course,sum] of [["ライト",2000],["スタンダード",5000],["プレミアム",10000]] as const){
