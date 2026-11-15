@@ -33,7 +33,6 @@ function yen(x:number):string{return Math.round(x).toLocaleString("ja-JP")+"円"
 const models:{id:MethodId;title:string;path:string}[]=[
  {id:"current",title:"現行モデル",path:"/"},
  {id:"cash6",title:"直近6か月モデル",path:"/models/6m"},
- {id:"cash96",title:"過去96か月モデル",path:"/models/96m"}
 ];
 export function modelNavigation(id:MethodId,date?:string,raceId?:string):string{
  return '<nav class="prediction-model-tabs" aria-label="予想モデルを切り替える">'+
