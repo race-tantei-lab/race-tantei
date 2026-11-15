@@ -1,0 +1,34 @@
+name: Three prediction models comparison UI — typecheck and safety CI
+on:
+  push:
+    branches: [feature/20261115-three-model-compare-safe]
+    paths:
+      - src/three-model-compare-page.ts
+      - src/v1/three-model-money-comparison.ts
+      - src/v1/three-model-archived-cash-priors.json
+      - src/public-site-entry-performance-history-fix-20260915.ts
+      - tests/three-model-compare-tests.ts
+      - .github/workflows/verify-three-model-comparison.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked runtime dependencies
+        run: npm ci
+      - name: Typecheck existing source and new comparison model
+        run: |
+          npm run typecheck
+          npx tsc -p tsconfig.test.json
+          npx tsc -p tsconfig.three-model.json
+      - name: Run exact three-model monetary and race-selection regression tests
+        run: node dist-test/tests/three-model-compare-tests.js
+      - name: Verify existing ticket generation tests stay green
+        run: npm run test:unit
