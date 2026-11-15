@@ -449,7 +449,7 @@ export default {
         const source=new URL(request.url);source.pathname="/";source.search="";
         const original=await addOriginalModelSwitch(await addRequestedRaceHomeButton(
           await base.fetch(new Request(source.toString(),request),env,ctx)));
-        return independentHomeResponse(mode,original);
+        return independentHomeResponse(env.DB,mode,original);
       }
       if(/^races\/20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}$/i.test(suffix)){
         const raceId=suffix.slice("races/".length);
