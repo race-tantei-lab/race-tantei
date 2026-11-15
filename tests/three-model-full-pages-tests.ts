@@ -1,5 +1,6 @@
 import {strict as assert} from "node:assert";
 import {modelNavigation,MODEL_SWITCH_CSS,serveFullModel} from "../src/three-model-full-pages.js";
+import {restored716Tickets} from "../src/v1/restored-716-money-policy.js";
 
 const raceDate="2026-11-14";
 const ids=Array.from({length:5},(_,i)=>raceDate+"-tokyo-"+String(i+1).padStart(2,"0"));
@@ -50,10 +51,12 @@ const six=await serveFullModel(new Request("https://race-tantei.test/models/6m?d
 assert.equal(six.status,200);
 assert.equal(six.headers.get("x-race-model-full-page"),"standalone-v3");
 const h6=await six.text();
-for(const text of ["直近6か月モデル","現行モデル","年","月","日付","競馬場","レース1","レース12","1,800円","200円","参考予想"]){
+for(const text of ["716.83%研究モデル","現行モデル","年","月","日付","競馬場","レース1","レース12","参考予想"]){
   assert.ok(h6.includes(text),"missing "+text);
 }
 assert.ok(h6.includes('data-prediction-model="cash6" aria-current="page"'));
+assert.equal((h6.match(/status buy/g)||[]).length,3);
+assert.ok(h6.includes("100円単位"));
 assert.ok(!h6.includes("過去96か月モデル"));
 assert.ok(!h6.includes("/models/96m"));
 for(const label of ["1. 年","2. 月","3. 日付","4. 会場","5. レース"]){
@@ -71,7 +74,10 @@ assert.ok(h6.indexOf('5. レース')<h6.indexOf('data-model-race='),"race cards 
 
 assert.equal((h6.match(/data-model-race=/g)||[]).length,12);
 assert.ok(h6.includes("/models/6m/races/"+ids[0]));
-const detail=await serveFullModel(new Request("https://race-tantei.test/models/6m/races/"+ids[0]),env,"cash6",ids[0]);
+const ranked=ids.map((id,i)=>({id,score:restored716Tickets(races[i]!,bets.slice(2*i,2*i+2)).priority}))
+  .sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
+const detailId=ranked[0]!.id;
+const detail=await serveFullModel(new Request("https://race-tantei.test/models/6m/races/"+detailId),env,"cash6",detailId);
 const hd=await detail.text();
 for(const text of ["テストホース","買い目の理由","ライト","スタンダード","プレミアム","4,500円","9,000円","予想買い目"]){
   assert.ok(hd.includes(text),"missing race detail feature "+text);
@@ -80,4 +86,4 @@ assert.ok(!hd.includes("/models/96m/races/"));
 assert.ok(hd.includes("/races/"+ids[0]));
 assert.ok(queries.every(x=>x.startsWith("FIRST SELECT ")||x.startsWith("ALL SELECT ")),
   "all queries must be SELECT-only");
-console.log("THREE_FULL_MODEL_HOMES_AND_RACE_DETAILS_SAME_UI_NAV_AND_READ_ONLY_TEST_OK",queries.length);
+console.log("RESTORED_716827_FULL_PAGES_AND_DETAILS_READ_ONLY_TEST_OK",queries.length);
