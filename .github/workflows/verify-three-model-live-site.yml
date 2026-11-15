@@ -1,0 +1,53 @@
+name: Verify three prediction model UI on live Cloudflare site
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/verify-three-model-live-site.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify home still works and new three-model link is visible
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          curl --retry 3 --retry-delay 2 --retry-all-errors --max-time 30 -fsS -D /tmp/home.headers "$base/?_three_model_check=${GITHUB_RUN_ID}" -o /tmp/home.html
+          grep -Fq 'href="/models"' /tmp/home.html
+          grep -Fq 'id="three-model-home-button"' /tmp/home.html
+          echo "THREE_MODEL_HOMEPAGE_ENTRY_LIVE_OK"
+      - name: Check all three model forecasts render on archived actual race day
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          curl --retry 3 --retry-delay 2 --retry-all-errors --max-time 35 -fsS -D /tmp/models.headers "$base/models?date=2026-11-14&_check=${GITHUB_RUN_ID}" -o /tmp/models.html
+          grep -Fiq 'x-race-three-models: research-comparison-v1' /tmp/models.headers
+          grep -Fq '3つの予想モデルを比較' /tmp/models.html
+          grep -Fq 'data-model="current"' /tmp/models.html
+          grep -Fq 'data-model="cash6"' /tmp/models.html
+          grep -Fq 'data-model="cash96"' /tmp/models.html
+          grep -Fq '現行モデル' /tmp/models.html
+          grep -Fq '直近6か月モデル' /tmp/models.html
+          grep -Fq '過去96か月モデル' /tmp/models.html
+          grep -Fq '参考予測' /tmp/models.html
+          echo "THREE_MODEL_SIDE_BY_SIDE_PRODUCTION_PAGE_LIVE_OK"
+      - name: Verify existing specified-race page and public API remain available
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://race-tantei-phase0.race-tantei.workers.dev"
+          curl --retry 2 --max-time 20 -fsS "$base/adhoc" -o /tmp/adhoc.html
+          grep -Fq '指定レース' /tmp/adhoc.html
+          curl --retry 2 --max-time 20 -fsS "$base/api/public/day?date=2026-11-14" -o /tmp/day.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('/tmp/day.json'))
+          assert isinstance(d,dict) and isinstance(d.get('races'),list) and len(d['races'])>=20
+          print('ORIGINAL_RACE_DAY_API_REMAINS_AVAILABLE',len(d['races']))
+          PY
+          echo "THREE_MODEL_SITE_BACKWARDS_COMPATIBLE_PRODUCTION_OK"
