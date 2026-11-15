@@ -1,0 +1,43 @@
+name: Audit profit-max and ROI-max new cash methods against original 2017–26 winner
+on:
+  push:
+    branches: [research/20261115-baseline-inclusive-rolling-money-v16]
+    paths:
+      - scripts/audit-20261115-baseline-included-research-v16.py
+      - .github/workflows/audit-20261115-baseline-inclusive-money-v16.yml
+permissions:
+  contents: read
+  actions: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Get the exact SUCCESSFUL clone-excluded v16 prediction-search results
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/novel-model
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14148324329/zip" >/tmp/new-model-results.zip
+          unzip -q /tmp/new-model-results.zip -d /tmp/novel-model
+          test -s /tmp/novel-model/20261115-baseline-inclusive-online-money-model-v16.json
+      - name: Independently reconcile 2017-26 actual yen cash and the strongest novel method recipes
+        run: |
+          python -m py_compile scripts/audit-20261115-baseline-included-research-v16.py
+          python -u scripts/audit-20261115-baseline-included-research-v16.py \
+            --source /tmp/novel-model/20261115-baseline-inclusive-online-money-model-v16.json \
+            --out /tmp/novel-model/independent-profit-method-audit-v16.json
+      - name: Save money model comparison and yearly check
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: completed-v16-1796-new-qualified-money-methods-audit
+          path: /tmp/novel-model/independent-profit-method-audit-v16.json
+          if-no-files-found: warn
+          retention-days: 30
