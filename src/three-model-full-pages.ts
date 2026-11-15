@@ -1,5 +1,5 @@
 /**
- * Fully separate current-like site screens for the 6m and 96m research methods.
+ * Separate current-like research site for the six-month cash-allocation method.
  *
  * Shares the production original site's shell, styling, year -> month -> day
  * -> venue -> race navigation, race-detail course tabs and runner list.
