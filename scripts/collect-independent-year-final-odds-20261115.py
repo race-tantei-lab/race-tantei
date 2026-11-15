@@ -11,6 +11,8 @@ OUT=ROOT/f"artifacts/independent-year-final-odds-{YEAR}.jsonl.gz"
 META=ROOT/f"artifacts/independent-year-final-odds-{YEAR}-meta.json"
 source=(ROOT/"scripts/export-selected-historical-official-odds.py").read_text()
 source=source.split("selection = json.loads(SELECTION.read_text")[0]
+# Offline public JRA parser needs no Cloudflare credential.
+source=source.replace("if not TOKEN:\n    raise RuntimeError('CLOUDFLARE_API_TOKEN is not set')", "if False: pass")
 # Offline research needs only JRA HTTPS; old exporter's D1 token gate is irrelevant.
 source=source.replace("if not TOKEN:\n    raise RuntimeError('CLOUDFLARE_API_TOKEN is not set')","")
 source=source.replace(r"pw01sde10(\d{2})",r"pw01sde(?:10|01)(\d{2})")
