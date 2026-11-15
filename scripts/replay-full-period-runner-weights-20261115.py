@@ -33,6 +33,12 @@ SELECTION=ROOT/"artifacts/independent-full-period-selections.json"
 OUT=ROOT/"artifacts/independent-full-period-horse-weights.jsonl.gz"
 YEAR=os.environ.get("AUDIT_YEAR","all")
 if YEAR!="all" and not(YEAR.isdigit() and 2016<=int(YEAR)<=2026):raise RuntimeError("BAD_YEAR")
+overrides={}
+if YEAR!="all":
+    official=ROOT/f"artifacts/independent-year-result-{YEAR}.json"
+    if official.is_file():
+        overrides={x["raceId"]:x.get("race",{}) for x in json.loads(official.read_text())["races"]}
+print("INDEPENDENT_OFFICIAL_HISTORY_CONTEXT",json.dumps({"year":YEAR,"availableOfficialRaceMetadata":len(overrides)}),flush=True)
 plans=json.loads(SELECTION.read_text())["modeResults"]
 target=collections.defaultdict(set)
 for row in plans:
@@ -71,6 +77,10 @@ with gzip.open(OUT,"wt",encoding="utf8",compresslevel=6) as dest:
         rid,date,venue,no,name,startJst,surface,distance,bets=record
         race={"raceId":rid,"raceDate":date,"venue":venue,"raceNo":int(no),"raceName":name,"startTimeJst":startJst,"surface":surface,"distanceM":int(distance or 0),
               "weather":"","trackCondition":"","direction":"","conditions":""}
+        source=overrides.get(rid,{})
+        for key in ("weather","trackCondition","direction","conditions","raceName","surface","distanceM"):
+            value=source.get(key)
+            if value is not None and value!="":race[key]=value
         runner_rows=[]
         result_rows=[]
         for val in runners[rid]:
@@ -103,12 +113,12 @@ with gzip.open(OUT,"wt",encoding="utf8",compresslevel=6) as dest:
             entry={"raceId":race["raceId"],"date":date,"venue":race["venue"],"raceNo":race["raceNo"],
                    "startTimeJst":race["startTimeJst"],"horseNos":[int(h["horseNo"]) for h in active],
                    "weights":weights,"finish":[r["finishPosition"] for r in res],
-                   "unknownWeatherAndTrack":True}
+                   "unknownWeatherAndTrack":not all(race.get(k) for k in ("weather","trackCondition"))}
             dest.write(json.dumps(entry,ensure_ascii=False,separators=(",",":"))+"\n")
             rows_written+=1
             stats[date[:4]]+=1
     core.update_feature_state_for_date(state,bundles)
     state["throughDate"]=date
     if count%100==0:print("INDEPENDENT_FULL_PERIOD_HORSE_REPLAY_PROGRESS",json.dumps({"days":count,"totalDays":len(records),"rows":rows_written,"errors":len(errors)}),flush=True)
-print("INDEPENDENT_FULL_PERIOD_HORSE_REPLAY",json.dumps({"year":YEAR,"races":rows_written,"yearly":stats,"errors":errors[:15],"errorCount":len(errors),"archiveRaces":len(metadata),"runnerRows":sum(len(v) for v in runners.values()),"modelTrees":MODEL.num_trees(),"metadataFallback":"unknown weather, track, direction"}),flush=True)
+print("INDEPENDENT_FULL_PERIOD_HORSE_REPLAY",json.dumps({"year":YEAR,"races":rows_written,"yearly":stats,"errors":errors[:15],"errorCount":len(errors),"archiveRaces":len(metadata),"runnerRows":sum(len(v) for v in runners.values()),"modelTrees":MODEL.num_trees(),"metadataFallback":"official historical weather, track, direction when available; otherwise unknown fallback"}),flush=True)
 if YEAR=="all" and rows_written<10000:raise RuntimeError("HISTORIC_MODEL_PROBABILITIES_COVERAGE_LOW:"+str(rows_written))
