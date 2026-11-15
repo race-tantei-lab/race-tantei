@@ -5,6 +5,7 @@ on:
     paths:
       - "scripts/probe-independent-final-odds-20261115.py"
       - "scripts/replay-independent-final-odds-20261115.mts"
+      - "scripts/collect-independent-final-odds-20261115.py"
       - ".github/workflows/research-independent-final-odds-replay-20261115.yml"
   workflow_dispatch:
 permissions:
@@ -32,3 +33,19 @@ jobs:
           npm ci --prefer-offline --no-audit --no-fund
       - name: Probe JRA historical final odds and feature-state availability
         run: python3 scripts/probe-independent-final-odds-20261115.py
+      - name: Replay exact deployed 6m / 96m race selection and horse-probability inference
+        run: npx tsx scripts/replay-independent-final-odds-20261115.mts plan
+      - name: Fetch official historical FINAL six-market odds for independent picks
+        run: python3 scripts/collect-independent-final-odds-20261115.py
+      - name: Recompute both independent tickets and actual payout ROI
+        run: npx tsx scripts/replay-independent-final-odds-20261115.mts settle
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: actual-6m-96m-final-odds-roi-replay
+          path: |
+            artifacts/independent-final-odds-plan.json
+            artifacts/independent-retro-odds.json
+            artifacts/independent-final-odds-roi-result.json
+          if-no-files-found: warn
+          retention-days: 30
