@@ -1,7 +1,7 @@
 name: Verify independent 6m and 96m model runners
 on:
   push:
-    branches: [feature/20261115-fully-independent-rolling-forecast, fix/20261115-independent-ui-ledger, fix/20261115-independent-ticket-uniqueness, main]
+    branches: [feature/20261115-fully-independent-rolling-forecast, fix/20261115-independent-ui-ledger, fix/20261115-independent-ticket-uniqueness, fix/20261115-undo-forced-ticket-difference, main]
     paths:
       - "src/independent-rolling-*"
       - "src/v1/independent-rolling-core.ts"
