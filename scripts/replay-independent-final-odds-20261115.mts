@@ -68,8 +68,13 @@ function makeQuotes(record:Record<string,any>):OfficialOddsRow[]{
    const values=(record as any)[key]||[];
    if(values.length!==combos.length)throw Error("ODDS_MARKET_VECTOR_LENGTH_"+type+":"+record.raceId+":"+values.length+":"+combos.length);
    for(let i=0;i<combos.length;i++){
-     const odd=Number(values[i]);
-     if(Number.isFinite(odd)&&odd>=1)rows.push({betType:type as OfficialOddsRow["betType"],combination:combos[i].join("-"),oddsMin:odd,oddsMax:odd});
+     // JRA wide-market prices are a RANGE until the actual 3rd-place
+     // pair is known; preserve both ends rather than discarding wide.
+     const v=values[i];
+     const low=Number(Array.isArray(v)?v[0]:v);
+     const high=Number(Array.isArray(v)?v[1]:v);
+     if(Number.isFinite(low)&&Number.isFinite(high)&&low>=1&&high>=low)
+       rows.push({betType:type as OfficialOddsRow["betType"],combination:combos[i].join("-"),oddsMin:low,oddsMax:high});
    }
  }
  return rows;
