@@ -1,0 +1,55 @@
+name: Research FULL Aug-Nov 2026 independent ROI actual payouts
+on:
+  push:
+    branches: [research/20261115-rolling-final-odds-replay]
+    paths:
+      - .github/workflows/research-independent-late-2026-roi-full.yml
+permissions:
+  contents: read
+jobs:
+  late2026:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+      AUDIT_YEAR: '2026'
+      AUDIT_LATE: '1'
+      AUDIT_LIMIT: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare Python and JS research environment
+        run: |
+          npm ci --no-audit --no-fund
+          pip install --disable-pip-version-check lightgbm numpy beautifulsoup4
+      - name: Export Aug10-Nov15 all actual race, runner, payout, prior bet rows read only
+        run: python3 scripts/export-independent-late-2026-d1-20261115.py
+      - name: Select 6m 96m races using deployed source and prior-month training only
+        run: npx tsx scripts/plan-independent-late-2026-20261115.mts
+      - name: Match actual official JRA payout records
+        run: npx tsx scripts/prepare-independent-late-2026-results-20261115.mts
+      - name: Reconstruct frozen shared horse probability model before every start
+        run: python3 scripts/replay-full-period-runner-weights-20261115.py
+      - name: Retrieve actual six-market JRA final odds per independently chosen race
+        run: python3 scripts/collect-independent-year-final-odds-20261115.py
+      - name: Independently choose tickets and calculate actual payout ROI
+        run: npx tsx scripts/evaluate-independent-full-year-roi-20261115.mts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-2026-aug-nov-full-roi
+          path: |
+            artifacts/independent-late-2026-selections.json
+            artifacts/independent-year-result-2026.json
+            artifacts/independent-year-final-odds-2026-meta.json
+            artifacts/independent-year-final-odds-2026.jsonl.gz
+            artifacts/independent-year-roi-late-2026.json
+          if-no-files-found: warn
+          retention-days: 30
