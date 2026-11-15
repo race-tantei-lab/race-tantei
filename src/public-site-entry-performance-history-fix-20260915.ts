@@ -1,6 +1,7 @@
 import base from "./public-site-entry-quota-recovery-20260912.js";
 import { routeAdhoc } from "./adhoc/controller.js";
 import { threeModelPage } from "./three-model-compare-page.js";
+import { serveFullModel, modelNavigation, MODEL_SWITCH_CSS } from "./three-model-full-pages.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
 import { cumulativePerformanceResponse, refreshCumulativePerformanceIfDue } from "./v1/cumulative-performance.js";
 import type { Env } from "./v1/types.js";
@@ -383,19 +384,13 @@ async function addRequestedRaceHomeButton(response: Response): Promise<Response>
     return new Response(source, { status: response.status, statusText: response.statusText, headers: response.headers });
   }
   const navLink = '<a href="/adhoc" data-adhoc-nav="true" style="font-weight:800;color:#42dfba">指定レース予想</a>';
-  const compareNav = '<a href="/models" data-three-model-nav="true" style="font-weight:800;color:#c6eaf9;margin-right:12px">3モデル比較</a>';
+
   const banner = '<section id="adhoc-home-entry" aria-label="指定レース予想" style="margin:12px 0 20px;padding:17px 20px;border:1px solid #287c72;border-radius:17px;background:linear-gradient(115deg,#103b39,#102535);color:#e9f9f4;display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap">'
     + '<div style="min-width:200px;flex:1"><strong style="font-size:17px">選定外のレースも予想できます</strong><div style="margin-top:5px;font-size:12px;color:#bddbd5;line-height:1.6">レースを指定して、レース探偵の同じモデルで予想</div></div>'
     + '<a id="adhoc-home-button" href="/adhoc" style="display:inline-block;text-align:center;background:#42dfba;color:#05251e;border-radius:11px;padding:13px 19px;font-weight:900;font-size:14px;text-decoration:none;white-space:nowrap;box-shadow:0 3px 12px #071c1e">指定レースを予想する →</a></section>';
-  const compareBanner = '<section id="three-model-home-entry" aria-label="3モデル予想を比較" style="margin:12px 0 15px;padding:15px 18px;border:1px solid #39736c;border-radius:16px;background:#162b35;color:#eaf9f8;display:flex;align-items:center;gap:15px;justify-content:space-between;flex-wrap:wrap">'
-    + '<div><strong style="font-size:17px">3つのモデルを同時に比較</strong><div style="font-size:12px;color:#bedbd7">現行・直近6か月・過去96か月。買い目と金額の違いを確認</div></div>'
-    + '<a href="/models" id="three-model-home-button" style="display:inline-block;padding:11px 15px;border-radius:10px;background:#8de4c9;color:#0b2424;font-weight:800">3モデル予想を見る</a></section>';
   let html = source;
   if (!/<a\b[^>]*href=["']\/adhoc(?:["'?#/])/i.test(html)) {
-    html = html.replace(/(<nav\b[^>]*>)/i, '$1' + compareNav + navLink);
-  }
-  if (!html.includes('href="/models"')) {
-    html = html.replace(/(<nav\b[^>]*>)/i, '$1' + compareNav);
+    html = html.replace(/(<nav\b[^>]*>)/i, '$1' + navLink);
   }
   if (!html.includes('id="adhoc-home-button"')) {
     if (html.includes("</header>")) {
@@ -404,27 +399,42 @@ async function addRequestedRaceHomeButton(response: Response): Promise<Response>
       html = html.replace(/(<main\b[^>]*>)/i, '$1' + banner);
     }
   }
-  if (!html.includes('id="three-model-home-entry"')) {
-    if (html.includes('id="adhoc-home-entry"')) {
-      html = html.replace('<section id="adhoc-home-entry"', compareBanner + '<section id="adhoc-home-entry"');
-    } else {
-      html = html.replace(/(<main\b[^>]*>)/i, '$1' + compareBanner);
-    }
-  }
   const headers = new Headers(response.headers);
   headers.delete("content-length");
   headers.set("x-race-adhoc-entry", "homepage-visible-v1");
-  headers.set("x-race-three-models-entry", "homepage-visible-v1");
   return new Response(html, { status: response.status, statusText: response.statusText, headers });
+}
+
+/** Put the SAME model selector on the original production homepage and
+ * each original race-detail screen; never rewrite an actual ticket or
+ * interfere with the original model's live outputs. */
+async function addOriginalModelSwitch(response: Response,raceId?: string): Promise<Response> {
+  if (response.status !== 200 || !response.headers.get("content-type")?.includes("text/html")) return response;
+  let html=await response.text();
+  if (/<main\b/i.test(html) && !html.includes('class="prediction-model-tabs"')) {
+    html=html.replace(/(<main\b[^>]*>)/i,'$1'+modelNavigation("current",undefined,raceId));
+    html=html.replace("</head>",MODEL_SWITCH_CSS+"</head>");
+  }
+  const headers=new Headers(response.headers);
+  headers.delete("content-length");
+  headers.set("x-race-model-switch","current-and-two-standalone-pages-v2");
+  return new Response(html,{status:response.status,statusText:response.statusText,headers});
 }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    // Research comparison is read-only; never change existing live tips or D1.
-    if (request.method === "GET" && (url.pathname === "/models" || url.pathname === "/models/")) {
-      return threeModelPage(request, env);
+    // Every model now has its OWN complete predictions / venue-day / race page.
+    // The previous three-column page stays accessible only at /models/compare.
+    const fullModelPath=url.pathname.match(/^\/models\/(6m|96m)(?:\/races\/(20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}))?\/?$/i);
+    if (request.method === "GET" && fullModelPath) {
+      return serveFullModel(request, env,fullModelPath[1]==="6m"?"cash6":"cash96",fullModelPath[2]);
     }
+    if (request.method === "GET" && (url.pathname === "/models" || url.pathname === "/models/")) {
+      const redirect="/models/6m"+(url.searchParams.has("date")?"?date="+encodeURIComponent(url.searchParams.get("date")||""):"");
+      return new Response(null,{status:302,headers:{"location":redirect,"cache-control":"no-store"}});
+    }
+    if (request.method === "GET" && url.pathname === "/models/compare") return threeModelPage(request, env);
     const adhoc = await routeAdhoc(request, env);
     if (adhoc) return adhoc;
     if (request.method === "GET" && url.pathname === "/api/public/cumulative-performance") {
@@ -470,7 +480,13 @@ export default {
 
     if (!base.fetch) return new Response("NOT_FOUND", { status: 404 });
     const response = await base.fetch(request, env, ctx);
-    if (request.method === "GET" && url.pathname === "/") return addRequestedRaceHomeButton(response);
+    if (request.method === "GET" && url.pathname === "/") {
+      return addOriginalModelSwitch(await addRequestedRaceHomeButton(response));
+    }
+    if (request.method === "GET" && /^\/races\/20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}\/?$/i.test(url.pathname)) {
+      const raceId=url.pathname.slice("/races/".length).replace(/\/$/,"");
+      return addOriginalModelSwitch(response,raceId);
+    }
     return response;
   },
 
