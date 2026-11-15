@@ -73,19 +73,23 @@ async function lockSingle(db:D1Database,mode:IndependentMode,id:string,now:Date)
  const {race,runners}=await loadRace(db,id);
  const deadline=Date.parse(race.startTimeUtc)-15*MINUTES;
  if(!Number.isFinite(deadline)||Date.now()>deadline||now.getTime()>deadline)throw Error("INDEPENDENT_T15_DEADLINE_PASSED");
+ const startUtc=race.startTimeUtc;
+ if(!startUtc)throw Error("INDEPENDENT_MISSING_START");
+ const entryUrl=race.entryUrl;
+ if(!entryUrl)throw Error("INDEPENDENT_MISSING_ENTRY");
  const fit=fitIndependent(race.raceDate,mode,await oldSettled(db,race.raceDate.slice(0,7)));
  const model=await loadWorkerModel(db);
  const state=await loadCompletedFeatureStateForRace(db,race,runners,now.toISOString());
  const vectors=runners.map(r=>completedFeatureVector(state,race,r,runners.length));
  const weights=normalizeCompletedWeights(vectors.map(v=>model.predict(v)));
- const fetched=await fetchFastJraOfficialOddsForRace(race.entryUrl,{raceDate:race.raceDate,venue:race.venue,raceNo:race.raceNo});
+ const fetched=await fetchFastJraOfficialOddsForRace(entryUrl,{raceDate:race.raceDate,venue:race.venue,raceNo:race.raceNo});
  const finishedAt=new Date().toISOString();
- if(!canFreezeIndependent(race.startTimeUtc,finishedAt,finishedAt))throw Error("INDEPENDENT_T15_FETCH_OVERRAN");
+ if(!canFreezeIndependent(startUtc,finishedAt,finishedAt))throw Error("INDEPENDENT_T15_FETCH_OVERRAN");
  const tickets=chooseIndependentTickets(race,mode,fit,runners.map(r=>Number(r.horseNo)),weights,fetched.rows);
  const courseBets=independentCourseBets(tickets);
  const final:IndependentFinal={
   date:race.raceDate,mode,raceId:id,lockedAt:finishedAt,oddsFetchedAt:finishedAt,
-  startTimeUtc:race.startTimeUtc,oddsSource:fetched.source,sourceModel:INDEPENDENT_SOURCE_VERSION,
+  startTimeUtc:startUtc,oddsSource:fetched.source,sourceModel:INDEPENDENT_SOURCE_VERSION,
   tickets,courseBets
  };
  await db.prepare("INSERT INTO rt_system_state(state_key,state_value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(state_key) DO NOTHING")
