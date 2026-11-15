@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/independent-rolling-worker.ts",
+    "src/independent-rolling-public.ts",
+    "src/v1/independent-rolling-core.ts",
+    "worker-types.d.ts",
+    "node-shims.d.ts"
+  ],
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false
+  }
+}

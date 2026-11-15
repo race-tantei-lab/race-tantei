@@ -1,0 +1,52 @@
+name: Verify independent 6m and 96m model runners
+on:
+  push:
+    branches: [feature/20261115-fully-independent-rolling-forecast, main]
+    paths:
+      - "src/independent-rolling-*"
+      - "src/v1/independent-rolling-core.ts"
+      - "src/v1/completed-worker-live-lock.ts"
+      - "src/public-site-entry-performance-history-fix-20260915.ts"
+      - "tests/independent-rolling-tests.ts"
+      - "tsconfig.independent.json"
+      - "wrangler.independent-6m.jsonc"
+      - "wrangler.independent-96m.jsonc"
+      - ".github/workflows/verify-independent-models.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --prefer-offline --no-audit --no-fund
+      - name: Compile exact production source including both new models
+        run: |
+          npx tsc -p tsconfig.independent.json
+      - name: Verify independent selection, T15, payments and identical UI
+        run: npx tsx tests/independent-rolling-tests.ts
+      - name: Verify neither new worker mutates canonical betting records
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('src/independent-rolling-worker.ts').read_text()
+          assert 'INSERT INTO rt_public_bets' not in source
+          assert 'UPDATE rt_public_bets' not in source
+          assert 'DELETE FROM rt_public_bets' not in source
+          assert 'final_daily_selection:' not in source
+          assert 'ON CONFLICT(state_key) DO NOTHING' in source
+          for w in ('6m','96m'):
+              source=Path('wrangler.independent-'+w+'.jsonc').read_text()
+              assert 'src/independent-rolling-worker.ts' in source
+          print('INDEPENDENT_MODEL_STORAGE_ISOLATION_OK')
+          PY
+      - name: Bundle independent 6-month Worker
+        run: npx wrangler deploy --dry-run --config wrangler.independent-6m.jsonc --outdir dist-independent-6m
+      - name: Bundle independent 96-month Worker
+        run: npx wrangler deploy --dry-run --config wrangler.independent-96m.jsonc --outdir dist-independent-96m
