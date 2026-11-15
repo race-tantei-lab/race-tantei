@@ -1,5 +1,5 @@
 import {oldSettled} from "./three-model-compare-page.js";
-import {fitIndependent,independentlyRankRaces,chooseIndependentTickets,independentCourseBets,canFreezeIndependent,INDEPENDENT_SOURCE_VERSION,type IndependentMode,type IndependentRace,type IndependentFinal,type IndependentSelection,type TicketIdentity} from "./v1/independent-rolling-core.js";
+import {fitIndependent,independentlyRankRaces,chooseIndependentTickets,independentCourseBets,canFreezeIndependent,INDEPENDENT_SOURCE_VERSION,type IndependentMode,type IndependentRace,type IndependentFinal,type IndependentSelection} from "./v1/independent-rolling-core.js";
 import {loadWorkerModel} from "./v1/completed-worker-live-lock.js";
 import {loadCompletedFeatureStateForRace,completedFeatureVector} from "./v1/completed-feature-runtime.js";
 import {normalizeCompletedWeights} from "./v1/completed-ticket-runtime.js";
@@ -69,62 +69,6 @@ async function loadRace(db:D1Database,id:string):Promise<{race:RaceRecord;runner
  if(runners.length<3)throw Error("INDEPENDENT_RUNNERS_NOT_READY:"+id);
  return {race,runners};
 }
-/**
- * Compare against original and other-model bets ONLY when they were actually
- * known before lock. Never borrow their predictions, use same-day results,
- * wait for their jobs, or edit either model's historical records.
- */
-export async function preStartBlockedTicketPairs(
- db:D1Database,mode:IndependentMode,raceId:string,startUtc:string,now=new Date()
-):Promise<TicketIdentity[][]>{
- const previous=mode==="cash6"?"cash96":"cash6";
- const [canonical,states]=await Promise.all([
-   db.prepare("SELECT bet_type AS betType,combination,locked_at AS lockedAt FROM rt_public_bets WHERE race_id=? AND course='ライト' AND source_prediction_id=-2 ORDER BY id LIMIT 3")
-    .bind(raceId).all<{betType:string;combination:string;lockedAt:string|null}>(),
-   db.prepare("SELECT state_key AS key,state_value AS value FROM rt_system_state WHERE state_key IN (?,?,?)")
-    .bind("worker_live_final:"+raceId,"worker_live_preview:"+raceId,finalKey(previous,raceId))
-    .all<{key:string;value:string}>()
- ]);
- const start=Date.parse(startUtc),nowMs=now.getTime();
- const validTime=(v:unknown):boolean=>{
-   const ms=Date.parse(String(v||""));
-   return Number.isFinite(ms)&&ms<=nowMs&&ms<=start-15*MINUTES;
- };
- const asPair=(v:unknown):TicketIdentity[]|null=>{
-   if(!Array.isArray(v)||v.length!==2)return null;
-   const b=v.map(x=>({betType:String(x?.betType||""),combination:String(x?.combination||"")}));
-   if(b.some(x=>!["単勝","ワイド","馬連","馬単","3連複","3連単"].includes(x.betType)||!x.combination)||
-      b[0].betType===b[1].betType)return null;
-   return b as TicketIdentity[];
- };
- const blocked:TicketIdentity[][]=[];
- const canonicalRows=canonical.results||[];
- if(canonicalRows.length===2&&canonicalRows.every(r=>validTime(r.lockedAt))){
-   const v=asPair(canonicalRows);
-   if(v)blocked.push(v);
- }
- for(const row of states.results||[]){
-   try{
-     const data=JSON.parse(row.value) as Record<string,unknown>;
-     if(row.key.startsWith("independent_final:")){
-       if(validTime(data.lockedAt)&&validTime(data.oddsFetchedAt)){
-         const p=asPair(data.tickets);if(p)blocked.push(p);
-       }
-     }else if(row.key.startsWith("worker_live_final:")){
-       if(validTime(data.lockedAt)&&validTime(data.oddsFetchedAt)){
-         const p=asPair(data.tickets);if(p)blocked.push(p);
-       }
-     }else if(row.key.startsWith("worker_live_preview:")){
-       if(!Array.isArray(data.snapshots))continue;
-       const snapshot=data.snapshots.find((v:Record<string,unknown>)=>validTime(v.generatedAt)&&validTime(v.oddsFetchedAt));
-       const p=snapshot?asPair(snapshot.tickets):null;
-       if(p)blocked.push(p);
-     }
-   }catch{ /* unavailable incumbent data may not block independent predictions */ }
- }
- return blocked;
-}
-
 async function lockSingle(db:D1Database,mode:IndependentMode,id:string,now:Date):Promise<boolean>{
  const {race,runners}=await loadRace(db,id);
  const startUtc=race.startTimeUtc;
@@ -141,8 +85,7 @@ async function lockSingle(db:D1Database,mode:IndependentMode,id:string,now:Date)
  const fetched=await fetchFastJraOfficialOddsForRace(entryUrl,{raceDate:race.raceDate,venue:race.venue,raceNo:race.raceNo});
  const finishedAt=new Date().toISOString();
  if(!canFreezeIndependent(startUtc,finishedAt,finishedAt))throw Error("INDEPENDENT_T15_FETCH_OVERRAN");
- const blocked=await preStartBlockedTicketPairs(db,mode,id,startUtc,new Date(finishedAt));
- const tickets=chooseIndependentTickets(race,mode,fit,runners.map(r=>Number(r.horseNo)),weights,fetched.rows,blocked);
+ const tickets=chooseIndependentTickets(race,mode,fit,runners.map(r=>Number(r.horseNo)),weights,fetched.rows);
  const courseBets=independentCourseBets(tickets);
  const final:IndependentFinal={
   date:race.raceDate,mode,raceId:id,lockedAt:finishedAt,oddsFetchedAt:finishedAt,
