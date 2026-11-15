@@ -1,9 +1,8 @@
-name: Verify truly independent prediction sites live
+name: Verify restored read-only cash research sites live
 on:
   push:
     branches: [main]
     paths:
-      - "src/independent-rolling-public.ts"
       - "src/public-site-entry-performance-history-fix-20260915.ts"
       - ".github/workflows/verify-independent-sites-live.yml"
   workflow_dispatch:
@@ -12,44 +11,30 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 16
     steps:
-      - name: Check original UI unchanged and both independent home screens use same markup
+      - name: Check original unchanged and research sites no longer expose unvalidated independent picks
         shell: bash
         run: |
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev'
-          curl -fsS --retry 4 --retry-delay 3 "$base/" -o /tmp/original.html
-          grep -Fq 'id="years"' /tmp/original.html
-          grep -Fq 'id="races"' /tmp/original.html
-          for mode in 6m 96m; do
-            curl -fsS --retry 4 --retry-delay 3 -D "/tmp/${mode}.headers" "$base/models/${mode}?_check=${GITHUB_RUN_ID}" -o "/tmp/${mode}.html"
-            grep -Fiq "x-race-independent-model: cash${mode%m}" "/tmp/${mode}.headers" || {
-              if [[ "${mode}" = "96m" ]]; then grep -Fiq 'x-race-independent-model: cash96' "/tmp/${mode}.headers"; else exit 1; fi
-            }
-            for id in years months dates venues races; do
-              grep -Fq "id=\"${id}\"" "/tmp/${mode}.html"
+          for i in $(seq 1 25); do
+            success=1
+            curl -fsS --retry 2 --retry-delay 2 "$base/" -o /tmp/original.html || success=0
+            grep -Fq 'id="races"' /tmp/original.html || success=0
+            for mode in 6m 96m; do
+              curl -fsS --retry 2 --retry-delay 2 -D "/tmp/${mode}.headers" "$base/models/${mode}?date=2026-11-08" -o "/tmp/${mode}.html" || success=0
+              grep -Fiq 'x-race-model-full-page: standalone-v3' "/tmp/${mode}.headers" || success=0
+              grep -Fq 'data-model-filter="true"' "/tmp/${mode}.html" || success=0
+              grep -Fq '参考予想' "/tmp/${mode}.html" || success=0
+              ! grep -Fiq 'x-race-independent-model: cash' "/tmp/${mode}.headers" || success=0
+              test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/${mode}/api/public/day?date=2026-11-08")" = "404" || success=0
             done
-            grep -Fq 'class="card navigator"' "/tmp/${mode}.html"
-            grep -Fq '/models/'"/${mode}"'/api/public/day' "/tmp/${mode}.html" || grep -Fq "/models/${mode}/api/public/day" "/tmp/${mode}.html"
-            ! grep -Fq '研究用・収益予測' "/tmp/${mode}.html"
+            if test "$success" = "1"; then
+              echo RESTORED_RESEARCH_PAGES_AND_ORIGINAL_SITE_LIVE_OK
+              exit 0
+            fi
+            sleep 15
           done
-          echo INDEPENDENT_MODELS_EXACT_ORIGINAL_NAVIGATION_LIVE_OK
-      - name: Validate both independently bound day APIs
-        shell: bash
-        run: |
-          set -euo pipefail
-          base='https://race-tantei-phase0.race-tantei.workers.dev'
-          for mode in 6m 96m; do
-            curl -fsS --retry 4 --retry-delay 3 "$base/models/${mode}/api/public/day?date=2026-11-15" -o "/tmp/${mode}.json"
-            python3 - "${mode}" <<'PY'
-          import json,sys
-          mode=sys.argv[1]
-          data=json.load(open('/tmp/'+mode+'.json'))
-          assert data.get('ok') is True
-          assert data.get('date')=='2026-11-15'
-          assert len(data.get('races') or [])==36
-          assert all('publicState' in row for row in data['races'])
-          print('INDEPENDENT_'+mode+'_DAY_API_OK')
-          PY
-          done
+          echo RESTORED_RESEARCH_PAGES_LIVE_FAILED >&2
+          exit 1
