@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/research-independent-2017-smoke-roi.yml"
       - "scripts/collect-independent-year-final-odds-20261115.py"
+      - "scripts/evaluate-independent-full-year-roi-20261115.mts"
 permissions:
   contents: read
 jobs:
