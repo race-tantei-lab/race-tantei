@@ -77,6 +77,7 @@ export function chooseIndependentTickets(
  const total=weights.reduce((a,b)=>a+b,0);
  if(!Number.isFinite(total)||Math.abs(total-1)>1e-7||weights.some(w=>!Number.isFinite(w)||w<=0))throw Error("BAD_INDEPENDENT_HORSE_PROBABILITIES");
  const byType=new Map<CompletedBetType,CompletedTicket>();
+ const contextForecastCache=new Map<string,ReturnType<typeof scoreCash>>();
  for(const q of quotes){
    if(!COMPLETED_BET_ORDER.includes(q.betType))continue;
    const odds=Number(q.oddsMin);
@@ -85,7 +86,10 @@ export function chooseIndependentTickets(
    if(!pos)continue;
    const p=completedCombinationProbability(q.betType,pos,weights);
    if(!Number.isFinite(p)||p<=0)continue;
-   const forecast=scoreCash(race,{betType:q.betType,assumedOdds:odds},fit);
+   const priceBand=odds<2?0:odds<3?1:odds<5?2:odds<8?3:odds<12?4:odds<20?5:odds<35?6:odds<60?7:odds<100?8:odds<200?9:odds<400?10:11;
+   const key=q.betType+":"+priceBand;
+   let forecast=contextForecastCache.get(key);
+   if(!forecast){forecast=scoreCash(race,{betType:q.betType,assumedOdds:odds},fit);contextForecastCache.set(key,forecast);}
    const cashRatio=Math.max(.15,Math.min(4,forecast.cash/Math.max(.1,fit.cashPrior)));
    const hitRatio=Math.max(.15,Math.min(4,forecast.hit/Math.max(.02,fit.hitPrior)));
    const factor=mode==="cash6"?.70*cashRatio+.30*hitRatio:cashRatio;
