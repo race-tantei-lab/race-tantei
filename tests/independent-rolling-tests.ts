@@ -65,6 +65,12 @@ for(const mode of ["cash6","cash96"] as const){
  assert.ok(output.includes('a.href="/models/'+(mode==="cash6"?"6m":"96m")+'/races/"'));
  assert.ok(!output.includes('研究用・収益予測')&&!output.includes('モデルの表示に必要な情報'));
  assert.ok(!output.includes('class="model-navigator"'),"no new custom navigator");
+ const originalToday='<section class="card today-results"><div class="section-title"><h2>今日の結果</h2></div><div class="today-result-row"><strong>LEGACY_RESULTS_SHOULD_NOT_APPEAR</strong></div></section>';
+ const withOriginalToday=NORMAL_HOME_SNAPSHOT.replace("</main>",originalToday+"</main>");
+ const modelToday=identicalHomeUi(withOriginalToday,mode,undefined,summaryForDay(date,empty));
+ assert.ok(!modelToday.includes("LEGACY_RESULTS_SHOULD_NOT_APPEAR"),"must not show canonical model's current-day ROI");
+ assert.ok(modelToday.includes('class="today-result-row"'),"keep identical original result-row UI");
+
  const html='<!doctype html><html><head></head><body><main><header></header><section class="hero today-hero"><div class="race-title"><span class="status miss">不的中</span></div></section><section data-race-panel="bets"><div>WRONG ORIGINAL TICKET</div></section><section id="race-panel-reason" data-race-panel="reason" hidden><p>WRONG OLD REASON</p></section><section data-race-panel="horses">HORSES</section></main></body></html>';
  const render=identicalDetailUi(html,mode,races[0].raceId,empty);
  assert.ok(!render.includes("WRONG ORIGINAL TICKET"));
