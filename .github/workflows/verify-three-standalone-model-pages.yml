@@ -1,9 +1,10 @@
 name: Verify three standalone prediction screens and existing race site
 on:
   push:
-    branches: [feature/20261115-three-full-model-pages]
+    branches: [feature/20261115-three-full-model-pages, fix/20261115-model-ui-interaction-parity]
     paths:
       - src/three-model-full-pages.ts
+      - src/three-model-navigation-client.ts
       - src/three-model-compare-page.ts
       - src/public-site-entry-performance-history-fix-20260915.ts
       - tsconfig.three-model.json

@@ -47,12 +47,25 @@ assert.ok(nav.includes("/races/"+ids[0]));
 assert.ok(MODEL_SWITCH_CSS.includes(".prediction-model-tabs"));
 const six=await serveFullModel(new Request("https://race-tantei.test/models/6m?date="+raceDate),env,"cash6");
 assert.equal(six.status,200);
-assert.equal(six.headers.get("x-race-model-full-page"),"standalone-v2");
+assert.equal(six.headers.get("x-race-model-full-page"),"standalone-v3");
 const h6=await six.text();
 for(const text of ["直近6か月モデル","過去96か月モデル","現行モデル","年","月","日付","競馬場","レース1","レース12","1,800円","200円","参考予想"]){
   assert.ok(h6.includes(text),"missing "+text);
 }
 assert.ok(h6.includes('data-prediction-model="cash6" aria-current="page"'));
+for(const label of ["1. 年","2. 月","3. 日付","4. 会場","5. レース"]){
+  assert.ok(h6.includes(label),"missing original navigator step "+label);
+}
+assert.ok(h6.includes('id="model-page-root"'));
+assert.ok(h6.includes('data-model-filter="true"'));
+assert.ok(h6.includes('data-model-rail="dates"'));
+assert.ok(h6.includes('data-model-venue="東京"'));
+assert.ok(h6.includes("history.pushState"),"research model controls must retain in-page browser navigation");
+assert.ok(h6.includes("window.scrollTo(0,y)"),"filtering must preserve scroll position");
+assert.ok(h6.includes('aria-busy'),"filtering must report updates accessibly");
+assert.ok(h6.includes('role="status" hidden'),"filter errors stay inline");
+assert.ok(h6.indexOf('5. レース')<h6.indexOf('data-model-race='),"race cards must be INSIDE original five-step navigator");
+
 assert.equal((h6.match(/data-model-race=/g)||[]).length,12);
 assert.ok(h6.includes("/models/6m/races/"+ids[0]));
 const ninety=await serveFullModel(new Request("https://race-tantei.test/models/96m?date="+raceDate),env,"cash96");
