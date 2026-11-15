@@ -79,7 +79,7 @@ const ranked=ids.map((id,i)=>({id,score:restored716Tickets(races[i]!,bets.slice(
 const detailId=ranked[0]!.id;
 const detail=await serveFullModel(new Request("https://race-tantei.test/models/6m/races/"+detailId),env,"cash6",detailId);
 const hd=await detail.text();
-for(const text of ["テストホース","買い目の理由","ライト","スタンダード","プレミアム","4,500円","9,000円","予想買い目"]){
+for(const text of ["テストホース","買い目の理由","ライト","スタンダード","プレミアム","5,000円","10,000円","予想買い目"]){
   assert.ok(hd.includes(text),"missing race detail feature "+text);
 }
 assert.ok(!hd.includes("/models/96m/races/"));
