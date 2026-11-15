@@ -16,6 +16,8 @@ if(!/^20(1[6-9]|2[0-6])$/.test(year))throw Error("BAD_RESEARCH_YEAR:"+year);
 const raw=JSON.parse(await readFile(join(OUT,"independent-full-period-selections.json"),"utf8"));
 const selected=new Set<string>();
 for(const p of raw.modeResults)if(p.date.slice(0,4)===year)for(const x of p.selected)selected.add(x.raceId);
+const limit=Number(process.env.AUDIT_LIMIT||"0");
+if(limit>0){const ids=[...selected].slice(0,limit);selected.clear();ids.forEach(id=>selected.add(id));}
 const venue=["","sapporo","hakodate","fukushima","niigata","tokyo","nakayama","chukyo","kyoto","hanshin","kokura"];
 function parseId(url:string):string|null{
  const u=decodeURIComponent(url);
