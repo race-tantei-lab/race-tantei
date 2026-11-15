@@ -8,11 +8,13 @@ import {gunzipSync} from "node:zlib";
 import {dirname,join} from "node:path";
 import {fileURLToPath} from "node:url";
 import {fitIndependent,chooseIndependentTickets,independentCourseBets,settleIndependent,type IndependentMode} from "../src/v1/independent-rolling-core.js";
+import history from "../src/v1/ten-year-history-data/index.js";
 import type {OfficialOddsRow} from "../src/v1/completed-ticket-runtime.js";
 const ROOT=join(dirname(fileURLToPath(import.meta.url)),"..");
 const OUT=join(ROOT,"artifacts");
 const YEAR=String(process.env.AUDIT_YEAR||"2017");
 const LIMITED=Number(process.env.AUDIT_LIMIT||"0");
+const ARCHIVE=new Map<string,any>(JSON.parse(gunzipSync(Buffer.from(history,"base64")).toString("utf8")).races.map((x:any)=>[x[0],x]));
 const modes=["cash6","cash96"] as const;
 const historyMod=await import("../src/v1/ten-year-history-data/index.js");
 const historyRows=JSON.parse(gunzipSync(Buffer.from(historyMod.default,"base64")).toString("utf8")).races as any[][];
@@ -78,7 +80,7 @@ for(const mode of modes){
    const k=mode+":"+sel.date.slice(0,7);
    let fit=fits.get(k);
    if(!fit){fit=fitIndependent(sel.date,mode,[]);fits.set(k,fit);}
-   const fakeRace={raceId:sel.raceId,raceDate:sel.date,venue:sel.venue,raceNo:sel.raceNo,raceName:null,surface:null,distanceM:null,startTimeUtc:null,startTimeJst:null};
+   const fakeRace:any={raceId:sel.raceId,raceDate:sel.date,venue:sel.venue,raceNo:sel.raceNo,raceName:null,surface:null,distanceM:null,startTimeUtc:null,startTimeJst:null};
    // Correct market priors: use actual archived surface, distance, race name
    // rather than winner-dependent result fields.
    const archive=ARCHIVE.get(sel.raceId);
