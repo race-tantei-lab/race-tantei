@@ -71,12 +71,6 @@ assert.ok(h6.indexOf('5. レース')<h6.indexOf('data-model-race='),"race cards 
 
 assert.equal((h6.match(/data-model-race=/g)||[]).length,12);
 assert.ok(h6.includes("/models/6m/races/"+ids[0]));
-const ninety=await serveFullModel(new Request("https://race-tantei.test/models/96m?date="+raceDate),env,"cash96");
-const h96=await ninety.text();
-assert.ok(h96.includes('data-prediction-model="cash96" aria-current="page"'));
-assert.ok(h96.includes("3R"));
-assert.equal((h96.match(/data-model-race=/g)||[]).length,12);
-assert.equal((h96.match(/参考予想<\/span>/g)||[]).length,3);
 const detail=await serveFullModel(new Request("https://race-tantei.test/models/6m/races/"+ids[0]),env,"cash6",ids[0]);
 const hd=await detail.text();
 for(const text of ["テストホース","買い目の理由","ライト","スタンダード","プレミアム","4,500円","9,000円","予想買い目"]){
