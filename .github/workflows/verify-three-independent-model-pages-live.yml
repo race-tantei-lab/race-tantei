@@ -29,17 +29,20 @@ jobs:
           base='https://race-tantei-phase0.race-tantei.workers.dev'
           for mode in 6m 96m; do
             curl -fsS --retry 3 --retry-delay 2 --max-time 35 -D "/tmp/${mode}.headers" "$base/models/${mode}?date=2026-11-14&_smoke=${GITHUB_RUN_ID}" -o "/tmp/${mode}.html"
-            grep -Fiq 'x-race-model-full-page: standalone-v2' "/tmp/${mode}.headers"
+            grep -Fiq 'x-race-model-full-page: standalone-v3' "/tmp/${mode}.headers"
             grep -Fq 'class="prediction-model-tabs"' "/tmp/${mode}.html"
-            grep -Fq 'model-year-rail' "/tmp/${mode}.html"
-            grep -Fq 'model-month-rail' "/tmp/${mode}.html"
-            grep -Fq 'model-day-rail' "/tmp/${mode}.html"
-            grep -Fq 'model-venue-rail' "/tmp/${mode}.html"
+            grep -Fq 'data-model-rail="years"' "/tmp/${mode}.html"
+            grep -Fq 'data-model-rail="months"' "/tmp/${mode}.html"
+            grep -Fq 'data-model-rail="dates"' "/tmp/${mode}.html"
+            grep -Fq 'data-model-rail="venues"' "/tmp/${mode}.html"
             grep -Fq 'data-model-race=' "/tmp/${mode}.html"
             grep -Fq 'href="/models/6m' "/tmp/${mode}.html"
             grep -Fq 'href="/models/96m' "/tmp/${mode}.html"
             grep -Fq 'href="/"' "/tmp/${mode}.html"
-            grep -Fq '本日の予想と参考収支' "/tmp/${mode}.html"
+            grep -Fq '選択日の予想と参考収支' "/tmp/${mode}.html"
+            grep -Fq 'id="model-page-root"' "/tmp/${mode}.html"
+            grep -Fq 'history.pushState' "/tmp/${mode}.html"
+            grep -Fq '5. レース' "/tmp/${mode}.html"
             echo "THREE_MODEL_STANDALONE_HOME_LIVE_OK ${mode}"
           done
       - name: Navigate SAME actual race between current, 6m and 96m detail screens
