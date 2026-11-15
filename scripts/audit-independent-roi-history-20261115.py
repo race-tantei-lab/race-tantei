@@ -56,6 +56,9 @@ def main():
             odds_tables.append({"name":name,"columns":[x["name"] for x in cols],
                "rows":one('SELECT COUNT(*) n FROM "'+name.replace('"','""')+'"').get("n")})
     race_counts=query("SELECT substr(race_date,1,4) AS year,COUNT(*) AS races FROM rt_races WHERE status='finished' AND race_date>='2016-08-10' GROUP BY 1 ORDER BY 1")
+    prestart_odds=query("SELECT substr(r.race_date,1,4) AS year, COUNT(*) AS quotes, COUNT(DISTINCT s.race_id) AS races, COUNT(DISTINCT s.bet_type) AS betTypes FROM rt_official_odds_snapshots s JOIN rt_races r ON r.race_id=s.race_id WHERE s.seconds_to_start>=900 GROUP BY 1 ORDER BY 1")
+    odds_span=one("SELECT MIN(captured_at_utc) AS minCaptured,MAX(captured_at_utc) AS maxCaptured,COUNT(DISTINCT race_id) AS races,COUNT(*) AS totalRows FROM rt_official_odds_snapshots")
+    full_six_markets=one("SELECT COUNT(*) AS races FROM (SELECT race_id FROM rt_official_odds_snapshots WHERE seconds_to_start>=900 GROUP BY race_id HAVING COUNT(DISTINCT bet_type)=6)")
     counts={}
     results={}
     for mode in ("cash6","cash96"):
@@ -110,6 +113,9 @@ def main():
     result={"audit":"independent-cash6-cash96-exact-frozen-bets-readonly",
       "asOf":"2026-11-15","noCanonicalFallback":True,"noHypotheticalOdds":True,
       "historicalRacesByYear":race_counts,
+      "preStartOfficialOddsByYear":prestart_odds,
+      "officialOddsArchiveSpan":odds_span,
+      "racesWithAllSixPreStartMarketTypes":full_six_markets.get("races",0),
       "oddsRelatedTables":odds_tables,
       "models":results,
       "validatedAllHistoricalYears":all(
