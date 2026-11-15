@@ -13,11 +13,11 @@ export type Bet={raceId:string;betType:string;combination:string;stakeYen:number
 export type PastBet=Bet&Race;
 export type Ticket={betType:string;combination:string;stakeYen:number;assumedOdds:number;
   expectedCashIndex:number|null;settledReturnYen:number|null};
-export type Pick={race:Race;status:"actual"|"simulation"|"awaiting"|"skipped";
+export type ModelPick={race:Race;status:"actual"|"simulation"|"awaiting"|"skipped";
   detail:string;expectedCashIndex:number|null;tickets:Ticket[]};
 export type Panel={id:MethodId;title:string;description:string;hypothetical:boolean;
   selectedRaces:number;awaitingRaces:number;trainingTickets:number;
-  venues:{venue:string;races:Pick[]}[]};
+  venues:{venue:string;races:ModelPick[]}[]};
 type Stats=[number,number,number,number];
 type MonthStats={global:number[];keys:Record<string,number[]>};
 const FROZEN=archive as unknown as {sourceLastDate:string;raceCount:number;ticketCount:number;
@@ -176,8 +176,8 @@ export function compareThree(date:string,selectedIds:string[],races:Race[],
       const rank96=new Set(def.id==="cash96"&&complete
         ? [...candidates].sort((a,b)=>b.expected-a.expected||a.race.raceNo-b.race.raceNo)
             .slice(0,3).map(x=>x.race.raceId):[]);
-      const selections:Pick[]=candidates.map(c=>{
-        let status:Pick["status"]="awaiting",detail="本番買い目の確定待ち",tickets:Ticket[]=[];
+      const selections:ModelPick[]=candidates.map(c=>{
+        let status:ModelPick["status"]="awaiting",detail="本番買い目の確定待ち",tickets:Ticket[]=[];
         if(def.id==="current"&&c.original){
           status="actual";tickets=c.tickets;detail=c.ready?"本番確定買い目":"本番の保存済み買い目（T−15固定は未確認）";
         }else if(def.id==="cash6"&&c.ready){
