@@ -13,13 +13,16 @@ import type {OfficialOddsRow} from "../src/v1/completed-ticket-runtime.js";
 const ROOT=join(dirname(fileURLToPath(import.meta.url)),"..");
 const OUT=join(ROOT,"artifacts");
 const YEAR=String(process.env.AUDIT_YEAR||"2017");
+const LATE=process.env.AUDIT_LATE==="1";
 const LIMITED=Number(process.env.AUDIT_LIMIT||"0");
 const ARCHIVE=new Map<string,any>(JSON.parse(gunzipSync(Buffer.from(history,"base64")).toString("utf8")).races.map((x:any)=>[x[0],x]));
 const modes=["cash6","cash96"] as const;
-const selection=JSON.parse(await readFile(join(OUT,"independent-full-period-selections.json"),"utf8"));
+const selection=JSON.parse(await readFile(join(OUT,LATE?"independent-late-2026-selections.json":"independent-full-period-selections.json"),"utf8"));
+const lateDb=LATE?JSON.parse(gunzipSync(await readFile(join(OUT,"independent-late-2026-d1.json.gz"))).toString("utf8")):null;
+if(lateDb){for(const b of lateDb.races){const r=b.race;ARCHIVE.set(r.raceId,[r.raceId,r.raceDate,r.venue,r.raceNo,r.raceName,r.startTimeJst,r.surface,r.distanceM,null]);}}
 const result=JSON.parse(await readFile(join(OUT,"independent-year-result-"+YEAR+".json"),"utf8"));
 const oddsPath=join(OUT,"independent-year-final-odds-"+YEAR+".jsonl.gz");
-const weightPath=join(OUT,"independent-full-period-horse-weights.jsonl.gz");
+const weightPath=join(OUT,LATE?"independent-late-2026-horse-weights.jsonl.gz":"independent-full-period-horse-weights.jsonl.gz");
 const oddsText=gunzipSync(await readFile(oddsPath)).toString("utf8");
 const weightText=gunzipSync(await readFile(weightPath)).toString("utf8");
 const odds=new Map<string,any>(),weights=new Map<string,any>(),payouts=new Map<string,any>();
@@ -51,11 +54,11 @@ function makeQuotes(record:Record<string,any>):OfficialOddsRow[]{
 }
 function resultPair(k:string):string{return k.replace(/[→－–—]/g,"-").replace(/\s+/g,"");}
 const fits=new Map<string,ReturnType<typeof fitIndependent>>();
-const year:any={year:YEAR,modelNames:[],modeResults:{},analysisDefinition:{
+const year:any={year:LATE?"2026-08-10..2026-11-15":YEAR,modelNames:[],modeResults:{},analysisDefinition:{
  availableMonths:selection.start+".."+selection.end,
  odds:"official JRA POSTRACE FINAL odds, not pre-T15",
- horseProbabilities:"frozen shared 500-tree LightGBM, per-date chronological features reconstructed from compact 2016-2026 archive",
- missingHorseFeatureMetadata:"weather/track/direction default unknown; not a certified pre-T15 replication",
+ horseProbabilities:LATE?"frozen shared 500-tree LightGBM, full pre-2026-Aug history plus D1 Nov 2026 historical features":"frozen shared 500-tree LightGBM, per-date chronological features reconstructed from compact 2016-2026 archive",
+ missingHorseFeatureMetadata:LATE?"source D1 has pre-known weather track and direction; odds are still retrospective final":"weather/track/direction default unknown when no official historical result metadata; not a certified pre-T15 replication",
  sameDeployedSourceFunctions:true,
  revenue:"actual JRA 100-yen payouts, not official odds treated as refunds",
  originalTicketReweighting:false
@@ -76,7 +79,7 @@ for(const mode of modes){
    if(quotes.length<10)throw Error("TOO_FEW_JRA_FINAL_ODDS");
    const k=mode+":"+sel.date.slice(0,7);
    let fit=fits.get(k);
-   if(!fit){fit=fitIndependent(sel.date,mode,[]);fits.set(k,fit);}
+   if(!fit){fit=fitIndependent(sel.date,mode,LATE?lateDb.pastOriginalSettled:[]);fits.set(k,fit);}
    const fakeRace:any={raceId:sel.raceId,raceDate:sel.date,venue:sel.venue,raceNo:sel.raceNo,raceName:null,surface:null,distanceM:null,startTimeUtc:null,startTimeJst:null};
    // Correct market priors: use actual archived surface, distance, race name
    // rather than winner-dependent result fields.
@@ -119,4 +122,4 @@ for(const mode of modes){
  };
  console.log("INDEPENDENT_FULL_YEAR_ROI",JSON.stringify({year:YEAR,mode,selected:chosen.length,settled:settled.length,skipped:issues.length,stake,paid:pay,roi:year.modeResults[mode].roiPct,largestExcluded:year.modeResults[mode].roiAfterLargestTicketPct,hit:year.modeResults[mode].hitRacePct,sampleMissing:issues.slice(0,5)}));
 }
-await writeFile(join(OUT,"independent-year-roi-"+YEAR+".json"),JSON.stringify(year));
+await writeFile(join(OUT,LATE?"independent-year-roi-late-2026.json":"independent-year-roi-"+YEAR+".json"),JSON.stringify(year));
