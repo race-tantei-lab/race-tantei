@@ -1,0 +1,76 @@
+name: Confirm three independent prediction screens and inter-page navigation on production
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/verify-three-independent-model-pages-live.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate live original home has model-switch links
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          curl -fsS --retry 3 --retry-delay 2 --max-time 35 -D /tmp/original.headers "$base/?_model_nav=${GITHUB_RUN_ID}" -o /tmp/original.html
+          grep -Fq 'class="prediction-model-tabs"' /tmp/original.html
+          grep -Fq 'href="/models/6m"' /tmp/original.html
+          grep -Fq 'href="/models/96m"' /tmp/original.html
+          grep -Fq '現行モデル' /tmp/original.html
+          echo THREE_MODEL_ORIGINAL_SCREEN_WITH_SWITCHER_LIVE_OK
+      - name: Validate each NEW full home shows original-style day venue and race navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          for mode in 6m 96m; do
+            curl -fsS --retry 3 --retry-delay 2 --max-time 35 -D "/tmp/${mode}.headers" "$base/models/${mode}?date=2026-11-14&_smoke=${GITHUB_RUN_ID}" -o "/tmp/${mode}.html"
+            grep -Fiq 'x-race-model-full-page: standalone-v2' "/tmp/${mode}.headers"
+            grep -Fq 'class="prediction-model-tabs"' "/tmp/${mode}.html"
+            grep -Fq 'model-year-rail' "/tmp/${mode}.html"
+            grep -Fq 'model-month-rail' "/tmp/${mode}.html"
+            grep -Fq 'model-day-rail' "/tmp/${mode}.html"
+            grep -Fq 'model-venue-rail' "/tmp/${mode}.html"
+            grep -Fq 'data-model-race=' "/tmp/${mode}.html"
+            grep -Fq 'href="/models/6m' "/tmp/${mode}.html"
+            grep -Fq 'href="/models/96m' "/tmp/${mode}.html"
+            grep -Fq 'href="/"' "/tmp/${mode}.html"
+            grep -Fq '本日の予想と参考収支' "/tmp/${mode}.html"
+            echo "THREE_MODEL_STANDALONE_HOME_LIVE_OK ${mode}"
+          done
+      - name: Navigate SAME actual race between current, 6m and 96m detail screens
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://race-tantei-phase0.race-tantei.workers.dev'
+          curl -fsS --retry 3 --retry-delay 2 --max-time 35 "$base/api/public/day?date=2026-11-14" -o /tmp/nov14.json
+          python3 - <<'PY'
+          import json,re
+          o=json.load(open('/tmp/nov14.json'))
+          races=o.get('races') or []
+          assert len(races)>=20,len(races)
+          c=next((x for x in races if x.get('publicState',{}).get('code') in ('buy','hit','miss')),races[0])
+          rid=str(c['raceId'])
+          assert re.fullmatch(r'20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}',rid),rid
+          open('/tmp/same-race-id','w').write(rid)
+          print('SAME_RACE_FOR_CROSS_MODEL_VALIDATION',rid)
+          PY
+          rid="$(cat /tmp/same-race-id)"
+          for path in "/races/$rid" "/models/6m/races/$rid" "/models/96m/races/$rid"; do
+            key="$(echo "$path" | tr '/' '_')"
+            curl -fsS --retry 3 --retry-delay 2 --max-time 35 "$base$path?_smoke=${GITHUB_RUN_ID}" -o "/tmp/${key}.html"
+            grep -Fq 'class="prediction-model-tabs"' "/tmp/${key}.html"
+            grep -Fq "/models/6m/races/$rid" "/tmp/${key}.html"
+            grep -Fq "/models/96m/races/$rid" "/tmp/${key}.html"
+            grep -Fq "/races/$rid" "/tmp/${key}.html"
+            echo "THREE_MODEL_SAME_RACE_TRANSITION_OK $path"
+          done
+          grep -Fq '予想買い目' "/tmp/_models_6m_races_$rid.html"
+          grep -Fq '出走馬・着順' "/tmp/_models_6m_races_$rid.html"
+          grep -Fq '予想買い目' "/tmp/_models_96m_races_$rid.html"
+          grep -Fq '出走馬・着順' "/tmp/_models_96m_races_$rid.html"
+          echo THREE_MODEL_FULL_RACE_DETAILS_PRODUCTION_LIVE_OK
