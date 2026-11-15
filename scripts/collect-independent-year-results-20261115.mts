@@ -43,6 +43,7 @@ async function mapPool<T,R>(items:T[],limit:number,f:(x:T)=>Promise<R>):Promise<
 const matched=new Map<string,string>(),monthFailures:any[]=[];
 for(let month=1;month<=12;month++){
  const ym=year+String(month).padStart(2,"0");
+ if(![...selected].some(id=>id.slice(0,4)+id.slice(5,7)===ym))continue;
  try{
   const links=await retry(()=>getArchiveResultUrls(ym),"month-"+ym,4);
   for(const link of links){
