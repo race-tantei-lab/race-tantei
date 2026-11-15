@@ -31,6 +31,8 @@ if(prior.schema!=="source-faithful-716-cash-2026-v1" ||
 }
 export const RESTORED_RESEARCH_ROI_PCT=prior.historicalResearchRoiPct;
 export const RESTORED_RESEARCH_SLA=3;
+export const RESTORED_RESEARCH_TRAINING_TICKETS=Object.values(prior.markets)
+  .reduce((n,row)=>n+Number(row[0]),0);
 function bin(odds:number):number{
   if(!Number.isFinite(odds)||odds<=0)throw Error("INVALID_ORIGINAL_OFFICIAL_ODDS");
   let index=0;
