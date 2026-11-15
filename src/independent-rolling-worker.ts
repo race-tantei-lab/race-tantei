@@ -71,10 +71,10 @@ async function loadRace(db:D1Database,id:string):Promise<{race:RaceRecord;runner
 }
 async function lockSingle(db:D1Database,mode:IndependentMode,id:string,now:Date):Promise<boolean>{
  const {race,runners}=await loadRace(db,id);
- const deadline=Date.parse(race.startTimeUtc)-15*MINUTES;
- if(!Number.isFinite(deadline)||Date.now()>deadline||now.getTime()>deadline)throw Error("INDEPENDENT_T15_DEADLINE_PASSED");
  const startUtc=race.startTimeUtc;
  if(!startUtc)throw Error("INDEPENDENT_MISSING_START");
+ const deadline=Date.parse(startUtc)-15*MINUTES;
+ if(!Number.isFinite(deadline)||Date.now()>deadline||now.getTime()>deadline)throw Error("INDEPENDENT_T15_DEADLINE_PASSED");
  const entryUrl=race.entryUrl;
  if(!entryUrl)throw Error("INDEPENDENT_MISSING_ENTRY");
  const fit=fitIndependent(race.raceDate,mode,await oldSettled(db,race.raceDate.slice(0,7)));
