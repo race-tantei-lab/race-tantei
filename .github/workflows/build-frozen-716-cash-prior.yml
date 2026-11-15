@@ -1,0 +1,35 @@
+name: Reproduce 716% frozen research priors on restoration branch
+on:
+  push:
+    branches: [restore/716827-cash-policy-20261116]
+    paths:
+      - "scripts/build-frozen-716-cash-prior.py"
+      - ".github/workflows/build-frozen-716-cash-prior.yml"
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reproduce original research financial ledger
+        run: |
+          python3 scripts/build-frozen-716-cash-prior.py
+          python3 scripts/build-frozen-716-cash-prior.py --check
+      - name: Commit generated source-faithful 2026 cash prior
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/v1/frozen-716-cash-prior-2026.json
+          if git diff --cached --quiet; then
+            echo FROZEN_PRIOR_ALREADY_CURRENT
+          else
+            git commit -m "Generate source-faithful 716.83% historical cash prior"
+            git push origin HEAD:restore/716827-cash-policy-20261116
+          fi
