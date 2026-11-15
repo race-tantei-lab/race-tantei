@@ -1,0 +1,40 @@
+name: Read-only coverage audit for Aug-Nov v16 cash method holdout
+on:
+  push:
+    branches: [research/20261115-aug-nov-v16-live-cash-v17]
+    paths: [.github/workflows/research-aug-nov-v16-live-schema-v17.yml]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect only anonymous research payout and odds schema
+        run: |
+          python - <<'PY'
+          import os,json,urllib.request
+          u=f"https://api.cloudflare.com/client/v4/accounts/{os.environ['CLOUDFLARE_ACCOUNT_ID']}/d1/database/{os.environ['CLOUDFLARE_D1_DATABASE_ID']}/query"
+          def q(sql):
+              assert sql.lstrip().upper().startswith('SELECT ')
+              req=urllib.request.Request(u,method='POST',data=json.dumps({'sql':sql,'params':[]}).encode(),
+                headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN'],'Content-Type':'application/json'})
+              with urllib.request.urlopen(req,timeout=60) as f:o=json.load(f)
+              if not o.get('success'):raise RuntimeError(str(o.get('errors')))
+              return (o.get('result') or [{}])[0].get('results',[])
+          queries={
+           'bet_schema':"SELECT sql FROM sqlite_master WHERE type='table' AND name='rt_public_bets'",
+           'race_schema':"SELECT sql FROM sqlite_master WHERE type='table' AND name='rt_races'",
+           'selected_state_count':"SELECT COUNT(*) AS n,MIN(state_key) AS first,MAX(state_key) AS last FROM rt_system_state WHERE state_key>='final_daily_selection:2026-08-01' AND state_key<'final_daily_selection:2026-11-15'",
+           'public_bets_lite_summary':"SELECT course,settlement_status,COUNT(*) AS n,COUNT(DISTINCT race_id) AS races,SUM(stake_yen) AS stake,SUM(return_yen) AS paid FROM rt_public_bets WHERE race_id>='2026-08-01-' AND race_id<'2026-11-15-' AND source_prediction_id=-2 GROUP BY course,settlement_status ORDER BY course,settlement_status",
+           'odds_snapshots_lite_summary':"SELECT bet_type,COUNT(*) AS rows,COUNT(DISTINCT race_id) AS races FROM rt_official_odds_snapshots WHERE race_id>='2026-08-01-' AND race_id<'2026-11-15-' AND seconds_to_start>=900 GROUP BY bet_type",
+          }
+          for k,s in queries.items():
+              try: print("LIVE_V16_SCHEMA_CHECK",json.dumps({"key":k,"result":q(s)},ensure_ascii=False),flush=True)
+              except Exception as e: print("LIVE_V16_SCHEMA_QUERY_FAILURE",json.dumps({"key":k,"error":str(e)[:300]}),flush=True)
+          PY
