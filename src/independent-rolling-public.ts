@@ -194,7 +194,7 @@ function replaceBlock(html:string,startMark:string,endMark:string,replacement:st
  if(b<0)return html;
  return html.slice(0,a)+replacement+html.slice(b);
 }
-export function identicalHomeUi(html:string,mode:IndependentMode,aggregation?:AggregateSummary):string{
+export function identicalHomeUi(html:string,mode:IndependentMode,aggregation?:AggregateSummary,current?:ReturnType<typeof summaryForDay>):string{
  const base="/models/"+(mode==="cash6"?"6m":"96m");
  let out=sameModelNavigation(html,mode);
  out=footerCss(out);
@@ -207,6 +207,24 @@ export function identicalHomeUi(html:string,mode:IndependentMode,aggregation?:Ag
  const displayed=aggregateMarkup(aggregation||{total:{races:0,stake:0,paid:0},months:new Map(),venues:new Map()});
  out=replaceBlock(out,'<section class="metrics shared-roi">','<div class="section-title venue-roi-title">',displayed.metrics);
  out=replaceBlock(out,'<div class="section-title venue-roi-title">','<section class="daily-performance-wrap"',displayed.venues);
+ // Replace the original model's embedded same-day results with THIS model's
+ // results. The exact original result-row markup and stylesheet are retained.
+ if(current){
+   const first=out.indexOf('<section class="card today-results">');
+   if(first>=0){
+     const last=out.indexOf("</section>",first);
+     if(last>first){
+       const lines=current.courses.map(c=>
+         '<div class="today-result-row"><b>'+esc(c.course)+'</b><span>'+
+         c.settledRaces+'/'+c.finalizedRaces+'R精算　的中'+c.hitRaces+'R</span><strong>'+
+         (c.roiPct==null?'—':c.roiPct.toFixed(1)+'%')+'</strong></div>'
+       ).join("");
+       const replacement='<section class="card today-results"><div class="section-title"><h2>今日の結果</h2>'+
+         '<span class="muted">精算済み時点</span></div>'+lines+'</section>';
+       out=out.slice(0,first)+replacement+out.slice(last+10);
+     }
+   }
+ }
  // Dynamic model performance is rendered by the identical original UI script.
  return out;
 }
@@ -241,9 +259,8 @@ export function identicalDetailUi(html:string,mode:IndependentMode,id:string,day
   const b=out.indexOf("</section>",a);
   if(b>a)out=out.slice(0,a)+mark+courseBlock(final,view,day)+"</section>"+out.slice(b+10);
  }else{
-  // No bet panel means the canonical response was not a valid race detail.
-  const fallback='<section data-race-panel="bets">'+courseBlock(final,view,day)+'</section>';
-  out=out.replace("</header>","</header>"+fallback);
+  // Never display the ORIGINAL model's tickets when the canonical DOM is not compatible.
+  throw Error("CANONICAL_DETAIL_BET_PANEL_MISSING");
  }
  const reasonStart=out.indexOf('<section id="race-panel-reason"');
  if(reasonStart>=0){
@@ -274,8 +291,8 @@ export async function independentDetailResponse(db:D1Database,mode:IndependentMo
  return new Response(html,{status:original.status,headers});
 }
 export async function independentHomeResponse(db:D1Database,mode:IndependentMode,original:Response):Promise<Response>{
- const a=await aggregateIndependent(db,mode);
- const html=identicalHomeUi(await original.text(),mode,a);
+ const [a,d]=await Promise.all([aggregateIndependent(db,mode),daySnapshot(db,mode,today())]);
+ const html=identicalHomeUi(await original.text(),mode,a,summaryForDay(today(),d));
  const headers=new Headers(original.headers);headers.delete("content-length");headers.set("x-race-independent-model",mode);
  return new Response(html,{status:original.status,headers});
 }
