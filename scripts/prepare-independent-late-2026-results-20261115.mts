@@ -1,0 +1,13 @@
+import {gunzipSync} from "node:zlib";
+import {readFile,writeFile} from "node:fs/promises";
+import {dirname,join} from "node:path";
+import {fileURLToPath} from "node:url";
+const root=join(dirname(fileURLToPath(import.meta.url)),".."),art=join(root,"artifacts");
+const db=JSON.parse(gunzipSync(await readFile(join(art,"independent-late-2026-d1.json.gz"))).toString("utf8"));
+const plan=JSON.parse(await readFile(join(art,"independent-late-2026-selections.json"),"utf8"));
+const selected=new Set(plan.modeResults.flatMap((x:any)=>x.selected.map((s:any)=>s.raceId)));
+const races=db.races.filter((x:any)=>selected.has(x.race.raceId)).map((b:any)=>({raceId:b.race.raceId,race:b.race,payouts:b.payouts}));
+const failed=races.filter((x:any)=>!x.race.resultUrl||x.payouts.length===0).map((x:any)=>x.raceId);
+await writeFile(join(art,"independent-year-result-2026.json"),JSON.stringify({year:"2026",scope:"2026-Aug-Nov",expected:selected.size,payoutRaces:races.length,matched:races.length,races}));
+console.log("INDEPENDENT_LATE_2026_OFFICIAL_RESULTS",JSON.stringify({selected:selected.size,matched:races.length,noSource:failed.slice(0,12)}));
+if(!races.length)throw Error("NO_LATE_2026_SELECTED_PAYOUTS");
