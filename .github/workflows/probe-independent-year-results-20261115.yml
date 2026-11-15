@@ -1,0 +1,30 @@
+name: Research 2017-2026 independent official results archive probe
+on:
+  push:
+    branches: [research/20261115-rolling-final-odds-replay]
+    paths:
+      - scripts/collect-independent-year-results-20261115.mts
+      - .github/workflows/probe-independent-year-results-20261115.yml
+permissions:
+  contents: read
+jobs:
+  jra-year-archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AUDIT_YEAR: '2017'
+      AUDIT_LIMIT: '8'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsx scripts/plan-independent-full-period-20261115.mts
+      - run: npx tsx scripts/collect-independent-year-results-20261115.mts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: independent-official-year-link-and-payout-probe
+          path: artifacts/independent-year-result-2017.json
+          retention-days: 14
