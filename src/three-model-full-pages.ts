@@ -7,6 +7,7 @@
  * different horses; they only adjust the two already-frozen ticket choices.
  */
 import {shell} from "./v1/public-ui.js";
+import {HOME_INTERACTION_SCRIPT} from "./three-model-navigation-client.js";
 import {compareThree,type Panel,type ModelPick,type Race,type Bet,type PastBet,type MethodId}
   from "./v1/three-model-money-comparison.js";
 import {addDays,normalizeDate,oldSettled} from "./three-model-compare-page.js";
@@ -88,7 +89,7 @@ function renderDocument(title:string,content:string,script=""):Response{
  if(script)html=html.replace("</body>","<script>"+script+"</script></body>");
  return new Response(html,{status:200,headers:{
    "content-type":"text/html; charset=utf-8","cache-control":"no-store, max-age=0",
-   "x-race-model-full-page":"standalone-v2","x-content-type-options":"nosniff"
+   "x-race-model-full-page":"standalone-v3","x-content-type-options":"nosniff"
  }});
 }
 function modePath(mode:ModelMode):string{return mode==="cash6"?"/models/6m":"/models/96m";}
@@ -102,20 +103,30 @@ function monthChoices(calendar:Calendar[],date:string):{years:string[];months:st
    venues:[...new Set(calendar.filter(x=>x.raceDate===date).map(x=>x.venue))]
  };
 }
-function navigation(mode:ModelMode,c:Calendar[],date:string,venue:string):string{
+function navigation(mode:ModelMode,c:Calendar[],date:string,venue:string,raceSections:string):string{
  const opts=monthChoices(c,date),base=modePath(mode);
  const currentYear=date.slice(0,4),currentMonth=date.slice(0,7);
- function anchor(value:string,label:string,active:boolean,extra=""):string{
-   return '<a href="'+base+'?date='+encodeURIComponent(value)+extra+'"'+(active?' class="active" aria-current="true"':"")+'>'+esc(label)+'</a>';
+ function anchor(value:string,label:string,active:boolean,extra="",venueValue?:string):string{
+   return '<a href="'+base+'?date='+encodeURIComponent(value)+extra+'" data-model-filter="true"'+
+     (venueValue?' data-model-venue="'+esc(venueValue)+'"':"")+
+     ' class="chip'+(active?' active':'')+'"'+(active?' aria-current="true"':"")+'>'+esc(label)+'</a>';
  }
- const firstDate=(s:string)=>[...new Set(c.map(x=>x.raceDate))].filter(x=>x.startsWith(s)).sort().reverse()[0]||date;
- return '<section class="panel model-navigator" aria-label="開催日と会場を選択">'+
- '<h2>開催日からレースを探す</h2>'+
- '<div class="nav-label">年</div><div class="model-year-rail">'+opts.years.map(y=>anchor(firstDate(y),y+"年",y===currentYear)).join("")+'</div>'+
- '<div class="nav-label">月</div><div class="model-month-rail">'+opts.months.map(m=>anchor(firstDate(m),Number(m.slice(5))+"月",m===currentMonth)).join("")+'</div>'+
- '<div class="nav-label">日付</div><div class="model-day-rail">'+opts.days.map(d=>anchor(d,Number(d.slice(8))+"日",d===date)).join("")+'</div>'+
- '<div class="nav-label">競馬場</div><div class="model-venue-rail">'+opts.venues.map(v=>anchor(date,v,v===venue,"&venue="+encodeURIComponent(v))).join("")+'</div>'+
- '</section>';
+ function step(n:number,label:string,railName:string,content:string):string{
+   return '<div class="nav-step"><p class="nav-label">'+n+'. '+label+'</p>'+
+     '<div class="rail" data-model-rail="'+railName+'">'+(content||'<span class="muted">開催情報待ち</span>')+'</div></div>';
+ }
+ const firstDate=(prefix:string)=>[...new Set(c.map(x=>x.raceDate))]
+   .filter(x=>x.startsWith(prefix)).sort().reverse()[0]||date;
+ return '<div class="section-title"><h2 id="selected-date">'+esc(date.replace(/-/g,"/"))+' のレースを選ぶ</h2>'+
+   '<span class="muted">横にスワイプできます</span></div>'+
+   '<section class="card navigator model-navigator" aria-label="開催日と会場を選択">'+
+   step(1,"年","years",opts.years.map(y=>anchor(firstDate(y),y+"年",y===currentYear)).join(""))+
+   step(2,"月","months",opts.months.map(m=>anchor(firstDate(m),Number(m.slice(5))+"月",m===currentMonth)).join(""))+
+   step(3,"日付","dates",opts.days.map(d=>anchor(d,Number(d.slice(8))+"日",d===date)).join(""))+
+   step(4,"会場","venues",opts.venues.map(v=>anchor(date,v,v===venue,"&venue="+encodeURIComponent(v),v)).join(""))+
+   '<div class="nav-step"><p class="nav-label">5. レース</p>'+
+   (raceSections||'<div class="empty">この日の開催情報はまだありません。</div>')+
+   '</div><p class="model-nav-error" role="status" hidden></p></section>';
 }
 function getPick(panel:Panel,race:Race):ModelPick|null{
  for(const venue of panel.venues){
@@ -159,7 +170,7 @@ function dailyCash(panel:Panel,bets:Bet[]):{races:number;stake:number;paid:numbe
 }
 function cashHeader(panel:Panel,bets:Bet[]):string{
  const d=dailyCash(panel,bets);
- return '<div class="section-title"><h2>本日の予想と参考収支</h2><span class="muted">実購入ではありません</span></div>'+
+ return '<div class="section-title"><h2>選択日の予想と参考収支</h2><span class="muted">実購入ではありません</span></div>'+
  '<div class="model-day-total">'+
  '<article class="panel"><small>対象レース</small><strong>'+panel.selectedRaces+'R</strong><small>判定待ち '+panel.awaitingRaces+'R</small></article>'+
  '<article class="panel"><small>精算確認済み・試算</small><strong>'+d.races+'R</strong><small>未精算 '+d.pending+'R</small></article>'+
@@ -229,25 +240,24 @@ function home(mode:ModelMode,ctx:Context,venueParam:string|null):Response{
  const byVenue=venueOpts.map(v=>{
    const rows=races.filter(x=>x.venue===v);
    const shown=rows.filter(x=>ids.has(x.raceId)).length;
-   return '<section class="venue-section" id="venue-'+encodeURIComponent(v)+'"'+(v!==venue?' hidden':"")+'>'+
+   return '<section class="venue-section" data-venue="'+esc(v)+'" id="venue-'+encodeURIComponent(v)+'"'+(v!==venue?' hidden':"")+'>'+
       '<div class="section-title"><h2>'+esc(v)+'競馬場</h2>'+
       '<span class="muted">'+shown+'レース候補 / 全'+rows.length+'レース</span></div>'+
       '<div class="race-rail">'+rows.map(x=>card(x,getPick(panel,x),ids.has(x.raceId),ctx.selectionKnown,mode)).join("")+'</div>'+
       '</section>';
  }).join("");
- const body=modelNavigation(mode,date)+
+ const body='<div id="model-page-root">'+modelNavigation(mode,date)+
  '<section class="hero today-hero model-lead"><span class="today-pill">研究用・収益予測</span><h1>'+intro.name+'</h1>'+
  '<p>'+esc(intro.lead)+'</p></section>'+
  '<div class="model-flag">'+esc(CAUTION)+'</div>'+
- navigation(mode,calendar,date,venue)+
  cashHeader(panel,bets)+
- (byVenue||'<section class="panel">この日の開催情報・確定予想はまだありません。</section>')+
+ navigation(mode,calendar,date,venue,byVenue)+
  '<div class="section-title"><h2>モデルについて</h2></div>'+
  '<section class="panel"><p>券種と馬番の組み合わせは現行モデルと共通です。'+
  '新モデルは買うレースと2券種への金額配分だけを予測します。'+
  '1レース2,000円を基準とし、スタンダード・プレミアムの配分は同じ比率で換算した参考額です。'+
- '上の回収率は精算できたレースだけの仮想購入額によるもので、本番の総合成績とは区別しています。</p></section>';
- return renderDocument(intro.name,body);
+ '上の回収率は精算できたレースだけの仮想購入額によるもので、本番の総合成績とは区別しています。</p></section></div>';
+ return renderDocument(intro.name,body,HOME_INTERACTION_SCRIPT);
 }
 function runnerList(rows:Horse[]):string{
  return '<section class="panel"><div class="section-title"><h2>出走馬・着順</h2><span class="muted">'+rows.length+'頭</span></div>'+
