@@ -1,8 +1,7 @@
 import base from "./public-site-entry-quota-recovery-20260912.js";
 import { routeAdhoc } from "./adhoc/controller.js";
 import { threeModelPage } from "./three-model-compare-page.js";
-import { modelNavigation, MODEL_SWITCH_CSS } from "./three-model-full-pages.js";
-import {independentHomeResponse,independentDetailResponse,independentDayApi,independentPerformance} from "./independent-rolling-public.js";
+import { serveFullModel, modelNavigation, MODEL_SWITCH_CSS } from "./three-model-full-pages.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
 import { cumulativePerformanceResponse, refreshCumulativePerformanceIfDue } from "./v1/cumulative-performance.js";
 import type { Env } from "./v1/types.js";
@@ -427,38 +426,11 @@ async function addOriginalModelSwitch(response: Response,raceId?: string): Promi
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    // Independent models are driven by their own immutable, pre-start
-    // selections and official-odds tickets. The view is THE SAME HTML/CSS/JS
-    // as the original production page, with only its model data routed aside.
-    const own=url.pathname.match(/^\/models\/(6m|96m)(?:\/(.*))?\/?$/i);
-    if(request.method==="GET"&&own){
-      const mode=own[1]==="6m"?"cash6":"cash96";
-      const suffix=(own[2]||"").replace(/\/$/,"");
-      if(suffix==="api/public/day"){
-        const date=url.searchParams.get("date")||jstDate();
-        const source=new URL(request.url);source.pathname="/api/public/day";
-        const response=await base.fetch(new Request(source.toString(),request),env,ctx);
-        if(!response.ok)return response;
-        return independentDayApi(env.DB,mode,date,await response.json());
-      }
-      if(suffix==="api/public/daily-performance"){
-        const date=url.searchParams.get("date")||jstDate();
-        return independentPerformance(env.DB,mode,date);
-      }
-      if(!suffix){
-        const source=new URL(request.url);source.pathname="/";source.search="";
-        const original=await addOriginalModelSwitch(await addRequestedRaceHomeButton(
-          await base.fetch(new Request(source.toString(),request),env,ctx)));
-        return independentHomeResponse(env.DB,mode,original);
-      }
-      if(/^races\/20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}$/i.test(suffix)){
-        const raceId=suffix.slice("races/".length);
-        const source=new URL(request.url);source.pathname="/races/"+raceId;source.search="";
-        const original=await addOriginalModelSwitch(await base.fetch(new Request(source.toString(),request),env,ctx),raceId);
-        if(!original.ok)return original;
-        return independentDetailResponse(env.DB,mode,raceId,original);
-      }
-      return new Response("NOT_FOUND",{status:404});
+    // Every model now has its OWN complete predictions / venue-day / race page.
+    // The previous three-column page stays accessible only at /models/compare.
+    const fullModelPath=url.pathname.match(/^\/models\/(6m|96m)(?:\/races\/(20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}))?\/?$/i);
+    if (request.method === "GET" && fullModelPath) {
+      return serveFullModel(request, env,fullModelPath[1]==="6m"?"cash6":"cash96",fullModelPath[2]);
     }
     if (request.method === "GET" && (url.pathname === "/models" || url.pathname === "/models/")) {
       const redirect="/models/6m"+(url.searchParams.has("date")?"?date="+encodeURIComponent(url.searchParams.get("date")||""):"");
