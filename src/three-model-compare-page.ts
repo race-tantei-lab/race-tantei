@@ -15,10 +15,10 @@ function esc(x:unknown):string{
 }
 function yen(x:number):string{return Math.round(x).toLocaleString("ja-JP")+"円";}
 function nowJST():string{return new Date(Date.now()+9*3600_000).toISOString().slice(0,10);}
-function addDays(date:string,n:number):string{
+export function addDays(date:string,n:number):string{
   return new Date(Date.parse(date+"T00:00:00Z")+n*86400000).toISOString().slice(0,10);
 }
-function normalizeDate(raw:string|null):string{
+export function normalizeDate(raw:string|null):string{
   const now=nowJST(),candidate=raw&&/^20\d{2}-\d{2}-\d{2}$/.test(raw)?raw:now;
   const unix=Date.parse(candidate+"T00:00:00Z");
   if(!Number.isFinite(unix)||new Date(unix).toISOString().slice(0,10)!==candidate||
@@ -71,7 +71,7 @@ function page(date:string,panels:Panel[]|null,notice:string|null):string{
   '<div class="footnote">比較対象はライトコース相当・1レース2,000円。現行モデルの実購入記録は変更しません。新方式の表示は試算であり、発走15分前に買い目を固定した独立実績ではありません。'+
   '学習は対象月より前のデータだけを使用します。保存済みの過去オッズは発走15分前のJRA公式オッズとして完全検証されていません。2026/8〜11の参考比較では両新モデルとも回収率200%未達です。</div></main></body></html>';
 }
-async function oldSettled(db:D1Database,month:string):Promise<PastBet[]>{
+export async function oldSettled(db:D1Database,month:string):Promise<PastBet[]>{
   const start="2026-08-10-",end=month+"-01-";
   // A bounded, read-only indexed race-ID range. Never download all 2016–26
   // history on a web request; 2016–Aug09 is a generated, bundled JSON prior.
