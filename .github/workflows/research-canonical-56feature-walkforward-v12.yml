@@ -1,0 +1,51 @@
+name: Verify restored 56-feature archive and recorded cash alignment (research only)
+on:
+  push:
+    branches: [research/20261114-canonical-56feature-walkforward-v12]
+    paths: [.github/workflows/research-canonical-56feature-walkforward-v12.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  align:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install light source check dependencies
+        run: python -m pip install --disable-pip-version-check pandas==2.2.3
+      - name: Fetch recovered causal features and official-recorded cash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/aligned
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14116836351/zip" >/tmp/features.zip
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/14115494728/zip" >/tmp/payouts.zip
+          unzip -q /tmp/features.zip -d /tmp/aligned
+          unzip -q /tmp/payouts.zip -d /tmp/aligned
+      - name: Check original demand overlap with recorded JRA WIN cash without modeling
+        run: |
+          python - <<'PY'
+          import collections,json
+          from pathlib import Path
+          import pandas as pd
+          root=Path('/tmp/aligned')
+          d=pd.read_csv(root/'reconstructed-runner-56.csv.gz',
+            compression='gzip',usecols=['raceId','raceDate','originalDemandSelected'],
+            dtype={'raceId':str,'raceDate':str},low_memory=False)
+          d=d[d['originalDemandSelected']==1]
+          payouts={str(json.loads(line)['raceId']) for line in
+             (root/'win-payouts-2024-2026.jsonl').read_text().splitlines() if line.strip()}
+          byyear=collections.defaultdict(set)
+          for race,year in zip(d['raceId'],d['raceDate'].str[:4]):
+              if race in payouts:byyear[year].add(race)
+          result={y:len(byyear[y]) for y in sorted(byyear)}
+          print('RESTORED_CANONICAL_56_WIN_PAYOUT_RACE_JOIN',json.dumps(result),flush=True)
+          if result.get('2025',0)<1000 or result.get('2026',0)<400:
+              raise RuntimeError('INSUFFICIENT_ALIGNED_REAL_YEN_RACES')
+          print('CANONICAL_RECONSTRUCTED_56_CASH_SOURCE_ALIGNMENT_VERIFIED',flush=True)
+          PY

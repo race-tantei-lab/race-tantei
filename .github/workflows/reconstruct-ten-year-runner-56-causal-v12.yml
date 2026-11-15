@@ -1,0 +1,37 @@
+name: Reconstruct causal 56-column 10-year runner training schema (research only)
+on:
+  push:
+    branches: [research/20261114-canonical-56feature-walkforward-v12]
+    paths:
+      - scripts/reconstruct-ten-year-runner-56-causal-v12.py
+      - .github/workflows/reconstruct-ten-year-runner-56-causal-v12.yml
+permissions:
+  contents: read
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify independent earlier-day feature learning
+        run: |
+          python -m py_compile scripts/reconstruct-ten-year-runner-56-causal-v12.py
+          python scripts/reconstruct-ten-year-runner-56-causal-v12.py --self-test
+      - name: Rebuild 2016 to 2026 daily causal 56-feature schema from original retained archive
+        run: |
+          python -u scripts/reconstruct-ten-year-runner-56-causal-v12.py \
+            --out /tmp/reconstructed-runner-56.csv.gz \
+            --meta /tmp/reconstructed-runner-56-meta.json
+      - name: Save reconstructed research-only features for new rolling LightGBM training
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reconstructed-56column-tenyear-causal-runner-research-v12
+          path: |
+            /tmp/reconstructed-runner-56.csv.gz
+            /tmp/reconstructed-runner-56-meta.json
+          if-no-files-found: warn
+          retention-days: 14

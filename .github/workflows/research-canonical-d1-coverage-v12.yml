@@ -1,0 +1,46 @@
+name: Check canonical historical training corpus coverage in production D1 (read-only)
+on:
+  push:
+    branches: [research/20261114-canonical-56feature-walkforward-v12]
+    paths: [.github/workflows/research-canonical-d1-coverage-v12.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: 3c6d1826b573b2e68cb13ec37e9e8ade
+      CLOUDFLARE_D1_DATABASE_ID: 949b5e8b-d1a4-4c4e-80d1-d031afdc03de
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read-only fixed historical counts — no export and no writes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request
+          a=os.environ.get("CLOUDFLARE_ACCOUNT_ID");d=os.environ.get("CLOUDFLARE_D1_DATABASE_ID");token=os.environ.get("CLOUDFLARE_API_TOKEN")
+          if not token:raise RuntimeError("D1_READ_ONLY_TOKEN_MISSING")
+          url=f"https://api.cloudflare.com/client/v4/accounts/{a}/d1/database/{d}/query"
+          def run(sql,params=None):
+              if not sql.lstrip().upper().startswith(("SELECT ","PRAGMA ")):
+                  raise RuntimeError("NON_READONLY_QUERY_REJECTED")
+              q=urllib.request.Request(url,method="POST",data=json.dumps({"sql":sql,"params":params or []}).encode(),headers={"Content-Type":"application/json","Authorization":"Bearer "+token})
+              with urllib.request.urlopen(q,timeout=65) as f:r=json.loads(f.read().decode())
+              if not r.get("success"):raise RuntimeError("D1_QUERY_FAILED:"+str(r.get("errors"))[:200])
+              return (r.get("result") or [{}])[0].get("results",[])
+          for name,sql in {
+              "races":"SELECT COUNT(*) AS n,MIN(race_date) AS first,MAX(race_date) AS last FROM rt_races WHERE race_date BETWEEN '2016-08-10' AND '2026-08-09'",
+              "runners":"SELECT COUNT(*) AS n FROM rt_runners",
+              "results":"SELECT COUNT(*) AS n FROM rt_results",
+              "payouts":"SELECT COUNT(*) AS n FROM rt_payouts",
+              "selected_race_count":"SELECT COUNT(DISTINCT race_id) AS n FROM rt_public_bets WHERE source_prediction_id=-2"
+          }.items():
+              try:
+                  print("CANONICAL_D1_READ_ONLY_COVERAGE",json.dumps({"table":name,"result":run(sql)},ensure_ascii=False),flush=True)
+              except Exception as e:
+                  print("CANONICAL_D1_READ_ONLY_QUERY_ERROR",type(e).__name__,str(e)[:300],flush=True)
+          print("CANONICAL_D1_READ_ONLY_COVERAGE_AUDIT_COMPLETE",flush=True)
+          PY
