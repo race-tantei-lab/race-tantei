@@ -28,7 +28,7 @@ assert.ok(history.years.some(x=>x.period==="2026"));
 assert.ok(history.months.some(x=>x.period==="2026-08"));
 const samples=[
   {raceDate:"2026-08-09",raceId:"historical",venue:"東京",rowCount:2,settledRows:2,stakeYen:2000,returnYen:50000},
-  {raceDate:"2026-08-10",raceId:"new1",venue:"東京",rowCount:2,settledRows:2,stakeYen:2000,returnYen:6500},
+  {raceDate:"2026-08-10",raceId:"new1",venue:"新潟",rowCount:2,settledRows:2,stakeYen:2000,returnYen:6500},
   {raceDate:"2026-08-11",raceId:"partial",venue:"東京",rowCount:2,settledRows:1,stakeYen:1000,returnYen:8000},
   {raceDate:"2026-11-15",raceId:"missing",venue:"東京",rowCount:1,settledRows:1,stakeYen:1000,returnYen:12000},
   {raceDate:"2026-11-16",raceId:"other",venue:"京都",rowCount:2,settledRows:2,stakeYen:2000,returnYen:0},
@@ -40,14 +40,14 @@ assert.equal(accepted.reduce((n,x)=>n+x[3],0),4000);
 assert.equal(accepted.reduce((n,x)=>n+x[4],0),6500);
 const withLive=buildVenuePeriods([],accepted,"2026-11-15","2026-11-16T04:20:00Z",null);
 assert.equal(withLive.productionRaces,2);
-const canonicalTokyoAug=history.months.find(x=>x.venue==="東京"&&x.period==="2026-08");
-const liveTokyoAug=withLive.months.find(x=>x.venue==="東京"&&x.period==="2026-08");
-assert.ok(canonicalTokyoAug&&liveTokyoAug);
-assert.equal(liveTokyoAug.races,canonicalTokyoAug.races+1);
-assert.equal(liveTokyoAug.returnYen,canonicalTokyoAug.returnYen+6500);
-const tok2026=withLive.years.find(x=>x.venue==="東京"&&x.period==="2026")!;
-assert.ok(tok2026);
-assert.equal(tok2026.stakeYen,history.years.find(x=>x.venue==="東京"&&x.period==="2026")!.stakeYen+2000);
+const canonicalNiigataAug=history.months.find(x=>x.venue==="新潟"&&x.period==="2026-08");
+const liveNiigataAug=withLive.months.find(x=>x.venue==="新潟"&&x.period==="2026-08");
+assert.ok(canonicalNiigataAug&&liveNiigataAug);
+assert.equal(liveNiigataAug.races,canonicalNiigataAug.races+1);
+assert.equal(liveNiigataAug.returnYen,canonicalNiigataAug.returnYen+6500);
+const niigata2026=withLive.years.find(x=>x.venue==="新潟"&&x.period==="2026")!;
+assert.ok(niigata2026);
+assert.equal(niigata2026.stakeYen,history.years.find(x=>x.venue==="新潟"&&x.period==="2026")!.stakeYen+2000);
 const overall2026=withLive.years.find(x=>x.venue==="全会場"&&x.period==="2026")!;
 assert.ok(Math.abs(overall2026.roiPct-(overall2026.returnYen/overall2026.stakeYen*100))<1e-8);
 
