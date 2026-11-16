@@ -42,6 +42,9 @@ jobs:
             ! grep -Fq 'href="/win5"' /tmp/canonical.html || success=0
             grep -Fq '累計回収率' /tmp/canonical.html || success=0
             grep -Fq '会場別回収率' /tmp/canonical.html || success=0
+            grep -Fq '<details class="roi-collapse" id="roi-fold">' /tmp/canonical.html || success=0
+            grep -Fq '<summary aria-label="回収率を見る・閉じる">' /tmp/canonical.html || success=0
+            grep -Fq '累計・会場別・年別／月別' /tmp/canonical.html || success=0
             grep -Fq 'id="venue-period-roi"' /tmp/canonical.html || success=0
             grep -Fq 'data-venue-period-mode="month"' /tmp/canonical.html || success=0
             grep -Fq 'data-venue-period-mode="year"' /tmp/canonical.html || success=0
@@ -50,6 +53,15 @@ jobs:
               python3 - <<'PY' || success=0
           import json
           x=json.load(open("/tmp/venue-period.json"))
+          html=open("/tmp/canonical.html",encoding="utf8").read()
+          first=html.index('<details class="roi-collapse" id="roi-fold">')
+          end=html.index('</div></details><section class="daily-performance-wrap"',first)
+          content=html[first:end]
+          for required in ("累計回収率","会場別回収率",'id="venue-period-roi"'):
+           assert required in content,required
+          assert 'open' not in html[first:first+len('<details class="roi-collapse" id="roi-fold">')]
+          assert 'id="races"' in html[end:]
+          assert html.count('id="roi-fold"')==1
           assert x.get("ok") is True
           assert x.get("version")=="venue-period-roi-v1-canonical-light"
           assert x.get("basis")=="ten-year-backtest-plus-production-light-settled-complete-pairs"
