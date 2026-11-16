@@ -67,7 +67,18 @@ jobs:
             sleep 3
           done
           test "$actual_home_ui" = "$EXPECTED_UI_VERSION"
-          grep -Fq '予想・買い目は各レース詳細で確認' /tmp/home.html
+          grep -Fq '累計回収率' /tmp/home.html
+          grep -Fq '会場別回収率' /tmp/home.html
+          for removed in '選定外のレースも予想できます' '開催日を選んで予想・結果を確認できます。' '予想・買い目は各レース詳細で確認' '指定レースを予想する' 'href="/adhoc"' 'href="/win5"' 'data-adhoc-nav=' 'id="adhoc-home-entry"'; do
+            if grep -Fq "$removed" /tmp/home.html; then
+              echo "RETIRED_HOME_ELEMENT_STILL_VISIBLE:$removed" >&2
+              exit 1
+            fi
+          done
+          for path in '/adhoc' '/api/adhoc/races' '/api/adhoc/status' '/win5' '/api/win5' '/models/6m'; do
+            code=$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$BASE_URL$path")
+            test "$code" = 404 || { echo "RETIRED_ROUTE_STILL_OPEN:$path:$code" >&2; exit 1; }
+          done
           for forbidden in '次の買い目を確認中' '予想は当日も継続更新' '発走10分前まで買い目が変わる可能性があります' '予想の公開タイミング'; do
             if grep -Fq "$forbidden" /tmp/home.html; then
               echo "REMOVED_HOME_CLUTTER_RETURNED:$forbidden" >&2

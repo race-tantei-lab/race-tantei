@@ -37,8 +37,10 @@ jobs:
         run: python scripts/verify-live-preview-priority.py
       - name: Verify bodyweight final-lock acquisition
         run: python scripts/verify-bodyweight-final-lock.py
-      - name: Verify WIN5 navigation UI
-        run: python scripts/verify-win5-ui.py
+      - name: Verify retired homepage sections and WIN5/adhoc public endpoints
+        run: |
+          npx tsx tests/retired-home-features-tests.ts
+          python3 scripts/verify-win5-safety.py
       - name: Verify public language clarity
         run: python scripts/verify-public-language.py
       - name: Verify public UI version resolver
