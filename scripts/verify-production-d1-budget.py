@@ -37,8 +37,8 @@ def main() -> None:
     require(public["triggers"]["crons"] == ["*/5 * * * *"], "public cron must stay 5m for urgent settlement")
     require(live["triggers"]["crons"] == ["* * * * *"], "live primary cron must stay 1m")
     require(live_backup["triggers"]["crons"] == ["1-59/2 * * * *"], "live backup cron must stay 2m")
-    require(win5["triggers"]["crons"] == ["* * * * *"], "WIN5 primary cron must stay 1m")
-    require(win5_backup["triggers"]["crons"] == ["3-59/5 * * * *"], "WIN5 backup cron must stay 5m staggered")
+    require(win5["triggers"]["crons"] == [], "retired WIN5 primary cron must stay disabled")
+    require(win5_backup["triggers"]["crons"] == [], "retired WIN5 backup cron must stay disabled")
     require(entry["triggers"]["crons"] == [], "standalone entry maintenance cron must stay disabled")
     require(result_settlement["triggers"]["crons"] == [], "standalone result settlement cron must stay disabled")
     require(guardian["triggers"]["crons"] == [], "obsolete guardian primary cron must stay disabled")
@@ -211,6 +211,7 @@ def main() -> None:
         "legacy_14d_scan=false",
         "live_canonical_learning=true",
         "win5_raw_history=false",
+        "retired_win5_schedules=disabled",
         "entry_cron=disabled_public5m_preselection_self_heal",
         "result_settlement=public5m_pending_bets_first",
         "guardian_crons=disabled",
