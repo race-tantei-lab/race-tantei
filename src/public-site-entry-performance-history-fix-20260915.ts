@@ -2,6 +2,8 @@ import base from "./public-site-entry-quota-recovery-20260912.js";
 import { RETIRED_PUBLIC_PATH_RE, removeRetiredLinks, removeUnusedHomeSections } from "./v1/retired-public-features-ui.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
 import { cumulativePerformanceResponse, refreshCumulativePerformanceIfDue } from "./v1/cumulative-performance.js";
+import {venuePeriodResponse,refreshVenuePeriodsIfDue} from "./v1/venue-period-performance.js";
+import {addVenuePeriodExplorer} from "./v1/venue-period-ui.js";
 import type { Env } from "./v1/types.js";
 
 type SnapshotRace = {
@@ -377,7 +379,7 @@ function performanceResponse(today: string, summary: DayPerformance, history: Da
 async function stripRetiredPublicUi(response:Response,home:boolean):Promise<Response>{
   if(response.status!==200||!response.headers.get("content-type")?.includes("text/html"))return response;
   const original=await response.text();
-  const html=home?removeUnusedHomeSections(original):removeRetiredLinks(original);
+  const html=home?addVenuePeriodExplorer(removeUnusedHomeSections(original)):removeRetiredLinks(original);
   const headers=new Headers(response.headers);
   headers.delete("content-length");
   headers.set("x-race-public-ui","canonical-only-no-adhoc-win5-v1");
@@ -404,6 +406,9 @@ export default {
         "cache-control":"no-store, max-age=0",
         "x-robots-tag":"noindex, nofollow"
       }});
+    }
+    if (request.method === "GET" && url.pathname === "/api/public/venue-period-performance") {
+      return venuePeriodResponse(env.DB);
     }
     if (request.method === "GET" && url.pathname === "/api/public/cumulative-performance") {
       return cumulativePerformanceResponse(env.DB);
@@ -477,6 +482,15 @@ export default {
       }
     } catch (error) {
       console.error("PUBLIC_DAILY_HISTORY_DAILY_FAILED", error);
+    }
+
+    try {
+      const venueAudit=await refreshVenuePeriodsIfDue(env,now);
+      if(venueAudit.status==="updated") {
+        console.log("VENUE_MONTH_YEAR_ROI_RECONCILED",JSON.stringify(venueAudit));
+      }
+    }catch(error){
+      console.error("VENUE_MONTH_YEAR_ROI_RECONCILE_FAILED",error);
     }
 
     if (baseFailure) throw baseFailure;
