@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths:
       - "src/public-site-entry-performance-history-fix-20260915.ts"
+      - "src/v1/venue-period-performance.ts"
+      - "src/v1/venue-period-ui.ts"
+      - "src/v1/venue-period-history.json"
       - "src/v1/retired-public-features-ui.ts"
       - ".github/workflows/verify-independent-sites-live.yml"
   workflow_dispatch:
@@ -39,6 +42,30 @@ jobs:
             ! grep -Fq 'href="/win5"' /tmp/canonical.html || success=0
             grep -Fq '累計回収率' /tmp/canonical.html || success=0
             grep -Fq '会場別回収率' /tmp/canonical.html || success=0
+            grep -Fq 'id="venue-period-roi"' /tmp/canonical.html || success=0
+            grep -Fq 'data-venue-period-mode="month"' /tmp/canonical.html || success=0
+            grep -Fq 'data-venue-period-mode="year"' /tmp/canonical.html || success=0
+            curl -fsS --retry 2 --retry-delay 2 "$base/api/public/venue-period-performance" -o /tmp/venue-period.json || success=0
+            if test -s /tmp/venue-period.json; then
+              python3 - <<'PY' || success=0
+import json
+x=json.load(open("/tmp/venue-period.json"))
+assert x.get("ok") is True
+assert x.get("version")=="venue-period-roi-v1-canonical-light"
+assert x.get("basis")=="ten-year-backtest-plus-production-light-settled-complete-pairs"
+assert x.get("historicalRaces")==14410
+assert x.get("historicalThrough")=="2026-08-09"
+assert len(x.get("venues",[]))==11
+assert len(x.get("months",[]))>400 and len(x.get("years",[]))>30
+assert sum(int(r["stakeYen"]) for r in x["years"] if r["venue"]=="全会場") >= 28820000
+for r in x["months"]+x["years"]:
+ assert r["races"]>0 and r["stakeYen"]>0
+ assert abs(r["roiPct"]-r["returnYen"]/r["stakeYen"]*100)<1e-6
+print("LIVE_VENUE_MONTH_YEAR_ROI_FINANCIAL_INTEGRITY_OK",x["productionRaces"],x["updatedAt"])
+PY
+            else
+              success=0
+            fi
             for path in /models /models/6m /models/6m/races/2026-11-08-tokyo-01 /models/96m /models/96m/races/2026-11-08-tokyo-01 /models/compare /models/6m/api/public/day?date=2026-11-08; do
               test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base$path")" = "404" || success=0
             done
