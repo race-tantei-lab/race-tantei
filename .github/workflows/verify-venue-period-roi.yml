@@ -1,0 +1,38 @@
+name: Verify venue-month/year ROI financial parity and live homepage
+on:
+  pull_request:
+    paths:
+      - "src/v1/venue-period-history.json"
+      - "src/v1/venue-period-performance.ts"
+      - "src/v1/venue-period-ui.ts"
+      - "scripts/build-venue-period-history.py"
+      - "src/public-site-entry-performance-history-fix-20260915.ts"
+      - "tests/venue-period-performance-tests.ts"
+      - ".github/workflows/verify-venue-period-roi.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 17
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Confirm canonical historical source and ten venue financial ledgers
+        run: python3 scripts/build-venue-period-history.py --check
+      - name: Typecheck public site and all regressions
+        run: |
+          npm run typecheck
+          npx tsc -p tsconfig.test.json
+      - name: Reconcile historical year/month and live settlement edge cases
+        run: node dist-test/tests/venue-period-performance-tests.js
+      - name: Ensure public Worker bundle builds without changing predictions
+        run: npx wrangler deploy --dry-run --outdir dist-venue-period-roi

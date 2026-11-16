@@ -1,0 +1,31 @@
+name: Generate canonical venue-month historical ROI baseline
+on:
+  push:
+    branches: [feature/venue-month-year-roi-auto-20261116]
+    paths:
+      - "scripts/build-venue-period-history.py"
+      - ".github/workflows/build-venue-period-history.yml"
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reconcile 14,410 original historical races and 10 venue totals
+        run: |
+          python3 scripts/build-venue-period-history.py
+          python3 scripts/build-venue-period-history.py --check
+      - name: Commit validated immutable historical venue-month baseline
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/v1/venue-period-history.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Generate source-matched canonical venue/month historical summary"
+            git push origin HEAD:feature/venue-month-year-roi-auto-20261116
+          fi
