@@ -1,7 +1,7 @@
 import {strict as assert} from "node:assert";
 import {NORMAL_HOME_SNAPSHOT} from "../src/normal-home-snapshot.js";
 import {removeUnusedHomeSections} from "../src/v1/retired-public-features-ui.js";
-import {addVenuePeriodExplorer} from "../src/v1/venue-period-ui.js";
+import {addVenuePeriodExplorer,foldRoiDisplay,VENUE_PERIOD_UI_SCRIPT} from "../src/v1/venue-period-ui.js";
 import {historicalCumulativeBaseline} from "../src/v1/cumulative-performance.js";
 import {acceptedProductionRows,buildVenuePeriods,venuePeriodResponse,
   refreshVenuePeriodsIfDue,VENUE_PERIOD_STATE_KEY,VENUE_PERIOD_VERSION}
@@ -63,6 +63,34 @@ assert.ok(enhanced.includes("会場別回収率"),"keep existing venue total");
 assert.ok(!enhanced.includes('href="/win5"'));
 assert.ok(!enhanced.includes('href="/adhoc"'));
 assert.equal(enhanced,addVenuePeriodExplorer(enhanced),"do not inject duplicate panels or scripts");
+
+const folded=foldRoiDisplay(enhanced);
+assert.ok(folded.includes('<details class="roi-collapse" id="roi-fold">'),"single native accordion");
+assert.ok(folded.includes('<summary aria-label="回収率を見る・閉じる">'),"accessible tap to expand");
+assert.ok(!/<details\b[^>]*\bid="roi-fold"[^>]*\bopen\b/.test(folded),"initial state CLOSED");
+const foldStart=folded.indexOf('<details class="roi-collapse" id="roi-fold">');
+const foldEnd=folded.indexOf('</div></details><section class="daily-performance-wrap"',foldStart);
+assert.ok(foldEnd>foldStart,"every ROI panel must close before the normal daily summary");
+const closedBody=folded.slice(foldStart,foldEnd);
+for(const snippet of ['累計回収率','class="metrics shared-roi"',
+  '会場別回収率','class="venue-roi-rail shared-venue-roi"',
+  'id="venue-period-roi"','会場別・年別／月別回収率']){
+  assert.ok(closedBody.includes(snippet),"folded ROI is missing "+snippet);
+}
+assert.ok(folded.includes('id="races"'),"keep actual race list and date/venue controls");
+assert.ok(folded.includes('class="daily-performance-wrap"'),"keep live daily summary");
+assert.ok(folded.includes("本日の集計"),"keep daily performance");
+assert.ok(folded.includes("日別回収率"),"keep daily history");
+assert.ok(!folded.includes('href="/win5"')&&!folded.includes('href="/adhoc"'),"keep retired navigation absent");
+assert.equal(folded,foldRoiDisplay(folded),"fold is idempotent");
+assert.equal(foldRoiDisplay("<html><body><h1>他の画面</h1></body></html>"),
+  "<html><body><h1>他の画面</h1></body></html>",
+  "never wrap race detail or other pages");
+assert.ok(VENUE_PERIOD_UI_SCRIPT.includes('roiFold.addEventListener'),
+  "expand gesture must trigger fresh live-month/year fetch");
+assert.ok(VENUE_PERIOD_UI_SCRIPT.includes('if(loading||document.hidden||!'),
+  "do not query live monthly/yearly ROI when panel is closed");
+
 
 const saved={
   version:VENUE_PERIOD_VERSION,
