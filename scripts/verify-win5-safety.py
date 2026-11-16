@@ -30,12 +30,12 @@ def main() -> None:
         raise AssertionError("unexpected public Worker entry")
     if primary.get("name") != "race-tantei-win5" or primary.get("main") != "src/win5-entry-v3.ts":
         raise AssertionError("primary WIN5 Worker identity mismatch")
-    if primary.get("triggers", {}).get("crons") != ["* * * * *"]:
-        raise AssertionError("primary WIN5 Worker must run every minute")
+    if primary.get("triggers", {}).get("crons") != []:
+        raise AssertionError("retired WIN5 primary must have no cron triggers")
     if backup.get("name") != "race-tantei-win5-backup" or backup.get("main") != "src/win5-entry-v3.ts":
         raise AssertionError("backup WIN5 Worker identity mismatch")
-    if backup.get("triggers", {}).get("crons") != ["3-59/5 * * * *"]:
-        raise AssertionError("backup WIN5 Worker must be staggered every five minutes")
+    if backup.get("triggers", {}).get("crons") != []:
+        raise AssertionError("retired WIN5 backup must have no cron triggers")
 
     expected_db = "949b5e8b-d1a4-4c4e-80d1-d031afdc03de"
     for label, cfg in (("primary", primary), ("backup", backup)):
@@ -145,8 +145,8 @@ def main() -> None:
 
     print(
         "WIN5_SAFETY_OK",
-        "primary_cron=1m",
-        "backup_cron=5m_staggered",
+        "primary_cron=disabled",
+        "backup_cron=disabled",
         "non_race_day_d1_precheck=true",
         "lease=true",
         "public_win5_mutation=false",
@@ -155,7 +155,7 @@ def main() -> None:
         "actual_time_deadline=true",
         "t15_lock=true",
         "morning_preview_guard=0930_jst",
-        "production_readiness=true",
+        "production_readiness=retired",
     )
 
 
