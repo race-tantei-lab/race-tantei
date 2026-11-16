@@ -67,8 +67,17 @@ jobs:
             sleep 3
           done
           test "$actual_home_ui" = "$EXPECTED_UI_VERSION"
-          grep -Fq '累計回収率' /tmp/home.html
-          grep -Fq '会場別回収率' /tmp/home.html
+          grep -Fq '<details class="roi-collapse" id="roi-fold">' /tmp/home.html
+          grep -Fq '<summary aria-label="回収率を見る・閉じる">' /tmp/home.html
+          grep -Fq 'id="venue-period-roi"' /tmp/home.html
+          grep -Fq 'data-venue-period-mode="month"' /tmp/home.html
+          grep -Fq 'data-venue-period-mode="year"' /tmp/home.html
+          for removed_roi in '累計回収率（ライト）' '会場別回収率（ライト）' 'class="metrics shared-roi"' 'class="venue-roi-rail shared-venue-roi"'; do
+            if grep -Fq "$removed_roi" /tmp/home.html; then
+              echo "REMOVED_DUPLICATE_ROI_STILL_VISIBLE:$removed_roi" >&2
+              exit 1
+            fi
+          done
           for removed in '選定外のレースも予想できます' '開催日を選んで予想・結果を確認できます。' '予想・買い目は各レース詳細で確認' '指定レースを予想する' 'href="/adhoc"' 'href="/win5"' 'data-adhoc-nav=' 'id="adhoc-home-entry"'; do
             if grep -Fq "$removed" /tmp/home.html; then
               echo "RETIRED_HOME_ELEMENT_STILL_VISIBLE:$removed" >&2
