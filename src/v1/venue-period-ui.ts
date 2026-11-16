@@ -12,7 +12,7 @@ export const VENUE_PERIOD_UI_CSS="<style>"+
   ".venue-period-table td{font-size:13px;padding:10px 7px;text-align:right;border-bottom:1px solid #293a4b}"+
   ".venue-period-table th:first-child,.venue-period-table td:first-child{text-align:left;white-space:nowrap;font-weight:700}"+
   ".venue-period-table .roi{font-weight:900;color:#54d4ad;font-size:17px}"+
-  ".venue-period-more{display:block;margin:13px auto 0;padding:9px 22px}"+
+  ".venue-period-more{display:block;margin:13px auto 0;padding:9px 22px}.venue-period-more[hidden]{display:none}"+
   ".venue-period-footnote{color:var(--muted,#9baec4);font-size:11px;line-height:1.7;margin:13px 0 0}"+
   "@media(max-width:650px){.venue-period-card{padding:13px 11px}.venue-period-table{min-width:370px}.venue-period-table th,.venue-period-table td{padding:9px 5px;font-size:11px}.venue-period-table .roi{font-size:15px}}"+
   "</style>";
