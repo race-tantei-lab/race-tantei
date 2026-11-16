@@ -43,9 +43,10 @@ export function addVenuePeriodExplorer(html:string):string{
     .replace("</body>",VENUE_PERIOD_UI_SCRIPT+"</body>");
 }
 
-/** One compact disclosure replaces the three permanently visible ROI blocks.
- * Preserve existing source HTML and live data; only move the rendered sections
- * inside a native <details>, initially closed and keyboard-accessible.
+/** Display ONLY venue-by-venue monthly/yearly ROI in one closed-by-default
+ * disclosure. Strip the obsolete overall cumulative and venue total cards,
+ * which duplicate the new period explorer and were explicitly retired.
+ * Historical / live accounting and other homepage panels remain untouched.
  */
 export const ROI_COLLAPSE_CSS = "<style>"+
   ".roi-collapse{margin:12px 0 18px;background:var(--panel,#101c29);border:1px solid var(--line,#2b3d52);border-radius:17px;overflow:hidden}"+
@@ -57,24 +58,28 @@ export const ROI_COLLAPSE_CSS = "<style>"+
   ".roi-collapse-sub{display:block;margin-top:2px;font-size:11px;color:var(--muted,#9baec4);font-weight:500}"+
   ".roi-collapse-body{border-top:1px solid var(--line,#2b3d52);padding:15px 12px 2px;min-width:0}"+
   ".roi-collapse-body>.section-title:first-child{margin-top:4px}"+
-  ".roi-collapse-body>.venue-period-card{margin:16px 0 14px}"+
+  ".roi-collapse-body>.venue-period-card{margin:0;padding:0;border:0;border-radius:0;background:transparent}"+
   "@media(max-width:650px){.roi-collapse>summary{padding:12px 14px}.roi-collapse-body{padding:12px 9px 1px}}"+
   "</style>";
 
 export function foldRoiDisplay(html:string):string{
-  if(html.includes('id="roi-fold"')) return html;
+  if(html.includes('id="roi-fold"'))return html;
   const first=html.indexOf('<div class="section-title"><h2>累計回収率');
   const end=html.indexOf('<section class="daily-performance-wrap"',first);
   if(first<0||end<=first)return html;
-  const before=html.slice(0,first),inside=html.slice(first,end),after=html.slice(end);
-  // Prevent a broken disclosure on a stale or unexpected upstream homepage.
-  if(!inside.includes('class="metrics shared-roi"')||
-     !inside.includes('class="section-title venue-roi-title"')||
-     !inside.includes('id="venue-period-roi"'))return html;
-  const start='<details class="roi-collapse" id="roi-fold">'+
+  const previous=html.slice(first,end);
+  const periodStart=previous.indexOf('<section class="venue-period-card" id="venue-period-roi"');
+  // Never drop homepage sections on an unknown template.
+  if(!previous.includes('class="metrics shared-roi"')||
+     !previous.includes('class="section-title venue-roi-title"')||
+     periodStart<0)return html;
+  // The two obsolete cards (cumulative + venue-total rail) are discarded,
+  // NOT merely hidden or moved into the disclosure.
+  const periodExplorer=previous.slice(periodStart);
+  const disclosure='<details class="roi-collapse" id="roi-fold">'+
     '<summary aria-label="回収率を見る・閉じる"><span>回収率を見る'+
-    '<small class="roi-collapse-sub">累計・会場別・年別／月別</small></span></summary>'+
-    '<div class="roi-collapse-body">';
-  const close='</div></details>';
-  return (before+start+inside+close+after).replace('</head>',ROI_COLLAPSE_CSS+'</head>');
+    '<small class="roi-collapse-sub">競馬場ごとの月別・年別</small></span></summary>'+
+    '<div class="roi-collapse-body">'+periodExplorer+'</div></details>';
+  return (html.slice(0,first)+disclosure+html.slice(end))
+    .replace('</head>',ROI_COLLAPSE_CSS+'</head>');
 }

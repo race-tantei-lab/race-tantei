@@ -70,13 +70,32 @@ assert.ok(folded.includes('<summary aria-label="回収率を見る・閉じる">
 assert.ok(!/<details\b[^>]*\bid="roi-fold"[^>]*\bopen\b/.test(folded),"initial state CLOSED");
 const foldStart=folded.indexOf('<details class="roi-collapse" id="roi-fold">');
 const foldEnd=folded.indexOf('</div></details><section class="daily-performance-wrap"',foldStart);
-assert.ok(foldEnd>foldStart,"every ROI panel must close before the normal daily summary");
+assert.ok(foldEnd>foldStart,"ROI disclosure must close before the normal daily summary");
 const closedBody=folded.slice(foldStart,foldEnd);
-for(const snippet of ['累計回収率','class="metrics shared-roi"',
-  '会場別回収率','class="venue-roi-rail shared-venue-roi"',
-  'id="venue-period-roi"','会場別・年別／月別回収率']){
-  assert.ok(closedBody.includes(snippet),"folded ROI is missing "+snippet);
+for(const snippet of [
+  'id="venue-period-roi"',
+  '会場別・年別／月別回収率',
+  'data-venue-period-mode="month"',
+  'data-venue-period-mode="year"',
+  'id="venue-period-venues"',
+  'id="venue-period-rows"'
+]){
+  assert.ok(closedBody.includes(snippet),"period ROI panel missing "+snippet);
 }
+for(const obsolete of [
+  '累計回収率',
+  '累計回収率（ライト）',
+  '会場別回収率（ライト）',
+  'class="metrics shared-roi"',
+  'class="cumulative-live-card"',
+  'class="section-title venue-roi-title"',
+  'class="venue-roi-rail shared-venue-roi"',
+  'class="venue-roi-card"'
+]){
+  assert.ok(!closedBody.includes(obsolete),"obsolete ROI repeated INSIDE fold: "+obsolete);
+  assert.ok(!folded.includes(obsolete),"obsolete ROI still visible on homepage: "+obsolete);
+}
+assert.ok(closedBody.includes('競馬場ごとの月別・年別'),"compact disclosure subtitle");
 assert.ok(folded.includes('id="races"'),"keep actual race list and date/venue controls");
 assert.ok(folded.includes('class="daily-performance-wrap"'),"keep live daily summary");
 assert.ok(folded.includes("本日の集計"),"keep daily performance");
