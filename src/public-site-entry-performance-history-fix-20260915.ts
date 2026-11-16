@@ -3,7 +3,7 @@ import { RETIRED_PUBLIC_PATH_RE, removeRetiredLinks, removeUnusedHomeSections } 
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
 import { cumulativePerformanceResponse, refreshCumulativePerformanceIfDue } from "./v1/cumulative-performance.js";
 import {venuePeriodResponse,refreshVenuePeriodsIfDue} from "./v1/venue-period-performance.js";
-import {addVenuePeriodExplorer} from "./v1/venue-period-ui.js";
+import {addVenuePeriodExplorer,foldRoiDisplay} from "./v1/venue-period-ui.js";
 import type { Env } from "./v1/types.js";
 
 type SnapshotRace = {
@@ -379,7 +379,7 @@ function performanceResponse(today: string, summary: DayPerformance, history: Da
 async function stripRetiredPublicUi(response:Response,home:boolean):Promise<Response>{
   if(response.status!==200||!response.headers.get("content-type")?.includes("text/html"))return response;
   const original=await response.text();
-  const html=home?addVenuePeriodExplorer(removeUnusedHomeSections(original)):removeRetiredLinks(original);
+  const html=home?foldRoiDisplay(addVenuePeriodExplorer(removeUnusedHomeSections(original))):removeRetiredLinks(original);
   const headers=new Headers(response.headers);
   headers.delete("content-length");
   headers.set("x-race-public-ui","canonical-only-no-adhoc-win5-v1");
