@@ -1,4 +1,4 @@
-name: Verify restored 716 percent model and retired 96m URLs
+name: Verify canonical-only site and all retired model paths
 on:
   push:
     branches: [main]
@@ -11,39 +11,31 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 16
+    timeout-minutes: 12
     steps:
-      - name: Check original and six-month pages, absent 96-month public interface
+      - name: Verify unchanged canonical homepage and no retired 716 percent pages
         shell: bash
         run: |
           set -euo pipefail
           base='https://race-tantei-phase0.race-tantei.workers.dev'
           for i in $(seq 1 25); do
             success=1
-            curl -fsS --retry 2 --retry-delay 2 "$base/" -o /tmp/original.html || success=0
-            grep -Fq 'id="races"' /tmp/original.html || success=0
-            curl -fsS --retry 2 --retry-delay 2 -D /tmp/6m.headers "$base/models/6m?date=2026-11-08" -o /tmp/6m.html || success=0
-            grep -Fiq 'x-race-model-full-page: standalone-v3' /tmp/6m.headers || success=0
-            grep -Fq 'data-model-filter="true"' /tmp/6m.html || success=0
-            grep -Fq '参考予想' /tmp/6m.html || success=0
-            grep -Fq '716.83%研究モデル' /tmp/6m.html || success=0
-            grep -Fq '5レース' /tmp/6m.html || success=0
-            grep -Fq '3レース' /tmp/6m.html || success=0
-            grep -Fq '100円単位' /tmp/6m.html || success=0
-            ! grep -Fq '1,800円、他方に200円' /tmp/6m.html || success=0
-            ! grep -Fq '過去96か月モデル' /tmp/6m.html || success=0
-            ! grep -Fq '/models/96m' /tmp/6m.html || success=0
-            grep -Fq '716.83%研究モデル' /tmp/original.html || success=0
-            ! grep -Fq '過去96か月モデル' /tmp/original.html || success=0
-            test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/96m")" = "404" || success=0
-            test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/96m/races/2026-11-08-tokyo-01")" = "404" || success=0
-            test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/6m/api/public/day?date=2026-11-08")" = "404" || success=0
-            test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/compare")" = "302" || success=0
+            curl -fsS --retry 2 --retry-delay 2 "$base/" -o /tmp/canonical.html || success=0
+            grep -Fq 'id="races"' /tmp/canonical.html || success=0
+            ! grep -Fq '716.83%研究モデル' /tmp/canonical.html || success=0
+            ! grep -Fq '直近6か月モデル' /tmp/canonical.html || success=0
+            ! grep -Fq '過去96か月モデル' /tmp/canonical.html || success=0
+            ! grep -Fq 'prediction-model-tabs' /tmp/canonical.html || success=0
+            ! grep -Fq 'data-prediction-model=' /tmp/canonical.html || success=0
+            ! grep -Fq '/models/6m' /tmp/canonical.html || success=0
+            for path in /models /models/6m /models/6m/races/2026-11-08-tokyo-01 /models/96m /models/96m/races/2026-11-08-tokyo-01 /models/compare /models/6m/api/public/day?date=2026-11-08; do
+              test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base$path")" = "404" || success=0
+            done
             if test "$success" = "1"; then
-              echo RESTORED_716_PERCENT_TWO_MODELS_LIVE_OK
+              echo CANONICAL_ONLY_NO_716_OR_6M_OR_96M_SITE_LIVE_OK
               exit 0
             fi
-            sleep 15
+            sleep 10
           done
-          echo TWO_MODELS_SITE_LIVE_FAILED >&2
+          echo RETIRED_MODELS_STILL_VISIBLE_OR_CANONICAL_UNHEALTHY >&2
           exit 1

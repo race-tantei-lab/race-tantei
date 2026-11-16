@@ -1,6 +1,5 @@
 import base from "./public-site-entry-quota-recovery-20260912.js";
 import { routeAdhoc } from "./adhoc/controller.js";
-import { serveFullModel, modelNavigation, MODEL_SWITCH_CSS } from "./three-model-full-pages.js";
 import { RECENT_PUBLIC_DAY_SNAPSHOT } from "./recent-public-day-snapshot.js";
 import { cumulativePerformanceResponse, refreshCumulativePerformanceIfDue } from "./v1/cumulative-performance.js";
 import type { Env } from "./v1/types.js";
@@ -404,40 +403,17 @@ async function addRequestedRaceHomeButton(response: Response): Promise<Response>
   return new Response(html, { status: response.status, statusText: response.statusText, headers });
 }
 
-/** Put the SAME model selector on the original production homepage and
- * each original race-detail screen; never rewrite an actual ticket or
- * interfere with the original model's live outputs. */
-async function addOriginalModelSwitch(response: Response,raceId?: string): Promise<Response> {
-  if (response.status !== 200 || !response.headers.get("content-type")?.includes("text/html")) return response;
-  let html=await response.text();
-  if (/<main\b/i.test(html) && !html.includes('class="prediction-model-tabs"')) {
-    const switcher=modelNavigation("current",undefined,raceId);
-    if (html.includes("</header>")) html=html.replace("</header>","</header>"+switcher);
-    else html=html.replace(/(<main\b[^>]*>)/i,'$1'+switcher);
-    html=html.replace("</head>",MODEL_SWITCH_CSS+"</head>");
-  }
-  const headers=new Headers(response.headers);
-  headers.delete("content-length");
-  headers.set("x-race-model-switch","current-and-six-month-v3");
-  return new Response(html,{status:response.status,statusText:response.statusText,headers});
-}
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    // Public model navigation is two-mode only: canonical + six-month research.
-    // Retired 96m endpoints cannot serve predictions or legacy comparisons.
-    if (url.pathname.match(/^\/models\/96m(?:\/|$)/i)) return new Response("NOT_FOUND",{status:404});
-    const fullModelPath=url.pathname.match(/^\/models\/(6m)(?:\/races\/(20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}))?\/?$/i);
-    if (request.method === "GET" && fullModelPath) {
-      return serveFullModel(request, env,"cash6",fullModelPath[2]);
-    }
-    if (request.method === "GET" && (url.pathname === "/models" || url.pathname === "/models/")) {
-      const redirect="/models/6m"+(url.searchParams.has("date")?"?date="+encodeURIComponent(url.searchParams.get("date")||""):"");
-      return new Response(null,{status:302,headers:{"location":redirect,"cache-control":"no-store"}});
-    }
-    if (request.method === "GET" && url.pathname === "/models/compare") {
-      return new Response(null,{status:302,headers:{"location":"/models/6m","cache-control":"no-store"}});
+    // The 716.83% research model, six-month model, and 96-month model
+    // are retired from public access. Keep the original model unchanged.
+    if (url.pathname === "/models" || /^\/models\//i.test(url.pathname)) {
+      return new Response("NOT_FOUND", {status:404, headers:{
+        "content-type":"text/plain; charset=utf-8",
+        "cache-control":"no-store, max-age=0",
+        "x-robots-tag":"noindex, nofollow"
+      }});
     }
     const adhoc = await routeAdhoc(request, env);
     if (adhoc) return adhoc;
@@ -485,11 +461,7 @@ export default {
     if (!base.fetch) return new Response("NOT_FOUND", { status: 404 });
     const response = await base.fetch(request, env, ctx);
     if (request.method === "GET" && url.pathname === "/") {
-      return addOriginalModelSwitch(await addRequestedRaceHomeButton(response));
-    }
-    if (request.method === "GET" && /^\/races\/20\d{2}-\d{2}-\d{2}-[a-z0-9-]+-\d{2}\/?$/i.test(url.pathname)) {
-      const raceId=url.pathname.slice("/races/".length).replace(/\/$/,"");
-      return addOriginalModelSwitch(response,raceId);
+      return addRequestedRaceHomeButton(response);
     }
     return response;
   },
