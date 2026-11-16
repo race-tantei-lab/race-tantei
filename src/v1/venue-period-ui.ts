@@ -57,7 +57,6 @@ export const ROI_COLLAPSE_CSS = "<style>"+
   ".roi-collapse>summary:focus-visible{outline:2px solid var(--green,#51d0a5);outline-offset:-3px}"+
   ".roi-collapse-sub{display:block;margin-top:2px;font-size:11px;color:var(--muted,#9baec4);font-weight:500}"+
   ".roi-collapse-body{border-top:1px solid var(--line,#2b3d52);padding:15px 12px 2px;min-width:0}"+
-  ".roi-collapse-body>.section-title:first-child{margin-top:4px}"+
   ".roi-collapse-body>.venue-period-card{margin:0;padding:0;border:0;border-radius:0;background:transparent}"+
   "@media(max-width:650px){.roi-collapse>summary{padding:12px 14px}.roi-collapse-body{padding:12px 9px 1px}}"+
   "</style>";
