@@ -1,9 +1,10 @@
-name: Verify canonical-only site and all retired model paths
+name: Verify canonical-only homepage without retired features
 on:
   push:
     branches: [main]
     paths:
       - "src/public-site-entry-performance-history-fix-20260915.ts"
+      - "src/v1/retired-public-features-ui.ts"
       - ".github/workflows/verify-independent-sites-live.yml"
   workflow_dispatch:
 permissions:
@@ -13,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - name: Verify unchanged canonical homepage and no retired 716 percent pages
+      - name: Verify original race metrics and deleted unused red-box/WIN5/adhoc sections
         shell: bash
         run: |
           set -euo pipefail
@@ -28,11 +29,24 @@ jobs:
             ! grep -Fq 'prediction-model-tabs' /tmp/canonical.html || success=0
             ! grep -Fq 'data-prediction-model=' /tmp/canonical.html || success=0
             ! grep -Fq '/models/6m' /tmp/canonical.html || success=0
+            ! grep -Fq '選定外のレースも予想できます' /tmp/canonical.html || success=0
+            ! grep -Fq '指定レースを予想する' /tmp/canonical.html || success=0
+            ! grep -Fq '開催日を選んで予想・結果を確認できます。' /tmp/canonical.html || success=0
+            ! grep -Fq '予想・買い目は各レース詳細で確認' /tmp/canonical.html || success=0
+            ! grep -Fq 'class="hero home-hero-compact"' /tmp/canonical.html || success=0
+            ! grep -Fq 'class="home-live-learning home-guide-compact"' /tmp/canonical.html || success=0
+            ! grep -Fq 'href="/adhoc"' /tmp/canonical.html || success=0
+            ! grep -Fq 'href="/win5"' /tmp/canonical.html || success=0
+            grep -Fq '累計回収率' /tmp/canonical.html || success=0
+            grep -Fq '会場別回収率' /tmp/canonical.html || success=0
             for path in /models /models/6m /models/6m/races/2026-11-08-tokyo-01 /models/96m /models/96m/races/2026-11-08-tokyo-01 /models/compare /models/6m/api/public/day?date=2026-11-08; do
               test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base$path")" = "404" || success=0
             done
+            for path in /adhoc /adhoc/ /api/adhoc/races /api/adhoc/status /win5 /win5/ /api/win5 /api/public/win5; do
+              test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base$path")" = "404" || success=0
+            done
             if test "$success" = "1"; then
-              echo CANONICAL_ONLY_NO_716_OR_6M_OR_96M_SITE_LIVE_OK
+              echo CANONICAL_ONLY_RETIRED_UI_ADHOC_WIN5_GONE_SITE_LIVE_OK
               exit 0
             fi
             sleep 10
