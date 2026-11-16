@@ -40,11 +40,13 @@ jobs:
             ! grep -Fq 'class="home-live-learning home-guide-compact"' /tmp/canonical.html || success=0
             ! grep -Fq 'href="/adhoc"' /tmp/canonical.html || success=0
             ! grep -Fq 'href="/win5"' /tmp/canonical.html || success=0
-            grep -Fq '累計回収率' /tmp/canonical.html || success=0
-            grep -Fq '会場別回収率' /tmp/canonical.html || success=0
+            ! grep -Fq '累計回収率（ライト）' /tmp/canonical.html || success=0
+            ! grep -Fq '会場別回収率（ライト）' /tmp/canonical.html || success=0
+            ! grep -Fq 'class="metrics shared-roi"' /tmp/canonical.html || success=0
+            ! grep -Fq 'class="venue-roi-rail shared-venue-roi"' /tmp/canonical.html || success=0
             grep -Fq '<details class="roi-collapse" id="roi-fold">' /tmp/canonical.html || success=0
             grep -Fq '<summary aria-label="回収率を見る・閉じる">' /tmp/canonical.html || success=0
-            grep -Fq '累計・会場別・年別／月別' /tmp/canonical.html || success=0
+            grep -Fq '競馬場ごとの月別・年別' /tmp/canonical.html || success=0
             grep -Fq 'id="venue-period-roi"' /tmp/canonical.html || success=0
             grep -Fq 'data-venue-period-mode="month"' /tmp/canonical.html || success=0
             grep -Fq 'data-venue-period-mode="year"' /tmp/canonical.html || success=0
@@ -57,8 +59,10 @@ jobs:
           first=html.index('<details class="roi-collapse" id="roi-fold">')
           end=html.index('</div></details><section class="daily-performance-wrap"',first)
           content=html[first:end]
-          for required in ("累計回収率","会場別回収率",'id="venue-period-roi"'):
+          for required in ('id="venue-period-roi"','会場別・年別／月別回収率','id="venue-period-rows"'):
            assert required in content,required
+          for obsolete in ('累計回収率','会場別回収率（ライト）','class="metrics shared-roi"','class="venue-roi-rail shared-venue-roi"'):
+           assert obsolete not in content,obsolete
           assert 'open' not in html[first:first+len('<details class="roi-collapse" id="roi-fold">')]
           assert 'id="races"' in html[end:]
           assert html.count('id="roi-fold"')==1
