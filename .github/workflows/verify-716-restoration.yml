@@ -1,0 +1,43 @@
+name: Verify original 716.83% policy restoration
+on:
+  pull_request:
+    paths:
+      - "src/v1/restored-716-money-policy.ts"
+      - "src/v1/frozen-716-cash-prior-2026.json"
+      - "scripts/build-frozen-716-cash-prior.py"
+      - "src/v1/three-model-money-comparison.ts"
+      - "src/three-model-full-pages.ts"
+      - "tests/three-model-compare-tests.ts"
+      - "tests/three-model-full-pages-tests.ts"
+      - ".github/workflows/verify-716-restoration.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: npm ci --no-audit --no-fund
+      - name: Reconcile frozen historical ledger and prohibit any future-year training
+        run: python3 scripts/build-frozen-716-cash-prior.py --check
+      - name: Compile both original and restored cash site
+        run: |
+          npm run typecheck
+          npx tsc -p tsconfig.three-model.json
+          npx tsc -p tsconfig.test.json
+      - name: Test 716.83 percent source-faithful selection and original UI
+        run: |
+          node dist-test/tests/three-model-compare-tests.js
+          node dist-test/tests/three-model-full-pages-tests.js
+          npm run test:unit
+      - name: Safe production Worker bundle dry-run
+        run: npx wrangler deploy --dry-run --outdir dist-716-restore-check

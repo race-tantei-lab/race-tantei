@@ -1,4 +1,4 @@
-name: Verify two-model public navigation and retired 96m URLs
+name: Verify restored 716 percent model and retired 96m URLs
 on:
   push:
     branches: [main]
@@ -26,17 +26,21 @@ jobs:
             grep -Fiq 'x-race-model-full-page: standalone-v3' /tmp/6m.headers || success=0
             grep -Fq 'data-model-filter="true"' /tmp/6m.html || success=0
             grep -Fq '参考予想' /tmp/6m.html || success=0
-            grep -Fq '直近6か月モデル' /tmp/6m.html || success=0
+            grep -Fq '716.83%研究モデル' /tmp/6m.html || success=0
+            grep -Fq '5レース' /tmp/6m.html || success=0
+            grep -Fq '3レース' /tmp/6m.html || success=0
+            grep -Fq '100円単位' /tmp/6m.html || success=0
+            ! grep -Fq '1,800円、他方に200円' /tmp/6m.html || success=0
             ! grep -Fq '過去96か月モデル' /tmp/6m.html || success=0
             ! grep -Fq '/models/96m' /tmp/6m.html || success=0
-            grep -Fq '直近6か月モデル' /tmp/original.html || success=0
+            grep -Fq '716.83%研究モデル' /tmp/original.html || success=0
             ! grep -Fq '過去96か月モデル' /tmp/original.html || success=0
             test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/96m")" = "404" || success=0
             test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/96m/races/2026-11-08-tokyo-01")" = "404" || success=0
             test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/6m/api/public/day?date=2026-11-08")" = "404" || success=0
             test "$(curl -sS --retry 2 -o /dev/null -w '%{http_code}' "$base/models/compare")" = "302" || success=0
             if test "$success" = "1"; then
-              echo TWO_MODELS_VISIBLE_NO_96M_SITE_LIVE_OK
+              echo RESTORED_716_PERCENT_TWO_MODELS_LIVE_OK
               exit 0
             fi
             sleep 15
