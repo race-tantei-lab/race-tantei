@@ -6,6 +6,7 @@ on:
       - "src/public-site-entry-performance-history-fix-20260915.ts"
       - "src/v1/venue-period-performance.ts"
       - "src/v1/venue-period-ui.ts"
+      - "src/v1/next-race-preview.ts"
       - "src/v1/venue-period-history.json"
       - "src/v1/retired-public-features-ui.ts"
       - ".github/workflows/verify-independent-sites-live.yml"
@@ -26,6 +27,10 @@ jobs:
             success=1
             curl -fsS --retry 2 --retry-delay 2 "$base/" -o /tmp/canonical.html || success=0
             grep -Fq 'id="races"' /tmp/canonical.html || success=0
+            grep -Fq 'id="next-target-race" hidden' /tmp/canonical.html || success=0
+            grep -Fq 'id="next-target-race-link"' /tmp/canonical.html || success=0
+            grep -Fq '次の対象レース' /tmp/canonical.html || success=0
+            grep -Fq 'rt:day-loaded' /tmp/canonical.html || success=0
             ! grep -Fq '716.83%研究モデル' /tmp/canonical.html || success=0
             ! grep -Fq '直近6か月モデル' /tmp/canonical.html || success=0
             ! grep -Fq '過去96か月モデル' /tmp/canonical.html || success=0
